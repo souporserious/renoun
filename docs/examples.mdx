@@ -31,8 +31,10 @@ example(() => <Button label="Say hello" onAction={() => alert('Hello!')} />)
 
 Export multiple examples using the `examples` extension:
 
+```
 Button.tsx
 Button.examples.tsx
+```
 
 ```tsx filename=Button.examples.tsx
 import { Button } from './Button'
@@ -50,12 +52,14 @@ export function DifferentSizes() {
 
 Or group examples into a directory:
 
+```
 Button/
 ├── index.tsx
 ├── exampels/
 │ ├── example-1.tsx
 │ ├── example-2.tsx
 │ ├── example-3.tsx
+```
 
 ## Comments
 
