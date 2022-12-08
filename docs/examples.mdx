@@ -56,9 +56,9 @@ Or group examples into a directory:
 Button/
 ├── index.tsx
 ├── exampels/
-│ ├── example-1.tsx
-│ ├── example-2.tsx
-│ ├── example-3.tsx
+│ ├── example.01.tsx
+│ ├── example.02.tsx
+│ ├── example.03.tsx
 ```
 
 ## Comments
@@ -67,7 +67,7 @@ JSDoc comments can be used to document examples. All examples will be compiled a
 
 ```tsx
 /**
- * Say hello to a person.
+ * Say hello.
  *
  * @example
  * <Hello name="Penny" />
@@ -79,7 +79,7 @@ function Hello({ name }: { name: string }) {
 
 ## Component
 
-Use the [[Example]] helper component to render examples when in MDX files:
+Use the [[Example]] component to render examples in MDX files:
 
 ```md filename=README.mdx
 When using buttons make sure to provide a label and an action.
@@ -87,4 +87,4 @@ When using buttons make sure to provide a label and an action.
 <Example name="BasicUsage" />
 ```
 
-Examples in MDX will automatically resolve based on the closest examples searching through the file itself, the colocated file, and finally the directory.
+Examples use the virtual filesystem that is loaded when compiling MDX. They will automatically resolve starting by looking in the file itself, any colocated files, and finally the directory.
