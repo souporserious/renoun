@@ -1,0 +1,18 @@
+# References
+
+Each symbol can list all of its references. This is useful for finding all the places where a symbol is used. If a specific symbol is not provided, all references will be listed for the current MDX file.
+
+```mdx
+import { References } from 'mdxts'
+
+<References />
+```
+
+For rendering specific references, you can pass a symbol name as a prop.
+
+```mdx
+import { References } from 'mdxts'
+import { Button } from './Button'
+
+<References symbol={Button} />
+```
