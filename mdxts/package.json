@@ -1,0 +1,29 @@
+{
+  "name": "mdxts",
+  "version": "0.0.0",
+  "bin": {
+    "mdxts": "./dist/cli/index.js"
+  },
+  "exports": {
+    "bundle": "./dist/bundle/index.js",
+    "react": "./dist/react/index.js",
+    "watcher": "./dist/watcher/index.js"
+  },
+  "typesVersions": {
+    "*": {
+      "bundle": [
+        "dist/bundle.d.ts"
+      ],
+      "react": [
+        "dist/react.d.ts"
+      ],
+      "watcher": [
+        "dist/watcher.d.ts"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "tsup bundle/index.ts react/index.ts watcher/index.ts cli/index.ts",
+    "dev": "pnpm build --watch"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "example",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "mdxts dev --onSuccess \"next dev\"",
+    "build": "mdxts build --onSuccess \"next build\"",
+    "lint": "next lint",
+    "test": "next test"
+  },
+  "dependencies": {
+    "@types/styled-components": "5.1.26",
+    "mdxts": "workspace:*",
+    "next": "^13.0.6",
+    "react": "*",
+    "react-dom": "*",
+    "styled-components": "5.3.6"
+  }
+}

@@ -1,0 +1,6 @@
+.DS_Store
+.next
+.turbo
+dist
+node_modules
+out
