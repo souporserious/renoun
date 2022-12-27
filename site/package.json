@@ -9,11 +9,10 @@
     "test": "next test"
   },
   "dependencies": {
-    "@types/styled-components": "5.1.26",
     "mdxts": "workspace:*",
     "next": "*",
     "react": "*",
     "react-dom": "*",
-    "styled-components": "5.3.6"
+    "styled-components": "6.0.0-beta.2"
   }
 }
