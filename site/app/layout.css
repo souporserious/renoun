@@ -1,0 +1,43 @@
+:root {
+  --shiki-color-text: #eeeeee;
+  --shiki-color-background: #333333;
+  --shiki-token-constant: #660000;
+  --shiki-token-string: #770000;
+  --shiki-token-comment: #880000;
+  --shiki-token-keyword: #990000;
+  --shiki-token-parameter: #aa0000;
+  --shiki-token-function: #bb0000;
+  --shiki-token-string-expression: #cc0000;
+  --shiki-token-punctuation: #dd0000;
+  --shiki-token-link: #ee0000;
+}
+
+* {
+  margin: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  padding: 1rem;
+}
+
+h1,
+h2,
+h3 {
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+}
+
+p {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+pre {
+  padding: 1rem;
+  background-color: var(--shiki-color-background);
+  color: var(--shiki-color-text);
+  overflow: auto;
+}

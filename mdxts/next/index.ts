@@ -82,8 +82,9 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions = {}) {
       )
 
       /** Run loaders for each set of source files. */
-      const build = () => {
-        console.log('mdxts: building')
+      const compile = () => {
+        console.log('mdxts: compiling...')
+
         return Promise.all(
           Object.entries(pluginOptions).map(async ([name, options]) => {
             const sourceFiles = project.addSourceFilesAtPaths(options.include)
@@ -100,13 +101,13 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions = {}) {
         )
       }
 
-      createWatcher(project, build)
+      createWatcher(project, compile)
 
       Promise.all([
         createMDXTSDirectory(),
         codemodTsConfig(),
         codemodGitIgnore(),
-        build(),
+        compile(),
       ])
         .then(resolvePromise)
         .catch(reject)

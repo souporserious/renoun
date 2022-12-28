@@ -4,6 +4,8 @@ import React from 'react'
 import { useServerInsertedHTML } from 'next/navigation'
 import { useStyledComponentsRegistry } from 'hooks/useStyledComponentsRegistry'
 
+import './layout.css'
+
 export default function RootLayout({
   children,
 }: {

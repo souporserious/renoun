@@ -69,10 +69,17 @@ function getLanguage(className: string[] = []) {
   return (language ? language.slice(9) : null) as Languages[number] | null
 }
 
-export async function getHighlighter(languages: Languages = defaultLanguages) {
+export async function getHighlighter(
+  languages: Languages = defaultLanguages,
+  theme = 'nord'
+) {
+  // TODO: add support for custom themes and add createCSSVariablesTheme helper
   // const loadedTheme = await shiki.loadTheme(theme)
-  const theme = 'css-variables'
-  const highlighter = await shiki.getHighlighter({ theme, langs: languages })
+  // const theme = 'css-variables'
+  const highlighter = await shiki.getHighlighter({
+    theme,
+    langs: languages,
+  })
 
   return (code: string, language: shiki.Lang) => {
     try {
