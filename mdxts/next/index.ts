@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { NextConfig } from 'next'
 import { Project } from 'ts-morph'
 import { executeCode } from '../execute-code'
+import { createWatcher } from '../watcher'
 
 type PluginOptions = Record<
   string,
@@ -17,7 +18,7 @@ async function codemodTsConfig() {
   const tsConfigFilePath = resolve(process.cwd(), 'tsconfig.json')
   const tsConfig = JSON.parse(await readFile(tsConfigFilePath, 'utf8'))
 
-  if (tsConfig.compilerOptions.paths?.['mdxts/data']) {
+  if (tsConfig.compilerOptions.paths?.['mdxts/*']) {
     return
   }
 
@@ -32,7 +33,7 @@ async function codemodTsConfig() {
 
   await writeFile(tsConfigFilePath, JSON.stringify(tsConfig, null, 2))
 
-  console.log('Added path alias for mdxts/data to tsconfig.json')
+  console.log('mdxts: Added path alias for mdxts/data to tsconfig.json')
 }
 
 /** Codemod the git ignore file to ignore the mdxts data directory. */
@@ -52,39 +53,48 @@ async function codemodGitIgnore() {
 
   await writeFile(gitIgnoreFilePath, gitIgnore + '\n.mdxts')
 
-  console.log('Added .mdxts directory to .gitignore')
+  console.log('mdxts: Added .mdxts directory to .gitignore')
 }
 
 /** Starts the MDXTS server and bundles all entry points defined in the plugin options. */
 export function createMDXTSPlugin(pluginOptions: PluginOptions = {}) {
   return async function withMDXTS(nextConfig: NextConfig = {}) {
-    await new Promise(async (resolvePromise, reject) => {
+    console.log('mdxts: config initialized')
+
+    await new Promise((resolvePromise, reject) => {
       const project = new Project({
         tsConfigFilePath: resolve(process.cwd(), 'tsconfig.json'),
       })
 
       /** Add additional source files to project. */
-      const addedSourceFiles = Object.values(pluginOptions).map(({ include }) =>
+      Object.values(pluginOptions).map(({ include }) =>
         project.addSourceFilesAtPaths(include)
       )
 
       /** Run loaders for each set of source files. */
-      await Promise.all(
-        Object.entries(pluginOptions).map(async ([name, options], index) => {
-          const sourceFiles = addedSourceFiles[index]
-          const loaderPath = resolve(process.cwd(), options.loader)
-          const loaderContents = await readFile(loaderPath, 'utf8')
-          const loader = await executeCode(loaderContents)
-          const data = await loader(sourceFiles)
+      // TODO: need to add a way to run loaders per source file so when watcher updates a file, only that file is reloaded
+      // right now the source will be stale when looping addedSourceFiles and calling loader again
+      const build = () => {
+        console.log('mdxts: building')
+        return Promise.all(
+          Object.entries(pluginOptions).map(async ([name, options]) => {
+            const sourceFiles = project.addSourceFilesAtPaths(options.include)
+            const loaderPath = resolve(process.cwd(), options.loader)
+            const loaderContents = await readFile(loaderPath, 'utf-8')
+            const loader = await executeCode(loaderContents)
+            const data = await loader(sourceFiles)
 
-          await writeFile(
-            resolve(process.cwd(), '.mdxts', `${name}.json`),
-            JSON.stringify(data, null, 2)
-          )
-        })
-      )
+            await writeFile(
+              resolve(process.cwd(), '.mdxts', `${name}.json`),
+              JSON.stringify(data, null, 2)
+            )
+          })
+        )
+      }
 
-      Promise.all([codemodTsConfig(), codemodGitIgnore()])
+      createWatcher(project, build)
+
+      Promise.all([codemodTsConfig(), codemodGitIgnore(), build()])
         .then(resolvePromise)
         .catch(reject)
     })

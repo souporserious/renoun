@@ -1,16 +1,18 @@
 import chokidar from 'chokidar'
 import { Project } from 'ts-morph'
 
+// TODO: watcher should initiate watched files and updated source files
 export function createWatcher(
   project: Project,
-  onUpdate: (path: null | string) => Promise<void>
+  onUpdate: (path: string) => Promise<any>
 ) {
   const watcher = chokidar.watch(
     project.getSourceFiles().map((sourceFile) => sourceFile.getFilePath()),
-    { ignoreInitial: true }
+    {
+      ignoreInitial: true,
+      ignored: `${process.cwd()}/.mdxts`,
+    }
   )
-
-  onUpdate(null)
 
   watcher.on('add', function (addedPath) {
     project.addSourceFileAtPath(addedPath)
