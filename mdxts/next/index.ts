@@ -1,8 +1,8 @@
-import { readFile, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { NextConfig } from 'next'
 import { Project } from 'ts-morph'
-import { executeCode } from '../execute-code'
+import { executeCode } from '../utils/execute-code'
 import { createWatcher } from '../watcher'
 
 type PluginOptions = Record<
@@ -12,6 +12,16 @@ type PluginOptions = Record<
     loader: string
   }
 >
+
+async function createMDXTSDirectory() {
+  const directoryPath = resolve(process.cwd(), '.mdxts')
+
+  try {
+    await access(directoryPath)
+  } catch {
+    await mkdir(directoryPath)
+  }
+}
 
 /** Codemod TS config file to add a path alias for "mdxts/data". */
 async function codemodTsConfig() {
@@ -72,8 +82,6 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions = {}) {
       )
 
       /** Run loaders for each set of source files. */
-      // TODO: need to add a way to run loaders per source file so when watcher updates a file, only that file is reloaded
-      // right now the source will be stale when looping addedSourceFiles and calling loader again
       const build = () => {
         console.log('mdxts: building')
         return Promise.all(
@@ -94,7 +102,12 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions = {}) {
 
       createWatcher(project, build)
 
-      Promise.all([codemodTsConfig(), codemodGitIgnore(), build()])
+      Promise.all([
+        createMDXTSDirectory(),
+        codemodTsConfig(),
+        codemodGitIgnore(),
+        build(),
+      ])
         .then(resolvePromise)
         .catch(reject)
     })

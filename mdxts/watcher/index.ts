@@ -1,7 +1,6 @@
 import chokidar from 'chokidar'
 import { Project } from 'ts-morph'
 
-// TODO: watcher should initiate watched files and updated source files
 export function createWatcher(
   project: Project,
   onUpdate: (path: string) => Promise<any>
