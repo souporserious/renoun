@@ -1,5 +1,6 @@
 import { kebabCase } from 'case-anything'
 import type { SourceFiles } from 'mdxts'
+// import { createSource } from 'mdxts'
 import { bundle } from 'mdxts/bundle'
 
 export default async function getDocs(sourceFiles: SourceFiles) {
@@ -11,7 +12,6 @@ export default async function getDocs(sourceFiles: SourceFiles) {
       const name = baseName.replace(/\.mdx$/, '')
 
       return {
-        // Replace double quotes with single quotes so it's JSON compatible.
         mdx: JSON.stringify(mdx.code),
         name: name.replace(/\.mdx$/, ''),
         slug: kebabCase(name),
