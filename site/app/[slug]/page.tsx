@@ -8,6 +8,5 @@ export async function generateStaticParams() {
 export default function Page({ params }: { params: { slug: string } }) {
   const doc = allDocs.find((doc) => doc.slug === params.slug)
 
-  // return <pre>{JSON.parse(doc.mdx)}</pre>
   return <CompiledComponent codeString={JSON.parse(doc.mdx)} />
 }

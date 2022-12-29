@@ -11,7 +11,7 @@ export function Sidebar() {
       {allDocs.map((doc) => {
         return (
           <Link key={doc.slug} href={doc.slug} className="link">
-            <Text>{doc.slug}</Text>
+            <Text>{doc.name}</Text>
           </Link>
         )
       })}
