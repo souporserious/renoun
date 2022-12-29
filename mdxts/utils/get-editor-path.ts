@@ -16,7 +16,7 @@ export type EditorLinkOptions = {
  * Opens the source file in the respective IDE.
  * Forked from: https://github.com/siddharthkp/babel-plugin-open-source
  */
-export function getEditorLink({
+export function getEditorPath({
   path,
   line = 0,
   column = 0,

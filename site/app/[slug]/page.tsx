@@ -1,5 +1,6 @@
 import { CompiledComponent } from 'components'
 import allDocs from 'mdxts/docs'
+import { SiblingNavigation } from './navigation'
 
 export async function generateStaticParams() {
   return allDocs.map((doc) => ({ slug: doc.slug }))
@@ -12,6 +13,7 @@ export default function Page({ params }: { params: { slug: string } }) {
     <>
       <a href={doc.path}>Source</a>
       <CompiledComponent codeString={JSON.parse(doc.mdx)} />
+      <SiblingNavigation />
     </>
   )
 }

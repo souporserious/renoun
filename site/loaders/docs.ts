@@ -2,7 +2,7 @@ import { capitalCase, kebabCase } from 'case-anything'
 import type { SourceFiles } from 'mdxts'
 // import { createSource } from 'mdxts'
 import { bundle } from 'mdxts/bundle'
-import { getEditorLink } from 'mdxts/utils'
+import { getEditorPath } from 'mdxts/utils'
 
 /**
  * Returns a constructed source link for the local IDE in development or a GitHub
@@ -10,7 +10,7 @@ import { getEditorLink } from 'mdxts/utils'
  */
 export function getSourceLink({ path }) {
   if (process.env.NODE_ENV === 'development') {
-    return getEditorLink({ path })
+    return getEditorPath({ path })
   }
 
   return `https://github.com/souporserious/mdxts/tree/main${path}`

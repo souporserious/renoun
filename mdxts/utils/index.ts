@@ -1,3 +1,3 @@
 export { executeCode } from './execute-code'
-export { getEditorLink } from './get-editor-link'
+export { getEditorPath } from './get-editor-path'
 export { transformCode } from './transform-code'
