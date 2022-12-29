@@ -15,16 +15,16 @@ const dependencies = {
 }
 
 export function getComponent<ComponentType extends any>(codeString: string) {
-  const exports: Record<string, unknown> = {}
-  const require = (path) => {
+  const functionModule = { exports: { default: null } }
+  const functionRequire = (path) => {
     if (dependencies[path]) {
       return dependencies[path]
     }
     throw Error(`Module not found: ${path}.`)
   }
-  const result = new Function('exports', 'require', codeString)
+  const result = new Function('module', 'require', codeString)
 
-  result(exports, require)
+  result(functionModule, functionRequire)
 
-  return exports.default as React.ComponentType<ComponentType>
+  return functionModule.exports.default as React.ComponentType<ComponentType>
 }
