@@ -13,7 +13,7 @@ export default function Page({ params }: { params: { slug: string } }) {
     <>
       <a href={doc.path}>Source</a>
       <CompiledComponent codeString={JSON.parse(doc.mdx)} />
-      <SiblingNavigation />
+      <SiblingNavigation activeSlug={params.slug} />
     </>
   )
 }
