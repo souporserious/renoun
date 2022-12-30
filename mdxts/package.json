@@ -20,10 +20,14 @@
     "dev": "pnpm build --watch"
   },
   "peerDependencies": {
-    "next": "^11.0.0"
+    "next": "^11.0.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
   },
   "devDependencies": {
-    "next": "*"
+    "next": "*",
+    "react": "*",
+    "react-dom": "*"
   },
   "dependencies": {
     "@mdx-js/esbuild": "^2.2.1",

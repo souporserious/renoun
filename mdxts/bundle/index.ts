@@ -16,7 +16,7 @@ export async function bundle({
 }) {
   /** Only load the shiki highlighter once. */
   if (highlighter === undefined) {
-    highlighter = await getHighlighter()
+    highlighter = await getHighlighter({ theme })
   }
 
   const allFileData: FileData[] = []
