@@ -18,11 +18,12 @@ import * as React from 'react'
  */
 export function useHover() {
   const [hover, setHover] = React.useState(false)
+
   return [
     hover,
     {
       onMouseEnter: () => setHover(true),
       onMouseLeave: () => setHover(false),
     },
-  ]
+  ] as const
 }

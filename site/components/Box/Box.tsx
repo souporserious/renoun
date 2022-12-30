@@ -1,7 +1,7 @@
 import * as React from 'react'
 
-export type BoxProps = {
-  as?: string
+export type BoxProps<Element extends React.ElementType> = {
+  as?: React.ComponentPropsWithRef<Element>['ref']
   children?: React.ReactNode
   padding?: number | string
   backgroundColor?: string
@@ -9,7 +9,9 @@ export type BoxProps = {
   style?: React.CSSProperties
 } & React.HTMLAttributes<HTMLElement>
 
-export const Box = React.forwardRef(function Box(
+export const Box = React.forwardRef(function Box<
+  Element extends React.ElementType = 'div'
+>(
   {
     as: Element = 'div',
     padding,
@@ -18,7 +20,7 @@ export const Box = React.forwardRef(function Box(
     children,
     style,
     ...props
-  }: BoxProps,
+  }: BoxProps<Element>,
   ref
 ) {
   return (
