@@ -4,11 +4,11 @@ import React, { createServerContext } from 'react'
 export const DataProviderContext = createServerContext({
   data: null,
   allData: null,
-  activeSlug: null,
+  activeSlug: '',
 }) as React.Context<{
   data: any
   allData: any
-  activeSlug: string | null
+  activeSlug: string
 }>
 
 export function DataProvider({

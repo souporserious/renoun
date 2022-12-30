@@ -1,7 +1,9 @@
-import allDocs from 'mdxts/docs'
+import * as React from 'react'
+import { DataProviderContext } from './DataProvider'
 
-export function SiblingNavigation({ activeSlug }: { activeSlug: string }) {
-  const { previous, next } = getPathData(allDocs, activeSlug)
+export function SiblingNavigation() {
+  const { allData, activeSlug } = React.useContext(DataProviderContext)
+  const { previous, next } = getPathData(allData, activeSlug)
 
   return (
     <nav style={{ display: 'flex', padding: '2rem 0 1rem' }}>
