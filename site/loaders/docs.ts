@@ -8,12 +8,15 @@ import { getEditorPath } from 'mdxts/utils'
  * Returns a constructed source link for the local IDE in development or a GitHub
  * link in production.
  */
-export function getSourceLink({ path }) {
+export function getSourceLink(path: string) {
   if (process.env.NODE_ENV === 'development') {
     return getEditorPath({ path })
   }
 
-  return `https://github.com/souporserious/mdxts/tree/main${path}`
+  return `https://github.com/souporserious/mdxts/tree/main${path.replace(
+    process.cwd(),
+    ''
+  )}`
 }
 
 function getMetaFromSourceFile(sourceFile: SourceFiles[number]) {
@@ -30,8 +33,7 @@ function getMetaFromSourceFile(sourceFile: SourceFiles[number]) {
   return {
     name: capitalCase(strippedName).replace(/-/g, ' '),
     slug: kebabCase(strippedName),
-    path: getSourceLink({ path: sourceFile.getFilePath() }),
-    // path: sourceFile.getFilePath().replace(process.cwd(), ''),
+    path: getSourceLink(sourceFile.getFilePath()),
     order,
   }
 }
