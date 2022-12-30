@@ -1,4 +1,4 @@
-import { CompiledComponent } from 'components'
+import { CompiledComponent } from 'components/CompiledComponent'
 import allDocs from 'mdxts/docs'
 import { DataProvider, Outline, SiblingNavigation } from 'mdxts/components'
 

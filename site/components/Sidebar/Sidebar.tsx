@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Text } from 'components'
+import { Text } from 'components/Text'
 import allDocs from 'mdxts/docs'
 
 export function Sidebar() {

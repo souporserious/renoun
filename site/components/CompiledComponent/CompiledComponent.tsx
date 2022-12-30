@@ -1,5 +1,6 @@
 import * as React from 'react'
-import { getComponent } from './utils'
+import * as jsxRuntime from 'react/jsx-runtime'
+import * as jsxDevRuntime from 'react/jsx-dev-runtime'
 
 /**
  * Execute a string of code and return the default export.
@@ -14,25 +15,32 @@ import { getComponent } from './utils'
  *   return <CompiledComponent codeString={codeString} />
  * }
  */
-export class CompiledComponent extends React.Component<{ codeString: string }> {
-  state = {
-    component: this.props.codeString
-      ? getComponent(this.props.codeString)
-      : null,
-  }
+export function CompiledComponent({ codeString }: { codeString: string }) {
+  const element = React.use(getComponent(codeString))
 
-  componentDidUpdate(prevProps) {
-    const { codeString } = this.props
-    if (prevProps.codeString !== codeString) {
-      this.setState({
-        component: codeString ? getComponent(codeString) : null,
-      })
+  return codeString ? React.createElement(element) : null
+}
+
+export async function getComponent<ComponentType extends any>(
+  codeString: string
+) {
+  const mdxReact = await import('@mdx-js/react')
+  const dependencies = {
+    react: React,
+    'react/jsx-runtime': jsxRuntime,
+    'react/jsx-dev-runtime': jsxDevRuntime,
+    '@mdx-js/react': mdxReact,
+  }
+  const functionModule = { exports: { default: null } }
+  const functionRequire = (path) => {
+    if (dependencies[path]) {
+      return dependencies[path]
     }
+    throw Error(`Module not found: ${path}.`)
   }
+  const result = new Function('module', 'require', codeString)
 
-  render() {
-    return this.state.component
-      ? React.createElement(this.state.component)
-      : null
-  }
+  result(functionModule, functionRequire)
+
+  return functionModule.exports.default as React.ComponentType<ComponentType>
 }
