@@ -94,13 +94,13 @@ export async function getHighlighter(
   }
 }
 
-type Headings = {
+export type Headings = {
   id: any
   text: string
-  level: number
+  depth: number
 }[]
 
-type CodeBlocks = {
+export type CodeBlocks = {
   text: string
   heading: Headings[number] | null
   language: shiki.Lang
@@ -132,6 +132,7 @@ export function rehypePlugin({
     const codeBlocks: CodeBlocks = []
     let previousHeading: Headings[number] | null = null
 
+    /** Replace all symbolic links [[link]] with jsx links <a href="/link">link</a>. */
     visitParents(tree, 'text', (node, ancestors) => {
       const matches = node.value.match(/\[\[(.+?)\]\]/g)
 
@@ -174,18 +175,19 @@ export function rehypePlugin({
       ancestors[ancestors.length - 1].children = splitNodes
     })
 
+    /** Gather headings and code blocks to analyze. */
     tree.children.forEach((node) => {
       if (node.type !== 'element') return
 
-      const level = headingRank(node)
+      const depth = headingRank(node)
 
-      if (level && node.properties) {
+      if (depth && node.properties) {
         if (!hasProperty(node, 'id')) {
           node.properties.id = slugs.slug(toString(node))
         }
 
         const heading = {
-          level,
+          depth,
           id: node.properties.id,
           text: node.children.map((child) => toString(child)).join(''),
         }

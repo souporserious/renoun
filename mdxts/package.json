@@ -11,11 +11,12 @@
   "main": "./dist/index.js",
   "exports": {
     "./bundle": "./dist/bundle/index.js",
+    "./components": "./dist/components/index.js",
     "./next": "./dist/next/index.js",
     "./utils": "./dist/utils/index.js"
   },
   "scripts": {
-    "build": "tsup index.ts utils/index.ts bundle/index.ts react/index.ts watcher/index.ts cli/index.ts next/index.ts",
+    "build": "tsup index.ts utils/index.ts bundle/index.ts components/index.ts watcher/index.ts cli/index.ts next/index.ts",
     "dev": "pnpm build --watch"
   },
   "peerDependencies": {

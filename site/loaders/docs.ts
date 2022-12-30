@@ -49,7 +49,7 @@ export default async function getDocs(sourceFiles: SourceFiles) {
         slug,
         order,
         path,
-        mdx: JSON.stringify(mdx.code),
+        mdx,
       }
     })
   )

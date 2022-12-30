@@ -27,8 +27,8 @@ export async function bundle({
     target: 'esnext',
     format: 'cjs',
     bundle: true,
+    minify: true,
     write: false,
-    // minify: process.env.NODE_ENV === 'production',
     plugins: [
       mdxPlugin({
         providerImportSource: '@mdx-js/react',
@@ -49,13 +49,14 @@ export async function bundle({
   })
 
   return entryPoints.map((filePath, index) => {
-    const { path, ...data } =
-      allFileData.find((fileData) => fileData.path === filePath) || {}
+    const findData = (fileData) => fileData.path === filePath
+    const fileData = allFileData.find(findData) || {}
 
     return {
       code: result.outputFiles[index].text,
-      path: filePath,
-      data,
-    }
+      ...fileData,
+    } as {
+      code: string
+    } & FileData
   })
 }
