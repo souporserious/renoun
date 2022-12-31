@@ -1,6 +1,5 @@
-import { CompiledComponent } from 'components/CompiledComponent'
 import allDocs from 'mdxts/docs'
-import { DataProvider, Outline, SiblingNavigation } from 'mdxts/components'
+import { Content, DataProvider, Outline, SiblingNavigation } from '@mdxts/react'
 
 export async function generateStaticParams() {
   return allDocs.map((doc) => ({ slug: doc.slug }))
@@ -14,7 +13,7 @@ export default function Page({ params }: { params: { slug: string } }) {
       <div style={{ display: 'flex' }}>
         <div>
           <a href={doc.path}>Source</a>
-          <CompiledComponent codeString={doc.mdx.code} />
+          <Content />
           <SiblingNavigation />
         </div>
         <Outline />
