@@ -1,6 +1,8 @@
 import * as React from 'react'
 import * as jsxRuntime from 'react/jsx-runtime'
 import * as jsxDevRuntime from 'react/jsx-dev-runtime'
+import * as mdxReact from '@mdx-js/react'
+import { DataProviderContext } from './DataProvider'
 
 /**
  * Execute a string of code and return the default export.
@@ -8,30 +10,43 @@ import * as jsxDevRuntime from 'react/jsx-dev-runtime'
  *
  * @example
  *
- * import { CompiledComponent } from 'components'
+ * import { DataProvider, Content } from 'mdxts/components'
+ * import allDocs from 'mdxts/docs'
  *
  * export default function Example() {
- *   const codeString = `exports.default = () => require('react').createElement('div', null, 'Hello World')`
- *   return <CompiledComponent codeString={codeString} />
+ *   return (
+ *     <DataProvider allData={allDocs} activeSlug={}>
+ *       <Content codeString={codeString} />
+ *     </DataProvider>
+ *   )
  * }
  */
-export function CompiledComponent({ codeString }: { codeString: string }) {
-  const element = React.use(getComponent(codeString))
+export function Content() {
+  // @ts-expect-error
+  const { data } = React.use(DataProviderContext)
 
-  return codeString ? React.createElement(element) : null
+  if (!data?.mdx?.code) {
+    return null
+  }
+
+  // const element = React.use(getComponent(data.mdx.code as string))
+
+  return 'HEllllos'
+  // return React.createElement(element)
 }
 
 export async function getComponent<ComponentType extends any>(
   codeString: string
 ) {
-  const mdxReact = await import('@mdx-js/react')
   const dependencies = {
     react: React,
     'react/jsx-runtime': jsxRuntime,
     'react/jsx-dev-runtime': jsxDevRuntime,
     '@mdx-js/react': mdxReact,
   }
-  const functionModule = { exports: { default: null } }
+  const functionModule: {
+    exports: { default: React.ComponentType<ComponentType> | null }
+  } = { exports: { default: null } }
   const functionRequire = (path) => {
     if (dependencies[path]) {
       return dependencies[path]
@@ -42,5 +57,5 @@ export async function getComponent<ComponentType extends any>(
 
   result(functionModule, functionRequire)
 
-  return functionModule.exports.default as React.ComponentType<ComponentType>
+  return functionModule.exports.default
 }

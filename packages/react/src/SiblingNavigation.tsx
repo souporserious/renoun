@@ -2,7 +2,8 @@ import * as React from 'react'
 import { DataProviderContext } from './DataProvider'
 
 export function SiblingNavigation() {
-  const { allData, activeSlug } = React.useContext(DataProviderContext)
+  // @ts-expect-error
+  const { allData, activeSlug } = React.use(DataProviderContext)
   const { previous, next } = getPathData(allData, activeSlug)
 
   return (

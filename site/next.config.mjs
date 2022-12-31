@@ -10,8 +10,10 @@ const withMDXTS = createMDXTSPlugin({
 export default withMDXTS({
   experimental: {
     appDir: true,
+    esmExternals: 'loose',
   },
   compiler: {
     styledComponents: true,
   },
+  transpilePackages: ['@mdxts/react'],
 })

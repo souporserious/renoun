@@ -9,7 +9,7 @@
     "test": "next test"
   },
   "dependencies": {
-    "@mdx-js/react": "^2.2.1",
+    "@mdxts/react": "workspace:*",
     "case-anything": "^2.1.10",
     "mdxts": "workspace:*",
     "next": "*",

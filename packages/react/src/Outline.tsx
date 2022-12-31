@@ -2,7 +2,8 @@ import * as React from 'react'
 import { DataProviderContext } from './DataProvider'
 
 export function Outline() {
-  const { data } = React.useContext(DataProviderContext)
+  // @ts-expect-error
+  const { data } = React.use(DataProviderContext)
 
   if (data?.mdx?.headings) {
     return (
