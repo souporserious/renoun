@@ -22,17 +22,16 @@ import { DataProviderContext } from './DataProvider'
  * }
  */
 export function Content() {
-  // @ts-expect-error
-  const { data } = React.use(DataProviderContext)
+  const { data } = React.useContext(DataProviderContext)
 
   if (!data?.mdx?.code) {
     return null
   }
 
-  // const element = React.use(getComponent(data.mdx.code as string))
+  // @ts-expect-error
+  const element = React.use(getComponent(data.mdx.code as string))
 
-  return 'HEllllos'
-  // return React.createElement(element)
+  return React.createElement(element)
 }
 
 export async function getComponent<ComponentType extends any>(

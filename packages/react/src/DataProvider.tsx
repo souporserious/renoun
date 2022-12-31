@@ -1,7 +1,6 @@
 import * as React from 'react'
 
-// @ts-expect-error
-export const DataProviderContext = React.createServerContext({
+export const DataProviderContext = React.createContext({
   data: null,
   allData: null,
   activeSlug: '',

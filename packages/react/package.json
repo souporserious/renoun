@@ -26,8 +26,8 @@
     "typescript"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --dts --format esm,cjs",
-    "dev": "pnpm build --watch --sourcemap"
+    "build": "tsc",
+    "dev": "pnpm build --watch"
   },
   "peerDependencies": {
     "@mdx-js/react": ">=2.0",
