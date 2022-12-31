@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { DataProviderContext } from './DataProvider'
 
-export function Outline() {
+export function Headings() {
   const { dataItem } = React.useContext(DataProviderContext)
 
   if (dataItem?.mdx?.headings) {

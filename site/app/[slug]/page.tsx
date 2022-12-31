@@ -1,11 +1,11 @@
-import allDocs from 'mdxts/docs'
 import {
   Content,
   DataProvider,
-  Outline,
+  Headings,
   SiblingNavigation,
   SourceLink,
 } from '@mdxts/react'
+import allDocs from 'mdxts/docs'
 
 export async function generateStaticParams() {
   return allDocs.map((doc) => ({ slug: doc.slug }))
@@ -20,7 +20,7 @@ export default function Page({ params }: { params: { slug: string } }) {
           <Content />
           <SiblingNavigation />
         </div>
-        <Outline />
+        <Headings />
       </div>
     </DataProvider>
   )
