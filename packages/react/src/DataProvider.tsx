@@ -2,27 +2,27 @@ import * as React from 'react'
 
 export const DataProviderContext = React.createContext({
   data: null,
-  allData: null,
-  activeSlug: '',
+  dataItem: null,
+  slug: '',
 }) as React.Context<{
   data: any
-  allData: any
-  activeSlug: string
+  dataItem: any
+  slug: string
 }>
 
 export function DataProvider({
   children,
-  allData,
-  activeSlug,
+  data,
+  slug,
 }: {
   children: any
-  allData: any
-  activeSlug: string
+  data: any
+  slug: string
 }) {
-  const data = allData.find((data) => data.slug === activeSlug)
+  const dataItem = data.find((dataItem) => dataItem.slug === slug)
 
   return (
-    <DataProviderContext.Provider value={{ data, allData, activeSlug }}>
+    <DataProviderContext.Provider value={{ data, dataItem, slug }}>
       {children}
     </DataProviderContext.Provider>
   )

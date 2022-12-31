@@ -22,14 +22,14 @@ import { DataProviderContext } from './DataProvider'
  * }
  */
 export function Content() {
-  const { data } = React.useContext(DataProviderContext)
+  const { dataItem } = React.useContext(DataProviderContext)
 
-  if (!data?.mdx?.code) {
+  if (!dataItem?.mdx?.code) {
     return null
   }
 
   // @ts-expect-error
-  const element = React.use(getComponent(data.mdx.code as string))
+  const element = React.use(getComponent(dataItem.mdx.code as string))
 
   return React.createElement(element)
 }

@@ -9,7 +9,7 @@ export default function Page({ params }: { params: { slug: string } }) {
   const doc = allDocs.find((doc) => doc.slug === params.slug)
 
   return (
-    <DataProvider allData={allDocs} activeSlug={params.slug}>
+    <DataProvider data={allDocs} slug={params.slug}>
       <div style={{ display: 'flex' }}>
         <div>
           <a href={doc.path}>Source</a>

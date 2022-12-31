@@ -2,8 +2,8 @@ import * as React from 'react'
 import { DataProviderContext } from './DataProvider'
 
 export function SiblingNavigation() {
-  const { allData, activeSlug } = React.useContext(DataProviderContext)
-  const { previous, next } = getPathData(allData, activeSlug)
+  const { data, slug } = React.useContext(DataProviderContext)
+  const { previous, next } = getPathData(data, slug)
 
   return (
     <nav style={{ display: 'flex', padding: '2rem 0 1rem' }}>

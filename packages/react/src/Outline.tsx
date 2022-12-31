@@ -2,12 +2,12 @@ import * as React from 'react'
 import { DataProviderContext } from './DataProvider'
 
 export function Outline() {
-  const { data } = React.useContext(DataProviderContext)
+  const { dataItem } = React.useContext(DataProviderContext)
 
-  if (data?.mdx?.headings) {
+  if (dataItem?.mdx?.headings) {
     return (
       <ul>
-        {data.mdx.headings.map((heading: any) => (
+        {dataItem.mdx.headings.map((heading: any) => (
           <li
             key={heading.text}
             style={{
