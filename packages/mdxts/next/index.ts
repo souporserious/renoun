@@ -74,6 +74,9 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions = {}) {
   const project = new Project({
     tsConfigFilePath: resolve(process.cwd(), 'tsconfig.json'),
   })
+  const loaderPaths = Object.values(pluginOptions).map((options) =>
+    resolve(process.cwd(), options.loader)
+  )
 
   /** Add additional source files to project. */
   Object.values(pluginOptions).map(({ include }) =>
@@ -110,7 +113,7 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions = {}) {
       ])
 
       if (phase === PHASE_DEVELOPMENT_SERVER) {
-        createWatcher(project, compile)
+        createWatcher(project, loaderPaths, compile)
         console.log('mdxts: started watcher...')
       }
 

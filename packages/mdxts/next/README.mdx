@@ -1,0 +1,27 @@
+# mdxts/next
+
+NextJS plugin for MDXTS.
+
+## Usage
+
+First, create a plugin using [[createMDXTSPlugin]] and export it along with any other configuration you need.
+
+```js filename=next.config.mjs
+import { createMDXTSPlugin } from 'mdxts/next'
+
+const withMDXTS = createMDXTSPlugin({
+  docs: {
+    include: 'docs/**/*.mdx',
+    loader: 'loaders/docs.ts',
+  },
+  packages: {
+    include: '../packages/*/src/**/*.(ts|tsx|mdx)',
+  },
+})
+
+export default withMDXTS({
+  compiler: { styledComponents: true },
+})
+```
+
+Note, files can be included from anywhere. This is especially useful in monorepos for including files that are outside of your NextJS project.
