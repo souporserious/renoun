@@ -1,16 +1,16 @@
 import { capitalCase, kebabCase } from 'case-anything'
 import type { SourceFile } from 'ts-morph'
-import { getSourceLink } from './get-source-link'
+import { getSourcePath } from './get-source-path'
 
-/** Generates common metadata from a source file. */
-export function getMetaFromSourceFile(sourceFile: SourceFile) {
+/** Generates compiled examples and gathers common metadata for a source file. */
+export function getDataFromSourceFile(sourceFile: SourceFile) {
   let name = sourceFile.getBaseNameWithoutExtension()
 
   if (name === 'index') {
     name = sourceFile.getDirectory().getBaseName()
   }
 
-  // Remove prefix from path name if it exists (e.g. 01. or 01-)
+  // Remove order prefix from path name if it exists (e.g. 01. or 01-)
   const strippedName = name.replace(/^(\d+\.|-)/, '')
   const order = Number(name.split(/\.|-/)[0]) ?? 0
 
@@ -19,7 +19,7 @@ export function getMetaFromSourceFile(sourceFile: SourceFile) {
     extension: sourceFile.getExtension(),
     name: capitalCase(strippedName).replace(/-/g, ' '),
     slug: kebabCase(strippedName),
-    path: getSourceLink(sourceFile.getFilePath()),
+    path: getSourcePath(sourceFile.getFilePath()),
     order,
   }
 }

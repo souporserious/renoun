@@ -1,10 +1,9 @@
 import { getEditorPath } from './get-editor-path'
 
 /**
- * Returns a constructed source link for the local IDE in development or a GitHub
- * link in production.
+ * Returns a constructed source path for the local IDE in development or a git link in production.
  */
-export function getSourceLink(path: string) {
+export function getSourcePath(path: string) {
   if (process.env.NODE_ENV === 'development') {
     return getEditorPath({ path })
   }

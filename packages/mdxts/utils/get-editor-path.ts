@@ -20,8 +20,9 @@ export function getEditorPath({
   path,
   line = 0,
   column = 0,
-  editor = 'vscode',
 }: EditorLinkOptions) {
+  const editor = process.env.MDXTS_EDITOR || 'vscode'
+
   switch (editor) {
     case 'sublime':
       return `subl://open?url=file://${path}&line=${line}&column=${column}`
