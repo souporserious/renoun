@@ -1,0 +1,25 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`get examples from comments 1`] = `
+[
+  "const a = 1
+const b = 2
+const c = add(a, b)
+
+console.log(c)",
+]
+`;
+
+exports[`get examples from directory 1`] = `
+"[
+  "import { Button } from '../Button'\\n\\nexport function BasicUsage() {\\n  return <Button label=\\"Say hello\\" onPress={() => alert('Hello!')} />\\n}",
+  "import { Button } from '../Button'\\n\\nexport function AlternateUsage() {\\n  return <Button label=\\"Say goodbye\\" onPress={() => alert('Goodbye!')} />\\n}"
+]"
+`;
+
+exports[`get examples from extension 1`] = `
+"[
+  "import { Button } from '../Button'\\n\\nexport function BasicUsage() {\\n  return <Button label=\\"Say hello\\" onPress={() => alert('Hello!')} />\\n}",
+  "import { Button } from '../Button'\\n\\nexport function AlternateUsage() {\\n  return <Button label=\\"Say goodbye\\" onPress={() => alert('Goodbye!')} />\\n}"
+]"
+`;

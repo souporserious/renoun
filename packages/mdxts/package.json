@@ -16,7 +16,8 @@
   },
   "scripts": {
     "build": "tsup index.ts utils/index.ts bundle/index.ts components/index.ts watcher/index.ts cli/index.ts next/index.ts",
-    "dev": "pnpm build --watch"
+    "dev": "pnpm build --watch",
+    "test": "jest"
   },
   "peerDependencies": {
     "@mdx-js/react": "^2.0.0",

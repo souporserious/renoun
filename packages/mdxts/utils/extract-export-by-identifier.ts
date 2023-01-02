@@ -13,11 +13,6 @@ export function extractExportByIdentifier(
     sourceFile.getFilePath().replace(baseName, `${baseName}.copy`)
   )
 
-  /** Remove named exports: export { useHover } from 'hooks' */
-  sourceFile.getExportDeclarations().forEach((declaration) => {
-    declaration.remove()
-  })
-
   /** Collect remaining exports and remove any declarations that don't have references. */
   sourceFile.getExportedDeclarations().forEach((declarations) => {
     declarations.forEach((declaration) => {
