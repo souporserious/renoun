@@ -1,10 +1,10 @@
-import type { Identifier, SourceFile } from 'ts-morph'
+import type { SourceFile } from 'ts-morph'
 import { Node, ts } from 'ts-morph'
 
 /** Extract a single export and its local dependencies from a source file. */
 export function extractExportByIdentifier(
   sourceFile: SourceFile,
-  identifier: Identifier | string
+  identifier: string
 ) {
   /** Copy the source file so it isn't mutated. */
   const baseName = sourceFile.getBaseNameWithoutExtension()
@@ -28,18 +28,9 @@ export function extractExportByIdentifier(
       const exportIdentifier = declaration.getFirstDescendantByKind(
         ts.SyntaxKind.Identifier
       )!
-      const identifierText =
-        typeof identifier === 'string' ? identifier : identifier.getText()
 
-      if (exportIdentifier.getText() !== identifierText) {
-        const references = exportIdentifier.findReferencesAsNodes()
-        const sourceFileReferences = references.filter(
-          (reference) => reference.getSourceFile() === sourceFile
-        )
-
-        if (sourceFileReferences.length <= 1) {
-          declaration.remove()
-        }
+      if (exportIdentifier.getText() !== identifier) {
+        declaration.remove()
       }
     })
   })
