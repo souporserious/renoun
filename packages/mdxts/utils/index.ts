@@ -1,3 +1,5 @@
-export { executeCode } from './execute-code'
-export { getEditorPath } from './get-editor-path'
-export { transformCode } from './transform-code'
+export * from './execute-code'
+export * from './get-editor-path'
+export * from './get-meta-from-source-file'
+export * from './get-source-link'
+export * from './transform-code'

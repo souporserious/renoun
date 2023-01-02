@@ -6,13 +6,16 @@ import { Project } from 'ts-morph'
 import { executeCode } from '../utils/execute-code'
 import { createWatcher } from '../watcher'
 
-type PluginOptions = Record<
-  string,
-  {
-    include: string | readonly string[]
-    loader: string
-  }
->
+type PluginOptions = {
+  gitSource: string
+  sources: Record<
+    string,
+    {
+      include: string | readonly string[]
+      loader: string
+    }
+  >
+}
 
 async function createMDXTSDirectory() {
   const directoryPath = resolve(process.cwd(), '.mdxts')
@@ -68,18 +71,18 @@ async function codemodGitIgnore() {
 }
 
 /** Starts the MDXTS server and bundles all entry points defined in the plugin options. */
-export function createMDXTSPlugin(pluginOptions: PluginOptions = {}) {
+export function createMDXTSPlugin(pluginOptions: PluginOptions) {
   console.log('mdxts: config initialized')
 
   const project = new Project({
     tsConfigFilePath: resolve(process.cwd(), 'tsconfig.json'),
   })
-  const loaderPaths = Object.values(pluginOptions).map((options) =>
+  const loaderPaths = Object.values(pluginOptions.sources).map((options) =>
     resolve(process.cwd(), options.loader)
   )
 
   /** Add additional source files to project. */
-  Object.values(pluginOptions).map(({ include }) =>
+  Object.values(pluginOptions.sources).map(({ include }) =>
     project.addSourceFilesAtPaths(include)
   )
 
@@ -88,7 +91,7 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions = {}) {
     console.log('mdxts: compiling...')
 
     return Promise.all(
-      Object.entries(pluginOptions).map(async ([name, options]) => {
+      Object.entries(pluginOptions.sources).map(async ([name, options]) => {
         const sourceFiles = project.addSourceFilesAtPaths(options.include)
         const loaderPath = resolve(process.cwd(), options.loader)
         const loaderContents = await readFile(loaderPath, 'utf-8')
@@ -116,6 +119,12 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions = {}) {
         createWatcher(project, loaderPaths, compile)
         console.log('mdxts: started watcher...')
       }
+
+      if (nextConfig.env === undefined) {
+        nextConfig.env = {}
+      }
+
+      nextConfig.env.MDXTS_GIT_SOURCE = pluginOptions.gitSource
 
       return nextConfig
     }

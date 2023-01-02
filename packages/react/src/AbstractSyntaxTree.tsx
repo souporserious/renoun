@@ -1,7 +1,14 @@
 import * as React from 'react'
 import type { Node } from 'ts-morph'
 
-/** View the AST for a specific node and optionally select it. */
+/**
+ * View the AST for a specific node and optionally select it.
+ *
+ * @example
+ * <SourceFile path="src/index.ts">
+ *  <AbstractSyntaxTree />
+ * </SourceFile>
+ */
 export function AbstractSyntaxTree({
   node,
   selectedNode,

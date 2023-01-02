@@ -1,6 +1,19 @@
 import * as React from 'react'
 import { DataProviderContext } from './DataProvider'
 
+// Export either a remark, rehype, or tsmorph plugin
+// export function remarkPlugin() {
+
+// }
+
+// export function loader(project, sourceFile, addPlugin) {
+
+// }
+
+// Attaches data to the dataItem
+// dataItem.remark.headings
+// dataItem.tsmorph.references
+
 export function Headings() {
   const { dataItem } = React.useContext(DataProviderContext)
 

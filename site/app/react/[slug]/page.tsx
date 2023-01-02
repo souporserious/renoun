@@ -6,19 +6,19 @@ import {
   SiblingNavigation,
   SourceLink,
 } from '@mdxts/react'
-import allDocs from 'mdxts/docs'
+import allReact from 'mdxts/react'
 
 export async function generateStaticParams() {
-  return allDocs.map((doc) => ({ slug: doc.slug }))
+  return allReact.map((doc) => ({ slug: doc.slug }))
 }
 
 export default function Page({ params }: { params: { slug: string } }) {
   return (
-    <DataProvider data={allDocs} slug={params.slug}>
+    <DataProvider data={allReact} slug={`react/${params.slug}`}>
       <div style={{ display: 'flex' }}>
         <div>
           <SourceLink />
-          <Content />
+          {/* <Content /> */}
           {/* <References /> */}
           <SiblingNavigation />
         </div>

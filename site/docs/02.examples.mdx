@@ -77,32 +77,26 @@ function Hello({ name }: { name: string }) {
 }
 ```
 
-## MDX
+Gather all `@example` tags from a file and render them in MDX:
 
-Use the [[Source]] component to render code in MDX files:
-
-```mdx filename=README.mdx
-When using buttons make sure to provide a label and an action.
-
-<Source path="examples/BasicUsage" />
+```tsx Button/index.tsx
+/**
+ * Provides a button for taking actions and navigating.
+ *
+ * @example
+ * <Button label="Say hello" onPress={() => alert('Hello!')} />
+ */
+export function Button({
+  label,
+  onPress,
+}: {
+  label: string
+  onPress: () => void
+}) {
+  return <button onClick={onPress}>{label}</button>
+}
 ```
 
-Source components use a virtual filesystem that is loaded when compiling MDX. The file system will automatically resolve starting by looking in the file itself, any colocated files, and finally the directory.
-
-By default the source will be rendered as a [[Code]] component. To expand on code there are a handful of helper components that can be used:
-
-- [[Editor]] - Renders the source code in an editor.
-- [[Preview]] - Renders a preview of the source code.
-- [[Tests]] - Displays associated tests the source code is used in.
-- [[References]] - Displays a list of references to the source code.
-- [[Props]] - Displays a list of props to the source code if it is a React component.
-
-```mdx filename=README.mdx
-When using buttons make sure to provide a label and an action.
-
-<Source path="examples/BasicUsage">
-  <Editor />
-  <Preview />
-  <References />
-</Source>
+```mdx filename=Button/README.mdx
+<Example identifier="Button" />
 ```
