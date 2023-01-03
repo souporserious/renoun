@@ -9,7 +9,7 @@ Local examples can be exported alongside your component using the [[example]] he
 ```tsx filename=Button.tsx
 import { example } from 'mdxts'
 
-/** Used for taking actions and navigation. */
+/** Used for taking actions and navigating. */
 export function Button({
   label,
   onAction,
@@ -23,7 +23,6 @@ export function Button({
   return <button onClick={onAction}>{label}</button>
 }
 
-/** Used for taking actions and navigation. */
 example(() => <Button label="Say hello" onAction={() => alert('Hello!')} />)
 ```
 
@@ -81,7 +80,7 @@ Gather all `@example` tags from a file and render them in MDX:
 
 ```tsx Button/index.tsx
 /**
- * Provides a button for taking actions and navigating.
+ * Used for taking actions and navigating.
  *
  * @example
  * <Button label="Say hello" onPress={() => alert('Hello!')} />

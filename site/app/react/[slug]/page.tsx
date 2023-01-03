@@ -1,11 +1,4 @@
-import {
-  Content,
-  DataProvider,
-  Headings,
-  References,
-  SiblingNavigation,
-  SourceLink,
-} from '@mdxts/react'
+import { DataProvider, Headings, SourceLink } from '@mdxts/react'
 import allReact from 'mdxts/react'
 
 export async function generateStaticParams() {
@@ -18,9 +11,6 @@ export default function Page({ params }: { params: { slug: string } }) {
       <div style={{ display: 'flex' }}>
         <div>
           <SourceLink />
-          {/* <Content /> */}
-          {/* <References /> */}
-          <SiblingNavigation />
         </div>
         <Headings />
       </div>

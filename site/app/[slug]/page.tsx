@@ -1,11 +1,4 @@
-import {
-  Content,
-  DataProvider,
-  Headings,
-  References,
-  SiblingNavigation,
-  SourceLink,
-} from '@mdxts/react'
+import { Content, DataProvider, Headings, SourceLink } from '@mdxts/react'
 import allDocs from 'mdxts/docs'
 
 export async function generateStaticParams() {
@@ -19,8 +12,6 @@ export default function Page({ params }: { params: { slug: string } }) {
         <div>
           <SourceLink />
           <Content />
-          {/* <References /> */}
-          <SiblingNavigation />
         </div>
         <Headings />
       </div>

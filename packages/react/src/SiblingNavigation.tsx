@@ -7,9 +7,9 @@ export function SiblingNavigation() {
 
   return (
     <nav style={{ display: 'flex', padding: '2rem 0 1rem' }}>
-      {previous ? <a href={previous.slug}>{previous.name}</a> : null}
+      {previous ? <a href={`/${previous.slug}`}>{previous.name}</a> : null}
       <div style={{ flex: 1 }} />
-      {next ? <a href={next.slug}>{next.name}</a> : null}
+      {next ? <a href={`/${next.slug}`}>{next.name}</a> : null}
     </nav>
   )
 }
