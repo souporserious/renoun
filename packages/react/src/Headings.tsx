@@ -8,9 +8,13 @@ export function Headings() {
     return (
       <ul
         style={{
+          position: 'sticky',
+          top: 0,
+          alignSelf: 'start',
           padding: 0,
           margin: 0,
           listStyle: 'none',
+          borderLeft: '1px solid #ccc',
         }}
       >
         {dataItem.mdx.headings

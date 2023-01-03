@@ -11,8 +11,8 @@ export default function Page({ params }: { params: { slug: string } }) {
     <DataProvider data={allDocs} slug={params.slug}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px' }}>
         <div style={{ minWidth: 0, minHeight: '100vh' }}>
-          <SourceLink />
           <Content />
+          <SourceLink />
           <SiblingNavigation />
         </div>
         <Headings />

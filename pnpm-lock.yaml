@@ -133,6 +133,7 @@ importers:
 
   site:
     specifiers:
+      '@mdx-js/mdx': ^2.2.1
       '@mdxts/react': workspace:*
       case-anything: ^2.1.10
       mdxts: workspace:*
@@ -141,6 +142,7 @@ importers:
       react-dom: '*'
       styled-components: 5.3.6
     dependencies:
+      '@mdx-js/mdx': 2.2.1
       '@mdxts/react': link:../packages/react
       case-anything: 2.1.10
       mdxts: link:../packages/mdxts
