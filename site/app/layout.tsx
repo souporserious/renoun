@@ -2,7 +2,6 @@
 
 import React from 'react'
 import { useServerInsertedHTML } from 'next/navigation'
-import { SiblingNavigation } from '@mdxts/react'
 import { useStyledComponentsRegistry } from 'hooks/useStyledComponentsRegistry'
 
 import './layout.css'

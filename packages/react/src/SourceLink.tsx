@@ -10,6 +10,10 @@ export function SourceLink({
 }) {
   const { dataItem } = React.useContext(DataProviderContext)
 
+  if (!dataItem) {
+    return null
+  }
+
   return (
     <a
       href={dataItem.path}

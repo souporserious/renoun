@@ -31,8 +31,6 @@
 }
 
 body {
-  display: grid;
-  grid-template-columns: 200px 1fr;
   font-size: var(--font-size-body);
   font-family: var(--font-family-body);
   background-color: var(--color-background);
@@ -46,6 +44,24 @@ a {
 
 a:hover {
   text-decoration: underline;
+}
+
+h1 {
+  font-size: var(--font-size-heading-1);
+  line-height: var(--line-height-heading-1);
+  font-weight: var(--font-weight-heading);
+}
+
+h2 {
+  font-size: var(--font-size-heading-2);
+  line-height: var(--line-height-heading-2);
+  font-weight: var(--font-weight-heading);
+}
+
+h3 {
+  font-size: var(--font-size-heading-3);
+  line-height: var(--line-height-heading-3);
+  font-weight: var(--font-weight-heading);
 }
 
 main {
