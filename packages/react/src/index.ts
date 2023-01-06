@@ -2,6 +2,7 @@
 export * from './AbstractSyntaxTree'
 export * from './Content'
 export * from './DataProvider'
+export * from './Editor'
 export * from './Headings'
 export * from './SiblingNavigation'
 export * from './SourceLink'

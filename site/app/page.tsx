@@ -2,10 +2,31 @@
 import * as React from 'react'
 import * as jsxRuntime from 'react/jsx-runtime'
 import { evaluateSync } from '@mdx-js/mdx'
+import { Editor } from '@mdxts/react'
 import { Logo } from 'components/Logo'
 import Link from 'next/link'
 
 type ContentComponent = React.ComponentType<any>
+
+const buttonSourceCode = `
+import { example } from 'mdxts'
+
+/** Used for taking actions and navigating. */
+export function Button({
+  label,
+  onAction,
+}: {
+  /** Provides a label for the button. */
+  label: string
+
+  /** Called when an action for this button is requested. */
+  onAction: () => void
+}) {
+  return <button onClick={onAction}>{label}</button>
+}
+
+example(() => <Button label="Say hello" onAction={() => alert('Hello!')} />)
+`.trim()
 
 const initialContent = `
 # Hello MDX
@@ -13,7 +34,7 @@ const initialContent = `
 ## Start editing to see some magic happen!
 `.trim()
 
-export default function Editor() {
+export default function Page() {
   const [value, setValue] = React.useState(initialContent)
   const [error, setError] = React.useState(null)
   const lastContent = React.useRef<ContentComponent>(null)
@@ -50,20 +71,12 @@ export default function Editor() {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+          gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)',
           minHeight: '100vh',
         }}
       >
-        <textarea
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-          style={{
-            padding: 16,
-            background: 'black',
-            color: 'white',
-            outline: 'none',
-          }}
-        />
+        <Editor height="100%" value={buttonSourceCode} />
+        <Editor height="100%" value={value} onChange={setValue} />
         <div
           style={{
             display: 'flex',

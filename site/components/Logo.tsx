@@ -1,4 +1,5 @@
 export function Logo() {
+  return null
   return (
     <svg
       height="24"
