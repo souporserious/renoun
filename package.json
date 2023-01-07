@@ -2,7 +2,6 @@
   "name": "mdxts",
   "private": true,
   "scripts": {
-    "postinstall": "node ./scripts/write-public-files.js",
     "build": "turbo run build",
     "dev": "turbo run dev",
     "test": "turbo run test",

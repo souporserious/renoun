@@ -5,6 +5,7 @@ import { PHASE_DEVELOPMENT_SERVER } from 'next/constants'
 import { Project } from 'ts-morph'
 import { executeCode } from '../utils/execute-code'
 import { createWatcher } from '../watcher'
+import { createPublicFiles } from './create-public-files'
 
 type PluginOptions = {
   gitSource: string
@@ -110,6 +111,7 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
     return async (phase) => {
       await Promise.all([
         createMDXTSDirectory(),
+        createPublicFiles(),
         codemodTsConfig(),
         codemodGitIgnore(),
         compile(),
