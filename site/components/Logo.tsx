@@ -9,13 +9,13 @@ export function Logo() {
       <path
         d="M47 8.02295L57 26.023L37 26.023L47 8.02295Z"
         fill="white"
-        fill-opacity="0.8"
+        fillOpacity="0.8"
       />
       <g filter="url(#filter0_d_44_57)">
         <path
           d="M47 20.023L37 2.02295L57 2.02295L47 20.023Z"
           fill="white"
-          fill-opacity="0.9"
+          fillOpacity="0.9"
           shape-rendering="crispEdges"
         />
       </g>
