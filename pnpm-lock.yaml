@@ -52,7 +52,7 @@ importers:
       turbo: 1.7.4
       typescript: 4.9.5
 
-  packages/mdxts:
+  mdxts:
     specifiers:
       '@mdx-js/esbuild': ^2.3.0
       '@mdx-js/mdx': ^2.3.0
@@ -114,27 +114,14 @@ importers:
       url-slug: 3.0.4
       yaml: 2.2.1
     devDependencies:
-      '@mdx-js/react': 2.2.1_react@18.2.0
-      next: 13.1.1_biqbaboplfbrettd7655fr4n2y
+      '@mdx-js/react': 2.3.0_react@18.2.0
+      next: 13.1.6_biqbaboplfbrettd7655fr4n2y
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
-
-  packages/react:
-    specifiers:
-      '@mdx-js/react': '*'
-      esbuild: ^0.17.8
-      react: '*'
-      ts-morph: '*'
-    devDependencies:
-      '@mdx-js/react': 2.2.1_react@18.2.0
-      esbuild: 0.17.8
-      react: 18.2.0
-      ts-morph: 17.0.1
 
   site:
     specifiers:
       '@mdx-js/mdx': ^2.3.0
-      '@mdxts/react': workspace:*
       case-anything: ^2.1.10
       mdxts: workspace:*
       next: '*'
@@ -143,9 +130,8 @@ importers:
       styled-components: 5.3.6
     dependencies:
       '@mdx-js/mdx': 2.3.0
-      '@mdxts/react': link:../packages/react
       case-anything: 2.1.10
-      mdxts: link:../packages/mdxts
+      mdxts: link:../mdxts
       next: 13.1.1_biqbaboplfbrettd7655fr4n2y
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
@@ -1245,16 +1231,6 @@ packages:
       - supports-color
     dev: false
 
-  /@mdx-js/react/2.2.1_react@18.2.0:
-    resolution: {integrity: sha512-YdXcMcEnqZhzql98RNrqYo9cEhTTesBiCclEtoiQUbJwx87q9453GTapYU6kJ8ZZ2ek1Vp25SiAXEFy5O/eAPw==}
-    peerDependencies:
-      react: '>=16'
-    dependencies:
-      '@types/mdx': 2.0.3
-      '@types/react': 18.0.28
-      react: 18.2.0
-    dev: true
-
   /@mdx-js/react/2.3.0_react@18.2.0:
     resolution: {integrity: sha512-zQH//gdOmuu7nt2oJR29vFhDv88oGPmVw6BggmrHeMI+xgEkp1B2dX9/bMBSYtK0dyLX/aOmesKS09g222K1/g==}
     peerDependencies:
@@ -1267,6 +1243,7 @@ packages:
 
   /@next/env/13.1.1:
     resolution: {integrity: sha512-vFMyXtPjSAiOXOywMojxfKIqE3VWN5RCAx+tT3AS3pcKjMLFTCJFUWsKv8hC+87Z1F4W3r68qTwDFZIFmd5Xkw==}
+    dev: false
 
   /@next/env/13.1.6:
     resolution: {integrity: sha512-s+W9Fdqh5MFk6ECrbnVmmAOwxKQuhGMT7xXHrkYIBMBcTiOqNWhv5KbJIboKR5STXxNXl32hllnvKaffzFaWQg==}
@@ -1278,6 +1255,7 @@ packages:
     cpu: [arm]
     os: [android]
     requiresBuild: true
+    dev: false
     optional: true
 
   /@next/swc-android-arm-eabi/13.1.6:
@@ -1295,6 +1273,7 @@ packages:
     cpu: [arm64]
     os: [android]
     requiresBuild: true
+    dev: false
     optional: true
 
   /@next/swc-android-arm64/13.1.6:
@@ -1312,6 +1291,7 @@ packages:
     cpu: [arm64]
     os: [darwin]
     requiresBuild: true
+    dev: false
     optional: true
 
   /@next/swc-darwin-arm64/13.1.6:
@@ -1329,6 +1309,7 @@ packages:
     cpu: [x64]
     os: [darwin]
     requiresBuild: true
+    dev: false
     optional: true
 
   /@next/swc-darwin-x64/13.1.6:
@@ -1346,6 +1327,7 @@ packages:
     cpu: [x64]
     os: [freebsd]
     requiresBuild: true
+    dev: false
     optional: true
 
   /@next/swc-freebsd-x64/13.1.6:
@@ -1363,6 +1345,7 @@ packages:
     cpu: [arm]
     os: [linux]
     requiresBuild: true
+    dev: false
     optional: true
 
   /@next/swc-linux-arm-gnueabihf/13.1.6:
@@ -1380,6 +1363,7 @@ packages:
     cpu: [arm64]
     os: [linux]
     requiresBuild: true
+    dev: false
     optional: true
 
   /@next/swc-linux-arm64-gnu/13.1.6:
@@ -1397,6 +1381,7 @@ packages:
     cpu: [arm64]
     os: [linux]
     requiresBuild: true
+    dev: false
     optional: true
 
   /@next/swc-linux-arm64-musl/13.1.6:
@@ -1414,6 +1399,7 @@ packages:
     cpu: [x64]
     os: [linux]
     requiresBuild: true
+    dev: false
     optional: true
 
   /@next/swc-linux-x64-gnu/13.1.6:
@@ -1431,6 +1417,7 @@ packages:
     cpu: [x64]
     os: [linux]
     requiresBuild: true
+    dev: false
     optional: true
 
   /@next/swc-linux-x64-musl/13.1.6:
@@ -1448,6 +1435,7 @@ packages:
     cpu: [arm64]
     os: [win32]
     requiresBuild: true
+    dev: false
     optional: true
 
   /@next/swc-win32-arm64-msvc/13.1.6:
@@ -1465,6 +1453,7 @@ packages:
     cpu: [ia32]
     os: [win32]
     requiresBuild: true
+    dev: false
     optional: true
 
   /@next/swc-win32-ia32-msvc/13.1.6:
@@ -1482,6 +1471,7 @@ packages:
     cpu: [x64]
     os: [win32]
     requiresBuild: true
+    dev: false
     optional: true
 
   /@next/swc-win32-x64-msvc/13.1.6:
@@ -4889,6 +4879,7 @@ packages:
     transitivePeerDependencies:
       - '@babel/core'
       - babel-plugin-macros
+    dev: false
 
   /next/13.1.6_biqbaboplfbrettd7655fr4n2y:
     resolution: {integrity: sha512-hHlbhKPj9pW+Cymvfzc15lvhaOZ54l+8sXDXJWm3OBNBzgrVj6hwGPmqqsXg40xO1Leq+kXpllzRPuncpC0Phw==}

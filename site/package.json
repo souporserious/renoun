@@ -3,14 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 4000",
     "build": "next build",
     "lint": "next lint",
     "test": "next test"
   },
   "dependencies": {
     "@mdx-js/mdx": "^2.3.0",
-    "@mdxts/react": "workspace:*",
     "case-anything": "^2.1.10",
     "mdxts": "workspace:*",
     "next": "*",

@@ -1,5 +1,5 @@
 import { usePathname } from 'next/navigation'
-import { getPathData } from '@mdxts/react'
+import { getPathData } from 'mdxts/utils'
 import allDocsData from 'mdxts/docs'
 import allReactData from 'mdxts/react'
 
