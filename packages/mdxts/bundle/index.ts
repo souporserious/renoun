@@ -2,6 +2,7 @@ import esbuild from 'esbuild'
 import type { AsyncReturnType } from 'type-fest'
 import type { FileData } from '../rehype'
 import { rehypePlugin, getHighlighter } from '../rehype'
+import { transformCode } from '../utils/transform-code'
 
 let highlighter: AsyncReturnType<typeof getHighlighter>
 
@@ -36,6 +37,8 @@ export async function bundle({
     absWorkingDir: workingDirectory,
     target: 'esnext',
     format: 'cjs',
+    jsxDev: process.env.NODE_ENV === 'development',
+    jsx: 'automatic',
     outdir: 'dist',
     bundle: true,
     minify: true,
@@ -57,13 +60,17 @@ export async function bundle({
     ],
     external: ['react', 'react-dom', ...external],
   })
+  /* Transpile JSX using SWC. For some reason this isn't working with Esbuild. */
+  const transformedOutputFiles = await Promise.all(
+    result.outputFiles.map((outputFile) => transformCode(outputFile.text))
+  )
 
   return entryPoints.map((filePath, index) => {
     const findData = (fileData) => fileData.path === filePath
     const fileData = allFileData.find(findData) || {}
 
     return {
-      code: result.outputFiles[index].text,
+      code: transformedOutputFiles[index],
       ...fileData,
     } as {
       code: string
