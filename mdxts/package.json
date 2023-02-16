@@ -8,7 +8,6 @@
   "bin": {
     "mdxts": "./dist/cli/index.js"
   },
-  "main": "./dist/index.js",
   "exports": {
     "./bundle": "./dist/bundle/index.js",
     "./next": "./dist/next/index.js",
