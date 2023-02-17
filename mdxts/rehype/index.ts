@@ -137,8 +137,6 @@ export function rehypePlugin({
 
     /** Replace all symbolic links [[link]] with jsx links <a href="/link">link</a>. */
     visitParents(tree, 'text', (node, ancestors) => {
-      if (node.type === 'element') return
-
       const matches = node.value.match(/\[\[(.+?)\]\]/g)
 
       if (!matches) {
