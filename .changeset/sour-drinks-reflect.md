@@ -1,5 +1,0 @@
----
-"mdxts": minor
----
-
-Initial release
