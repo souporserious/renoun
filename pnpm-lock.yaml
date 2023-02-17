@@ -24,7 +24,7 @@ importers:
       react-dom: ^18.2.0
       rimraf: ^4.1.2
       ts-morph: ^17.0.1
-      tsup: ^6.6.3
+      tsup: 6.6.2
       turbo: 1.7.4
       typescript: ^4.9.5
     devDependencies:
@@ -48,7 +48,7 @@ importers:
       react-dom: 18.2.0_react@18.2.0
       rimraf: 4.1.2
       ts-morph: 17.0.1
-      tsup: 6.6.3_5l6o7hpeklex5q2il47wwacb4e
+      tsup: 6.6.2_5l6o7hpeklex5q2il47wwacb4e
       turbo: 1.7.4
       typescript: 4.9.5
 
@@ -5767,9 +5767,9 @@ packages:
   /tslib/2.5.0:
     resolution: {integrity: sha512-336iVw3rtn2BUK7ORdIAHTyxHGRIHVReokCR3XjbckJMK7ms8FysBfhLR8IXnAgy7T0PTPNBWKiH514FOW/WSg==}
 
-  /tsup/6.6.3_5l6o7hpeklex5q2il47wwacb4e:
-    resolution: {integrity: sha512-OLx/jFllYlVeZQ7sCHBuRVEQBBa1tFbouoc/gbYakyipjVQdWy/iQOvmExUA/ewap9iQ7tbJf9pW0PgcEFfJcQ==}
-    engines: {node: '>=14.18'}
+  /tsup/6.6.2_5l6o7hpeklex5q2il47wwacb4e:
+    resolution: {integrity: sha512-+yQ6SI4rVtp1+YpcYOePumJLEVQ896CDNRt9dJ2L/DeMnLf1+FTOCVw5eioLBH0xLdHgogO9NQ6vPNF5MfkSJw==}
+    engines: {node: '>=14'}
     hasBin: true
     peerDependencies:
       '@swc/core': ^1

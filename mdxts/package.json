@@ -30,7 +30,7 @@
     }
   },
   "scripts": {
-    "build": "tsup index.ts utils/index.ts bundle/index.ts watcher/index.ts next/index.ts --dts --format esm,cjs",
+    "build": "tsup index.ts utils/index.ts rehype/index.ts bundle/index.ts watcher/index.ts next/index.ts --dts --format esm,cjs",
     "dev": "pnpm build --watch --sourcemap",
     "test": "jest"
   },
