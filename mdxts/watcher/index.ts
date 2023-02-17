@@ -7,16 +7,24 @@ export function createWatcher(
   onUpdate: (path: string) => Promise<any>
 ) {
   const watcher = chokidar.watch(
-    loaderPaths.concat(
-      project.getSourceFiles().map((sourceFile) => sourceFile.getFilePath())
-    ),
-    {
-      ignoreInitial: true,
-      ignored: `${process.cwd()}/.mdxts`,
-    }
+    loaderPaths
+      .concat(
+        project.getSourceFiles().map((sourceFile) => sourceFile.getFilePath())
+      )
+      .filter(
+        (path) =>
+          !path.includes('node_modules') &&
+          !path.includes('dist') &&
+          !path.includes('.mdxts') &&
+          !path.includes('.next') &&
+          !path.includes('.turbo')
+      ),
+    { ignoreInitial: true }
   )
 
   watcher.on('add', function (addedPath) {
+    console.log('Added path to watcher: ', addedPath)
+
     if (!loaderPaths.includes(addedPath)) {
       project.addSourceFileAtPath(addedPath)
     }
@@ -25,6 +33,8 @@ export function createWatcher(
   })
 
   watcher.on('unlink', function (removedPath) {
+    console.log('Removed path from watcher: ', removedPath)
+
     if (!loaderPaths.includes(removedPath)) {
       const removedSourceFile = project.getSourceFile(removedPath)
 
@@ -37,6 +47,8 @@ export function createWatcher(
   })
 
   watcher.on('change', async function (changedPath) {
+    console.log('Changed path in watcher: ', changedPath)
+
     if (!loaderPaths.includes(changedPath)) {
       const changedSourceFile = project.getSourceFile(changedPath)
 
