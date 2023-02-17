@@ -1,5 +1,8 @@
 # mdxts
 
+> **Warning**
+> This project and all packages are still a work in progress. The APIs are not stable and may change.
+
 Markdown by TypeScript.
 
 Build a full knowledge graph between your Markdown and TypeScript files.
