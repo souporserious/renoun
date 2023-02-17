@@ -22,4 +22,5 @@ export default withMDXTS({
   compiler: {
     styledComponents: true,
   },
+  target: 'serverless',
 })
