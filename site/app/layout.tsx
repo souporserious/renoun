@@ -20,7 +20,9 @@ export default function RootLayout({
 
   return (
     <html>
-      <head />
+      <head>
+        <link rel="canonical" href="https://www.mdxts.com" />
+      </head>
       <body>
         <StyledComponentsRegistry>{children}</StyledComponentsRegistry>
       </body>
