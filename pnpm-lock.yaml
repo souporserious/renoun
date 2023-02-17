@@ -71,6 +71,7 @@ importers:
       hast-util-has-property: ^2.0.1
       hast-util-heading-rank: ^2.1.1
       hast-util-to-string: ^2.0.0
+      mdxts: ^0.1.0
       next: '*'
       react: '*'
       react-dom: '*'
@@ -102,6 +103,7 @@ importers:
       hast-util-has-property: 2.0.1
       hast-util-heading-rank: 2.1.1
       hast-util-to-string: 2.0.0
+      mdxts: 'link:'
       remark-frontmatter: 4.0.1
       shiki: 0.14.1
       tree-visit: 0.1.3
