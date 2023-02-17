@@ -1,0 +1,5 @@
+---
+"mdxts": patch
+---
+
+Fix types

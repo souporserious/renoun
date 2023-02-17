@@ -9,11 +9,29 @@
   "exports": {
     "./bundle": "./dist/bundle/index.js",
     "./next": "./dist/next/index.js",
-    "./utils": "./dist/utils/index.js"
+    "./utils": "./dist/utils/index.js",
+    "./watcher": "./dist/watcher/index.js"
+  },
+  "types": "./dist/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "bundle": [
+        "./dist/bundle/index.d.ts"
+      ],
+      "next": [
+        "./dist/next/index.d.ts"
+      ],
+      "utils": [
+        "./dist/utils/index.d.ts"
+      ],
+      "watcher": [
+        "./dist/watcher/index.d.ts"
+      ]
+    }
   },
   "scripts": {
-    "build": "tsup index.ts utils/index.ts bundle/index.ts components/index.ts watcher/index.ts cli/index.ts next/index.ts",
-    "dev": "pnpm build --watch",
+    "build": "tsup index.ts utils/index.ts bundle/index.ts watcher/index.ts next/index.ts --dts --format esm,cjs",
+    "dev": "pnpm build --watch --sourcemap",
     "test": "jest"
   },
   "peerDependencies": {
