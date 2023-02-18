@@ -209,11 +209,11 @@ export function rehypePlugin({
           codeNode.tagName === 'code' &&
           codeNode.properties
         ) {
+          const code = toString(node)
           const classNames = (codeNode.properties?.className || []) as string[]
           const language = getLanguage(classNames)
 
           if (language) {
-            const code = toString(node)
             const tokens = highlighter(code, language)
 
             codeBlocks.push({
@@ -224,6 +224,18 @@ export function rehypePlugin({
             })
 
             node.children = tokensToHast(tokens)
+          }
+
+          /* Map properties to attributes. */
+          if (codeNode.data?.meta) {
+            const meta = codeNode.data.meta as string
+
+            meta.split(' ').forEach((prop) => {
+              const [key, value] = prop.split('=')
+              node.properties[key] = value ?? true
+            })
+
+            node.properties.code = code
           }
         }
       }
