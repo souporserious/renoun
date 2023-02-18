@@ -16,7 +16,7 @@ export function Logo() {
           d="M47 20.023L37 2.02295L57 2.02295L47 20.023Z"
           fill="white"
           fillOpacity="0.9"
-          shape-rendering="crispEdges"
+          shapeRendering="crispEdges"
         />
       </g>
       <path
@@ -43,9 +43,9 @@ export function Logo() {
           width="28"
           height="26"
           filterUnits="userSpaceOnUse"
-          color-interpolation-filters="sRGB"
+          colorInterpolationFilters="sRGB"
         >
-          <feFlood flood-opacity="0" result="BackgroundImageFix" />
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
           <feColorMatrix
             in="SourceAlpha"
             type="matrix"
