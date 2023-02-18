@@ -7,10 +7,6 @@ const withMDXTS = createMDXTSPlugin({
       include: 'docs/**/*.mdx',
       loader: 'loaders/docs.ts',
     },
-    react: {
-      include: '../packages/react/src/**/*.(ts|tsx|mdx)',
-      loader: 'loaders/react.ts',
-    },
   },
 })
 

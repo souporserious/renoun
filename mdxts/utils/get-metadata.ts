@@ -16,7 +16,7 @@ import { getSourcePath } from './get-source-path'
 // - exports: Exports for the source file.
 
 /** Generates compiled examples and gathers common metadata for a source file. */
-export function getData(sourceFile: SourceFile) {
+export function getMetadata(sourceFile: SourceFile) {
   let name = sourceFile.getBaseNameWithoutExtension()
 
   if (name === 'index') {

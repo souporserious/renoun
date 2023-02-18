@@ -1,18 +1,22 @@
 import type { SourceFiles } from 'mdxts'
 import { bundle } from 'mdxts/bundle'
-import { getData } from 'mdxts/utils'
+import { getMetadata } from 'mdxts/utils'
 
 export default async function getDocs(sourceFiles: SourceFiles) {
+  const mdxContents = await bundle({
+    entryPoints: sourceFiles.map((sourceFile) => sourceFile.getFilePath()),
+    workingDirectory: process.cwd() + '/docs',
+  })
+
   return Promise.all(
-    sourceFiles.map(async (sourceFile) => {
-      const [mdx] = await bundle({
-        entryPoints: [sourceFile.getFilePath()],
-      })
-      const { name, slug, order, path } = getData(sourceFile)
+    sourceFiles.map(async (sourceFile, index) => {
+      const mdx = mdxContents[index]
+      const { name, slug, order, path } = getMetadata(sourceFile)
 
       return {
         name,
         slug,
+        pathname: `/docs/${slug}`,
         order,
         path,
         mdx,
