@@ -1,38 +1,50 @@
-import { capitalCase, kebabCase } from 'case-anything'
-import type { SourceFile } from 'ts-morph'
+import path from 'node:path'
+import { kebabCase } from 'case-anything'
+import title from 'title'
+import { Directory, SourceFile } from 'ts-morph'
 import { getSourcePath } from './get-source-path'
 
-// Common metadata for an MDX/TSX source file.
-// - name: Capitalized name of the source file.
-// - slug: Kebab-cased name of the source file.
-// - path: Path to the source file in the local IDE or git repository.
-// - order: Order of the source file in the directory.
-// - basename: Base name of the source file.
-// - extension: Extension of the source file.
-// - source: Original source file.
-// - compiled: Compiled source file.
-// - examples: Examples for the source file.
-// - references: References for the source file.
-// - exports: Exports for the source file.
-
 /** Generates compiled examples and gathers common metadata for a source file. */
-export function getMetadata(sourceFile: SourceFile) {
-  let name = sourceFile.getBaseNameWithoutExtension()
-
-  if (name === 'index') {
-    name = sourceFile.getDirectory().getBaseName()
-  }
-
-  // Remove order prefix from path name if it exists (e.g. 01. or 01-)
-  const strippedName = name.replace(/^(\d+\.|-)/, '')
-  const order = Number(name.split(/\.|-/)[0]) ?? 0
+export function getMetadata(
+  sourceFileOrDirectory: SourceFile | Directory,
+  workingDirectory: string
+) {
+  const basename =
+    sourceFileOrDirectory instanceof Directory
+      ? sourceFileOrDirectory.getBaseName()
+      : sourceFileOrDirectory.getBaseNameWithoutExtension()
+  const path =
+    sourceFileOrDirectory instanceof Directory
+      ? sourceFileOrDirectory.getPath()
+      : sourceFileOrDirectory.getFilePath()
+  const pathSegments = getPathSegments(path, workingDirectory)
+  const strippedName = stripOrderPrefix(basename)
+  const order = Number(basename.split(/\.|-/)[0])
 
   return {
-    basename: name,
-    extension: sourceFile.getExtension(),
-    name: capitalCase(strippedName).replace(/-/g, ' '),
+    name: title(strippedName.replace(/-/g, ' ')),
     slug: kebabCase(strippedName),
-    path: getSourcePath(sourceFile.getFilePath()),
-    order,
+    order: isNaN(order) ? 0 : order,
+    sourcePath: getSourcePath(path),
+    pathname: `/${pathSegments.join('/')}`,
+    pathSegments,
   }
+}
+
+/** Parses path segments from source file path. */
+function getPathSegments(filePath: string, workingDirectory: string) {
+  return filePath
+    .replace(workingDirectory, '')
+    .split('/')
+    .filter((segment) => segment !== '')
+    .map((segment) =>
+      kebabCase(
+        path.basename(stripOrderPrefix(segment), path.extname(filePath))
+      )
+    )
+}
+
+/** Remove order prefix from base name if it exists (e.g. 01. or 01-) */
+function stripOrderPrefix(name: string) {
+  return name.replace(/^(\d+\.|-)/, '')
 }
