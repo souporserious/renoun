@@ -1,3 +1,4 @@
+import FilterWarningsPlugin from 'webpack-filter-warnings-plugin'
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { NextConfig } from 'next'
@@ -107,6 +108,25 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
   }
 
   return function withMDXTS(nextConfig: NextConfig = {}) {
+    const getWebpackConfig = nextConfig.webpack
+
+    // TODO: #8 silencing ts-morph critical dependency warnings for now
+    nextConfig.webpack = (config, options) => {
+      config.plugins.push(
+        new FilterWarningsPlugin({
+          exclude: [
+            /Critical dependency: the request of a dependency is an expression/,
+          ],
+        })
+      )
+
+      if (typeof getWebpackConfig === 'function') {
+        return getWebpackConfig(config, options)
+      }
+
+      return config
+    }
+
     return async (phase) => {
       await Promise.all([
         createMDXTSDirectory(),
