@@ -1,3 +1,4 @@
+export * from './flatten-data'
 export * from './get-component'
 export * from './get-editor-path'
 export * from './get-examples'
