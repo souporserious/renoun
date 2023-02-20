@@ -19,17 +19,31 @@ export function Sidebar() {
         </h1>
       </a>
 
-      <ul style={{ padding: 0, listStyle: 'none' }}>
-        {allDocs.map((data) => {
-          return (
-            <li key={data.slug}>
-              <Link href={data.slug} className="link">
-                <Text>{data.name}</Text>
-              </Link>
-            </li>
-          )
-        })}
-      </ul>
+      {renderNavigation(allDocs)}
     </aside>
+  )
+}
+
+// Recursively render a nested list of links based on children
+function renderNavigation(data: any, order: number = 0) {
+  return (
+    <ul
+      style={{
+        padding: 0,
+        paddingLeft: order * 1.5 + 'rem',
+        listStyle: 'none',
+      }}
+    >
+      {data.map((item: any) => {
+        return (
+          <li key={item.pathname}>
+            <Link href={item.pathname} className="link">
+              <Text>{item.name}</Text>
+            </Link>
+            {item.children && renderNavigation(item.children, order + 1)}
+          </li>
+        )
+      })}
+    </ul>
   )
 }
