@@ -97,7 +97,7 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
         const loaderPath = resolve(process.cwd(), options.loader)
         const loaderContents = await readFile(loaderPath, 'utf-8')
         const loader = await executeCode(loaderContents)
-        const data = await loader(sourceFiles)
+        const data = await loader(sourceFiles, project)
 
         await writeFile(
           resolve(process.cwd(), '.mdxts', `${name}.json`),
