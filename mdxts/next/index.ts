@@ -82,11 +82,6 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
     resolve(process.cwd(), options.loader)
   )
 
-  /** Add additional source files to project. */
-  Object.values(pluginOptions.sources).map(({ include }) =>
-    project.addSourceFilesAtPaths(include)
-  )
-
   /** Run loaders for each set of source files. */
   const compile = () => {
     console.log('mdxts: compiling...')
