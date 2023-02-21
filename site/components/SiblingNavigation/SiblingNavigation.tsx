@@ -1,9 +1,6 @@
 import { usePathname } from 'next/navigation'
 import { getPathData } from 'mdxts/utils'
-import allDocsData from 'mdxts/docs'
-import allReactData from 'mdxts/react'
-
-const allData = [...allDocsData, ...allReactData]
+import allData from 'mdxts/docs'
 
 export function SiblingNavigation() {
   const pathname = usePathname()
