@@ -4,13 +4,23 @@ import { getMetadata } from 'mdxts/utils'
 
 export default async function getDocs(sourceFiles: SourceFiles) {
   const topLevelDirectories = getTopLevelDirectories(sourceFiles)
-  const workingDirectory = process.cwd() + '/docs'
-  const mdxContents = await bundle({
-    workingDirectory,
-    entryPoints: sourceFiles.map((sourceFile) => sourceFile.getFilePath()),
-  })
+  const mdxContents = (
+    await Promise.all(
+      topLevelDirectories.map((directory) =>
+        bundle({
+          workingDirectory: directory.getPath(),
+          entryPoints: sourceFiles.map((sourceFile) =>
+            sourceFile.getFilePath()
+          ),
+        })
+      )
+    )
+  ).flat()
 
-  function getDataForSourceFile(sourceFile: SourceFile) {
+  function getDataForSourceFile(
+    sourceFile: SourceFile,
+    workingDirectory?: string
+  ) {
     const mdx = mdxContents.find((mdx) => mdx.path === sourceFile.getFilePath())
 
     if (mdx) {
@@ -26,29 +36,33 @@ export default async function getDocs(sourceFiles: SourceFiles) {
   }
 
   // Recursively traverse all descendant directory source files and generate metadata.
-  function getDataForDirectory(directory: Directory) {
+  function getDataForDirectory(directory: Directory, workingDirectory: string) {
     const sourceFiles = directory.getSourceFiles()
     const indexSourceFile = sourceFiles.find(
       (sourceFile) => sourceFile.getBaseName() === 'index'
     )
     const data = indexSourceFile
-      ? getDataForSourceFile(indexSourceFile)
+      ? getDataForSourceFile(indexSourceFile, workingDirectory)
       : getMetadata(directory, workingDirectory)
 
     return {
       ...data,
       children: directory
         .getDirectories()
-        .map(getDataForDirectory)
+        .map((directory) => getDataForDirectory(directory, workingDirectory))
         .concat(
           sourceFiles
             .filter((sourceFile) => sourceFile.getBaseName() !== 'index')
-            .map((sourceFile) => getDataForSourceFile(sourceFile))
+            .map((sourceFile) =>
+              getDataForSourceFile(sourceFile, workingDirectory)
+            )
         ),
     }
   }
 
-  const data = topLevelDirectories.map(getDataForDirectory)
+  const data = topLevelDirectories.map((directory) =>
+    getDataForDirectory(directory, directory.getPath())
+  )
 
   sortChildren(data)
 

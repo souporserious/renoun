@@ -19,18 +19,17 @@ export function Sidebar() {
         </h1>
       </a>
 
-      {renderNavigation(allDocs)}
+      {renderNavigation(allDocs[0].children)}
     </aside>
   )
 }
 
-// Recursively render a nested list of links based on children
 function renderNavigation(data: any, order: number = 0) {
   return (
     <ul
       style={{
         padding: 0,
-        paddingLeft: order * 1.5 + 'rem',
+        paddingLeft: order * 0.5 + 'rem',
         listStyle: 'none',
       }}
     >

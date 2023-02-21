@@ -2,7 +2,7 @@ import allDocs from 'mdxts/docs'
 import { flattenData } from 'mdxts/utils'
 import { MDXComponent } from 'app/MDXComponent'
 
-const flattenedDocs = flattenData(allDocs)
+const flattenedDocs = flattenData(allDocs[0].children)
 
 export async function generateStaticParams() {
   return flattenedDocs.map((doc) => ({ slug: doc.pathSegments }))

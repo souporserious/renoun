@@ -57,7 +57,7 @@
     "case-anything": "^2.1.10",
     "chokidar": "^3.5.3",
     "dprint-node": "^1.0.7",
-    "esbuild": "^0.17.8",
+    "esbuild": "^0.17.10",
     "esbuild-plugin-wasm": "^1.0.0",
     "find-up": "^6.3.0",
     "github-slugger": "^2.0.0",
