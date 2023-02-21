@@ -5,7 +5,8 @@ export function flattenData(data) {
   }
 
   if (data.children) {
-    return data.children.flatMap(flattenData)
+    const { children, ...collectionData } = data
+    return [collectionData].concat(children.flatMap(flattenData))
   }
 
   return data

@@ -39,11 +39,20 @@ export default async function getDocs(sourceFiles: SourceFiles) {
   function getDataForDirectory(directory: Directory, workingDirectory: string) {
     const sourceFiles = directory.getSourceFiles()
     const indexSourceFile = sourceFiles.find(
-      (sourceFile) => sourceFile.getBaseName() === 'index'
+      (sourceFile) => sourceFile.getBaseNameWithoutExtension() === 'index'
     )
-    const data = indexSourceFile
+    const directorySourceFiles = sourceFiles.filter(
+      (sourceFile) => sourceFile.getBaseNameWithoutExtension() !== 'index'
+    )
+    let data = indexSourceFile
       ? getDataForSourceFile(indexSourceFile, workingDirectory)
       : getMetadata(directory, workingDirectory)
+
+    if (indexSourceFile) {
+      const directoryMetadata = getMetadata(directory, workingDirectory)
+
+      Object.assign(data, directoryMetadata, { sourcePath: data.sourcePath })
+    }
 
     return {
       ...data,
@@ -51,11 +60,9 @@ export default async function getDocs(sourceFiles: SourceFiles) {
         .getDirectories()
         .map((directory) => getDataForDirectory(directory, workingDirectory))
         .concat(
-          sourceFiles
-            .filter((sourceFile) => sourceFile.getBaseName() !== 'index')
-            .map((sourceFile) =>
-              getDataForSourceFile(sourceFile, workingDirectory)
-            )
+          directorySourceFiles.map((sourceFile) =>
+            getDataForSourceFile(sourceFile, workingDirectory)
+          )
         ),
     }
   }

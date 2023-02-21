@@ -13,9 +13,9 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
     (doc) => JSON.stringify(doc.pathSegments) === JSON.stringify(params.slug)
   )
 
-  if (!doc) {
-    return null
+  if (doc?.mdx) {
+    return <MDXComponent code={doc.mdx.code} />
   }
 
-  return <MDXComponent code={doc.mdx.code} />
+  return null
 }

@@ -28,17 +28,25 @@ function renderNavigation(data: any, order: number = 0) {
   return (
     <ul
       style={{
-        padding: 0,
         paddingLeft: order * 0.5 + 'rem',
         listStyle: 'none',
       }}
     >
       {data.map((item: any) => {
         return (
-          <li key={item.pathname}>
-            <Link href={item.pathname} className="link">
-              <Text>{item.name}</Text>
-            </Link>
+          <li
+            key={item.pathname}
+            style={{ color: item.mdx ? 'white' : 'grey' }}
+          >
+            {item.mdx ? (
+              <Link href={item.pathname} style={{ padding: '0.25rem 0' }}>
+                <Text>{item.name}</Text>
+              </Link>
+            ) : (
+              <div style={{ padding: '0.25rem 0', cursor: 'default' }}>
+                <Text>{item.name}</Text>
+              </div>
+            )}
             {item.children && renderNavigation(item.children, order + 1)}
           </li>
         )
