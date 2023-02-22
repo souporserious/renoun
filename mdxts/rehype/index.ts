@@ -228,12 +228,12 @@ export function rehypePlugin({
 
           /* Map properties to attributes. */
           if (codeNode.data?.meta) {
-            const meta = codeNode.data.meta as string
+            // const meta = codeNode.data.meta as string
 
-            meta.split(' ').forEach((prop) => {
-              const [key, value] = prop.split('=')
-              node.properties[key] = value ?? true
-            })
+            // meta.split(' ').forEach((prop) => {
+            //   const [key, value] = prop.split('=')
+            //   node.properties[key] = value ?? true
+            // })
 
             node.properties.code = code
           }

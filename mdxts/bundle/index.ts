@@ -6,7 +6,7 @@ import { transformCode } from '../utils/transform-code'
 
 let highlighter: AsyncReturnType<typeof getHighlighter>
 
-/** Bundle a set of MDX files into a single JavaScript file. */
+/** Bundle MDX/JavaScript/TypeScript files for the browser. */
 export async function bundle({
   entryPoints,
   workingDirectory,

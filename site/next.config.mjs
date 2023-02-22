@@ -3,10 +3,7 @@ import { createMDXTSPlugin } from 'mdxts/next'
 const withMDXTS = createMDXTSPlugin({
   gitSource: 'https://github.com/souporserious/mdxts/tree/main',
   sources: {
-    docs: {
-      include: 'docs/**/*.(tsx|mdx)',
-      loader: 'loaders/docs.ts',
-    },
+    docs: 'docs/**/*.(tsx|mdx)',
   },
 })
 

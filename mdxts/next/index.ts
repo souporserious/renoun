@@ -5,14 +5,29 @@ import { NextConfig } from 'next'
 import { PHASE_DEVELOPMENT_SERVER } from 'next/constants'
 import { Project } from 'ts-morph'
 import { executeCode } from '../utils/execute-code'
+import { getSourceFilesData } from '../utils/get-source-files-data'
 import { createWatcher } from '../watcher'
+
+type FileGlobs = string | readonly string[]
 
 type PluginOptions = {
   gitSource: string
   sources: Record<
     string,
+    | FileGlobs
+    | {
+        include: FileGlobs
+        loader: string
+      }
+  >
+}
+
+type NormalizedPluginOptions = {
+  gitSource: string
+  sources: Record<
+    string,
     {
-      include: string | readonly string[]
+      include: FileGlobs
       loader: string
     }
   >
@@ -71,28 +86,54 @@ async function codemodGitIgnore() {
   console.log('mdxts: added .mdxts directory to .gitignore')
 }
 
+function normalizeOptions(pluginOptions: PluginOptions) {
+  Object.entries(pluginOptions.sources).forEach(([name, options]) => {
+    if (typeof options === 'string') {
+      pluginOptions.sources[name] = {
+        include: options,
+        loader: null,
+      }
+    }
+  })
+
+  return pluginOptions as NormalizedPluginOptions
+}
+
 /** Starts the MDXTS server and bundles all entry points defined in the plugin options. */
 export function createMDXTSPlugin(pluginOptions: PluginOptions) {
   console.log('mdxts: config initialized')
 
+  const { gitSource, sources } = normalizeOptions(pluginOptions)
   const project = new Project({
     tsConfigFilePath: resolve(process.cwd(), 'tsconfig.json'),
   })
-  const loaderPaths = Object.values(pluginOptions.sources).map((options) =>
-    resolve(process.cwd(), options.loader)
-  )
+  const loaderPaths = Object.values(sources)
+    .map((options) =>
+      options.loader ? resolve(process.cwd(), options.loader) : null
+    )
+    .filter(Boolean)
 
   /** Run loaders for each set of source files. */
   const compile = () => {
     console.log('mdxts: compiling...')
 
     return Promise.all(
-      Object.entries(pluginOptions.sources).map(async ([name, options]) => {
+      Object.entries(sources).map(async ([name, options]) => {
         const sourceFiles = project.addSourceFilesAtPaths(options.include)
-        const loaderPath = resolve(process.cwd(), options.loader)
-        const loaderContents = await readFile(loaderPath, 'utf-8')
-        const loader = await executeCode(loaderContents)
-        const data = await loader(sourceFiles, project)
+        const sourceFilesData = getSourceFilesData(sourceFiles)
+        let loader: any = (sourceFilesData) => sourceFilesData
+
+        if (options.loader) {
+          try {
+            const loaderPath = resolve(process.cwd(), options.loader)
+            const loaderContents = await readFile(loaderPath, 'utf-8')
+            loader = await executeCode(loaderContents)
+          } catch (error) {
+            console.error(`mdxts: error loading loader for ${name}`, error)
+          }
+        }
+
+        const data = await loader(sourceFilesData, sourceFiles, project)
 
         await writeFile(
           resolve(process.cwd(), '.mdxts', `${name}.json`),
@@ -139,7 +180,7 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
         nextConfig.env = {}
       }
 
-      nextConfig.env.MDXTS_GIT_SOURCE = pluginOptions.gitSource
+      nextConfig.env.MDXTS_GIT_SOURCE = gitSource
 
       return nextConfig
     }

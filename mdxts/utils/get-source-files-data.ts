@@ -1,8 +1,11 @@
-import type { SourceFiles, SourceFile, Project } from 'mdxts'
-import { bundle } from 'mdxts/bundle'
-import { getMetadata } from 'mdxts/utils'
+import type { Directory, SourceFile } from 'ts-morph'
+import { bundle } from '../bundle'
+import { getMetadata } from './get-metadata'
+import { getTopLevelDirectories } from './get-top-level-directories'
+import { sortChildren } from './sort-children'
 
-export default async function getDocs(sourceFiles: SourceFiles) {
+/** Get data for all source files starting from top-level directories. */
+export async function getSourceFilesData(sourceFiles: SourceFile[]) {
   const topLevelDirectories = getTopLevelDirectories(sourceFiles)
   const bundledFiles = await bundle({
     entryPoints: sourceFiles.map((sourceFile) => sourceFile.getFilePath()),
@@ -67,30 +70,4 @@ export default async function getDocs(sourceFiles: SourceFiles) {
   sortChildren(data)
 
   return data
-}
-
-type Directory = ReturnType<Project['getDirectory']>
-
-/** Get the top level directories for a collection of source files. */
-function getTopLevelDirectories(sourceFiles: SourceFiles) {
-  const allDirectories = new Set<Directory>()
-
-  sourceFiles.forEach((sourceFile) => {
-    allDirectories.add(sourceFile.getDirectory())
-  })
-
-  const topLevelDirectories = Array.from(allDirectories).filter((directory) => {
-    return !allDirectories.has(directory.getParent())
-  })
-
-  return topLevelDirectories
-}
-
-/** Recursively sort children by order property. */
-function sortChildren(children) {
-  children.sort((a, b) => a.order - b.order)
-  children.forEach((child) => {
-    if (!child.children) return
-    sortChildren(child.children)
-  })
 }
