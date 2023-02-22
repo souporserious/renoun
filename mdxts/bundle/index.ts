@@ -36,7 +36,7 @@ export async function bundle({
     entryPoints: entryPoints,
     absWorkingDir: workingDirectory,
     target: 'esnext',
-    format: 'cjs',
+    format: 'esm',
     jsxDev: process.env.NODE_ENV === 'development',
     jsx: 'automatic',
     outdir: 'dist',
@@ -70,6 +70,7 @@ export async function bundle({
     const fileData = allFileData.find(findData) || {}
 
     return {
+      path: filePath,
       code: transformedOutputFiles[index],
       ...fileData,
     } as {

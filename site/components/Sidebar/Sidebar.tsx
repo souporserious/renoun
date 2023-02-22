@@ -36,9 +36,9 @@ function renderNavigation(data: any, order: number = 0) {
         return (
           <li
             key={item.pathname}
-            style={{ color: item.mdx ? 'white' : 'grey' }}
+            style={{ color: item.code ? 'white' : 'grey' }}
           >
-            {item.mdx ? (
+            {item.code ? (
               <Link href={item.pathname} style={{ padding: '0.25rem 0' }}>
                 <Text>{item.name}</Text>
               </Link>

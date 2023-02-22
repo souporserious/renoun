@@ -4,7 +4,7 @@ const withMDXTS = createMDXTSPlugin({
   gitSource: 'https://github.com/souporserious/mdxts/tree/main',
   sources: {
     docs: {
-      include: 'docs/**/*.mdx',
+      include: 'docs/**/*.(tsx|mdx)',
       loader: 'loaders/docs.ts',
     },
   },

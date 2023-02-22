@@ -4,30 +4,23 @@ import { getMetadata } from 'mdxts/utils'
 
 export default async function getDocs(sourceFiles: SourceFiles) {
   const topLevelDirectories = getTopLevelDirectories(sourceFiles)
-  const mdxContents = (
-    await Promise.all(
-      topLevelDirectories.map((directory) =>
-        bundle({
-          workingDirectory: directory.getPath(),
-          entryPoints: sourceFiles.map((sourceFile) =>
-            sourceFile.getFilePath()
-          ),
-        })
-      )
-    )
-  ).flat()
+  const bundledFiles = await bundle({
+    entryPoints: sourceFiles.map((sourceFile) => sourceFile.getFilePath()),
+  })
 
   function getDataForSourceFile(
     sourceFile: SourceFile,
     workingDirectory?: string
   ) {
-    const mdx = mdxContents.find((mdx) => mdx.path === sourceFile.getFilePath())
+    const result = bundledFiles.find(
+      (file) => file.path === sourceFile.getFilePath()
+    )
 
-    if (mdx) {
+    if (result) {
       const metadata = getMetadata(sourceFile, workingDirectory)
 
       return {
-        mdx: { code: mdx.code },
+        code: result.code,
         // references,
         // examples,
         ...metadata,
