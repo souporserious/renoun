@@ -10,7 +10,7 @@ export async function generateStaticParams() {
 
 export default async function Page({ params }: { params: { slug: string[] } }) {
   const doc = flattenedDocs.find(
-    (doc) => JSON.stringify(doc.pathSegments) === JSON.stringify(params.slug)
+    (doc) => doc.pathSegments.join('') === params.slug.join('')
   )
 
   if (doc?.code) {
