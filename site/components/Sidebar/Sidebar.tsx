@@ -10,7 +10,7 @@ export function Sidebar() {
         display: 'flex',
         flexDirection: 'column',
         padding: '2rem',
-        gap: '2rem',
+        gap: '2.5rem',
       }}
     >
       <a href="/">
@@ -39,7 +39,10 @@ function renderNavigation(data: any, order: number = 0) {
             style={{ color: item.code ? 'white' : 'grey' }}
           >
             {item.code ? (
-              <Link href={item.pathname} style={{ padding: '0.25rem 0' }}>
+              <Link
+                href={item.pathname}
+                style={{ display: 'block', padding: '0.25rem 0' }}
+              >
                 <Text>{item.name}</Text>
               </Link>
             ) : (
