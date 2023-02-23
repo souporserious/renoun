@@ -32,6 +32,7 @@
 body {
   font-size: var(--font-size-body);
   font-family: var(--font-family-body);
+  letter-spacing: 0.02em;
   background-color: var(--color-background);
   color: var(--color-foreground);
 }
@@ -42,6 +43,7 @@ a {
 }
 
 a:hover {
+  color: white;
   text-decoration: underline;
 }
 
@@ -64,7 +66,7 @@ h3 {
 }
 
 main {
-  padding: 3rem 2rem 2rem;
+  padding: 6rem 2rem 2rem;
 }
 
 main h1,
@@ -73,7 +75,7 @@ main h3,
 main pre,
 main ul,
 main p {
-  margin: 0 0 2rem;
+  margin: 0 0 1.6rem;
 }
 
 pre {

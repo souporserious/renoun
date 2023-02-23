@@ -13,6 +13,7 @@ type StyledTextProps = {
   $variant?: TextVariants
   $alignment?: 'start' | 'center' | 'end'
   $width?: string | number
+  $weight?: number
   $lineHeight?: string
 }
 
@@ -36,6 +37,7 @@ export const Text = ({
   variant = 'body1',
   alignment,
   width,
+  weight = 400,
   lineHeight,
   children,
 }: TextProps) => {
@@ -58,6 +60,7 @@ export const Text = ({
         $alignment={alignment}
         $lineHeight={lineHeight}
         $width={width}
+        $weight={weight}
         $variant={variant}
       >
         {children}
@@ -67,17 +70,22 @@ export const Text = ({
 }
 
 const StyledText = styled.span<StyledTextProps>(
-  ({ $alignment, $lineHeight, $width, $variant = 'body' }) => {
+  ({ $alignment, $lineHeight, $weight, $width, $variant }) => {
     const styles = {
       margin: 0,
       textAlign: $alignment,
       width: $width,
       ...(textStyles[$variant] ?? {}),
     }
-    // allow overriding text style line height
+
+    if ($weight !== undefined) {
+      styles.fontWeight = $weight
+    }
+
     if ($lineHeight !== undefined) {
       styles.lineHeight = $lineHeight
     }
+
     return styles
   }
 )
