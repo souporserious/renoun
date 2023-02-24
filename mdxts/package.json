@@ -40,9 +40,15 @@
     "react-dom": ">=18.0.0"
   },
   "devDependencies": {
+    "hast-util-to-html": "^8.0.4",
+    "mdast-util-to-hast": "^12.3.0",
     "next": "*",
     "react": "*",
-    "react-dom": "*"
+    "react-dom": "*",
+    "rehype-parse": "^8.0.4",
+    "rehype-stringify": "^9.0.3",
+    "remark": "^14.0.2",
+    "unified": "^10.1.2"
   },
   "dependencies": {
     "@mdx-js/esbuild": "^2.3.0",
@@ -68,7 +74,6 @@
     "ts-morph": "^17.0.1",
     "type-fest": "^3.6.0",
     "unified": "^10.1.2",
-    "unist-builder": "^3.0.1",
     "unist-util-visit": "^4.1.2",
     "unist-util-visit-parents": "^5.1.3",
     "url-slug": "^3.0.4",

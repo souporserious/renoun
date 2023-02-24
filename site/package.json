@@ -9,6 +9,7 @@
     "test": "next test"
   },
   "dependencies": {
+    "@codesandbox/sandpack-react": "^2.0.15",
     "@mdx-js/mdx": "^2.3.0",
     "@monaco-editor/react": "^4.4.6",
     "@types/mdx": "^2.0.3",
