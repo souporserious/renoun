@@ -6,17 +6,15 @@ As an illustration of how this works, let's say we have the following file struc
 
 ```tsx
 ├── examples
-│   ├── basic.tsx
-│   └── advanced.tsx
+│   ├── Basic.tsx
+│   └── Advanced.tsx
 └── README.mdx
 ```
 
 We can now render the `basic` example in our README like so:
 
 ```mdx
-import { Example } from 'mdxts'
-
-<Example name="basic" />
+<Example source="Basic.tsx" />
 ```
 
 ## Code Block Examples
@@ -28,7 +26,7 @@ When declaring a code block in MDX, you can target the filename prop to render t
 export const Basic = () => <div>Basic</div>
 ```
 
-<Example name="Basic.tsx" />
+<Example source="Basic.tsx" />
 ````
 
 Or if no source is provided the first previous code block will be used.
