@@ -67,7 +67,7 @@ test('get examples from directory', async () => {
     .createDirectory('examples')
     .createSourceFile('BasicUsage.tsx', basicUsageSourceFile)
 
-  const examples = getExamplesFromDirectory(sourceFile)
+  const examples = getExamplesFromDirectory(sourceFile.getDirectory())
 
   expect(JSON.stringify(examples, null, 2)).toMatchSnapshot()
 })

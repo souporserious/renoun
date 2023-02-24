@@ -1,4 +1,4 @@
-import type { FunctionLikeDeclaration, SourceFile } from 'ts-morph'
+import type { Directory, FunctionLikeDeclaration, SourceFile } from 'ts-morph'
 import { SyntaxKind } from 'ts-morph'
 import { extractExportByIdentifier } from './extract-export-by-identifier'
 
@@ -42,9 +42,9 @@ export function getExamplesFromExtension(sourceFile: SourceFile) {
   })
 }
 
-/** Gathers examples from a source file's examples directory. */
-export function getExamplesFromDirectory(sourceFile: SourceFile) {
-  const examplesDirectory = sourceFile.getDirectory().getDirectory('examples')
+/** Gathers examples from the closest `examples` directory. */
+export function getExamplesFromDirectory(directory: Directory) {
+  const examplesDirectory = directory.getDirectory('examples')
 
   if (!examplesDirectory) {
     return []
