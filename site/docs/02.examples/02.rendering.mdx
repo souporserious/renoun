@@ -19,6 +19,28 @@ import { Example } from 'mdxts'
 <Example name="basic" />
 ```
 
+## Code Block Examples
+
+When declaring a code block in MDX, you can target the filename prop to render the example:
+
+````mdx
+```tsx filename="Basic.tsx"
+export const Basic = () => <div>Basic</div>
+```
+
+<Example name="Basic.tsx" />
+````
+
+Or if no source is provided the first previous code block will be used.
+
+````mdx
+```tsx
+export const Basic = () => <div>Basic</div>
+```
+
+<Preview />
+````
+
 ## Templating
 
 While the [[Example]] component is great for content like a blog and one-off situations. It's not very useful for a library, or automated documentation. For this, you can lean on your specific build tool to handle the templating and query the information available in the collected data.
