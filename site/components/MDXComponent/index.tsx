@@ -17,9 +17,9 @@ export function MDXComponent({ code }: { code: string }) {
         Example: ({
           source,
           identifier,
+          language,
           code,
           transformedCode,
-          language,
         }: {
           source: string
           identifier: string
@@ -28,6 +28,17 @@ export function MDXComponent({ code }: { code: string }) {
           language: string
         }) => {
           const codeExports = React.use(getComponent(transformedCode))
+
+          if (identifier) {
+            const Component = codeExports[identifier]
+
+            return (
+              <>
+                <pre>{code}</pre>
+                <Component />
+              </>
+            )
+          }
 
           return (
             <>
