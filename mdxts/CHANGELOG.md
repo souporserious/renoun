@@ -1,5 +1,14 @@
 # mdxts
 
+## 0.1.3
+
+### Patch Changes
+
+- ac2703b: Initial Example component implementation.
+- 6aeba9c: Fix symbolic links transform cutting off content.
+- 32ac2bb: Change `getExamplesFromDirectory` signature to accept a directory.
+- e86ce2b: Remove @mdx-js/react and ts-morph peer dependencies.
+
 ## 0.1.2
 
 ### Patch Changes
