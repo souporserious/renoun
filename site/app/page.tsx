@@ -38,7 +38,7 @@ export default function Editor() {
         style={{
           display: 'flex',
           justifyContent: 'space-between',
-          padding: '1rem',
+          padding: '4rem 2rem 2rem',
         }}
       >
         <Logo />
@@ -47,60 +47,81 @@ export default function Editor() {
         </nav>
       </header>
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
-          minHeight: '100vh',
-        }}
-      >
-        <textarea
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
+      <main>
+        <section
           style={{
-            padding: 16,
-            background: 'black',
-            color: 'white',
-            outline: 'none',
-          }}
-        />
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            boxShadow: error && 'inset 0 0 0 2px #d54040',
+            display: 'grid',
+            gridTemplateColumns: '1fr minmax(40ch, 1fr) minmax(40ch, 1fr) 1fr',
+            gap: '2rem',
+            padding: '2rem 8rem 8rem',
           }}
         >
+          <h1 style={{ gridColumn: 2, fontSize: '4rem', lineHeight: 1 }}>
+            Tell your story with the full power of MDX and TypeScript
+          </h1>
+          <p style={{ gridColumn: 3, fontSize: '2rem', paddingTop: '1rem' }}>
+            Generate rich static content for any framework. MDXTS is a data
+            generator for building performant sites with MDX and TypeScript.
+          </p>
+        </section>
+
+        <section>
           <div
             style={{
-              display: 'flex',
-              flexDirection: 'column',
-              padding: 16,
-              gap: 16,
-              textAlign: 'center',
-              flex: 1,
+              display: 'grid',
+              gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+              minHeight: '100vh',
             }}
           >
-            <Content
-              components={{
-                h1: (props) => <h1 {...props} style={{ fontSize: 40 }} />,
-                h2: (props) => <h2 {...props} style={{ fontSize: 24 }} />,
-              }}
-            />
-          </div>
-          {error && (
-            <div
+            <textarea
+              value={value}
+              onChange={(event) => setValue(event.target.value)}
               style={{
                 padding: 16,
-                backgroundColor: '#d54040',
+                background: 'black',
                 color: 'white',
+                outline: 'none',
+              }}
+            />
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                boxShadow: error && 'inset 0 0 0 2px #d54040',
               }}
             >
-              {error}
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  padding: 16,
+                  gap: 16,
+                  textAlign: 'center',
+                  flex: 1,
+                }}
+              >
+                <Content
+                  components={{
+                    h1: (props) => <h1 {...props} style={{ fontSize: 40 }} />,
+                    h2: (props) => <h2 {...props} style={{ fontSize: 24 }} />,
+                  }}
+                />
+              </div>
+              {error && (
+                <div
+                  style={{
+                    padding: 16,
+                    backgroundColor: '#d54040',
+                    color: 'white',
+                  }}
+                >
+                  {error}
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </div>
+          </div>
+        </section>
+      </main>
     </div>
   )
 }
