@@ -1,6 +1,6 @@
 import allDocs from 'mdxts/docs'
 import { flattenData } from 'mdxts/utils'
-import { MDXComponent } from 'app/MDXComponent'
+import { MDXComponent } from 'components/MDXComponent'
 
 const flattenedDocs = flattenData(allDocs[0].children)
 

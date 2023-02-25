@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import { NextConfig } from 'next'
 import { PHASE_DEVELOPMENT_SERVER } from 'next/constants'
 import { Project } from 'ts-morph'
-import { executeCode } from '../utils/execute-code'
+import { executeCode } from '../transform/execute-code'
 import { getSourceFilesData } from '../utils/get-source-files-data'
 import { createWatcher } from '../watcher'
 

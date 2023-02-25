@@ -14,3 +14,17 @@ test('transforms symbolic links correctly', async () => {
 
   expect(outputHtml).toMatchSnapshot()
 })
+
+const mdxSource = `
+\`\`\`tsx
+export function BasicUsage() {
+  return (
+    <div>
+      <h1>Example</h1>
+    </div>
+  )
+}
+\`\`\`
+
+<Example identifier="BasicUsage" />
+`

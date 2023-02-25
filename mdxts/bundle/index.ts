@@ -1,10 +1,13 @@
 import esbuild from 'esbuild'
+import { join } from 'path'
+import { Project } from 'ts-morph'
 import type { AsyncReturnType } from 'type-fest'
 import type { FileData } from '../rehype'
 import { rehypePlugin, getHighlighter } from '../rehype'
-import { transformCode } from '../utils/transform-code'
+import { transformCode } from '../transform/transform-code'
 
 let highlighter: AsyncReturnType<typeof getHighlighter>
+let project: Project
 
 /** Bundle MDX/JavaScript/TypeScript files for the browser. */
 export async function bundle({
@@ -30,6 +33,16 @@ export async function bundle({
     highlighter = await getHighlighter({ theme })
   }
 
+  /** Only initialize the ts-morph project once. */
+  if (project === undefined) {
+    project = new Project({
+      tsConfigFilePath: join(
+        workingDirectory || process.cwd(),
+        'tsconfig.json'
+      ),
+    })
+  }
+
   const allFileData: FileData[] = []
   const mdxPlugin = (await import('@mdx-js/esbuild')).default
   const result = await esbuild.build({
@@ -50,6 +63,7 @@ export async function bundle({
             rehypePlugin,
             {
               highlighter,
+              project,
               onFileData: (fileData: FileData) => {
                 allFileData.push(fileData)
               },

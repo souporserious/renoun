@@ -2,6 +2,10 @@ import type { Element, ElementContent } from 'hast'
 import type { AsyncReturnType } from 'type-fest'
 import type Slugger from 'github-slugger'
 import * as shiki from 'shiki'
+import type { Project } from 'ts-morph'
+import { transformExamples } from './transform-examples'
+import type { Languages } from './utils'
+import { getLanguage } from './utils'
 
 let slugs: Slugger
 
@@ -46,8 +50,6 @@ function tokensToHast(lines: shiki.IThemedToken[][]) {
   return tree
 }
 
-type Languages = shiki.Lang[]
-
 const defaultLanguages: Languages = [
   'html',
   'css',
@@ -62,12 +64,6 @@ const defaultLanguages: Languages = [
   'json',
   'yaml',
 ]
-
-function getLanguage(className: string[] = []) {
-  const language = className.find((name) => name.startsWith('language-'))
-
-  return (language ? language.slice(9) : null) as Languages[number] | null
-}
 
 export async function getHighlighter({
   languages = defaultLanguages,
@@ -117,11 +113,13 @@ export type FileData = {
 }
 
 export function rehypePlugin({
-  onFileData,
   highlighter,
+  project,
+  onFileData,
 }: {
-  onFileData: (data: FileData) => void
   highlighter: AsyncReturnType<typeof getHighlighter>
+  project: Project
+  onFileData: (data: FileData) => void
 }) {
   return async function transformer(tree: Element, file: any) {
     slugs.reset()
@@ -135,6 +133,9 @@ export function rehypePlugin({
 
     /** Replace all symbolic links [[link]] with jsx links <a href="/link">link</a>. */
     await transformSymbolicLinks(tree)
+
+    /** Attaches metadata to Example and Preview components */
+    await transformExamples(tree, project)
 
     /** Gather headings and code blocks to analyze. */
     tree.children.forEach((node) => {

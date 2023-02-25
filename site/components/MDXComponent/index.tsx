@@ -6,13 +6,54 @@ import Editor from '@monaco-editor/react'
 
 /** Renders a string of compiled MDX code as a client component. */
 export function MDXComponent({ code }: { code: string }) {
-  const Component = React.use(getComponent(code)) as React.ComponentType<{
+  const Component = React.use(getComponent(code))
+    .default as React.ComponentType<{
     components?: MDXComponents
   }>
 
   return (
     <Component
       components={{
+        Example: ({
+          source,
+          identifier,
+          code,
+          transformedCode,
+          language,
+        }: {
+          source: string
+          identifier: string
+          code: string
+          transformedCode: string
+          language: string
+        }) => {
+          const codeExports = React.use(getComponent(transformedCode))
+
+          return (
+            <>
+              <pre>{code}</pre>
+              {Object.entries(codeExports)
+                .filter(([, value]) => Boolean(value))
+                .map(([key, Component]) => {
+                  return (
+                    <div key={key}>
+                      <h2>{key}</h2>
+                      <Component />
+                    </div>
+                  )
+                })}
+            </>
+          )
+        },
+        Preview: ({
+          source,
+          identifier,
+        }: {
+          source: string
+          identifier: string
+        }) => {
+          return <>Preview Here</>
+        },
         Summary: (props) => {
           return <div {...props} style={{ fontSize: '1.2rem' }} />
         },

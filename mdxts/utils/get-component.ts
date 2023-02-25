@@ -44,5 +44,5 @@ export async function getComponent<ComponentType extends any>(
 
   result(functionModule, functionExports, functionRequire)
 
-  return functionModule.exports.default
+  return functionModule.exports
 }
