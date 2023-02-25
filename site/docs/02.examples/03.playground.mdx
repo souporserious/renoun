@@ -1,10 +1,22 @@
 <Example>
 
 ```tsx
+import { value } from '@jsxui/react'
+
+const opacity = value(1)
+
 export function BasicUsage() {
   return (
     <div>
-      <h1>Example</h1>
+      <h1>Basic {opacity.value}</h1>
+    </div>
+  )
+}
+
+export function Advanced() {
+  return (
+    <div>
+      <h1>Advanced</h1>
     </div>
   )
 }
