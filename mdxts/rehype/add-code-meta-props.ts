@@ -27,9 +27,9 @@ export async function addCodeMetaProps(tree: Element, file: VFile) {
           try {
             element.properties.transformedCode = transformCodeSync(codeString)
           } catch (error) {
-            throw new Error(
+            console.error(
               `Error transforming MDX code block meta string for "${file.path}:${element.position?.start.line}"`,
-              { cause: error }
+              error
             )
           }
         }
