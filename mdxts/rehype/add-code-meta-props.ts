@@ -23,12 +23,18 @@ export async function addCodeMetaProps(tree: Element, file: VFile) {
 
         element.properties.code = codeString
 
+        /* Transform code block if marked as TypeScript or JavaScript. */
         if (/tsx?|jsx?/.test(language)) {
           try {
-            element.properties.transformedCode = transformCodeSync(codeString)
+            element.properties.transformedCode = transformCodeSync(
+              /* Wrap code in a function if it's inline JSX. */
+              codeString.startsWith('<')
+                ? `export default () => ${codeString}`
+                : codeString
+            )
           } catch (error) {
             console.error(
-              `Error transforming MDX code block meta string for "${file.path}:${element.position?.start.line}"`,
+              `Error transforming MDX code block meta string for "${file.path}:${element.position?.start.line}"\n`,
               error
             )
           }
