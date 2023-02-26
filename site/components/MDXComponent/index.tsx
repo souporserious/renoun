@@ -11,10 +11,13 @@ const dependencies = {
 
 /** Renders a string of compiled MDX code as a client component. */
 export function MDXComponent({ code }: { code: string }) {
-  const Component = React.use(getComponent(code, dependencies))
-    .default as React.ComponentType<{
-    components?: MDXComponents
-  }>
+  const { default: Component } = React.use(
+    getComponent(code, dependencies)
+  ) as {
+    default: React.ComponentType<{
+      components?: MDXComponents
+    }>
+  }
 
   return (
     <Component
@@ -28,9 +31,9 @@ export function MDXComponent({ code }: { code: string }) {
         }: {
           source: string
           identifier: string
+          language: string
           code: string
           transformedCode: string
-          language: string
         }) => {
           const codeExports = React.use(
             getComponent(transformedCode, dependencies)
