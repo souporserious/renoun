@@ -1,7 +1,7 @@
 import { unified } from 'unified'
 import rehypeParse from 'rehype-parse'
 import rehypeStringify from 'rehype-stringify'
-import { transformSymbolicLinks } from './index'
+import { transformSymbolicLinks } from './transform-symbolic-links'
 
 const fixture = `Examples can be rendered in MDX using the helper [[Example]] and [[Preview]] components. These component take a \`source\` prop, which is the name of the example file or code block in any of the [locations examples can exist](./01.writing.mdx).`
 
