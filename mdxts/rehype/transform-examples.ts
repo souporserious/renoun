@@ -3,6 +3,7 @@ import type { Project } from 'ts-morph'
 import { transformCodeSync } from '../transform'
 import { getLanguage } from './utils'
 
+/** Attaches metadata to `Example` and `Preview` components */
 export async function transformExamples(tree: Element, project: Project) {
   const { visit } = await import('unist-util-visit')
   const { toString } = await import('hast-util-to-string')

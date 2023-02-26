@@ -1,5 +1,6 @@
 import { Element } from 'hast'
 
+/** Replace all symbolic links `[[link]]` with jsx links `<a href="/link">link</a>`. */
 export async function transformSymbolicLinks(tree: Element) {
   const { visitParents } = await import('unist-util-visit-parents')
 

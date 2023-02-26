@@ -3,6 +3,7 @@ import type { AsyncReturnType } from 'type-fest'
 import type Slugger from 'github-slugger'
 import * as shiki from 'shiki'
 import type { Project } from 'ts-morph'
+import { addCodeMetaProps } from './add-code-meta-props'
 import { transformExamples } from './transform-examples'
 import { transformSymbolicLinks } from './transform-symbolic-links'
 import type { Languages } from './utils'
@@ -132,10 +133,13 @@ export function rehypePlugin({
     const codeBlocks: CodeBlocks = []
     let previousHeading: Headings[number] | null = null
 
+    /** Pass through meta string and code as props to `code` elements. */
+    await addCodeMetaProps(tree)
+
     /** Replace all symbolic links [[link]] with jsx links <a href="/link">link</a>. */
     await transformSymbolicLinks(tree)
 
-    /** Attaches metadata to Example and Preview components */
+    /** Attaches metadata to `Example` and `Preview` components */
     await transformExamples(tree, project)
 
     /** Gather headings and code blocks to analyze. */
@@ -184,16 +188,6 @@ export function rehypePlugin({
             })
 
             node.children = tokensToHast(tokens)
-          }
-
-          /* Map meta string to props. */
-          if (codeNode.data?.meta) {
-            const meta = codeNode.data.meta as string
-
-            meta.split(' ').forEach((prop) => {
-              const [key, value] = prop.split('=')
-              node.properties[key] = value ?? true
-            })
           }
         }
       }
