@@ -85,7 +85,7 @@ export function MDXComponent({ code }: { code: string }) {
         Summary: (props) => {
           return <div {...props} style={{ fontSize: '1.2rem' }} />
         },
-        pre: ({ code, live, ...props }: any) => {
+        pre: ({ code, transformedCode, filename, live, ...props }: any) => {
           if (live) {
             return (
               <Editor
