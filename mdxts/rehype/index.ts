@@ -185,14 +185,14 @@ export function rehypePlugin({
             node.children = tokensToHast(tokens)
           }
 
-          /* Map properties to attributes. */
+          /* Map meta string to props. */
           if (codeNode.data?.meta) {
-            // const meta = codeNode.data.meta as string
-            // meta.split(' ').forEach((prop) => {
-            //   const [key, value] = prop.split('=')
-            //   node.properties[key] = value ?? true
-            // })
-            node.properties.code = code
+            const meta = codeNode.data.meta as string
+
+            meta.split(' ').forEach((prop) => {
+              const [key, value] = prop.split('=')
+              node.properties[key] = value ?? true
+            })
           }
         }
       }
