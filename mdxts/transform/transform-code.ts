@@ -3,6 +3,7 @@ import { transform, transformSync } from '@swc/core'
 
 export const options = {
   jsc: {
+    target: 'es2020',
     parser: {
       syntax: 'typescript',
       tsx: true,
