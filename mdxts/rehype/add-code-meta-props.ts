@@ -1,9 +1,10 @@
 import type { Element } from 'hast'
+import type { VFile } from 'vfile'
 import { transformCodeSync } from '../transform'
 import { getLanguage } from './utils'
 
 /** Pass through meta string and code as props to `code` elements. */
-export async function addCodeMetaProps(tree: Element) {
+export async function addCodeMetaProps(tree: Element, file: VFile) {
   const { visit } = await import('unist-util-visit')
   const { toString } = await import('hast-util-to-string')
 
@@ -27,7 +28,7 @@ export async function addCodeMetaProps(tree: Element) {
             element.properties.transformedCode = transformCodeSync(codeString)
           } catch (error) {
             throw new Error(
-              `Error transforming code block for meta string MDX transform`,
+              `Error transforming MDX code block meta string for "${file.path}:${element.position?.start.line}"`,
               { cause: error }
             )
           }

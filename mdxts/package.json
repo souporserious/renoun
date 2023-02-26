@@ -52,7 +52,8 @@
     "rehype-parse": "^8.0.4",
     "rehype-stringify": "^9.0.3",
     "remark": "^14.0.2",
-    "unified": "^10.1.2"
+    "unified": "^10.1.2",
+    "vfile": "^5.3.7"
   },
   "dependencies": {
     "@mdx-js/esbuild": "^2.3.0",

@@ -1,4 +1,5 @@
 import type { Element, ElementContent } from 'hast'
+import type { VFile } from 'vfile'
 import type { AsyncReturnType } from 'type-fest'
 import type Slugger from 'github-slugger'
 import * as shiki from 'shiki'
@@ -123,7 +124,7 @@ export function rehypePlugin({
   project: Project
   onFileData: (data: FileData) => void
 }) {
-  return async function transformer(tree: Element, file: any) {
+  return async function transformer(tree: Element, file: VFile) {
     slugs.reset()
 
     const { hasProperty } = await import('hast-util-has-property')
@@ -133,13 +134,8 @@ export function rehypePlugin({
     const codeBlocks: CodeBlocks = []
     let previousHeading: Headings[number] | null = null
 
-    /** Pass through meta string and code as props to `code` elements. */
-    await addCodeMetaProps(tree)
-
-    /** Replace all symbolic links [[link]] with jsx links <a href="/link">link</a>. */
+    await addCodeMetaProps(tree, file)
     await transformSymbolicLinks(tree)
-
-    /** Attaches metadata to `Example` and `Preview` components */
     await transformExamples(tree, project)
 
     /** Gather headings and code blocks to analyze. */
