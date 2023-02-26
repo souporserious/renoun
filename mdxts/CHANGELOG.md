@@ -1,5 +1,11 @@
 # mdxts
 
+## 0.1.4
+
+### Patch Changes
+
+- 4ee1325: Map meta string to props.
+
 ## 0.1.3
 
 ### Patch Changes
