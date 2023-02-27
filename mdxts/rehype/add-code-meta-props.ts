@@ -40,7 +40,7 @@ export async function addCodeMetaProps(tree: Element, file: VFile) {
           }
         }
 
-        const meta = element.data?.meta as string | undefined
+        const meta = codeNode.data?.meta as string | undefined
 
         /* Map meta string to props. */
         meta?.split(' ').forEach((prop) => {
