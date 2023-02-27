@@ -163,6 +163,8 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
       return config
     }
 
+    let watcherCreated = false
+
     return async (phase) => {
       await Promise.all([
         createMDXTSDirectory(),
@@ -171,7 +173,8 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
         compile(),
       ])
 
-      if (phase === PHASE_DEVELOPMENT_SERVER) {
+      if (!watcherCreated && phase === PHASE_DEVELOPMENT_SERVER) {
+        watcherCreated = true
         createWatcher(project, loaderPaths, compile)
         console.log('mdxts: started watcher...')
       }
