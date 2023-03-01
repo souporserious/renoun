@@ -1,4 +1,5 @@
 import FilterWarningsPlugin from 'webpack-filter-warnings-plugin'
+import MonacoWebpackPlugin from 'monaco-editor-webpack-plugin'
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { NextConfig } from 'next'
@@ -7,6 +8,7 @@ import { Project } from 'ts-morph'
 import { executeCode } from '../transform/execute-code'
 import { getSourceFilesData } from '../utils/get-source-files-data'
 import { createWatcher } from '../watcher'
+import { createPublicFiles } from './create-public-files'
 
 type FileGlobs = string | readonly string[]
 
@@ -153,6 +155,10 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
           exclude: [
             /Critical dependency: the request of a dependency is an expression/,
           ],
+        }),
+        new MonacoWebpackPlugin({
+          languages: ['javascript', 'typescript'],
+          filename: 'static/[name].worker.js',
         })
       )
 
@@ -168,6 +174,7 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
     return async (phase) => {
       await Promise.all([
         createMDXTSDirectory(),
+        createPublicFiles(),
         codemodTsConfig(),
         codemodGitIgnore(),
         compile(),

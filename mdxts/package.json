@@ -8,6 +8,7 @@
   "main": "./dist/index.js",
   "exports": {
     "./bundle": "./dist/bundle/index.js",
+    "./editor": "./dist/editor/index.js",
     "./next": "./dist/next/index.js",
     "./transform": "./dist/transform/index.js",
     "./utils": "./dist/utils/index.js",
@@ -18,6 +19,9 @@
     "*": {
       "bundle": [
         "./dist/bundle/index.d.ts"
+      ],
+      "editor": [
+        "./dist/editor/index.d.ts"
       ],
       "next": [
         "./dist/next/index.d.ts"
@@ -34,7 +38,7 @@
     }
   },
   "scripts": {
-    "build": "tsup index.ts utils/index.ts transform/index.ts rehype/index.ts bundle/index.ts watcher/index.ts next/index.ts --dts --format esm,cjs",
+    "build": "tsup index.ts utils/index.ts transform/index.ts rehype/index.ts bundle/index.ts watcher/index.ts next/index.ts editor/index.tsx --dts --format esm,cjs",
     "dev": "pnpm build --watch",
     "test": "jest"
   },
@@ -63,6 +67,7 @@
     "@types/hast": "^2.3.4",
     "case-anything": "^2.1.10",
     "chokidar": "^3.5.3",
+    "color": "^4.2.3",
     "dprint-node": "^1.0.7",
     "esbuild": "^0.17.10",
     "esbuild-plugin-wasm": "^1.0.0",
@@ -73,6 +78,12 @@
     "hast-util-heading-rank": "^2.1.1",
     "hast-util-to-string": "^2.0.0",
     "mdast-util-mdx-jsx": "^2.1.2",
+    "monaco-editor": "^0.36.0",
+    "monaco-editor-textmate": "^4.0.0",
+    "monaco-editor-webpack-plugin": "^7.0.1",
+    "monaco-textmate": "^3.0.1",
+    "node-fetch": "^3.3.0",
+    "onigasm": "^2.2.5",
     "remark-frontmatter": "^4.0.1",
     "shiki": "^0.14.1",
     "title": "^3.5.3",

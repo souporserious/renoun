@@ -12,7 +12,6 @@
     "@codesandbox/sandpack-react": "^2.0.15",
     "@jsxui/react": "^0.1.27",
     "@mdx-js/mdx": "^2.3.0",
-    "@monaco-editor/react": "^4.4.6",
     "@types/mdx": "^2.0.3",
     "case-anything": "^2.1.10",
     "mdxts": "workspace:*",
