@@ -5,6 +5,7 @@ import { getTheme } from './theme'
 import defaultTheme from './theme.json'
 
 export default function Editor({ theme, ...props }: { theme?: any }) {
+  const id = React.useId().slice(1, -1)
   const ref = React.useRef(null)
 
   React.useLayoutEffect(() => {
@@ -13,10 +14,10 @@ export default function Editor({ theme, ...props }: { theme?: any }) {
       return <h1>Hello world!</h1>
     }`,
       'typescript',
-      monaco.Uri.parse(`file:///index.tsx`)
+      monaco.Uri.parse(`file:///${id}.index.tsx`)
     )
 
-    const editorInstance = monaco.editor.create(ref.current, {
+    const editor = monaco.editor.create(ref.current, {
       model,
       language: 'typescript',
       automaticLayout: true,
@@ -37,7 +38,7 @@ export default function Editor({ theme, ...props }: { theme?: any }) {
 
     return () => {
       model.dispose()
-      editorInstance.dispose()
+      editor.dispose()
     }
   }, [])
 
