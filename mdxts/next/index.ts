@@ -150,17 +150,17 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
   return function withMDXTS(nextConfig: NextConfig = {}) {
     const getWebpackConfig = nextConfig.webpack
 
-    // TODO: #8 silencing ts-morph critical dependency warnings for now
     nextConfig.webpack = (config, options) => {
       config.plugins.push(
+        // TODO: #8 silencing ts-morph critical dependency warnings for now
         new FilterWarningsPlugin({
           exclude: [
             /Critical dependency: the request of a dependency is an expression/,
           ],
         }),
         new MonacoWebpackPlugin({
-          languages: ['javascript', 'typescript'],
           filename: 'static/[name].worker.js',
+          languages: options.isServer ? [] : ['javascript', 'typescript'],
         })
       )
 

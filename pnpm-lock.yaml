@@ -54,7 +54,6 @@ importers:
 
   mdxts:
     specifiers:
-      '@estruyf/vscode-theme-converter': ^1.1.0
       '@mdx-js/esbuild': ^2.3.0
       '@mdx-js/mdx': ^2.3.0
       '@swc/core': ^1.3.35
@@ -101,7 +100,6 @@ importers:
       webpack-filter-warnings-plugin: ^1.2.1
       yaml: ^2.2.1
     dependencies:
-      '@estruyf/vscode-theme-converter': 1.1.0
       '@mdx-js/esbuild': 2.3.0_esbuild@0.17.10
       '@mdx-js/mdx': 2.3.0
       '@swc/core': 1.3.35
@@ -1056,12 +1054,6 @@ packages:
     os: [win32]
     requiresBuild: true
     optional: true
-
-  /@estruyf/vscode-theme-converter/1.1.0:
-    resolution: {integrity: sha512-4VITnbemB6hJm5d0QMfX7oiP8bJDM3BANb7JXgbm50tMp5B04DhRYbafQOMyqZEjmxjriJ23+bLcsr6fkHbwkg==}
-    dependencies:
-      tslib: 2.5.0
-    dev: false
 
   /@istanbuljs/load-nyc-config/1.1.0:
     resolution: {integrity: sha512-VjeHSlIzpv/NyD3N0YuHfXOPDIixcA1q2ZV98wsMqcYlPmv2n3Yb2lYP9XMElnaFVXg5A7YLTeLu6V84uQDjmQ==}
