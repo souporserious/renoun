@@ -5,10 +5,14 @@ import { getTopLevelDirectories } from './get-top-level-directories'
 import { sortChildren } from './sort-children'
 
 /** Get data for all source files starting from top-level directories. */
-export async function getSourceFilesData(sourceFiles: SourceFile[]) {
+export async function getSourceFilesData(
+  sourceFiles: SourceFile[],
+  { theme }: { theme: string }
+) {
   const topLevelDirectories = getTopLevelDirectories(sourceFiles)
   const bundledFiles = await bundle({
     entryPoints: sourceFiles.map((sourceFile) => sourceFile.getFilePath()),
+    theme,
   })
 
   function getDataForSourceFile(

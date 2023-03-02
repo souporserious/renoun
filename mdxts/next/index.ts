@@ -124,7 +124,9 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
     return Promise.all(
       Object.entries(sources).map(async ([name, options]) => {
         const sourceFiles = project.addSourceFilesAtPaths(options.include)
-        const sourceFilesData = getSourceFilesData(sourceFiles)
+        const sourceFilesData = getSourceFilesData(sourceFiles, {
+          theme: resolve(process.cwd(), theme),
+        })
         let loader: any = (sourceFilesData) => sourceFilesData
 
         if (options.loader) {

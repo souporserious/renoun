@@ -2,8 +2,8 @@ import type { Element, ElementContent } from 'hast'
 import type { VFile } from 'vfile'
 import type { AsyncReturnType } from 'type-fest'
 import type Slugger from 'github-slugger'
-import * as shiki from 'shiki'
 import type { Project } from 'ts-morph'
+import * as shiki from 'shiki'
 import { addCodeMetaProps } from './add-code-meta-props'
 import { transformExamples } from './transform-examples'
 import { transformSymbolicLinks } from './transform-symbolic-links'
@@ -69,23 +69,21 @@ const defaultLanguages: Languages = [
 ]
 
 export async function getHighlighter({
-  languages = defaultLanguages,
-  theme = 'nord',
+  languages,
+  theme,
 }: {
   languages?: Languages
   theme?: string
 } = {}) {
-  // TODO: add support for custom themes and add createCSSVariablesTheme helper
-  // const loadedTheme = await shiki.loadTheme(theme)
-  // const theme = 'css-variables'
+  const loadedTheme = await shiki.loadTheme(theme)
   const highlighter = await shiki.getHighlighter({
-    theme,
-    langs: languages,
+    theme: loadedTheme,
+    langs: languages || defaultLanguages,
   })
 
   return (code: string, language: shiki.Lang) => {
     try {
-      return highlighter.codeToThemedTokens(code, language, theme, {
+      return highlighter.codeToThemedTokens(code, language, null, {
         includeExplanation: false,
       })
     } catch (error) {
