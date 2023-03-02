@@ -14,6 +14,7 @@ type FileGlobs = string | readonly string[]
 
 type PluginOptions = {
   gitSource: string
+  theme: string
   sources: Record<
     string,
     | FileGlobs
@@ -26,6 +27,7 @@ type PluginOptions = {
 
 type NormalizedPluginOptions = {
   gitSource: string
+  theme: string
   sources: Record<
     string,
     {
@@ -105,7 +107,7 @@ function normalizeOptions(pluginOptions: PluginOptions) {
 export function createMDXTSPlugin(pluginOptions: PluginOptions) {
   console.log('mdxts: config initialized')
 
-  const { gitSource, sources } = normalizeOptions(pluginOptions)
+  const { gitSource, theme, sources } = normalizeOptions(pluginOptions)
   const project = new Project({
     tsConfigFilePath: resolve(process.cwd(), 'tsconfig.json'),
   })
@@ -191,6 +193,10 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
       }
 
       nextConfig.env.MDXTS_GIT_SOURCE = gitSource
+      nextConfig.env.MDXTS_THEME = await readFile(
+        resolve(process.cwd(), theme),
+        'utf-8'
+      )
 
       return nextConfig
     }

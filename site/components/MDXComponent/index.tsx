@@ -3,6 +3,9 @@ import * as React from 'react'
 import * as jsxui from '@jsxui/react'
 import type { MDXComponents } from 'mdx/types'
 import { getComponent } from 'mdxts/utils'
+import dynamic from 'next/dynamic'
+
+const Editor = dynamic(() => import('mdxts/editor'), { ssr: false })
 
 const dependencies = {
   '@jsxui/react': jsxui,
@@ -86,25 +89,7 @@ export function MDXComponent({ code }: { code: string }) {
         },
         pre: ({ code, transformedCode, filename, live, ...props }: any) => {
           if (live) {
-            return <textarea>{code}</textarea>
-            // return (
-            //   <Editor
-            //     value={code}
-            //     language="typescript"
-            //     theme="vs-dark"
-            //     height="20rem"
-            //     options={{
-            //       minimap: { enabled: false },
-            //       fontSize: 14,
-            //       scrollBeyondLastLine: false,
-            //       lineNumbers: 'off',
-            //       lineDecorationsWidth: 0,
-            //       lineNumbersMinChars: 0,
-            //       glyphMargin: false,
-            //       folding: false,
-            //     }}
-            //   />
-            // )
+            return <Editor defaultValue={code} />
           }
 
           return <pre {...props} />
