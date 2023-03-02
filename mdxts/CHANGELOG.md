@@ -1,5 +1,17 @@
 # mdxts
 
+## 0.1.5
+
+### Patch Changes
+
+- 27fa51d: Use config theme for shiki highlighting.
+- e4ba8ba: Initial Editor component.
+- 3d536d7: Transform code when JavaScript or TypeScript code block.
+- 33f93b9: Fix multiple watchers being created.
+- a63b352: Better error message for meta props transform.
+- f0ca3b7: Load theme through next config.
+- 0a5de46: Fix meta props.
+
 ## 0.1.4
 
 ### Patch Changes
