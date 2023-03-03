@@ -1,15 +1,12 @@
 'use client'
 import * as React from 'react'
-import * as jsxui from '@jsxui/react'
 import type { MDXComponents } from 'mdx/types'
 import { getComponent } from 'mdxts/utils'
 import dynamic from 'next/dynamic'
 
 const Editor = dynamic(() => import('mdxts/editor'), { ssr: false })
 
-const dependencies = {
-  '@jsxui/react': jsxui,
-}
+const dependencies = {}
 
 /** Renders a string of compiled MDX code as a client component. */
 export function MDXComponent({ code }: { code: string }) {
