@@ -3,7 +3,7 @@ import { wireTmGrammars } from 'monaco-editor-textmate'
 import { Registry } from 'monaco-textmate'
 import { loadWASM } from 'onigasm'
 
-export async function initializeMonaco() {
+export async function initializeMonaco(editor: any) {
   try {
     await loadWASM('/mdxts/onigasm.wasm')
   } catch {
@@ -56,5 +56,5 @@ export async function initializeMonaco() {
   })
 
   /* Wire up TextMate grammars */
-  await wireTmGrammars(monaco, registry, grammars)
+  await wireTmGrammars(monaco, registry, grammars, editor)
 }

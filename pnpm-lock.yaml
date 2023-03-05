@@ -74,9 +74,9 @@ importers:
       hast-util-to-string: ^2.0.0
       mdast-util-mdx-jsx: ^2.1.2
       mdast-util-to-hast: ^12.3.0
-      monaco-editor: ^0.36.1
+      monaco-editor: 0.29.1
       monaco-editor-textmate: ^4.0.0
-      monaco-editor-webpack-plugin: ^7.0.1
+      monaco-editor-webpack-plugin: 6.0.0
       monaco-textmate: ^3.0.1
       next: '*'
       node-fetch: ^3.3.0
@@ -118,9 +118,9 @@ importers:
       hast-util-heading-rank: 2.1.1
       hast-util-to-string: 2.0.0
       mdast-util-mdx-jsx: 2.1.2
-      monaco-editor: 0.36.1
-      monaco-editor-textmate: 4.0.0_n7746n4du5g5boijpd7xdle434
-      monaco-editor-webpack-plugin: 7.0.1_monaco-editor@0.36.1
+      monaco-editor: 0.29.1
+      monaco-editor-textmate: 4.0.0_imk7yuux775zoagrpvb7yyqn7e
+      monaco-editor-webpack-plugin: 6.0.0_monaco-editor@0.29.1
       monaco-textmate: 3.0.1_onigasm@2.2.5
       node-fetch: 3.3.0
       onigasm: 2.2.5
@@ -4932,28 +4932,28 @@ packages:
     engines: {node: '>=10'}
     hasBin: true
 
-  /monaco-editor-textmate/4.0.0_n7746n4du5g5boijpd7xdle434:
+  /monaco-editor-textmate/4.0.0_imk7yuux775zoagrpvb7yyqn7e:
     resolution: {integrity: sha512-Clwup5LJzVfwURQrS+odSEC5/hZBEG36pQnvBKt4OtBndF8r2xLeXUZcK/AqEBK2u0Npy7frFp9hG7m66Ol9hA==}
     peerDependencies:
       monaco-editor: 0.x.x
       monaco-textmate: ^3.0.0
     dependencies:
-      monaco-editor: 0.36.1
+      monaco-editor: 0.29.1
       monaco-textmate: 3.0.1_onigasm@2.2.5
     dev: false
 
-  /monaco-editor-webpack-plugin/7.0.1_monaco-editor@0.36.1:
-    resolution: {integrity: sha512-M8qIqizltrPlIbrb73cZdTWfU9sIsUVFvAZkL3KGjAHmVWEJ0hZKa/uad14JuOckc0GwnCaoGHvMoYtJjVyCzw==}
+  /monaco-editor-webpack-plugin/6.0.0_monaco-editor@0.29.1:
+    resolution: {integrity: sha512-vC886Mzpd2AkSM35XLkfQMjH+Ohz6RISVwhAejDUzZDheJAiz6G34lky1vyO8fZ702v7IrcKmsGwL1rRFnwvUA==}
     peerDependencies:
-      monaco-editor: '>= 0.31.0'
+      monaco-editor: 0.30.x
       webpack: ^4.5.0 || 5.x
     dependencies:
       loader-utils: 2.0.4
-      monaco-editor: 0.36.1
+      monaco-editor: 0.29.1
     dev: false
 
-  /monaco-editor/0.36.1:
-    resolution: {integrity: sha512-/CaclMHKQ3A6rnzBzOADfwdSJ25BFoFT0Emxsc4zYVyav5SkK9iA6lEtIeuN/oRYbwPgviJT+t3l+sjFa28jYg==}
+  /monaco-editor/0.29.1:
+    resolution: {integrity: sha512-rguaEG/zrPQSaKzQB7IfX/PpNa0qxF1FY8ZXRkN4WIl8qZdTQRSRJCtRto7IMcSgrU6H53RXI+fTcywOBC4aVw==}
     dev: false
 
   /monaco-textmate/3.0.1_onigasm@2.2.5:
