@@ -168,7 +168,7 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
 
       // Disable normal WASM loading pipeline so onigasm can load properly
       config.module.rules.push({
-        test: /onigasm\.wasm$/,
+        test: /onig\.wasm$/,
         type: 'asset/resource',
         generator: {
           filename: 'static/wasm/onigasm.wasm',
