@@ -4,8 +4,11 @@ import { Registry } from 'monaco-textmate'
 import { loadWASM } from 'onigasm'
 
 export async function initializeMonaco(editor: any) {
+  // @ts-expect-error
+  const { default: onigasmPath } = await import('onigasm/lib/onigasm.wasm')
+
   try {
-    await loadWASM('/mdxts/onigasm.wasm')
+    await loadWASM(onigasmPath)
   } catch {
     // try/catch prevents onigasm from erroring on fast refreshes
   }
