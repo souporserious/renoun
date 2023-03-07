@@ -1,10 +1,10 @@
-import type { Registry, StateStack } from 'vscode-textmate'
+import type { Registry, StateStack, IGrammar } from 'vscode-textmate'
 import { INITIAL } from 'vscode-textmate'
-import * as monacoEditor from 'monaco-editor'
+import * as monaco from 'monaco-editor'
 
 // as described in issue: https://github.com/NeekSandhu/monaco-textmate/issues/5
 export const TMToMonacoToken = (
-  editor: monacoEditor.editor.ICodeEditor,
+  editor: monaco.editor.ICodeEditor,
   scopes: string[]
 ) => {
   let scopeName = ''
@@ -41,17 +41,13 @@ export const TMToMonacoToken = (
       const char = scope[i]
       if (char === '.') {
         const token = scope.slice(0, i)
-        if (
-          editor['_themeService']._theme._tokenTheme._match(
-            token + '.' + scopeName
-          )._foreground > 1
-        ) {
+        const theme = editor['_themeService'].getColorTheme()
+
+        if (theme._tokenTheme._match(token + '.' + scopeName)._foreground > 1) {
           return token + '.' + scopeName
         }
-        if (
-          editor['_themeService']._theme._tokenTheme._match(token)._foreground >
-          1
-        ) {
+
+        if (theme._tokenTheme._match(token)._foreground > 1) {
           return token
         }
       }
@@ -61,7 +57,7 @@ export const TMToMonacoToken = (
   return ''
 }
 
-class TokenizerState implements monacoEditor.languages.IState {
+class TokenizerState implements monaco.languages.IState {
   constructor(private _ruleStack: StateStack) {}
 
   public get ruleStack(): StateStack {
@@ -72,7 +68,7 @@ class TokenizerState implements monacoEditor.languages.IState {
     return new TokenizerState(this._ruleStack)
   }
 
-  public equals(other: monacoEditor.languages.IState): boolean {
+  public equals(other: monaco.languages.IState): boolean {
     if (
       !other ||
       !(other instanceof TokenizerState) ||
@@ -93,10 +89,9 @@ class TokenizerState implements monacoEditor.languages.IState {
  * @param languages `Map` of language ids (string) to TM names (string)
  */
 export function wireTmGrammars(
-  monaco: typeof monacoEditor,
   registry: Registry,
   languages: Map<string, string>,
-  editor?: monacoEditor.editor.ICodeEditor
+  editor: monaco.editor.ICodeEditor
 ) {
   return Promise.all(
     Array.from(languages.keys()).map(async (languageId) => {
@@ -104,15 +99,13 @@ export function wireTmGrammars(
       monaco.languages.setTokensProvider(languageId, {
         getInitialState: () => new TokenizerState(INITIAL),
         tokenize: (line: string, state: TokenizerState) => {
-          const res = grammar.tokenizeLine(line, state.ruleStack)
+          const result = grammar.tokenizeLine(line, state.ruleStack)
+
           return {
-            endState: new TokenizerState(res.ruleStack),
-            tokens: res.tokens.map((token) => ({
+            endState: new TokenizerState(result.ruleStack),
+            tokens: result.tokens.map((token) => ({
               ...token,
-              // TODO: At the moment, monaco-editor doesn't seem to accept array of scopes
-              scopes: editor
-                ? TMToMonacoToken(editor, token.scopes)
-                : token.scopes[token.scopes.length - 1],
+              scopes: TMToMonacoToken(editor, token.scopes),
             })),
           }
         },

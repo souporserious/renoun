@@ -77,5 +77,5 @@ export async function initializeMonaco(editor: any) {
   })
 
   /* Wire up TextMate grammars */
-  await wireTmGrammars(monaco, registry, grammars, editor)
+  await wireTmGrammars(registry, grammars, editor)
 }
