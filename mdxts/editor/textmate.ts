@@ -1,4 +1,4 @@
-import type { Registry, StateStack, IGrammar } from 'vscode-textmate'
+import type { Registry, StateStack } from 'vscode-textmate'
 import { INITIAL } from 'vscode-textmate'
 import * as monaco from 'monaco-editor'
 
@@ -9,8 +9,8 @@ export const TMToMonacoToken = (
 ) => {
   let scopeName = ''
   // get the scope name. Example: cpp , java, haskell
-  for (let i = scopes[0].length - 1; i >= 0; i -= 1) {
-    const char = scopes[0][i]
+  for (let index = scopes[0].length - 1; index >= 0; index -= 1) {
+    const char = scopes[0][index]
     if (char === '.') {
       break
     }
@@ -18,8 +18,8 @@ export const TMToMonacoToken = (
   }
 
   // iterate through all scopes from last to first
-  for (let i = scopes.length - 1; i >= 0; i -= 1) {
-    const scope = scopes[i]
+  for (let index = scopes.length - 1; index >= 0; index -= 1) {
+    const scope = scopes[index]
 
     /**
      * Try all possible tokens from high specific token to low specific token
@@ -37,10 +37,10 @@ export const TMToMonacoToken = (
      * 6 meta.cpp
      * 7 meta
      */
-    for (let i = scope.length - 1; i >= 0; i -= 1) {
-      const char = scope[i]
+    for (let index = scope.length - 1; index >= 0; index -= 1) {
+      const char = scope[index]
       if (char === '.') {
-        const token = scope.slice(0, i)
+        const token = scope.slice(0, index)
         const theme = editor['_themeService'].getColorTheme()
 
         if (theme._tokenTheme._match(token + '.' + scopeName)._foreground > 1) {
