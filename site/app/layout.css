@@ -1,6 +1,6 @@
 :root {
   --shiki-color-text: #eeeeee;
-  --shiki-color-background: #111915;
+  --shiki-color-background: #101217;
 
   --color-foreground: #fff;
   --color-foreground-interactive: hsla(0, 0%, 100%, 0.9);
@@ -79,6 +79,7 @@ main p {
 }
 
 pre {
+  font-size: 1rem;
   padding: 1rem;
   background-color: var(--shiki-color-background);
   color: var(--shiki-color-text);

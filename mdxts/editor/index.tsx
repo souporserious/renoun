@@ -41,6 +41,10 @@ export default function Editor({
       language,
       theme: 'mdxts',
       automaticLayout: true,
+      fontSize: 16,
+      fontFamily: 'monospace',
+      lineNumbers: 'off',
+      minimap: { enabled: false },
       ...props,
     })
 
