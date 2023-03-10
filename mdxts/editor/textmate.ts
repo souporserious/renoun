@@ -40,14 +40,13 @@ export const TMToMonacoToken = (
     for (let index = scope.length - 1; index >= 0; index -= 1) {
       const char = scope[index]
       if (char === '.') {
-        const token = scope.slice(0, index)
+        const token = scope.slice(0, index) + '.' + scopeName
         const theme = editor['_themeService'].getColorTheme()
 
-        if (theme._tokenTheme._match(token + '.' + scopeName)._foreground > 1) {
-          return token + '.' + scopeName
-        }
-
-        if (theme._tokenTheme._match(token)._foreground > 1) {
+        if (
+          theme._tokenTheme._match(token)._foreground !==
+          theme._tokenTheme._root._mainRule._foreground
+        ) {
           return token
         }
       }
@@ -81,16 +80,15 @@ class TokenizerState implements monaco.languages.IState {
   }
 }
 
-/**
- * Wires up monaco-editor with monaco-textmate
- *
- * @param monaco monaco namespace this operation should apply to (usually the `monaco` global unless you have some other setup)
- * @param registry TmGrammar `Registry` this wiring should rely on to provide the grammars
- * @param languages `Map` of language ids (string) to TM names (string)
- */
-export function wireTmGrammars(
+/** Wires up monaco-editor with monaco-textmate */
+export function wireTextMateGrammars(
+  /** TmGrammar `Registry` this wiring should rely on to provide the grammars. */
   registry: Registry,
+
+  /** `Map` of language ids (string) to TM names (string). */
   languages: Map<string, string>,
+
+  /** The monaco editor instance to wire up. */
   editor: monaco.editor.ICodeEditor
 ) {
   return Promise.all(

@@ -6,8 +6,6 @@ const publicDirectory = path.join(process.cwd(), 'public')
 
 const basePath = `node_modules/mdxts/node_modules`
 const pathsToCopy = [
-  `shiki/languages/javascript.tmLanguage.json`,
-  `shiki/languages/jsx.tmLanguage.json`,
   `shiki/languages/typescript.tmLanguage.json`,
   `shiki/languages/tsx.tmLanguage.json`,
 ]
