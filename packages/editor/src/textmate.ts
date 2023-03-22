@@ -49,8 +49,8 @@ export function wireTextMateGrammars(
             tokens: result.tokens.map((token) => {
               const scopes = token.scopes.slice(0)
 
-              for (let i = scopes.length - 1; i >= 0; i--) {
-                const scope = scopes[i]
+              for (let index = scopes.length - 1; index >= 0; index--) {
+                const scope = scopes[index]
                 const foreground = tokenTheme._match(scope)._foreground
 
                 if (foreground !== defaultForeground) {

@@ -9,11 +9,13 @@ const withMDXTS = createMDXTSPlugin({
 })
 
 export default withMDXTS({
+  compiler: {
+    styledComponents: true,
+  },
   experimental: {
     appDir: true,
     esmExternals: 'loose',
   },
-  compiler: {
-    styledComponents: true,
-  },
+  transpilePackages: ['@mdxts/code', '@mdxts/editor', '@mdxts/live'],
+  output: 'standalone',
 })

@@ -10,12 +10,15 @@
   },
   "dependencies": {
     "@mdx-js/mdx": "^2.3.0",
+    "@mdxts/code": "workspace:*",
+    "@mdxts/editor": "workspace:*",
+    "@mdxts/live": "workspace:*",
     "@types/mdx": "^2.0.3",
     "case-anything": "^2.1.10",
     "mdxts": "workspace:*",
     "next": "*",
     "react": "*",
     "react-dom": "*",
-    "styled-components": "5.3.8"
+    "styled-components": "5.3.9"
   }
 }

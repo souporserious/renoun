@@ -1,0 +1,26 @@
+{
+  "name": "@mdxts/code",
+  "version": "0.0.0",
+  "files": [
+    "dist/*"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsup src/index.tsx --dts --format esm",
+    "dev": "pnpm build --watch",
+    "test": "jest"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "devDependencies": {
+    "react": "*",
+    "react-dom": "*"
+  },
+  "dependencies": {
+    "bright": "^0.7.0"
+  }
+}

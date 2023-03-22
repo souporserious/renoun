@@ -1,20 +1,15 @@
 import * as monaco from 'monaco-editor'
-import Color from 'color'
+
+function isValidColor(color) {
+  const colorRegex = /^#(?:[0-9a-fA-F]{3}){1,2}$/
+  return colorRegex.test(color)
+}
 
 function sanitizeColor(color) {
-  if (!color) {
+  if (!color || isValidColor(color)) {
     return color
   }
-
-  if (/#......$/.test(color) || /#........$/.test(color)) {
-    return color
-  }
-
-  try {
-    return new Color(color).hexString()
-  } catch (e) {
-    return '#FF0000'
-  }
+  return '#FF0000'
 }
 
 function colorsAllowed({ foreground, background }) {
@@ -28,8 +23,10 @@ function colorsAllowed({ foreground, background }) {
 function transformTheme(theme) {
   const { tokenColors = [], colors = {} } = theme
   const rules = tokenColors
-    .filter((t) => t.settings && t.scope && colorsAllowed(t.settings))
-    .reduce((acc, token) => {
+    .filter(
+      (token) => token.settings && token.scope && colorsAllowed(token.settings)
+    )
+    .reduce((collection, token) => {
       const settings = {
         foreground: sanitizeColor(token.settings.foreground),
         background: sanitizeColor(token.settings.background),
@@ -42,29 +39,29 @@ function transformTheme(theme) {
           : token.scope
 
       scope.map((s) =>
-        acc.push({
+        collection.push({
           token: s,
           ...settings,
         })
       )
 
-      return acc
+      return collection
     }, [])
 
   const newColors = colors
 
-  Object.keys(colors).forEach((c) => {
-    if (newColors[c]) return c
+  Object.keys(colors).forEach((color) => {
+    if (newColors[color]) return color
 
-    delete newColors[c]
+    delete newColors[color]
 
-    return c
+    return color
   })
 
   return {
     colors: newColors,
-    rules,
     type: theme.type,
+    rules,
   }
 }
 
@@ -80,7 +77,10 @@ function getBase(type) {
   return 'vs'
 }
 
-export function getTheme(theme): monaco.editor.IStandaloneThemeData {
+/** Parses TextMate theme and returns a monaco compatible theme. */
+export function getTheme(
+  theme: Record<string, any>
+): monaco.editor.IStandaloneThemeData {
   const transformedTheme = transformTheme(theme)
 
   return {

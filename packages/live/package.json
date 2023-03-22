@@ -1,0 +1,29 @@
+{
+  "name": "@mdxts/live",
+  "version": "0.0.0",
+  "files": [
+    "dist/*"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsup src/index.tsx --dts --format esm",
+    "dev": "pnpm build --watch",
+    "test": "jest"
+  },
+  "peerDependencies": {
+    "next": ">=13.0.0",
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "devDependencies": {
+    "next": "*",
+    "react": "*",
+    "react-dom": "*"
+  },
+  "dependencies": {
+    "@mdxts/code": "workspace:*",
+    "@mdxts/editor": "workspace:*"
+  }
+}
