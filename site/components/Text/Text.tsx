@@ -76,7 +76,7 @@ const StyledText = styled.span<StyledTextProps>(
       textAlign: $alignment,
       width: $width,
       ...(textStyles[$variant] ?? {}),
-    }
+    } as any
 
     if ($weight !== undefined) {
       styles.fontWeight = $weight
