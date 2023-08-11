@@ -2,19 +2,19 @@ import { createGlobalStyle } from 'styled-components'
 import { cssVariables, mediaQuery } from 'theme'
 
 export const GlobalStyles = createGlobalStyle({
-  ':root': cssVariables,
+  ':root': cssVariables ,
   '*': {
     boxSizing: 'border-box',
   },
   html: {
     fontSize: '40%',
-    [mediaQuery.medium]: {
+    [String(mediaQuery.medium)]: {
       fontSize: '56%',
     },
-    [mediaQuery.large]: {
+    [String(mediaQuery.large)]: {
       fontSize: '72%',
     },
-    [mediaQuery.xlarge]: {
+    [String(mediaQuery.xlarge)]: {
       fontSize: '100%',
     },
   },
