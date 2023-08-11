@@ -10,12 +10,12 @@
   },
   "dependencies": {
     "@mdx-js/mdx": "^2.3.0",
-    "@types/mdx": "^2.0.3",
-    "case-anything": "^2.1.10",
+    "@types/mdx": "^2.0.6",
+    "case-anything": "^2.1.13",
     "mdxts": "workspace:*",
     "next": "*",
     "react": "*",
     "react-dom": "*",
-    "styled-components": "5.3.8"
+    "styled-components": "6.0.7"
   }
 }
