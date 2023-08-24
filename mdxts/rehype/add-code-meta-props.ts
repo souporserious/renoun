@@ -33,7 +33,7 @@ export async function addCodeMetaProps(tree: Element, file: VFile) {
                 : codeString
             )
           } catch (error) {
-            console.error(
+            throw new Error(
               `Error transforming MDX code block meta string for "${file.path}:${element.position?.start.line}"\n`,
               error
             )

@@ -1,21 +1,26 @@
-import allDocs from 'mdxts/docs'
-import { flattenData } from 'mdxts/utils'
-import { MDXComponent } from 'components/MDXComponent'
+import { allDocs } from 'app/all-docs'
 
-const flattenedDocs = flattenData(allDocs[0].children)
+export default function Page({ params }) {
+  const doc = allDocs[`docs/${params.slug[0]}`]
 
-export async function generateStaticParams() {
-  return flattenedDocs.map((doc) => ({ slug: doc.pathSegments }))
-}
-
-export default async function Page({ params }: { params: { slug: string[] } }) {
-  const doc = flattenedDocs.find(
-    (doc) => doc.pathSegments.join('') === params.slug.join('')
-  )
-
-  if (doc?.code) {
-    return <MDXComponent code={doc.code} />
+  if (doc == undefined) {
+    return <div>404</div>
   }
 
-  return null
+  const Component = doc.default
+
+  console.log(doc.headings)
+
+  return (
+    <>
+      <ul>
+        {doc.headings?.map(({ text, id }) => (
+          <li>
+            <a href={`#${id}`}>{text}</a>
+          </li>
+        ))}
+      </ul>
+      <Component />
+    </>
+  )
 }

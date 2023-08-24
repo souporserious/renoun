@@ -9,6 +9,9 @@ import { transformExamples } from './transform-examples'
 import { transformSymbolicLinks } from './transform-symbolic-links'
 import type { Languages } from './utils'
 import { getLanguage } from './utils'
+import type { CodeBlocks, FileData, Headings } from './types'
+
+export { CodeBlocks, FileData, Headings }
 
 let slugs: Slugger
 
@@ -94,25 +97,6 @@ export async function getHighlighter({
   }
 }
 
-export type Headings = {
-  id: any
-  text: string
-  depth: number
-}[]
-
-export type CodeBlocks = {
-  text: string
-  heading: Headings[number] | null
-  language: shiki.Lang
-  tokens: shiki.IThemedToken[][]
-}[]
-
-export type FileData = {
-  path: string
-  headings: Headings
-  codeBlocks: CodeBlocks
-}
-
 export function rehypePlugin({
   highlighter,
   project,
@@ -186,6 +170,87 @@ export function rehypePlugin({
         }
       }
     })
+
+    const exportNode = {
+      type: 'mdxjsEsm',
+      value: 'export const headings = [{ text: "HELLO", id: "text" }]',
+      data: {
+        estree: {
+          type: 'Program',
+          body: [
+            {
+              type: 'ExportNamedDeclaration',
+              declaration: {
+                type: 'VariableDeclaration',
+                declarations: [
+                  {
+                    type: 'VariableDeclarator',
+                    id: {
+                      type: 'Identifier',
+                      name: 'headings',
+                    },
+                    init: {
+                      type: 'ArrayExpression',
+                      elements: [
+                        {
+                          type: 'ObjectExpression',
+                          properties: [
+                            {
+                              type: 'Property',
+                              key: {
+                                type: 'Identifier',
+                                name: 'text',
+                              },
+                              value: {
+                                type: 'Literal',
+                                value: 'HELLO',
+                              },
+                              kind: 'init',
+                            },
+                            {
+                              type: 'Property',
+                              key: {
+                                type: 'Identifier',
+                                name: 'id',
+                              },
+                              value: {
+                                type: 'Literal',
+                                value: 'text',
+                              },
+                              kind: 'init',
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  },
+                ],
+                kind: 'const',
+              },
+              specifiers: [],
+              source: null,
+            },
+          ],
+          sourceType: 'module',
+          comments: [],
+        },
+      },
+    }
+
+    // @ts-expect-error
+    tree.children.unshift(exportNode)
+
+    // tree.children.unshift({
+    //   // @ts-expect-error
+    //   type: 'export',
+    //   value: `export const headings = [{ text: 'hello' }];`,
+    //   default: false,
+    // })
+
+    // tree.children.unshift({
+    //   type: 'raw',
+    //   value: `export const headings = ${JSON.stringify(headings)}`,
+    // })
 
     onFileData?.({
       path: file.path,

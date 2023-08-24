@@ -1,7 +1,9 @@
 import { Text } from 'components/Text'
 import { Logo } from 'components/Logo'
-import allDocs from 'mdxts/docs'
+// import allDocs from 'mdxts/docs'
 import { SidebarLink } from './SidebarLink'
+
+const allDocs = []
 
 export function Sidebar() {
   return (
@@ -40,7 +42,7 @@ export function Sidebar() {
         </a>
       </div>
 
-      {renderNavigation(allDocs[0].children)}
+      {/* {renderNavigation(allDocs[0].children)} */}
     </aside>
   )
 }
