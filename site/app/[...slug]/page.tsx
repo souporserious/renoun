@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 import { allDocs } from 'data'
 
 export default function Page({ params }) {
-  const doc = allDocs[`docs/${params.slug[0]}`]
+  const doc = allDocs[`docs/${params.slug.join('/')}`]
 
   if (doc == undefined) {
     return notFound()
