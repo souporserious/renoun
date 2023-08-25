@@ -1,9 +1,8 @@
+import parseTitle from 'title'
+import { allDocs } from 'data'
 import { Text } from 'components/Text'
 import { Logo } from 'components/Logo'
-// import allDocs from 'mdxts/docs'
 import { SidebarLink } from './SidebarLink'
-
-const allDocs = []
 
 export function Sidebar() {
   return (
@@ -42,36 +41,85 @@ export function Sidebar() {
         </a>
       </div>
 
-      {/* {renderNavigation(allDocs[0].children)} */}
+      {renderNavigation(createTreeFromModules(allDocs))}
     </aside>
   )
 }
 
-function renderNavigation(data: any, order: number = 0) {
+type Node = {
+  title: string
+  part: string
+  pathSegments: string[]
+  children: Node[]
+}
+
+function createTreeFromModules(allModules: Record<string, any>): Node[] {
+  const root: Node[] = []
+
+  for (let path in allModules) {
+    const module = allModules[path]
+    const parts = path.split('/')
+    let pathSegments: string[] = []
+
+    let currentNode: Node[] = root
+
+    for (let index = 0; index < parts.length; index++) {
+      const part = parts[index]
+      let title
+
+      pathSegments.push(part)
+
+      if (index < parts.length - 1) {
+        title = parseTitle(part)
+      } else {
+        title = module.title || parseTitle(part)
+      }
+
+      let existingNode = currentNode.find((node) => node.part === part)
+
+      if (existingNode) {
+        currentNode = existingNode.children
+      } else {
+        const newNode: Node = {
+          part,
+          title,
+          pathSegments,
+          children: [],
+        }
+        currentNode.push(newNode)
+        currentNode = newNode.children
+      }
+    }
+  }
+
+  return root
+}
+
+function renderNavigation(data: Node[], order: number = 0) {
+  const itemsToRender = data.length === 1 ? data[0].children : data
+
   return (
-    <ul
-      style={{
-        paddingLeft: order * 0.5 + 'rem',
-        listStyle: 'none',
-      }}
-    >
-      {data.map((item: any) => {
-        return (
-          <li
-            key={item.pathname}
-            style={{ color: item.code ? 'white' : 'grey' }}
-          >
-            {item.code ? (
-              <SidebarLink {...item} />
-            ) : (
-              <div style={{ padding: '0.25rem 0', cursor: 'default' }}>
-                <Text weight={600}>{item.name}</Text>
-              </div>
-            )}
-            {item.children && renderNavigation(item.children, order + 1)}
-          </li>
-        )
-      })}
+    <ul style={{ paddingLeft: order * 0.5 + 'rem', listStyle: 'none' }}>
+      {itemsToRender.map((item) => (
+        <li
+          key={item.title}
+          style={{ color: item.children.length ? 'grey' : 'white' }}
+        >
+          {item.children.length ? (
+            <div style={{ padding: '0.25rem 0', cursor: 'default' }}>
+              <Text weight={600}>{item.title}</Text>
+            </div>
+          ) : (
+            <SidebarLink
+              pathname={item.pathSegments.join('/').replace('docs/', '')}
+              name={item.title}
+            />
+          )}
+          {item.children.length
+            ? renderNavigation(item.children, order + 1)
+            : null}
+        </li>
+      ))}
     </ul>
   )
 }

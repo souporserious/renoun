@@ -62,18 +62,6 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
         withMDX = createMDXPlugin({
           options: {
             remarkPlugins: [remarkPlugin],
-            // rehypePlugins: [
-            //   [
-            //     rehypePlugin,
-            //     {
-            //       highlighter,
-            //       project,
-            //       onFileData: (fileData) => {
-            //         console.log(fileData)
-            //       },
-            //     },
-            //   ],
-            // ],
           },
         })
       }

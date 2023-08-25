@@ -3,7 +3,15 @@ import type { Headings } from 'mdxts/rehype'
 
 /** Loads all imports from a specific directory. */
 export function getModules<Type>(context: ReturnType<typeof require.context>) {
-  const modules: Record<string, Type> = {}
+  const modules: Record<
+    string,
+    {
+      default: ComponentType
+      title: string
+      headings?: Headings
+      metadata?: { title: string; description: string }
+    } & Type
+  > = {}
 
   for (const fileName of context.keys()) {
     if (fileName.startsWith('./')) continue
@@ -15,15 +23,14 @@ export function getModules<Type>(context: ReturnType<typeof require.context>) {
       .replace(/^\.\//, '')
       // Remove leading sorting number
       .replace(/\/\d+\./g, '/')
+    const module = context(fileName)
 
-    modules[slug] = context(fileName)
+    modules[slug] = Object.assign(module, {
+      title: module.metadata?.title || module.headings?.[0]?.text,
+    })
   }
 
   return modules
 }
 
-export const allDocs = getModules<{
-  default: ComponentType
-  headings?: Headings
-  metadata?: { title: string; description: string }
-}>(require.context('../docs', true, /\.mdx$/))
+export const allDocs = getModules(require.context('./docs', true, /\.mdx$/))

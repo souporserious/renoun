@@ -1,4 +1,5 @@
 'use client'
+
 import * as React from 'react'
 import * as jsxRuntime from 'react/jsx-runtime'
 import { evaluateSync } from '@mdx-js/mdx'

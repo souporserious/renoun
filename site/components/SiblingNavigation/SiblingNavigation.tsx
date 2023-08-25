@@ -1,10 +1,11 @@
+'use client'
 import { usePathname } from 'next/navigation'
 import { getPathData } from 'mdxts/utils'
-import allData from 'mdxts/docs'
+import { allDocs } from 'data'
 
 export function SiblingNavigation() {
   const pathname = usePathname()
-  const { previous, next } = getPathData(allData, pathname)
+  const { previous, next } = getPathData(Object.values(allDocs), pathname)
 
   return (
     <nav style={{ display: 'flex', padding: '4rem 0 2rem' }}>
