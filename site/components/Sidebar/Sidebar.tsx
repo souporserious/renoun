@@ -111,7 +111,7 @@ function renderNavigation(data: Node[], order: number = 0) {
             </div>
           ) : (
             <SidebarLink
-              pathname={item.pathSegments.join('/').replace('docs/', '')}
+              pathname={`/${item.pathSegments.join('/').replace('docs/', '')}`}
               name={item.title}
             />
           )}
