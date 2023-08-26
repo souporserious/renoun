@@ -79,6 +79,9 @@ importers:
 
   mdxts:
     dependencies:
+      '@code-hike/lighter':
+        specifier: 0.8.2
+        version: 0.8.2
       '@mdx-js/esbuild':
         specifier: ^2.3.0
         version: 2.3.0(esbuild@0.17.10)
@@ -1820,6 +1823,12 @@ packages:
       human-id: 1.0.2
       prettier: 2.8.8
     dev: true
+
+  /@code-hike/lighter@0.8.2:
+    resolution: {integrity: sha512-h7PA2+90rIRQWamxeHSpcgVLs9hwhz8UW8+RG+vYIYh2Y4F2GTa4c+7S5HQH/BKTyMPv5yrSCEwhCB605gO5og==}
+    dependencies:
+      ansi-sequence-parser: 1.1.0
+    dev: false
 
   /@emotion/is-prop-valid@1.2.1:
     resolution: {integrity: sha512-61Mf7Ufx4aDxx1xlDeOm8aFFigGHE4z+0sKCa+IHCeZKiyP9RLD0Mmx7m8b9/Cf37f7NAvQOOJAbQQGVr5uERw==}

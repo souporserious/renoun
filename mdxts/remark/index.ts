@@ -14,6 +14,13 @@ export function remarkPlugin() {
     const { toString } = await import('mdast-util-to-string')
     const headings = []
 
+    /* Add default `lang` to code blocks. */
+    visit(tree, 'code', (node) => {
+      if (!node.lang) {
+        node.lang = 'bash'
+      }
+    })
+
     visit(tree, 'heading', (node) => {
       const text = node.children.map((child) => toString(child)).join('')
       const heading = {

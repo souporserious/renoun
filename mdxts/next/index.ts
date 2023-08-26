@@ -77,6 +77,7 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
       }
 
       nextConfig.env.MDXTS_GIT_SOURCE = gitSource
+      nextConfig.env.MDXTS_THEME_PATH = themePath
       nextConfig.env.MDXTS_THEME = (await readFile(themePath, 'utf-8'))
         // replace single line comments with empty string
         .replace(/\/\/.*/g, '')

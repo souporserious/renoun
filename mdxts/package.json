@@ -7,6 +7,7 @@
   ],
   "main": "./dist/index.js",
   "exports": {
+    "./components": "./dist/components/index.js",
     "./editor": "./dist/editor/index.js",
     "./next": "./dist/next/index.js",
     "./transform": "./dist/transform/index.js",
@@ -16,8 +17,8 @@
   "types": "./dist/index.d.ts",
   "typesVersions": {
     "*": {
-      "bundle": [
-        "./dist/bundle/index.d.ts"
+      "components": [
+        "./dist/components/index.d.ts"
       ],
       "editor": [
         "./dist/editor/index.d.ts"
@@ -37,7 +38,7 @@
     }
   },
   "scripts": {
-    "build": "tsup index.ts utils/index.ts transform/index.ts rehype/index.ts remark/index.ts watcher/index.ts next/index.ts editor/index.tsx --dts --format esm,cjs",
+    "build": "tsup index.ts utils/index.ts transform/index.ts rehype/index.ts remark/index.ts watcher/index.ts next/index.ts editor/index.tsx components/index.ts --dts --format esm,cjs",
     "dev": "pnpm build --watch --sourcemap",
     "test": "jest"
   },
@@ -59,6 +60,7 @@
     "vfile": "^5.3.7"
   },
   "dependencies": {
+    "@code-hike/lighter": "0.8.2",
     "@next/mdx": "13.4.19",
     "@mdx-js/esbuild": "^2.3.0",
     "@mdx-js/loader": "2.3.0",
