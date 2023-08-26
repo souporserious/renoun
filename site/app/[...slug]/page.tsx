@@ -21,33 +21,33 @@ export default function Page({ params }) {
       <div>
         <Component />
       </div>
-      <div>
-        <nav>
-          <ul
-            style={{
-              listStyle: 'none',
-              display: 'flex',
-              flexDirection: 'column',
-              padding: 0,
-              margin: 0,
-            }}
-          >
-            {doc.headings?.map(({ text, depth, id }) =>
-              depth > 1 ? (
-                <li
-                  key={id}
-                  style={{
-                    padding: '0.25rem 0',
-                    paddingLeft: (depth - 1) * 0.5 + 'rem',
-                  }}
-                >
-                  <a href={`#${id}`}>{text}</a>
-                </li>
-              ) : null
-            )}
-          </ul>
-        </nav>
-      </div>
+      <nav>
+        <ul
+          style={{
+            listStyle: 'none',
+            display: 'flex',
+            flexDirection: 'column',
+            padding: 0,
+            margin: 0,
+            position: 'sticky',
+            top: '2rem',
+          }}
+        >
+          {doc.headings?.map(({ text, depth, id }) =>
+            depth > 1 ? (
+              <li
+                key={id}
+                style={{
+                  padding: '0.25rem 0',
+                  paddingLeft: (depth - 1) * 0.5 + 'rem',
+                }}
+              >
+                <a href={`#${id}`}>{text}</a>
+              </li>
+            ) : null
+          )}
+        </ul>
+      </nav>
     </div>
   )
 }

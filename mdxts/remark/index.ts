@@ -22,6 +22,15 @@ export function remarkPlugin() {
         depth: node.depth,
       }
       headings.push(heading)
+
+      /* Add `id` to heading. */
+      if (!node.data) {
+        node.data = {}
+      }
+      if (!node.data.hProperties) {
+        node.data.hProperties = {}
+      }
+      node.data.hProperties.id = heading.id
     })
 
     tree.children.unshift({
