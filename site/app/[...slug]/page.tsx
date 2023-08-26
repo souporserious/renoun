@@ -15,22 +15,39 @@ export default function Page({ params }) {
       style={{
         display: 'grid',
         gridTemplateColumns: 'minmax(0, 1fr) auto',
+        gap: '1rem',
       }}
     >
-      <main>
+      <div>
         <Component />
-      </main>
-      <aside>
+      </div>
+      <div>
         <nav>
-          <ul>
-            {doc.headings?.map(({ text, id }) => (
-              <li>
-                <a href={`#${id}`}>{text}</a>
-              </li>
-            ))}
+          <ul
+            style={{
+              listStyle: 'none',
+              display: 'flex',
+              flexDirection: 'column',
+              padding: 0,
+              margin: 0,
+            }}
+          >
+            {doc.headings?.map(({ text, depth, id }) =>
+              depth > 1 ? (
+                <li
+                  key={id}
+                  style={{
+                    padding: '0.25rem 0',
+                    paddingLeft: (depth - 1) * 0.5 + 'rem',
+                  }}
+                >
+                  <a href={`#${id}`}>{text}</a>
+                </li>
+              ) : null
+            )}
           </ul>
         </nav>
-      </aside>
+      </div>
     </div>
   )
 }
