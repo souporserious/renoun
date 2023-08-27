@@ -10,7 +10,7 @@ type CodeProps = {
 /** Renders a code block with syntax highlighting. */
 export async function Code({ language = 'bash', value, ...props }: CodeProps) {
   const { lines } = await highlight(
-    value,
+    value.trim(),
     language,
     JSON.parse(await readFile(process.env.MDXTS_THEME_PATH, 'utf-8'))
   )
