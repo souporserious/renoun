@@ -16,7 +16,7 @@ export function getModules<Type>(context: ReturnType<typeof require.context>) {
   for (const fileName of context.keys()) {
     if (fileName.startsWith('./')) continue
 
-    const slug = fileName
+    const pathname = fileName
       // Remove file extensions
       .replace(/\.[^/.]+$/, '')
       // Remove leading "./"
@@ -25,8 +25,9 @@ export function getModules<Type>(context: ReturnType<typeof require.context>) {
       .replace(/\/\d+\./g, '/')
     const module = context(fileName)
 
-    modules[slug] = Object.assign(module, {
+    modules[pathname] = Object.assign(module, {
       title: module.metadata?.title || module.headings?.[0]?.text,
+      pathname,
     })
   }
 

@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import { SiblingNavigation } from 'components/SiblingNavigation'
 import { allDocs } from 'data'
 
 export default function Page({ params }) {
@@ -11,43 +12,46 @@ export default function Page({ params }) {
   const Component = doc.default
 
   return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1fr) auto',
-        gap: '1rem',
-      }}
-    >
-      <div>
-        <Component />
+    <>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1fr) auto',
+          gap: '1rem',
+        }}
+      >
+        <div>
+          <Component />
+        </div>
+        <nav>
+          <ul
+            style={{
+              listStyle: 'none',
+              display: 'flex',
+              flexDirection: 'column',
+              padding: 0,
+              margin: 0,
+              position: 'sticky',
+              top: '2rem',
+            }}
+          >
+            {doc.headings?.map(({ text, depth, id }) =>
+              depth > 1 ? (
+                <li
+                  key={id}
+                  style={{
+                    padding: '0.25rem 0',
+                    paddingLeft: (depth - 1) * 0.5 + 'rem',
+                  }}
+                >
+                  <a href={`#${id}`}>{text}</a>
+                </li>
+              ) : null
+            )}
+          </ul>
+        </nav>
       </div>
-      <nav>
-        <ul
-          style={{
-            listStyle: 'none',
-            display: 'flex',
-            flexDirection: 'column',
-            padding: 0,
-            margin: 0,
-            position: 'sticky',
-            top: '2rem',
-          }}
-        >
-          {doc.headings?.map(({ text, depth, id }) =>
-            depth > 1 ? (
-              <li
-                key={id}
-                style={{
-                  padding: '0.25rem 0',
-                  paddingLeft: (depth - 1) * 0.5 + 'rem',
-                }}
-              >
-                <a href={`#${id}`}>{text}</a>
-              </li>
-            ) : null
-          )}
-        </ul>
-      </nav>
-    </div>
+      <SiblingNavigation data={allDocs} pathname={params.slug} />
+    </>
   )
 }
