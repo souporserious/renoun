@@ -6,7 +6,7 @@ import { PHASE_DEVELOPMENT_SERVER } from 'next/constants'
 import { Project } from 'ts-morph'
 import createMDXPlugin from '@next/mdx'
 import { remarkPlugin } from '../remark'
-import { rehypePlugin, getHighlighter } from '../rehype'
+import { rehypePlugin } from '../rehype'
 
 type PluginOptions = {
   gitSource: string
@@ -53,15 +53,14 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
       const themePath = resolve(process.cwd(), theme)
 
       if (withMDX === undefined) {
-        const highlighter = await getHighlighter({ theme: themePath })
-
-        const project = new Project({
-          tsConfigFilePath: resolve(process.cwd(), 'tsconfig.json'),
-        })
+        // const project = new Project({
+        //   tsConfigFilePath: resolve(process.cwd(), 'tsconfig.json'),
+        // })
 
         withMDX = createMDXPlugin({
           options: {
             remarkPlugins: [remarkPlugin],
+            rehypePlugins: [rehypePlugin],
           },
         })
       }
