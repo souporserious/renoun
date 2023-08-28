@@ -43,34 +43,34 @@ export function Sidebar() {
 
       <Navigation
         data={allDocs}
-        renderList={(list) => (
+        renderList={(props) => (
           <ul
             style={{
-              paddingLeft: list.order * 0.5 + 'rem',
+              paddingLeft: props.order * 0.5 + 'rem',
               listStyle: 'none',
             }}
           >
-            {list.children}
+            {props.children}
           </ul>
         )}
-        renderItem={(item) => (
+        renderItem={(props) => (
           <li
-            key={item.title}
-            style={{ color: item.children ? 'grey' : 'white' }}
+            key={props.title}
+            style={{ color: props.children ? 'grey' : 'white' }}
           >
-            {item.children ? (
+            {props.children ? (
               <div style={{ padding: '0.25rem 0', cursor: 'default' }}>
-                <Text weight={600}>{item.title}</Text>
+                <Text weight={600}>{props.title}</Text>
               </div>
             ) : (
               <SidebarLink
-                pathname={`/${item.pathSegments
+                pathname={`/${props.pathSegments
                   .join('/')
                   .replace('docs/', '')}`}
-                name={item.title}
+                name={props.title}
               />
             )}
-            {item.children}
+            {props.children}
           </li>
         )}
       />
