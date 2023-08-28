@@ -1,4 +1,5 @@
-import { getPathData } from 'mdxts/utils'
+import * as React from 'react'
+import { getPathData } from '../utils'
 
 export function SiblingNavigation({
   data,

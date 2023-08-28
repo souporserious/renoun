@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation'
-import { SiblingNavigation } from 'components/SiblingNavigation'
+import { SiblingNavigation } from 'mdxts/components'
 import { allDocs } from 'data'
 
 export default function Page({ params }) {
