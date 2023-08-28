@@ -16,7 +16,7 @@ export default function Page({ params }) {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1fr) auto',
+          gridTemplateColumns: 'minmax(0, 1fr) 160px',
           gap: '1rem',
         }}
       >
@@ -31,6 +31,7 @@ export default function Page({ params }) {
               flexDirection: 'column',
               padding: 0,
               margin: 0,
+              marginTop: 'calc(var(--font-size-heading-1) + 1rem)',
               position: 'sticky',
               top: '2rem',
             }}
@@ -40,6 +41,7 @@ export default function Page({ params }) {
                 <li
                   key={id}
                   style={{
+                    fontSize: '0.875rem',
                     padding: '0.25rem 0',
                     paddingLeft: (depth - 1) * 0.5 + 'rem',
                   }}
