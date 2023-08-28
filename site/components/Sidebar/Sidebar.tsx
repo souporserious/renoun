@@ -1,4 +1,4 @@
-import { renderNavigation } from 'mdxts/utils'
+import { Navigation } from 'mdxts/components'
 import { allDocs } from 'data'
 import { Text } from 'components/Text'
 import { Logo } from 'components/Logo'
@@ -41,9 +41,9 @@ export function Sidebar() {
         </a>
       </div>
 
-      {renderNavigation(
-        allDocs,
-        (list) => (
+      <Navigation
+        data={allDocs}
+        renderList={(list) => (
           <ul
             style={{
               paddingLeft: list.order * 0.5 + 'rem',
@@ -52,8 +52,8 @@ export function Sidebar() {
           >
             {list.children}
           </ul>
-        ),
-        (item) => (
+        )}
+        renderItem={(item) => (
           <li
             key={item.title}
             style={{ color: item.children ? 'grey' : 'white' }}
@@ -72,8 +72,8 @@ export function Sidebar() {
             )}
             {item.children}
           </li>
-        )
-      )}
+        )}
+      />
     </aside>
   )
 }

@@ -49,8 +49,7 @@ function createTreeFromModules(allModules: Record<string, any>): Node[] {
   return root
 }
 
-/** Renders a navigation tree from a collection of modules. */
-export function renderNavigation(
+function renderNavigation(
   data: Record<string, any>,
   renderList: (list: { children: JSX.Element[]; order: number }) => JSX.Element,
   renderItem: (
@@ -74,4 +73,19 @@ export function renderNavigation(
 
   const tree = createTreeFromModules(data)
   return buildNavigationTree(tree[0].children, 0)
+}
+
+/** Renders a navigation tree from a collection of modules. */
+export function Navigation({
+  data,
+  renderList,
+  renderItem,
+}: {
+  data: Record<string, any>
+  renderList: (list: { children: JSX.Element[]; order: number }) => JSX.Element
+  renderItem: (
+    item: Omit<Node, 'children'> & { children?: JSX.Element }
+  ) => JSX.Element
+}) {
+  return renderNavigation(data, renderList, renderItem)
 }
