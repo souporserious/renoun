@@ -7,6 +7,7 @@
   ],
   "main": "./dist/index.js",
   "exports": {
+    ".": "./dist/index.js",
     "./components": "./dist/components/index.js",
     "./editor": "./dist/editor/index.js",
     "./next": "./dist/next/index.js",

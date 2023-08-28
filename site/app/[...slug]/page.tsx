@@ -9,7 +9,7 @@ export default function Page({ params }) {
     return notFound()
   }
 
-  const Component = doc.default
+  const { Component } = doc
 
   return (
     <>

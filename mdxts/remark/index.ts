@@ -6,6 +6,12 @@ import('github-slugger').then(({ default: Slugger }) => {
   slugs = new Slugger()
 })
 
+export type Headings = {
+  id: any
+  text: string
+  depth: number
+}[]
+
 export function remarkPlugin() {
   return async (tree) => {
     slugs.reset()

@@ -1,5 +1,3 @@
-import parseTitle from 'title'
-
 type Node = {
   title: string
   part: string
@@ -19,15 +17,8 @@ function createTreeFromModules(allModules: Record<string, any>): Node[] {
 
     for (let index = 0; index < parts.length; index++) {
       const part = parts[index]
-      let title
 
       pathSegments.push(part)
-
-      if (index < parts.length - 1) {
-        title = parseTitle(part)
-      } else {
-        title = module.title || parseTitle(part)
-      }
 
       let existingNode = currentNode.find((node) => node.part === part)
 
@@ -35,8 +26,8 @@ function createTreeFromModules(allModules: Record<string, any>): Node[] {
         currentNode = existingNode.children
       } else {
         const newNode: Node = {
+          ...module,
           part,
-          title,
           pathSegments,
           children: [],
         }
