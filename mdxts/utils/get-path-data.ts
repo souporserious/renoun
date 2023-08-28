@@ -15,7 +15,7 @@ export function getPathData(
     const siblingIndex = startIndex + direction
     const siblingPath = allData[siblingIndex]
 
-    if (siblingPath?.slug === null) {
+    if (siblingPath?.pathname === null) {
       return getSiblingPath(siblingIndex, direction)
     }
 
