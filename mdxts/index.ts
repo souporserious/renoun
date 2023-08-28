@@ -2,6 +2,13 @@ import title from 'title'
 import type { ComponentType } from 'react'
 import type { Headings } from './remark'
 
+export type Module = {
+  Component: ComponentType
+  title: string
+  headings?: Headings
+  metadata?: { title: string; description: string }
+}
+
 /** Parses and attaches metadata to a module. */
 function parseModule(module, fileName: string) {
   const { default: Component, ...exports } = module
@@ -24,15 +31,7 @@ function parseModule(module, fileName: string) {
 
 /** Loads all imports from a specific directory. */
 export function getData<Type>(context: ReturnType<typeof require.context>) {
-  const modules: Record<
-    string,
-    {
-      Component: ComponentType
-      title: string
-      headings?: Headings
-      metadata?: { title: string; description: string }
-    } & Type
-  > = {}
+  const modules: Record<string, Module & Type> = {}
 
   for (const fileName of context.keys()) {
     if (fileName.startsWith('./')) continue

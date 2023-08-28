@@ -1,5 +1,6 @@
-type Node = {
-  title: string
+import type { Module } from '../index'
+
+type Node = Module & {
   part: string
   pathSegments: string[]
   children: Node[]
