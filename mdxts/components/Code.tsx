@@ -8,6 +8,11 @@ type CodeProps = {
 }
 
 async function AsyncCode({ language = 'bash', value, ...props }: CodeProps) {
+  console.log(
+    process.cwd(),
+    'attempting to load:',
+    process.env.MDXTS_THEME_PATH
+  )
   const { lines } = await highlight(
     value.trim(),
     language,
