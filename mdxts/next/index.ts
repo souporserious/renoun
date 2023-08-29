@@ -2,6 +2,7 @@ import MonacoWebpackPlugin from 'monaco-editor-webpack-plugin'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { NextConfig } from 'next'
+import CopyPlugin from 'copy-webpack-plugin'
 import { PHASE_DEVELOPMENT_SERVER } from 'next/constants'
 import { Project } from 'ts-morph'
 import createMDXPlugin from '@next/mdx'
@@ -18,6 +19,7 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
   console.log('mdxts: config initialized')
 
   const { gitSource, theme } = pluginOptions
+  const themePath = resolve(process.cwd(), theme)
 
   return function withMDXTS(nextConfig: NextConfig = {}) {
     const getWebpackConfig = nextConfig.webpack
@@ -39,6 +41,18 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
         },
       })
 
+      // Load theme for Code component
+      config.plugins.push(
+        new CopyPlugin({
+          patterns: [
+            {
+              from: themePath,
+              to: 'static/mdxts/theme.json',
+            },
+          ],
+        })
+      )
+
       if (typeof getWebpackConfig === 'function') {
         return getWebpackConfig(config, options)
       }
@@ -50,8 +64,6 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
     let withMDX: ReturnType<typeof createMDXPlugin>
 
     return async (phase) => {
-      const themePath = resolve(process.cwd(), theme)
-
       if (withMDX === undefined) {
         // const project = new Project({
         //   tsConfigFilePath: resolve(process.cwd(), 'tsconfig.json'),

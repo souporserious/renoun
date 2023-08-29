@@ -58,7 +58,8 @@
     "rehype-stringify": "^9.0.3",
     "remark": "^14.0.2",
     "unified": "^10.1.2",
-    "vfile": "^5.3.7"
+    "vfile": "^5.3.7",
+    "webpack": "^5.88.2"
   },
   "dependencies": {
     "@code-hike/lighter": "0.8.2",
@@ -73,6 +74,7 @@
     "case-anything": "^2.1.10",
     "chokidar": "^3.5.3",
     "color": "^4.2.3",
+    "copy-webpack-plugin": "^11.0.0",
     "dprint-node": "^1.0.7",
     "esbuild": "^0.17.10",
     "esbuild-plugin-wasm": "^1.0.0",
