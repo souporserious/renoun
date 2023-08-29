@@ -1,9 +1,22 @@
+import title from 'title'
 import type { Module } from '../index'
 
 type Node = Module & {
   part: string
   pathSegments: string[]
   children: Node[]
+  isDirectory: boolean
+}
+
+function markDirectories(node: Node): void {
+  if (node.children.length > 0) {
+    node.isDirectory = true
+    node.title = title(node.part)
+    node.children.forEach(markDirectories)
+    delete node.headings
+  } else {
+    node.isDirectory = false
+  }
 }
 
 function createTreeFromModules(allModules: Record<string, any>): Node[] {
@@ -38,7 +51,7 @@ function createTreeFromModules(allModules: Record<string, any>): Node[] {
     }
   }
 
-  return root
+  return root[0].children
 }
 
 function renderNavigation(
@@ -51,20 +64,20 @@ function renderNavigation(
   function buildNavigationTree(children: Node[], order: number) {
     return renderList({
       children: children.map((item) =>
-        renderItem(
-          Object.assign(item, {
-            children: item.children.length
-              ? buildNavigationTree(item.children, order + 1)
-              : null,
-          })
-        )
+        renderItem({
+          ...item,
+          children: item.children.length
+            ? buildNavigationTree(item.children, order + 1)
+            : null,
+        })
       ),
       order,
     })
   }
 
   const tree = createTreeFromModules(data)
-  return buildNavigationTree(tree[0].children, 0)
+  tree.forEach(markDirectories)
+  return buildNavigationTree(tree, 0)
 }
 
 /** Renders a navigation tree from a collection of modules. */

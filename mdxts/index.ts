@@ -29,7 +29,7 @@ function parseModule(module, fileName: string) {
   }
 }
 
-/** Loads all imports from a specific directory. */
+/** Loads all imports and parses metadata for a specific directory. */
 export function getData<Type>(context: ReturnType<typeof require.context>) {
   const modules: Record<string, Module & Type> = {}
 
