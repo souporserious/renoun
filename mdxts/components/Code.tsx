@@ -1,6 +1,11 @@
 import * as React from 'react'
 import { readFile } from 'node:fs/promises'
 import { highlight } from '@code-hike/lighter'
+import path from 'path'
+import url from 'url'
+
+const __filename = url.fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 type CodeProps = {
   language?: string
@@ -8,8 +13,13 @@ type CodeProps = {
 }
 
 async function AsyncCode({ language = 'bash', value, ...props }: CodeProps) {
+  const filePath = await import.meta.resolve('./')
   throw new Error(
-    `CWD: ${process.cwd()}, attempting to load: ${process.env.MDXTS_THEME_PATH}`
+    `cwd: ${process.cwd()}
+    filePath: ${filePath}
+    __dirname: ${__dirname}
+    __filename: ${__filename}
+    themePath: ${process.env.MDXTS_THEME_PATH}`
   )
 
   const { lines } = await highlight(
