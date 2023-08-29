@@ -1,11 +1,11 @@
 import * as React from 'react'
 import { readFile } from 'node:fs/promises'
 import { highlight } from '@code-hike/lighter'
-import path from 'path'
-import url from 'url'
+// import path from 'path'
+// import url from 'url'
 
-const __filename = url.fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
+// const __filename = url.fileURLToPath(import.meta.url)
+// const __dirname = path.dirname(__filename)
 
 type CodeProps = {
   language?: string
