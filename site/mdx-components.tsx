@@ -22,10 +22,7 @@ export function useMDXComponents(): MDXComponents {
     pre: (props) => {
       const { children, className } = (props.children as any).props
       const language = getLanguageFromClassName(className)
-      return (
-        // @ts-expect-error
-        <Code language={language} value={children} />
-      )
+      return <Code language={language} value={children} />
     },
   } satisfies MDXComponents
 }
