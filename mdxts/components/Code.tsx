@@ -14,33 +14,36 @@ type CodeProps = {
 
 async function AsyncCode({ language = 'bash', value, ...props }: CodeProps) {
   const filePath = await import.meta.resolve('./')
-  throw new Error(
-    `cwd: ${process.cwd()}
-    filePath: ${filePath}
-    __dirname: ${__dirname}
-    __filename: ${__filename}
-    themePath: ${process.env.MDXTS_THEME_PATH}`
-  )
 
-  const { lines } = await highlight(
-    value.trim(),
-    language,
-    JSON.parse(await readFile(process.env.MDXTS_THEME_PATH, 'utf-8'))
-  )
+  try {
+    const { lines } = await highlight(
+      value.trim(),
+      language,
+      JSON.parse(await readFile(process.env.MDXTS_THEME_PATH, 'utf-8'))
+    )
 
-  return (
-    <pre style={{ gridArea: '1 / 1', margin: 0 }} {...props}>
-      {lines.map((line, index) => (
-        <div key={index} style={{ height: 20, lineHeight: '20px' }}>
-          {line.map((token, index) => (
-            <span key={index} style={token.style}>
-              {token.content}
-            </span>
-          ))}
-        </div>
-      ))}
-    </pre>
-  )
+    return (
+      <pre style={{ gridArea: '1 / 1', margin: 0 }} {...props}>
+        {lines.map((line, index) => (
+          <div key={index} style={{ height: 20, lineHeight: '20px' }}>
+            {line.map((token, index) => (
+              <span key={index} style={token.style}>
+                {token.content}
+              </span>
+            ))}
+          </div>
+        ))}
+      </pre>
+    )
+  } catch (error) {
+    throw new Error(
+      `cwd: ${process.cwd()}
+      filePath: ${filePath}
+      __dirname: ${__dirname}
+      __filename: ${__filename}
+      themePath: ${process.env.MDXTS_THEME_PATH}`
+    )
+  }
 }
 
 /** Renders a code block with syntax highlighting. */
