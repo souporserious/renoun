@@ -7,8 +7,7 @@ type CodeProps = {
   value?: string
 }
 
-/** Renders a code block with syntax highlighting. */
-export async function Code({ language = 'bash', value, ...props }: CodeProps) {
+async function AsyncCode({ language = 'bash', value, ...props }: CodeProps) {
   const { lines } = await highlight(
     value.trim(),
     language,
@@ -28,4 +27,9 @@ export async function Code({ language = 'bash', value, ...props }: CodeProps) {
       ))}
     </pre>
   )
+}
+
+/** Renders a code block with syntax highlighting. */
+export function Code(props: CodeProps) {
+  return <AsyncCode {...props} />
 }
