@@ -97,7 +97,6 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
         nextConfig.pageExtensions = ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx']
       }
 
-      // @ts-expect-error
       return withMDX(nextConfig)
     }
   }

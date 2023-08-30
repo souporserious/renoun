@@ -6,10 +6,7 @@ const withMDXTS = createMDXTSPlugin({
 })
 
 export default withMDXTS({
-  experimental: {
-    appDir: true,
-    esmExternals: 'loose',
-  },
+  transpilePackages: ['mdxts'],
   compiler: {
     styledComponents: true,
   },

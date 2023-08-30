@@ -1,6 +1,7 @@
 import * as React from 'react'
 import type { MDXComponents } from 'mdx/types'
 import { Code } from 'mdxts/components'
+import theme from './theme.json'
 
 const languages = {
   mjs: 'javascript',
@@ -22,7 +23,7 @@ export function useMDXComponents(): MDXComponents {
     pre: (props) => {
       const { children, className } = (props.children as any).props
       const language = getLanguageFromClassName(className)
-      return <Code language={language} value={children} />
+      return <Code language={language} value={children} theme={theme} />
     },
   } satisfies MDXComponents
 }
