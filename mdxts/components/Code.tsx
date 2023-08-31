@@ -2,18 +2,24 @@ import * as React from 'react'
 import { highlight } from '@code-hike/lighter'
 
 type CodeProps = {
-  language?: string
+  /** Code snippet to be highlighted. */
   value?: string
+
+  /** Language of the code snippet. */
+  language?: string
+
+  /** VS Code-based theme for highlighting. */
   theme?: Record<string, unknown>
 }
 
-async function AsyncCode({
-  language = 'bash',
+/** Renders a code block with syntax highlighting. */
+export async function Code({
   value,
+  language = 'bash',
   theme,
   ...props
 }: CodeProps) {
-  const { lines } = await highlight(value.trim(), language, theme)
+  const { lines } = await highlight(value, language, theme)
 
   return (
     <pre style={{ gridArea: '1 / 1', margin: 0 }} {...props}>
@@ -28,9 +34,4 @@ async function AsyncCode({
       ))}
     </pre>
   )
-}
-
-/** Renders a code block with syntax highlighting. */
-export function Code(props: CodeProps) {
-  return <AsyncCode {...props} />
 }
