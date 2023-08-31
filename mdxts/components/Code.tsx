@@ -19,10 +19,10 @@ export async function Code({
   theme,
   ...props
 }: CodeProps) {
-  const { lines } = await highlight(value, language, theme)
+  const { lines, style } = await highlight(value, language, theme)
 
   return (
-    <pre style={{ gridArea: '1 / 1', margin: 0 }} {...props}>
+    <pre style={{ gridArea: '1 / 1', margin: 0, ...style }} {...props}>
       {lines.map((line, index) => (
         <div key={index} style={{ height: 20, lineHeight: '20px' }}>
           {line.map((token, index) => (
