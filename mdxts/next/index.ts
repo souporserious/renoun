@@ -7,11 +7,17 @@ import { PHASE_DEVELOPMENT_SERVER } from 'next/constants'
 import { Project } from 'ts-morph'
 import createMDXPlugin from '@next/mdx'
 import { remarkPlugin } from '../remark'
-import { rehypePlugin } from '../rehype'
+// import { rehypePlugin } from '../rehype'
 
 type PluginOptions = {
   gitSource: string
   theme: string
+}
+
+export function rehypePlugin({ project }) {
+  return function transformer(tree, file) {
+    console.log('MDXTS: rehype plugin called')
+  }
 }
 
 /** Starts the MDXTS server and bundles all entry points defined in the plugin options. */
@@ -61,43 +67,39 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
     }
 
     let watcherCreated = false
-    let withMDX: ReturnType<typeof createMDXPlugin>
 
-    return async (phase) => {
-      if (withMDX === undefined) {
-        // const project = new Project({
-        //   tsConfigFilePath: resolve(process.cwd(), 'tsconfig.json'),
-        // })
+    const project = new Project({
+      tsConfigFilePath: resolve(process.cwd(), 'tsconfig.json'),
+    })
+    const withMDX = createMDXPlugin({
+      options: {
+        remarkPlugins: [remarkPlugin],
+        // rehypePlugins: [rehypePlugin],
+      },
+    })
 
-        withMDX = createMDXPlugin({
-          options: {
-            remarkPlugins: [remarkPlugin],
-            rehypePlugins: [rehypePlugin],
-          },
-        })
-      }
+    // return async (phase) => {
+    //   if (!watcherCreated && phase === PHASE_DEVELOPMENT_SERVER) {
+    //     // watcherCreated = true
+    //     // createWatcher(project, loaderPaths, compile)
+    //     // console.log('mdxts: started watcher...')
+    //   }
 
-      //   if (!watcherCreated && phase === PHASE_DEVELOPMENT_SERVER) {
-      //     // watcherCreated = true
-      //     // createWatcher(project, loaderPaths, compile)
-      //     // console.log('mdxts: started watcher...')
-      //   }
-
-      if (nextConfig.env === undefined) {
-        nextConfig.env = {}
-      }
-
-      nextConfig.env.MDXTS_GIT_SOURCE = gitSource
-      nextConfig.env.MDXTS_THEME_PATH = themePath
-      // nextConfig.env.MDXTS_THEME = (await readFile(themePath, 'utf-8'))
-      //   // replace single line comments with empty string
-      //   .replace(/\/\/.*/g, '')
-
-      if (nextConfig.pageExtensions === undefined) {
-        nextConfig.pageExtensions = ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx']
-      }
-
-      return withMDX(nextConfig)
+    if (nextConfig.env === undefined) {
+      nextConfig.env = {}
     }
+
+    nextConfig.env.MDXTS_GIT_SOURCE = gitSource
+    nextConfig.env.MDXTS_THEME_PATH = themePath
+    // nextConfig.env.MDXTS_THEME = (await readFile(themePath, 'utf-8'))
+    //   // replace single line comments with empty string
+    //   .replace(/\/\/.*/g, '')
+
+    if (nextConfig.pageExtensions === undefined) {
+      nextConfig.pageExtensions = ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx']
+    }
+
+    return withMDX(nextConfig)
+    // }
   }
 }

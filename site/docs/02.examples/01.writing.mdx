@@ -29,7 +29,7 @@ function Hello({ name }: { name: string }) {
 
 Gather all `@example` tags from a file and render them in MDX:
 
-```tsx filename=Button/index.tsx
+```Button/index.tsx
 /**
  * Used for taking actions and navigating.
  *
@@ -47,7 +47,7 @@ export function Button({
 }
 ```
 
-```mdx filename=Button/README.mdx
+```Button/README.mdx
 <Example identifier="Button" />
 ```
 
@@ -55,7 +55,7 @@ export function Button({
 
 Module examples can be exported alongside your component using the [[example]] helper:
 
-```tsx live filename="Button.tsx"
+```Button.tsx live
 import { example } from 'mdxts'
 
 /** Used for taking actions and navigating. */
@@ -86,7 +86,7 @@ Button.tsx
 Button.examples.tsx
 ```
 
-```tsx filename=Button.examples.tsx
+```Button.examples.tsx
 import { Button } from './Button'
 
 export function BasicUsage() {

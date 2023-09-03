@@ -1,11 +1,9 @@
-import type { Element } from 'hast'
-import type { VFile } from 'vfile'
-import { addCodeMetaProps } from './add-code-meta-props'
-import { transformSymbolicLinks } from './transform-symbolic-links'
+// import { addCodeMetaProps } from './add-code-meta-props'
 
-export function rehypePlugin() {
-  return async function transformer(tree: Element, file: VFile) {
-    await addCodeMetaProps(tree, file)
-    await transformSymbolicLinks(tree)
+export function rehypePlugin({ project }) {
+  return function transformer(tree, file) {
+    // await addCodeMetaProps(project)(tree, file)
+    // await transformSymbolicLinks(tree)
+    // console.log(project.getSourceFiles().map((file) => file.getBaseName()))
   }
 }

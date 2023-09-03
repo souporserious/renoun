@@ -1,30 +1,50 @@
-import type { Element } from 'hast'
+import type { Element, Parent, Node } from 'hast'
 import type { VFile } from 'vfile'
+import type { Project } from 'ts-morph'
 
-/** Pass through meta string and code as props to `code` elements. */
-export async function addCodeMetaProps(tree: Element, file: VFile) {
-  const { visit } = await import('unist-util-visit')
-  const { toString } = await import('hast-util-to-string')
+export function addCodeMetaProps(project: Project) {
+  return async (tree: Node, file: VFile) => {
+    const { visit } = await import('unist-util-visit')
+    const { toString } = await import('hast-util-to-string')
+    const basePath = file.path ? file.path.replace(/\W+/g, '_') : 'unknown'
+    let indexPath = []
 
-  visit(tree, 'element', (element) => {
-    if (element.tagName === 'pre') {
-      const codeNode = element.children[0]
+    visit(
+      tree,
+      'element',
+      (element: Element, index: number, parent: Parent) => {
+        if (parent) {
+          indexPath.push(index)
+        }
 
-      if (
-        codeNode &&
-        codeNode.type === 'element' &&
-        codeNode.tagName === 'code'
-      ) {
-        element.properties.code = toString(element)
+        if (element.tagName === 'pre') {
+          const codeNode = element.children[0]
 
-        const meta = codeNode.data?.meta as string | undefined
+          if (
+            codeNode &&
+            codeNode.type === 'element' &&
+            codeNode.tagName === 'code'
+          ) {
+            const codeString = toString(codeNode)
+            element.properties.code = codeString
 
-        /* Map meta string to props. */
-        meta?.split(' ').forEach((prop) => {
-          const [key, value] = prop.split('=')
-          element.properties[key] = value ?? true
-        })
+            const codeFileName = `code_${basePath}_${indexPath.join('_')}.ts`
+            project.createSourceFile(codeFileName, codeString)
+
+            // Map meta string to props
+            const meta = (codeNode.data as any)?.meta as string | undefined
+            meta?.split(' ').forEach((prop) => {
+              const [key, value] = prop.split('=')
+              element.properties[key] = value ?? true
+            })
+          }
+        }
+
+        // Reset the index path if we are back to the root node
+        if (!parent) {
+          indexPath = []
+        }
       }
-    }
-  })
+    )
+  }
 }

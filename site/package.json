@@ -16,7 +16,6 @@
     "next": "*",
     "react": "*",
     "react-dom": "*",
-    "styled-components": "6.0.7",
-    "title": "^3.5.3"
+    "styled-components": "6.0.7"
   }
 }
