@@ -1,12 +1,21 @@
 import type { Element, Parent, Node } from 'hast'
 import type { VFile } from 'vfile'
-import type { Project } from 'ts-morph'
 
-export function addCodeMetaProps(project: Project) {
+export type AddCodeMetaPropsOptions = {
+  /** Called when a code block is found. */
+  onCodeBlock?: (fileName: string, codeString: string) => void
+}
+
+/** Adds code meta props to the code element. */
+export function addCodeMetaProps({
+  onCodeBlock,
+}: AddCodeMetaPropsOptions = {}) {
   return async (tree: Node, file: VFile) => {
     const { visit } = await import('unist-util-visit')
     const { toString } = await import('hast-util-to-string')
-    const basePath = file.path ? file.path.replace(/\W+/g, '_') : 'unknown'
+    const basePath = file.path
+      ? file.path.replace(process.cwd(), '').replace(/\W+/g, '_')
+      : ''
     let indexPath = []
 
     visit(
@@ -19,7 +28,6 @@ export function addCodeMetaProps(project: Project) {
 
         if (element.tagName === 'pre') {
           const codeNode = element.children[0]
-
           if (
             codeNode &&
             codeNode.type === 'element' &&
@@ -29,7 +37,7 @@ export function addCodeMetaProps(project: Project) {
             element.properties.code = codeString
 
             const codeFileName = `code_${basePath}_${indexPath.join('_')}.ts`
-            project.createSourceFile(codeFileName, codeString)
+            onCodeBlock?.(codeFileName, codeString)
 
             // Map meta string to props
             const meta = (codeNode.data as any)?.meta as string | undefined
@@ -39,7 +47,6 @@ export function addCodeMetaProps(project: Project) {
             })
           }
         }
-
         // Reset the index path if we are back to the root node
         if (!parent) {
           indexPath = []

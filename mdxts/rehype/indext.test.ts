@@ -14,7 +14,11 @@ const remarkProcessor = unified()
 test('adds code blocks to project', async () => {
   const project = new Project()
   const processor = remarkProcessor
-    .use(rehypePlugin, { project })
+    .use(rehypePlugin, {
+      onCodeBlock: (fileName, codeString) => {
+        project.createSourceFile(fileName, codeString, { overwrite: true })
+      },
+    })
     .use(rehypeStringify)
   const outputHtml = await processor.process(
     `# Hello

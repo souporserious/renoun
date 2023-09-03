@@ -15,9 +15,9 @@ export function useMDXComponents() {
     References: (props) => <div {...props} />,
     Summary: (props) => <div {...props} />,
     pre: (props) => {
-      const { children, className } = (props.children as any).props
+      const { children: value, className } = (props.children as any).props
       const language = getLanguageFromClassName(className)
-      return <Code language={language} value={children} theme={theme} />
+      return <Code language={language} value={value.trim()} theme={theme} />
     },
   } satisfies MDXComponents
 }

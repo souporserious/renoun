@@ -1,23 +1,17 @@
 import MonacoWebpackPlugin from 'monaco-editor-webpack-plugin'
-import { readFile } from 'node:fs/promises'
+// import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { NextConfig } from 'next'
 import CopyPlugin from 'copy-webpack-plugin'
-import { PHASE_DEVELOPMENT_SERVER } from 'next/constants'
+// import { PHASE_DEVELOPMENT_SERVER } from 'next/constants'
 import { Project } from 'ts-morph'
 import createMDXPlugin from '@next/mdx'
 import { remarkPlugin } from '../remark'
-// import { rehypePlugin } from '../rehype'
+import { rehypePlugin } from '../rehype'
 
 type PluginOptions = {
   gitSource: string
   theme: string
-}
-
-export function rehypePlugin({ project }) {
-  return function transformer(tree, file) {
-    console.log('MDXTS: rehype plugin called')
-  }
 }
 
 /** Starts the MDXTS server and bundles all entry points defined in the plugin options. */
@@ -66,7 +60,7 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
       return config
     }
 
-    let watcherCreated = false
+    // let watcherCreated = false
 
     const project = new Project({
       tsConfigFilePath: resolve(process.cwd(), 'tsconfig.json'),
@@ -74,7 +68,18 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
     const withMDX = createMDXPlugin({
       options: {
         remarkPlugins: [remarkPlugin],
-        // rehypePlugins: [rehypePlugin],
+        rehypePlugins: [
+          [
+            rehypePlugin,
+            {
+              onCodeBlock: (fileName, codeString) => {
+                project.createSourceFile(fileName, codeString, {
+                  overwrite: true,
+                })
+              },
+            },
+          ],
+        ],
       },
     })
 
