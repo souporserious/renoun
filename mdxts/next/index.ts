@@ -1,3 +1,4 @@
+import FilterWarningsPlugin from 'webpack-filter-warnings-plugin'
 import MonacoWebpackPlugin from 'monaco-editor-webpack-plugin'
 // import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
@@ -67,6 +68,12 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
 
     nextConfig.webpack = (config, options) => {
       config.plugins.push(
+        // TODO: #8 silencing ts-morph critical dependency warnings for now
+        new FilterWarningsPlugin({
+          exclude: [
+            /Critical dependency: the request of a dependency is an expression/,
+          ],
+        }),
         new MonacoWebpackPlugin({
           filename: 'static/[name].worker.js',
           languages: options.isServer ? [] : ['javascript', 'typescript'],
