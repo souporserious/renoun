@@ -3,8 +3,10 @@ import {
   type AddCodeMetaPropsOptions,
 } from './add-code-meta-props'
 
-export function rehypePlugin({ onCodeBlock }: AddCodeMetaPropsOptions = {}) {
+export function rehypePlugin({
+  onJavaScriptCodeBlock,
+}: AddCodeMetaPropsOptions = {}) {
   return async function (tree, file) {
-    await addCodeMetaProps({ onCodeBlock })(tree, file)
+    await addCodeMetaProps({ onJavaScriptCodeBlock })(tree, file)
   }
 }

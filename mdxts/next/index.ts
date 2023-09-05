@@ -8,6 +8,7 @@ import { Project } from 'ts-morph'
 import createMDXPlugin from '@next/mdx'
 import { remarkPlugin } from '../remark'
 import { rehypePlugin } from '../rehype'
+import { getEditorPath } from '../utils'
 
 type PluginOptions = {
   gitSource: string
@@ -28,9 +29,31 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
         [
           rehypePlugin,
           {
-            onCodeBlock: (filename, codeString) => {
-              project.createSourceFile(filename, codeString, {
-                overwrite: true,
+            onJavaScriptCodeBlock: (
+              filePath,
+              lineStart,
+              filename,
+              codeString
+            ) => {
+              const sourceFile = project.createSourceFile(
+                filename,
+                codeString,
+                { overwrite: true }
+              )
+              const diagnostics = sourceFile.getPreEmitDiagnostics()
+
+              diagnostics.forEach((diagnostic) => {
+                const message = diagnostic.getMessageText()
+                const { line, column } = sourceFile.getLineAndColumnAtPos(
+                  diagnostic.getStart()
+                )
+                const sourcePath = getEditorPath({
+                  path: filePath,
+                  line: lineStart + line,
+                  column,
+                })
+
+                console.log(`Error at line ${sourcePath}: ${message}`)
               })
             },
           },
