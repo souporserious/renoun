@@ -14,6 +14,7 @@ export function useMDXComponents() {
     Outline: (props) => <div {...props} />,
     References: (props) => <div {...props} />,
     Summary: (props) => <div {...props} />,
+    Note: (props) => <div {...props} />,
     pre: (props) => {
       const { children: value, className = '' } = (props.children as any).props
       const metadata = getMetadataFromClassName(className)
