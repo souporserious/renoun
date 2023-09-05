@@ -1,7 +1,7 @@
 import * as React from 'react'
 import type { MDXComponents } from 'mdx/types'
 import { Code } from 'mdxts/components'
-import { getLanguageFromClassName } from 'mdxts/utils'
+import { getMetadataFromClassName } from 'mdxts/utils'
 
 import theme from './theme.json'
 
@@ -15,9 +15,15 @@ export function useMDXComponents() {
     References: (props) => <div {...props} />,
     Summary: (props) => <div {...props} />,
     pre: (props) => {
-      const { children: value, className } = (props.children as any).props
-      const language = getLanguageFromClassName(className)
-      return <Code language={language} value={value.trim()} theme={theme} />
+      const { children: value, className = '' } = (props.children as any).props
+      const metadata = getMetadataFromClassName(className)
+      return (
+        <Code
+          language={metadata?.language}
+          value={value.trim()}
+          theme={theme}
+        />
+      )
     },
   } satisfies MDXComponents
 }

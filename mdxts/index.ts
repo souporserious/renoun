@@ -10,9 +10,9 @@ export type Module = {
 }
 
 /** Parses and attaches metadata to a module. */
-function parseModule(module, fileName: string) {
+function parseModule(module, filename: string) {
   const { default: Component, ...exports } = module
-  const pathname = fileName
+  const pathname = filename
     // Remove file extensions
     .replace(/\.[^/.]+$/, '')
     // Remove leading "./"
@@ -33,9 +33,9 @@ function parseModule(module, fileName: string) {
 export function getData<Type>(context: ReturnType<typeof require.context>) {
   const modules: Record<string, Module & Type> = {}
 
-  for (const fileName of context.keys()) {
-    if (fileName.startsWith('./')) continue
-    const module = parseModule(context(fileName), fileName)
+  for (const filename of context.keys()) {
+    if (filename.startsWith('./')) continue
+    const module = parseModule(context(filename), filename)
     modules[module.pathname] = module
   }
 

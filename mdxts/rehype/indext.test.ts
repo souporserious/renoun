@@ -15,8 +15,8 @@ test('adds code blocks to project', async () => {
   const project = new Project()
   const processor = remarkProcessor
     .use(rehypePlugin, {
-      onCodeBlock: (fileName, codeString) => {
-        project.createSourceFile(fileName, codeString, { overwrite: true })
+      onCodeBlock: (filename, codeString) => {
+        project.createSourceFile(filename, codeString, { overwrite: true })
       },
     })
     .use(rehypeStringify)

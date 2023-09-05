@@ -16,10 +16,28 @@ type PluginOptions = {
 
 /** Starts the MDXTS server and bundles all entry points defined in the plugin options. */
 export function createMDXTSPlugin(pluginOptions: PluginOptions) {
-  console.log('mdxts: config initialized')
-
   const { gitSource, theme } = pluginOptions
   const themePath = resolve(process.cwd(), theme)
+  const project = new Project({
+    tsConfigFilePath: resolve(process.cwd(), 'tsconfig.json'),
+  })
+  const withMDX = createMDXPlugin({
+    options: {
+      remarkPlugins: [remarkPlugin],
+      rehypePlugins: [
+        [
+          rehypePlugin,
+          {
+            onCodeBlock: (filename, codeString) => {
+              project.createSourceFile(filename, codeString, {
+                overwrite: true,
+              })
+            },
+          },
+        ],
+      ],
+    },
+  })
 
   return function withMDXTS(nextConfig: NextConfig = {}) {
     const getWebpackConfig = nextConfig.webpack
@@ -62,27 +80,6 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
 
     // let watcherCreated = false
 
-    const project = new Project({
-      tsConfigFilePath: resolve(process.cwd(), 'tsconfig.json'),
-    })
-    const withMDX = createMDXPlugin({
-      options: {
-        remarkPlugins: [remarkPlugin],
-        rehypePlugins: [
-          [
-            rehypePlugin,
-            {
-              onCodeBlock: (fileName, codeString) => {
-                project.createSourceFile(fileName, codeString, {
-                  overwrite: true,
-                })
-              },
-            },
-          ],
-        ],
-      },
-    })
-
     // return async (phase) => {
     //   if (!watcherCreated && phase === PHASE_DEVELOPMENT_SERVER) {
     //     // watcherCreated = true
@@ -95,10 +92,6 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
     }
 
     nextConfig.env.MDXTS_GIT_SOURCE = gitSource
-    nextConfig.env.MDXTS_THEME_PATH = themePath
-    // nextConfig.env.MDXTS_THEME = (await readFile(themePath, 'utf-8'))
-    //   // replace single line comments with empty string
-    //   .replace(/\/\/.*/g, '')
 
     if (nextConfig.pageExtensions === undefined) {
       nextConfig.pageExtensions = ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx']
