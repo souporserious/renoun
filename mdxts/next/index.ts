@@ -1,15 +1,14 @@
 import FilterWarningsPlugin from 'webpack-filter-warnings-plugin'
 import MonacoWebpackPlugin from 'monaco-editor-webpack-plugin'
-// import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { NextConfig } from 'next'
 import CopyPlugin from 'copy-webpack-plugin'
-// import { PHASE_DEVELOPMENT_SERVER } from 'next/constants'
 import { Project } from 'ts-morph'
 import createMDXPlugin from '@next/mdx'
 import { remarkPlugin } from '../remark'
 import { rehypePlugin } from '../rehype'
 import { getEditorPath } from '../utils'
+import { renumberFilenames } from '../utils/renumber'
 
 type PluginOptions = {
   gitSource: string
@@ -54,7 +53,7 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
                   column,
                 })
 
-                console.log(`Error at line ${sourcePath}: ${message}`)
+                console.log(`MDXTS Error ${sourcePath}: ${message}`)
               })
             },
           },
@@ -65,6 +64,7 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
 
   return function withMDXTS(nextConfig: NextConfig = {}) {
     const getWebpackConfig = nextConfig.webpack
+    let startedWatcher = false
 
     nextConfig.webpack = (config, options) => {
       config.plugins.push(
@@ -101,21 +101,17 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
         })
       )
 
+      if (options.isServer && options.dev && !startedWatcher) {
+        renumberFilenames('docs')
+        startedWatcher = true
+      }
+
       if (typeof getWebpackConfig === 'function') {
         return getWebpackConfig(config, options)
       }
 
       return config
     }
-
-    // let watcherCreated = false
-
-    // return async (phase) => {
-    //   if (!watcherCreated && phase === PHASE_DEVELOPMENT_SERVER) {
-    //     // watcherCreated = true
-    //     // createWatcher(project, loaderPaths, compile)
-    //     // console.log('mdxts: started watcher...')
-    //   }
 
     if (nextConfig.env === undefined) {
       nextConfig.env = {}
@@ -128,6 +124,5 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
     }
 
     return withMDX(nextConfig)
-    // }
   }
 }
