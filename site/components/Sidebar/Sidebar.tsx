@@ -1,6 +1,7 @@
+import { Navigation } from 'mdxts/components'
+import { allDocs } from 'data'
 import { Text } from 'components/Text'
 import { Logo } from 'components/Logo'
-import allDocs from 'mdxts/docs'
 import { SidebarLink } from './SidebarLink'
 
 export function Sidebar() {
@@ -40,36 +41,39 @@ export function Sidebar() {
         </a>
       </div>
 
-      {renderNavigation(allDocs[0].children)}
-    </aside>
-  )
-}
-
-function renderNavigation(data: any, order: number = 0) {
-  return (
-    <ul
-      style={{
-        paddingLeft: order * 0.5 + 'rem',
-        listStyle: 'none',
-      }}
-    >
-      {data.map((item: any) => {
-        return (
-          <li
-            key={item.pathname}
-            style={{ color: item.code ? 'white' : 'grey' }}
+      <Navigation
+        data={allDocs}
+        renderList={(props) => (
+          <ul
+            style={{
+              paddingLeft: props.order * 0.5 + 'rem',
+              listStyle: 'none',
+            }}
           >
-            {item.code ? (
-              <SidebarLink {...item} />
-            ) : (
+            {props.children}
+          </ul>
+        )}
+        renderItem={(props) => (
+          <li
+            key={props.title}
+            style={{ color: props.children ? 'grey' : 'white' }}
+          >
+            {props.children ? (
               <div style={{ padding: '0.25rem 0', cursor: 'default' }}>
-                <Text weight={600}>{item.name}</Text>
+                <Text weight={600}>{props.title}</Text>
               </div>
+            ) : (
+              <SidebarLink
+                pathname={`/${props.pathSegments
+                  .join('/')
+                  .replace('docs/', '')}`}
+                name={props.title}
+              />
             )}
-            {item.children && renderNavigation(item.children, order + 1)}
+            {props.children}
           </li>
-        )
-      })}
-    </ul>
+        )}
+      />
+    </aside>
   )
 }

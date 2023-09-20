@@ -1,21 +1,59 @@
-import allDocs from 'mdxts/docs'
-import { flattenData } from 'mdxts/utils'
-import { MDXComponent } from 'components/MDXComponent'
+import { notFound } from 'next/navigation'
+import { SiblingNavigation } from 'mdxts/components'
+import { allDocs } from 'data'
 
-const flattenedDocs = flattenData(allDocs[0].children)
+export default function Page({ params }) {
+  const doc = allDocs[`docs/${params.slug.join('/')}`]
 
-export async function generateStaticParams() {
-  return flattenedDocs.map((doc) => ({ slug: doc.pathSegments }))
-}
-
-export default async function Page({ params }: { params: { slug: string[] } }) {
-  const doc = flattenedDocs.find(
-    (doc) => doc.pathSegments.join('') === params.slug.join('')
-  )
-
-  if (doc?.code) {
-    return <MDXComponent code={doc.code} />
+  if (doc == undefined) {
+    return notFound()
   }
 
-  return null
+  const { Component } = doc
+
+  return (
+    <>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1fr) 160px',
+          gap: '1rem',
+        }}
+      >
+        <div>
+          <Component />
+        </div>
+        <nav>
+          <ul
+            style={{
+              listStyle: 'none',
+              display: 'flex',
+              flexDirection: 'column',
+              padding: 0,
+              margin: 0,
+              marginTop: 'calc(var(--font-size-heading-1) + 1rem)',
+              position: 'sticky',
+              top: '2rem',
+            }}
+          >
+            {doc.headings?.map(({ text, depth, id }) =>
+              depth > 1 ? (
+                <li
+                  key={id}
+                  style={{
+                    fontSize: '0.875rem',
+                    padding: '0.25rem 0',
+                    paddingLeft: (depth - 1) * 0.5 + 'rem',
+                  }}
+                >
+                  <a href={`#${id}`}>{text}</a>
+                </li>
+              ) : null
+            )}
+          </ul>
+        </nav>
+      </div>
+      <SiblingNavigation data={allDocs} pathname={params.slug} />
+    </>
+  )
 }

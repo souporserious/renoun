@@ -1,0 +1,34 @@
+# Type Checking
+
+All code blocks are type checked using the TypeScript compiler based on the `tsconfig.json` file local to the project that MDXTS is running in. This helps to identify and prevent errors in your code blocks.
+
+## Suppressing Errors
+
+If you want to suppress errors for a specific code block, you can add an `allowErrors` flag to the code block:
+
+````mdx
+```tsx allowErrors
+const a: string = 1
+```
+````
+
+This will prevent the code block from erroring when being type checked.
+
+<Note>
+  You can codemod existing code blocks to add this flag by running `mdxts
+  --codemod allowErrors`.
+</Note>
+
+### Allowing specific errors
+
+To only allow specific errors, you can add the `allowErrors` flag with a comma separated list of error codes to allow:
+
+````mdx
+```tsx allowErrors=2588
+const a: string = 1
+```
+````
+
+This is useful for educational purposes, when you want to show the error message to the user.
+
+<Note>The error code can be found in the error message.</Note>

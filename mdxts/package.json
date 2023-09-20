@@ -7,7 +7,8 @@
   ],
   "main": "./dist/index.js",
   "exports": {
-    "./bundle": "./dist/bundle/index.js",
+    ".": "./dist/index.js",
+    "./components": "./dist/components/index.js",
     "./editor": "./dist/editor/index.js",
     "./next": "./dist/next/index.js",
     "./transform": "./dist/transform/index.js",
@@ -17,8 +18,8 @@
   "types": "./dist/index.d.ts",
   "typesVersions": {
     "*": {
-      "bundle": [
-        "./dist/bundle/index.d.ts"
+      "components": [
+        "./dist/components/index.d.ts"
       ],
       "editor": [
         "./dist/editor/index.d.ts"
@@ -38,8 +39,8 @@
     }
   },
   "scripts": {
-    "build": "tsup index.ts utils/index.ts transform/index.ts rehype/index.ts bundle/index.ts watcher/index.ts next/index.ts editor/index.tsx --dts --format esm,cjs",
-    "dev": "pnpm build --watch",
+    "build": "tsup index.ts utils/index.ts transform/index.ts rehype/index.ts remark/index.ts watcher/index.ts next/index.ts editor/index.tsx components/index.ts --dts --format esm,cjs",
+    "dev": "pnpm build --watch --sourcemap",
     "test": "jest"
   },
   "peerDependencies": {
@@ -48,52 +49,40 @@
     "react-dom": ">=18.0.0"
   },
   "devDependencies": {
-    "hast-util-to-html": "^8.0.4",
-    "mdast-util-to-hast": "^12.3.0",
     "next": "*",
     "react": "*",
     "react-dom": "*",
-    "rehype-parse": "^8.0.4",
-    "rehype-stringify": "^9.0.3",
-    "remark": "^14.0.2",
-    "unified": "^10.1.2",
-    "vfile": "^5.3.7"
+    "rehype-stringify": "^10.0.0",
+    "remark-parse": "^10.0.2",
+    "remark-rehype": "^10.1.0",
+    "webpack": "^5.88.2"
   },
   "dependencies": {
-    "@mdx-js/esbuild": "^2.3.0",
+    "@code-hike/lighter": "0.8.2",
+    "@mdx-js/loader": "^2.3.0",
     "@mdx-js/mdx": "^2.3.0",
-    "@swc/core": "^1.3.37",
+    "@next/mdx": "13.4.19",
+    "@swc/core": "^1.3.82",
     "@types/github-slugger": "^2.0.0",
-    "@types/hast": "^2.3.4",
-    "case-anything": "^2.1.10",
+    "@types/hast": "^3.0.0",
+    "@types/mdast": "^4.0.0",
+    "case-anything": "^2.1.13",
     "chokidar": "^3.5.3",
     "color": "^4.2.3",
-    "dprint-node": "^1.0.7",
-    "esbuild": "^0.17.10",
-    "esbuild-plugin-wasm": "^1.0.0",
-    "find-up": "^6.3.0",
+    "copy-webpack-plugin": "^11.0.0",
     "github-slugger": "^2.0.0",
-    "gray-matter": "^4.0.3",
-    "hast-util-has-property": "^2.0.1",
-    "hast-util-heading-rank": "^2.1.1",
-    "hast-util-to-string": "^2.0.0",
-    "mdast-util-mdx-jsx": "^2.1.2",
-    "monaco-editor": "0.29.1",
-    "monaco-editor-webpack-plugin": "6.0.0",
-    "node-fetch": "^3.3.0",
-    "remark-frontmatter": "^4.0.1",
-    "shiki": "^0.14.1",
+    "hast-util-to-string": "^3.0.0",
+    "mdast-util-to-string": "^4.0.0",
+    "monaco-editor": "0.41.0",
+    "monaco-editor-webpack-plugin": "7.1.0",
     "title": "^3.5.3",
-    "tree-visit": "^0.1.3",
-    "ts-morph": "^17.0.1",
-    "type-fest": "^3.6.1",
-    "unified": "^10.1.2",
-    "unist-util-visit": "^4.1.2",
-    "unist-util-visit-parents": "^5.1.3",
-    "url-slug": "^3.0.4",
-    "vscode-oniguruma": "^1.7.0",
+    "ts-morph": "^19.0.0",
+    "unified": "^11.0.2",
+    "unist-util-visit": "^5.0.0",
+    "unist-util-visit-parents": "^6.0.1",
+    "vfile": "^6.0.1",
+    "vscode-oniguruma": "^2.0.0",
     "vscode-textmate": "^9.0.0",
-    "webpack-filter-warnings-plugin": "^1.2.1",
-    "yaml": "^2.2.1"
+    "webpack-filter-warnings-plugin": "^1.2.1"
   }
 }

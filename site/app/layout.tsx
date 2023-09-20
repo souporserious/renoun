@@ -1,8 +1,5 @@
-'use client'
-
 import React from 'react'
-import { useServerInsertedHTML } from 'next/navigation'
-import { useStyledComponentsRegistry } from 'hooks/useStyledComponentsRegistry'
+import { AppProvider } from './app-provider'
 
 import './layout.css'
 
@@ -11,20 +8,13 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
-  const [StyledComponentsRegistry, styledComponentsFlushEffect] =
-    useStyledComponentsRegistry()
-
-  useServerInsertedHTML(() => {
-    return <>{styledComponentsFlushEffect()}</>
-  })
-
   return (
     <html>
       <head>
         <link rel="canonical" href="https://www.mdxts.com" />
       </head>
       <body>
-        <StyledComponentsRegistry>{children}</StyledComponentsRegistry>
+        <AppProvider>{children}</AppProvider>
       </body>
     </html>
   )

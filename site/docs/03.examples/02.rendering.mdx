@@ -1,3 +1,7 @@
+export const metadata = {
+  title: 'Rendering',
+}
+
 # Rendering Examples
 
 Examples can be rendered in MDX using the [[Example]] and [[Preview]] components. These components take a `source` prop, which is the name of the example file or code block in any of the [locations examples can exist](./01.writing.mdx).
@@ -22,7 +26,7 @@ We can now render the `basic` example in our README like so:
 When declaring a code block in MDX, you can target the filename prop to render the example:
 
 ````mdx
-```tsx filename="Basic.tsx"
+```Basic.tsx
 export const Basic = () => <div>Basic</div>
 ```
 
@@ -45,7 +49,7 @@ While the [[Example]] component is great for content like a blog and one-off sit
 
 Using Next.js as an example, we can create a custom component that will render the example based on the name of the example file:
 
-```tsx filename="[example].tsx"
+```[example].tsx
 import Head from 'next/head'
 import * as React from 'react'
 import { CompiledComponent } from 'components'

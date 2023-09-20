@@ -1,53 +1,65 @@
-import type { Element } from 'hast'
+import type { Element, Node } from 'hast'
 import type { VFile } from 'vfile'
-import { transformCodeSync } from '../transform'
-import { getLanguage } from './utils'
+import path from 'node:path'
+import { getMetadataFromClassName } from '../utils'
 
-/** Pass through meta string and code as props to `code` elements. */
-export async function addCodeMetaProps(tree: Element, file: VFile) {
-  const { visit } = await import('unist-util-visit')
-  const { toString } = await import('hast-util-to-string')
+export type AddCodeMetaPropsOptions = {
+  /** Called when a code block is found. */
+  onJavaScriptCodeBlock?: (
+    filePath: string,
+    lineStart: number | undefined,
+    filename: string,
+    codeString: string
+  ) => void
+}
 
-  visit(tree, 'element', (element) => {
-    if (element.tagName === 'pre') {
-      const codeNode = element.children[0]
+/** Adds code meta props to the code element. */
+export function addCodeMetaProps({
+  onJavaScriptCodeBlock,
+}: AddCodeMetaPropsOptions = {}) {
+  return async (tree: Node, file: VFile) => {
+    const { visit } = await import('unist-util-visit')
+    const { toString } = await import('hast-util-to-string')
+    let filename = file.path ? path.parse(file.path).name : ''
+    let codeIndex = 0
 
-      if (
-        codeNode &&
-        codeNode.type === 'element' &&
-        codeNode.tagName === 'code'
-      ) {
-        const codeString = toString(element)
-        const classNames = (codeNode.properties?.className || []) as string[]
-        const language = getLanguage(classNames)
+    visit(tree, 'element', (element: Element) => {
+      if (element.tagName === 'pre') {
+        const codeNode = element.children[0]
 
-        element.properties.code = codeString
+        if (
+          codeNode &&
+          codeNode.type === 'element' &&
+          codeNode.tagName === 'code'
+        ) {
+          const codeString = toString(codeNode)
+          element.properties.code = codeString
 
-        /* Transform code block if marked as TypeScript or JavaScript. */
-        if (/tsx?|jsx?/.test(language)) {
-          try {
-            element.properties.transformedCode = transformCodeSync(
-              /* Wrap code in a function if it's inline JSX. */
-              codeString.startsWith('<')
-                ? `export default () => ${codeString}`
-                : codeString
+          if (codeNode.properties.className) {
+            const metadata = getMetadataFromClassName(
+              codeNode.properties.className as string[]
             )
-          } catch (error) {
-            console.error(
-              `Error transforming MDX code block meta string for "${file.path}:${element.position?.start.line}"\n`,
-              error
+            const isJavaScriptLanguage = ['js', 'jsx', 'ts', 'tsx'].some(
+              (extension) => extension === metadata.language
             )
+            if (isJavaScriptLanguage) {
+              onJavaScriptCodeBlock?.(
+                file.path,
+                codeNode.position?.start.line,
+                metadata.filename || `${filename}_${codeIndex++}.tsx`,
+                codeString
+              )
+            }
           }
+
+          // Map meta string to props
+          const meta = (codeNode.data as any)?.meta as string | undefined
+          meta?.split(' ').forEach((prop) => {
+            const [key, value] = prop.split('=')
+            element.properties[key] = value ?? true
+          })
         }
-
-        const meta = codeNode.data?.meta as string | undefined
-
-        /* Map meta string to props. */
-        meta?.split(' ').forEach((prop) => {
-          const [key, value] = prop.split('=')
-          element.properties[key] = value ?? true
-        })
       }
-    }
-  })
+    })
+  }
 }

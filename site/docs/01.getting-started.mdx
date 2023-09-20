@@ -16,27 +16,21 @@ pnpm install mdxts
 yarn add mdxts
 ```
 
-Once installed, you can use the cli to build your content:
+Once installed, you can set up the Next.js plugin that will build a graph of your content and code blocks throughout your project:
 
-```bash
-mdxts build
-```
+```next.config.mjs
+import { createMDXTSPlugin } from 'mdxts/next'
 
-This will produce a `dist` directory that will contain a `mdxts.json` file of all the files that were built. This file can be used to generate a knowledge graph of your content.
+const withMDXTS = createMDXTSPlugin({
+  theme: 'theme.json',
+  gitSource: 'https://github.com/souporserious/mdxts/tree/main',
+})
 
-## Configure
-
-By default, MDXTS will look for a `mdxts.config.js` file in the current working directory. This file is used to configure the build process.
-
-```js filename=mdxts.config.js
-export default {
-  output: 'dist',
-  tsconfig: 'tsconfig.json',
-}
+export default withMDXTS({
+  ...
+})
 ```
 
 ## Next steps
 
-Check out the [examples](/examples) to see how to use MDXTS in your project.
-
-If you're using React check out the [[Props]] page to see how to use MDXTS with React.
+Check out the [examples](./examples) to see how to use MDXTS in your project.
