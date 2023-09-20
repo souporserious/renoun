@@ -52,8 +52,8 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
                   line: lineStart + line,
                   column,
                 })
-
-                console.log(`MDXTS Error ${sourcePath}: ${message}`)
+                console.log(`MDXTS Error ${sourcePath}:`)
+                console.log(message)
               })
             },
           },

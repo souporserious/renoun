@@ -3,7 +3,7 @@
 Lists the types for the closest exported modules in `index` if used in a `README` file, otherwise it will throw an error if no `index` file is found or is not used in a `README` file.
 
 ```mdx
-import { Props } from 'mdxts'
+import { Types } from 'mdxts'
 
 <Types />
 ```
@@ -11,8 +11,13 @@ import { Props } from 'mdxts'
 For rendering specific types, you can pass a symbol:
 
 ```mdx
-import { Props } from 'mdxts'
+import { Types } from 'mdxts'
 import { Button } from './Button'
 
 <Types symbol={Button} />
 ```
+
+<Note>
+  When passing a React component to `Types` it will render the prop types and
+  omit the argument.
+</Note>
