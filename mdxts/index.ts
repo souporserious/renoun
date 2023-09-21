@@ -5,6 +5,8 @@ import type { Headings } from './remark'
 export type Module = {
   Component: ComponentType
   title: string
+  pathname: string
+  slug: string
   headings?: Headings
   metadata?: { title: string; description: string }
 }
@@ -25,6 +27,7 @@ function parseModule(module, filename: string) {
     Component,
     title: module.metadata?.title || module.headings?.[0]?.text || title(slug),
     pathname,
+    slug,
     ...exports,
   }
 }

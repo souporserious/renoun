@@ -2,6 +2,12 @@ import { notFound } from 'next/navigation'
 import { SiblingNavigation } from 'mdxts/components'
 import { allDocs } from 'data'
 
+export async function generateStaticParams() {
+  return Object.values(allDocs).map((doc) => ({
+    slug: doc.pathname.split('/'),
+  }))
+}
+
 export default function Page({ params }) {
   const doc = allDocs[`docs/${params.slug.join('/')}`]
 
