@@ -75,6 +75,7 @@
     "mdast-util-to-string": "^4.0.0",
     "monaco-editor": "0.41.0",
     "monaco-editor-webpack-plugin": "7.1.0",
+    "remark-typography": "^0.6.14",
     "title": "^3.5.3",
     "ts-morph": "^19.0.0",
     "unified": "^11.0.2",

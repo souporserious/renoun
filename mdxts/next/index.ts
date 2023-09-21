@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import { NextConfig } from 'next'
 import CopyPlugin from 'copy-webpack-plugin'
 import { Project } from 'ts-morph'
+import remarkTypography from 'remark-typography'
 import createMDXPlugin from '@next/mdx'
 import { remarkPlugin } from '../remark'
 import { rehypePlugin } from '../rehype'
@@ -24,7 +25,11 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
   })
   const withMDX = createMDXPlugin({
     options: {
-      remarkPlugins: [remarkPlugin],
+      remarkPlugins: [
+        // @ts-expect-error: Typings are incorrect
+        remarkTypography,
+        remarkPlugin,
+      ],
       rehypePlugins: [
         [
           rehypePlugin,
