@@ -24,7 +24,7 @@ async function loadVSCodeOnigurumWASM() {
   }
 }
 
-export async function initializeMonaco(editor: any) {
+export async function initializeMonaco(editor: any, theme: any) {
   await loadVSCodeOnigurumWASM()
 
   const registry = new Registry({
@@ -40,7 +40,7 @@ export async function initializeMonaco(editor: any) {
 
       return parseRawGrammar(grammar, path)
     },
-    theme: JSON.parse(process.env.MDXTS_THEME),
+    theme,
   })
   const grammars = new Map()
 

@@ -3,33 +3,39 @@ import * as monaco from 'monaco-editor/esm/vs/editor/editor.api'
 import { initializeMonaco } from './initialize'
 import { getTheme } from './theme'
 
-/* Convert VS Code theme to Monaco theme */
-// TODO: this should allow setting multiple themes that are all defined at the same time e.g. <Editor theme="night-owl" />
-try {
-  monaco.editor.defineTheme(
-    'mdxts',
-    getTheme(JSON.parse(process.env.MDXTS_THEME))
-  )
-  monaco.editor.setTheme('mdxts')
-} catch (error) {
-  throw new Error(
-    `MDXTS: Invalid theme configuration. Make sure theme is set to a path that exists and defines a valid VS Code theme.`,
-    { cause: error }
-  )
+const languageMap = {
+  tsx: 'typescript',
 }
 
 export default function Editor({
   defaultValue,
-  language = 'typescript',
+  language: languageProp = 'typescript',
+  theme,
   ...props
 }: {
   defaultValue?: string
   language?: string
+  theme?: any
 }) {
+  const language = languageMap[languageProp] || languageProp
   const id = React.useId().slice(1, -1)
   const ref = React.useRef(null)
 
   React.useLayoutEffect(() => {
+    /* Convert VS Code theme to Monaco theme */
+    // TODO: this should allow setting multiple themes that are all defined at the same time e.g. <Editor theme="night-owl" />
+    const parsedTheme = getTheme(theme)
+
+    try {
+      monaco.editor.defineTheme('mdxts', parsedTheme)
+      monaco.editor.setTheme('mdxts')
+    } catch (error) {
+      throw new Error(
+        `MDXTS: Invalid theme configuration. Make sure theme is set to a path that exists and defines a valid VS Code theme.`,
+        { cause: error }
+      )
+    }
+
     const model = monaco.editor.createModel(
       defaultValue,
       language,
@@ -48,7 +54,7 @@ export default function Editor({
       ...props,
     })
 
-    initializeMonaco(editor)
+    initializeMonaco(editor, parsedTheme)
 
     return () => {
       model.dispose()

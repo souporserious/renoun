@@ -73,7 +73,7 @@
     "github-slugger": "^2.0.0",
     "hast-util-to-string": "^3.0.0",
     "mdast-util-to-string": "^4.0.0",
-    "monaco-editor": "0.41.0",
+    "monaco-editor": "0.43.0",
     "monaco-editor-webpack-plugin": "7.1.0",
     "remark-typography": "^0.6.14",
     "title": "^3.5.3",
@@ -82,7 +82,7 @@
     "unist-util-visit": "^5.0.0",
     "unist-util-visit-parents": "^6.0.1",
     "vfile": "^6.0.1",
-    "vscode-oniguruma": "^2.0.0",
+    "vscode-oniguruma": "^2.0.1",
     "vscode-textmate": "^9.0.0",
     "webpack-filter-warnings-plugin": "^1.2.1"
   }

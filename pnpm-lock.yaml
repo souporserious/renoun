@@ -119,11 +119,11 @@ importers:
         specifier: ^4.0.0
         version: 4.0.0
       monaco-editor:
-        specifier: 0.41.0
-        version: 0.41.0
+        specifier: 0.43.0
+        version: 0.43.0
       monaco-editor-webpack-plugin:
         specifier: 7.1.0
-        version: 7.1.0(monaco-editor@0.41.0)(webpack@5.88.2)
+        version: 7.1.0(monaco-editor@0.43.0)(webpack@5.88.2)
       remark-typography:
         specifier: ^0.6.14
         version: 0.6.14
@@ -146,8 +146,8 @@ importers:
         specifier: ^6.0.1
         version: 6.0.1
       vscode-oniguruma:
-        specifier: ^2.0.0
-        version: 2.0.0
+        specifier: ^2.0.1
+        version: 2.0.1
       vscode-textmate:
         specifier: ^9.0.0
         version: 9.0.0
@@ -6143,19 +6143,19 @@ packages:
     engines: {node: '>=10'}
     hasBin: true
 
-  /monaco-editor-webpack-plugin@7.1.0(monaco-editor@0.41.0)(webpack@5.88.2):
+  /monaco-editor-webpack-plugin@7.1.0(monaco-editor@0.43.0)(webpack@5.88.2):
     resolution: {integrity: sha512-ZjnGINHN963JQkFqjjcBtn1XBtUATDZBMgNQhDQwd78w2ukRhFXAPNgWuacaQiDZsUr4h1rWv5Mv6eriKuOSzA==}
     peerDependencies:
       monaco-editor: '>= 0.31.0'
       webpack: ^4.5.0 || 5.x
     dependencies:
       loader-utils: 2.0.4
-      monaco-editor: 0.41.0
+      monaco-editor: 0.43.0
       webpack: 5.88.2(@swc/core@1.3.82)(esbuild@0.17.19)
     dev: false
 
-  /monaco-editor@0.41.0:
-    resolution: {integrity: sha512-1o4olnZJsiLmv5pwLEAmzHTE/5geLKQ07BrGxlF4Ri/AXAc2yyDGZwHjiTqD8D/ROKUZmwMA28A+yEowLNOEcA==}
+  /monaco-editor@0.43.0:
+    resolution: {integrity: sha512-cnoqwQi/9fml2Szamv1XbSJieGJ1Dc8tENVMD26Kcfl7xGQWp7OBKMjlwKVGYFJ3/AXJjSOGvcqK7Ry/j9BM1Q==}
     dev: false
 
   /mri@1.2.0:
@@ -7829,8 +7829,8 @@ packages:
       unist-util-stringify-position: 4.0.0
       vfile-message: 4.0.2
 
-  /vscode-oniguruma@2.0.0:
-    resolution: {integrity: sha512-QWb6OZHNMxk1/nNOA6gjmbwA7gkKOYPAgteCOy8hX8/3FzoEb4pLHt2b2VHGy9gDdzGt3l5NqiQyo1HEQIanhw==}
+  /vscode-oniguruma@2.0.1:
+    resolution: {integrity: sha512-poJU8iHIWnC3vgphJnrLZyI3YdqRlR27xzqDmpPXYzA93R4Gk8z7T6oqDzDoHjoikA2aS82crdXFkjELCdJsjQ==}
     dev: false
 
   /vscode-textmate@9.0.0:
