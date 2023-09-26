@@ -22,12 +22,12 @@ class TokenizerState implements monaco.languages.IState {
 }
 
 /** Wires up monaco-editor with monaco-textmate */
-export function wireTextMateGrammars(
+export async function wireTextMateGrammars(
   /** TmGrammar `Registry` this wiring should rely on to provide the grammars. */
   registry: Registry,
 
-  /** `Map` of language ids (string) to TM names (string). */
-  languages: Map<string, string>,
+  /** Record of textmate grammar information. */
+  grammars: Record<string, { language: string; path: string }>,
 
   /** The monaco editor instance to wire up. */
   editor: monaco.editor.ICodeEditor
@@ -35,11 +35,16 @@ export function wireTextMateGrammars(
   const tokenTheme = editor['_themeService'].getColorTheme().tokenTheme
   const defaultForeground = tokenTheme._root._mainRule._foreground
 
-  return Promise.all(
-    Array.from(languages.keys()).map(async (languageId) => {
-      const grammar = await registry.loadGrammar(languages.get(languageId))
+  await Promise.all(
+    Object.keys(grammars).map(async (scopeName) => {
+      const { language } = grammars[scopeName]
+      const grammar = await registry.loadGrammar(scopeName)
 
-      monaco.languages.setTokensProvider(languageId, {
+      if (!grammar) {
+        throw new Error(`No grammar found for scope name ${scopeName}`)
+      }
+
+      monaco.languages.setTokensProvider(language, {
         getInitialState: () => new TokenizerState(INITIAL),
         tokenize: (line: string, state: TokenizerState) => {
           const result = grammar.tokenizeLine(line, state.ruleStack)

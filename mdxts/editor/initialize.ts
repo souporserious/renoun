@@ -3,13 +3,6 @@ import { IRawGrammar, Registry, parseRawGrammar } from 'vscode-textmate'
 import { createOnigScanner, createOnigString, loadWASM } from 'vscode-oniguruma'
 import { wireTextMateGrammars } from './textmate'
 
-export type ScopeName = string
-
-const grammarPaths: Record<string, string> = {
-  'source.ts': 'typescript.tmLanguage.json',
-  'source.tsx': 'tsx.tmLanguage.json',
-}
-
 async function loadVSCodeOnigurumWASM() {
   const onigasmModule = await import(
     // @ts-expect-error
@@ -25,6 +18,23 @@ async function loadVSCodeOnigurumWASM() {
 }
 
 export async function initializeMonaco(editor: any, theme: any) {
+  const grammars = {
+    'source.ts': {
+      language: 'typescript',
+      path: './TypeScript.tmLanguage.json',
+      grammar: JSON.stringify(
+        (await import('./grammars/TypeScript.tmLanguage.json')).default
+      ),
+    },
+    'source.tsx': {
+      language: 'typescript',
+      path: './TypeScriptReact.tmLanguage.json',
+      grammar: JSON.stringify(
+        (await import('./grammars/TypeScriptReact.tmLanguage.json')).default
+      ),
+    },
+  }
+
   await loadVSCodeOnigurumWASM()
 
   const registry = new Registry({
@@ -32,24 +42,24 @@ export async function initializeMonaco(editor: any, theme: any) {
       createOnigScanner,
       createOnigString,
     }),
-    async loadGrammar(scopeName: ScopeName): Promise<IRawGrammar | null> {
-      const path = grammarPaths[scopeName]
-      const uri = `/mdxts/${path}`
-      const response = await fetch(uri)
-      const grammar = await response.text()
+    async loadGrammar(scopeName: string): Promise<IRawGrammar | null> {
+      const grammarConfig = grammars[scopeName]
 
-      return parseRawGrammar(grammar, path)
+      if (!grammarConfig) {
+        throw new Error(`No grammar found for scope name ${scopeName}`)
+      }
+
+      return parseRawGrammar(grammarConfig.grammar, grammarConfig.path)
     },
     theme,
   })
-  const grammars = new Map()
-
-  grammars.set('typescript', 'source.ts')
-  grammars.set('typescript', 'source.tsx')
 
   monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
-    jsx: monaco.languages.typescript.JsxEmit.Preserve,
-    esModuleInterop: true,
+    target: monaco.languages.typescript.ScriptTarget.ESNext,
+    jsx: monaco.languages.typescript.JsxEmit.ReactJSX,
+    jsxImportSource: monaco.languages.typescript.JsxEmit.React,
+    moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
+    module: monaco.languages.typescript.ModuleKind.ESNext,
   })
 
   await wireTextMateGrammars(registry, grammars, editor)

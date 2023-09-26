@@ -81,7 +81,7 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
         }),
         new MonacoWebpackPlugin({
           filename: 'static/[name].worker.js',
-          languages: options.isServer ? [] : ['javascript', 'typescript'],
+          languages: ['css', 'javascript', 'typescript'],
         })
       )
 

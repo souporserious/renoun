@@ -22,11 +22,10 @@ export default function Editor({
   const ref = React.useRef(null)
 
   React.useLayoutEffect(() => {
-    /* Convert VS Code theme to Monaco theme */
-    // TODO: this should allow setting multiple themes that are all defined at the same time e.g. <Editor theme="night-owl" />
-    const parsedTheme = getTheme(theme)
-
     try {
+      /* Convert VS Code theme to Monaco theme */
+      // TODO: this should allow setting multiple themes that are all defined at the same time e.g. <Editor theme="night-owl" />
+      const parsedTheme = getTheme(theme)
       monaco.editor.defineTheme('mdxts', parsedTheme)
       monaco.editor.setTheme('mdxts')
     } catch (error) {
@@ -51,10 +50,11 @@ export default function Editor({
       fontFamily: 'monospace',
       lineNumbers: 'off',
       minimap: { enabled: false },
+      selectionHighlight: false,
       ...props,
     })
 
-    initializeMonaco(editor, parsedTheme)
+    initializeMonaco(editor, theme)
 
     return () => {
       model.dispose()
