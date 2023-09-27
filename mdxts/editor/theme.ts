@@ -90,3 +90,14 @@ export function getTheme(theme): monaco.editor.IStandaloneThemeData {
     rules: transformedTheme.rules,
   }
 }
+
+export function getColorMap(registry: any, theme: Record<string, any>) {
+  const colorMap = registry.getColorMap()
+  if (!theme.colorNames) return colorMap
+  return colorMap.map((c) => {
+    const key = Object.keys(theme.colorNames).find(
+      (key) => theme.colorNames[key].toUpperCase() === c.toUpperCase()
+    )
+    return key || c
+  })
+}

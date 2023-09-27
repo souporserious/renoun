@@ -1,24 +1,18 @@
-import * as monaco from 'monaco-editor/esm/vs/editor/editor.api'
 import { IRawGrammar, Registry, parseRawGrammar } from 'vscode-textmate'
 import { createOnigScanner, createOnigString, loadWASM } from 'vscode-oniguruma'
 import { wireTextMateGrammars } from './textmate'
 
-async function loadVSCodeOnigurumWASM() {
-  const onigasmModule = await import(
-    // @ts-expect-error
-    'vscode-oniguruma/release/onig.wasm'
-  )
-  const response = await fetch(onigasmModule.default)
-  try {
-    const data: ArrayBuffer | Response = await (response as any).arrayBuffer()
-    loadWASM(data)
-  } catch (error) {
-    console.error(`Failed to load vscode-oniguruma: ${error}`)
-  }
-}
+let registry: Registry | null = null
 
-export async function initializeMonaco(editor: any, theme: any) {
+export async function initializeMonaco(theme: any) {
   const grammars = {
+    'source.css': {
+      language: 'css',
+      path: './css.tmLanguage.json',
+      grammar: JSON.stringify(
+        (await import('./grammars/css.tmLanguage.json')).default
+      ),
+    },
     'source.ts': {
       language: 'typescript',
       path: './TypeScript.tmLanguage.json',
@@ -35,32 +29,36 @@ export async function initializeMonaco(editor: any, theme: any) {
     },
   }
 
-  await loadVSCodeOnigurumWASM()
+  if (!registry) {
+    const onigasmModule = await import(
+      // @ts-expect-error
+      'vscode-oniguruma/release/onig.wasm'
+    )
+    const response = await fetch(onigasmModule.default)
 
-  const registry = new Registry({
-    onigLib: Promise.resolve({
-      createOnigScanner,
-      createOnigString,
-    }),
-    async loadGrammar(scopeName: string): Promise<IRawGrammar | null> {
-      const grammarConfig = grammars[scopeName]
+    try {
+      const data: ArrayBuffer | Response = await (response as any).arrayBuffer()
+      loadWASM(data)
+    } catch (error) {
+      throw new Error('Failed to load vscode-oniguruma', { cause: error })
+    }
 
-      if (!grammarConfig) {
-        throw new Error(`No grammar found for scope name ${scopeName}`)
-      }
+    registry = new Registry({
+      onigLib: Promise.resolve({
+        createOnigScanner,
+        createOnigString,
+      }),
+      async loadGrammar(scopeName: string): Promise<IRawGrammar | null> {
+        const grammarConfig = grammars[scopeName]
 
-      return parseRawGrammar(grammarConfig.grammar, grammarConfig.path)
-    },
-    theme,
-  })
+        if (!grammarConfig) {
+          throw new Error(`No grammar found for scope name ${scopeName}`)
+        }
 
-  monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
-    target: monaco.languages.typescript.ScriptTarget.ESNext,
-    jsx: monaco.languages.typescript.JsxEmit.ReactJSX,
-    jsxImportSource: monaco.languages.typescript.JsxEmit.React,
-    moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
-    module: monaco.languages.typescript.ModuleKind.ESNext,
-  })
+        return parseRawGrammar(grammarConfig.grammar, grammarConfig.path)
+      },
+    })
+  }
 
-  await wireTextMateGrammars(registry, grammars, editor)
+  await wireTextMateGrammars(registry, grammars, theme)
 }

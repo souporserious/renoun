@@ -23,14 +23,10 @@ export default function Editor({
 
   React.useLayoutEffect(() => {
     try {
-      /* Convert VS Code theme to Monaco theme */
-      // TODO: this should allow setting multiple themes that are all defined at the same time e.g. <Editor theme="night-owl" />
-      const parsedTheme = getTheme(theme)
-      monaco.editor.defineTheme('mdxts', parsedTheme)
-      monaco.editor.setTheme('mdxts')
+      monaco.editor.defineTheme('mdxts', getTheme(theme))
     } catch (error) {
       throw new Error(
-        `MDXTS: Invalid theme configuration. Make sure theme is set to a path that exists and defines a valid VS Code theme.`,
+        `MDXTS: Invalid theme configuration. Theme must be a valid VS Code theme.`,
         { cause: error }
       )
     }
@@ -54,7 +50,30 @@ export default function Editor({
       ...props,
     })
 
-    initializeMonaco(editor, theme)
+    monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+      target: monaco.languages.typescript.ScriptTarget.ESNext,
+      jsx: monaco.languages.typescript.JsxEmit.ReactJSX,
+      jsxImportSource: monaco.languages.typescript.JsxEmit.React,
+      moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
+      module: monaco.languages.typescript.ModuleKind.ESNext,
+    })
+
+    const languages = [
+      {
+        id: 'css',
+        extensions: ['.css'],
+        aliases: ['CSS', 'css'],
+      },
+      {
+        id: 'typescript',
+        extensions: ['.ts', '.tsx'],
+        aliases: ['TypeScript', 'ts', 'typescript'],
+      },
+    ]
+
+    languages.forEach((config) => monaco.languages.register(config))
+
+    initializeMonaco(theme)
 
     return () => {
       model.dispose()

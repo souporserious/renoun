@@ -1,6 +1,7 @@
-import type { Registry, StateStack } from 'vscode-textmate'
+import type { IRawTheme, Registry, StateStack } from 'vscode-textmate'
 import { INITIAL } from 'vscode-textmate'
 import * as monaco from 'monaco-editor'
+// import { addScopesToLine, getStyle, tokenizeLine } from './tokenizer'
 
 class TokenizerState implements monaco.languages.IState {
   constructor(private _ruleStack: StateStack) {}
@@ -21,6 +22,17 @@ class TokenizerState implements monaco.languages.IState {
   }
 }
 
+function getColorMap(registry: Registry, theme: any) {
+  const colorMap = registry.getColorMap()
+  if (!theme.colorNames) return colorMap
+  return colorMap.map((c) => {
+    const key = Object.keys(theme.colorNames).find(
+      (key) => theme.colorNames[key].toUpperCase() === c.toUpperCase()
+    )
+    return key || c
+  })
+}
+
 /** Wires up monaco-editor with monaco-textmate */
 export async function wireTextMateGrammars(
   /** TmGrammar `Registry` this wiring should rely on to provide the grammars. */
@@ -29,11 +41,12 @@ export async function wireTextMateGrammars(
   /** Record of textmate grammar information. */
   grammars: Record<string, { language: string; path: string }>,
 
-  /** The monaco editor instance to wire up. */
-  editor: monaco.editor.ICodeEditor
+  /** VS Code compatible syntax theme. */
+  theme: IRawTheme
 ) {
-  const tokenTheme = editor['_themeService'].getColorTheme().tokenTheme
-  const defaultForeground = tokenTheme._root._mainRule._foreground
+  registry.setTheme(theme)
+
+  const colorMap = getColorMap(registry, theme)
 
   await Promise.all(
     Object.keys(grammars).map(async (scopeName) => {
@@ -47,32 +60,49 @@ export async function wireTextMateGrammars(
       monaco.languages.setTokensProvider(language, {
         getInitialState: () => new TokenizerState(INITIAL),
         tokenize: (line: string, state: TokenizerState) => {
-          const result = grammar.tokenizeLine(line, state.ruleStack)
-
+          const { tokens, ruleStack } = grammar.tokenizeLine(
+            line,
+            state.ruleStack
+          )
           return {
-            endState: new TokenizerState(result.ruleStack),
-            tokens: result.tokens.map((token) => {
-              const scopes = token.scopes.slice(0)
-
-              for (let i = scopes.length - 1; i >= 0; i--) {
-                const scope = scopes[i]
-                const foreground = tokenTheme._match(scope)._foreground
-
-                if (foreground !== defaultForeground) {
-                  return {
-                    ...token,
-                    scopes: scope,
-                  }
-                }
-              }
-
+            endState: new TokenizerState(ruleStack),
+            tokens: tokens.map((token) => {
               return {
-                ...token,
-                scopes: scopes[scopes.length - 1],
-              }
+                startIndex: token.startIndex,
+                scopes: token.scopes.at(-1),
+                // scopes: token.scopes.reverse().join(' '),
+              } satisfies monaco.languages.IToken
             }),
           }
         },
+        // tokenize: (line: string, state: TokenizerState) => {
+        //   const { rawTokens, nextStack } = tokenizeLine(
+        //     grammar,
+        //     state.ruleStack,
+        //     line,
+        //     { preserveWhitespace: true }
+        //   )
+        //   const newTokens = rawTokens.map(({ content, metadata }) => ({
+        //     content,
+        //     style: getStyle(metadata, colorMap),
+        //   }))
+        //   const tokensWithScopes = addScopesToLine(
+        //     line,
+        //     state.ruleStack,
+        //     grammar,
+        //     newTokens
+        //   )
+
+        //   return {
+        //     endState: new TokenizerState(nextStack),
+        //     tokens: tokensWithScopes.map((token) => {
+        //       return {
+        //         startIndex: token.startIndex,
+        //         scopes: token.scopes.at(0),
+        //       } satisfies monaco.languages.IToken
+        //     }),
+        //   }
+        // },
       })
     })
   )
