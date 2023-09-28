@@ -2,7 +2,7 @@ import * as React from 'react'
 import type { MDXComponents } from 'mdx/types'
 import { getMetadataFromClassName } from 'mdxts/utils'
 import { Code } from 'mdxts/components'
-// import { Editor } from './editor'
+import { Editor } from './editor'
 
 import theme from './theme.json'
 
@@ -20,20 +20,19 @@ export function useMDXComponents() {
       const { children: value, className = '' } = (props.children as any).props
       const metadata = getMetadataFromClassName(className)
 
-      // return (
-      //   <Editor
-      //     defaultValue={value.trim()}
-      //     language={metadata?.language}
-      //     theme={theme}
-      //   />
-      // )
-
       return (
-        <Code
-          language={metadata?.language}
-          value={value.trim()}
-          theme={theme}
-        />
+        <>
+          <Code
+            language={metadata?.language}
+            value={value.trim()}
+            theme={theme}
+          />
+          <Editor
+            defaultValue={value.trim()}
+            language={metadata?.language}
+            theme={theme}
+          />
+        </>
       )
     },
   } satisfies MDXComponents

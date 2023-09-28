@@ -1,85 +1,95 @@
-import * as React from 'react'
-import * as monaco from 'monaco-editor/esm/vs/editor/editor.api'
-import { initializeMonaco } from './initialize'
-import { getTheme } from './theme'
+// @ts-expect-error
+import { Fragment, jsx, jsxs } from 'react/jsx-runtime'
+import React, { use, useState } from 'react'
+import { toJsxRuntime } from 'hast-util-to-jsx-runtime'
+import { createStarryNight } from '@wooorm/starry-night'
+import sourceTsx from './grammars/source.tsx'
 
-const languageMap = {
-  tsx: 'typescript',
-}
+// import sourceCss from '@wooorm/starry-night/lang/source.css.js'
+// import sourceDiff from '@wooorm/starry-night/lang/source.diff.js'
+// import sourceJs from '@wooorm/starry-night/lang/source.js.js'
+// import sourceJson from '@wooorm/starry-night/lang/source.json.js'
+// import sourceToml from '@wooorm/starry-night/lang/source.toml.js'
+// import sourceTs from '@wooorm/starry-night/lang/source.ts.js'
+// import sourceTsx from '@wooorm/starry-night/lang/source.tsx'
+// import sourceYaml from '@wooorm/starry-night/lang/source.yaml.js'
+// import textHtmlBasic from '@wooorm/starry-night/lang/text.html.basic.js'
+// import textXmlSvg from '@wooorm/starry-night/lang/text.xml.svg.js'
 
-export default function Editor({
+// const grammars = [
+// sourceCss,
+// sourceDiff,
+// sourceJs,
+// sourceJson,
+// sourceToml,
+// sourceTs,
+// sourceTsx,
+// sourceYaml,
+// textHtmlBasic,
+// textXmlSvg,
+// ]
+
+const starryNightPromise = createStarryNight([sourceTsx])
+
+/** Code editor with syntax highlighting. */
+export function Editor({
+  language = 'typescript',
+  scope = 'source.tsx',
   defaultValue,
-  language: languageProp = 'typescript',
-  theme,
-  ...props
+  value,
+  onChange,
 }: {
-  defaultValue?: string
   language?: string
-  theme?: any
+  scope?: string
+  defaultValue?: string
+  value: string
+  onChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => void
 }) {
-  const language = languageMap[languageProp] || languageProp
-  const id = React.useId().slice(1, -1)
-  const ref = React.useRef(null)
-
-  React.useLayoutEffect(() => {
-    try {
-      monaco.editor.defineTheme('mdxts', getTheme(theme))
-    } catch (error) {
-      throw new Error(
-        `MDXTS: Invalid theme configuration. Theme must be a valid VS Code theme.`,
-        { cause: error }
-      )
-    }
-
-    const model = monaco.editor.createModel(
-      defaultValue,
-      language,
-      monaco.Uri.parse(`file:///${id}.index.tsx`)
-    )
-
-    const editor = monaco.editor.create(ref.current, {
-      model,
-      language,
-      theme: 'mdxts',
-      automaticLayout: true,
-      fontSize: 16,
-      fontFamily: 'monospace',
-      lineNumbers: 'off',
-      minimap: { enabled: false },
-      selectionHighlight: false,
-      ...props,
-    })
-
-    monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
-      target: monaco.languages.typescript.ScriptTarget.ESNext,
-      jsx: monaco.languages.typescript.JsxEmit.ReactJSX,
-      jsxImportSource: monaco.languages.typescript.JsxEmit.React,
-      moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
-      module: monaco.languages.typescript.ModuleKind.ESNext,
-    })
-
-    const languages = [
-      {
-        id: 'css',
-        extensions: ['.css'],
-        aliases: ['CSS', 'css'],
-      },
-      {
-        id: 'typescript',
-        extensions: ['.ts', '.tsx'],
-        aliases: ['TypeScript', 'ts', 'typescript'],
-      },
-    ]
-
-    languages.forEach((config) => monaco.languages.register(config))
-
-    initializeMonaco(theme)
-
-    return () => {
-      model.dispose()
-      editor.dispose()
-    }
-  }, [])
-
-  return <div ref={ref} style={{ height: 400 }} />
+  const [stateValue, setStateValue] = useState(defaultValue)
+  const starryNight = use(starryNightPromise)
+  const resolvedValue = value ?? stateValue
+  const sharedStyle = {
+    gridArea: '1 / 1',
+    padding: 0,
+    whiteSpace: 'pre-wrap',
+    wordWrap: 'break-word',
+    fontFamily: 'monospace',
+    fontSize: 14,
+    tabSize: 4,
+    letterSpacing: 'normal',
+    lineHeight: 'calc(1 * (1em + 1ex))',
+  } satisfies React.CSSProperties
+  return (
+    <div style={{ display: 'grid', width: '100%' }}>
+      <div style={sharedStyle}>
+        {toJsxRuntime(starryNight.highlight(resolvedValue, scope), {
+          jsx,
+          jsxs,
+          Fragment,
+        })}
+        {/\n[ \t]*$/.test(resolvedValue) ? <br /> : undefined}
+      </div>
+      <textarea
+        spellCheck="false"
+        className="write"
+        value={resolvedValue}
+        onChange={
+          defaultValue
+            ? (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+                setStateValue(event.target.value)
+                onChange?.(event)
+              }
+            : onChange
+        }
+        rows={resolvedValue.split('\n').length + 1}
+        style={{
+          ...sharedStyle,
+          backgroundColor: 'transparent',
+          color: 'transparent',
+          caretColor: '#79c0ff',
+          resize: 'none',
+        }}
+      />
+    </div>
+  )
 }
