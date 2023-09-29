@@ -17,23 +17,28 @@ export function useMDXComponents() {
     Summary: (props) => <div {...props} />,
     Note: (props) => <div {...props} />,
     pre: (props) => {
-      const { children: value, className = '' } = (props.children as any).props
+      const {
+        children: value,
+        live,
+        className = '',
+      } = (props.children as any).props
       const metadata = getMetadataFromClassName(className)
 
+      // return live ? (
       return (
-        <>
-          <Code
-            language={metadata?.language}
-            value={value.trim()}
-            theme={theme}
-          />
-          <Editor
-            defaultValue={value.trim()}
-            language={metadata?.language}
-            theme={theme}
-          />
-        </>
+        <Editor
+          defaultValue={value.trim()}
+          language={metadata?.language}
+          theme={theme}
+        />
       )
+      // ) : (
+      //   <Code
+      //     language={metadata?.language}
+      //     value={value.trim()}
+      //     theme={theme}
+      //   />
+      // )
     },
   } satisfies MDXComponents
 }

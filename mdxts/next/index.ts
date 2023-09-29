@@ -1,5 +1,4 @@
 import FilterWarningsPlugin from 'webpack-filter-warnings-plugin'
-import MonacoWebpackPlugin from 'monaco-editor-webpack-plugin'
 import { resolve } from 'node:path'
 import { NextConfig } from 'next'
 import CopyPlugin from 'copy-webpack-plugin'
@@ -77,31 +76,6 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
         new FilterWarningsPlugin({
           exclude: [
             /Critical dependency: the request of a dependency is an expression/,
-          ],
-        }),
-        new MonacoWebpackPlugin({
-          filename: 'static/[name].worker.js',
-          languages: ['css', 'javascript', 'typescript'],
-        })
-      )
-
-      // Disable normal WASM loading pipeline so onigasm can load properly
-      config.module.rules.push({
-        test: /onig\.wasm$/,
-        type: 'asset/resource',
-        generator: {
-          filename: 'static/wasm/onigasm.wasm',
-        },
-      })
-
-      // Load theme for Code component
-      config.plugins.push(
-        new CopyPlugin({
-          patterns: [
-            {
-              from: themePath,
-              to: 'static/mdxts/theme.json',
-            },
           ],
         })
       )

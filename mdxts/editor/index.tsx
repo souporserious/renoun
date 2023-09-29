@@ -27,9 +27,10 @@ export function Editor({
 }: {
   language?: string
   scope?: string
+  theme?: any
   defaultValue?: string
-  value: string
-  onChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => void
+  value?: string
+  onChange?: (event: React.ChangeEvent<HTMLTextAreaElement>) => void
 }) {
   const [stateValue, setStateValue] = useState(defaultValue)
   const [tsEnv, setTsEnv] = useState(null)
