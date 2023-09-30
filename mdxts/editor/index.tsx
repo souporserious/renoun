@@ -74,15 +74,8 @@ export function Editor({
     return completions ? completions.entries : []
   }
 
-  function handleTextareaChange(event: React.ChangeEvent<HTMLTextAreaElement>) {
-    const cursorPosition = event.target.selectionStart
-    const currentSuggestions = getAutocompletions(cursorPosition)
-    setSuggestions(currentSuggestions)
-    setShowDropdown(currentSuggestions.length > 0)
-    setStateValue(event.target.value)
-  }
-
   function handleSuggestionClick(suggestion) {
+    console.log(suggestion)
     const currentPos = textareaRef.current?.selectionStart || 0
     const beforeCursor = resolvedValue.substring(0, currentPos)
     const afterCursor = resolvedValue.substring(currentPos)
@@ -114,7 +107,7 @@ export function Editor({
     y: number
   } | null>(null)
 
-  function handleSymbolHover(
+  function handleMouseMove(
     event: React.MouseEvent<HTMLTextAreaElement, MouseEvent>
   ) {
     const rect = event.currentTarget.getBoundingClientRect()
@@ -128,10 +121,21 @@ export function Editor({
       0
     )
     const position = charsBeforeCurrentRow + column
-    // const positions = sourceFile.getLineAndColumnAtPos(position)
+    const node = sourceFile.getDescendantAtPos(position)
+
+    if (!node) {
+      setHoverInfo(null)
+      setHoverPosition(null)
+      return
+    }
+
+    const nodeStartLineContent = resolvedValue.substring(
+      charsBeforeCurrentRow,
+      node.getStart()
+    )
+    const nodeVisualStart = context.measureText(nodeStartLineContent).width
+
     try {
-      // const node = sourceFile.getDescendantAtPos(position)
-      // console.log(node.getText())
       const quickInfo = languageService.getQuickInfoAtPosition(
         'index.tsx',
         position
@@ -144,7 +148,10 @@ export function Editor({
         const docText = documentation.map((part) => part.text).join('')
 
         setHoverInfo({ displayText, docText })
-        setHoverPosition({ x: event.clientX, y: event.clientY })
+        setHoverPosition({
+          x: nodeVisualStart - context.measureText(' ').width,
+          y: row * 20 + 10, // TODO: position on top similar to VS Code
+        })
       } else {
         setHoverInfo(null)
         setHoverPosition(null)
@@ -181,10 +188,9 @@ export function Editor({
           const cursorPosition = textareaRef.current?.selectionStart || 0
           setCursorPosition(cursorPosition)
         }}
-        onMouseMove={handleSymbolHover}
+        onMouseMove={handleMouseMove}
         onKeyUp={handleKeyUp}
         onBlur={() => setShowDropdown(false)}
-        // onChange={handleTextareaChange}
         onChange={
           defaultValue
             ? (event: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -239,7 +245,7 @@ export function Editor({
       {hoverInfo && hoverPosition && (
         <div
           style={{
-            position: 'fixed',
+            position: 'absolute',
             left: hoverPosition.x + 10,
             top: hoverPosition.y + 10,
             color: 'white',
