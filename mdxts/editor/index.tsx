@@ -150,7 +150,7 @@ export function Editor({
         setHoverInfo({ displayText, docText })
         setHoverPosition({
           x: nodeVisualStart - context.measureText(' ').width,
-          y: row * 20 + 10, // TODO: position on top similar to VS Code
+          y: row * 20 - 10,
         })
       } else {
         setHoverInfo(null)
@@ -248,6 +248,7 @@ export function Editor({
             position: 'absolute',
             left: hoverPosition.x + 10,
             top: hoverPosition.y + 10,
+            translate: '0px -100%',
             color: 'white',
             fontSize: 14,
             backgroundColor: 'black',
