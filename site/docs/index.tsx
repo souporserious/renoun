@@ -1,6 +1,3 @@
-import './index.css'
-
-```tsx live
 /**
  * Say hello.
  *
@@ -10,4 +7,3 @@ import './index.css'
 function Hello({ name }: { name: string }) {
   return <div>Hello, {name}</div>
 }
-```

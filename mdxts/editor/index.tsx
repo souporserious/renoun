@@ -33,7 +33,9 @@ export function Editor({
   onChange?: (event: React.ChangeEvent<HTMLTextAreaElement>) => void
 }) {
   const [stateValue, setStateValue] = useState(defaultValue)
-  const [tsEnv, setTsEnv] = useState(null)
+  const [cursorPosition, setCursorPosition] = useState(null)
+  const [row, setRow] = useState(null)
+  const [column, setColumn] = useState(null)
   const [sourceFile, setSourceFile] = useState<SourceFile | null>(null)
   const textareaRef = useRef(null)
   const [suggestions, setSuggestions] = useState([])
@@ -51,15 +53,22 @@ export function Editor({
     setSourceFile(nextSourceFile)
   }, [resolvedValue])
 
+  useEffect(() => {
+    setShowDropdown(false)
+  }, [cursorPosition])
+
   function getAutocompletions(position) {
     const completions = languageService.getCompletionsAtPosition(
       '/index.tsx',
       position,
       {
-        includeCompletionsForModuleExports: true,
-        includeCompletionsWithInsertText: true,
-        includeCompletionsWithSnippetText: true,
+        includeCompletionsForModuleExports: false,
+        includeCompletionsWithInsertText: false,
+        includeCompletionsWithSnippetText: false,
+        includeInsertTextCompletions: false,
+        includeExternalModuleExports: false,
         providePrefixAndSuffixTextForRename: false,
+        triggerCharacter: '.',
       }
     )
     return completions ? completions.entries : []
@@ -82,12 +91,15 @@ export function Editor({
     setShowDropdown(false)
   }
 
-  function handleKeydown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === '.' || (event.key.length === 1 && /\w/.test(event.key))) {
-      const cursorPosition = textareaRef.current?.selectionStart || 0
-      const currentSuggestions = getAutocompletions(
-        event.key.length === 1 ? cursorPosition + 1 : cursorPosition
-      )
+  function handleKeyUp(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+    const cursorPosition = textareaRef.current?.selectionStart || 0
+    setCursorPosition(cursorPosition)
+
+    if (event.key === ' ' && event.ctrlKey) {
+      const currentSuggestions = getAutocompletions(cursorPosition)
+      const lines = resolvedValue.substring(0, cursorPosition).split('\n')
+      setRow(lines.length - 1)
+      setColumn(lines.at(-1).length)
       setSuggestions(currentSuggestions)
       setShowDropdown(currentSuggestions.length > 0)
     }
@@ -154,7 +166,7 @@ export function Editor({
   } satisfies React.CSSProperties
 
   return (
-    <div style={{ display: 'grid', width: '100%' }}>
+    <div style={{ display: 'grid', width: '100%', position: 'relative' }}>
       <div style={sharedStyle}>
         {toJsxRuntime(starryNight.highlight(resolvedValue, scope), {
           jsx,
@@ -165,8 +177,12 @@ export function Editor({
       </div>
       <textarea
         ref={textareaRef}
+        onPointerUp={() => {
+          const cursorPosition = textareaRef.current?.selectionStart || 0
+          setCursorPosition(cursorPosition)
+        }}
         onMouseMove={handleSymbolHover}
-        onKeyDown={handleKeydown}
+        onKeyUp={handleKeyUp}
         onBlur={() => setShowDropdown(false)}
         // onChange={handleTextareaChange}
         onChange={
@@ -200,9 +216,9 @@ export function Editor({
             width: 200,
             height: 340,
             overflow: 'auto',
-            position: 'fixed',
-            top: 0,
-            right: 0,
+            position: 'absolute',
+            top: row * 20 + 20,
+            left: column * context.measureText(' ').width,
             zIndex: 1000,
             color: 'white',
             backgroundColor: 'black',
@@ -243,6 +259,14 @@ export function Editor({
           <div>{hoverInfo.docText}</div>
         </div>
       )}
+
+      {process.env.NODE_ENV === 'development' ? (
+        <div>
+          <div>Position: {cursorPosition}</div>
+          <div>Row: {row}</div>
+          <div>Column: {column}</div>
+        </div>
+      ) : null}
     </div>
   )
 }
