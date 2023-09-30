@@ -17,6 +17,14 @@ const context = canvas?.getContext('2d')
 
 context.font = '14px monospace'
 
+fetch('/_next/static/mdxts/types.json').then(async (response) => {
+  const typeDeclarations = await response.json()
+
+  typeDeclarations.forEach(({ code, path }) => {
+    project.createSourceFile(path, code)
+  })
+})
+
 /** Code editor with syntax highlighting. */
 export function Editor({
   language = 'typescript',
