@@ -5,7 +5,7 @@
  * <Hello name="Penny" />
  */
 function Hello({ name }: { name: string }) {
-  return <div a>Hello, {name}</div>
+  return <div>Hello, {name}</div>
 }
 
 const foo = { hello: 'world' }

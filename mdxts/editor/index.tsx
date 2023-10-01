@@ -95,34 +95,26 @@ export function Editor({
 
   function selectSuggestion(suggestion) {
     const currentPosition = textareaRef.current?.selectionStart || 0
+    const regex = /[a-zA-Z_]+$/
     const beforeCursor = resolvedValue.substring(0, currentPosition)
-    const identifierStart = beforeCursor.search(/\W(?=\w*$)/)
-    let nextValue
-    let nextCursorPosition
+    const match = beforeCursor.match(regex)
+    const prefix = match ? match[0] : ''
 
-    // The word is at the beginning of the text.
-    if (identifierStart === -1) {
-      // Replace the entire word before the cursor with the selected suggestion.
-      nextValue = `${suggestion.name}${resolvedValue.substring(
-        currentPosition
-      )}`
-      nextCursorPosition = suggestion.name.length
-    } else {
-      // Replace the word before the cursor with the selected suggestion.
-      nextValue = `${beforeCursor.substring(0, identifierStart + 1)}${
-        suggestion.name
-      }${resolvedValue.substring(currentPosition)}`
-      nextCursorPosition = identifierStart + 1 + suggestion.name.length
+    for (let i = 0; i < prefix.length; i++) {
+      document.execCommand('delete', false)
     }
 
-    nextCursorPositionRef.current = nextCursorPosition
-    setStateValue(nextValue)
+    document.execCommand('insertText', false, suggestion.name)
     setIsDropdownOpen(false)
     setHighlightedIndex(0)
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (isDropdownOpen && event.key === 'ArrowUp') {
+    if (!isDropdownOpen) {
+      return
+    }
+
+    if (event.key === 'ArrowUp') {
       event.preventDefault()
       let nextIndex = highlightedIndex - 1
       if (nextIndex < 0) {
@@ -131,7 +123,7 @@ export function Editor({
       setHighlightedIndex(nextIndex)
     }
 
-    if (isDropdownOpen && event.key === 'ArrowDown') {
+    if (event.key === 'ArrowDown') {
       event.preventDefault()
       let nextIndex = highlightedIndex + 1
       if (nextIndex >= suggestions.length) {
@@ -140,9 +132,15 @@ export function Editor({
       setHighlightedIndex(nextIndex)
     }
 
-    if (isDropdownOpen && event.key === 'Enter') {
+    if (event.key === 'Enter') {
       event.preventDefault()
       selectSuggestion(suggestions[highlightedIndex])
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      setIsDropdownOpen(false)
+      setHighlightedIndex(0)
     }
   }
 
@@ -150,13 +148,23 @@ export function Editor({
     const cursorPosition = textareaRef.current?.selectionStart || 0
     setCursorPosition(cursorPosition)
 
-    if (/^[a-zA-Z.]$/.test(event.key) || event.key === 'Backspace') {
-      const currentSuggestions = getAutocompletions(cursorPosition)
+    if (
+      /^[a-zA-Z.]$/.test(event.key) ||
+      event.key === 'Backspace' ||
+      (event.key === ' ' && event.ctrlKey)
+    ) {
       const lines = resolvedValue.substring(0, cursorPosition).split('\n')
       setRow(lines.length - 1)
       setColumn(lines.at(-1).length)
-      setSuggestions(currentSuggestions)
-      setIsDropdownOpen(currentSuggestions.length > 0)
+
+      // don't trigger suggestions if there is space before the cursor
+      if (['\n', ' '].includes(resolvedValue.at(-1))) {
+        setIsDropdownOpen(false)
+      } else {
+        const currentSuggestions = getAutocompletions(cursorPosition)
+        setSuggestions(currentSuggestions)
+        setIsDropdownOpen(currentSuggestions.length > 0)
+      }
     }
   }
 
