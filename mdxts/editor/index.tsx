@@ -46,8 +46,10 @@ export function Editor({
   const [column, setColumn] = useState(null)
   const [sourceFile, setSourceFile] = useState<SourceFile | null>(null)
   const textareaRef = useRef(null)
+  const nextCursorPositionRef = useRef(null)
   const [suggestions, setSuggestions] = useState([])
-  const [showDropdown, setShowDropdown] = useState(false)
+  const [highlightedIndex, setHighlightedIndex] = useState(0)
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const starryNight = use(starryNightPromise)
   const resolvedValue = value ?? stateValue
 
@@ -62,8 +64,16 @@ export function Editor({
   }, [resolvedValue])
 
   useEffect(() => {
-    setShowDropdown(false)
+    setIsDropdownOpen(false)
   }, [cursorPosition])
+
+  useEffect(() => {
+    if (nextCursorPositionRef.current) {
+      textareaRef.current.selectionStart = nextCursorPositionRef.current
+      textareaRef.current.selectionEnd = nextCursorPositionRef.current
+      nextCursorPositionRef.current = null
+    }
+  }, [stateValue])
 
   function getAutocompletions(position) {
     const completions = languageService.getCompletionsAtPosition(
@@ -82,14 +92,32 @@ export function Editor({
     return completions ? completions.entries : []
   }
 
-  function handleSuggestionClick(suggestion) {
-    console.log(suggestion)
-    const currentPos = textareaRef.current?.selectionStart || 0
-    const beforeCursor = resolvedValue.substring(0, currentPos)
-    const afterCursor = resolvedValue.substring(currentPos)
+  function selectSuggestion(suggestion) {
+    const currentPosition = textareaRef.current?.selectionStart || 0
+    const beforeCursor = resolvedValue.substring(0, currentPosition)
+    const afterCursor = resolvedValue.substring(currentPosition)
     const newValue = `${beforeCursor}${suggestion.name}${afterCursor}`
     setStateValue(newValue)
-    setShowDropdown(false)
+    setIsDropdownOpen(false)
+    setHighlightedIndex(0)
+    nextCursorPositionRef.current = currentPosition + suggestion.name.length
+  }
+
+  function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (isDropdownOpen && event.key === 'ArrowUp') {
+      event.preventDefault()
+      setHighlightedIndex(highlightedIndex - 1)
+    }
+
+    if (isDropdownOpen && event.key === 'ArrowDown') {
+      event.preventDefault()
+      setHighlightedIndex(highlightedIndex + 1)
+    }
+
+    if (isDropdownOpen && event.key === 'Enter') {
+      event.preventDefault()
+      selectSuggestion(suggestions[highlightedIndex])
+    }
   }
 
   function handleKeyUp(event: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -102,7 +130,7 @@ export function Editor({
       setRow(lines.length - 1)
       setColumn(lines.at(-1).length)
       setSuggestions(currentSuggestions)
-      setShowDropdown(currentSuggestions.length > 0)
+      setIsDropdownOpen(currentSuggestions.length > 0)
     }
   }
 
@@ -201,8 +229,9 @@ export function Editor({
           setHoverInfo(null)
           setHoverPosition(null)
         }}
+        onKeyDown={handleKeyDown}
         onKeyUp={handleKeyUp}
-        onBlur={() => setShowDropdown(false)}
+        onBlur={() => setIsDropdownOpen(false)}
         onChange={
           defaultValue
             ? (event: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -227,7 +256,7 @@ export function Editor({
         }}
       />
 
-      {showDropdown && (
+      {isDropdownOpen && (
         <div
           style={{
             fontSize: 14,
@@ -243,14 +272,21 @@ export function Editor({
             border: '1px solid white',
           }}
         >
-          {suggestions.map((suggestion) => (
-            <div
-              key={suggestion.name}
-              onClick={() => handleSuggestionClick(suggestion)}
-            >
-              {suggestion.name}
-            </div>
-          ))}
+          {suggestions.map((suggestion, index) => {
+            const isHighlighted = index === highlightedIndex
+            return (
+              <div
+                key={suggestion.name}
+                onClick={() => selectSuggestion(suggestion)}
+                style={{
+                  padding: 2,
+                  backgroundColor: isHighlighted ? '#0086ffbd' : 'transparent',
+                }}
+              >
+                {suggestion.name}
+              </div>
+            )
+          })}
         </div>
       )}
 
@@ -278,14 +314,6 @@ export function Editor({
           <div>{hoverInfo.docText}</div>
         </div>
       )}
-
-      {process.env.NODE_ENV === 'development' ? (
-        <div>
-          <div>Position: {cursorPosition}</div>
-          <div>Row: {row}</div>
-          <div>Column: {column}</div>
-        </div>
-      ) : null}
     </div>
   )
 }
