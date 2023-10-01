@@ -1,6 +1,6 @@
 // @ts-expect-error
 import { Fragment, jsx, jsxs } from 'react/jsx-runtime'
-import React, { use, useEffect, useRef, useState } from 'react'
+import React, { use, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime'
 import { createStarryNight } from '@wooorm/starry-night'
 import { Project, type SourceFile } from 'ts-morph'
@@ -276,16 +276,12 @@ export function Editor({
           {suggestions.map((suggestion, index) => {
             const isHighlighted = index === highlightedIndex
             return (
-              <div
+              <Suggestion
                 key={suggestion.name}
                 onClick={() => selectSuggestion(suggestion)}
-                style={{
-                  padding: 2,
-                  backgroundColor: isHighlighted ? '#0086ffbd' : 'transparent',
-                }}
-              >
-                {suggestion.name}
-              </div>
+                isHighlighted={isHighlighted}
+                suggestion={suggestion}
+              />
             )
           })}
         </div>
@@ -315,6 +311,37 @@ export function Editor({
           <div>{hoverInfo.docText}</div>
         </div>
       )}
+    </div>
+  )
+}
+
+function Suggestion({
+  suggestion,
+  isHighlighted,
+  onClick,
+}: {
+  suggestion: any
+  isHighlighted: boolean
+  onClick: () => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useLayoutEffect(() => {
+    if (isHighlighted) {
+      ref.current?.scrollIntoView({ block: 'nearest' })
+    }
+  }, [isHighlighted])
+
+  return (
+    <div
+      ref={ref}
+      onClick={onClick}
+      style={{
+        padding: 2,
+        backgroundColor: isHighlighted ? '#0086ffbd' : 'transparent',
+      }}
+    >
+      {suggestion.name}
     </div>
   )
 }
