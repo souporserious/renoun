@@ -65,6 +65,7 @@ export function Editor({
 
   useEffect(() => {
     setIsDropdownOpen(false)
+    setHighlightedIndex(0)
   }, [cursorPosition])
 
   useEffect(() => {
