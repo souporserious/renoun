@@ -63,10 +63,10 @@ export function Editor({
     setSourceFile(nextSourceFile)
   }, [resolvedValue])
 
-  useEffect(() => {
-    setIsDropdownOpen(false)
-    setHighlightedIndex(0)
-  }, [cursorPosition])
+  // useEffect(() => {
+  //   setIsDropdownOpen(false)
+  //   setHighlightedIndex(0)
+  // }, [cursorPosition])
 
   useEffect(() => {
     if (nextCursorPositionRef.current) {
@@ -96,12 +96,29 @@ export function Editor({
   function selectSuggestion(suggestion) {
     const currentPosition = textareaRef.current?.selectionStart || 0
     const beforeCursor = resolvedValue.substring(0, currentPosition)
-    const afterCursor = resolvedValue.substring(currentPosition)
-    const newValue = `${beforeCursor}${suggestion.name}${afterCursor}`
-    setStateValue(newValue)
+    const identifierStart = beforeCursor.search(/\W(?=\w*$)/)
+    let nextValue
+    let nextCursorPosition
+
+    // The word is at the beginning of the text.
+    if (identifierStart === -1) {
+      // Replace the entire word before the cursor with the selected suggestion.
+      nextValue = `${suggestion.name}${resolvedValue.substring(
+        currentPosition
+      )}`
+      nextCursorPosition = suggestion.name.length
+    } else {
+      // Replace the word before the cursor with the selected suggestion.
+      nextValue = `${beforeCursor.substring(0, identifierStart + 1)}${
+        suggestion.name
+      }${resolvedValue.substring(currentPosition)}`
+      nextCursorPosition = identifierStart + 1 + suggestion.name.length
+    }
+
+    nextCursorPositionRef.current = nextCursorPosition
+    setStateValue(nextValue)
     setIsDropdownOpen(false)
     setHighlightedIndex(0)
-    nextCursorPositionRef.current = currentPosition + suggestion.name.length
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -133,7 +150,7 @@ export function Editor({
     const cursorPosition = textareaRef.current?.selectionStart || 0
     setCursorPosition(cursorPosition)
 
-    if (event.key === ' ' && event.ctrlKey) {
+    if (/^[a-zA-Z.]$/.test(event.key) || event.key === 'Backspace') {
       const currentSuggestions = getAutocompletions(cursorPosition)
       const lines = resolvedValue.substring(0, cursorPosition).split('\n')
       setRow(lines.length - 1)
