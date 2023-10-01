@@ -153,12 +153,13 @@ export function Editor({
       event.key === 'Backspace' ||
       (event.key === ' ' && event.ctrlKey)
     ) {
+      const lastChar = resolvedValue.at(-1)
       const lines = resolvedValue.substring(0, cursorPosition).split('\n')
       setRow(lines.length - 1)
       setColumn(lines.at(-1).length)
 
       // don't trigger suggestions if there is space before the cursor
-      if (['\n', ' '].includes(resolvedValue.at(-1))) {
+      if (!/^[a-zA-Z.]$/.test(lastChar) || ['\n', ' '].includes(lastChar)) {
         setIsDropdownOpen(false)
       } else {
         const currentSuggestions = getAutocompletions(cursorPosition)
