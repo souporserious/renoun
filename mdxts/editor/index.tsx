@@ -107,12 +107,20 @@ export function Editor({
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (isDropdownOpen && event.key === 'ArrowUp') {
       event.preventDefault()
-      setHighlightedIndex(highlightedIndex - 1)
+      let nextIndex = highlightedIndex - 1
+      if (nextIndex < 0) {
+        nextIndex = suggestions.length - 1
+      }
+      setHighlightedIndex(nextIndex)
     }
 
     if (isDropdownOpen && event.key === 'ArrowDown') {
       event.preventDefault()
-      setHighlightedIndex(highlightedIndex + 1)
+      let nextIndex = highlightedIndex + 1
+      if (nextIndex >= suggestions.length) {
+        nextIndex = 0
+      }
+      setHighlightedIndex(nextIndex)
     }
 
     if (isDropdownOpen && event.key === 'Enter') {
