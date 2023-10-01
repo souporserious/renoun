@@ -115,7 +115,7 @@ export function Editor({
     y: number
   } | null>(null)
 
-  function handleMouseMove(
+  function handlePointerMove(
     event: React.MouseEvent<HTMLTextAreaElement, MouseEvent>
   ) {
     const rect = event.currentTarget.getBoundingClientRect()
@@ -196,7 +196,11 @@ export function Editor({
           const cursorPosition = textareaRef.current?.selectionStart || 0
           setCursorPosition(cursorPosition)
         }}
-        onMouseMove={handleMouseMove}
+        onPointerMove={handlePointerMove}
+        onPointerLeave={() => {
+          setHoverInfo(null)
+          setHoverPosition(null)
+        }}
         onKeyUp={handleKeyUp}
         onBlur={() => setShowDropdown(false)}
         onChange={
@@ -228,7 +232,7 @@ export function Editor({
           style={{
             fontSize: 14,
             width: 200,
-            height: 340,
+            maxHeight: 340,
             overflow: 'auto',
             position: 'absolute',
             top: row * 20 + 20,
