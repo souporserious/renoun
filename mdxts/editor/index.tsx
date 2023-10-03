@@ -235,10 +235,6 @@ export function Editor({
           displayText,
           language
         )
-        const docTextTokens = highlighterRef.current.codeToThemedTokens(
-          docText,
-          'md'
-        )
 
         setHoverInfo(
           <div>
@@ -255,19 +251,7 @@ export function Editor({
                 </div>
               )
             })}
-            {docTextTokens.map((line, index) => {
-              return (
-                <div key={index}>
-                  {line.map((token, index) => {
-                    return (
-                      <span key={index} style={{ color: token.color }}>
-                        {token.content}
-                      </span>
-                    )
-                  })}
-                </div>
-              )
-            })}
+            {docText ? <p>{docText}</p> : null}
           </div>
         )
 
@@ -280,7 +264,7 @@ export function Editor({
         setHoverPosition(null)
       }
     } catch (error) {
-      // console.error(error)
+      console.error(error)
     }
   }
 
