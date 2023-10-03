@@ -1,13 +1,6 @@
-// @ts-expect-error
-import { Fragment, jsx, jsxs } from 'react/jsx-runtime'
-import React, { use, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { toJsxRuntime } from 'hast-util-to-jsx-runtime'
-import { createStarryNight } from '@wooorm/starry-night'
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Project, type SourceFile } from 'ts-morph'
-
-import sourceTsx from './grammars/source.tsx'
-
-const starryNightPromise = createStarryNight([sourceTsx])
+import { getHighlighter } from 'shiki'
 
 const project = new Project({ useInMemoryFileSystem: true })
 const languageService = project.getLanguageService().compilerObject
@@ -27,31 +20,53 @@ fetch('/_next/static/mdxts/types.json').then(async (response) => {
 
 /** Code editor with syntax highlighting. */
 export function Editor({
-  language = 'typescript',
-  scope = 'source.tsx',
+  language,
   defaultValue,
   value,
   onChange,
+  theme,
 }: {
   language?: string
-  scope?: string
-  theme?: any
+  theme?: Parameters<typeof getHighlighter>[0]['theme']
   defaultValue?: string
   value?: string
   onChange?: (event: React.ChangeEvent<HTMLTextAreaElement>) => void
 }) {
   const [stateValue, setStateValue] = useState(defaultValue)
-  const [cursorPosition, setCursorPosition] = useState(null)
+  const [tokens, setTokens] = useState<
+    ReturnType<Awaited<ReturnType<typeof getHighlighter>>['codeToThemedTokens']>
+  >([])
   const [row, setRow] = useState(null)
   const [column, setColumn] = useState(null)
   const [sourceFile, setSourceFile] = useState<SourceFile | null>(null)
+  const highlighterRef = useRef<Awaited<
+    ReturnType<typeof getHighlighter>
+  > | null>(null)
   const textareaRef = useRef(null)
   const nextCursorPositionRef = useRef(null)
   const [suggestions, setSuggestions] = useState([])
   const [highlightedIndex, setHighlightedIndex] = useState(0)
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
-  const starryNight = use(starryNightPromise)
   const resolvedValue = value ?? stateValue
+
+  useLayoutEffect(() => {
+    ;(async function init() {
+      const highlighter = await getHighlighter({
+        theme,
+        langs: ['javascript', 'jsx', 'typescript', 'tsx', 'css'],
+        paths: {
+          languages: '_next/static/mdxts',
+          wasm: '_next/static/mdxts',
+        },
+      })
+
+      highlighterRef.current = highlighter
+
+      const tokens = highlighter.codeToThemedTokens(resolvedValue, language)
+
+      setTokens(tokens)
+    })()
+  }, [])
 
   useEffect(() => {
     const nextSourceFile = project.createSourceFile(
@@ -61,12 +76,16 @@ export function Editor({
     )
 
     setSourceFile(nextSourceFile)
-  }, [resolvedValue])
 
-  // useEffect(() => {
-  //   setIsDropdownOpen(false)
-  //   setHighlightedIndex(0)
-  // }, [cursorPosition])
+    if (highlighterRef.current) {
+      const tokens = highlighterRef.current.codeToThemedTokens(
+        resolvedValue,
+        language
+      )
+
+      setTokens(tokens)
+    }
+  }, [resolvedValue])
 
   useEffect(() => {
     if (nextCursorPositionRef.current) {
@@ -145,14 +164,12 @@ export function Editor({
   }
 
   function handleKeyUp(event: React.KeyboardEvent<HTMLTextAreaElement>) {
-    const cursorPosition = textareaRef.current?.selectionStart || 0
-    setCursorPosition(cursorPosition)
-
     if (
       /^[a-zA-Z.]$/.test(event.key) ||
       event.key === 'Backspace' ||
       (event.key === ' ' && event.ctrlKey)
     ) {
+      const cursorPosition = textareaRef.current?.selectionStart || 0
       const lastChar = resolvedValue.at(-1)
       const lines = resolvedValue.substring(0, cursorPosition).split('\n')
       setRow(lines.length - 1)
@@ -169,10 +186,7 @@ export function Editor({
     }
   }
 
-  const [hoverInfo, setHoverInfo] = useState<{
-    displayText: string
-    docText: string
-  } | null>(null)
+  const [hoverInfo, setHoverInfo] = useState<React.ReactNode | null>(null)
   const [hoverPosition, setHoverPosition] = useState<{
     x: number
     y: number
@@ -217,8 +231,46 @@ export function Editor({
         const documentation = quickInfo.documentation || []
         const displayText = displayParts.map((part) => part.text).join('')
         const docText = documentation.map((part) => part.text).join('')
+        const displayTextTokens = highlighterRef.current.codeToThemedTokens(
+          displayText,
+          language
+        )
+        const docTextTokens = highlighterRef.current.codeToThemedTokens(
+          docText,
+          'md'
+        )
 
-        setHoverInfo({ displayText, docText })
+        setHoverInfo(
+          <div>
+            {displayTextTokens.map((line, index) => {
+              return (
+                <div key={index}>
+                  {line.map((token, index) => {
+                    return (
+                      <span key={index} style={{ color: token.color }}>
+                        {token.content}
+                      </span>
+                    )
+                  })}
+                </div>
+              )
+            })}
+            {docTextTokens.map((line, index) => {
+              return (
+                <div key={index}>
+                  {line.map((token, index) => {
+                    return (
+                      <span key={index} style={{ color: token.color }}>
+                        {token.content}
+                      </span>
+                    )
+                  })}
+                </div>
+              )
+            })}
+          </div>
+        )
+
         setHoverPosition({
           x: nodeVisualStart - context.measureText(' ').width,
           y: row * 20 - 10,
@@ -246,19 +298,22 @@ export function Editor({
   return (
     <div style={{ display: 'grid', width: '100%', position: 'relative' }}>
       <div style={sharedStyle}>
-        {toJsxRuntime(starryNight.highlight(resolvedValue, scope), {
-          jsx,
-          jsxs,
-          Fragment,
+        {tokens.map((line, index) => {
+          return (
+            <div key={index} style={{ minHeight: 20 }}>
+              {line.map((token, index) => {
+                return (
+                  <span key={index} style={{ color: token.color }}>
+                    {token.content}
+                  </span>
+                )
+              })}
+            </div>
+          )
         })}
-        {/\n[ \t]*$/.test(resolvedValue) ? <br /> : undefined}
       </div>
       <textarea
         ref={textareaRef}
-        onPointerUp={() => {
-          const cursorPosition = textareaRef.current?.selectionStart || 0
-          setCursorPosition(cursorPosition)
-        }}
         onPointerMove={handlePointerMove}
         onPointerLeave={() => {
           setHoverInfo(null)
@@ -337,12 +392,7 @@ export function Editor({
             zIndex: 1000,
           }}
         >
-          {toJsxRuntime(starryNight.highlight(hoverInfo.displayText, scope), {
-            jsx,
-            jsxs,
-            Fragment,
-          })}
-          <div>{hoverInfo.docText}</div>
+          {hoverInfo}
         </div>
       )}
     </div>

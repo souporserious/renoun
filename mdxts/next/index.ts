@@ -97,14 +97,41 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
           startedWatcher = true
         }
 
-        if (!options.isServer) {
-          // Load package type declarations for Editor
+        if (options.isServer === false) {
           config.plugins.push(
             new CopyPlugin({
               patterns: [
                 {
+                  from: require.resolve(
+                    'shiki/languages/javascript.tmLanguage.json'
+                  ),
+                  to: 'static/mdxts',
+                },
+                {
+                  from: require.resolve(
+                    'shiki/languages/typescript.tmLanguage.json'
+                  ),
+                  to: 'static/mdxts',
+                },
+                {
+                  from: require.resolve('shiki/languages/jsx.tmLanguage.json'),
+                  to: 'static/mdxts',
+                },
+                {
+                  from: require.resolve('shiki/languages/tsx.tmLanguage.json'),
+                  to: 'static/mdxts',
+                },
+                {
+                  from: require.resolve('shiki/languages/css.tmLanguage.json'),
+                  to: 'static/mdxts',
+                },
+                {
+                  from: require.resolve('vscode-oniguruma/release/onig.wasm'),
+                  to: 'static/mdxts',
+                },
+                {
                   from: typesFilePath,
-                  to: 'static/mdxts/types.json',
+                  to: 'static/mdxts',
                 },
               ],
             })

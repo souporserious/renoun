@@ -103,9 +103,6 @@ importers:
       '@typescript/vfs':
         specifier: ^1.5.0
         version: 1.5.0
-      '@wooorm/starry-night':
-        specifier: ^3.0.0
-        version: 3.0.0
       case-anything:
         specifier: ^2.1.13
         version: 2.1.13
@@ -148,6 +145,9 @@ importers:
       rollup-plugin-dts:
         specifier: ^6.0.2
         version: 6.0.2(rollup@3.29.4)(typescript@5.2.2)
+      shiki:
+        specifier: ^0.14.4
+        version: 0.14.4
       title:
         specifier: ^3.5.3
         version: 3.5.3
@@ -167,11 +167,11 @@ importers:
         specifier: ^6.0.1
         version: 6.0.1
       vscode-oniguruma:
-        specifier: ^2.0.1
-        version: 2.0.1
+        specifier: ^1.7.0
+        version: 1.7.0
       vscode-textmate:
-        specifier: ^9.0.0
-        version: 9.0.0
+        specifier: ^8.0.0
+        version: 8.0.0
       webpack-filter-warnings-plugin:
         specifier: ^1.2.1
         version: 1.2.1(webpack@5.88.2)
@@ -2937,15 +2937,6 @@ packages:
       '@webassemblyjs/ast': 1.11.6
       '@xtuc/long': 4.2.2
 
-  /@wooorm/starry-night@3.0.0:
-    resolution: {integrity: sha512-9bS69LSlh7btL0zP4nkgt2m+yfVCimBmCHfzhDuqC/gYK592n205YKNED/Ax9HwaqtjmZN0LzpAKJjppGFvzKw==}
-    dependencies:
-      '@types/hast': 3.0.0
-      import-meta-resolve: 3.0.0
-      vscode-oniguruma: 2.0.1
-      vscode-textmate: 9.0.0
-    dev: false
-
   /@xtuc/ieee754@1.2.0:
     resolution: {integrity: sha512-DX8nKgqcGwsc0eJSqYt5lwP4DH5FlHnmuWWBRy7X0NcaGR0ZtuyeESgMwTYVEtxmsNGY+qit4QYT/MIYTOTPeA==}
 
@@ -4709,10 +4700,6 @@ packages:
       resolve-cwd: 3.0.0
     dev: true
 
-  /import-meta-resolve@3.0.0:
-    resolution: {integrity: sha512-4IwhLhNNA8yy445rPjD/lWh++7hMDOml2eHtd58eG7h+qK3EryMuuRbsHGPikCoAgIkkDnckKfWSk2iDla/ejg==}
-    dev: false
-
   /imurmurhash@0.1.4:
     resolution: {integrity: sha512-JmXMZ6wuvDmLiHEml9ykzqO6lwFbof0GG4IkcGaENdCRDDmMVnny7s5HsIgHCbaq0w2MyPhDqkhTUgS2LU2PHA==}
     engines: {node: '>=0.8.19'}
@@ -5574,7 +5561,6 @@ packages:
 
   /jsonc-parser@3.2.0:
     resolution: {integrity: sha512-gfFQZrcTc8CnKXp6Y4/CBT3fTc0OVuDofpre4aEeEpSBPV5X5v4+Vmx+8snU7RLPrNHPKSgLxGo9YuQzz20o+w==}
-    dev: true
 
   /jsonfile@4.0.0:
     resolution: {integrity: sha512-m6F1R3z8jjlf2imQHS2Qez5sjKWQzbuuhuJ/FKYFRZvPE3PuHcSMVZzfsLhGVOkfd20obL5SWEBew5ShlquNxg==}
@@ -7054,6 +7040,15 @@ packages:
     engines: {node: '>=8'}
     dev: true
 
+  /shiki@0.14.4:
+    resolution: {integrity: sha512-IXCRip2IQzKwxArNNq1S+On4KPML3Yyn8Zzs/xRgcgOWIr8ntIK3IKzjFPfjy/7kt9ZMjc+FItfqHRBg8b6tNQ==}
+    dependencies:
+      ansi-sequence-parser: 1.1.1
+      jsonc-parser: 3.2.0
+      vscode-oniguruma: 1.7.0
+      vscode-textmate: 8.0.0
+    dev: false
+
   /side-channel@1.0.4:
     resolution: {integrity: sha512-q5XPytqFEIKHkGdiMIrY10mvLRvnQh42/+GoBlFW3b2LXLE2xxJpZFdm94we0BaoV3RwJyGqg5wS7epxTv0Zvw==}
     dependencies:
@@ -7974,12 +7969,12 @@ packages:
       unist-util-stringify-position: 4.0.0
       vfile-message: 4.0.2
 
-  /vscode-oniguruma@2.0.1:
-    resolution: {integrity: sha512-poJU8iHIWnC3vgphJnrLZyI3YdqRlR27xzqDmpPXYzA93R4Gk8z7T6oqDzDoHjoikA2aS82crdXFkjELCdJsjQ==}
+  /vscode-oniguruma@1.7.0:
+    resolution: {integrity: sha512-L9WMGRfrjOhgHSdOYgCt/yRMsXzLDJSL7BPrOZt73gU0iWO4mpqzqQzOz5srxqTvMBaR0XZTSrVWo4j55Rc6cA==}
     dev: false
 
-  /vscode-textmate@9.0.0:
-    resolution: {integrity: sha512-Cl65diFGxz7gpwbav10HqiY/eVYTO1sjQpmRmV991Bj7wAoOAjGQ97PpQcXorDE2Uc4hnGWLY17xme+5t6MlSg==}
+  /vscode-textmate@8.0.0:
+    resolution: {integrity: sha512-AFbieoL7a5LMqcnOF04ji+rpXadgOXnZsxQr//r83kLPr7biP7am3g9zbaZIaBGwBRWeSvoMD4mgPdX3e4NWBg==}
     dev: false
 
   /w3c-xmlserializer@4.0.0:

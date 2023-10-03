@@ -1,7 +1,7 @@
 import * as React from 'react'
 import type { MDXComponents } from 'mdx/types'
 import { getMetadataFromClassName } from 'mdxts/utils'
-import { Code } from 'mdxts/components'
+// import { Code, Editor } from 'mdxts/components'
 import { Editor } from './editor'
 
 import theme from './theme.json'
@@ -29,7 +29,7 @@ export function useMDXComponents() {
         <Editor
           defaultValue={value.trim()}
           language={metadata?.language}
-          theme={theme}
+          theme={theme as any}
         />
       )
       // ) : (
