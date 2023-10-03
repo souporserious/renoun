@@ -53,7 +53,7 @@ export function Editor({
     ;(async function init() {
       const highlighter = await getHighlighter({
         theme,
-        langs: ['javascript', 'jsx', 'typescript', 'tsx', 'css'],
+        langs: ['javascript', 'jsx', 'typescript', 'tsx', 'css', 'json'],
         paths: {
           languages: '_next/static/mdxts',
           wasm: '_next/static/mdxts',

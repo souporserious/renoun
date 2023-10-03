@@ -126,6 +126,10 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
                   to: 'static/mdxts',
                 },
                 {
+                  from: require.resolve('shiki/languages/json.tmLanguage.json'),
+                  to: 'static/mdxts',
+                },
+                {
                   from: require.resolve('vscode-oniguruma/release/onig.wasm'),
                   to: 'static/mdxts',
                 },
