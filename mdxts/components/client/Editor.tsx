@@ -7,8 +7,33 @@ const languageService = project.getLanguageService().compilerObject
 const isDocument = typeof document !== 'undefined'
 const canvas = isDocument ? document.createElement('canvas') : null
 const context = canvas?.getContext('2d')
+const FontStyle = {
+  Italic: 1,
+  Bold: 2,
+  Underline: 4,
+  Strikethrough: 8,
+}
 
-context.font = '14px monospace'
+function getFontStyle(fontStyle: number): any {
+  const style = {}
+  if (fontStyle === FontStyle.Italic) {
+    style['fontStyle'] = 'italic'
+  }
+  if (fontStyle === FontStyle.Bold) {
+    style['fontWeight'] = 'bold'
+  }
+  if (fontStyle === FontStyle.Underline) {
+    style['textDecoration'] = 'underline'
+  }
+  if (fontStyle === FontStyle.Strikethrough) {
+    style['textDecoration'] = 'line-through'
+  }
+  return style
+}
+
+if (context) {
+  context.font = '14px monospace'
+}
 
 fetch('/_next/static/mdxts/types.json').then(async (response) => {
   const typeDeclarations = await response.json()
@@ -211,7 +236,7 @@ export function Editor({
     const cursorX = event.clientX - rect.left
     const cursorY = event.clientY - rect.top
     const row = Math.floor(cursorY / 20)
-    const column = Math.floor(cursorX / context.measureText(' ').width)
+    const column = Math.floor(cursorX / context?.measureText(' ').width)
     const linesBeforeCursor = resolvedValue.split('\n').slice(0, row)
     const charsBeforeCurrentRow = linesBeforeCursor.reduce(
       (acc, line) => acc + line.length + 1,
@@ -230,7 +255,7 @@ export function Editor({
       charsBeforeCurrentRow,
       node.getStart()
     )
-    const nodeVisualStart = context.measureText(nodeStartLineContent).width
+    const nodeVisualStart = context?.measureText(nodeStartLineContent).width
 
     try {
       const quickInfo = languageService.getQuickInfoAtPosition(
@@ -268,7 +293,7 @@ export function Editor({
         )
 
         setHoverPosition({
-          x: nodeVisualStart - context.measureText(' ').width,
+          x: nodeVisualStart - context?.measureText(' ').width,
           y: row * 20 - 10,
         })
       } else {
@@ -286,28 +311,37 @@ export function Editor({
     wordWrap: 'break-word',
     fontFamily: 'monospace',
     fontSize: 14,
-    tabSize: 4,
-    letterSpacing: '0px',
     lineHeight: '20px',
+    letterSpacing: '0px',
+    tabSize: 4,
+    backgroundColor: '#101218',
   } satisfies React.CSSProperties
 
   return (
     <div style={{ display: 'grid', width: '100%', position: 'relative' }}>
       <div style={sharedStyle}>
-        {children ??
-          tokens.map((line, index) => {
-            return (
-              <div key={index} style={{ minHeight: 20 }}>
-                {line.map((token, index) => {
-                  return (
-                    <span key={index} style={{ color: token.color }}>
-                      {token.content}
-                    </span>
-                  )
-                })}
-              </div>
-            )
-          })}
+        {stateValue === defaultValue && children
+          ? children
+          : tokens.map((line, index) => {
+              return (
+                <div key={index} style={{ height: 20 }}>
+                  {line.map((token, index) => {
+                    const fontStyle = getFontStyle(token.fontStyle)
+                    return (
+                      <span
+                        key={index}
+                        style={{
+                          ...fontStyle,
+                          color: token.color,
+                        }}
+                      >
+                        {token.content}
+                      </span>
+                    )
+                  })}
+                </div>
+              )
+            })}
       </div>
       <textarea
         ref={textareaRef}
@@ -352,7 +386,7 @@ export function Editor({
             overflow: 'auto',
             position: 'absolute',
             top: row * 20 + 20,
-            left: column * context.measureText(' ').width,
+            left: column * context?.measureText(' ').width,
             zIndex: 1000,
             color: 'white',
             backgroundColor: 'black',

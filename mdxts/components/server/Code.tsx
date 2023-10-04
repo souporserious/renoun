@@ -23,9 +23,19 @@ export async function Code({
   const { lines, style } = await highlight(value, language, theme as any)
 
   return (
-    <pre style={{ gridArea: '1 / 1', margin: 0, ...style }} {...props}>
+    <pre
+      style={{
+        gridArea: '1 / 1',
+        fontSize: 14,
+        lineHeight: '20px',
+        padding: 0,
+        margin: 0,
+        ...style,
+      }}
+      {...props}
+    >
       {lines.map((line, index) => (
-        <div key={index} style={{ height: 20, lineHeight: '20px' }}>
+        <div key={index} style={{ height: 20 }}>
           {line.map((token, index) => (
             <span key={index} style={token.style}>
               {token.content}

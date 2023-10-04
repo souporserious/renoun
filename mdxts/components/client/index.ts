@@ -1,2 +1,2 @@
 'use client'
-export { Editor } from './Editor'
+export { Editor, type EditorProps } from './Editor'

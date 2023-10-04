@@ -1,9 +1,23 @@
-'use client'
-import dynamic from 'next/dynamic'
+import * as React from 'react'
+import { Editor as ClientEditor } from 'mdxts/components/client'
+import type { EditorProps } from 'mdxts/components/client'
+import { Code } from 'mdxts/components/server'
 
-const Editor = dynamic(
-  () => import('mdxts/components/client').then((module) => module.Editor),
-  { ssr: false }
-)
-
-export { Editor }
+/** Renders a code editor with syntax highlighting, type information, and autocomplete. */
+export function Editor({
+  defaultValue,
+  language,
+  theme,
+  value,
+}: Omit<EditorProps, 'onChange'>) {
+  return (
+    <ClientEditor
+      defaultValue={defaultValue}
+      language={language}
+      theme={theme}
+      value={value}
+    >
+      <Code value={defaultValue ?? value} language={language} theme={theme} />
+    </ClientEditor>
+  )
+}
