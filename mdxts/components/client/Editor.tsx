@@ -18,6 +18,23 @@ fetch('/_next/static/mdxts/types.json').then(async (response) => {
   })
 })
 
+export type EditorProps = {
+  /** Default value of the editor. */
+  defaultValue?: string
+
+  /** Controlled value of the editor. */
+  value?: string
+
+  /** Language of the code snippet. */
+  language?: string
+
+  /** VS Code-based theme for highlighting. */
+  theme?: Parameters<typeof getHighlighter>[0]['theme']
+
+  /** Callback when the editor value changes. */
+  onChange?: (event: React.ChangeEvent<HTMLTextAreaElement>) => void
+}
+
 /** Code editor with syntax highlighting. */
 export function Editor({
   language,
@@ -25,13 +42,8 @@ export function Editor({
   value,
   onChange,
   theme,
-}: {
-  language?: string
-  theme?: Parameters<typeof getHighlighter>[0]['theme']
-  defaultValue?: string
-  value?: string
-  onChange?: (event: React.ChangeEvent<HTMLTextAreaElement>) => void
-}) {
+  children,
+}: EditorProps & { children?: React.ReactNode }) {
   const [stateValue, setStateValue] = useState(defaultValue)
   const [tokens, setTokens] = useState<
     ReturnType<Awaited<ReturnType<typeof getHighlighter>>['codeToThemedTokens']>
@@ -282,19 +294,20 @@ export function Editor({
   return (
     <div style={{ display: 'grid', width: '100%', position: 'relative' }}>
       <div style={sharedStyle}>
-        {tokens.map((line, index) => {
-          return (
-            <div key={index} style={{ minHeight: 20 }}>
-              {line.map((token, index) => {
-                return (
-                  <span key={index} style={{ color: token.color }}>
-                    {token.content}
-                  </span>
-                )
-              })}
-            </div>
-          )
-        })}
+        {children ??
+          tokens.map((line, index) => {
+            return (
+              <div key={index} style={{ minHeight: 20 }}>
+                {line.map((token, index) => {
+                  return (
+                    <span key={index} style={{ color: token.color }}>
+                      {token.content}
+                    </span>
+                  )
+                })}
+              </div>
+            )
+          })}
       </div>
       <textarea
         ref={textareaRef}

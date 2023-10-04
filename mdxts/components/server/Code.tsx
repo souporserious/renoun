@@ -1,7 +1,8 @@
 import * as React from 'react'
 import { highlight } from '@code-hike/lighter'
+import type { getHighlighter } from 'shiki'
 
-type CodeProps = {
+export type CodeProps = {
   /** Code snippet to be highlighted. */
   value?: string
 
@@ -9,7 +10,7 @@ type CodeProps = {
   language?: string
 
   /** VS Code-based theme for highlighting. */
-  theme?: Record<string, unknown>
+  theme?: Parameters<typeof getHighlighter>[0]['theme']
 }
 
 /** Renders a code block with syntax highlighting. */
@@ -19,7 +20,7 @@ export async function Code({
   theme,
   ...props
 }: CodeProps) {
-  const { lines, style } = await highlight(value, language, theme)
+  const { lines, style } = await highlight(value, language, theme as any)
 
   return (
     <pre style={{ gridArea: '1 / 1', margin: 0, ...style }} {...props}>
