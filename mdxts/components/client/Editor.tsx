@@ -35,7 +35,7 @@ if (context) {
   context.font = '14px monospace'
 }
 
-fetch('/_next/static/mdxts/types.json').then(async (response) => {
+fetch('_next/static/mdxts/types.json').then(async (response) => {
   const typeDeclarations = await response.json()
 
   typeDeclarations.forEach(({ code, path }) => {
