@@ -159,6 +159,17 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
         nextConfig.pageExtensions = ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx']
       }
 
+      const packages = [
+        'mdxts',
+        'mdxts/components',
+        'mdxts/components/server',
+        'mdxts/components/client',
+      ]
+
+      nextConfig.transpilePackages = nextConfig.transpilePackages
+        ? nextConfig.transpilePackages.concat(packages)
+        : packages
+
       return withMDX(nextConfig)
     }
   }
