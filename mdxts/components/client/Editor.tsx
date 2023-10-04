@@ -238,7 +238,11 @@ export function Editor({
     const cursorX = event.clientX - rect.left
     const cursorY = event.clientY - rect.top
     const row = Math.floor(cursorY / 20)
-    const column = Math.floor(cursorX / context?.measureText(' ').width)
+    const lineText = resolvedValue.split('\n')[row] || ''
+    const column = Math.min(
+      Math.floor(cursorX / context?.measureText(' ').width),
+      lineText.length
+    )
     const linesBeforeCursor = resolvedValue.split('\n').slice(0, row)
     const charsBeforeCurrentRow = linesBeforeCursor.reduce(
       (acc, line) => acc + line.length + 1,
