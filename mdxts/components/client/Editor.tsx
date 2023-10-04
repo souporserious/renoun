@@ -4,8 +4,8 @@ import { getHighlighter } from 'shiki'
 
 const project = new Project({ useInMemoryFileSystem: true })
 const languageService = project.getLanguageService().compilerObject
-const isDocument = typeof document !== 'undefined'
-const canvas = isDocument ? document.createElement('canvas') : null
+const isClient = typeof document !== 'undefined'
+const canvas = isClient ? document.createElement('canvas') : null
 const context = canvas?.getContext('2d')
 const FontStyle = {
   Italic: 1,
@@ -35,13 +35,15 @@ if (context) {
   context.font = '14px monospace'
 }
 
-fetch('_next/static/mdxts/types.json').then(async (response) => {
-  const typeDeclarations = await response.json()
+if (isClient) {
+  fetch('/_next/static/mdxts/types.json').then(async (response) => {
+    const typeDeclarations = await response.json()
 
-  typeDeclarations.forEach(({ code, path }) => {
-    project.createSourceFile(path, code)
+    typeDeclarations.forEach(({ code, path }) => {
+      project.createSourceFile(path, code)
+    })
   })
-})
+}
 
 export type EditorProps = {
   /** Default value of the editor. */
@@ -92,8 +94,8 @@ export function Editor({
         theme,
         langs: ['javascript', 'jsx', 'typescript', 'tsx', 'css', 'json'],
         paths: {
-          languages: '_next/static/mdxts',
-          wasm: '_next/static/mdxts',
+          languages: '/_next/static/mdxts',
+          wasm: '/_next/static/mdxts',
         },
       })
 
