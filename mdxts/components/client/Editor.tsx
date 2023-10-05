@@ -294,7 +294,7 @@ export function Editor({
                 </div>
               )
             })}
-            {docText ? <p>{docText}</p> : null}
+            {docText ? <p style={{ margin: 0 }}>{docText}</p> : null}
           </div>
         )
 
