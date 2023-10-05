@@ -32,7 +32,7 @@ async function fetchTypes(
           resolve(
             types.map(({ code, path }) => ({
               code,
-              path: `file://${path.replace('@types/', '')}`,
+              path: path.replace('@types/', ''),
             }))
           )
         },
@@ -60,8 +60,8 @@ function getAllDependencies(packageJson) {
 
 async function findTypesPathFromTypeVersions(
   packageJson,
-  parentPackage,
-  submodule
+  packageName,
+  packageExport
 ) {
   if (!packageJson.typesVersions) return null
 
@@ -69,7 +69,7 @@ async function findTypesPathFromTypeVersions(
 
   if (!typeVersionsField) return null
 
-  const typesPathsFromTypeVersions = typeVersionsField[submodule]
+  const typesPathsFromTypeVersions = typeVersionsField[packageExport]
 
   if (!typesPathsFromTypeVersions) return null
 
@@ -78,7 +78,7 @@ async function findTypesPathFromTypeVersions(
       const typesPath = path.resolve(
         process.cwd(),
         'node_modules',
-        parentPackage,
+        packageName,
         candidatePath
       )
 
@@ -180,7 +180,7 @@ export async function getTypeDeclarations(packageName) {
       return [
         {
           code: result.output[0].code,
-          path: `file:///node_modules/${packageName}/index.d.ts`,
+          path: `/node_modules/${packageName}/index.d.ts`,
         },
       ]
     } catch (error) {
