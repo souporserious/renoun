@@ -14,8 +14,13 @@ import { renumberFilenames } from '../utils/renumber'
 import { getTypeDeclarations } from '../utils/get-type-declarations'
 
 type PluginOptions = {
+  /** The git source to use for linking to the repository and source files. */
   gitSource: string
+
+  /** Path to the VS Code compatible theme used for syntax highlighting the Code and Editor components. */
   theme: string
+
+  /** The type declarations to bundle for the Code and Editor components. */
   types?: string[]
 }
 
@@ -127,6 +132,12 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
                 },
                 {
                   from: require.resolve('shiki/languages/json.tmLanguage.json'),
+                  to: 'static/mdxts',
+                },
+                {
+                  from: require.resolve(
+                    'shiki/languages/shellscript.tmLanguage.json'
+                  ),
                   to: 'static/mdxts',
                 },
                 {

@@ -62,15 +62,21 @@ export type EditorProps = {
   onChange?: (event: React.ChangeEvent<HTMLTextAreaElement>) => void
 }
 
+const languageMap = {
+  shell: 'shellscript',
+  bash: 'shellscript',
+}
+
 /** Code editor with syntax highlighting. */
 export function Editor({
-  language,
+  language: languageProp,
   defaultValue,
   value,
   onChange,
   theme,
   children,
 }: EditorProps & { children?: React.ReactNode }) {
+  const language = languageMap[languageProp] || languageProp
   const [stateValue, setStateValue] = useState(defaultValue)
   const [tokens, setTokens] = useState<
     ReturnType<Awaited<ReturnType<typeof getHighlighter>>['codeToThemedTokens']>
@@ -81,6 +87,7 @@ export function Editor({
   const highlighterRef = useRef<Awaited<
     ReturnType<typeof getHighlighter>
   > | null>(null)
+  const ctrlKeyRef = useRef(false)
   const textareaRef = useRef(null)
   const nextCursorPositionRef = useRef(null)
   const [suggestions, setSuggestions] = useState([])
@@ -92,7 +99,15 @@ export function Editor({
     ;(async function init() {
       const highlighter = await getHighlighter({
         theme,
-        langs: ['javascript', 'jsx', 'typescript', 'tsx', 'css', 'json'],
+        langs: [
+          'javascript',
+          'jsx',
+          'typescript',
+          'tsx',
+          'css',
+          'json',
+          'shellscript',
+        ],
         paths: {
           languages: '/_next/static/mdxts',
           wasm: '/_next/static/mdxts',
@@ -200,13 +215,15 @@ export function Editor({
       setIsDropdownOpen(false)
       setHighlightedIndex(0)
     }
+
+    ctrlKeyRef.current = event.ctrlKey
   }
 
   function handleKeyUp(event: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (
       /^[a-zA-Z.]$/.test(event.key) ||
       event.key === 'Backspace' ||
-      (event.key === ' ' && event.ctrlKey)
+      (event.key === ' ' && ctrlKeyRef.current)
     ) {
       const cursorPosition = textareaRef.current?.selectionStart || 0
       const lastChar = resolvedValue.at(-1)
