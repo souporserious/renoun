@@ -58,18 +58,17 @@ function getAllDependencies(packageJson) {
   )
 }
 
-async function findTypesPathFromTypeVersions(
-  packageJson,
-  packageName,
-  packageExport
-) {
+async function findTypesPathFromTypeVersions(packageJson, packageName) {
+  const rootPackageName = getRootPackageName(packageName)
+  const submoduleName = packageName.split('/').slice(1).join('/')
+
   if (!packageJson.typesVersions) return null
 
   const typeVersionsField = packageJson.typesVersions['*']
 
   if (!typeVersionsField) return null
 
-  const typesPathsFromTypeVersions = typeVersionsField[packageExport]
+  const typesPathsFromTypeVersions = typeVersionsField[submoduleName]
 
   if (!typesPathsFromTypeVersions) return null
 
@@ -78,7 +77,7 @@ async function findTypesPathFromTypeVersions(
       const typesPath = path.resolve(
         process.cwd(),
         'node_modules',
-        packageName,
+        rootPackageName,
         candidatePath
       )
 
@@ -100,35 +99,36 @@ async function findParentNodeModulesPath(currentPath, packageName) {
     return nodeModulesPath
   } catch {
     const parentPath = path.dirname(currentPath)
-    if (parentPath === currentPath) return null // We have reached the root directory
+    // We have reached the root directory
+    if (parentPath === currentPath) {
+      return null
+    }
     return findParentNodeModulesPath(parentPath, packageName)
   }
 }
 
-async function findTypesPath(packageJson, parentPackage, submodule) {
+async function findTypesPath(packageJson, packageName) {
   const typesField = packageJson.types || packageJson.typings
+  const isSubmodule = packageName.includes('/')
 
-  if (!submodule && typesField) {
-    return path.resolve(
-      process.cwd(),
-      'node_modules',
-      parentPackage,
-      typesField
-    )
+  if (!isSubmodule && typesField) {
+    return path.resolve(process.cwd(), 'node_modules', packageName, typesField)
   }
 
-  if (submodule) {
+  if (isSubmodule) {
     const typesPath = await findTypesPathFromTypeVersions(
       packageJson,
-      parentPackage,
-      submodule
+      packageName
     )
-    if (typesPath) return typesPath
+
+    if (typesPath) {
+      return typesPath
+    }
   }
 
   const parentNodeModulesPath = await findParentNodeModulesPath(
     process.cwd(),
-    `@types/${parentPackage}`
+    `@types/${packageName}`
   )
 
   if (!parentNodeModulesPath) return null
@@ -136,26 +136,31 @@ async function findTypesPath(packageJson, parentPackage, submodule) {
   return path.resolve(parentNodeModulesPath, 'index.d.ts')
 }
 
+/** Parses the root package name from a nested package name. */
+function getRootPackageName(packageName: string) {
+  const isOrg = packageName.startsWith('@')
+
+  if (isOrg) {
+    return packageName.split('/').slice(0, 2).join('/')
+  }
+
+  return packageName.split('/').shift()
+}
+
 /** Fetches the types for a locally installed NPM package. */
 export async function getTypeDeclarations(packageName) {
-  const [orgOrParent, parentPackageOrSubmodule, submoduleCandidate] =
-    packageName.split('/')
-  const isOrgPackage = orgOrParent.startsWith('@')
-  const parentPackage = isOrgPackage
-    ? `${orgOrParent}/${parentPackageOrSubmodule}`
-    : orgOrParent
-  const submodule = isOrgPackage ? submoduleCandidate : parentPackageOrSubmodule
-  const parentPackagePath = path.resolve(
+  const rootPackageName = getRootPackageName(packageName)
+  const packageJsonPath = path.resolve(
     process.cwd(),
     'node_modules',
-    parentPackage,
+    rootPackageName,
     'package.json'
   )
 
   try {
-    const packageJson = await getPackageJson(parentPackagePath)
+    const packageJson = await getPackageJson(packageJsonPath)
     const allDependencies = getAllDependencies(packageJson)
-    const typesPath = await findTypesPath(packageJson, parentPackage, submodule)
+    const typesPath = await findTypesPath(packageJson, packageName)
 
     // use ATA when dealing with @types since rollup is not reliable
     if (typesPath.includes('@types/')) {
