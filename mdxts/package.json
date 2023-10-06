@@ -11,7 +11,8 @@
     "./components": "./dist/components/index.js",
     "./components/client": "./dist/components/client/index.js",
     "./components/server": "./dist/components/server/index.js",
-    "./editor": "./dist/editor/index.js",
+    "./rehype": "./dist/rehype/index.js",
+    "./remark": "./dist/remark/index.js",
     "./next": "./dist/next/index.js",
     "./transform": "./dist/transform/index.js",
     "./utils": "./dist/utils/index.js",
@@ -28,6 +29,12 @@
       ],
       "components/server": [
         "./dist/components/server/index.d.ts"
+      ],
+      "rehype": [
+        "./dist/rehype/index.d.ts"
+      ],
+      "remark": [
+        "./dist/remark/index.d.ts"
       ],
       "next": [
         "./dist/next/index.d.ts"
