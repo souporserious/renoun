@@ -47,18 +47,29 @@ async function fetchTypes(
   })
 }
 
-async function getPackageJson(packagePath) {
-  const packageJsonContent = await fs.readFile(packagePath, 'utf-8')
-  return JSON.parse(packageJsonContent)
+async function getPackageJson(
+  packagePath: string
+): Promise<Record<string, any>> {
+  try {
+    const packageJsonContent = await fs.readFile(packagePath, 'utf-8')
+    return JSON.parse(packageJsonContent)
+  } catch (error) {
+    throw new Error(`mdxts: Could not read package.json for "${packagePath}"`, {
+      cause: error,
+    })
+  }
 }
 
-function getAllDependencies(packageJson) {
+function getAllDependencies(packageJson: Record<string, any>): string[] {
   return Object.keys(packageJson.dependencies ?? {}).concat(
     Object.keys(packageJson.peerDependencies ?? {})
   )
 }
 
-async function findTypesPathFromTypeVersions(packageJson, packageName) {
+async function findTypesPathFromTypeVersions(
+  packageJson: Record<string, any>,
+  packageName: string
+): Promise<string | null> {
   const rootPackageName = getRootPackageName(packageName)
   const submoduleName = packageName.split('/').slice(1).join('/')
 
@@ -91,7 +102,10 @@ async function findTypesPathFromTypeVersions(packageJson, packageName) {
   return null
 }
 
-async function findParentNodeModulesPath(currentPath, packageName) {
+async function findParentNodeModulesPath(
+  currentPath: string,
+  packageName: string
+): Promise<string | null> {
   const nodeModulesPath = path.resolve(currentPath, 'node_modules', packageName)
 
   try {
@@ -107,7 +121,10 @@ async function findParentNodeModulesPath(currentPath, packageName) {
   }
 }
 
-async function findTypesPath(packageJson, packageName) {
+async function findTypesPath(
+  packageJson: Record<string, any>,
+  packageName: string
+): Promise<string> {
   const typesField = packageJson.types || packageJson.typings
   const isSubmodule = packageName.includes('/')
 
@@ -126,18 +143,26 @@ async function findTypesPath(packageJson, packageName) {
     }
   }
 
-  const parentNodeModulesPath = await findParentNodeModulesPath(
-    process.cwd(),
-    `@types/${packageName}`
-  )
+  try {
+    const parentNodeModulesPath = await findParentNodeModulesPath(
+      process.cwd(),
+      `@types/${packageName}`
+    )
 
-  if (!parentNodeModulesPath) return null
+    if (!parentNodeModulesPath) {
+      throw new Error(`mdxts: Could not find types path for "${packageName}"`)
+    }
 
-  return path.resolve(parentNodeModulesPath, 'index.d.ts')
+    return path.resolve(parentNodeModulesPath, 'index.d.ts')
+  } catch (error) {
+    throw new Error(`mdxts: Could not find types path for "${packageName}"`, {
+      cause: error,
+    })
+  }
 }
 
 /** Parses the root package name from a nested package name. */
-function getRootPackageName(packageName: string) {
+function getRootPackageName(packageName: string): string {
   const isOrg = packageName.startsWith('@')
 
   if (isOrg) {
@@ -148,7 +173,7 @@ function getRootPackageName(packageName: string) {
 }
 
 /** Fetches the types for a locally installed NPM package. */
-export async function getTypeDeclarations(packageName) {
+export async function getTypeDeclarations(packageName: string) {
   const rootPackageName = getRootPackageName(packageName)
   const packageJsonPath = path.resolve(
     process.cwd(),
@@ -156,47 +181,39 @@ export async function getTypeDeclarations(packageName) {
     rootPackageName,
     'package.json'
   )
+  const packageJson = await getPackageJson(packageJsonPath)
+  const allDependencies = getAllDependencies(packageJson)
+  const typesPath = await findTypesPath(packageJson, packageName)
 
-  try {
-    const packageJson = await getPackageJson(packageJsonPath)
-    const allDependencies = getAllDependencies(packageJson)
-    const typesPath = await findTypesPath(packageJson, packageName)
-
-    // use ATA when dealing with @types since rollup is not reliable
-    if (typesPath.includes('@types/')) {
-      const packageTypes = await fetchTypes([packageName])
-      return packageTypes
-    }
-
-    try {
-      const bundle = await rollup({
-        input: path.resolve('./node_modules/', packageName, typesPath),
-        plugins: [dts({ respectExternal: true })],
-        external: (id) =>
-          allDependencies
-            .concat(
-              builtinModules,
-              builtinModules.map((moduleName) => `node:${moduleName}`)
-            )
-            .includes(id),
-      })
-      const result = await bundle.generate({})
-
-      return [
-        {
-          code: result.output[0].code,
-          path: `/node_modules/${packageName}/index.d.ts`,
-        },
-      ]
-    } catch (error) {
-      console.error(`mdxts: Could not find types for "${packageName}"`, error)
-    }
-  } catch (error) {
-    console.error(
-      `mdxts: Could not find package.json for "${packageName}"`,
-      error
-    )
+  // use ATA when dealing with @types since rollup is not reliable
+  if (typesPath.includes('@types/')) {
+    const packageTypes = await fetchTypes([packageName])
+    return packageTypes
   }
 
-  return []
+  try {
+    const bundle = await rollup({
+      input: path.resolve('./node_modules/', packageName, typesPath),
+      plugins: [dts({ respectExternal: true })],
+      external: (id) =>
+        allDependencies
+          .concat(
+            builtinModules,
+            builtinModules.map((moduleName) => `node:${moduleName}`)
+          )
+          .includes(id),
+    })
+    const result = await bundle.generate({})
+
+    return [
+      {
+        code: result.output[0].code,
+        path: `/node_modules/${packageName}/index.d.ts`,
+      },
+    ]
+  } catch (error) {
+    throw new Error(`mdxts: Could not bundle "${packageName}"`, {
+      cause: error,
+    })
+  }
 }
