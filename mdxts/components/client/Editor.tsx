@@ -328,6 +328,13 @@ export function Editor({
     }
   }
 
+  const isJavaScriptBasedLanguage = [
+    'javascript',
+    'jsx',
+    'typescript',
+    'tsx',
+  ].some((languageToCompare) => languageToCompare === language)
+
   const sharedStyle = {
     gridArea: '1 / 1',
     whiteSpace: 'pre-wrap',
@@ -368,13 +375,15 @@ export function Editor({
       </div>
       <textarea
         ref={textareaRef}
-        onPointerMove={handlePointerMove}
+        onPointerMove={
+          isJavaScriptBasedLanguage ? handlePointerMove : undefined
+        }
         onPointerLeave={() => {
           setHoverInfo(null)
           setHoverPosition(null)
         }}
         onKeyDown={handleKeyDown}
-        onKeyUp={handleKeyUp}
+        onKeyUp={isJavaScriptBasedLanguage ? handleKeyUp : undefined}
         onBlur={() => setIsDropdownOpen(false)}
         onChange={
           defaultValue
