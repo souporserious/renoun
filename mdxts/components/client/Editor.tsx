@@ -88,7 +88,8 @@ export function Editor({
     ReturnType<typeof getHighlighter>
   > | null>(null)
   const ctrlKeyRef = useRef(false)
-  const textareaRef = useRef(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
   const nextCursorPositionRef = useRef(null)
   const [suggestions, setSuggestions] = useState([])
   const [highlightedIndex, setHighlightedIndex] = useState(0)
@@ -315,9 +316,12 @@ export function Editor({
           </div>
         )
 
+        const xOffset = scrollRef.current?.scrollLeft ?? 0
+        const yOffset = scrollRef.current?.scrollTop ?? 0
+
         setHoverPosition({
-          x: nodeVisualStart - context?.measureText(' ').width,
-          y: row * 20 - 10,
+          x: nodeVisualStart - context?.measureText(' ').width - xOffset,
+          y: row * 20 - 10 - yOffset,
         })
       } else {
         setHoverInfo(null)
@@ -337,7 +341,7 @@ export function Editor({
 
   const sharedStyle = {
     gridArea: '1 / 1',
-    whiteSpace: 'pre-wrap',
+    whiteSpace: 'pre',
     wordWrap: 'break-word',
     fontFamily: 'monospace',
     fontSize: 14,
@@ -348,66 +352,69 @@ export function Editor({
   } satisfies React.CSSProperties
 
   return (
-    <div style={{ display: 'grid', width: '100%', position: 'relative' }}>
-      <div style={sharedStyle}>
-        {stateValue === defaultValue && children
-          ? children
-          : tokens.map((line, index) => {
-              return (
-                <div key={index} style={{ height: 20 }}>
-                  {line.map((token, index) => {
-                    const fontStyle = getFontStyle(token.fontStyle)
-                    return (
-                      <span
-                        key={index}
-                        style={{
-                          ...fontStyle,
-                          color: token.color,
-                        }}
-                      >
-                        {token.content}
-                      </span>
-                    )
-                  })}
-                </div>
-              )
-            })}
+    <div style={{ position: 'relative' }}>
+      <div ref={scrollRef} style={{ display: 'grid', overflow: 'auto' }}>
+        <div style={sharedStyle}>
+          {stateValue === defaultValue && children
+            ? children
+            : tokens.map((line, index) => {
+                return (
+                  <div key={index} style={{ height: 20 }}>
+                    {line.map((token, index) => {
+                      const fontStyle = getFontStyle(token.fontStyle)
+                      return (
+                        <span
+                          key={index}
+                          style={{
+                            ...fontStyle,
+                            color: token.color,
+                          }}
+                        >
+                          {token.content}
+                        </span>
+                      )
+                    })}
+                  </div>
+                )
+              })}
+        </div>
+        <textarea
+          ref={textareaRef}
+          onPointerMove={
+            isJavaScriptBasedLanguage ? handlePointerMove : undefined
+          }
+          onPointerLeave={() => {
+            setHoverInfo(null)
+            setHoverPosition(null)
+          }}
+          onKeyDown={handleKeyDown}
+          onKeyUp={isJavaScriptBasedLanguage ? handleKeyUp : undefined}
+          onBlur={() => setIsDropdownOpen(false)}
+          onChange={
+            defaultValue
+              ? (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+                  setStateValue(event.target.value)
+                  onChange?.(event)
+                }
+              : onChange
+          }
+          spellCheck="false"
+          className="write"
+          value={resolvedValue}
+          rows={resolvedValue.split('\n').length + 1}
+          style={{
+            ...sharedStyle,
+            padding: 0,
+            border: 0,
+            backgroundColor: 'transparent',
+            color: 'transparent',
+            caretColor: '#79c0ff',
+            resize: 'none',
+            outline: 'none',
+            overflow: 'visible',
+          }}
+        />
       </div>
-      <textarea
-        ref={textareaRef}
-        onPointerMove={
-          isJavaScriptBasedLanguage ? handlePointerMove : undefined
-        }
-        onPointerLeave={() => {
-          setHoverInfo(null)
-          setHoverPosition(null)
-        }}
-        onKeyDown={handleKeyDown}
-        onKeyUp={isJavaScriptBasedLanguage ? handleKeyUp : undefined}
-        onBlur={() => setIsDropdownOpen(false)}
-        onChange={
-          defaultValue
-            ? (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-                setStateValue(event.target.value)
-                onChange?.(event)
-              }
-            : onChange
-        }
-        spellCheck="false"
-        className="write"
-        value={resolvedValue}
-        rows={resolvedValue.split('\n').length + 1}
-        style={{
-          ...sharedStyle,
-          padding: 0,
-          border: 0,
-          backgroundColor: 'transparent',
-          color: 'transparent',
-          caretColor: '#79c0ff',
-          resize: 'none',
-          outline: 'none',
-        }}
-      />
 
       {isDropdownOpen && (
         <div
