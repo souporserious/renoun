@@ -18,7 +18,7 @@ yarn add mdxts
 
 Once installed, you can set up the Next.js plugin that will build a graph of your content and code blocks throughout your project:
 
-```next.config.mjs
+```mjs filename=next.config.mjs
 import { createMDXTSPlugin } from 'mdxts/next'
 
 const withMDXTS = createMDXTSPlugin({
@@ -27,7 +27,7 @@ const withMDXTS = createMDXTSPlugin({
 })
 
 export default withMDXTS({
-  ...
+  // ...
 })
 ```
 

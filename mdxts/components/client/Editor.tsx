@@ -9,9 +9,11 @@ const project = new Project({
   compilerOptions: {
     resolveJsonModule: true,
     esModuleInterop: true,
-    moduleResolution: ts.ModuleResolutionKind.NodeJs,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
     jsx: ts.JsxEmit.ReactJSX,
-    jsxImportSource: 'react',
+    module: ts.ModuleKind.ESNext,
+    target: ts.ScriptTarget.ESNext,
+    isolatedModules: true,
   },
   useInMemoryFileSystem: true,
 })
@@ -80,6 +82,11 @@ export function Editor({
   ].some((languageToCompare) => languageToCompare === language)
 
   useLayoutEffect(() => {
+    // Editor currently only supports highlighting JavaScript-based languages
+    if (!isJavaScriptBasedLanguage) {
+      return
+    }
+
     ;(async function init() {
       const highlighter = await getHighlighter({
         theme,

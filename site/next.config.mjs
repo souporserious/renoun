@@ -5,6 +5,7 @@ const withMDXTS = createMDXTSPlugin({
   gitSource: 'https://github.com/souporserious/mdxts/tree/main',
   types: [
     'react',
+    'mdxts',
     'mdxts/components',
     'mdxts/components/server',
     'mdxts/components/client',
