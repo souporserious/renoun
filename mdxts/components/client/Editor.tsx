@@ -1,12 +1,9 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import {
-  Diagnostic,
-  Project,
-  ts,
-  type SourceFile,
-  type DiagnosticMessageChain,
-} from 'ts-morph'
-import { getHighlighter } from 'shiki'
+import type { SourceFile } from 'ts-morph'
+import { Diagnostic, Project, ts } from 'ts-morph'
+import { hasDiagnosticsForToken, getDiagnosticMessageText } from './diagnostics'
+import type { Highlighter, Theme, Tokens } from './highlighter'
+import { getHighlighter, processToken } from './highlighter'
 
 const project = new Project({
   compilerOptions: {
@@ -22,90 +19,7 @@ const languageService = project.getLanguageService().compilerObject
 const isClient = typeof document !== 'undefined'
 const canvas = isClient ? document.createElement('canvas') : null
 const context = canvas?.getContext('2d')
-const FontStyle = {
-  Italic: 1,
-  Bold: 2,
-  Underline: 4,
-  Strikethrough: 8,
-}
 let fetchPromise = isClient ? fetch('/_next/static/mdxts/types.json') : null
-
-function getFontStyle(fontStyle: number): any {
-  const style = {}
-  if (fontStyle === FontStyle.Italic) {
-    style['fontStyle'] = 'italic'
-  }
-  if (fontStyle === FontStyle.Bold) {
-    style['fontWeight'] = 'bold'
-  }
-  if (fontStyle === FontStyle.Underline) {
-    style['textDecoration'] = 'underline'
-  }
-  if (fontStyle === FontStyle.Strikethrough) {
-    style['textDecoration'] = 'line-through'
-  }
-  return style
-}
-
-function hasDiagnosticsForToken(
-  token: any,
-  tokenIndex: number,
-  lineIndex: number,
-  tokens: any[],
-  diagnostics: Diagnostic[],
-  content: string
-) {
-  const linesBeforeToken = content.split('\n').slice(0, lineIndex)
-  const charsBeforeTokenLine = linesBeforeToken.reduce(
-    (sum, line) => sum + line.length + 1, // +1 for the newline character
-    0
-  )
-
-  // Calculate position of the token within its line by summing up lengths of previous tokens in the same line
-  const positionWithinLine = tokens[lineIndex]
-    .slice(0, tokenIndex)
-    .reduce((sum, prevToken) => sum + prevToken.content.length, 0)
-  const tokenStart = charsBeforeTokenLine + positionWithinLine
-
-  const tokenEnd = tokenStart + token.content.length
-
-  // Iterate over the diagnostics to see if any of them overlap with the token's position.
-  for (let diagnostic of diagnostics) {
-    const diagnosticStart = diagnostic.getStart()
-    const diagnosticEnd = diagnosticStart + diagnostic.getLength()
-
-    if (
-      (diagnosticStart >= tokenStart && diagnosticStart <= tokenEnd) ||
-      (diagnosticEnd >= tokenStart && diagnosticEnd <= tokenEnd) ||
-      (diagnosticStart <= tokenStart && diagnosticEnd >= tokenEnd)
-    ) {
-      return true
-    }
-  }
-
-  return false
-}
-
-function getDiagnosticMessageText(
-  message: string | DiagnosticMessageChain
-): string {
-  if (typeof message === 'string') {
-    return message
-  } else {
-    const nextMessage = message.getNext()
-    let result = message.getMessageText()
-
-    if (Array.isArray(nextMessage)) {
-      for (const msg of nextMessage) {
-        result += '\n' + getDiagnosticMessageText(msg)
-      }
-    } else if (nextMessage) {
-      result += '\n' + getDiagnosticMessageText(nextMessage)
-    }
-
-    return result
-  }
-}
 
 if (context) {
   context.font = '14px monospace'
@@ -122,7 +36,7 @@ export type EditorProps = {
   language?: string
 
   /** VS Code-based theme for highlighting. */
-  theme?: Parameters<typeof getHighlighter>[0]['theme']
+  theme?: Theme
 
   /** Callback when the editor value changes. */
   onChange?: (event: React.ChangeEvent<HTMLTextAreaElement>) => void
@@ -144,16 +58,12 @@ export function Editor({
 }: EditorProps & { children?: React.ReactNode }) {
   const language = languageMap[languageProp] || languageProp
   const [stateValue, setStateValue] = useState(defaultValue)
-  const [tokens, setTokens] = useState<
-    ReturnType<Awaited<ReturnType<typeof getHighlighter>>['codeToThemedTokens']>
-  >([])
+  const [tokens, setTokens] = useState<Tokens>([])
   const [row, setRow] = useState(null)
   const [column, setColumn] = useState(null)
   const [sourceFile, setSourceFile] = useState<SourceFile | null>(null)
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([])
-  const highlighterRef = useRef<Awaited<
-    ReturnType<typeof getHighlighter>
-  > | null>(null)
+  const highlighterRef = useRef<Highlighter | null>(null)
   const ctrlKeyRef = useRef(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -162,6 +72,12 @@ export function Editor({
   const [highlightedIndex, setHighlightedIndex] = useState(0)
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const resolvedValue = value ?? stateValue
+  const isJavaScriptBasedLanguage = [
+    'javascript',
+    'jsx',
+    'typescript',
+    'tsx',
+  ].some((languageToCompare) => languageToCompare === language)
 
   useLayoutEffect(() => {
     ;(async function init() {
@@ -184,24 +100,22 @@ export function Editor({
 
       highlighterRef.current = highlighter
 
-      const tokens = highlighter.codeToThemedTokens(resolvedValue, language)
-
+      const tokens = highlighter(resolvedValue, language)
       setTokens(tokens)
     })()
   }, [])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     async function init() {
       // Wait for the types to be fetched before creating declaration source files
+      // TODO: Implement a better way to do this
       if (fetchPromise) {
         const response = await fetchPromise
-        const typeDeclarations = await response.json()
+        const typeDeclarations = await response.clone().json()
 
         typeDeclarations.forEach(({ path, code }) => {
-          project.createSourceFile(path, code)
+          project.createSourceFile(path, code, { overwrite: true })
         })
-
-        fetchPromise = null
       }
 
       const nextSourceFile = project.createSourceFile(
@@ -211,15 +125,13 @@ export function Editor({
       )
       setSourceFile(nextSourceFile)
 
-      const diagnostics = nextSourceFile.getPreEmitDiagnostics()
-      setDiagnostics(diagnostics)
+      if (isJavaScriptBasedLanguage) {
+        const diagnostics = nextSourceFile.getPreEmitDiagnostics()
+        setDiagnostics(diagnostics)
+      }
 
       if (highlighterRef.current) {
-        const tokens = highlighterRef.current.codeToThemedTokens(
-          resolvedValue,
-          language
-        )
-
+        const tokens = highlighterRef.current(resolvedValue, language)
         setTokens(tokens)
       }
     }
@@ -258,7 +170,7 @@ export function Editor({
     const match = beforeCursor.match(regex)
     const prefix = match ? match[0] : ''
 
-    for (let i = 0; i < prefix.length; i++) {
+    for (let index = 0; index < prefix.length; index++) {
       document.execCommand('delete', false)
     }
 
@@ -347,7 +259,7 @@ export function Editor({
     )
     const linesBeforeCursor = resolvedValue.split('\n').slice(0, row)
     const charsBeforeCurrentRow = linesBeforeCursor.reduce(
-      (acc, line) => acc + line.length + 1,
+      (total, line) => total + line.length + 1,
       0
     )
     const position = charsBeforeCurrentRow + column
@@ -376,10 +288,7 @@ export function Editor({
         const documentation = quickInfo.documentation || []
         const displayText = displayParts.map((part) => part.text).join('')
         const docText = documentation.map((part) => part.text).join('')
-        const displayTextTokens = highlighterRef.current.codeToThemedTokens(
-          displayText,
-          language
-        )
+        const displayTextTokens = highlighterRef.current(displayText, language)
 
         setHoverInfo(
           <div>
@@ -416,13 +325,6 @@ export function Editor({
     }
   }
 
-  const isJavaScriptBasedLanguage = [
-    'javascript',
-    'jsx',
-    'typescript',
-    'tsx',
-  ].some((languageToCompare) => languageToCompare === language)
-
   const sharedStyle = {
     gridArea: '1 / 1',
     whiteSpace: 'pre',
@@ -453,21 +355,44 @@ export function Editor({
                         diagnostics,
                         resolvedValue
                       )
-                      const fontStyle = getFontStyle(token.fontStyle)
-                      return (
-                        <span
-                          key={tokenIndex}
-                          style={{
-                            ...fontStyle,
-                            color: token.color,
-                            textDecoration: hasError
-                              ? 'red wavy underline'
-                              : 'none',
-                          }}
-                        >
-                          {token.content}
-                        </span>
-                      )
+
+                      // Check if this token has an error
+                      if (hasError) {
+                        const diagnostic = diagnostics.find((diagnostic) => {
+                          const diagnosticStart = diagnostic.getStart()
+                          const diagnosticEnd =
+                            diagnosticStart + diagnostic.getLength()
+                          return (
+                            diagnosticStart <= token.end &&
+                            diagnosticEnd >= token.start
+                          )
+                        })
+                        const subTokens = processToken(token, diagnostic)
+
+                        return subTokens.map((subToken, idx) => (
+                          <span
+                            key={idx}
+                            style={{
+                              ...subToken.fontStyle,
+                              color: subToken.color,
+                              textDecoration: subToken.hasError
+                                ? 'red wavy underline'
+                                : 'none',
+                            }}
+                          >
+                            {subToken.content}
+                          </span>
+                        ))
+                      } else {
+                        return (
+                          <span
+                            key={tokenIndex}
+                            style={{ ...token.fontStyle, color: token.color }}
+                          >
+                            {token.content}
+                          </span>
+                        )
+                      }
                     })}
                   </div>
                 )
