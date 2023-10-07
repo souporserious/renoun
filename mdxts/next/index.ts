@@ -12,6 +12,7 @@ import { rehypePlugin } from '../rehype'
 import { getEditorPath } from '../utils'
 import { renumberFilenames } from '../utils/renumber'
 import { getTypeDeclarations } from '../utils/get-type-declarations'
+import { getDiagnosticMessageText } from '../components/client/diagnostics'
 
 type PluginOptions = {
   /** The git source to use for linking to the repository and source files. */
@@ -55,6 +56,12 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
               )
               const diagnostics = sourceFile.getPreEmitDiagnostics()
 
+              if (diagnostics.length === 0) {
+                return
+              }
+
+              console.log(`mdxts errors in the following code blocks:`)
+
               diagnostics.forEach((diagnostic) => {
                 const message = diagnostic.getMessageText()
                 const { line, column } = sourceFile.getLineAndColumnAtPos(
@@ -65,8 +72,8 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
                   line: lineStart + line,
                   column,
                 })
-                console.log(`MDXTS Error ${sourcePath}:`)
-                console.log(message)
+                console.log(sourcePath)
+                console.log(getDiagnosticMessageText(message))
               })
             },
           },
