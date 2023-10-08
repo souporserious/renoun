@@ -65,14 +65,19 @@ export function Editor({
   const [column, setColumn] = useState(null)
   const [sourceFile, setSourceFile] = useState<SourceFile | null>(null)
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([])
+  const [suggestions, setSuggestions] = useState([])
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const [highlightedIndex, setHighlightedIndex] = useState(0)
+  const [hoverInfo, setHoverInfo] = useState<React.ReactNode | null>(null)
+  const [hoverPosition, setHoverPosition] = useState<{
+    x: number
+    y: number
+  } | null>(null)
   const highlighterRef = useRef<Highlighter | null>(null)
   const ctrlKeyRef = useRef(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const nextCursorPositionRef = useRef(null)
-  const [suggestions, setSuggestions] = useState([])
-  const [highlightedIndex, setHighlightedIndex] = useState(0)
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const resolvedValue = value ?? stateValue
   const isJavaScriptBasedLanguage = [
     'javascript',
@@ -118,6 +123,7 @@ export function Editor({
       // TODO: Implement a better way to do this
       if (fetchPromise) {
         const response = await fetchPromise
+        fetchPromise = null
         const typeDeclarations = await response.clone().json()
 
         typeDeclarations.forEach(({ path, code }) => {
@@ -172,9 +178,8 @@ export function Editor({
 
   function selectSuggestion(suggestion) {
     const currentPosition = textareaRef.current?.selectionStart || 0
-    const regex = /[a-zA-Z_]+$/
     const beforeCursor = resolvedValue.substring(0, currentPosition)
-    const match = beforeCursor.match(regex)
+    const match = beforeCursor.match(/[a-zA-Z_]+$/)
     const prefix = match ? match[0] : ''
 
     for (let index = 0; index < prefix.length; index++) {
@@ -245,12 +250,6 @@ export function Editor({
       }
     }
   }
-
-  const [hoverInfo, setHoverInfo] = useState<React.ReactNode | null>(null)
-  const [hoverPosition, setHoverPosition] = useState<{
-    x: number
-    y: number
-  } | null>(null)
 
   function handlePointerMove(
     event: React.MouseEvent<HTMLTextAreaElement, MouseEvent>
