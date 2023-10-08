@@ -92,7 +92,7 @@ export function Editor({
       return
     }
 
-    ;(async function init() {
+    async function init() {
       const highlighter = await getHighlighter({
         theme,
         langs: [
@@ -111,7 +111,8 @@ export function Editor({
       })
 
       highlighterRef.current = highlighter
-    })()
+    }
+    init()
   }, [])
 
   useLayoutEffect(() => {
@@ -129,7 +130,7 @@ export function Editor({
       }
 
       const nextSourceFile = project.createSourceFile(
-        '/index.tsx',
+        'index.tsx',
         resolvedValue,
         { overwrite: true }
       )
@@ -415,11 +416,14 @@ export function Editor({
       </div>
 
       {isDropdownOpen && (
-        <div
+        <ul
           style={{
+            listStyle: 'none',
             fontSize: 14,
             width: 200,
             maxHeight: 340,
+            padding: 0,
+            margin: 0,
             overflow: 'auto',
             position: 'absolute',
             top: row * 20 + 20,
@@ -441,7 +445,7 @@ export function Editor({
               />
             )
           })}
-        </div>
+        </ul>
       )}
 
       {hoverInfo && hoverPosition && (
@@ -465,18 +469,21 @@ export function Editor({
       )}
 
       {diagnostics.length > 0 ? (
-        <p
+        <ul
           style={{
-            fontSize: '0.6rem',
+            listStyle: 'none',
+            fontSize: '0.8rem',
             padding: '0.6rem',
             margin: 0,
             backgroundColor: 'red',
           }}
         >
-          {diagnostics.map((diagnostic) =>
-            getDiagnosticMessageText(diagnostic.getMessageText())
-          )}
-        </p>
+          {diagnostics.map((diagnostic, index) => (
+            <li key={index}>
+              {getDiagnosticMessageText(diagnostic.getMessageText())}
+            </li>
+          ))}
+        </ul>
       ) : null}
     </div>
   )
@@ -491,7 +498,7 @@ function Suggestion({
   isHighlighted: boolean
   onClick: () => void
 }) {
-  const ref = useRef<HTMLDivElement>(null)
+  const ref = useRef<HTMLLIElement>(null)
 
   useLayoutEffect(() => {
     if (isHighlighted) {
@@ -500,7 +507,7 @@ function Suggestion({
   }, [isHighlighted])
 
   return (
-    <div
+    <li
       ref={ref}
       onClick={onClick}
       style={{
@@ -509,6 +516,6 @@ function Suggestion({
       }}
     >
       {suggestion.name}
-    </div>
+    </li>
   )
 }
