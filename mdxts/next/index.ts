@@ -188,6 +188,15 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
         ? nextConfig.transpilePackages.concat(packages)
         : packages
 
+      nextConfig.experimental = {
+        ...nextConfig.experimental,
+        serverComponentsExternalPackages: [
+          ...(nextConfig.experimental?.serverComponentsExternalPackages ?? []),
+          'ts-morph',
+          'typescript',
+        ],
+      }
+
       return withMDX(nextConfig)
     }
   }
