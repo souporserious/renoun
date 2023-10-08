@@ -1,9 +1,9 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { SourceFile } from 'ts-morph'
 import { Diagnostic, Project, ts } from 'ts-morph'
-import { hasDiagnosticsForToken, getDiagnosticMessageText } from './diagnostics'
+import { getDiagnosticMessageText } from './diagnostics'
 import type { Highlighter, Theme, Tokens } from './highlighter'
-import { getHighlighter, processToken } from './highlighter'
+import { getHighlighter } from './highlighter'
 
 const project = new Project({
   compilerOptions: {
@@ -60,7 +60,7 @@ export function Editor({
 }: EditorProps & { children?: React.ReactNode }) {
   const language = languageMap[languageProp] || languageProp
   const [stateValue, setStateValue] = useState(defaultValue)
-  const [tokens, setTokens] = useState<Tokens>([])
+  const [tokens, setTokens] = useState<Tokens[]>([])
   const [row, setRow] = useState(null)
   const [column, setColumn] = useState(null)
   const [sourceFile, setSourceFile] = useState<SourceFile | null>(null)
@@ -111,9 +111,6 @@ export function Editor({
       })
 
       highlighterRef.current = highlighter
-
-      const tokens = highlighter(resolvedValue, language)
-      setTokens(tokens)
     })()
   }, [])
 
@@ -141,9 +138,16 @@ export function Editor({
       if (isJavaScriptBasedLanguage) {
         const diagnostics = nextSourceFile.getPreEmitDiagnostics()
         setDiagnostics(diagnostics)
-      }
 
-      if (highlighterRef.current) {
+        if (highlighterRef.current) {
+          const tokens = highlighterRef.current(
+            resolvedValue,
+            language,
+            diagnostics
+          )
+          setTokens(tokens)
+        }
+      } else if (highlighterRef.current) {
         const tokens = highlighterRef.current(resolvedValue, language)
         setTokens(tokens)
       }
@@ -269,7 +273,7 @@ export function Editor({
       0
     )
     const position = charsBeforeCurrentRow + column
-    const node = sourceFile.getDescendantAtPos(position)
+    const node = sourceFile?.getDescendantAtPos(position)
 
     if (!node) {
       setHoverInfo(null)
@@ -353,52 +357,20 @@ export function Editor({
                 return (
                   <div key={lineIndex} style={{ height: 20 }}>
                     {line.map((token, tokenIndex) => {
-                      const hasError = hasDiagnosticsForToken(
-                        token,
-                        tokenIndex,
-                        lineIndex,
-                        tokens,
-                        diagnostics,
-                        resolvedValue
+                      return (
+                        <span
+                          key={tokenIndex}
+                          style={{
+                            ...token.fontStyle,
+                            color: token.color,
+                            textDecoration: token.hasError
+                              ? 'red wavy underline'
+                              : 'none',
+                          }}
+                        >
+                          {token.content}
+                        </span>
                       )
-
-                      // Check if this token has an error
-                      if (hasError) {
-                        const diagnostic = diagnostics.find((diagnostic) => {
-                          const diagnosticStart = diagnostic.getStart()
-                          const diagnosticEnd =
-                            diagnosticStart + diagnostic.getLength()
-                          return (
-                            diagnosticStart <= token.end &&
-                            diagnosticEnd >= token.start
-                          )
-                        })
-                        const subTokens = processToken(token, diagnostic)
-
-                        return subTokens.map((subToken, idx) => (
-                          <span
-                            key={idx}
-                            style={{
-                              ...subToken.fontStyle,
-                              color: subToken.color,
-                              textDecoration: subToken.hasError
-                                ? 'red wavy underline'
-                                : 'none',
-                            }}
-                          >
-                            {subToken.content}
-                          </span>
-                        ))
-                      } else {
-                        return (
-                          <span
-                            key={tokenIndex}
-                            style={{ ...token.fontStyle, color: token.color }}
-                          >
-                            {token.content}
-                          </span>
-                        )
-                      }
                     })}
                   </div>
                 )

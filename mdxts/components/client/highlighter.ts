@@ -1,11 +1,8 @@
 import { getHighlighter as shikiGetHighlighter } from 'shiki'
 import type { Diagnostic } from 'ts-morph'
+import { hasDiagnosticsForToken } from './diagnostics'
 
 export type Theme = Parameters<typeof shikiGetHighlighter>[0]['theme']
-
-export type Highlighter = (code: string, language: any) => Token[][]
-
-export type Tokens = Token[][]
 
 export type Token = {
   content: string
@@ -14,11 +11,16 @@ export type Token = {
   fontStyle: Record<string, string | number>
   start: number
   end: number
-}
-
-export type ProcessedToken = Token & {
   hasError: boolean
 }
+
+export type Tokens = Token[]
+
+export type Highlighter = (
+  code: string,
+  language: any,
+  diagnostics?: Diagnostic[]
+) => Tokens[]
 
 const FontStyle = {
   Italic: 1,
@@ -45,14 +47,9 @@ function getFontStyle(fontStyle: number): any {
 }
 
 /** Returns an array of tokens with error information. */
-export function processToken(
-  token: Token,
-  diagnostic?: Diagnostic
-): ProcessedToken[] {
+export function processToken(token: Token, diagnostic?: Diagnostic): Tokens {
   const diagnosticStart = diagnostic?.getStart()
   const diagnosticEnd = diagnosticStart + diagnostic?.getLength()
-
-  console.log({ diagnosticStart, diagnosticEnd, token })
 
   if (token.start >= diagnosticStart && token.end <= diagnosticEnd) {
     // If the whole token is an error
@@ -99,16 +96,16 @@ export function processToken(
 export async function getHighlighter(options: any): Promise<Highlighter> {
   const highlighter = await shikiGetHighlighter(options)
 
-  return function (code: string, language: any) {
+  return function (code: string, language: any, diagnostics?: Diagnostic[]) {
     const tokens = highlighter.codeToThemedTokens(code, language)
     let position = 0
 
-    return tokens.map((line) => {
-      return line.map((token, tokenIndex) => {
+    return tokens.map((line, lineIndex) => {
+      return line.flatMap((token, tokenIndex) => {
         const isLastToken = tokenIndex === line.length - 1
-        const start = position
+        const tokenStart = position
         position += token.content.length
-        const end = position
+        const tokenEnd = position
         const fontStyle = getFontStyle(token.fontStyle)
 
         // Offset the position by 1 to account for new lines
@@ -116,7 +113,37 @@ export async function getHighlighter(options: any): Promise<Highlighter> {
           position += 1
         }
 
-        return { ...token, fontStyle, start, end }
+        const processedToken = {
+          ...token,
+          fontStyle,
+          start: tokenStart,
+          end: tokenEnd,
+          hasError: false,
+        }
+
+        if (diagnostics) {
+          const hasError = hasDiagnosticsForToken(
+            token,
+            tokenIndex,
+            lineIndex,
+            tokens,
+            diagnostics,
+            code
+          )
+
+          if (hasError) {
+            const diagnostic = diagnostics.find((diagnostic) => {
+              const diagnosticStart = diagnostic.getStart()
+              const diagnosticEnd = diagnosticStart + diagnostic.getLength()
+              return diagnosticStart <= tokenEnd && diagnosticEnd >= tokenStart
+            })
+            const subTokens = processToken(processedToken, diagnostic)
+
+            return subTokens
+          }
+        }
+
+        return processedToken
       })
     })
   }

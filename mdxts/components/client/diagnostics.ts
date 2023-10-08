@@ -19,7 +19,6 @@ export function hasDiagnosticsForToken(
     .slice(0, tokenIndex)
     .reduce((sum, prevToken) => sum + prevToken.content.length, 0)
   const tokenStart = charsBeforeTokenLine + positionWithinLine
-
   const tokenEnd = tokenStart + token.content.length
 
   // Iterate over the diagnostics to see if any of them overlap with the token's position.
