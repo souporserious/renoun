@@ -51,7 +51,11 @@ function createTreeFromModules(allModules: Record<string, any>): Node[] {
     }
   }
 
-  return root[0].children
+  if (root.length > 0) {
+    return root[0].children
+  }
+
+  return []
 }
 
 function renderNavigation(
