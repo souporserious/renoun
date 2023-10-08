@@ -97,7 +97,9 @@ export async function getHighlighter(options: any): Promise<Highlighter> {
   const highlighter = await shikiGetHighlighter(options)
 
   return function (code: string, language: any, diagnostics?: Diagnostic[]) {
-    const tokens = highlighter.codeToThemedTokens(code, language)
+    const tokens = highlighter.codeToThemedTokens(code, language, null, {
+      includeExplanation: false,
+    })
     let position = 0
 
     return tokens.map((line, lineIndex) => {
@@ -106,7 +108,6 @@ export async function getHighlighter(options: any): Promise<Highlighter> {
         const tokenStart = position
         position += token.content.length
         const tokenEnd = position
-        const fontStyle = getFontStyle(token.fontStyle)
 
         // Offset the position by 1 to account for new lines
         if (isLastToken) {
@@ -114,8 +115,9 @@ export async function getHighlighter(options: any): Promise<Highlighter> {
         }
 
         const processedToken = {
-          ...token,
-          fontStyle,
+          color: token.color,
+          content: token.content,
+          fontStyle: getFontStyle(token.fontStyle),
           start: tokenStart,
           end: tokenEnd,
           hasError: false,
