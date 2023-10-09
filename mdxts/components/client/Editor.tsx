@@ -73,7 +73,7 @@ export function Editor({
     x: number
     y: number
   } | null>(null)
-  const highlighterRef = useRef<Highlighter | null>(null)
+  const [highlighter, setHighlighter] = useState<Highlighter | null>(null)
   const ctrlKeyRef = useRef(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -93,6 +93,18 @@ export function Editor({
     }
 
     async function init() {
+      // Wait for the types to be fetched before creating declaration source files
+      if (fetchPromise) {
+        const response = await fetchPromise
+        const typeDeclarations = await response.clone().json()
+
+        typeDeclarations.forEach(({ path, code }) => {
+          project.createSourceFile(path, code, { overwrite: true })
+        })
+
+        fetchPromise = null
+      }
+
       const highlighter = await getHighlighter({
         theme,
         langs: [
@@ -110,51 +122,36 @@ export function Editor({
         },
       })
 
-      highlighterRef.current = highlighter
+      setHighlighter(() => highlighter)
     }
     init()
   }, [])
 
   useLayoutEffect(() => {
-    async function init() {
-      // Wait for the types to be fetched before creating declaration source files
-      // TODO: Implement a better way to do this
-      if (fetchPromise) {
-        const response = await fetchPromise
-        fetchPromise = null
-        const typeDeclarations = await response.clone().json()
+    if (highlighter === null) {
+      return
+    }
 
-        typeDeclarations.forEach(({ path, code }) => {
-          project.createSourceFile(path, code, { overwrite: true })
-        })
-      }
+    const nextSourceFile = project.createSourceFile(
+      'index.tsx',
+      resolvedValue,
+      { overwrite: true }
+    )
+    setSourceFile(nextSourceFile)
 
-      const nextSourceFile = project.createSourceFile(
-        'index.tsx',
-        resolvedValue,
-        { overwrite: true }
-      )
-      setSourceFile(nextSourceFile)
+    if (isJavaScriptBasedLanguage) {
+      const diagnostics = nextSourceFile.getPreEmitDiagnostics()
+      setDiagnostics(diagnostics)
 
-      if (isJavaScriptBasedLanguage) {
-        const diagnostics = nextSourceFile.getPreEmitDiagnostics()
-        setDiagnostics(diagnostics)
-
-        if (highlighterRef.current) {
-          const tokens = highlighterRef.current(
-            resolvedValue,
-            language,
-            diagnostics
-          )
-          setTokens(tokens)
-        }
-      } else if (highlighterRef.current) {
-        const tokens = highlighterRef.current(resolvedValue, language)
+      if (highlighter) {
+        const tokens = highlighter(resolvedValue, language, diagnostics)
         setTokens(tokens)
       }
+    } else if (highlighter) {
+      const tokens = highlighter(resolvedValue, language)
+      setTokens(tokens)
     }
-    init()
-  }, [resolvedValue])
+  }, [resolvedValue, highlighter])
 
   useEffect(() => {
     if (nextCursorPositionRef.current) {
@@ -299,7 +296,7 @@ export function Editor({
         const documentation = quickInfo.documentation || []
         const displayText = displayParts.map((part) => part.text).join('')
         const docText = documentation.map((part) => part.text).join('')
-        const displayTextTokens = highlighterRef.current(displayText, language)
+        const displayTextTokens = highlighter(displayText, language)
 
         setHoverInfo(
           <div>
