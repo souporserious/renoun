@@ -1,6 +1,6 @@
 import type { Diagnostic, DiagnosticMessageChain } from 'ts-morph'
 
-export function hasDiagnosticsForToken(
+export function getDiagnosticForToken(
   token: any,
   tokenIndex: number,
   lineIndex: number,
@@ -31,7 +31,7 @@ export function hasDiagnosticsForToken(
       (diagnosticEnd >= tokenStart && diagnosticEnd <= tokenEnd) ||
       (diagnosticStart <= tokenStart && diagnosticEnd >= tokenEnd)
     ) {
-      return true
+      return diagnostic
     }
   }
 

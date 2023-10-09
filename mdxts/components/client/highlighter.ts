@@ -1,6 +1,6 @@
 import { getHighlighter as shikiGetHighlighter } from 'shiki'
 import type { Diagnostic } from 'ts-morph'
-import { hasDiagnosticsForToken } from './diagnostics'
+import { getDiagnosticForToken } from './diagnostics'
 
 export type Theme = Parameters<typeof shikiGetHighlighter>[0]['theme']
 
@@ -51,15 +51,7 @@ export function processToken(token: Token, diagnostic?: Diagnostic): Tokens {
   const diagnosticStart = diagnostic?.getStart()
   const diagnosticEnd = diagnosticStart + diagnostic?.getLength()
 
-  if (token.start >= diagnosticStart && token.end <= diagnosticEnd) {
-    // If the whole token is an error
-    return [
-      {
-        ...token,
-        hasError: true,
-      },
-    ]
-  } else if (diagnosticStart > token.start && diagnosticEnd < token.end) {
+  if (diagnosticStart > token.start && diagnosticEnd < token.end) {
     // If only a part of the token is an error, split it
     return [
       {
@@ -79,6 +71,14 @@ export function processToken(token: Token, diagnostic?: Diagnostic): Tokens {
         ...token,
         content: token.content.slice(diagnosticEnd - token.start),
         hasError: false,
+      },
+    ]
+  } else if (token.start >= diagnosticStart && token.end <= diagnosticEnd) {
+    // If the whole token is an error
+    return [
+      {
+        ...token,
+        hasError: true,
       },
     ]
   } else {
@@ -124,7 +124,7 @@ export async function getHighlighter(options: any): Promise<Highlighter> {
         }
 
         if (diagnostics) {
-          const hasError = hasDiagnosticsForToken(
+          const diagnostic = getDiagnosticForToken(
             token,
             tokenIndex,
             lineIndex,
@@ -133,14 +133,8 @@ export async function getHighlighter(options: any): Promise<Highlighter> {
             code
           )
 
-          if (hasError) {
-            const diagnostic = diagnostics.find((diagnostic) => {
-              const diagnosticStart = diagnostic.getStart()
-              const diagnosticEnd = diagnosticStart + diagnostic.getLength()
-              return diagnosticStart <= tokenEnd && diagnosticEnd >= tokenStart
-            })
+          if (diagnostic) {
             const subTokens = processToken(processedToken, diagnostic)
-
             return subTokens
           }
         }
