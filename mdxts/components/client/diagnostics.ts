@@ -7,7 +7,7 @@ export function getDiagnosticForToken(
   tokens: any[],
   diagnostics: Diagnostic[],
   code: string
-) {
+): Diagnostic | null {
   const linesBeforeToken = code.split('\n').slice(0, lineIndex)
   const charsBeforeTokenLine = linesBeforeToken.reduce(
     (sum, line) => sum + line.length + 1, // +1 for the newline character
@@ -35,7 +35,7 @@ export function getDiagnosticForToken(
     }
   }
 
-  return false
+  return null
 }
 
 export function getDiagnosticMessageText(
