@@ -2,6 +2,7 @@
 .mdxts
 .next
 .turbo
+.vercel
 dist
 node_modules
 out
