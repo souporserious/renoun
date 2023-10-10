@@ -70,9 +70,6 @@ importers:
 
   mdxts:
     dependencies:
-      '@code-hike/lighter':
-        specifier: 0.8.2
-        version: 0.8.2
       '@mdx-js/loader':
         specifier: ^2.3.0
         version: 2.3.0(webpack@5.88.2)
@@ -224,6 +221,9 @@ importers:
       react-dom:
         specifier: '*'
         version: 18.2.0(react@18.2.0)
+      shiki:
+        specifier: ^0.14.4
+        version: 0.14.4
       styled-components:
         specifier: 6.0.8
         version: 6.0.8(react-dom@18.2.0)(react@18.2.0)
@@ -1719,12 +1719,6 @@ packages:
       human-id: 1.0.2
       prettier: 2.8.8
     dev: true
-
-  /@code-hike/lighter@0.8.2:
-    resolution: {integrity: sha512-h7PA2+90rIRQWamxeHSpcgVLs9hwhz8UW8+RG+vYIYh2Y4F2GTa4c+7S5HQH/BKTyMPv5yrSCEwhCB605gO5og==}
-    dependencies:
-      ansi-sequence-parser: 1.1.1
-    dev: false
 
   /@emotion/is-prop-valid@1.2.1:
     resolution: {integrity: sha512-61Mf7Ufx4aDxx1xlDeOm8aFFigGHE4z+0sKCa+IHCeZKiyP9RLD0Mmx7m8b9/Cf37f7NAvQOOJAbQQGVr5uERw==}

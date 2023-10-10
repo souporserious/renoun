@@ -1,6 +1,5 @@
 import * as React from 'react'
-import { highlight } from '@code-hike/lighter'
-import type { getHighlighter } from 'shiki'
+import { getHighlighter } from '../client/highlighter'
 
 export type CodeProps = {
   /** Code snippet to be highlighted. */
@@ -20,7 +19,19 @@ export async function Code({
   theme,
   ...props
 }: CodeProps) {
-  const { lines, style } = await highlight(value, language, theme as any)
+  const highlighter = await getHighlighter({
+    theme,
+    langs: [
+      'javascript',
+      'jsx',
+      'typescript',
+      'tsx',
+      'css',
+      'json',
+      'shellscript',
+    ],
+  })
+  const tokens = highlighter(value, language)
 
   return (
     <pre
@@ -30,19 +41,31 @@ export async function Code({
         lineHeight: '20px',
         padding: 0,
         margin: 0,
-        ...style,
       }}
       {...props}
     >
-      {lines.map((line, index) => (
-        <div key={index} style={{ height: 20 }}>
-          {line.map((token, index) => (
-            <span key={index} style={token.style}>
-              {token.content}
-            </span>
-          ))}
-        </div>
-      ))}
+      {tokens.map((line, lineIndex) => {
+        return (
+          <div key={lineIndex} style={{ height: 20 }}>
+            {line.map((token, tokenIndex) => {
+              return (
+                <span
+                  key={tokenIndex}
+                  style={{
+                    ...token.fontStyle,
+                    color: token.color,
+                    textDecoration: token.hasError
+                      ? 'red wavy underline'
+                      : 'none',
+                  }}
+                >
+                  {token.content}
+                </span>
+              )
+            })}
+          </div>
+        )
+      })}
     </pre>
   )
 }

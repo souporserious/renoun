@@ -72,7 +72,6 @@
     "webpack": "^5.88.2"
   },
   "dependencies": {
-    "@code-hike/lighter": "0.8.2",
     "@mdx-js/loader": "^2.3.0",
     "@mdx-js/mdx": "^2.3.0",
     "@next/mdx": "13.4.19",

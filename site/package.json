@@ -16,6 +16,7 @@
     "next": "*",
     "react": "*",
     "react-dom": "*",
+    "shiki": "^0.14.4",
     "styled-components": "6.0.8"
   }
 }

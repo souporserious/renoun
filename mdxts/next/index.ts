@@ -109,6 +109,11 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
           startedWatcher = true
         }
 
+        config.module.rules.push({
+          test: /onig\.wasm$/,
+          type: 'asset/resource',
+        })
+
         if (options.isServer === false) {
           config.plugins.push(
             new CopyPlugin({
@@ -192,6 +197,8 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
         ...nextConfig.experimental,
         serverComponentsExternalPackages: [
           ...(nextConfig.experimental?.serverComponentsExternalPackages ?? []),
+          'shiki',
+          'vscode-oniguruma',
           'ts-morph',
           'typescript',
         ],
