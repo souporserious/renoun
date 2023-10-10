@@ -15,6 +15,7 @@ export type CodeProps = {
   theme?: Parameters<typeof getHighlighter>[0]['theme']
 }
 
+const nextDirectory = process.env.NODE_ENV === 'production' ? '_next' : '.next'
 let id = 0
 
 /** Renders a code block with syntax highlighting. */
@@ -36,12 +37,12 @@ export async function Code({
       'shellscript',
     ],
     paths: {
-      languages: resolve(process.cwd(), '.next/static/mdxts'),
+      languages: resolve(process.cwd(), `${nextDirectory}/static/mdxts`),
     },
   })
   const typeDeclarations = JSON.parse(
     await readFile(
-      resolve(process.cwd(), '.next/static/mdxts/types.json'),
+      resolve(process.cwd(), `${nextDirectory}/static/mdxts/types.json`),
       'utf8'
     )
   )
