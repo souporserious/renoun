@@ -35,6 +35,9 @@ export async function Code({
       'json',
       'shellscript',
     ],
+    paths: {
+      languages: resolve(process.cwd(), '.next/static/mdxts'),
+    },
   })
   const typeDeclarations = JSON.parse(
     await readFile(
