@@ -12,7 +12,7 @@ import { rehypePlugin } from '../rehype'
 import { getEditorPath } from '../utils'
 import { renumberFilenames } from '../utils/renumber'
 import { getTypeDeclarations } from '../utils/get-type-declarations'
-import { getDiagnosticMessageText } from '../components/client/diagnostics'
+import { getDiagnosticMessageText } from '../components/diagnostics'
 
 type PluginOptions = {
   /** The git source to use for linking to the repository and source files. */

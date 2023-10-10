@@ -1,23 +1,10 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { SourceFile } from 'ts-morph'
-import { Diagnostic, Project, ts } from 'ts-morph'
-import { getDiagnosticMessageText } from './diagnostics'
-import type { Highlighter, Theme, Tokens } from './highlighter'
-import { getHighlighter } from './highlighter'
+import type { Diagnostic, SourceFile } from 'ts-morph'
+import { getDiagnosticMessageText } from '../diagnostics'
+import type { Highlighter, Theme, Tokens } from '../highlighter'
+import { getHighlighter } from '../highlighter'
+import { project, languageService } from '../project'
 
-const project = new Project({
-  compilerOptions: {
-    resolveJsonModule: true,
-    esModuleInterop: true,
-    moduleResolution: ts.ModuleResolutionKind.Bundler,
-    jsx: ts.JsxEmit.ReactJSX,
-    module: ts.ModuleKind.ESNext,
-    target: ts.ScriptTarget.ESNext,
-    isolatedModules: true,
-  },
-  useInMemoryFileSystem: true,
-})
-const languageService = project.getLanguageService().compilerObject
 const isClient = typeof document !== 'undefined'
 const canvas = isClient ? document.createElement('canvas') : null
 const context = canvas?.getContext('2d')

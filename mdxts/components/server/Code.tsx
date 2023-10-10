@@ -1,5 +1,8 @@
 import * as React from 'react'
-import { getHighlighter } from '../client/highlighter'
+import { getHighlighter } from '../highlighter'
+import { project } from '../project'
+import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
 
 export type CodeProps = {
   /** Code snippet to be highlighted. */
@@ -11,6 +14,8 @@ export type CodeProps = {
   /** VS Code-based theme for highlighting. */
   theme?: Parameters<typeof getHighlighter>[0]['theme']
 }
+
+let id = 0
 
 /** Renders a code block with syntax highlighting. */
 export async function Code({
@@ -31,7 +36,20 @@ export async function Code({
       'shellscript',
     ],
   })
-  const tokens = highlighter(value, language)
+  const typeDeclarations = JSON.parse(
+    await readFile(
+      resolve(process.cwd(), '.next/static/mdxts/types.json'),
+      'utf8'
+    )
+  )
+
+  typeDeclarations.forEach(({ path, code }) => {
+    project.createSourceFile(path, code, { overwrite: true })
+  })
+
+  const sourceFile = project.createSourceFile(`index-${id++}.tsx`, value)
+  const diagnostics = sourceFile.getPreEmitDiagnostics()
+  const tokens = highlighter(value, language, diagnostics)
 
   return (
     <pre
