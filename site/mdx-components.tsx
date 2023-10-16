@@ -1,8 +1,8 @@
 import * as React from 'react'
 import type { MDXComponents } from 'mdx/types'
 import { getMetadataFromClassName } from 'mdxts/utils'
-import { Code } from 'mdxts/components/server'
-import { Editor } from './editor'
+import { Code } from 'mdxts/components'
+// import { Editor } from './editor'
 import theme from './theme.json'
 
 export function useMDXComponents() {
@@ -25,19 +25,27 @@ export function useMDXComponents() {
       const value = children.props.children.trim()
       const metadata = getMetadataFromClassName(children.props.className || '')
 
-      return live ? (
-        <Editor
-          defaultValue={value.trim()}
-          language={metadata?.language}
-          theme={theme as any}
-        />
-      ) : (
+      return (
         <Code
           language={metadata?.language}
           value={value.trim()}
-          theme={theme as any}
+          // theme={theme as any}
         />
       )
+
+      // return live ? (
+      //   <Editor
+      //     defaultValue={value.trim()}
+      //     language={metadata?.language}
+      //     theme={theme as any}
+      //   />
+      // ) : (
+      //   <Code
+      //     language={metadata?.language}
+      //     value={value.trim()}
+      //     theme={theme as any}
+      //   />
+      // )
     },
   } satisfies MDXComponents
 }

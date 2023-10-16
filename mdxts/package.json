@@ -5,12 +5,12 @@
   "files": [
     "dist/*"
   ],
+  "sideEffects": false,
   "main": "./dist/index.js",
   "exports": {
     ".": "./dist/index.js",
     "./components": "./dist/components/index.js",
     "./components/client": "./dist/components/client/index.js",
-    "./components/server": "./dist/components/server/index.js",
     "./rehype": "./dist/rehype/index.js",
     "./remark": "./dist/remark/index.js",
     "./next": "./dist/next/index.js",
@@ -26,9 +26,6 @@
       ],
       "components/client": [
         "./dist/components/client/index.d.ts"
-      ],
-      "components/server": [
-        "./dist/components/server/index.d.ts"
       ],
       "rehype": [
         "./dist/rehype/index.d.ts"
@@ -51,7 +48,7 @@
     }
   },
   "scripts": {
-    "build": "tsup index.ts utils/index.ts transform/index.ts rehype/index.ts remark/index.ts watcher/index.ts next/index.ts components/index.ts components/server/index.ts components/client/index.ts --dts --format esm,cjs",
+    "build": "tsup",
     "dev": "pnpm build --watch --sourcemap",
     "test": "jest"
   },

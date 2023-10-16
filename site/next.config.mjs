@@ -7,7 +7,6 @@ const withMDXTS = createMDXTSPlugin({
     'react',
     'mdxts',
     'mdxts/components',
-    'mdxts/components/server',
     'mdxts/components/client',
     'mdxts/next',
     'mdxts/rehype',

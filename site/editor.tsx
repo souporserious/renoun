@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { Editor as ClientEditor } from 'mdxts/components/client'
 import type { EditorProps } from 'mdxts/components/client'
-import { Code } from 'mdxts/components/server'
+import { Code } from 'mdxts/components'
 
 /** Renders a code editor with syntax highlighting, type information, and autocomplete. */
 export function Editor({
@@ -17,7 +17,11 @@ export function Editor({
       theme={theme}
       value={value}
     >
-      <Code value={defaultValue ?? value} language={language} theme={theme} />
+      <Code
+        value={defaultValue ?? value}
+        language={language}
+        // theme={theme}
+      />
     </ClientEditor>
   )
 }
