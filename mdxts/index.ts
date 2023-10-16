@@ -33,14 +33,11 @@ function parseModule(module, filename: string) {
 }
 
 /** Loads all imports and parses metadata for a specific directory. */
-export function getData<Type>(context: ReturnType<typeof require.context>) {
-  const modules: Record<string, Module & Type> = {}
-
-  for (const filename of context.keys()) {
-    if (filename.startsWith('./')) continue
-    const module = parseModule(context(filename), filename)
-    modules[module.pathname] = module
-  }
-
-  return modules
+export function getData<Type>(allModules: Record<string, Type>) {
+  return Object.fromEntries(
+    Object.entries(allModules).map(([key, module]) => {
+      const parsedModule = parseModule(module, key)
+      return [parsedModule.pathname, parsedModule]
+    })
+  ) as Record<string, Module>
 }

@@ -1,3 +1,7 @@
 import { getData } from 'mdxts'
 
-export const allDocs = getData(require.context('./docs', true, /\.mdx$/))
+const docsContext = require.context('./docs', true, /\.mdx$/)
+const docsModules = Object.fromEntries(
+  docsContext.keys().map((key) => [key, docsContext(key)])
+)
+export const allDocs = getData(docsModules)
