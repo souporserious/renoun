@@ -62,9 +62,9 @@
     "typescript": ">=5.0.0"
   },
   "devDependencies": {
-    "next": "*",
-    "react": "*",
-    "react-dom": "*",
+    "next": "13.5.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "rehype-stringify": "^10.0.0",
     "remark-parse": "^10.0.2",
     "remark-rehype": "^10.1.0",
