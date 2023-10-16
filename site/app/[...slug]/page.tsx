@@ -4,7 +4,7 @@ import { allDocs } from 'data'
 
 export async function generateStaticParams() {
   return Object.values(allDocs).map((doc) => ({
-    slug: [doc.slug],
+    slug: doc.pathname.split('/').slice(1), // trim "docs" segment
   }))
 }
 
