@@ -68,8 +68,10 @@ export function Editor({
   const resolvedValue = value ?? stateValue
   const isJavaScriptBasedLanguage = [
     'javascript',
+    'js',
     'jsx',
     'typescript',
+    'ts',
     'tsx',
   ].some((languageToCompare) => languageToCompare === language)
 
@@ -96,8 +98,10 @@ export function Editor({
         theme,
         langs: [
           'javascript',
+          'js',
           'jsx',
           'typescript',
+          'ts',
           'tsx',
           'css',
           'json',

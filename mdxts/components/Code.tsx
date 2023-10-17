@@ -1,4 +1,4 @@
-import { cache } from 'react'
+import React, { cache } from 'react'
 import { readFile } from 'node:fs/promises'
 import { getHighlighter } from './highlighter'
 import { project } from './project'

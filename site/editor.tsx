@@ -17,11 +17,7 @@ export function Editor({
       theme={theme}
       value={value}
     >
-      <Code
-        value={defaultValue ?? value}
-        language={language}
-        // theme={theme}
-      />
+      <Code value={defaultValue ?? value} language={language} theme={theme} />
     </ClientEditor>
   )
 }
