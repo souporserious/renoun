@@ -17,8 +17,6 @@ export type CodeProps = {
   theme?: Parameters<typeof getHighlighter>[0]['theme']
 }
 
-let id = 0
-
 const loadTypeDeclarations = cache(async () => {
   const typeDeclarations = JSON.parse(
     await readFile(`.next/static/mdxts/types.json`, 'utf8')
@@ -29,26 +27,26 @@ const loadTypeDeclarations = cache(async () => {
   })
 })
 
+let filenameId = 0
+
 /** Renders a code block with syntax highlighting. */
 export async function Code({
   value,
+  filename: filenameProp,
   language = 'bash',
   theme,
-  filename,
   ...props
 }: CodeProps) {
+  const filename = filenameProp || `index-${filenameId++}.tsx`
   const highlighter = await getHighlighter({ theme })
   let diagnostics = []
 
   if (['js', 'jsx', 'ts', 'tsx', 'mdx'].includes(language)) {
     await loadTypeDeclarations()
 
-    const sourceFile = project.createSourceFile(
-      filename || `index-${id++}.tsx`,
-      value
-    )
-
-    diagnostics = sourceFile.getPreEmitDiagnostics()
+    diagnostics = project
+      .createSourceFile(filename, value)
+      .getPreEmitDiagnostics()
   }
 
   const tokens = highlighter(value, language, diagnostics)

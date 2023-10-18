@@ -1,4 +1,10 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import React, {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useId,
+  useState,
+} from 'react'
 import type { Diagnostic, SourceFile } from 'ts-morph'
 import { getDiagnosticMessageText } from '../diagnostics'
 import type { Highlighter, Theme, Tokens } from '../highlighter'
@@ -21,6 +27,9 @@ export type EditorProps = {
   /** Controlled value of the editor. */
   value?: string
 
+  /** Name of the file. */
+  filename?: string
+
   /** Language of the code snippet. */
   language?: string
 
@@ -41,10 +50,13 @@ export function Editor({
   language: languageProp,
   defaultValue,
   value,
+  filename: filenameProp,
   onChange,
   theme,
   children,
 }: EditorProps & { children?: React.ReactNode }) {
+  const filenameId = useId()
+  const filename = filenameProp || `index-${filenameId.slice(1, -1)}.tsx`
   const language = languageMap[languageProp] || languageProp
   const [stateValue, setStateValue] = useState(defaultValue)
   const [tokens, setTokens] = useState<Tokens[]>([])
@@ -123,11 +135,9 @@ export function Editor({
       return
     }
 
-    const nextSourceFile = project.createSourceFile(
-      'index.tsx',
-      resolvedValue,
-      { overwrite: true }
-    )
+    const nextSourceFile = project.createSourceFile(filename, resolvedValue, {
+      overwrite: true,
+    })
     setSourceFile(nextSourceFile)
 
     if (isJavaScriptBasedLanguage) {
@@ -154,7 +164,7 @@ export function Editor({
 
   function getAutocompletions(position) {
     const completions = languageService.getCompletionsAtPosition(
-      '/index.tsx',
+      filename,
       position,
       {
         includeCompletionsForModuleExports: false,
@@ -278,7 +288,7 @@ export function Editor({
 
     try {
       const quickInfo = languageService.getQuickInfoAtPosition(
-        'index.tsx',
+        filename,
         position
       )
 
