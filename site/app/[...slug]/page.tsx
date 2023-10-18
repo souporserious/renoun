@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation'
 import { SiblingNavigation } from 'mdxts/components'
 import { allDocs } from 'data'
 
+export const dynamic = 'force-static'
+
 export async function generateStaticParams() {
   return Object.values(allDocs).map((doc) => ({
     slug: doc.pathname.split('/').slice(1), // trim "docs" segment
