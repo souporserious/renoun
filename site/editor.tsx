@@ -8,16 +8,10 @@ export function Editor({
   defaultValue,
   language,
   theme,
-  value,
-}: Omit<EditorProps, 'onChange'>) {
+}: Omit<EditorProps, 'onChange' | 'value'>) {
   return (
-    <ClientEditor
-      defaultValue={defaultValue}
-      language={language}
-      theme={theme}
-      value={value}
-    >
-      <Code value={defaultValue ?? value} language={language} theme={theme} />
+    <ClientEditor defaultValue={defaultValue} language={language} theme={theme}>
+      <Code value={defaultValue} language={language} theme={theme} />
     </ClientEditor>
   )
 }
