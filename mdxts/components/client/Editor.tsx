@@ -333,13 +333,18 @@ export function Editor({
     lineHeight: '20px',
     letterSpacing: '0px',
     tabSize: 4,
-    backgroundColor: '#101218',
   } satisfies React.CSSProperties
 
   return (
     <div style={{ position: 'relative' }}>
       <div ref={scrollRef} style={{ display: 'grid', overflow: 'auto' }}>
-        <div style={sharedStyle}>
+        <div
+          style={{
+            ...sharedStyle,
+            color: theme.colors['editor.color'],
+            backgroundColor: theme.colors['editor.background'],
+          }}
+        >
           {stateValue === defaultValue && children
             ? children
             : tokens.map((line, lineIndex) => {
@@ -395,10 +400,10 @@ export function Editor({
             border: 0,
             backgroundColor: 'transparent',
             color: 'transparent',
-            caretColor: '#79c0ff',
             resize: 'none',
             outline: 'none',
             overflow: 'visible',
+            caretColor: theme.colors['editorCursor.foreground'],
           }}
         />
       </div>
@@ -417,9 +422,9 @@ export function Editor({
             top: row * 20 + 20,
             left: column * context?.measureText(' ').width,
             zIndex: 1000,
-            color: 'white',
-            backgroundColor: 'black',
-            border: '1px solid white',
+            borderRadius: 3,
+            border: `1px solid ${theme.colors['editorHoverWidget.border']}`,
+            backgroundColor: theme.colors['editorHoverWidget.background'],
           }}
         >
           {suggestions.map((suggestion, index) => {
@@ -443,13 +448,12 @@ export function Editor({
             left: hoverPosition.x + 10,
             top: hoverPosition.y + 10,
             translate: '0px -100%',
-            color: 'white',
             fontSize: 14,
-            backgroundColor: 'black',
-            border: '1px solid white',
-            borderRadius: 1,
-            padding: 4,
+            padding: '5px 8px',
             zIndex: 1000,
+            borderRadius: 3,
+            border: `1px solid ${theme.colors['editorHoverWidget.border']}`,
+            backgroundColor: theme.colors['editorHoverWidget.background'],
           }}
         >
           {hoverInfo}

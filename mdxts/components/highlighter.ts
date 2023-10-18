@@ -2,7 +2,26 @@ import { getHighlighter as shikiGetHighlighter } from 'shiki'
 import type { Diagnostic } from 'ts-morph'
 import { getDiagnosticForToken } from './diagnostics'
 
-export type Theme = Parameters<typeof shikiGetHighlighter>[0]['theme']
+type Color = string
+
+type TokenColor = {
+  name?: string
+  scope: string | string[]
+  settings: {
+    background?: Color
+    foreground?: Color
+    fontStyle?: 'italic' | 'bold' | 'underline'
+  }
+}
+
+export type Theme = {
+  name: string
+  type: 'light' | 'dark' | 'hc'
+  colors: {
+    [element: string]: Color
+  }
+  tokenColors: TokenColor[]
+}
 
 export type Token = {
   content: string
