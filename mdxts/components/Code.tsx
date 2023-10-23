@@ -2,7 +2,7 @@ import React, { cache } from 'react'
 import { readFile } from 'node:fs/promises'
 import type { SourceFile } from 'ts-morph'
 import { Identifier, SyntaxKind } from 'ts-morph'
-import { getHighlighter } from './highlighter'
+import { getHighlighter, type Theme } from './highlighter'
 import { project } from './project'
 
 export type CodeProps = {
@@ -16,7 +16,7 @@ export type CodeProps = {
   language?: string
 
   /** VS Code-based theme for highlighting. */
-  theme?: Parameters<typeof getHighlighter>[0]['theme']
+  theme?: Theme
 }
 
 const loadTypeDeclarations = cache(async () => {
@@ -58,7 +58,13 @@ export async function Code({
   }
 
   return (
-    <>
+    <div
+      style={{
+        color: theme.colors['editor.color'],
+        backgroundColor: theme.colors['editor.background'],
+        borderRadius: 4,
+      }}
+    >
       <pre
         style={{
           gridArea: '1 / 1',
@@ -67,6 +73,7 @@ export async function Code({
           padding: 0,
           margin: 0,
           position: 'relative',
+          pointerEvents: 'none',
         }}
         {...props}
       >
@@ -95,9 +102,6 @@ export async function Code({
                     style={{
                       ...token.fontStyle,
                       color: token.color,
-                      backgroundColor: token.isSymbol
-                        ? 'rgba(255, 255, 255, 0.4)'
-                        : 'transparent',
                       textDecoration: token.hasError
                         ? 'red wavy underline'
                         : 'none',
@@ -111,7 +115,7 @@ export async function Code({
           )
         })}
       </pre>
-    </>
+    </div>
   )
 }
 
