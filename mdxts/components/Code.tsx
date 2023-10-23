@@ -54,7 +54,7 @@ export async function Code({
   let boxes = []
 
   if (sourceFile) {
-    boxes = getIdentifierBoxes(sourceFile, { width: 8.825, height: 20 })
+    boxes = getIdentifierBoxes(sourceFile, { width: 8.45, height: 20 })
   }
 
   return (

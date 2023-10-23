@@ -343,6 +343,8 @@ export function Editor({
     lineHeight: '20px',
     letterSpacing: '0px',
     tabSize: 4,
+    padding: '1rem',
+    borderRadius: 4,
   } satisfies React.CSSProperties
 
   return (
@@ -406,7 +408,6 @@ export function Editor({
           rows={resolvedValue.split('\n').length + 1}
           style={{
             ...sharedStyle,
-            padding: 0,
             border: 0,
             backgroundColor: 'transparent',
             color: 'transparent',
