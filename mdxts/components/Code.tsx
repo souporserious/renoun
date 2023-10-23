@@ -39,14 +39,14 @@ export async function Code({
   theme,
   ...props
 }: CodeProps) {
-  const filename = filenameProp || `index-${filenameId++}.tsx`
+  const filename = filenameProp ?? `index.${filenameId++}.tsx`
   const highlighter = await getHighlighter({ theme })
   let sourceFile: SourceFile
 
   if (['js', 'jsx', 'ts', 'tsx', 'mdx'].includes(language)) {
     await loadTypeDeclarations()
 
-    sourceFile = project.createSourceFile(filename, value)
+    sourceFile = project.createSourceFile(filename, value, { overwrite: true })
   }
 
   const tokens = highlighter(value, language, sourceFile)

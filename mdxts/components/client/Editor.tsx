@@ -348,15 +348,25 @@ export function Editor({
   } satisfies React.CSSProperties
 
   return (
-    <div style={{ position: 'relative' }}>
-      <div ref={scrollRef} style={{ display: 'grid', overflow: 'auto' }}>
+    <div
+      style={{
+        position: 'relative',
+        color: theme.colors['editor.color'],
+        backgroundColor: theme.colors['editor.background'],
+      }}
+    >
+      {filenameProp ? (
         <div
           style={{
-            ...sharedStyle,
-            color: theme.colors['editor.color'],
-            backgroundColor: theme.colors['editor.background'],
+            fontSize: '0.8rem',
+            padding: '1rem 1rem 0 1rem',
           }}
         >
+          {filename}
+        </div>
+      ) : null}
+      <div ref={scrollRef} style={{ display: 'grid', overflow: 'auto' }}>
+        <div style={sharedStyle}>
           {stateValue === defaultValue && children
             ? children
             : tokens.map((line, lineIndex) => {

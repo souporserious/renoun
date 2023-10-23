@@ -16,9 +16,11 @@ export function useMDXComponents() {
     Summary: (props) => <div {...props} />,
     Note: (props) => <div {...props} />,
     pre: ({
+      filename,
       editable,
       children,
     }: {
+      filename?: string
       editable?: boolean
       children: React.ReactElement
     }) => {
@@ -27,12 +29,14 @@ export function useMDXComponents() {
 
       return editable ? (
         <Editor
+          filename={filename}
           defaultValue={value.trim()}
           language={metadata?.language}
           theme={theme as any}
         />
       ) : (
         <Code
+          filename={filename}
           language={metadata?.language}
           value={value.trim()}
           theme={theme as any}

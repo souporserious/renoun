@@ -7,11 +7,22 @@ import { Code } from 'mdxts/components'
 export function Editor({
   defaultValue,
   language,
+  filename,
   theme,
 }: Omit<EditorProps, 'onChange' | 'value'>) {
   return (
-    <ClientEditor defaultValue={defaultValue} language={language} theme={theme}>
-      <Code value={defaultValue} language={language} theme={theme} />
+    <ClientEditor
+      defaultValue={defaultValue}
+      filename={filename}
+      language={language}
+      theme={theme}
+    >
+      <Code
+        value={defaultValue}
+        filename={filename}
+        language={language}
+        theme={theme}
+      />
     </ClientEditor>
   )
 }

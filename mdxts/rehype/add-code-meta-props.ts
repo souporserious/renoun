@@ -56,7 +56,10 @@ export function addCodeMetaProps({
           const meta = (codeNode.data as any)?.meta as string | undefined
           meta?.split(' ').forEach((prop) => {
             const [key, value] = prop.split('=')
-            element.properties[key] = value.replace(/^["']|["']$/g, '') || true
+            element.properties[key] =
+              typeof value === 'undefined'
+                ? true
+                : value.replace(/^["']|["']$/g, '')
           })
         }
       }
