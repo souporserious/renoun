@@ -1,5 +1,6 @@
 import { getHighlighter as shikiGetHighlighter } from 'shiki'
-import type { Diagnostic } from 'ts-morph'
+import type { Diagnostic, SourceFile, Node } from 'ts-morph'
+import { SyntaxKind } from 'ts-morph'
 import { getDiagnosticForToken } from './diagnostics'
 
 type Color = string
@@ -31,6 +32,7 @@ export type Token = {
   start: number
   end: number
   hasError: boolean
+  isSymbol: boolean
 }
 
 export type Tokens = Token[]
@@ -38,7 +40,7 @@ export type Tokens = Token[]
 export type Highlighter = (
   code: string,
   language: any,
-  diagnostics?: Diagnostic[]
+  sourceFile?: SourceFile
 ) => Tokens[]
 
 const FontStyle = {
@@ -111,14 +113,110 @@ export function processToken(token: Token, diagnostic?: Diagnostic): Tokens {
   }
 }
 
+/** Returns an array of tokens with symbol information. */
+function processSymbol(
+  token: Token,
+  ranges: Array<{ start: number; end: number }>
+): Tokens {
+  // If no ranges, return token as-is
+  if (!ranges || ranges.length === 0) {
+    return [{ ...token, isSymbol: false }]
+  }
+
+  const intersectingRanges = ranges.filter(
+    (range) => token.end > range.start && token.start < range.end
+  )
+
+  if (intersectingRanges.length === 0) {
+    return [{ ...token, isSymbol: false }]
+  }
+
+  // Process the first intersecting range and split the token accordingly
+  const firstRange = intersectingRanges[0]
+  let tokensAfterProcessing: Tokens = []
+
+  if (firstRange.start > token.start) {
+    tokensAfterProcessing.push({
+      ...token,
+      content: token.content.slice(0, firstRange.start - token.start),
+      isSymbol: false,
+    })
+  }
+
+  if (token.start < firstRange.end && token.end > firstRange.start) {
+    tokensAfterProcessing.push({
+      ...token,
+      content: token.content.slice(
+        Math.max(token.start, firstRange.start) - token.start,
+        Math.min(token.end, firstRange.end) - token.start
+      ),
+      isSymbol: true,
+    })
+  }
+
+  if (firstRange.end < token.end) {
+    tokensAfterProcessing.push({
+      ...token,
+      content: token.content.slice(firstRange.end - token.start),
+      isSymbol: false,
+    })
+  }
+
+  // Remove the processed range and recursively process the split tokens
+  const remainingRanges = intersectingRanges.slice(1)
+  return tokensAfterProcessing.flatMap((t) => processSymbol(t, remainingRanges))
+}
+
+function processSingleSymbolIntersection(
+  token: Token,
+  range: { start: number; end: number }
+): Tokens {
+  const { start: symbolStart, end: symbolEnd } = range
+
+  if (symbolStart > token.start && symbolEnd < token.end) {
+    return [
+      {
+        ...token,
+        content: token.content.slice(0, symbolStart - token.start),
+        isSymbol: false,
+      },
+      {
+        ...token,
+        content: token.content.slice(
+          symbolStart - token.start,
+          symbolEnd - token.start
+        ),
+        isSymbol: true,
+      },
+      {
+        ...token,
+        content: token.content.slice(symbolEnd - token.start),
+        isSymbol: false,
+      },
+    ]
+  } else if (token.start >= symbolStart && token.end <= symbolEnd) {
+    return [{ ...token, isSymbol: true }]
+  } else {
+    return [{ ...token, isSymbol: false }]
+  }
+}
+
 /** Returns a function that converts code to an array of highlighted tokens */
 export async function getHighlighter(options: any): Promise<Highlighter> {
   const highlighter = await shikiGetHighlighter(options)
 
-  return function (code: string, language: any, diagnostics?: Diagnostic[]) {
+  return function (code: string, language: any, sourceFile?: SourceFile) {
+    const diagnostics = sourceFile?.getPreEmitDiagnostics()
     const tokens = highlighter.codeToThemedTokens(code, language, null, {
       includeExplanation: false,
     })
+    const ranges: Array<{ start: number; end: number }> = sourceFile
+      ?.getDescendantsOfKind(SyntaxKind.Identifier)
+      .map((node) => {
+        const start = node.getStart()
+        const end = node.getEnd()
+        return { start, end }
+      })
     let position = 0
 
     return tokens.map((line, lineIndex) => {
@@ -133,15 +231,19 @@ export async function getHighlighter(options: any): Promise<Highlighter> {
           position += 1
         }
 
-        const processedToken = {
-          color: token.color,
-          content: token.content,
-          fontStyle: getFontStyle(token.fontStyle),
-          start: tokenStart,
-          end: tokenEnd,
-          hasError: false,
-        }
+        let processedTokens: Tokens = [
+          {
+            color: token.color,
+            content: token.content,
+            fontStyle: getFontStyle(token.fontStyle),
+            start: tokenStart,
+            end: tokenEnd,
+            hasError: false,
+            isSymbol: false,
+          },
+        ]
 
+        // Check for diagnostics
         if (diagnostics) {
           const diagnostic = getDiagnosticForToken(
             token,
@@ -153,12 +255,11 @@ export async function getHighlighter(options: any): Promise<Highlighter> {
           )
 
           if (diagnostic) {
-            const subTokens = processToken(processedToken, diagnostic)
-            return subTokens
+            processedTokens = processToken(processedTokens[0], diagnostic)
           }
         }
 
-        return processedToken
+        return processedTokens.flatMap((token) => processSymbol(token, ranges))
       })
     })
   }

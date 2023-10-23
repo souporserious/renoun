@@ -145,7 +145,7 @@ export function Editor({
       setDiagnostics(diagnostics)
 
       if (highlighter) {
-        const tokens = highlighter(resolvedValue, language, diagnostics)
+        const tokens = highlighter(resolvedValue, language, sourceFile)
         setTokens(tokens)
       }
     } else if (highlighter) {

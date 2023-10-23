@@ -1,5 +1,7 @@
 import React, { cache } from 'react'
 import { readFile } from 'node:fs/promises'
+import type { SourceFile } from 'ts-morph'
+import { Identifier, SyntaxKind } from 'ts-morph'
 import { getHighlighter } from './highlighter'
 import { project } from './project'
 
@@ -39,51 +41,101 @@ export async function Code({
 }: CodeProps) {
   const filename = filenameProp || `index-${filenameId++}.tsx`
   const highlighter = await getHighlighter({ theme })
-  let diagnostics = []
+  let sourceFile: SourceFile
 
   if (['js', 'jsx', 'ts', 'tsx', 'mdx'].includes(language)) {
     await loadTypeDeclarations()
 
-    diagnostics = project
-      .createSourceFile(filename, value)
-      .getPreEmitDiagnostics()
+    sourceFile = project.createSourceFile(filename, value)
   }
 
-  const tokens = highlighter(value, language, diagnostics)
+  const tokens = highlighter(value, language, sourceFile)
+
+  let boxes = []
+
+  if (sourceFile) {
+    boxes = getIdentifierBoxes(sourceFile, { width: 8.825, height: 20 })
+  }
 
   return (
-    <pre
-      style={{
-        gridArea: '1 / 1',
-        fontSize: 14,
-        lineHeight: '20px',
-        padding: 0,
-        margin: 0,
-      }}
-      {...props}
-    >
-      {tokens.map((line, lineIndex) => {
-        return (
-          <div key={lineIndex} style={{ height: 20 }}>
-            {line.map((token, tokenIndex) => {
-              return (
-                <span
-                  key={tokenIndex}
-                  style={{
-                    ...token.fontStyle,
-                    color: token.color,
-                    textDecoration: token.hasError
-                      ? 'red wavy underline'
-                      : 'none',
-                  }}
-                >
-                  {token.content}
-                </span>
-              )
-            })}
-          </div>
-        )
-      })}
-    </pre>
+    <>
+      <pre
+        style={{
+          gridArea: '1 / 1',
+          fontSize: 14,
+          lineHeight: '20px',
+          padding: 0,
+          margin: 0,
+          position: 'relative',
+        }}
+        {...props}
+      >
+        {boxes.map((box, index) => {
+          return (
+            <div
+              key={index}
+              style={{
+                position: 'absolute',
+                top: box.top,
+                left: box.left,
+                width: box.width,
+                height: box.height,
+                backgroundColor: '#87add73d',
+              }}
+            />
+          )
+        })}
+        {tokens.map((line, lineIndex) => {
+          return (
+            <div key={lineIndex} style={{ height: 20 }}>
+              {line.map((token, tokenIndex) => {
+                return (
+                  <span
+                    key={tokenIndex}
+                    style={{
+                      ...token.fontStyle,
+                      color: token.color,
+                      backgroundColor: token.isSymbol
+                        ? 'rgba(255, 255, 255, 0.4)'
+                        : 'transparent',
+                      textDecoration: token.hasError
+                        ? 'red wavy underline'
+                        : 'none',
+                    }}
+                  >
+                    {token.content}
+                  </span>
+                )
+              })}
+            </div>
+          )
+        })}
+      </pre>
+    </>
   )
+}
+
+function getIdentifierBoxes(
+  sourceFile: SourceFile,
+  charDimensions: { width: number; height: number }
+) {
+  const identifiers = sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)
+  const boxes = identifiers
+    .filter((identifier) => {
+      const parent = identifier.getParent()
+      return !Identifier.isJSDocTag(parent) && !Identifier.isJSDoc(parent)
+    })
+    .map((identifier) => {
+      const startPos = identifier.getStart()
+      const startLineCol = sourceFile.getLineAndColumnAtPos(startPos)
+
+      return {
+        top: (startLineCol.line - 1) * charDimensions.height,
+        left: (startLineCol.column - 1) * charDimensions.width,
+        width: identifier.getWidth() * charDimensions.width,
+        height: charDimensions.height,
+      }
+    })
+
+  return boxes
 }
