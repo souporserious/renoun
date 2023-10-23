@@ -16,16 +16,16 @@ export function useMDXComponents() {
     Summary: (props) => <div {...props} />,
     Note: (props) => <div {...props} />,
     pre: ({
-      live,
+      editable,
       children,
     }: {
-      live?: boolean
+      editable?: boolean
       children: React.ReactElement
     }) => {
       const value = children.props.children.trim()
       const metadata = getMetadataFromClassName(children.props.className || '')
 
-      return live ? (
+      return editable ? (
         <Editor
           defaultValue={value.trim()}
           language={metadata?.language}
@@ -35,7 +35,7 @@ export function useMDXComponents() {
         <Code
           language={metadata?.language}
           value={value.trim()}
-          theme={theme}
+          theme={theme as any}
         />
       )
     },
