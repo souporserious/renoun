@@ -73,6 +73,9 @@ export async function Code({
       <style
         dangerouslySetInnerHTML={{
           __html: `
+          .identifier:hover {
+            background-color: #87add73d;
+          }
           .identifier > div {
             display: none;
           }
@@ -94,7 +97,6 @@ export async function Code({
                 left: bounds.left,
                 width: bounds.width,
                 height: bounds.height,
-                backgroundColor: '#87add73d',
                 pointerEvents: 'auto',
               }}
             >
