@@ -4,6 +4,7 @@ import type { SourceFile } from 'ts-morph'
 import { Identifier, SyntaxKind } from 'ts-morph'
 import { getHighlighter, type Theme } from './highlighter'
 import { project } from './project'
+import { QuickInfo } from './QuickInfo'
 
 export type CodeProps = {
   /** Code snippet to be highlighted. */
@@ -53,27 +54,25 @@ export async function Code({
   const identifierBounds = sourceFile ? getIdentifierBounds(sourceFile, 20) : []
 
   return (
-    <div
+    <pre
       style={{
-        color: theme.colors['editor.color'],
-        backgroundColor: theme.colors['editor.background'],
+        gridArea: '1 / 1',
+        fontSize: 14,
+        lineHeight: '20px',
+        padding: 0,
+        margin: 0,
         borderRadius: 4,
+        color: theme.colors['editor.foreground'],
+        backgroundColor: theme.colors['editor.background'],
+        pointerEvents: 'none',
+        position: 'relative',
+        overflow: 'visible',
       }}
+      {...props}
     >
-      <pre
-        style={{
-          gridArea: '1 / 1',
-          fontSize: 14,
-          lineHeight: '20px',
-          padding: 0,
-          margin: 0,
-          position: 'relative',
-          pointerEvents: 'none',
-        }}
-        {...props}
-      >
-        {identifierBounds.map((bounds, index) => {
-          return (
+      {identifierBounds.map((bounds, index) => {
+        return (
+          <>
             <div
               key={index}
               style={{
@@ -83,34 +82,44 @@ export async function Code({
                 width: bounds.width,
                 height: bounds.height,
                 backgroundColor: '#87add73d',
+                pointerEvents: 'auto',
               }}
             />
-          )
-        })}
-        {tokens.map((line, lineIndex) => {
-          return (
-            <div key={lineIndex} style={{ height: 20 }}>
-              {line.map((token, tokenIndex) => {
-                return (
-                  <span
-                    key={tokenIndex}
-                    style={{
-                      ...token.fontStyle,
-                      color: token.color,
-                      textDecoration: token.hasError
-                        ? 'red wavy underline'
-                        : 'none',
-                    }}
-                  >
-                    {token.content}
-                  </span>
-                )
-              })}
-            </div>
-          )
-        })}
-      </pre>
-    </div>
+            <QuickInfo
+              filename={filename}
+              highlighter={highlighter}
+              language={language}
+              position={bounds.start}
+              theme={theme}
+              x={bounds.left}
+              y={bounds.top}
+            />
+          </>
+        )
+      })}
+      {tokens.map((line, lineIndex) => {
+        return (
+          <div key={lineIndex} style={{ height: 20 }}>
+            {line.map((token, tokenIndex) => {
+              return (
+                <span
+                  key={tokenIndex}
+                  style={{
+                    ...token.fontStyle,
+                    color: token.color,
+                    textDecoration: token.hasError
+                      ? 'red wavy underline'
+                      : 'none',
+                  }}
+                >
+                  {token.content}
+                </span>
+              )
+            })}
+          </div>
+        )
+      })}
+    </pre>
   )
 }
 
@@ -122,11 +131,11 @@ function getIdentifierBounds(sourceFile: SourceFile, lineHeight: number) {
       return !Identifier.isJSDocTag(parent) && !Identifier.isJSDoc(parent)
     })
     .map((identifier) => {
-      const { line, column } = sourceFile.getLineAndColumnAtPos(
-        identifier.getStart()
-      )
+      const start = identifier.getStart()
+      const { line, column } = sourceFile.getLineAndColumnAtPos(start)
 
       return {
+        start,
         top: (line - 1) * lineHeight,
         left: `calc(${column - 1} * 1ch)`,
         width: `calc(${identifier.getWidth()} * 1ch)`,

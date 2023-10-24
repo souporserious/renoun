@@ -351,7 +351,7 @@ export function Editor({
     <div
       style={{
         position: 'relative',
-        color: theme.colors['editor.color'],
+        color: theme.colors['editor.foreground'],
         backgroundColor: theme.colors['editor.background'],
       }}
     >
@@ -365,7 +365,13 @@ export function Editor({
           {filename}
         </div>
       ) : null}
-      <div ref={scrollRef} style={{ display: 'grid', overflow: 'auto' }}>
+      <div
+        ref={scrollRef}
+        style={{
+          display: 'grid',
+          // overflow: 'auto',
+        }}
+      >
         <div style={sharedStyle}>
           {stateValue === defaultValue && children
             ? children
@@ -394,13 +400,13 @@ export function Editor({
         </div>
         <textarea
           ref={textareaRef}
-          onPointerMove={
-            isJavaScriptBasedLanguage ? handlePointerMove : undefined
-          }
-          onPointerLeave={() => {
-            setHoverInfo(null)
-            setHoverPosition(null)
-          }}
+          // onPointerMove={
+          //   isJavaScriptBasedLanguage ? handlePointerMove : undefined
+          // }
+          // onPointerLeave={() => {
+          //   setHoverInfo(null)
+          //   setHoverPosition(null)
+          // }}
           onKeyDown={handleKeyDown}
           onKeyUp={isJavaScriptBasedLanguage ? handleKeyUp : undefined}
           onBlur={() => setIsDropdownOpen(false)}
