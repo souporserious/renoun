@@ -1,5 +1,5 @@
 import { getHighlighter as shikiGetHighlighter } from 'shiki'
-import type { Diagnostic, SourceFile, Node } from 'ts-morph'
+import type { Diagnostic, SourceFile } from 'ts-morph'
 import { SyntaxKind } from 'ts-morph'
 import { getDiagnosticForToken } from './diagnostics'
 
@@ -165,40 +165,6 @@ function processSymbol(
   // Remove the processed range and recursively process the split tokens
   const remainingRanges = intersectingRanges.slice(1)
   return tokensAfterProcessing.flatMap((t) => processSymbol(t, remainingRanges))
-}
-
-function processSingleSymbolIntersection(
-  token: Token,
-  range: { start: number; end: number }
-): Tokens {
-  const { start: symbolStart, end: symbolEnd } = range
-
-  if (symbolStart > token.start && symbolEnd < token.end) {
-    return [
-      {
-        ...token,
-        content: token.content.slice(0, symbolStart - token.start),
-        isSymbol: false,
-      },
-      {
-        ...token,
-        content: token.content.slice(
-          symbolStart - token.start,
-          symbolEnd - token.start
-        ),
-        isSymbol: true,
-      },
-      {
-        ...token,
-        content: token.content.slice(symbolEnd - token.start),
-        isSymbol: false,
-      },
-    ]
-  } else if (token.start >= symbolStart && token.end <= symbolEnd) {
-    return [{ ...token, isSymbol: true }]
-  } else {
-    return [{ ...token, isSymbol: false }]
-  }
 }
 
 /** Returns a function that converts code to an array of highlighted tokens */

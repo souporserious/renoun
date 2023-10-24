@@ -50,12 +50,7 @@ export async function Code({
   }
 
   const tokens = highlighter(value, language, sourceFile)
-
-  let boxes = []
-
-  if (sourceFile) {
-    boxes = getIdentifierBoxes(sourceFile, { width: 8.45, height: 20 })
-  }
+  const identifierBounds = sourceFile ? getIdentifierBounds(sourceFile, 20) : []
 
   return (
     <div
@@ -77,16 +72,16 @@ export async function Code({
         }}
         {...props}
       >
-        {boxes.map((box, index) => {
+        {identifierBounds.map((bounds, index) => {
           return (
             <div
               key={index}
               style={{
                 position: 'absolute',
-                top: box.top,
-                left: box.left,
-                width: box.width,
-                height: box.height,
+                top: bounds.top,
+                left: bounds.left,
+                width: bounds.width,
+                height: bounds.height,
                 backgroundColor: '#87add73d',
               }}
             />
@@ -119,27 +114,25 @@ export async function Code({
   )
 }
 
-function getIdentifierBoxes(
-  sourceFile: SourceFile,
-  charDimensions: { width: number; height: number }
-) {
+function getIdentifierBounds(sourceFile: SourceFile, lineHeight: number) {
   const identifiers = sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)
-  const boxes = identifiers
+  const bounds = identifiers
     .filter((identifier) => {
       const parent = identifier.getParent()
       return !Identifier.isJSDocTag(parent) && !Identifier.isJSDoc(parent)
     })
     .map((identifier) => {
-      const startPos = identifier.getStart()
-      const startLineCol = sourceFile.getLineAndColumnAtPos(startPos)
+      const { line, column } = sourceFile.getLineAndColumnAtPos(
+        identifier.getStart()
+      )
 
       return {
-        top: (startLineCol.line - 1) * charDimensions.height,
-        left: (startLineCol.column - 1) * charDimensions.width,
-        width: identifier.getWidth() * charDimensions.width,
-        height: charDimensions.height,
+        top: (line - 1) * lineHeight,
+        left: `calc(${column - 1} * 1ch)`,
+        width: `calc(${identifier.getWidth()} * 1ch)`,
+        height: lineHeight,
       }
     })
 
-  return boxes
+  return bounds
 }
