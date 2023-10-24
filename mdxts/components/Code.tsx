@@ -70,11 +70,24 @@ export async function Code({
       }}
       {...props}
     >
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+          .identifier > div {
+            display: none;
+          }
+          .identifier:hover > div {
+            display: block;
+          }
+        `,
+        }}
+      />
       {identifierBounds.map((bounds, index) => {
         return (
           <>
             <div
               key={index}
+              className="identifier"
               style={{
                 position: 'absolute',
                 top: bounds.top,
@@ -84,16 +97,15 @@ export async function Code({
                 backgroundColor: '#87add73d',
                 pointerEvents: 'auto',
               }}
-            />
-            <QuickInfo
-              filename={filename}
-              highlighter={highlighter}
-              language={language}
-              position={bounds.start}
-              theme={theme}
-              x={bounds.left}
-              y={bounds.top}
-            />
+            >
+              <QuickInfo
+                filename={filename}
+                highlighter={highlighter}
+                language={language}
+                position={bounds.start}
+                theme={theme}
+              />
+            </div>
           </>
         )
       })}
