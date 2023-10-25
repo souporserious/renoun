@@ -260,27 +260,50 @@ export function Editor({
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: '1rem',
         position: 'relative',
         color: theme.colors['editor.foreground'],
         backgroundColor: theme.colors['editor.background'],
+        border: '1px solid #293742',
+        borderRadius: 4,
       }}
     >
-      {filenameProp ? (
-        <div
-          style={{
-            fontSize: '0.8rem',
-            padding: '1rem 1rem 0 1rem',
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr auto',
+          padding: '1rem 1.85rem',
+          borderBottom: '1px solid #293742',
+        }}
+      >
+        {filenameProp ? (
+          <div style={{ fontSize: '0.8rem' }}>{filename}</div>
+        ) : null}
+        <button
+          onClick={() => {
+            navigator.clipboard.writeText(resolvedValue)
           }}
+          style={{ backgroundColor: 'transparent', border: 0 }}
         >
-          {filename}
-        </div>
-      ) : null}
+          <svg
+            aria-hidden="true"
+            focusable="false"
+            role="img"
+            viewBox="0 0 16 16"
+            width="12"
+            height="12"
+            fill="white"
+          >
+            <path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"></path>
+            <path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"></path>
+          </svg>
+        </button>
+      </div>
       <div
         ref={scrollRef}
         style={{
           display: 'grid',
           gridTemplateColumns: 'auto 1fr',
+          padding: '10px 0',
           // overflow: 'auto',
         }}
       >
