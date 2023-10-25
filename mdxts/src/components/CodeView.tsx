@@ -59,7 +59,7 @@ export function CodeView({
               }}
               key={lineIndex}
             >
-              {lineIndex}
+              {lineIndex + 1}
             </div>
           ))}
         </div>
