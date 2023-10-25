@@ -1,3 +1,4 @@
+'use client'
 import React, {
   useEffect,
   useLayoutEffect,
@@ -33,6 +34,9 @@ export type EditorProps = {
   /** Language of the code snippet. */
   language?: string
 
+  /** Show or hide line numbers. */
+  lineNumbers?: boolean
+
   /** VS Code-based theme for highlighting. */
   theme?: Theme
 
@@ -51,6 +55,7 @@ export function Editor({
   defaultValue,
   value,
   filename: filenameProp,
+  lineNumbers,
   onChange,
   theme,
   children,

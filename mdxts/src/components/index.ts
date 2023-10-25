@@ -1,3 +1,5 @@
 export { Code, type CodeProps } from './Code'
+export { Editor } from './Editor'
+export type { EditorProps } from '../components/client/Editor'
 export { Navigation } from './Navigation'
 export { SiblingNavigation } from './SiblingNavigation'

@@ -16,6 +16,9 @@ export type CodeProps = {
   /** Language of the code snippet. */
   language?: string
 
+  /** Show or hide line numbers. */
+  lineNumbers?: boolean
+
   /** VS Code-based theme for highlighting. */
   theme?: Theme
 }
@@ -37,6 +40,7 @@ export async function Code({
   value,
   filename: filenameProp,
   language = 'bash',
+  lineNumbers,
   theme,
   ...props
 }: CodeProps) {

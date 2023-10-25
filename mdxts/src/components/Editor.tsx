@@ -1,7 +1,7 @@
 import * as React from 'react'
-import { Editor as ClientEditor } from 'mdxts/components/client'
-import type { EditorProps } from 'mdxts/components/client'
-import { Code } from 'mdxts/components'
+import { Editor as ClientEditor } from './client/Editor'
+import type { EditorProps } from './client/Editor'
+import { Code } from './Code'
 
 /** Renders a code editor with syntax highlighting, type information, and autocomplete. */
 export function Editor({
