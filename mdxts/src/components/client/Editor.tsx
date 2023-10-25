@@ -11,6 +11,7 @@ import { getDiagnosticMessageText } from '../diagnostics'
 import type { Highlighter, Theme, Tokens } from '../highlighter'
 import { getHighlighter } from '../highlighter'
 import { project, languageService } from '../project'
+import { CodeView } from '../CodeView'
 
 const isClient = typeof document !== 'undefined'
 const canvas = isClient ? document.createElement('canvas') : null
@@ -72,11 +73,6 @@ export function Editor({
   const [suggestions, setSuggestions] = useState([])
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [highlightedIndex, setHighlightedIndex] = useState(0)
-  const [hoverInfo, setHoverInfo] = useState<React.ReactNode | null>(null)
-  const [hoverPosition, setHoverPosition] = useState<{
-    x: number
-    y: number
-  } | null>(null)
   const [highlighter, setHighlighter] = useState<Highlighter | null>(null)
   const ctrlKeyRef = useRef(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -259,102 +255,12 @@ export function Editor({
     }
   }
 
-  function handlePointerMove(
-    event: React.MouseEvent<HTMLTextAreaElement, MouseEvent>
-  ) {
-    const rect = event.currentTarget.getBoundingClientRect()
-    const cursorX = event.clientX - rect.left
-    const cursorY = event.clientY - rect.top
-    const row = Math.floor(cursorY / 20)
-    const lineText = resolvedValue.split('\n')[row] || ''
-    const column = Math.min(
-      Math.floor(cursorX / context?.measureText(' ').width),
-      lineText.length
-    )
-    const linesBeforeCursor = resolvedValue.split('\n').slice(0, row)
-    const charsBeforeCurrentRow = linesBeforeCursor.reduce(
-      (total, line) => total + line.length + 1,
-      0
-    )
-    const position = charsBeforeCurrentRow + column
-    const node = sourceFile?.getDescendantAtPos(position)
-
-    if (!node) {
-      setHoverInfo(null)
-      setHoverPosition(null)
-      return
-    }
-
-    const nodeStartLineContent = resolvedValue.substring(
-      charsBeforeCurrentRow,
-      node.getStart()
-    )
-    const nodeVisualStart = context?.measureText(nodeStartLineContent).width
-
-    try {
-      const quickInfo = languageService.getQuickInfoAtPosition(
-        filename,
-        position
-      )
-
-      if (quickInfo) {
-        const displayParts = quickInfo.displayParts || []
-        const documentation = quickInfo.documentation || []
-        const displayText = displayParts.map((part) => part.text).join('')
-        const docText = documentation.map((part) => part.text).join('')
-        const displayTextTokens = highlighter(displayText, language)
-
-        setHoverInfo(
-          <div>
-            {displayTextTokens.map((line, index) => {
-              return (
-                <div key={index}>
-                  {line.map((token, index) => {
-                    return (
-                      <span key={index} style={{ color: token.color }}>
-                        {token.content}
-                      </span>
-                    )
-                  })}
-                </div>
-              )
-            })}
-            {docText ? <p style={{ margin: 0 }}>{docText}</p> : null}
-          </div>
-        )
-
-        const xOffset = scrollRef.current?.scrollLeft ?? 0
-        const yOffset = scrollRef.current?.scrollTop ?? 0
-
-        setHoverPosition({
-          x: nodeVisualStart - context?.measureText(' ').width - xOffset,
-          y: row * 20 - 10 - yOffset,
-        })
-      } else {
-        setHoverInfo(null)
-        setHoverPosition(null)
-      }
-    } catch (error) {
-      console.error(error)
-    }
-  }
-
-  const sharedStyle = {
-    gridArea: '1 / 1',
-    whiteSpace: 'pre',
-    wordWrap: 'break-word',
-    fontFamily: 'monospace',
-    fontSize: 14,
-    lineHeight: '20px',
-    letterSpacing: '0px',
-    tabSize: 4,
-    padding: '1rem',
-    borderRadius: 4,
-  } satisfies React.CSSProperties
-
   return (
     <div
       style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '1rem',
         position: 'relative',
         color: theme.colors['editor.foreground'],
         backgroundColor: theme.colors['editor.background'],
@@ -374,44 +280,27 @@ export function Editor({
         ref={scrollRef}
         style={{
           display: 'grid',
+          gridTemplateColumns: 'auto 1fr',
           // overflow: 'auto',
         }}
       >
-        <div style={sharedStyle}>
-          {stateValue === defaultValue && children
-            ? children
-            : tokens.map((line, lineIndex) => {
-                return (
-                  <div key={lineIndex} style={{ height: 20 }}>
-                    {line.map((token, tokenIndex) => {
-                      return (
-                        <span
-                          key={tokenIndex}
-                          style={{
-                            ...token.fontStyle,
-                            color: token.color,
-                            textDecoration: token.hasError
-                              ? 'red wavy underline'
-                              : 'none',
-                          }}
-                        >
-                          {token.content}
-                        </span>
-                      )
-                    })}
-                  </div>
-                )
-              })}
-        </div>
+        <>
+          {stateValue === defaultValue && children ? (
+            children
+          ) : (
+            <CodeView
+              tokens={tokens}
+              lineNumbers={lineNumbers}
+              sourceFile={sourceFile}
+              filename={filename}
+              highlighter={highlighter}
+              language={language}
+              theme={theme}
+            />
+          )}
+        </>
         <textarea
           ref={textareaRef}
-          // onPointerMove={
-          //   isJavaScriptBasedLanguage ? handlePointerMove : undefined
-          // }
-          // onPointerLeave={() => {
-          //   setHoverInfo(null)
-          //   setHoverPosition(null)
-          // }}
           onKeyDown={handleKeyDown}
           onKeyUp={isJavaScriptBasedLanguage ? handleKeyUp : undefined}
           onBlur={() => setIsDropdownOpen(false)}
@@ -428,7 +317,17 @@ export function Editor({
           value={resolvedValue}
           rows={resolvedValue.split('\n').length + 1}
           style={{
-            ...sharedStyle,
+            gridColumn: 2,
+            gridRow: 1,
+            whiteSpace: 'pre',
+            wordWrap: 'break-word',
+            fontFamily: 'monospace',
+            fontSize: 14,
+            lineHeight: '20px',
+            letterSpacing: '0px',
+            tabSize: 4,
+            padding: 0,
+            borderRadius: 4,
             border: 0,
             backgroundColor: 'transparent',
             color: 'transparent',
@@ -452,7 +351,7 @@ export function Editor({
             overflow: 'auto',
             position: 'absolute',
             top: row * 20 + 20,
-            left: column * context?.measureText(' ').width,
+            left: `calc(${column} * 1ch)`,
             zIndex: 1000,
             borderRadius: 3,
             border: `1px solid ${theme.colors['editorHoverWidget.border']}`,
@@ -471,25 +370,6 @@ export function Editor({
             )
           })}
         </ul>
-      )}
-
-      {hoverInfo && hoverPosition && (
-        <div
-          style={{
-            position: 'absolute',
-            left: hoverPosition.x + 10,
-            top: hoverPosition.y + 10,
-            translate: '0px -100%',
-            fontSize: 14,
-            padding: '5px 8px',
-            zIndex: 1000,
-            borderRadius: 3,
-            border: `1px solid ${theme.colors['editorHoverWidget.border']}`,
-            backgroundColor: theme.colors['editorHoverWidget.background'],
-          }}
-        >
-          {hoverInfo}
-        </div>
       )}
 
       {diagnostics.length > 0 ? (
