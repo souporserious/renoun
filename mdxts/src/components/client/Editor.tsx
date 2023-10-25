@@ -304,7 +304,7 @@ export function Editor({
           display: 'grid',
           gridTemplateColumns: 'auto 1fr',
           padding: '10px 0',
-          // overflow: 'auto',
+          overflow: 'auto',
         }}
       >
         <>
@@ -373,8 +373,8 @@ export function Editor({
             margin: 0,
             overflow: 'auto',
             position: 'absolute',
-            top: row * 20 + 20,
-            left: `calc(${column} * 1ch)`,
+            top: row * 20 + 80,
+            left: `calc(${column} * 1ch + 6ch)`,
             zIndex: 1000,
             borderRadius: 3,
             border: `1px solid ${theme.colors['editorHoverWidget.border']}`,

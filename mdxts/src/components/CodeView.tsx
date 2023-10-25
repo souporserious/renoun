@@ -114,6 +114,7 @@ export function CodeView({
                 }}
               >
                 <QuickInfo
+                  bounds={bounds}
                   filename={filename}
                   highlighter={highlighter}
                   language={language}

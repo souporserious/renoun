@@ -2,12 +2,14 @@ import * as React from 'react'
 import { languageService } from './project'
 
 export function QuickInfo({
+  bounds,
   filename,
   position,
   highlighter,
   language,
   theme,
 }: {
+  bounds: any
   filename: string
   position: number
   highlighter: any
@@ -31,7 +33,7 @@ export function QuickInfo({
       <div
         style={{
           position: 'absolute',
-          translate: '0px -100%',
+          translate: bounds.top < 40 ? '0px 20px' : '0px -100%',
           fontSize: 13,
           zIndex: 1000,
           borderRadius: 3,
