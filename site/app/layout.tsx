@@ -14,6 +14,19 @@ export default function RootLayout({
         <link rel="canonical" href="https://www.mdxts.com" />
       </head>
       <body>
+        <div
+          style={{
+            fontWeight: 600,
+            fontSize: 14,
+            padding: '1rem',
+            backgroundColor: '#d39e5a',
+            color: '#1c1309',
+            textAlign: 'center',
+          }}
+        >
+          This package is still a work in progress. The APIs are not stable and
+          may change.
+        </div>
         <AppProvider>{children}</AppProvider>
       </body>
     </html>
