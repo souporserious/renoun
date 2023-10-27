@@ -96,7 +96,7 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
 
       nextConfig.webpack = (config, options) => {
         config.plugins.push(
-          // silence ts-morph critical dependency warnings
+          // silence ts-morph warnings
           new webpack.ContextReplacementPlugin(
             /\/@ts-morph\/common\//,
             (data) => {
@@ -105,7 +105,10 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
               }
               return data
             }
-          )
+          ),
+          new webpack.IgnorePlugin({
+            resourceRegExp: /^perf_hooks$/,
+          })
         )
 
         if (options.isServer && options.dev && !startedWatcher) {
