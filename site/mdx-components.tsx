@@ -18,11 +18,13 @@ export function useMDXComponents() {
       filename,
       editable,
       lineNumbers,
+      highlight,
       children,
     }: {
       filename?: string
       editable?: boolean
       lineNumbers?: boolean
+      highlight?: string
       children: React.ReactElement
     }) => {
       const value = children.props.children.trim()
@@ -33,6 +35,7 @@ export function useMDXComponents() {
           filename={filename}
           language={metadata?.language}
           lineNumbers={lineNumbers}
+          highlight={highlight}
           defaultValue={value.trim()}
           theme={theme as any}
         />
@@ -41,6 +44,7 @@ export function useMDXComponents() {
           filename={filename}
           language={metadata?.language}
           lineNumbers={lineNumbers}
+          highlight={highlight}
           value={value.trim()}
           theme={theme as any}
         />

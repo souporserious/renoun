@@ -9,6 +9,7 @@ export function Editor({
   language,
   filename,
   lineNumbers,
+  highlight,
   theme,
 }: Omit<EditorProps, 'onChange' | 'value'>) {
   return (
@@ -17,6 +18,7 @@ export function Editor({
       filename={filename}
       language={language}
       lineNumbers={lineNumbers}
+      highlight={highlight}
       theme={theme}
     >
       <Code
@@ -24,6 +26,7 @@ export function Editor({
         filename={filename}
         language={language}
         lineNumbers={lineNumbers}
+        highlight={highlight}
         theme={theme}
       />
     </ClientEditor>

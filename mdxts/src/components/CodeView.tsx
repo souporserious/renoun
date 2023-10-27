@@ -17,6 +17,9 @@ export type CodeProps = {
   /** Show or hide line numbers. */
   lineNumbers?: boolean
 
+  /** Lines to highlight. */
+  highlight?: string
+
   /** VS Code-based theme for highlighting. */
   theme?: Theme
 }
@@ -27,6 +30,7 @@ export function CodeView({
   lineNumbers,
   sourceFile,
   filename,
+  highlight,
   highlighter,
   language,
   theme,
@@ -36,7 +40,7 @@ export function CodeView({
   highlighter: any
 }) {
   const identifierBounds = sourceFile ? getIdentifierBounds(sourceFile, 20) : []
-
+  const shouldHighlightLine = calculateLinesToHighlight(highlight)
   return (
     <>
       {lineNumbers ? (
@@ -46,22 +50,28 @@ export function CodeView({
             gridRow: 1,
           }}
         >
-          {tokens.map((_, lineIndex) => (
-            <div
-              style={{
-                width: '6ch',
-                fontSize: 14,
-                lineHeight: '20px',
-                paddingRight: '2ch',
-                textAlign: 'right',
-                color: theme.colors['editorLineNumber.foreground'],
-                userSelect: 'none',
-              }}
-              key={lineIndex}
-            >
-              {lineIndex + 1}
-            </div>
-          ))}
+          {tokens.map((_, lineIndex) => {
+            const shouldHighlight = shouldHighlightLine(lineIndex)
+            return (
+              <div
+                style={{
+                  width: '6ch',
+                  fontSize: 14,
+                  lineHeight: '20px',
+                  paddingRight: '2ch',
+                  textAlign: 'right',
+                  color: shouldHighlight
+                    ? theme.colors['editorLineNumber.activeForeground']
+                    : theme.colors['editorLineNumber.foreground'],
+                  userSelect: 'none',
+                  backgroundColor: shouldHighlight ? '#87add726' : undefined,
+                }}
+                key={lineIndex}
+              >
+                {lineIndex + 1}
+              </div>
+            )
+          })}
         </div>
       ) : null}
       <pre
@@ -88,6 +98,7 @@ export function CodeView({
             __html: `
           .identifier:hover {
             background-color: #87add73d;
+            cursor: text;
           }
           .identifier > div {
             display: none;
@@ -127,7 +138,15 @@ export function CodeView({
         })}
         {tokens.map((line, lineIndex) => {
           return (
-            <div key={lineIndex} style={{ height: 20 }}>
+            <div
+              key={lineIndex}
+              style={{
+                height: 20,
+                backgroundColor: shouldHighlightLine(lineIndex)
+                  ? '#87add726'
+                  : undefined,
+              }}
+            >
               {line.map((token, tokenIndex) => {
                 return (
                   <span
@@ -150,6 +169,23 @@ export function CodeView({
       </pre>
     </>
   )
+}
+
+export function calculateLinesToHighlight(meta) {
+  if (meta === undefined || meta === '') {
+    return () => false
+  }
+  const lineNumbers = meta
+    .split(',')
+    .map((value) => value.split('-').map((y) => parseInt(y, 10)))
+
+  return (index) => {
+    const lineNumber = index + 1
+    const inRange = lineNumbers.some(([start, end]) =>
+      end ? lineNumber >= start && lineNumber <= end : lineNumber === start
+    )
+    return inRange
+  }
 }
 
 function getIdentifierBounds(sourceFile: SourceFile, lineHeight: number) {

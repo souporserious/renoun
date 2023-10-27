@@ -38,6 +38,9 @@ export type EditorProps = {
   /** Show or hide line numbers. */
   lineNumbers?: boolean
 
+  /** Lines to highlight. */
+  highlight?: string
+
   /** VS Code-based theme for highlighting. */
   theme?: Theme
 
@@ -57,6 +60,7 @@ export function Editor({
   value,
   filename: filenameProp,
   lineNumbers,
+  highlight,
   onChange,
   theme,
   children,
@@ -327,6 +331,7 @@ export function Editor({
               sourceFile={sourceFile}
               filename={filename}
               highlighter={highlighter}
+              highlight={highlight}
               language={language}
               theme={theme}
             />

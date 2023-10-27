@@ -18,6 +18,9 @@ export type CodeProps = {
   /** Show or hide line numbers. */
   lineNumbers?: boolean
 
+  /** Lines to highlight. */
+  highlight?: string
+
   /** VS Code-based theme for highlighting. */
   theme?: Theme
 }
@@ -40,6 +43,7 @@ export async function Code({
   filename: filenameProp,
   language = 'bash',
   lineNumbers,
+  highlight,
   theme,
 }: CodeProps) {
   const filename = filenameProp ?? `index.${filenameId++}.tsx`
@@ -61,6 +65,7 @@ export async function Code({
       sourceFile={sourceFile}
       filename={filename}
       highlighter={highlighter}
+      highlight={highlight}
       language={language}
       theme={theme}
     />
