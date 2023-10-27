@@ -271,18 +271,28 @@ export function Editor({
         style={{
           display: 'grid',
           gridTemplateColumns: '1fr auto',
-          padding: '1rem 1.85rem',
           borderBottom: '1px solid #293742',
         }}
       >
         {filenameProp ? (
-          <div style={{ fontSize: '0.8rem' }}>{filename}</div>
+          <div
+            style={{
+              fontSize: '0.8rem',
+              padding: '0.8rem 1rem',
+            }}
+          >
+            {filename}
+          </div>
         ) : null}
         <button
           onClick={() => {
             navigator.clipboard.writeText(resolvedValue)
           }}
-          style={{ backgroundColor: 'transparent', border: 0 }}
+          style={{
+            backgroundColor: 'transparent',
+            padding: '0.8rem',
+            border: 0,
+          }}
         >
           <svg
             aria-hidden="true"
