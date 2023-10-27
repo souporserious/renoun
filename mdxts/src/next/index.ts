@@ -1,4 +1,4 @@
-import FilterWarningsPlugin from 'webpack-filter-warnings-plugin'
+import webpack from 'webpack'
 import { NextConfig } from 'next'
 import { resolve, join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -96,12 +96,16 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
 
       nextConfig.webpack = (config, options) => {
         config.plugins.push(
-          // TODO: #8 silencing ts-morph critical dependency warnings for now
-          new FilterWarningsPlugin({
-            exclude: [
-              /Critical dependency: the request of a dependency is an expression/,
-            ],
-          })
+          // silence ts-morph critical dependency warnings
+          new webpack.ContextReplacementPlugin(
+            /\/@ts-morph\/common\//,
+            (data) => {
+              for (const dependency of data.dependencies) {
+                delete dependency.critical
+              }
+              return data
+            }
+          )
         )
 
         if (options.isServer && options.dev && !startedWatcher) {

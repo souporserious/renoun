@@ -169,9 +169,6 @@ importers:
       vscode-textmate:
         specifier: ^8.0.0
         version: 8.0.0
-      webpack-filter-warnings-plugin:
-        specifier: ^1.2.1
-        version: 1.2.1(webpack@5.88.2)
     devDependencies:
       next:
         specifier: 13.5.4
@@ -8540,15 +8537,6 @@ packages:
     resolution: {integrity: sha512-VwddBukDzu71offAQR975unBIGqfKZpM+8ZX6ySk8nYhVoo5CYaZyzt3YBvYtRtO+aoGlqxPg/B87NGVZ/fu6g==}
     engines: {node: '>=12'}
     dev: true
-
-  /webpack-filter-warnings-plugin@1.2.1(webpack@5.88.2):
-    resolution: {integrity: sha512-Ez6ytc9IseDMLPo0qCuNNYzgtUl8NovOqjIq4uAU8LTD4uoa1w1KpZyyzFtLTEMZpkkOkLfL9eN+KGYdk1Qtwg==}
-    engines: {node: '>= 4.3 < 5.0.0 || >= 5.10'}
-    peerDependencies:
-      webpack: ^2.0.0 || ^3.0.0 || ^4.0.0
-    dependencies:
-      webpack: 5.88.2(@swc/core@1.3.94)(esbuild@0.17.19)
-    dev: false
 
   /webpack-sources@3.2.3:
     resolution: {integrity: sha512-/DyMEOrDgLKKIG0fmvtz+4dUX/3Ghozwgm6iPp8KRhvn+eQf9+Q7GWxVNMk3+uCPWfdXYC4ExGBckIXdFEfH1w==}

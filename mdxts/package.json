@@ -105,7 +105,6 @@
     "unist-util-visit-parents": "^6.0.1",
     "vfile": "^6.0.1",
     "vscode-oniguruma": "^1.7.0",
-    "vscode-textmate": "^8.0.0",
-    "webpack-filter-warnings-plugin": "^1.2.1"
+    "vscode-textmate": "^8.0.0"
   }
 }
