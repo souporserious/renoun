@@ -26,6 +26,7 @@ export type CodeProps = {
 
 /** Renders a code block with syntax highlighting. */
 export function CodeView({
+  row,
   tokens,
   lineNumbers,
   sourceFile,
@@ -35,10 +36,12 @@ export function CodeView({
   language,
   theme,
 }: CodeProps & {
+  row?: number
   tokens: any
   sourceFile: SourceFile
   highlighter: any
 }) {
+  console.log({ row })
   const identifierBounds = sourceFile ? getIdentifierBounds(sourceFile, 20) : []
   const shouldHighlightLine = calculateLinesToHighlight(highlight)
   return (
@@ -52,6 +55,7 @@ export function CodeView({
         >
           {tokens.map((_, lineIndex) => {
             const shouldHighlight = shouldHighlightLine(lineIndex)
+            const isActive = row === lineIndex
             return (
               <div
                 style={{
@@ -60,9 +64,10 @@ export function CodeView({
                   lineHeight: '20px',
                   paddingRight: '2ch',
                   textAlign: 'right',
-                  color: shouldHighlight
-                    ? theme.colors['editorLineNumber.activeForeground']
-                    : theme.colors['editorLineNumber.foreground'],
+                  color:
+                    shouldHighlight || isActive
+                      ? theme.colors['editorLineNumber.activeForeground']
+                      : theme.colors['editorLineNumber.foreground'],
                   userSelect: 'none',
                   backgroundColor: shouldHighlight ? '#87add726' : undefined,
                 }}

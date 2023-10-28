@@ -199,6 +199,12 @@ export function Editor({
     setHighlightedIndex(0)
   }
 
+  function handleCaretPosition(event: React.FormEvent<HTMLTextAreaElement>) {
+    const { row, col } = getCaretPosition(event.currentTarget)
+    setRow(row)
+    setColumn(col)
+  }
+
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (!isDropdownOpen) {
       return
@@ -237,6 +243,8 @@ export function Editor({
   }
 
   function handleKeyUp(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+    handleCaretPosition(event)
+
     if (
       /^[a-zA-Z.]$/.test(event.key) ||
       event.key === 'Backspace' ||
@@ -326,6 +334,7 @@ export function Editor({
             children
           ) : (
             <CodeView
+              row={row}
               tokens={tokens}
               lineNumbers={lineNumbers}
               sourceFile={sourceFile}
@@ -339,6 +348,9 @@ export function Editor({
         </>
         <textarea
           ref={textareaRef}
+          onInput={handleCaretPosition}
+          onClick={handleCaretPosition}
+          onFocus={handleCaretPosition}
           onKeyDown={handleKeyDown}
           onKeyUp={isJavaScriptBasedLanguage ? handleKeyUp : undefined}
           onBlur={() => setIsDropdownOpen(false)}
@@ -460,4 +472,14 @@ function Suggestion({
       {suggestion.name}
     </li>
   )
+}
+
+function getCaretPosition(textarea: HTMLTextAreaElement) {
+  const start = textarea.selectionStart
+  const beforeCaret = textarea.value.substring(0, start)
+  const lines = beforeCaret.split('\n')
+  const row = lines.length - 1
+  const col = lines[lines.length - 1].length + 1
+
+  return { row, col }
 }
