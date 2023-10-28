@@ -71,6 +71,7 @@ export function Editor({
   const [stateValue, setStateValue] = useState(defaultValue)
   const [tokens, setTokens] = useState<Tokens[]>([])
   const [row, setRow] = useState(null)
+  const [focus, setFocus] = useState(false)
   const [column, setColumn] = useState(null)
   const [sourceFile, setSourceFile] = useState<SourceFile | null>(null)
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([])
@@ -200,7 +201,7 @@ export function Editor({
   }
 
   function handleCaretPosition(event: React.FormEvent<HTMLTextAreaElement>) {
-    const { row, col } = getCaretPosition(event.currentTarget)
+    const { row, col } = getCaretPositions(event.currentTarget)
     setRow(row)
     setColumn(col)
   }
@@ -250,16 +251,13 @@ export function Editor({
       event.key === 'Backspace' ||
       (event.key === ' ' && ctrlKeyRef.current)
     ) {
-      const cursorPosition = textareaRef.current?.selectionStart || 0
       const lastChar = resolvedValue.at(-1)
-      const lines = resolvedValue.substring(0, cursorPosition).split('\n')
-      setRow(lines.length - 1)
-      setColumn(lines.at(-1).length)
 
       // don't trigger suggestions if there is space before the cursor
       if (!/^[a-zA-Z.]$/.test(lastChar) || ['\n', ' '].includes(lastChar)) {
         setIsDropdownOpen(false)
       } else {
+        const cursorPosition = textareaRef.current?.selectionStart || 0
         const currentSuggestions = getAutocompletions(cursorPosition)
         setSuggestions(currentSuggestions)
         setIsDropdownOpen(currentSuggestions.length > 0)
@@ -330,7 +328,7 @@ export function Editor({
         }}
       >
         <>
-          {stateValue === defaultValue && children ? (
+          {stateValue === defaultValue && children && !focus ? (
             children
           ) : (
             <CodeView
@@ -349,11 +347,18 @@ export function Editor({
         <textarea
           ref={textareaRef}
           onInput={handleCaretPosition}
-          onClick={handleCaretPosition}
-          onFocus={handleCaretPosition}
+          onPointerMove={handleCaretPosition}
+          onPointerUp={handleCaretPosition}
           onKeyDown={handleKeyDown}
           onKeyUp={isJavaScriptBasedLanguage ? handleKeyUp : undefined}
-          onBlur={() => setIsDropdownOpen(false)}
+          onFocus={(event: React.FocusEvent<HTMLTextAreaElement>) => {
+            setFocus(true)
+            handleCaretPosition(event)
+          }}
+          onBlur={() => {
+            setFocus(false)
+            setIsDropdownOpen(false)
+          }}
           onChange={
             defaultValue
               ? (event: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -474,12 +479,23 @@ function Suggestion({
   )
 }
 
-function getCaretPosition(textarea: HTMLTextAreaElement) {
+function getCaretPositions(textarea) {
   const start = textarea.selectionStart
-  const beforeCaret = textarea.value.substring(0, start)
-  const lines = beforeCaret.split('\n')
+  const end = textarea.selectionEnd
+  const textBeforeStart = textarea.value.substring(0, start)
+  const textBeforeEnd = textarea.value.substring(0, end)
+  const startPosition = getPositionFromText(textBeforeStart)
+  const endPosition = getPositionFromText(textBeforeEnd)
+
+  return {
+    row: [startPosition.row, endPosition.row],
+    col: [startPosition.col, endPosition.col],
+  }
+}
+
+function getPositionFromText(text) {
+  const lines = text.split('\n')
   const row = lines.length - 1
   const col = lines[lines.length - 1].length + 1
-
   return { row, col }
 }

@@ -36,12 +36,11 @@ export function CodeView({
   language,
   theme,
 }: CodeProps & {
-  row?: number
+  row?: [number, number]
   tokens: any
   sourceFile: SourceFile
   highlighter: any
 }) {
-  console.log({ row })
   const identifierBounds = sourceFile ? getIdentifierBounds(sourceFile, 20) : []
   const shouldHighlightLine = calculateLinesToHighlight(highlight)
   return (
@@ -55,9 +54,10 @@ export function CodeView({
         >
           {tokens.map((_, lineIndex) => {
             const shouldHighlight = shouldHighlightLine(lineIndex)
-            const isActive = row === lineIndex
+            const isActive = row && row[0] <= lineIndex && lineIndex <= row[1]
             return (
               <div
+                key={lineIndex}
                 style={{
                   width: '6ch',
                   fontSize: 14,
@@ -71,7 +71,6 @@ export function CodeView({
                   userSelect: 'none',
                   backgroundColor: shouldHighlight ? '#87add726' : undefined,
                 }}
-                key={lineIndex}
               >
                 {lineIndex + 1}
               </div>
@@ -116,29 +115,27 @@ export function CodeView({
         />
         {identifierBounds.map((bounds, index) => {
           return (
-            <>
-              <div
-                key={index}
-                className="identifier"
-                style={{
-                  position: 'absolute',
-                  top: bounds.top,
-                  left: bounds.left,
-                  width: bounds.width,
-                  height: bounds.height,
-                  pointerEvents: 'auto',
-                }}
-              >
-                <QuickInfo
-                  bounds={bounds}
-                  filename={filename}
-                  highlighter={highlighter}
-                  language={language}
-                  position={bounds.start}
-                  theme={theme}
-                />
-              </div>
-            </>
+            <div
+              key={index}
+              className="identifier"
+              style={{
+                position: 'absolute',
+                top: bounds.top,
+                left: bounds.left,
+                width: bounds.width,
+                height: bounds.height,
+                pointerEvents: 'auto',
+              }}
+            >
+              <QuickInfo
+                bounds={bounds}
+                filename={filename}
+                highlighter={highlighter}
+                language={language}
+                position={bounds.start}
+                theme={theme}
+              />
+            </div>
           )
         })}
         {tokens.map((line, lineIndex) => {
