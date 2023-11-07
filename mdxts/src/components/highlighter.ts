@@ -266,8 +266,9 @@ export function fixJsxOnly(sourceFile: SourceFile) {
       .getFilePath()
       .replace(
         sourceFile.getExtension(),
-        `.mdxts.${sourceFile.getExtension()}`
-      )}`
+        `.mdxts${sourceFile.getExtension()}`
+      )}`,
+    { overwrite: true }
   )
 
   const start = `export default function ${MdxtsJsxOnly}() {\n  return (\n`

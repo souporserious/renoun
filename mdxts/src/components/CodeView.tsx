@@ -47,7 +47,7 @@ export function CodeView({
   const intrinsicSourceFile = sourceFile
     .getProject()
     .getSourceFile(
-      `${sourceFile.getBaseNameWithoutExtension()}.mdxts.${sourceFile.getExtension()}`
+      `${sourceFile.getBaseNameWithoutExtension()}.mdxts${sourceFile.getExtension()}`
     )
   const intrinsicIdentifierBounds = intrinsicSourceFile
     ? getIdentifierBounds(intrinsicSourceFile, lineHeight)
