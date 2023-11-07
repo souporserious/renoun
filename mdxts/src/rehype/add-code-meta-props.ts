@@ -27,6 +27,20 @@ export function addCodeMetaProps({
       if (element.tagName === 'pre') {
         const codeNode = element.children[0]
 
+        // Map meta string to props
+        const meta = (codeNode.data as any)?.meta as string | undefined
+        const props: Record<string, any> = {}
+        meta?.split(' ').forEach((prop) => {
+          const [key, value] = prop.split('=')
+          props[key] =
+            typeof value === 'undefined'
+              ? true
+              : value.replace(/^["']|["']$/g, '')
+        })
+
+        // Add props to code element
+        Object.assign(element.properties, props)
+
         if (
           codeNode &&
           codeNode.type === 'element' &&
@@ -46,21 +60,13 @@ export function addCodeMetaProps({
               onJavaScriptCodeBlock?.(
                 file.path,
                 codeNode.position?.start.line,
-                metadata.filename || `${filename}_${codeIndex++}.tsx`,
+                props.filename ||
+                  metadata.filename ||
+                  `${filename}.${codeIndex++}.tsx`,
                 codeString
               )
             }
           }
-
-          // Map meta string to props
-          const meta = (codeNode.data as any)?.meta as string | undefined
-          meta?.split(' ').forEach((prop) => {
-            const [key, value] = prop.split('=')
-            element.properties[key] =
-              typeof value === 'undefined'
-                ? true
-                : value.replace(/^["']|["']$/g, '')
-          })
         }
       }
     })

@@ -13,6 +13,7 @@ import { getEditorPath } from '../utils'
 import { renumberFilenames } from '../utils/renumber'
 import { getTypeDeclarations } from '../utils/get-type-declarations'
 import { getDiagnosticMessageText } from '../components/diagnostics'
+import { fixJsxOnly } from '../components/highlighter'
 
 type PluginOptions = {
   /** The git source to use for linking to the repository and source files. */
@@ -32,6 +33,7 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
   const project = new Project({
     tsConfigFilePath: resolve(process.cwd(), 'tsconfig.json'),
   })
+  const codeBlocksSourceFiles = []
   const withMDX = createMDXPlugin({
     options: {
       remarkPlugins: [
@@ -54,6 +56,11 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
                 codeString,
                 { overwrite: true }
               )
+
+              fixJsxOnly(sourceFile)
+
+              codeBlocksSourceFiles.push(sourceFile)
+
               const diagnostics = sourceFile.getPreEmitDiagnostics()
 
               if (diagnostics.length === 0) {

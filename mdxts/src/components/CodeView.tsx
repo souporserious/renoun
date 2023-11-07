@@ -1,7 +1,7 @@
 import * as React from 'react'
 import type { SourceFile } from 'ts-morph'
 import { Identifier, SyntaxKind } from 'ts-morph'
-import { type Theme } from './highlighter'
+import { type Theme, MdxtsJsxOnly } from './highlighter'
 import { QuickInfo } from './QuickInfo'
 
 export type CodeProps = {
@@ -24,6 +24,8 @@ export type CodeProps = {
   theme?: Theme
 }
 
+const lineHeight = 20
+
 /** Renders a code block with syntax highlighting. */
 export function CodeView({
   row,
@@ -41,7 +43,25 @@ export function CodeView({
   sourceFile: SourceFile
   highlighter: any
 }) {
-  const identifierBounds = sourceFile ? getIdentifierBounds(sourceFile, 20) : []
+  // intrinsic source file is used to calculate the position of identifiers when dealing with jsx only files
+  const intrinsicSourceFile = sourceFile
+    .getProject()
+    .getSourceFile(
+      `${sourceFile.getBaseNameWithoutExtension()}.mdxts.${sourceFile.getExtension()}`
+    )
+  const intrinsicIdentifierBounds = intrinsicSourceFile
+    ? getIdentifierBounds(intrinsicSourceFile, lineHeight)
+    : []
+  const identifierBounds = sourceFile
+    ? getIdentifierBounds(sourceFile, lineHeight).map((bounds, index) => {
+        const intrinsicBounds = intrinsicIdentifierBounds[index] || bounds
+        return {
+          ...bounds,
+          top: bounds.top - (bounds.top - intrinsicBounds.top),
+          left: bounds.left - (bounds.left - intrinsicBounds.left),
+        }
+      })
+    : []
   const shouldHighlightLine = calculateLinesToHighlight(highlight)
   return (
     <>
@@ -121,8 +141,8 @@ export function CodeView({
               style={{
                 position: 'absolute',
                 top: bounds.top,
-                left: bounds.left,
-                width: bounds.width,
+                left: `calc(${bounds.left} * 1ch)`,
+                width: `calc(${bounds.width} * 1ch)`,
                 height: bounds.height,
                 pointerEvents: 'auto',
               }}
@@ -190,22 +210,34 @@ export function calculateLinesToHighlight(meta) {
   }
 }
 
+/* Get the bounding rectangle of all identifiers in a source file. */
 function getIdentifierBounds(sourceFile: SourceFile, lineHeight: number) {
   const identifiers = sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)
+  const isJsxOnly = identifiers.some(
+    (identifier) => identifier.getText() === MdxtsJsxOnly
+  )
   const bounds = identifiers
     .filter((identifier) => {
       const parent = identifier.getParent()
-      return !Identifier.isJSDocTag(parent) && !Identifier.isJSDoc(parent)
+      const isJsxOnlyIdentifier = identifier.getText() === MdxtsJsxOnly
+      const isJsxOnlyImport = isJsxOnly
+        ? parent?.getKind() === SyntaxKind.ImportSpecifier
+        : false
+      return (
+        !Identifier.isJSDocTag(parent) &&
+        !Identifier.isJSDoc(parent) &&
+        !isJsxOnlyIdentifier &&
+        !isJsxOnlyImport
+      )
     })
     .map((identifier) => {
       const start = identifier.getStart()
       const { line, column } = sourceFile.getLineAndColumnAtPos(start)
-
       return {
         start,
         top: (line - 1) * lineHeight,
-        left: `calc(${column - 1} * 1ch)`,
-        width: `calc(${identifier.getWidth()} * 1ch)`,
+        left: column - 1,
+        width: identifier.getWidth(),
         height: lineHeight,
       }
     })

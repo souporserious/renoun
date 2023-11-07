@@ -1,18 +1,53 @@
 # Code
 
-```tsx filename="App.tsx" editable lineNumbers highlight="2,10-12"
+```tsx filename="useCounter.ts"
 import { useState } from 'react'
-import { Code, Navigation } from 'mdxts/components'
 
-/**
- * Say hello.
- *
- * @example
- * <Hello name="Penny" />
- */
-function Hello({ name }: { name: string }) {
-  return <div>Hello, {name}</div>
+export function useCounter(initialValue: number = 0) {
+  const [count, setCount] = useState(initialValue)
+  return {
+    count,
+    increment: () => setCount(count + 1),
+    decrement: () => setCount(count - 1),
+  }
 }
+```
 
-const foo = { hello: 'world' }
+```tsx filename="Counter.tsx"
+import { useCounter } from './useCounter'
+
+export function Counter({ initialCount }: { initialCount: number }) {
+  const { count, increment, decrement } = useCounter(initialCount)
+  return (
+    <div>
+      <button onClick={increment}>+</button>
+      <span>{count}</span>
+      <button onClick={decrement}>-</button>
+    </div>
+  )
+}
+```
+
+```tsx preview
+<Counter initialCount={2} />
+```
+
+```tsx preview
+<table>
+  <TableHeader />
+  <tbody>
+    <TableRow>
+      <td>Row 1</td>
+      <td>
+        <Counter initialCount={2} />
+      </td>
+    </TableRow>
+    <TableRow>
+      <td>Row 2</td>
+      <td>
+        <Counter initialCount={5} />
+      </td>
+    </TableRow>
+  </tbody>
+</table>
 ```

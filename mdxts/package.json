@@ -93,8 +93,8 @@
     "monaco-editor": "0.43.0",
     "monaco-editor-webpack-plugin": "7.1.0",
     "node-fetch": "^3.3.2",
-    "rollup": "^4.1.4",
-    "rollup-plugin-dts": "^6.0.2",
+    "rollup": "^4.1.5",
+    "rollup-plugin-dts": "^6.1.0",
     "remark-typography": "^0.6.14",
     "server-only": "0.0.1",
     "shiki": "^0.14.4",
@@ -105,6 +105,7 @@
     "unist-util-visit-parents": "^6.0.1",
     "vfile": "^6.0.1",
     "vscode-oniguruma": "^1.7.0",
-    "vscode-textmate": "^8.0.0"
+    "vscode-textmate": "^8.0.0",
+    "webpack-virtual-modules": "^0.6.0"
   }
 }

@@ -172,7 +172,7 @@ export async function getHighlighter(options: any): Promise<Highlighter> {
   const highlighter = await shikiGetHighlighter(options)
 
   return function (code: string, language: any, sourceFile?: SourceFile) {
-    const diagnostics = sourceFile?.getPreEmitDiagnostics()
+    const diagnostics = getSourceFileDiagnostics(sourceFile)
     const tokens = highlighter.codeToThemedTokens(code, language, null, {
       includeExplanation: false,
     })
@@ -229,4 +229,54 @@ export async function getHighlighter(options: any): Promise<Highlighter> {
       })
     })
   }
+}
+
+function getSourceFileDiagnostics(sourceFile?: SourceFile) {
+  if (!sourceFile) {
+    return
+  }
+
+  fixJsxOnly(sourceFile)
+
+  const diagnostics = sourceFile.getPreEmitDiagnostics()
+
+  if (diagnostics.length === 0) {
+    return
+  }
+
+  return diagnostics
+}
+
+function isJsxOnly(sourceFile: SourceFile) {
+  const sourceFileText = sourceFile.getFullText().trim()
+  return sourceFileText.startsWith('<') && sourceFileText.endsWith('>')
+}
+
+export const MdxtsJsxOnly = 'MdxtsJsxOnly'
+
+/** Fixes a source file that only contains JSX e.g. `<Counter initialCount={2} />` */
+export function fixJsxOnly(sourceFile: SourceFile) {
+  if (!isJsxOnly(sourceFile)) {
+    return
+  }
+
+  // create a copy of the original source file to compare against
+  sourceFile.copy(
+    `${sourceFile
+      .getFilePath()
+      .replace(
+        sourceFile.getExtension(),
+        `.mdxts.${sourceFile.getExtension()}`
+      )}`
+  )
+
+  const start = `export default function ${MdxtsJsxOnly}() {\n  return (\n`
+  const end = `\n);\n}`
+
+  sourceFile.replaceText(
+    [sourceFile.getStart(), sourceFile.getEnd()],
+    start + sourceFile.getFullText() + end
+  )
+  sourceFile.fixMissingImports()
+  sourceFile.formatText()
 }
