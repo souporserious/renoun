@@ -64,7 +64,7 @@ export function CodeView({
     : []
   const shouldHighlightLine = calculateLinesToHighlight(highlight)
   return (
-    <>
+    <div style={{ margin: '0 0 1.6rem' }}>
       {lineNumbers ? (
         <div
           style={{
@@ -189,7 +189,7 @@ export function CodeView({
           )
         })}
       </pre>
-    </>
+    </div>
   )
 }
 
