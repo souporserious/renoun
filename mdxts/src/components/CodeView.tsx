@@ -40,12 +40,12 @@ export function CodeView({
 }: CodeProps & {
   row?: [number, number]
   tokens: any
-  sourceFile: SourceFile
+  sourceFile?: SourceFile
   highlighter: any
 }) {
   // intrinsic source file is used to calculate the position of identifiers when dealing with jsx only files
   const intrinsicSourceFile = sourceFile
-    .getProject()
+    ?.getProject()
     .getSourceFile(
       `${sourceFile.getBaseNameWithoutExtension()}.mdxts${sourceFile.getExtension()}`
     )
