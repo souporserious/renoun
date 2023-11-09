@@ -1,4 +1,8 @@
+import Counter from './counter/Counter.tsx'
+
 # Code
+
+## Code Blocks
 
 ```tsx filename="useCounter.ts"
 import { useState } from 'react'
@@ -14,20 +18,29 @@ export function useCounter(initialValue: number = 0) {
 ```
 
 ```tsx filename="Counter.tsx"
+'use client'
 import { useCounter } from './useCounter'
 
-export function Counter({ initialCount }: { initialCount: number }) {
-  const { count, increment, decrement } = useCounter(initialCount)
+export default function Counter({ initialCount }: { initialCount: number }) {
+  const { count, decrement, increment } = useCounter(initialCount)
   return (
     <div>
-      <button onClick={increment}>+</button>
-      <span>{count}</span>
       <button onClick={decrement}>-</button>
+      <span>{count}</span>
+      <button onClick={increment}>+</button>
     </div>
   )
 }
 ```
 
-```tsx preview
+```tsx
 <Counter initialCount={2} />
 ```
+
+## Components
+
+<Code source="./counter/Counter.tsx" />
+
+<Code source="./counter/useCounter.ts" />
+
+<Counter initialCount={2} />

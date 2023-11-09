@@ -6,6 +6,7 @@ import theme from './theme.json'
 
 export function useMDXComponents() {
   return {
+    Code: (props) => <Code theme={theme} {...props} />,
     Example: (props) => <div {...props} />,
     Editor: (props) => <div {...props} />,
     Preview: (props) => <div {...props} />,

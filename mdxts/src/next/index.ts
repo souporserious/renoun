@@ -39,6 +39,7 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
       remarkPlugins: [
         // @ts-expect-error: Typings are incorrect
         remarkTypography,
+        // @ts-expect-error: Typings are incorrect
         remarkPlugin,
       ],
       rehypePlugins: [
