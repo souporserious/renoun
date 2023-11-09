@@ -53,14 +53,26 @@ export function CodeView({
     ? getIdentifierBounds(intrinsicSourceFile, lineHeight)
     : []
   const identifierBounds = sourceFile
-    ? getIdentifierBounds(sourceFile, lineHeight).map((bounds, index) => {
-        const intrinsicBounds = intrinsicIdentifierBounds[index] || bounds
-        return {
-          ...bounds,
-          top: bounds.top - (bounds.top - intrinsicBounds.top),
-          left: bounds.left - (bounds.left - intrinsicBounds.left),
-        }
-      })
+    ? getIdentifierBounds(sourceFile, lineHeight)
+        .map((bounds, index) => {
+          let intrinsicBounds = intrinsicIdentifierBounds[index]
+
+          // Filter out identifiers that are not in the intrinsic source file
+          if (intrinsicSourceFile) {
+            if (intrinsicBounds === undefined) {
+              return null
+            }
+          } else {
+            intrinsicBounds = bounds
+          }
+
+          return {
+            ...bounds,
+            top: bounds.top - (bounds.top - intrinsicBounds.top),
+            left: bounds.left - (bounds.left - intrinsicBounds.left),
+          }
+        })
+        .filter(Boolean)
     : []
   const shouldHighlightLine = calculateLinesToHighlight(highlight)
   return (
