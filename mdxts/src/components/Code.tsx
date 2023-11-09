@@ -92,7 +92,7 @@ export async function Code({
       filename={filename}
       highlighter={highlighter}
       highlight={highlight}
-      language={language}
+      language={finalLanguage}
       theme={theme}
     />
   )
