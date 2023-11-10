@@ -93,6 +93,8 @@ export async function Code({
     if (importCount === 0 && sourceFile.getImportDeclarations().length > 0) {
       isJsxOnly = true
     }
+
+    sourceFile.formatText({ indentSize: 2 })
   }
 
   const tokens = highlighter(
