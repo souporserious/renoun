@@ -34,7 +34,12 @@ export default function Counter({ initialCount }: { initialCount: number }) {
 ```
 
 ```tsx
-<Counter initialCount={2} />
+<Counter
+  initialCount={2}
+  boolean
+  someOtherProp={[1, 2, 3, 4, 5, 6, 7]}
+  render={() => <div>Hello</div>}
+/>
 ```
 
 ## Components

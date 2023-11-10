@@ -40,7 +40,8 @@ export type Tokens = Token[]
 export type Highlighter = (
   code: string,
   language: any,
-  sourceFile?: SourceFile
+  sourceFile?: SourceFile,
+  isJsxOnly?: boolean
 ) => Tokens[]
 
 const FontStyle = {
@@ -171,21 +172,46 @@ function processSymbol(
 export async function getHighlighter(options: any): Promise<Highlighter> {
   const highlighter = await shikiGetHighlighter(options)
 
-  return function (code: string, language: any, sourceFile?: SourceFile) {
+  return function (
+    code: string,
+    language: any,
+    sourceFile?: SourceFile,
+    isJsxOnly: boolean = false
+  ) {
     const diagnostics = getSourceFileDiagnostics(sourceFile)
-    const tokens = highlighter.codeToThemedTokens(code, language, null, {
-      includeExplanation: false,
-    })
+    const tokens = highlighter
+      .codeToThemedTokens(code, language, null, {
+        includeExplanation: false,
+      })
+      .filter((line) => {
+        // filter out imports when jsx only source file
+        if (isJsxOnly) {
+          return !line.some((token) => token.content === 'import')
+        }
+
+        return true
+      })
     const ranges: Array<{ start: number; end: number }> = sourceFile
       ?.getDescendantsOfKind(SyntaxKind.Identifier)
+      .filter((node) => {
+        // filter out imports when jsx only source file
+        if (isJsxOnly) {
+          const parent = node.getParent()
+          return (
+            parent?.getKind() !== SyntaxKind.ImportSpecifier &&
+            parent?.getKind() === SyntaxKind.ImportClause
+          )
+        }
+
+        return true
+      })
       .map((node) => {
         const start = node.getStart()
         const end = node.getEnd()
         return { start, end }
       })
     let position = 0
-
-    return tokens.map((line, lineIndex) => {
+    const parsedTokens = tokens.map((line, lineIndex) => {
       return line.flatMap((token, tokenIndex) => {
         const isLastToken = tokenIndex === line.length - 1
         const tokenStart = position
@@ -228,6 +254,13 @@ export async function getHighlighter(options: any): Promise<Highlighter> {
         return processedTokens.flatMap((token) => processSymbol(token, ranges))
       })
     })
+
+    // remove first line if it's jsx only since it's leftover whitespace from import statements
+    if (isJsxOnly) {
+      parsedTokens.shift()
+    }
+
+    return parsedTokens
   }
 }
 
@@ -235,8 +268,6 @@ function getSourceFileDiagnostics(sourceFile?: SourceFile) {
   if (!sourceFile) {
     return
   }
-
-  fixJsxOnly(sourceFile)
 
   const diagnostics = sourceFile.getPreEmitDiagnostics()
 
@@ -248,36 +279,11 @@ function getSourceFileDiagnostics(sourceFile?: SourceFile) {
 }
 
 function isJsxOnly(sourceFile: SourceFile) {
-  const sourceFileText = sourceFile.getFullText().trim()
+  const sourceFileText = sourceFile
+    .getFullText()
+    .replace(/import.*\n/g, '')
+    .trim()
   return sourceFileText.startsWith('<') && sourceFileText.endsWith('>')
 }
 
 export const MdxtsJsxOnly = 'MdxtsJsxOnly'
-
-/** Fixes a source file that only contains JSX e.g. `<Counter initialCount={2} />` */
-export function fixJsxOnly(sourceFile: SourceFile) {
-  if (!isJsxOnly(sourceFile)) {
-    return
-  }
-
-  // create a copy of the original source file to compare against
-  sourceFile.copy(
-    `${sourceFile
-      .getFilePath()
-      .replace(
-        sourceFile.getExtension(),
-        `.mdxts${sourceFile.getExtension()}`
-      )}`,
-    { overwrite: true }
-  )
-
-  const start = `export default function ${MdxtsJsxOnly}() {\n  return (\n`
-  const end = `\n);\n}`
-
-  sourceFile.replaceText(
-    [sourceFile.getStart(), sourceFile.getEnd()],
-    start + sourceFile.getFullText() + end
-  )
-  sourceFile.fixMissingImports()
-  sourceFile.formatText()
-}

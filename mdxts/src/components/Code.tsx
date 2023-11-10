@@ -59,6 +59,7 @@ export async function Code({
 }: CodeProps) {
   let finalValue
   let finalLanguage = language
+  let isJsxOnly = false
 
   if ('value' in props) {
     finalValue = props.value
@@ -70,7 +71,10 @@ export async function Code({
     finalLanguage = sourcePath.split('.').pop()
   }
 
-  const filename = filenameProp ?? `${filenameId++}.${finalLanguage}`
+  const filename =
+    'source' in props
+      ? props.source
+      : filenameProp ?? `${filenameId++}.mdxts.${finalLanguage}`
   const highlighter = await getHighlighter({ theme })
   let sourceFile: SourceFile
 
@@ -80,9 +84,23 @@ export async function Code({
     sourceFile = project.createSourceFile(filename, finalValue, {
       overwrite: true,
     })
+
+    const importCount = sourceFile.getImportDeclarations().length
+
+    sourceFile.fixMissingImports()
+
+    // If there were no imports, then this is a JSX-only source file.
+    if (importCount === 0 && sourceFile.getImportDeclarations().length > 0) {
+      isJsxOnly = true
+    }
   }
 
-  const tokens = highlighter(finalValue, finalLanguage, sourceFile)
+  const tokens = highlighter(
+    sourceFile.getFullText(),
+    finalLanguage,
+    sourceFile,
+    isJsxOnly
+  )
 
   return (
     <CodeView
@@ -94,6 +112,7 @@ export async function Code({
       highlight={highlight}
       language={finalLanguage}
       theme={theme}
+      isJsxOnly={isJsxOnly}
     />
   )
 }
