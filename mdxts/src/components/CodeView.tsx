@@ -54,8 +54,11 @@ export function CodeView({
     : []
   const identifierBounds = sourceFile
     ? getIdentifierBounds(sourceFile, lineHeight)
-        .map((bounds, index) => {
-          let intrinsicBounds = intrinsicIdentifierBounds[index]
+        .map(([identifier, bounds]) => {
+          let [, intrinsicBounds] =
+            intrinsicIdentifierBounds.find(([intrinsicIdentifier]) => {
+              return intrinsicIdentifier.getText() === identifier.getText()
+            }) || []
 
           // Filter out identifiers that are not in the intrinsic source file
           if (intrinsicSourceFile) {
@@ -245,14 +248,26 @@ function getIdentifierBounds(sourceFile: SourceFile, lineHeight: number) {
     .map((identifier) => {
       const start = identifier.getStart()
       const { line, column } = sourceFile.getLineAndColumnAtPos(start)
-      return {
-        start,
-        top: (line - 1) * lineHeight,
-        left: column - 1,
-        width: identifier.getWidth(),
-        height: lineHeight,
-      }
-    })
+      return [
+        identifier,
+        {
+          start,
+          top: (line - 1) * lineHeight,
+          left: column - 1,
+          width: identifier.getWidth(),
+          height: lineHeight,
+        },
+      ]
+    }) as [
+    Identifier,
+    {
+      start: number
+      top: number
+      left: number
+      width: number
+      height: number
+    },
+  ][]
 
   return bounds
 }
