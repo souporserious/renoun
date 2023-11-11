@@ -51,6 +51,7 @@ export type EditorProps = {
 const languageMap = {
   shell: 'shellscript',
   bash: 'shellscript',
+  mjs: 'javascript',
 }
 
 /** Code editor with syntax highlighting. */

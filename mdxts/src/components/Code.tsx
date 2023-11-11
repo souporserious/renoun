@@ -46,6 +46,11 @@ const loadTypeDeclarations = cache(async () => {
   })
 })
 
+const languageMap = {
+  shell: 'shellscript',
+  bash: 'shellscript',
+  mjs: 'javascript',
+}
 let filenameId = 0
 
 /** Renders a code block with syntax highlighting. */
@@ -58,7 +63,7 @@ export async function Code({
   ...props
 }: CodeProps) {
   let finalValue
-  let finalLanguage = language
+  let finalLanguage = languageMap[language] ?? language
   let isJsxOnly = false
 
   if ('value' in props) {
@@ -78,7 +83,7 @@ export async function Code({
   const highlighter = await getHighlighter({ theme })
   let sourceFile: SourceFile
 
-  if (['js', 'jsx', 'ts', 'tsx', 'mdx'].includes(finalLanguage)) {
+  if (['js', 'jsx', 'ts', 'tsx'].includes(finalLanguage)) {
     await loadTypeDeclarations()
 
     sourceFile = project.createSourceFile(filename, finalValue, {
@@ -97,12 +102,7 @@ export async function Code({
     sourceFile.formatText({ indentSize: 2 })
   }
 
-  const tokens = highlighter(
-    sourceFile.getFullText(),
-    finalLanguage,
-    sourceFile,
-    isJsxOnly
-  )
+  const tokens = highlighter(finalValue, finalLanguage, sourceFile, isJsxOnly)
 
   return (
     <CodeView

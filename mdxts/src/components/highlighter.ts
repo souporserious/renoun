@@ -173,11 +173,12 @@ export async function getHighlighter(options: any): Promise<Highlighter> {
   const highlighter = await shikiGetHighlighter(options)
 
   return function (
-    code: string,
+    value: string,
     language: any,
     sourceFile?: SourceFile,
     isJsxOnly: boolean = false
   ) {
+    const code = sourceFile ? sourceFile.getFullText() : value
     const diagnostics = getSourceFileDiagnostics(sourceFile)
     const tokens = highlighter
       .codeToThemedTokens(code, language, null, {
