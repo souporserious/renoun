@@ -26,7 +26,7 @@ type PluginOptions = {
 }
 
 /** Starts the MDXTS server and bundles all entry points defined in the plugin options. */
-export function createMDXTSPlugin(pluginOptions: PluginOptions) {
+export function createMdxtsPlugin(pluginOptions: PluginOptions) {
   const { gitSource, theme, types = [] } = pluginOptions
   const themePath = resolve(process.cwd(), theme)
   const project = new Project({
@@ -63,7 +63,7 @@ export function createMDXTSPlugin(pluginOptions: PluginOptions) {
     },
   })
 
-  return function withMDXTS(nextConfig: NextConfig = {}) {
+  return function withMdxts(nextConfig: NextConfig = {}) {
     const getWebpackConfig = nextConfig.webpack
     let startedWatcher = false
 

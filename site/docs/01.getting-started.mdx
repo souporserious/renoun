@@ -1,8 +1,8 @@
 # Getting Started
 
 <Summary>
-  MDXTS compiles and type checks your MDX and TypeScript files for building rich
-  interactive, and type safe content. Built on [MDX](https://mdxjs.com/),
+  MDXTS compiles and type checks your MDX content and TypeScript files enabling
+  rich interactive, and type safe content. Built on [MDX](https://mdxjs.com/),
   [esbuild](https://esbuild.github.io/), and [TS Morph](https://ts-morph.com/).
 </Summary>
 
@@ -16,18 +16,18 @@ pnpm install mdxts
 yarn add mdxts
 ```
 
-Once installed, you can set up the Next.js plugin that will build a graph of your content and code blocks throughout your project:
+Once installed, you can configure the Next.js plugin to build a graph of content and code blocks throughout your project:
 
-```mjs filename=next.config.mjs
-import { createMDXTSPlugin } from 'mdxts/next'
+```ts filename="next.config.ts"
+import { createMdxtsPlugin } from 'mdxts/next'
 
-const withMDXTS = createMDXTSPlugin({
+const withMdxts = createMdxtsPlugin({
   theme: 'theme.json',
-  gitSource: 'https://github.com/souporserious/mdxts/tree/main',
+  gitSource: 'souporserious/mdxts',
 })
 
-export default withMDXTS({
-  // ...
+export default withMdxts({
+  // Next.js config options...
 })
 ```
 

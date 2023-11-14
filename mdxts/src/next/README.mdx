@@ -4,12 +4,12 @@ NextJS plugin for MDXTS.
 
 ## Usage
 
-First, create a plugin using [[createMDXTSPlugin]] and export it along with any other configuration you need.
+First, create a plugin using [[createMdxtsPlugin]] and export it along with any other configuration you need.
 
 ```next.config.mjs
-import { createMDXTSPlugin } from 'mdxts/next'
+import { createMdxtsPlugin } from 'mdxts/next'
 
-const withMDXTS = createMDXTSPlugin({
+const withMdxts = createMdxtsPlugin({
   docs: {
     include: 'docs/**/*.mdx',
     loader: 'loaders/docs.ts',
@@ -19,7 +19,7 @@ const withMDXTS = createMDXTSPlugin({
   },
 })
 
-export default withMDXTS({
+export default withMdxts({
   compiler: { styledComponents: true },
 })
 ```

@@ -1,6 +1,6 @@
-import { createMDXTSPlugin } from 'mdxts/next'
+import { createMdxtsPlugin } from 'mdxts/next'
 
-const withMDXTS = createMDXTSPlugin({
+const withMdxts = createMdxtsPlugin({
   theme: 'theme.json',
   gitSource: 'https://github.com/souporserious/mdxts/tree/main',
   types: [
@@ -14,7 +14,7 @@ const withMDXTS = createMDXTSPlugin({
   ],
 })
 
-export default withMDXTS({
+export default withMdxts({
   compiler: {
     styledComponents: true,
   },
