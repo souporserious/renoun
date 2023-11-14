@@ -1,5 +1,6 @@
 'use client'
 import React, {
+  useContext,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -7,6 +8,7 @@ import React, {
   useState,
 } from 'react'
 import type { Diagnostic, SourceFile } from 'ts-morph'
+import { useMdxtsContext } from '../../context'
 import { getDiagnosticMessageText } from '../diagnostics'
 import type { Highlighter, Theme, Tokens } from '../highlighter'
 import { getHighlighter } from '../highlighter'
@@ -66,6 +68,7 @@ export function Editor({
   theme,
   children,
 }: EditorProps & { children?: React.ReactNode }) {
+  const mdxtsContext = useMdxtsContext()
   const filenameId = useId()
   const filename = filenameProp || `index-${filenameId.slice(1, -1)}.tsx`
   const language = languageMap[languageProp] || languageProp
@@ -148,6 +151,10 @@ export function Editor({
     setSourceFile(nextSourceFile)
 
     if (isJavaScriptBasedLanguage) {
+      mdxtsContext.codeBlocks.map(({ value, filename }) => {
+        project.createSourceFile(filename, value, { overwrite: true })
+      })
+
       const diagnostics = nextSourceFile.getPreEmitDiagnostics()
       setDiagnostics(diagnostics)
 

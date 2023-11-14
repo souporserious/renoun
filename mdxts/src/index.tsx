@@ -1,19 +1,24 @@
+import React from 'react'
 import title from 'title'
 import type { ComponentType } from 'react'
-import type { Headings } from './remark'
+import type { CodeBlocks, Headings } from './remark'
+import { MdxtsProvider } from './context'
+
+export * from './context'
 
 export type Module = {
   Component: ComponentType
   title: string
   pathname: string
   slug: string
-  headings?: Headings
+  headings: Headings
+  codeBlocks: CodeBlocks
   metadata?: { title: string; description: string }
 }
 
 /** Parses and attaches metadata to a module. */
 function parseModule(module, filename: string) {
-  const { default: Component, ...exports } = module
+  const { default: Component, codeBlocks, ...exports } = module
   const pathname = filename
     // Remove file extensions
     .replace(/\.[^/.]+$/, '')
@@ -24,7 +29,11 @@ function parseModule(module, filename: string) {
   const slug = pathname.split('/').pop()
 
   return {
-    Component,
+    Component: (props) => (
+      <MdxtsProvider value={{ codeBlocks }}>
+        <Component {...props} />
+      </MdxtsProvider>
+    ),
     title: module.metadata?.title || module.headings?.[0]?.text || title(slug),
     pathname,
     slug,

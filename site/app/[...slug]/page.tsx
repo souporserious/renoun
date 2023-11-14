@@ -13,7 +13,7 @@ export async function generateStaticParams() {
 export default function Page({ params }) {
   const doc = allDocs[`docs/${params.slug.join('/')}`]
 
-  if (doc == undefined) {
+  if (doc === undefined) {
     return notFound()
   }
 

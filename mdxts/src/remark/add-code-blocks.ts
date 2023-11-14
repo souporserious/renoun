@@ -1,44 +1,64 @@
-import type { Root, Node, Heading } from 'mdast'
-import type Slugger from 'github-slugger'
+import type { Root, Code } from 'mdast'
+import type { VFile } from 'vfile'
 
-let slugs: Slugger
-
-import('github-slugger').then(({ default: Slugger }) => {
-  slugs = new Slugger()
-})
-
-export type Headings = {
-  id: any
-  text: string
-  depth: number
+export type CodeBlocks = {
+  filename: string
+  value: string
+  props: Record<string, any>
 }[]
 
-/** Adds an `id` to all headings and exports a `headings` prop. */
-export function addHeadings() {
-  return async function (tree: Root) {
-    const headings: Headings = []
-    slugs.reset()
-
+/** Adds a `codeBlock` prop to `Playground` components and exports a `codeBlocks` constant. */
+export function addCodeBlocks() {
+  return async function (tree: Root, file: VFile) {
     const { visit } = await import('unist-util-visit')
-    const { toString } = await import('mdast-util-to-string')
 
-    visit(tree, 'heading', (node: Heading) => {
-      const text = node.children.map((child) => toString(child)).join('')
-      const heading = {
-        text,
-        id: slugs.slug(text),
-        depth: node.depth,
+    visit(tree, 'mdxJsxFlowElement', (node: any) => {
+      if (node.name === 'Playground') {
+        const [firstChild] = node.children
+        node.attributes = [
+          {
+            type: 'mdxJsxAttribute',
+            name: 'codeBlock',
+            value: file
+              .toString()
+              .slice(
+                firstChild.position.start.offset,
+                firstChild.position.end.offset
+              ),
+          },
+          ...node.attributes,
+        ]
       }
-      headings.push(heading)
+    })
 
-      /* Add `id` to heading. */
-      if (!node.data) {
-        node.data = {}
+    const codeBlocks: Array<{
+      filename: string
+      value: string
+      props: Record<string, any>
+    }> = []
+
+    visit(tree, 'code', (node: Code) => {
+      const isJavaScriptLanguage = ['js', 'jsx', 'ts', 'tsx'].some(
+        (extension) => extension === node.lang
+      )
+
+      if (isJavaScriptLanguage) {
+        const props: Record<string, any> = {}
+
+        node.meta?.split(' ').forEach((prop) => {
+          const [key, value] = prop.split('=')
+          props[key] =
+            typeof value === 'undefined'
+              ? true
+              : value.replace(/^["']|["']$/g, '')
+        })
+
+        codeBlocks.push({
+          filename: props.filename || `${file.path}.${codeBlocks.length}.tsx`,
+          value: node.value,
+          props,
+        })
       }
-      if (!node.data.hProperties) {
-        node.data.hProperties = {}
-      }
-      node.data.hProperties.id = heading.id
     })
 
     tree.children.unshift({
@@ -58,11 +78,11 @@ export function addHeadings() {
                     type: 'VariableDeclarator',
                     id: {
                       type: 'Identifier',
-                      name: 'headings',
+                      name: 'codeBlocks',
                     },
                     init: {
                       type: 'ArrayExpression',
-                      elements: headings.map((heading) => ({
+                      elements: codeBlocks.map((codeBlock) => ({
                         type: 'ObjectExpression',
                         properties: [
                           {
@@ -72,12 +92,12 @@ export function addHeadings() {
                             computed: false,
                             key: {
                               type: 'Identifier',
-                              name: 'text',
+                              name: 'value',
                             },
                             value: {
                               type: 'Literal',
-                              value: heading.text,
-                              raw: `"${heading.text}"`,
+                              value: codeBlock.value,
+                              raw: '`' + codeBlock.value + '`',
                             },
                             kind: 'init',
                           },
@@ -88,28 +108,12 @@ export function addHeadings() {
                             computed: false,
                             key: {
                               type: 'Identifier',
-                              name: 'id',
+                              name: 'filename',
                             },
                             value: {
                               type: 'Literal',
-                              value: heading.id,
-                              raw: `"${heading.id}"`,
-                            },
-                            kind: 'init',
-                          },
-                          {
-                            type: 'Property',
-                            method: false,
-                            shorthand: false,
-                            computed: false,
-                            key: {
-                              type: 'Identifier',
-                              name: 'depth',
-                            },
-                            value: {
-                              type: 'Literal',
-                              value: heading.depth,
-                              raw: `${heading.depth}`,
+                              value: codeBlock.filename,
+                              raw: `"${codeBlock.filename}"`,
                             },
                             kind: 'init',
                           },
@@ -129,11 +133,5 @@ export function addHeadings() {
         },
       },
     })
-  }
-}
-
-declare module 'mdast' {
-  interface Data {
-    hProperties?: Record<string, any>
   }
 }

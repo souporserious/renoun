@@ -8,10 +8,10 @@ export function useMDXComponents() {
   return {
     Code: (props) => <Code theme={theme} {...props} />,
     Example: (props) => <div {...props} />,
-    Playground: ({ codeString, ...props }) => {
+    Playground: ({ codeBlock, ...props }) => {
       return (
         <div style={{ display: 'flex' }}>
-          <Code language="tsx" theme={theme as any} value={codeString} />
+          <Code language="tsx" theme={theme as any} value={codeBlock} />
           <div {...props} />
         </div>
       )
