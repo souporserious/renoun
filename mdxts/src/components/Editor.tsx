@@ -3,6 +3,8 @@ import { Editor as ClientEditor } from './client/Editor'
 import type { EditorProps } from './client/Editor'
 import { Code } from './Code'
 
+export type { EditorProps } from './client/Editor'
+
 /** Renders a code editor with syntax highlighting, type information, and autocomplete. */
 export function Editor({
   defaultValue,
