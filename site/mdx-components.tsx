@@ -36,7 +36,7 @@ export function useMDXComponents() {
       highlight?: string
       children: React.ReactElement
     }) => {
-      const value = children.props.children.trim()
+      const value = children.props.children.trimStart()
       const metadata = getMetadataFromClassName(children.props.className || '')
 
       return editable ? (
@@ -45,7 +45,7 @@ export function useMDXComponents() {
           language={metadata?.language}
           lineNumbers={lineNumbers}
           highlight={highlight}
-          defaultValue={value.trim()}
+          defaultValue={value}
           theme={theme as any}
         />
       ) : (
@@ -54,7 +54,7 @@ export function useMDXComponents() {
           language={metadata?.language}
           lineNumbers={lineNumbers}
           highlight={highlight}
-          value={value.trim()}
+          value={value}
           theme={theme as any}
         />
       )
