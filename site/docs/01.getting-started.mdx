@@ -21,17 +21,10 @@ This library includes exports for various use cases that work best when used tog
 
 ## Package Exports
 
-`mdxts` - Data utilities for creating data in MDXTS.
-
-`mdxts/next` - Next.js plugin to enable MDXTS.
-
-`mdxts/components` - React Server and Client components for interacting with the MDXTS graph.
-
-`mdxts/remark` - Remark plugin
-
-`mdxts/rehype` - Rehype plugin
-
-`mdxts/watcher` - Watcher for MDX files
+<PackageExports
+  name="mdxts"
+  context={require.context('../../mdxts/src', true, /README\.mdx$/)}
+/>
 
 ## Guided Setup
 

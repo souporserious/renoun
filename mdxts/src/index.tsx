@@ -13,6 +13,7 @@ export type Module = {
   slug: string
   headings: Headings
   codeBlocks: CodeBlocks
+  summary: string
   metadata?: { title: string; description: string }
 }
 
