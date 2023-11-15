@@ -142,6 +142,7 @@ export function CodeView({
                 language={language}
                 position={bounds.start}
                 theme={theme}
+                sourceFile={sourceFile}
               />
             </div>
           )

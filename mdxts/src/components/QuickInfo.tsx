@@ -1,5 +1,7 @@
 import * as React from 'react'
+import { type SourceFile } from 'ts-morph'
 import { languageService } from './project'
+import { getDiagnosticMessageText } from './diagnostics'
 
 export function QuickInfo({
   bounds,
@@ -8,6 +10,7 @@ export function QuickInfo({
   highlighter,
   language,
   theme,
+  sourceFile,
 }: {
   bounds: any
   filename: string
@@ -15,8 +18,10 @@ export function QuickInfo({
   highlighter: any
   language: string
   theme: any
+  sourceFile: SourceFile
 }) {
   const quickInfo = languageService.getQuickInfoAtPosition(filename, position)
+  const diagnostics = sourceFile.getPreEmitDiagnostics()
 
   if (!quickInfo) {
     return null
@@ -41,6 +46,33 @@ export function QuickInfo({
           backgroundColor: theme.colors['editorHoverWidget.background'],
         }}
       >
+        {diagnostics.length ? (
+          <>
+            <div
+              style={{
+                padding: '5px 8px',
+                fontSize: 13,
+                color: theme.colors['editorHoverWidget.foreground'],
+              }}
+            >
+              {diagnostics.map((diagnostic, index) => {
+                return (
+                  <div key={index}>
+                    {getDiagnosticMessageText(diagnostic.getMessageText())}
+                  </div>
+                )
+              })}
+            </div>
+            <hr
+              style={{
+                height: 1,
+                border: 'none',
+                backgroundColor: theme.colors['editorHoverWidget.border'],
+                opacity: 0.5,
+              }}
+            />
+          </>
+        ) : null}
         <div style={{ padding: '5px 0px' }}>
           {displayTextTokens.map((line, index) => {
             return (
