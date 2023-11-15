@@ -1,8 +1,9 @@
 # Getting Started
 
 <Summary>
-  MDXTS compiles and type checks your MDX content and TypeScript files enabling
-  rich interactive, and type safe content. Built on [MDX](https://mdxjs.com/),
+  The best features of MDX and TypeScript. MDXTS generates a graph of content
+  and source code for better introspection. Build interactive, type safe content
+  and documentation easily. Built on [MDX](https://mdxjs.com/),
   [esbuild](https://esbuild.github.io/), and [TS Morph](https://ts-morph.com/).
 </Summary>
 
@@ -16,7 +17,27 @@ pnpm install mdxts
 yarn add mdxts
 ```
 
-Once installed, you can configure the Next.js plugin to build a graph of content and code blocks throughout your project:
+This library includes exports for various use cases that work best when used together, but can also be used independently.
+
+## Package Exports
+
+`mdxts` - Data utilities for creating data in MDXTS.
+
+`mdxts/next` - Next.js plugin to enable MDXTS.
+
+`mdxts/components` - React Server and Client components for interacting with the MDXTS graph.
+
+`mdxts/remark` - Remark plugin
+
+`mdxts/rehype` - Rehype plugin
+
+`mdxts/watcher` - Watcher for MDX files
+
+## Guided Setup
+
+### Configure Plugin
+
+Once the `mdxts` package is installed, you can configure the Next.js plugin to use a custom theme and git source:
 
 ```ts filename="next.config.ts"
 import { createMdxtsPlugin } from 'mdxts/next'
@@ -28,6 +49,31 @@ const withMdxts = createMdxtsPlugin({
 
 export default withMdxts({
   // Next.js config options...
+})
+```
+
+### Enable Type Checking
+
+To enable type checking, you need to add a `tsconfig.json` file to your project. The `mdxts` package will
+
+```ts filename="next.config.ts"
+const withMdxts = createMdxtsPlugin({
+  theme: 'theme.json',
+  gitSource: 'souporserious/mdxts',
+  types: ['mdxts/components', 'react', 'react-dom'],
+})
+```
+
+### Generating Data
+
+To generate data, you can use the `createData` function exported from the `mdxts` package:
+
+```ts filename="data.ts"
+import { createSourceFiles } from 'mdxts'
+
+export const allDocs = createSourceFiles({
+  pattern: '**/*.mdx',
+  baseDirectory: 'docs',
 })
 ```
 

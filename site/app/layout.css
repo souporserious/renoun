@@ -2,6 +2,7 @@
   --color-foreground: #fff;
   --color-foreground-interactive: hsla(0, 0%, 100%, 0.9);
   --color-background: #000;
+  --color-surface: #222;
   --color-separator: hsla(0, 0%, 100%, 0.96);
   --font-family-mono: 'SF Mono', Menlo, Consolas, 'Ubuntu Mono',
     'Liberation Mono', 'DejaVu Sans Mono', 'Courier New', monospace;
@@ -15,7 +16,7 @@
   --line-height-heading-1: 3rem;
   --line-height-heading-2: 2.4rem;
   --line-height-heading-3: 1.8rem;
-  --line-height-body: 2rem;
+  --line-height-body: 1.6rem;
   --font-weight-heading: 700;
   --font-weight-body: 400;
   --letter-spacing-body: 0.025rem;
@@ -29,7 +30,7 @@
 body {
   font-size: var(--font-size-body);
   font-family: var(--font-family-body);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.025em;
   background-color: var(--color-background);
   color: var(--color-foreground);
 }
@@ -62,6 +63,12 @@ h3 {
   font-weight: var(--font-weight-heading);
 }
 
+p {
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  font-weight: var(--font-weight-body);
+}
+
 main {
   padding: 6rem 2rem 2rem;
 }
@@ -79,6 +86,12 @@ pre {
   font-size: 1rem;
   padding: 1rem;
   overflow: auto;
+}
+
+code {
+  padding: 0.2rem 0.4rem;
+  font-size: 0.875em;
+  background-color: var(--color-surface);
 }
 
 .link {

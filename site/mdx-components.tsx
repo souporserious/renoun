@@ -22,7 +22,19 @@ export function useMDXComponents() {
     Outline: (props) => <div {...props} />,
     References: (props) => <div {...props} />,
     Summary: (props) => <div {...props} />,
-    Note: (props) => <div {...props} />,
+    Note: (props) => (
+      <div
+        style={{
+          fontSize: '0.875rem',
+          padding: '0.875rem',
+          margin: '1rem 0',
+          border: '1px solid #333',
+          borderRadius: '0.5rem',
+          backgroundColor: '#222',
+        }}
+        {...props}
+      />
+    ),
     pre: ({
       filename,
       editable,
