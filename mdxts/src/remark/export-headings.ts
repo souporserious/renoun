@@ -1,4 +1,4 @@
-import type { Headings } from './add-heading-ids'
+import type { Headings } from './add-headings'
 
 /** Exports `headings` as a constant. */
 export function exportHeadings({ headings }: { headings: Headings }) {

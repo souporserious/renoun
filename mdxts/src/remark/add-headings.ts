@@ -1,4 +1,4 @@
-import type { Root, Node, Heading } from 'mdast'
+import type { Root, Heading } from 'mdast'
 import type Slugger from 'github-slugger'
 
 let slugs: Slugger
