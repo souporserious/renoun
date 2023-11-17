@@ -2,6 +2,7 @@ import * as React from 'react'
 import type { SourceFile } from 'ts-morph'
 import { Identifier, SyntaxKind } from 'ts-morph'
 import { type Theme, MdxtsJsxOnly } from './highlighter'
+import { Symbol } from './Symbol'
 import { QuickInfo } from './QuickInfo'
 
 export type CodeProps = {
@@ -110,48 +111,27 @@ export function CodeView({
           overflow: 'visible',
         }}
       >
-        <style
-          dangerouslySetInnerHTML={{
-            __html: `
-          .identifier:hover {
-            background-color: #87add73d;
-            cursor: text;
-          }
-          .identifier > div {
-            display: none;
-          }
-          .identifier:hover > div {
-            display: block;
-          }
-        `,
-          }}
-        />
-        {identifierBounds.map((bounds, index) => {
-          return (
-            <div
-              key={index}
-              className="identifier"
-              style={{
-                position: 'absolute',
-                top: bounds.top,
-                left: `calc(${bounds.left} * 1ch)`,
-                width: `calc(${bounds.width} * 1ch)`,
-                height: bounds.height,
-                pointerEvents: 'auto',
-              }}
-            >
-              <QuickInfo
-                bounds={bounds}
-                filename={filename}
-                highlighter={highlighter}
-                language={language}
-                position={bounds.start}
-                theme={theme}
-                sourceFile={sourceFile}
-              />
-            </div>
-          )
-        })}
+        {identifierBounds.map((bounds, index) => (
+          <Symbol
+            key={index}
+            style={{
+              top: bounds.top,
+              left: `calc(${bounds.left} * 1ch)`,
+              width: `calc(${bounds.width} * 1ch)`,
+              height: bounds.height,
+            }}
+          >
+            <QuickInfo
+              bounds={bounds}
+              filename={filename}
+              highlighter={highlighter}
+              language={language}
+              position={bounds.start}
+              theme={theme}
+              sourceFile={sourceFile}
+            />
+          </Symbol>
+        ))}
         {tokens.map((line, lineIndex) => {
           return (
             <div
