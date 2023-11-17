@@ -1,6 +1,6 @@
 import React, { cache } from 'react'
 import { join } from 'node:path'
-import { readFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import type { SourceFile } from 'ts-morph'
 import { getHighlighter, type Theme } from './highlighter'
 import { project } from './project'
@@ -24,6 +24,12 @@ export type BaseCodeProps = {
 
   /** Show or hide errors. */
   showErrors?: boolean
+
+  /** Path to the source file on disk. */
+  sourcePath?: string
+
+  /** Line to scroll to. */
+  line?: number
 
   /** Class name to be applied to the code block. */
   className?: string
@@ -68,6 +74,8 @@ export async function Code({
   theme,
   className,
   showErrors,
+  sourcePath,
+  line,
   ...props
 }: CodeProps) {
   let finalValue
@@ -125,6 +133,28 @@ export async function Code({
       isJsxOnly={isJsxOnly}
       showErrors={showErrors}
       className={className}
+      edit={
+        process.env.NODE_ENV === 'development'
+          ? async function () {
+              'use server'
+              const sourceLine = line
+              const contents = await readFile(sourcePath, 'utf-8')
+              const modifiedContents = contents
+                .split('\n')
+                .map((_line, index) => {
+                  if (index === sourceLine - 1) {
+                    return _line.includes('showErrors')
+                      ? _line.replace('showErrors', '')
+                      : `${_line.trimEnd()} showErrors`
+                  }
+                  return _line
+                })
+                .join('\n')
+
+              writeFile(sourcePath, modifiedContents)
+            }
+          : undefined
+      }
     />
   )
 }

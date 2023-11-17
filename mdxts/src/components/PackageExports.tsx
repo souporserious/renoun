@@ -1,8 +1,8 @@
 import React from 'react'
 import fs from 'fs'
 import path from 'path'
-import { getEditorPath } from '../utils'
 import { redirect } from 'next/navigation'
+import { getEditorPath } from '../utils'
 
 // Remove the '/README.mdx' part to get the directory path
 // This assumes that all keys end with '/README.mdx'
@@ -93,25 +93,28 @@ export function PackageExports({
             {summary ? (
               <p>{summary}</p>
             ) : process.env.NODE_ENV === 'development' ? (
-              <form>
-                <button
-                  formAction={async function createReadme() {
-                    'use server'
-                    // create the README file if it doesn't exist
-                    if (!fs.existsSync(sourcePath)) {
-                      fs.writeFileSync(
-                        sourcePath,
-                        `# ${exportPath}\n\nThis is the README for the ${exportPath} export from the ${name} package.`
-                      )
-                    }
+              <form
+                action={async function createReadme() {
+                  'use server'
+                  // create the README file if it doesn't exist
+                  if (!fs.existsSync(sourcePath)) {
+                    fs.writeFileSync(
+                      sourcePath,
+                      `# ${exportPath}\n\nThis is the README for the ${exportPath} export from the ${name} package.`
+                    )
+                  }
 
-                    // open the README file in the editor
-                    redirect(editorPath)
-                  }}
+                  // open the README file in the editor
+                  redirect(editorPath)
+                }}
+              >
+                <button
                   style={{
+                    letterSpacing: '0.015em',
+                    fontWeight: 600,
                     padding: '0.5rem 0.8rem',
                     border: '1px solid #0479df',
-                    borderRadius: '0.5rem',
+                    borderRadius: '8px',
                     background: '#1871be',
                     color: 'white',
                   }}

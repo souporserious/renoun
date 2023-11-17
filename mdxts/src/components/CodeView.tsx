@@ -47,12 +47,14 @@ export function CodeView({
   showErrors,
   isJsxOnly,
   className,
+  edit,
 }: CodeProps & {
   row?: [number, number]
   tokens: any
   sourceFile?: SourceFile
   highlighter: any
   isJsxOnly?: boolean
+  edit?: any
 }) {
   const identifierBounds = sourceFile
     ? getIdentifierBounds(sourceFile, isJsxOnly, lineHeight)
@@ -122,10 +124,11 @@ export function CodeView({
             const end = start + diagnostic.getLength()
             return start <= bounds.start && bounds.start <= end
           })
+          const isQuickInfoOpen = showErrors && filteredDiagnostics.length > 0
           return (
             <Symbol
               key={index}
-              isQuickInfoOpen={showErrors && filteredDiagnostics.length > 0}
+              isQuickInfoOpen={isQuickInfoOpen}
               style={{
                 top: bounds.top,
                 left: `calc(${bounds.left} * 1ch)`,
@@ -141,6 +144,8 @@ export function CodeView({
                 position={bounds.start}
                 theme={theme}
                 diagnostics={filteredDiagnostics}
+                edit={edit}
+                isQuickInfoOpen={isQuickInfoOpen}
               />
             </Symbol>
           )

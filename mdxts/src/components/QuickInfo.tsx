@@ -11,6 +11,8 @@ export function QuickInfo({
   language,
   theme,
   diagnostics,
+  edit,
+  isQuickInfoOpen,
 }: {
   bounds: any
   filename: string
@@ -19,6 +21,8 @@ export function QuickInfo({
   language: string
   theme: any
   diagnostics: Diagnostic[]
+  edit: any
+  isQuickInfoOpen?: boolean
 }) {
   const quickInfo = languageService.getQuickInfoAtPosition(filename, position)
 
@@ -102,6 +106,31 @@ export function QuickInfo({
               {docText}
             </p>
           </>
+        ) : null}
+        {diagnostics.length > 0 ? (
+          <form
+            action={edit}
+            style={{
+              display: 'flex',
+              justifyContent: 'end',
+              padding: '5px 8px',
+            }}
+          >
+            <button
+              style={{
+                letterSpacing: '0.015em',
+                fontWeight: 600,
+                fontSize: '0.8rem',
+                padding: '0.25rem 0.5rem',
+                border: '1px solid #0479df',
+                borderRadius: '6px',
+                background: '#1871be',
+                color: 'white',
+              }}
+            >
+              {isQuickInfoOpen ? 'Hide' : 'Show'} Errors
+            </button>
+          </form>
         ) : null}
       </div>
     </>

@@ -1,7 +1,7 @@
 import type { Element, Node } from 'hast'
 import type { VFile } from 'vfile'
 import path from 'node:path'
-import { getMetadataFromClassName } from '../utils'
+import { getEditorPath, getMetadataFromClassName } from '../utils'
 
 export type AddCodeMetaPropsOptions = {
   /** Called when a code block is found. */
@@ -37,6 +37,12 @@ export function addCodeMetaProps({
               ? true
               : value.replace(/^["']|["']$/g, '')
         })
+
+        if (process.env.NODE_ENV === 'development') {
+          props.workingDirectory = file.dirname
+          props.sourcePath = file.path
+          props.line = element.position.start.line
+        }
 
         // Add props to code element
         Object.assign(element.properties, props)

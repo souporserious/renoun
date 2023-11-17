@@ -48,6 +48,8 @@ export function useMDXComponents() {
       lineNumbers,
       showErrors,
       highlight,
+      sourcePath,
+      line,
       children,
     }: {
       filename?: string
@@ -55,6 +57,8 @@ export function useMDXComponents() {
       lineNumbers?: boolean
       showErrors?: boolean
       highlight?: string
+      sourcePath?: string
+      line?: number
       children: React.ReactElement
     }) => {
       const value = children.props.children.trimStart()
@@ -80,6 +84,8 @@ export function useMDXComponents() {
           theme={theme as any}
           showErrors={showErrors}
           className={GeistMono.className}
+          sourcePath={sourcePath}
+          line={line}
         />
       )
     },
