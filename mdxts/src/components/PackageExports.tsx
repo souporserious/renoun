@@ -34,7 +34,6 @@ export function PackageExports({
     const tsconfigPath = path.join(packageDirectoryPath, 'tsconfig.json')
     const tsconfig = JSON.parse(fs.readFileSync(tsconfigPath, 'utf8'))
     const readmeModules = context.keys().reduce((allModules, key) => {
-      console.log(key)
       const normalizedKey = normalizeKey(key, name)
       allModules[normalizedKey] = context(key)
       return allModules

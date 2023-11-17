@@ -199,11 +199,18 @@ function reportDiagnostics(
 ) {
   const diagnostics = sourceFile.getPreEmitDiagnostics()
 
-  if (diagnostics.length === 0) {
+  if (
+    diagnostics.length === 0 ||
+    sourceFile.getFullText().includes('showErrors')
+  ) {
     return
   }
 
-  console.log(`mdxts: errors in the following code blocks`)
+  console.log(
+    `\n❌ ${diagnostics.length} error${
+      diagnostics.length > 1 ? 's' : ''
+    } in the following code blocks:\n`
+  )
 
   diagnostics.forEach((diagnostic) => {
     const message = diagnostic.getMessageText()
@@ -215,7 +222,7 @@ function reportDiagnostics(
       line: lineStart + line,
       column,
     })
-    console.log(sourcePath)
-    console.log(getDiagnosticMessageText(message))
+    console.log(`${sourcePath}`)
+    console.log(`${getDiagnosticMessageText(message)}\n`)
   })
 }

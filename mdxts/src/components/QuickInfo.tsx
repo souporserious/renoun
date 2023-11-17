@@ -54,13 +54,11 @@ export function QuickInfo({
                 color: theme.colors['editorHoverWidget.foreground'],
               }}
             >
-              {diagnostics.map((diagnostic, index) => {
-                return (
-                  <div key={index}>
-                    {getDiagnosticMessageText(diagnostic.getMessageText())}
-                  </div>
-                )
-              })}
+              {diagnostics.map((diagnostic, index) => (
+                <div key={index}>
+                  {getDiagnosticMessageText(diagnostic.getMessageText())}
+                </div>
+              ))}
             </div>
             <hr
               style={{
