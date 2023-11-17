@@ -46,12 +46,14 @@ export function useMDXComponents() {
       filename,
       editable,
       lineNumbers,
+      showErrors,
       highlight,
       children,
     }: {
       filename?: string
       editable?: boolean
       lineNumbers?: boolean
+      showErrors?: boolean
       highlight?: string
       children: React.ReactElement
     }) => {
@@ -76,6 +78,7 @@ export function useMDXComponents() {
           highlight={highlight}
           value={value}
           theme={theme as any}
+          showErrors={showErrors}
           className={GeistMono.className}
         />
       )

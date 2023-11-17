@@ -1,9 +1,9 @@
 # Getting Started
 
 <Summary>
-  The best features of MDX and TypeScript. MDXTS generates a graph of content
-  and source code for better introspection. Build interactive, type safe content
-  and documentation easily. Built on [MDX](https://mdxjs.com/),
+  Build interactive, type-safe content, and documentation. MDXTS generates a
+  graph of content, source code, and examples that can be rendered through
+  components and utilities. Built on [MDX](https://mdxjs.com/),
   [esbuild](https://esbuild.github.io/), and [TS Morph](https://ts-morph.com/).
 </Summary>
 
@@ -61,7 +61,7 @@ const withMdxts = createMdxtsPlugin({
 
 To generate data, you can use the `createData` function exported from the `mdxts` package:
 
-```ts filename="data.ts"
+```ts filename="data.ts" showErrors
 import { createSourceFiles } from 'mdxts'
 
 export const allDocs = createSourceFiles({

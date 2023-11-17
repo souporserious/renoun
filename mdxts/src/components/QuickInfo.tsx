@@ -26,11 +26,6 @@ export function QuickInfo({
     return null
   }
 
-  const filteredDiagnostics = diagnostics.filter((diagnostic) => {
-    const start = diagnostic.getStart()
-    const end = start + diagnostic.getLength()
-    return start <= position && position <= end
-  })
   const displayParts = quickInfo.displayParts || []
   const documentation = quickInfo.documentation || []
   const displayText = displayParts.map((part) => part.text).join('')
@@ -50,7 +45,7 @@ export function QuickInfo({
           backgroundColor: theme.colors['editorHoverWidget.background'],
         }}
       >
-        {filteredDiagnostics.length ? (
+        {diagnostics.length ? (
           <>
             <div
               style={{
@@ -59,7 +54,7 @@ export function QuickInfo({
                 color: theme.colors['editorHoverWidget.foreground'],
               }}
             >
-              {filteredDiagnostics.map((diagnostic, index) => {
+              {diagnostics.map((diagnostic, index) => {
                 return (
                   <div key={index}>
                     {getDiagnosticMessageText(diagnostic.getMessageText())}

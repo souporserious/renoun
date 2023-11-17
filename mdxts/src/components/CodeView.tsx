@@ -24,6 +24,9 @@ export type CodeProps = {
   /** VS Code-based theme for highlighting. */
   theme?: Theme
 
+  /** Show or hide errors. */
+  showErrors?: boolean
+
   /** Class name to be applied to the code block. */
   className?: string
 }
@@ -41,6 +44,7 @@ export function CodeView({
   highlighter,
   language,
   theme,
+  showErrors,
   isJsxOnly,
   className,
 }: CodeProps & {
@@ -112,27 +116,35 @@ export function CodeView({
           overflow: 'visible',
         }}
       >
-        {identifierBounds.map((bounds, index) => (
-          <Symbol
-            key={index}
-            style={{
-              top: bounds.top,
-              left: `calc(${bounds.left} * 1ch)`,
-              width: `calc(${bounds.width} * 1ch)`,
-              height: bounds.height,
-            }}
-          >
-            <QuickInfo
-              bounds={bounds}
-              filename={filename}
-              highlighter={highlighter}
-              language={language}
-              position={bounds.start}
-              theme={theme}
-              diagnostics={diagnostics}
-            />
-          </Symbol>
-        ))}
+        {identifierBounds.map((bounds, index) => {
+          const filteredDiagnostics = diagnostics.filter((diagnostic) => {
+            const start = diagnostic.getStart()
+            const end = start + diagnostic.getLength()
+            return start <= bounds.start && bounds.start <= end
+          })
+          return (
+            <Symbol
+              key={index}
+              isQuickInfoOpen={showErrors && filteredDiagnostics.length > 0}
+              style={{
+                top: bounds.top,
+                left: `calc(${bounds.left} * 1ch)`,
+                width: `calc(${bounds.width} * 1ch)`,
+                height: bounds.height,
+              }}
+            >
+              <QuickInfo
+                bounds={bounds}
+                filename={filename}
+                highlighter={highlighter}
+                language={language}
+                position={bounds.start}
+                theme={theme}
+                diagnostics={filteredDiagnostics}
+              />
+            </Symbol>
+          )
+        })}
         {tokens.map((line, lineIndex) => {
           return (
             <div

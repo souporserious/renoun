@@ -4,9 +4,11 @@ import React, { useState } from 'react'
 export function Symbol({
   children,
   style,
+  isQuickInfoOpen,
 }: {
   children: React.ReactNode
   style?: React.CSSProperties
+  isQuickInfoOpen?: boolean
 }) {
   const [hover, setHover] = useState(false)
 
@@ -21,7 +23,7 @@ export function Symbol({
         ...style,
       }}
     >
-      {hover ? children : null}
+      {isQuickInfoOpen || hover ? children : null}
     </div>
   )
 }

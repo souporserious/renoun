@@ -22,6 +22,9 @@ export type BaseCodeProps = {
   /** VS Code-based theme for highlighting. */
   theme?: Theme
 
+  /** Show or hide errors. */
+  showErrors?: boolean
+
   /** Class name to be applied to the code block. */
   className?: string
 }
@@ -64,6 +67,7 @@ export async function Code({
   highlight,
   theme,
   className,
+  showErrors,
   ...props
 }: CodeProps) {
   let finalValue
@@ -119,6 +123,7 @@ export async function Code({
       language={finalLanguage}
       theme={theme}
       isJsxOnly={isJsxOnly}
+      showErrors={showErrors}
       className={className}
     />
   )

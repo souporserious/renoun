@@ -24,8 +24,8 @@ export default function Page({ params }) {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1fr) 160px',
-          gap: '1rem',
+          gridTemplateColumns: 'minmax(0, 1fr) 140px',
+          gap: '2rem',
         }}
       >
         <div>

@@ -46,7 +46,7 @@ export function Sidebar() {
         renderList={(props) => (
           <ul
             style={{
-              paddingLeft: props.order * 0.5 + 'rem',
+              paddingLeft: props.order * 0.8 + 'rem',
               listStyle: 'none',
             }}
           >
@@ -60,7 +60,7 @@ export function Sidebar() {
           >
             {props.children ? (
               <div style={{ padding: '0.25rem 0', cursor: 'default' }}>
-                <Text weight={600}>{props.title}</Text>
+                <Text>{props.title}</Text>
               </div>
             ) : (
               <SidebarLink
