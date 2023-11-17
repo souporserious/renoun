@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { type SourceFile } from 'ts-morph'
+import { type Diagnostic } from 'ts-morph'
 import { languageService } from './project'
 import { getDiagnosticMessageText } from './diagnostics'
 
@@ -10,7 +10,7 @@ export function QuickInfo({
   highlighter,
   language,
   theme,
-  sourceFile,
+  diagnostics,
 }: {
   bounds: any
   filename: string
@@ -18,15 +18,19 @@ export function QuickInfo({
   highlighter: any
   language: string
   theme: any
-  sourceFile: SourceFile
+  diagnostics: Diagnostic[]
 }) {
   const quickInfo = languageService.getQuickInfoAtPosition(filename, position)
-  const diagnostics = sourceFile.getPreEmitDiagnostics()
 
   if (!quickInfo) {
     return null
   }
 
+  const filteredDiagnostics = diagnostics.filter((diagnostic) => {
+    const start = diagnostic.getStart()
+    const end = start + diagnostic.getLength()
+    return start <= position && position <= end
+  })
   const displayParts = quickInfo.displayParts || []
   const documentation = quickInfo.documentation || []
   const displayText = displayParts.map((part) => part.text).join('')
@@ -46,7 +50,7 @@ export function QuickInfo({
           backgroundColor: theme.colors['editorHoverWidget.background'],
         }}
       >
-        {diagnostics.length ? (
+        {filteredDiagnostics.length ? (
           <>
             <div
               style={{
@@ -55,7 +59,7 @@ export function QuickInfo({
                 color: theme.colors['editorHoverWidget.foreground'],
               }}
             >
-              {diagnostics.map((diagnostic, index) => {
+              {filteredDiagnostics.map((diagnostic, index) => {
                 return (
                   <div key={index}>
                     {getDiagnosticMessageText(diagnostic.getMessageText())}
