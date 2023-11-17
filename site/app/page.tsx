@@ -3,8 +3,10 @@
 import * as React from 'react'
 import * as jsxRuntime from 'react/jsx-runtime'
 import { evaluateSync } from '@mdx-js/mdx'
+// import { Editor } from 'mdxts/components/client'
 import { Logo } from 'components/Logo'
 import Link from 'next/link'
+// import theme from '../theme.json'
 
 type ContentComponent = React.ComponentType<any>
 
@@ -12,9 +14,22 @@ const initialContent = `
 # Hello MDX
 
 ## Start editing to see some magic happen!
+
+\`\`\`tsx
+import { createMdxtsPlugin } from 'mdxts/next'
+
+const withMdxts = createMdxtsPlugin({
+  theme: 'theme.json',
+  gitSource: 'souporserious/mdxts',
+})
+
+export default withMdxts({
+  // Next.js config options...
+})
+\`\`\`
 `.trim()
 
-export default function Editor() {
+export default function Home() {
   const [value, setValue] = React.useState(initialContent)
   const [error, setError] = React.useState(null)
   const lastContent = React.useRef<ContentComponent>(null)
@@ -49,21 +64,17 @@ export default function Editor() {
       </header>
 
       <main>
-        <section
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr minmax(40ch, 1fr) minmax(40ch, 1fr) 1fr',
-            gap: '2rem',
-            padding: '2rem 8rem 8rem',
-          }}
-        >
-          <h1 style={{ gridColumn: 2, fontSize: '4rem', lineHeight: 1 }}>
-            Tell your story with the full power of MDX and TypeScript
+        <section style={{ padding: '2rem 8rem 8rem' }}>
+          <h1
+            style={{
+              gridColumn: 2,
+              fontSize: '6vw',
+              lineHeight: 1,
+              textAlign: 'center',
+            }}
+          >
+            Structured content authoring in MDX.
           </h1>
-          <p style={{ gridColumn: 3, fontSize: '2rem', paddingTop: '1rem' }}>
-            Generate rich static content for any framework. MDXTS is a data
-            generator for building performant sites with MDX and TypeScript.
-          </p>
         </section>
 
         <section>
@@ -71,9 +82,14 @@ export default function Editor() {
             style={{
               display: 'grid',
               gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
-              minHeight: '100vh',
             }}
           >
+            {/* <Editor
+              value={value}
+              onChange={(event) => setValue(event.target.value)}
+              theme={theme as any}
+              language="mdx"
+            /> */}
             <textarea
               value={value}
               onChange={(event) => setValue(event.target.value)}
@@ -91,16 +107,7 @@ export default function Editor() {
                 boxShadow: error && 'inset 0 0 0 2px #d54040',
               }}
             >
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  padding: 16,
-                  gap: 16,
-                  textAlign: 'center',
-                  flex: 1,
-                }}
-              >
+              <div style={{ padding: 16, flex: 1 }}>
                 <Content
                   components={{
                     h1: (props) => <h1 {...props} style={{ fontSize: 40 }} />,
