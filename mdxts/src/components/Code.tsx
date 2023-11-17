@@ -21,6 +21,9 @@ export type BaseCodeProps = {
 
   /** VS Code-based theme for highlighting. */
   theme?: Theme
+
+  /** Class name to be applied to the code block. */
+  className?: string
 }
 
 export type CodeProps =
@@ -60,6 +63,7 @@ export async function Code({
   lineNumbers,
   highlight,
   theme,
+  className,
   ...props
 }: CodeProps) {
   let finalValue
@@ -115,6 +119,7 @@ export async function Code({
       language={finalLanguage}
       theme={theme}
       isJsxOnly={isJsxOnly}
+      className={className}
     />
   )
 }

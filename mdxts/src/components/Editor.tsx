@@ -13,6 +13,7 @@ export function Editor({
   lineNumbers,
   highlight,
   theme,
+  className,
 }: Omit<EditorProps, 'onChange' | 'value'>) {
   return (
     <ClientEditor
@@ -22,6 +23,7 @@ export function Editor({
       lineNumbers={lineNumbers}
       highlight={highlight}
       theme={theme}
+      className={className}
     >
       <Code
         value={defaultValue}

@@ -1,4 +1,5 @@
 import React from 'react'
+import { GeistSans } from 'geist/font/sans'
 import { AppProvider } from './app-provider'
 
 import './layout.css'
@@ -9,11 +10,11 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html>
+    <html lang="en">
       <head>
         <link rel="canonical" href="https://www.mdxts.com" />
       </head>
-      <body>
+      <body className={GeistSans.className}>
         <div
           style={{
             fontWeight: 600,

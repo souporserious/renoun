@@ -45,6 +45,9 @@ export type EditorProps = {
   /** VS Code-based theme for highlighting. */
   theme?: Theme
 
+  /** Class name to be applied to the code block. */
+  className?: string
+
   /** Callback when the editor value changes. */
   onChange?: (event: React.ChangeEvent<HTMLTextAreaElement>) => void
 }
@@ -65,6 +68,7 @@ export function Editor({
   highlight,
   onChange,
   theme,
+  className,
   children,
 }: EditorProps & { children?: React.ReactNode }) {
   const mdxtsContext = useMdxtsContext()
@@ -275,6 +279,7 @@ export function Editor({
 
   return (
     <div
+      className={className}
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -384,7 +389,7 @@ export function Editor({
             gridRow: 1,
             whiteSpace: 'pre',
             wordWrap: 'break-word',
-            fontFamily: 'monospace',
+            fontFamily: 'inherit',
             fontSize: 14,
             lineHeight: '20px',
             letterSpacing: '0px',

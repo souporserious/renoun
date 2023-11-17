@@ -2,6 +2,7 @@ import * as React from 'react'
 import type { MDXComponents } from 'mdx/types'
 import { getMetadataFromClassName } from 'mdxts/utils'
 import { Code, Editor, PackageExports } from 'mdxts/components'
+import { GeistMono } from 'geist/font/mono'
 import theme from './theme.json'
 
 export function useMDXComponents() {
@@ -12,7 +13,12 @@ export function useMDXComponents() {
     Playground: ({ codeBlock, ...props }) => {
       return (
         <div style={{ display: 'flex' }}>
-          <Code language="tsx" theme={theme as any} value={codeBlock} />
+          <Code
+            className={GeistMono.className}
+            language="tsx"
+            theme={theme as any}
+            value={codeBlock}
+          />
           <div {...props} />
         </div>
       )
@@ -60,6 +66,7 @@ export function useMDXComponents() {
           highlight={highlight}
           defaultValue={value}
           theme={theme as any}
+          className={GeistMono.className}
         />
       ) : (
         <Code
@@ -69,6 +76,7 @@ export function useMDXComponents() {
           highlight={highlight}
           value={value}
           theme={theme as any}
+          className={GeistMono.className}
         />
       )
     },
