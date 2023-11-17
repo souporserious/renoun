@@ -109,6 +109,13 @@ export function PackageExports({
                     // open the README file in the editor
                     redirect(editorPath)
                   }}
+                  style={{
+                    padding: '0.5rem 0.8rem',
+                    border: '1px solid #0479df',
+                    borderRadius: '0.5rem',
+                    background: '#1871be',
+                    color: 'white',
+                  }}
                 >
                   Create README
                 </button>
