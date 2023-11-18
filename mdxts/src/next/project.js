@@ -5,7 +5,7 @@ let project = null
 
 parentPort?.on('message', (message) => {
   if (message.type === 'createProject') {
-    project = new Project(message.options)
+    project = new Project({ ...message.options, useInMemoryFileSystem: true })
   } else if (message.type === 'createOrUpdateFile' && project) {
     const { filePath, filename, lineStart, codeString } = message
     const sourceFile = project.createSourceFile(filename, codeString, {

@@ -8,7 +8,7 @@ import { rehypePlugin } from './index'
 const remarkProcessor = unified().use(remarkParse).use(remarkRehype)
 
 test('adds code blocks to project', async () => {
-  const project = new Project()
+  const project = new Project({ useInMemoryFileSystem: true })
   const processor = remarkProcessor
     .use(rehypePlugin, {
       onJavaScriptCodeBlock: (_filePath, _lineStart, filename, codeString) => {
