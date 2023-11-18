@@ -50,6 +50,8 @@ export default withMdxts({
 To enable type checking, you need to add a `tsconfig.json` file to your project. The `mdxts` package will
 
 ```ts filename="next.config.ts"
+import { createMdxtsPlugin } from 'mdxts/next'
+
 const withMdxts = createMdxtsPlugin({
   theme: 'theme.json',
   gitSource: 'souporserious/mdxts',
@@ -61,7 +63,7 @@ const withMdxts = createMdxtsPlugin({
 
 To generate data, you can use the `createData` function exported from the `mdxts` package:
 
-```ts filename="data.ts"  showErrors
+```ts filename="data.ts" showErrors
 import { createSourceFiles } from 'mdxts'
 
 export const allDocs = createSourceFiles({

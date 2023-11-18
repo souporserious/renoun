@@ -2,17 +2,15 @@ import webpack from 'webpack'
 import { NextConfig } from 'next'
 import { resolve, join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { Worker } from 'node:worker_threads'
 import { writeFile } from 'node:fs/promises'
 import CopyPlugin from 'copy-webpack-plugin'
-import { Project, type SourceFile } from 'ts-morph'
 import remarkTypography from 'remark-typography'
 import createMDXPlugin from '@next/mdx'
 import { remarkPlugin } from '../remark'
 import { rehypePlugin } from '../rehype'
-import { getEditorPath } from '../utils'
 import { renumberFilenames } from '../utils/renumber'
 import { getTypeDeclarations } from '../utils/get-type-declarations'
-import { getDiagnosticMessageText } from '../components/diagnostics'
 
 type PluginOptions = {
   /** The git source to use for linking to the repository and source files. */
@@ -25,13 +23,14 @@ type PluginOptions = {
   types?: string[]
 }
 
+const projectWorker = new Worker(
+  join(process.cwd(), 'node_modules/mdxts/src/next/project.js')
+)
+
 /** Starts the MDXTS server and bundles all entry points defined in the plugin options. */
 export function createMdxtsPlugin(pluginOptions: PluginOptions) {
   const { gitSource, theme, types = [] } = pluginOptions
   const themePath = resolve(process.cwd(), theme)
-  const project = new Project({
-    tsConfigFilePath: resolve(process.cwd(), 'tsconfig.json'),
-  })
   const withMDX = createMDXPlugin({
     options: {
       remarkPlugins: [
@@ -50,17 +49,23 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
               filename,
               codeString
             ) => {
-              const sourceFile = project.createSourceFile(
+              projectWorker.postMessage({
+                type: 'createOrUpdateFile',
                 filename,
                 codeString,
-                { overwrite: true }
-              )
-              reportDiagnostics(sourceFile, filePath, lineStart)
+                filePath,
+                lineStart,
+              })
             },
           },
         ],
       ],
     },
+  })
+
+  projectWorker.postMessage({
+    type: 'createProject',
+    config: { tsConfigFilePath: resolve(process.cwd(), 'tsconfig.json') },
   })
 
   return function withMdxts(nextConfig: NextConfig = {}) {
@@ -190,39 +195,4 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
       return withMDX(nextConfig)
     }
   }
-}
-
-function reportDiagnostics(
-  sourceFile: SourceFile,
-  filePath: string,
-  lineStart: number
-) {
-  const diagnostics = sourceFile.getPreEmitDiagnostics()
-
-  if (
-    diagnostics.length === 0 ||
-    sourceFile.getFullText().includes('showErrors')
-  ) {
-    return
-  }
-
-  console.log(
-    `\n❌ ${diagnostics.length} error${
-      diagnostics.length > 1 ? 's' : ''
-    } in the following code blocks:\n`
-  )
-
-  diagnostics.forEach((diagnostic) => {
-    const message = diagnostic.getMessageText()
-    const { line, column } = sourceFile.getLineAndColumnAtPos(
-      diagnostic.getStart()
-    )
-    const sourcePath = getEditorPath({
-      path: filePath,
-      line: lineStart + line,
-      column,
-    })
-    console.log(`${sourcePath}`)
-    console.log(`${getDiagnosticMessageText(message)}\n`)
-  })
 }
