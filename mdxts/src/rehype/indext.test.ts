@@ -5,11 +5,7 @@ import rehypeStringify from 'rehype-stringify'
 import { Project } from 'ts-morph'
 import { rehypePlugin } from './index'
 
-const remarkProcessor = unified()
-  // @ts-expect-error
-  .use(remarkParse)
-  // @ts-expect-error
-  .use(remarkRehype)
+const remarkProcessor = unified().use(remarkParse).use(remarkRehype)
 
 test('adds code blocks to project', async () => {
   const project = new Project()
