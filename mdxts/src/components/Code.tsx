@@ -33,6 +33,9 @@ export type BaseCodeProps = {
 
   /** Class name to be applied to the code block. */
   className?: string
+
+  /** Whether the code block is nested in an editor. */
+  isNestedInEditor?: boolean
 }
 
 export type CodeProps =
@@ -76,6 +79,7 @@ export async function Code({
   showErrors,
   sourcePath,
   line,
+  isNestedInEditor,
   ...props
 }: CodeProps) {
   let finalValue
@@ -137,6 +141,7 @@ export async function Code({
       language={finalLanguage}
       theme={theme}
       isJsxOnly={isJsxOnly}
+      isNestedInEditor={isNestedInEditor}
       showErrors={showErrors}
       className={className}
       edit={

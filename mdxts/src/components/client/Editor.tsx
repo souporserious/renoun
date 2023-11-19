@@ -15,13 +15,7 @@ import { project, languageService } from '../project'
 import { CodeView } from '../CodeView'
 
 const isClient = typeof document !== 'undefined'
-const canvas = isClient ? document.createElement('canvas') : null
-const context = canvas?.getContext('2d')
 let fetchPromise = isClient ? fetch('/_next/static/mdxts/types.json') : null
-
-if (context) {
-  context.font = '14px monospace'
-}
 
 export type EditorProps = {
   /** Default value of the editor. */
@@ -354,6 +348,7 @@ export function Editor({
               highlight={highlight}
               language={language}
               theme={theme}
+              isNestedInEditor
             />
           )}
         </>

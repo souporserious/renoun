@@ -32,6 +32,7 @@ export function Editor({
         lineNumbers={lineNumbers}
         highlight={highlight}
         theme={theme}
+        isNestedInEditor
       />
     </ClientEditor>
   )

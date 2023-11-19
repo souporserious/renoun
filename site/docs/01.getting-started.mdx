@@ -1,7 +1,7 @@
 # Getting Started
 
 <Summary>
-  Build interactive, type-safe content, and documentation. MDXTS generates a
+  Build interactive, type-safe content and documentation. MDXTS generates a
   graph of content, source code, and examples that can be rendered through
   components and utilities. Built on [MDX](https://mdxjs.com/),
   [esbuild](https://esbuild.github.io/), and [TS Morph](https://ts-morph.com/).
@@ -63,10 +63,10 @@ const withMdxts = createMdxtsPlugin({
 
 To generate data, you can use the `createData` function exported from the `mdxts` package:
 
-```ts filename="data.ts" showErrors
-import { createSourceFiles } from 'mdxts'
+```ts filename="data.ts"
+import { getData } from 'mdxts'
 
-export const allDocs = createSourceFiles({
+export const allDocs = getData({
   pattern: '**/*.mdx',
   baseDirectory: 'docs',
 })

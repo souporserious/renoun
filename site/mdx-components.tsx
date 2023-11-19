@@ -24,7 +24,6 @@ export function useMDXComponents() {
       )
     },
     Editor: (props) => <div {...props} />,
-    Preview: (props) => <div {...props} />,
     Error: (props) => <div {...props} />,
     Outline: (props) => <div {...props} />,
     References: (props) => <div {...props} />,
