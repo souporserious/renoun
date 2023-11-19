@@ -1,11 +1,23 @@
 const { parentPort } = require('worker_threads')
-const { Project } = require('ts-morph')
+const { Project, ts } = require('ts-morph')
 
 let project = null
 
 parentPort?.on('message', (message) => {
   if (message.type === 'createProject') {
-    project = new Project({ ...message.options, useInMemoryFileSystem: true })
+    project = new Project({
+      compilerOptions: {
+        resolveJsonModule: true,
+        esModuleInterop: true,
+        moduleResolution: ts.ModuleResolutionKind.Bundler,
+        jsx: ts.JsxEmit.ReactJSX,
+        module: ts.ModuleKind.ESNext,
+        target: ts.ScriptTarget.ESNext,
+        isolatedModules: true,
+        ...message.options,
+      },
+      useInMemoryFileSystem: true,
+    })
   } else if (message.type === 'createOrUpdateFile' && project) {
     const { filePath, filename, lineStart, codeString } = message
     const sourceFile = project.createSourceFile(filename, codeString, {
