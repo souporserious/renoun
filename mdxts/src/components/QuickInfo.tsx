@@ -107,7 +107,7 @@ export function QuickInfo({
             </p>
           </>
         ) : null}
-        {diagnostics.length > 0 ? (
+        {edit && diagnostics.length > 0 ? (
           <form
             action={edit}
             style={{
