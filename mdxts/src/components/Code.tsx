@@ -87,7 +87,13 @@ export async function Code({
   }
 
   if ('source' in props) {
-    const sourcePath = join(props.workingDirectory ?? '', props.source ?? '')
+    if (!props.workingDirectory) {
+      throw new Error(
+        'The [workingDirectory] prop is required when using the [source] prop in the Code component.'
+      )
+    }
+
+    const sourcePath = join(props.workingDirectory, props.source)
     finalValue = await readFile(sourcePath, 'utf-8')
     finalLanguage = sourcePath.split('.').pop()
   }

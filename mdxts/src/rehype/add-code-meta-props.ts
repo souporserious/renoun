@@ -1,7 +1,7 @@
 import type { Element, Node } from 'hast'
 import type { VFile } from 'vfile'
 import path from 'node:path'
-import { getEditorPath, getMetadataFromClassName } from '../utils'
+import { getMetadataFromClassName } from '../utils'
 
 export type AddCodeMetaPropsOptions = {
   /** Called when a code block is found. */

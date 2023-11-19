@@ -5,12 +5,9 @@ import { getEditorPath } from '../utils'
 /** Adds file meta data to all `Code` components. */
 export function addFileMetaToCode() {
   return async function (tree: Node, file: VFile) {
-    const { visit, EXIT } = await import('unist-util-visit')
+    const { visit } = await import('unist-util-visit')
 
     visit(tree, 'mdxJsxFlowElement', (node: any) => {
-      if (process.env.NODE_ENV === 'production') {
-        return EXIT
-      }
       if (node.name === 'Code') {
         node.attributes = [
           {
@@ -21,7 +18,10 @@ export function addFileMetaToCode() {
           {
             type: 'mdxJsxAttribute',
             name: 'sourcePath',
-            value: `${file.path}:${node.position.start.line}`,
+            value:
+              process.env.NODE_ENV === 'development'
+                ? `${file.path}:${node.position.start.line}`
+                : undefined,
           },
           ...node.attributes,
         ]
