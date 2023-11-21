@@ -1,41 +1,39 @@
+import { cache } from 'react'
 import { signal, effect } from '@preact/signals-core'
 
-const activeCodeComponents = signal<Set<any> | null>(null)
+const activeCodeComponents = signal<null | Set<string>>(null)
 
-const areAllCodesProcessed = signal(false)
+const allCodeComponentsProcessed = signal(false)
 
-export function registerCodeComponent(id) {
+effect(() => {
+  allCodeComponentsProcessed.value = activeCodeComponents.value?.size === 0
+})
+
+export const registerCodeComponent = cache((id) => {
   if (activeCodeComponents.value === null) {
     activeCodeComponents.value = new Set([id])
   } else {
     activeCodeComponents.value.add(id)
+    activeCodeComponents.value = new Set(activeCodeComponents.value)
   }
-}
 
-export function unregisterCodeComponent(id) {
-  activeCodeComponents.value.delete(id)
-  if (activeCodeComponents.value.size === 0) {
-    areAllCodesProcessed.value = true
-  }
-}
-
-effect(() => {
-  if (activeCodeComponents.value?.size === 0) {
-    areAllCodesProcessed.value = true
+  return () => {
+    activeCodeComponents.value.delete(id)
+    activeCodeComponents.value = new Set(activeCodeComponents.value)
   }
 })
 
-export function waitUntilAllCodesProcessed() {
+export const waitUntilAllCodeComponentsAdded = cache(() => {
   return new Promise((resolve) => {
-    if (areAllCodesProcessed.value) {
+    if (allCodeComponentsProcessed.value) {
       resolve(null)
     } else {
       const stop = effect(() => {
-        if (areAllCodesProcessed.value) {
+        if (allCodeComponentsProcessed.value) {
           stop()
           resolve(null)
         }
       })
     }
   })
-}
+})

@@ -2,10 +2,10 @@ import React from 'react'
 import { bundle } from '../utils/bundle'
 import { ClientComponent } from './ClientComponent'
 import { project } from './project'
-import { waitUntilAllCodesProcessed } from './state'
+import { waitUntilAllCodeComponentsAdded } from './state'
 
 export async function Preview({ source }: { source: string }) {
-  await waitUntilAllCodesProcessed()
+  await waitUntilAllCodeComponentsAdded()
 
   const code = await bundle(project, source)
 
