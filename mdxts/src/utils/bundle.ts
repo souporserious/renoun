@@ -17,6 +17,7 @@ export async function bundle(
     ...external,
   ]
   const inMemoryFiles = {}
+  let entryFilePresent = false
 
   project.getSourceFiles().forEach((sourceFile) => {
     if (sourceFile.isInNodeModules()) {
@@ -24,8 +25,18 @@ export async function bundle(
     }
     const filePath = sourceFile.getFilePath()
     const fileContents = sourceFile.getFullText()
+
     inMemoryFiles[filePath] = fileContents
+
+    if (filePath === ensureLeadingSlash(entryPoint)) {
+      entryFilePresent = true
+    }
   })
+
+  if (!entryFilePresent) {
+    console.error(`mdxts esbuild: Entry point not found for ${entryPoint}`)
+    return null
+  }
 
   if (Object.keys(inMemoryFiles).length === 0) {
     return null
@@ -103,7 +114,7 @@ export async function bundle(
             }
 
             return {
-              errors: [{ text: `File not found: ${path}` }],
+              errors: [{ text: `mdxts esbuild: File not found: ${path}` }],
             }
           })
         },

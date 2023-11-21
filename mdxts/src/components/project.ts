@@ -1,4 +1,5 @@
 import { Project, ts } from 'ts-morph'
+import { readFile } from 'node:fs/promises'
 
 export const project = new Project({
   compilerOptions: {

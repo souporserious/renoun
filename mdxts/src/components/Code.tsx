@@ -5,6 +5,7 @@ import type { SourceFile } from 'ts-morph'
 import { getHighlighter, type Theme } from './highlighter'
 import { project } from './project'
 import { CodeView } from './CodeView'
+import { registerCodeComponent, unregisterCodeComponent } from './state'
 
 export type BaseCodeProps = {
   /** Name of the file. */
@@ -82,6 +83,11 @@ export async function Code({
   isNestedInEditor,
   ...props
 }: CodeProps) {
+  const id =
+    'source' in props ? props.source : filenameProp ?? `${filenameId++}`
+
+  registerCodeComponent(id)
+
   let finalValue
   let finalLanguage = languageMap[language] ?? language
   let isJsxOnly = false
@@ -105,8 +111,7 @@ export async function Code({
   const filename =
     'source' in props
       ? props.source
-      : filenameProp ?? `${filenameId++}.mdxts.${finalLanguage}`
-  const highlighter = await getHighlighter({ theme })
+      : filenameProp ?? `${id}.mdxts.${finalLanguage}`
   let sourceFile: SourceFile
 
   if (['js', 'jsx', 'ts', 'tsx'].includes(finalLanguage)) {
@@ -128,6 +133,9 @@ export async function Code({
     sourceFile.formatText({ indentSize: 2 })
   }
 
+  unregisterCodeComponent(id)
+
+  const highlighter = await getHighlighter({ theme })
   const tokens = highlighter(finalValue, finalLanguage, sourceFile, isJsxOnly)
 
   return (

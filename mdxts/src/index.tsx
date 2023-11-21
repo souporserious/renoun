@@ -1,10 +1,6 @@
-import React from 'react'
 import title from 'title'
 import type { ComponentType } from 'react'
 import type { CodeBlocks, Headings } from './remark'
-import { MdxtsProvider } from './context'
-
-export * from './context'
 
 export type Module = {
   Component: ComponentType
@@ -30,11 +26,6 @@ function parseModule(module, filename: string) {
   const slug = pathname.split('/').pop()
 
   return {
-    // Component: (props) => (
-    //   <MdxtsProvider value={{ codeBlocks }}>
-    //     <Component {...props} />
-    //   </MdxtsProvider>
-    // ),
     Component,
     title: module.metadata?.title || module.headings?.[0]?.text || title(slug),
     pathname,

@@ -7,7 +7,6 @@ import React, {
   useState,
 } from 'react'
 import type { Diagnostic, SourceFile } from 'ts-morph'
-import { useMdxtsContext } from '../../context'
 import { getDiagnosticMessageText } from '../diagnostics'
 import type { Highlighter, Theme, Tokens } from '../highlighter'
 import { getHighlighter } from '../highlighter'
@@ -65,7 +64,6 @@ export function Editor({
   className,
   children,
 }: EditorProps & { children?: React.ReactNode }) {
-  const mdxtsContext = useMdxtsContext()
   const filenameId = useId()
   const filename = filenameProp || `index-${filenameId.slice(1, -1)}.tsx`
   const language = languageMap[languageProp] || languageProp
