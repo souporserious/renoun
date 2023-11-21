@@ -5,7 +5,9 @@ import { tmpdir } from 'node:os'
 import { Worker } from 'node:worker_threads'
 import { writeFile } from 'node:fs/promises'
 import CopyPlugin from 'copy-webpack-plugin'
+import remarkGfm from 'remark-gfm'
 import remarkTypography from 'remark-typography'
+import remarkUnwrapImages from 'remark-unwrap-images'
 import createMDXPlugin from '@next/mdx'
 import { remarkPlugin } from '../remark'
 import { rehypePlugin } from '../rehype'
@@ -34,6 +36,8 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
   const withMDX = createMDXPlugin({
     options: {
       remarkPlugins: [
+        remarkGfm,
+        remarkUnwrapImages,
         // @ts-expect-error: Typings are incorrect
         remarkTypography,
         // @ts-expect-error: Typings are incorrect
