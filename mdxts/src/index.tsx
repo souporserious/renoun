@@ -1,6 +1,7 @@
 import title from 'title'
 import type { ComponentType } from 'react'
-import type { CodeBlocks, Headings } from './remark'
+import type { CodeBlocks } from './remark/add-code-blocks'
+import type { Headings } from './remark/add-headings'
 
 export type Module = {
   Component: ComponentType
