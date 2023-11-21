@@ -100,11 +100,6 @@ export function Editor({
       return
     }
 
-    // Add code blocks to the project
-    mdxtsContext.codeBlocks.map(({ value, filename }) => {
-      project.createSourceFile(filename, value, { overwrite: true })
-    })
-
     async function init() {
       // Wait for the types to be fetched before creating declaration source files
       if (fetchPromise) {

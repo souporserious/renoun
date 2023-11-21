@@ -15,7 +15,7 @@ export function useCounter(initialValue: number = 0) {
 }
 ```
 
-```tsx filename="Counter.tsx" lineNumbers
+```tsx filename="Counter.tsx" editable lineNumbers
 'use client'
 import { useCounter } from './useCounter'
 
@@ -31,6 +31,20 @@ export default function Counter({ initialCount }: { initialCount: number }) {
 }
 ```
 
-```tsx
+```tsx filename="preview.tsx"
 <Counter initialCount={2} />
 ```
+
+<Preview source="preview.tsx" />
+
+## Components
+
+import Counter from './counter/Counter.tsx'
+
+<Code source="./counter/Counter.tsx" />
+
+<Code source="./counter/useCounter.ts" />
+
+<Playground>
+  <Counter initialCount={3} />
+</Playground>

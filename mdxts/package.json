@@ -85,6 +85,7 @@
     "chokidar": "^3.5.3",
     "color": "^4.2.3",
     "copy-webpack-plugin": "^11.0.0",
+    "esbuild": "^0.19.6",
     "github-slugger": "^2.0.0",
     "hast-util-to-jsx-runtime": "^2.2.0",
     "hast-util-to-string": "^3.0.0",

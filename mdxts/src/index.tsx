@@ -30,11 +30,12 @@ function parseModule(module, filename: string) {
   const slug = pathname.split('/').pop()
 
   return {
-    Component: (props) => (
-      <MdxtsProvider value={{ codeBlocks }}>
-        <Component {...props} />
-      </MdxtsProvider>
-    ),
+    // Component: (props) => (
+    //   <MdxtsProvider value={{ codeBlocks }}>
+    //     <Component {...props} />
+    //   </MdxtsProvider>
+    // ),
+    Component,
     title: module.metadata?.title || module.headings?.[0]?.text || title(slug),
     pathname,
     slug,
