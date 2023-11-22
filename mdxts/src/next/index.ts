@@ -5,9 +5,7 @@ import { tmpdir } from 'node:os'
 import { Worker } from 'node:worker_threads'
 import { writeFile } from 'node:fs/promises'
 import CopyPlugin from 'copy-webpack-plugin'
-import remarkGfm from 'remark-gfm'
 import remarkTypography from 'remark-typography'
-import remarkUnwrapImages from 'remark-unwrap-images'
 import createMDXPlugin from '@next/mdx'
 import { remarkPlugin } from '../remark'
 import { rehypePlugin } from '../rehype'
@@ -33,39 +31,6 @@ const projectWorker = new Worker(
 export function createMdxtsPlugin(pluginOptions: PluginOptions) {
   const { gitSource, theme, types = [] } = pluginOptions
   const themePath = resolve(process.cwd(), theme)
-  const withMDX = createMDXPlugin({
-    options: {
-      remarkPlugins: [
-        remarkGfm,
-        remarkUnwrapImages,
-        // @ts-expect-error: Typings are incorrect
-        remarkTypography,
-        // @ts-expect-error: Typings are incorrect
-        remarkPlugin,
-      ],
-      rehypePlugins: [
-        [
-          rehypePlugin,
-          {
-            onJavaScriptCodeBlock: (
-              filePath,
-              lineStart,
-              filename,
-              codeString
-            ) => {
-              projectWorker.postMessage({
-                type: 'createOrUpdateFile',
-                filename,
-                codeString,
-                filePath,
-                lineStart,
-              })
-            },
-          },
-        ],
-      ],
-    },
-  })
 
   projectWorker.postMessage({
     type: 'createProject',
@@ -77,6 +42,45 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
     let startedWatcher = false
 
     return async () => {
+      const [remarkGfm, remarkUnwrapImages] = await Promise.all([
+        import('remark-gfm'),
+        import('remark-unwrap-images'),
+      ])
+      const withMDX = createMDXPlugin({
+        options: {
+          remarkPlugins: [
+            // @ts-expect-error: Typings are incorrect
+            remarkGfm,
+            // @ts-expect-error: Typings are incorrect
+            remarkUnwrapImages,
+            // @ts-expect-error: Typings are incorrect
+            remarkTypography,
+            // @ts-expect-error: Typings are incorrect
+            remarkPlugin,
+          ],
+          rehypePlugins: [
+            [
+              rehypePlugin,
+              {
+                onJavaScriptCodeBlock: (
+                  filePath,
+                  lineStart,
+                  filename,
+                  codeString
+                ) => {
+                  projectWorker.postMessage({
+                    type: 'createOrUpdateFile',
+                    filename,
+                    codeString,
+                    filePath,
+                    lineStart,
+                  })
+                },
+              },
+            ],
+          ],
+        },
+      })
       const typesContents = (
         await Promise.all(types.flatMap(getTypeDeclarations))
       ).flat()
