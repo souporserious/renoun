@@ -34,8 +34,7 @@ export async function bundle(
   })
 
   if (!entryFilePresent) {
-    console.error(`mdxts esbuild: Entry point not found for ${entryPoint}`)
-    return null
+    throw new Error(`mdxts esbuild: Entry file not found for ${entryPoint}`)
   }
 
   if (Object.keys(inMemoryFiles).length === 0) {
