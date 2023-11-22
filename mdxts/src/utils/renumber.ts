@@ -88,8 +88,8 @@ to: "${newPath}"
   }
 }
 
-export async function renumberFilenames(directory) {
-  const absoluteDirectory = path.resolve(directory)
+export async function renumberFilenames() {
+  const absoluteDirectory = process.cwd()
 
   await processDirectory(absoluteDirectory)
 

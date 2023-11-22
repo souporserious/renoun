@@ -106,7 +106,7 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
         )
 
         if (options.isServer && options.dev && !startedWatcher) {
-          renumberFilenames('docs')
+          renumberFilenames()
           startedWatcher = true
         }
 
