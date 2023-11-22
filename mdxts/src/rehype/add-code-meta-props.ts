@@ -3,25 +3,11 @@ import type { VFile } from 'vfile'
 import path from 'node:path'
 import { getMetadataFromClassName } from '../utils'
 
-export type AddCodeMetaPropsOptions = {
-  /** Called when a code block is found. */
-  onJavaScriptCodeBlock?: (
-    filePath: string,
-    lineStart: number | undefined,
-    filename: string,
-    codeString: string
-  ) => void
-}
-
 /** Adds code meta props to the code element. */
-export function addCodeMetaProps({
-  onJavaScriptCodeBlock,
-}: AddCodeMetaPropsOptions = {}) {
+export function addCodeMetaProps() {
   return async (tree: Node, file: VFile) => {
     const { visit } = await import('unist-util-visit')
     const { toString } = await import('hast-util-to-string')
-    let filename = file.path ? path.parse(file.path).name : ''
-    let codeIndex = 0
 
     visit(tree, 'element', (element: Element) => {
       if (element.tagName === 'pre') {
@@ -54,25 +40,6 @@ export function addCodeMetaProps({
         ) {
           const codeString = toString(codeNode)
           element.properties.code = codeString
-
-          if (codeNode.properties.className) {
-            const metadata = getMetadataFromClassName(
-              codeNode.properties.className as string[]
-            )
-            const isJavaScriptLanguage = ['js', 'jsx', 'ts', 'tsx'].some(
-              (extension) => extension === metadata.language
-            )
-            if (isJavaScriptLanguage) {
-              onJavaScriptCodeBlock?.(
-                file.path,
-                codeNode.position?.start.line,
-                props.filename ||
-                  metadata.filename ||
-                  `${filename}.${codeIndex++}.tsx`,
-                codeString
-              )
-            }
-          }
         }
       }
     })

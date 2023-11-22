@@ -2,7 +2,6 @@ import webpack from 'webpack'
 import { NextConfig } from 'next'
 import { resolve, join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { Worker } from 'node:worker_threads'
 import { writeFile } from 'node:fs/promises'
 import CopyPlugin from 'copy-webpack-plugin'
 import remarkTypography from 'remark-typography'
@@ -23,19 +22,10 @@ type PluginOptions = {
   types?: string[]
 }
 
-const projectWorker = new Worker(
-  join(process.cwd(), 'node_modules/mdxts/src/next/project.js')
-)
-
 /** Starts the MDXTS server and bundles all entry points defined in the plugin options. */
 export function createMdxtsPlugin(pluginOptions: PluginOptions) {
   const { gitSource, theme, types = [] } = pluginOptions
   const themePath = resolve(process.cwd(), theme)
-
-  projectWorker.postMessage({
-    type: 'createProject',
-    config: { tsConfigFilePath: resolve(process.cwd(), 'tsconfig.json') },
-  })
 
   return function withMdxts(nextConfig: NextConfig = {}) {
     const getWebpackConfig = nextConfig.webpack
@@ -58,27 +48,7 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
             // @ts-expect-error: Typings are incorrect
             remarkPlugin,
           ],
-          rehypePlugins: [
-            [
-              rehypePlugin,
-              {
-                onJavaScriptCodeBlock: (
-                  filePath,
-                  lineStart,
-                  filename,
-                  codeString
-                ) => {
-                  projectWorker.postMessage({
-                    type: 'createOrUpdateFile',
-                    filename,
-                    codeString,
-                    filePath,
-                    lineStart,
-                  })
-                },
-              },
-            ],
-          ],
+          rehypePlugins: [rehypePlugin],
         },
       })
       const typesContents = (

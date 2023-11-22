@@ -19,7 +19,11 @@ export function useCounter(initialValue: number = 0) {
 'use client'
 import { useCounter } from './useCounter'
 
-export default function Counter({ initialCount }: { initialCount: number }) {
+export default function Counter({
+  initialCount = 0,
+}: {
+  initialCount: number
+}) {
   const { count, decrement, increment } = useCounter(initialCount)
   return (
     <div>

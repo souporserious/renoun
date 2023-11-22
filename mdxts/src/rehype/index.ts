@@ -1,12 +1,7 @@
-import {
-  addCodeMetaProps,
-  type AddCodeMetaPropsOptions,
-} from './add-code-meta-props'
+import { addCodeMetaProps } from './add-code-meta-props'
 
-export function rehypePlugin({
-  onJavaScriptCodeBlock,
-}: AddCodeMetaPropsOptions = {}) {
+export function rehypePlugin() {
   return async function (tree, file) {
-    await addCodeMetaProps({ onJavaScriptCodeBlock })(tree, file)
+    await addCodeMetaProps()(tree, file)
   }
 }

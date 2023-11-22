@@ -1,5 +1,6 @@
 import { getData } from 'mdxts'
 
+// const docsContext = require.context('./docs', true, /types\.mdx$/)
 const docsContext = require.context('./docs', true, /\.mdx$/)
 const docsModules = Object.fromEntries(
   docsContext
