@@ -3,6 +3,7 @@ import type { Root, Paragraph } from 'mdast'
 /** Eexports a `summary` constant based on the first paragraph. */
 export function addSummary() {
   return async function (tree: Root) {
+    const { valueToEstree } = await import('estree-util-value-to-estree')
     const { visit, EXIT } = await import('unist-util-visit')
     const { toString } = await import('mdast-util-to-string')
     let summary = null
@@ -34,11 +35,7 @@ export function addSummary() {
                       type: 'Identifier',
                       name: 'summary',
                     },
-                    init: {
-                      type: 'Literal',
-                      value: summary,
-                      raw: `"${summary}"`,
-                    },
+                    init: valueToEstree(summary),
                   },
                 ],
                 kind: 'const',

@@ -10,6 +10,7 @@ export type CodeBlocks = {
 /** Adds a `codeBlock` prop to `Playground` components and exports a `codeBlocks` constant. */
 export function addCodeBlocks() {
   return async function (tree: Root, file: VFile) {
+    const { valueToEstree } = await import('estree-util-value-to-estree')
     const { visit } = await import('unist-util-visit')
 
     visit(tree, 'mdxJsxFlowElement', (node: any) => {
@@ -80,46 +81,7 @@ export function addCodeBlocks() {
                       type: 'Identifier',
                       name: 'codeBlocks',
                     },
-                    init: {
-                      type: 'ArrayExpression',
-                      elements: codeBlocks.map((codeBlock) => ({
-                        type: 'ObjectExpression',
-                        properties: [
-                          {
-                            type: 'Property',
-                            method: false,
-                            shorthand: false,
-                            computed: false,
-                            key: {
-                              type: 'Identifier',
-                              name: 'value',
-                            },
-                            value: {
-                              type: 'Literal',
-                              value: codeBlock.value,
-                              raw: '`' + codeBlock.value + '`',
-                            },
-                            kind: 'init',
-                          },
-                          {
-                            type: 'Property',
-                            method: false,
-                            shorthand: false,
-                            computed: false,
-                            key: {
-                              type: 'Identifier',
-                              name: 'filename',
-                            },
-                            value: {
-                              type: 'Literal',
-                              value: codeBlock.filename,
-                              raw: `"${codeBlock.filename}"`,
-                            },
-                            kind: 'init',
-                          },
-                        ],
-                      })),
-                    },
+                    init: valueToEstree(codeBlocks),
                   },
                 ],
                 kind: 'const',

@@ -116,6 +116,9 @@ importers:
       esbuild:
         specifier: ^0.19.6
         version: 0.19.6
+      estree-util-value-to-estree:
+        specifier: ^3.0.1
+        version: 3.0.1
       github-slugger:
         specifier: ^2.0.0
         version: 2.0.0
@@ -3701,6 +3704,14 @@ packages:
       '@types/estree-jsx': 1.0.1
       astring: 1.8.6
       source-map: 0.7.4
+    dev: false
+
+  /estree-util-value-to-estree@3.0.1:
+    resolution: {integrity: sha512-b2tdzTurEIbwRh+mKrEcaWfu1wgb8J1hVsgREg7FFiecWwK/PhO8X0kyc+0bIcKNtD4sqxIdNoRy6/p/TvECEA==}
+    engines: {node: '>=16.0.0'}
+    dependencies:
+      '@types/estree': 1.0.2
+      is-plain-obj: 4.1.0
     dev: false
 
   /estree-util-visit@1.2.1:
