@@ -63,12 +63,7 @@ export function Sidebar() {
                 <Text>{props.title}</Text>
               </div>
             ) : (
-              <SidebarLink
-                pathname={`/${props.pathSegments
-                  .join('/')
-                  .replace('docs/', '')}`}
-                name={props.title}
-              />
+              <SidebarLink pathname={props.pathname} name={props.title} />
             )}
             {props.children}
           </li>

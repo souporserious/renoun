@@ -59,17 +59,38 @@ const withMdxts = createMdxtsPlugin({
 })
 ```
 
-### Generating Data
+### Generating Routes
 
-To generate data, you can use the `createData` function exported from the `mdxts` package:
+Use the `loadModules` function exported from the `mdxts` package to generate metadata and paths from a set of modules:
 
 ```ts filename="data.ts"
-import { getData } from 'mdxts'
+import { loadModules } from 'mdxts'
 
-export const allDocs = getData({
-  pattern: '**/*.mdx',
-  baseDirectory: 'docs',
-})
+export const allDocs = loadModules(
+  require.context('./docs', true, /\.mdx$/),
+  'docs'
+)
+```
+
+### Rendering Content
+
+Use the [[get]] helper from the modules loader to render MDX content:
+
+```tsx filename="app/[...slug]/page.tsx"
+import { notFound } from 'next/navigation'
+import { allDocs } from './data'
+
+export default function Page({ params }) {
+  const doc = allDocs.get(params.slug)
+
+  if (doc.active === undefined) {
+    return notFound()
+  }
+
+  const { Component } = doc.active
+
+  return <Component />
+}
 ```
 
 ## Next steps

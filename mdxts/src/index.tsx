@@ -14,8 +14,46 @@ export type Module = {
   metadata?: { title: string; description: string }
 }
 
+/**
+ * Loads modules and parses metadata from Webpack `require.context`.
+ *
+ * @example
+ * export const allDocs = loadModules(
+ *   require.context('./docs', true, /\.mdx$/),
+ *   'docs'
+ * )
+ */
+export function loadModules<Type>(
+  context: __WebpackModuleApi.RequireContext,
+  baseDirectory: string = ''
+) {
+  const allModules = Object.fromEntries(
+    context
+      .keys()
+      .filter((key) => !key.startsWith('./'))
+      .map((key) => {
+        const parsedModule = parseModule(key, baseDirectory, context(key))
+        return [parsedModule.pathname, parsedModule]
+      })
+  ) as Record<string, Module & Type>
+
+  return {
+    all() {
+      return allModules
+    },
+    paths() {
+      return Object.values(allModules).map((module) =>
+        module.pathname.split('/')
+      ) as string[][]
+    },
+    get(pathname: string[]) {
+      return getPathData(allModules, pathname)
+    },
+  }
+}
+
 /** Parses and attaches metadata to a module. */
-function parseModule(module, filename: string) {
+function parseModule(filename: string, baseDirectory: string, module: any) {
   const { default: Component, codeBlocks, ...exports } = module
   const pathname = filename
     // Remove file extensions
@@ -24,6 +62,8 @@ function parseModule(module, filename: string) {
     .replace(/^\.\//, '')
     // Remove leading sorting number
     .replace(/\/\d+\./g, '/')
+    // Remove base directory
+    .replace(baseDirectory, '')
   const slug = pathname.split('/').pop()
 
   return {
@@ -35,12 +75,33 @@ function parseModule(module, filename: string) {
   }
 }
 
-/** Loads all imports and parses metadata for a specific directory. */
-export function getData<Type>(allModules: Record<string, Type>) {
-  return Object.fromEntries(
-    Object.entries(allModules).map(([key, module]) => {
-      const parsedModule = parseModule(module, key)
-      return [parsedModule.pathname, parsedModule]
-    })
-  ) as Record<string, Module>
+/** Returns the active and sibling data based on the active pathname. */
+function getPathData(
+  /** The collected data from a source. */
+  data: Record<string, any>,
+
+  /** The pathname of the active page. */
+  pathname: string[]
+) {
+  const allData = Object.values(data) as any[]
+  const index = Object.keys(data).findIndex((dataPathname) =>
+    dataPathname.includes(pathname.join('/'))
+  )
+
+  function getSiblingPath(startIndex: number, direction: number) {
+    const siblingIndex = startIndex + direction
+    const siblingPath = allData[siblingIndex]
+
+    if (siblingPath?.pathname === null) {
+      return getSiblingPath(siblingIndex, direction)
+    }
+
+    return siblingPath || null
+  }
+
+  return {
+    active: allData[index] || null,
+    previous: getSiblingPath(index, -1),
+    next: getSiblingPath(index, 1),
+  }
 }

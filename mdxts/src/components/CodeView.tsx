@@ -78,7 +78,7 @@ export function CodeView({
             display: 'grid',
             gridTemplateColumns: 'auto 1fr',
             padding: '10px 0',
-            overflow: 'auto',
+            // overflow: 'auto',
           }}
           {...props}
         />

@@ -1,23 +1,20 @@
 import { notFound } from 'next/navigation'
-import { SiblingNavigation } from 'mdxts/components'
 import { allDocs } from 'data'
 
 export const dynamic = 'force-static'
 
-export async function generateStaticParams() {
-  return Object.values(allDocs).map((doc) => ({
-    slug: doc.pathname.split('/').slice(1), // trim "docs" segment
-  }))
+export function generateStaticParams() {
+  return allDocs.paths().map((pathname) => ({ slug: pathname }))
 }
 
 export default function Page({ params }) {
-  const doc = allDocs[`docs/${params.slug.join('/')}`]
+  const doc = allDocs.get(params.slug)
 
-  if (doc === undefined) {
+  if (doc.active === undefined) {
     return notFound()
   }
 
-  const { Component } = doc
+  const { Component } = doc.active
 
   return (
     <>
@@ -44,7 +41,7 @@ export default function Page({ params }) {
               top: '2rem',
             }}
           >
-            {doc.headings?.map(({ text, depth, id }) =>
+            {doc.active.headings?.map(({ text, depth, id }) =>
               depth > 1 ? (
                 <li
                   key={id}
@@ -61,7 +58,30 @@ export default function Page({ params }) {
           </ul>
         </nav>
       </div>
-      <SiblingNavigation data={allDocs} pathname={params.slug} />
+      <nav
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'auto minmax(16px, 1fr) auto',
+          padding: '4rem 0 2rem',
+        }}
+      >
+        {doc.previous ? (
+          <a
+            href={doc.previous.pathname}
+            style={{ gridColumn: 1, textAlign: 'left' }}
+          >
+            {doc.previous.title}
+          </a>
+        ) : null}
+        {doc.next ? (
+          <a
+            href={doc.next.pathname}
+            style={{ gridColumn: 3, textAlign: 'right' }}
+          >
+            {doc.next.title}
+          </a>
+        ) : null}
+      </nav>
     </>
   )
 }

@@ -1,5 +1,5 @@
 import title from 'title'
-import type { Module } from '../index'
+import type { Module, loadModules } from '../index'
 
 type Node = Module & {
   part: string
@@ -59,7 +59,7 @@ function createTreeFromModules(allModules: Record<string, any>): Node[] {
 }
 
 function renderNavigation(
-  data: Record<string, any>,
+  allModules: Record<string, Module>,
   renderList: (list: { children: JSX.Element[]; order: number }) => JSX.Element,
   renderItem: (
     item: Omit<Node, 'children'> & { children?: JSX.Element }
@@ -79,7 +79,7 @@ function renderNavigation(
     })
   }
 
-  const tree = createTreeFromModules(data)
+  const tree = createTreeFromModules(allModules)
   tree.forEach(markDirectories)
   return buildNavigationTree(tree, 0)
 }
@@ -90,11 +90,11 @@ export function Navigation({
   renderList,
   renderItem,
 }: {
-  data: Record<string, any>
+  data: ReturnType<typeof loadModules>
   renderList: (list: { children: JSX.Element[]; order: number }) => JSX.Element
   renderItem: (
     item: Omit<Node, 'children'> & { children?: JSX.Element }
   ) => JSX.Element
 }) {
-  return renderNavigation(data, renderList, renderItem)
+  return renderNavigation(data.all(), renderList, renderItem)
 }

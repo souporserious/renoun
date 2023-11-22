@@ -11,6 +11,11 @@
   "dependencies": {
     "@mdx-js/mdx": "^3.0.0",
     "@types/mdx": "^2.0.10",
+    "@types/react": "^18.2.38",
+    "@types/react-dom": "^18.2.17",
+    "@types/prop-types": "^15.7.11",
+    "@types/scheduler": "^0.16.8",
+    "@types/webpack-env": "1.18.4",
     "case-anything": "^2.1.13",
     "esbuild": "^0.19.6",
     "geist": "1.1.0",
