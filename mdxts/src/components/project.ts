@@ -1,5 +1,4 @@
 import { Project, ts } from 'ts-morph'
-import { readFile } from 'node:fs/promises'
 
 export const project = new Project({
   compilerOptions: {
@@ -11,7 +10,7 @@ export const project = new Project({
     target: ts.ScriptTarget.ESNext,
     isolatedModules: true,
   },
-  useInMemoryFileSystem: true,
+  useInMemoryFileSystem: typeof window !== 'undefined',
 })
 
 export const languageService = project.getLanguageService().compilerObject

@@ -1,4 +1,4 @@
-import React, { cache } from 'react'
+import React from 'react'
 import { join } from 'node:path'
 import { readFile, writeFile } from 'node:fs/promises'
 import type { SourceFile } from 'ts-morph'
@@ -52,16 +52,6 @@ export type CodeProps =
       workingDirectory?: string
     } & BaseCodeProps)
 
-const loadTypeDeclarations = cache(async () => {
-  const typeDeclarations = JSON.parse(
-    await readFile(`.next/static/mdxts/types.json`, 'utf8')
-  )
-
-  typeDeclarations.forEach(({ path, code }) => {
-    project.createSourceFile(path, code, { overwrite: true })
-  })
-})
-
 const languageMap = {
   shell: 'shellscript',
   bash: 'shellscript',
@@ -113,8 +103,6 @@ export async function Code({
   let sourceFile: SourceFile
 
   if (['js', 'jsx', 'ts', 'tsx'].includes(finalLanguage)) {
-    await loadTypeDeclarations()
-
     sourceFile = project.createSourceFile(filename, finalValue, {
       overwrite: true,
     })
