@@ -41,10 +41,10 @@ export function loadModules<Type>(
     all() {
       return allModules
     },
-    paths() {
+    paths(): string[][] {
       return Object.values(allModules).map((module) =>
         module.pathname.split('/')
-      ) as string[][]
+      )
     },
     get(pathname: string[]) {
       return getPathData(allModules, pathname)
@@ -78,12 +78,16 @@ function parseModule(filename: string, baseDirectory: string, module: any) {
 /** Returns the active and sibling data based on the active pathname. */
 function getPathData(
   /** The collected data from a source. */
-  data: Record<string, any>,
+  data: Record<string, Module>,
 
   /** The pathname of the active page. */
   pathname: string[]
-) {
-  const allData = Object.values(data) as any[]
+): {
+  active?: Module
+  previous?: Module
+  next?: Module
+} {
+  const allData = Object.values(data) as Module[]
   const index = Object.keys(data).findIndex((dataPathname) =>
     dataPathname.includes(pathname.join('/'))
   )
@@ -96,11 +100,11 @@ function getPathData(
       return getSiblingPath(siblingIndex, direction)
     }
 
-    return siblingPath || null
+    return siblingPath
   }
 
   return {
-    active: allData[index] || null,
+    active: allData[index],
     previous: getSiblingPath(index, -1),
     next: getSiblingPath(index, 1),
   }
