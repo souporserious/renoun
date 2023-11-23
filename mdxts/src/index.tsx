@@ -42,8 +42,8 @@ export function loadModules<Type>(
       return allModules
     },
     paths(): string[][] {
-      return Object.values(allModules).map((module) =>
-        module.pathname.split('/')
+      return Object.values(allModules).map(
+        (module) => module.pathname.split('/').slice(1) // remove leading ""
       )
     },
     get(pathname: string[]) {
