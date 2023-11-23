@@ -5,9 +5,8 @@ import { rollup } from 'rollup'
 import dts from 'rollup-plugin-dts'
 import ts from 'typescript'
 
-/* TODO: this is inefficient, the ata utility should only be instantiated once. */
 async function fetchTypes(
-  name: string[]
+  name: string
 ): Promise<{ code: string; path: string }[]> {
   const { setupTypeAcquisition } = await import('@typescript/ata')
   let types: { code: string; path: string }[] = []
@@ -17,33 +16,20 @@ async function fetchTypes(
       projectName: 'mdxts',
       typescript: ts,
       logger: console,
-      fetcher: async (input) => {
-        const { default: fetch } = await import('node-fetch')
-        return fetch(input as any) as any
-      },
       delegate: {
         receivedFile: (code: string, path: string) => {
-          types = [...types, { code, path }]
+          types.push({ code, path: path.replace('@types/', '') })
         },
         errorMessage(userFacingMessage, error) {
           throw new Error(userFacingMessage, { cause: error })
         },
         finished: () => {
-          resolve(
-            types.map(({ code, path }) => ({
-              code,
-              path: path.replace('@types/', ''),
-            }))
-          )
+          resolve(types)
         },
       },
     })
 
-    /*
-     * ATA expects a list of imports from a source file to fetch types for,
-     * so we simply provide a list of imports for each package.
-     */
-    ata(name.map((name) => `import ${name} from "${name}"`).join('\n'))
+    ata(`import "${name}"`)
   })
 }
 
@@ -143,22 +129,16 @@ async function findTypesPath(
     }
   }
 
-  try {
-    const parentNodeModulesPath = await findParentNodeModulesPath(
-      process.cwd(),
-      `@types/${packageName}`
-    )
+  const parentNodeModulesPath = await findParentNodeModulesPath(
+    process.cwd(),
+    `@types/${packageName}`
+  )
 
-    if (!parentNodeModulesPath) {
-      throw new Error(`mdxts: Could not find types path for "${packageName}"`)
-    }
-
-    return path.resolve(parentNodeModulesPath, 'index.d.ts')
-  } catch (error) {
-    throw new Error(`mdxts: Could not find types path for "${packageName}"`, {
-      cause: error,
-    })
+  if (!parentNodeModulesPath) {
+    return null
   }
+
+  return path.resolve(parentNodeModulesPath, 'index.d.ts')
 }
 
 /** Parses the root package name from a nested package name. */
@@ -182,14 +162,19 @@ export async function getTypeDeclarations(packageName: string) {
     'package.json'
   )
   const packageJson = await getPackageJson(packageJsonPath)
-  const allDependencies = getAllDependencies(packageJson)
   const typesPath = await findTypesPath(packageJson, packageName)
 
-  // use ATA when dealing with @types since rollup is not reliable
-  if (typesPath.includes('@types/')) {
-    const packageTypes = await fetchTypes([packageName])
+  // Use ATA when failing to find path or dealing with @types since rollup is not reliable
+  if (
+    typesPath === null ||
+    typesPath.includes('@types/') ||
+    packageName.includes('@types/')
+  ) {
+    const packageTypes = await fetchTypes(packageName)
     return packageTypes
   }
+
+  const allDependencies = getAllDependencies(packageJson)
 
   try {
     const bundle = await rollup({
@@ -211,9 +196,9 @@ export async function getTypeDeclarations(packageName: string) {
         path: `/node_modules/${packageName}/index.d.ts`,
       },
     ]
-  } catch (error) {
-    throw new Error(`mdxts: Could not bundle "${packageName}"`, {
-      cause: error,
-    })
+  } catch {
+    // Fallback to ATA if Rollup fails for any reason
+    const packageTypes = await fetchTypes(packageName)
+    return packageTypes
   }
 }
