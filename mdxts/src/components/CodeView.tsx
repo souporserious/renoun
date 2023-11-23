@@ -59,11 +59,6 @@ export function CodeView({
   isNestedInEditor?: boolean
   edit?: any
 }) {
-  // Add each code block as a source files to the project.
-  // once the first Preview component comes in then compile the project for display
-  // Subsequent Preview components should use a cached compiled output
-  // project.createSourceFile(filename, value, { overwrite: true })
-
   const identifierBounds = sourceFile
     ? getIdentifierBounds(sourceFile, isJsxOnly, lineHeight)
     : []
@@ -211,7 +206,8 @@ export function CodeView({
   )
 }
 
-export function calculateLinesToHighlight(meta) {
+/** Calculate which lines to highlight based on the range meta string added by the rehype plugin. */
+function calculateLinesToHighlight(meta) {
   if (meta === undefined || meta === '') {
     return () => false
   }
