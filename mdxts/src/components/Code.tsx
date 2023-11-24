@@ -2,6 +2,7 @@ import React from 'react'
 import { join } from 'node:path'
 import { readFile, writeFile } from 'node:fs/promises'
 import type { SourceFile } from 'ts-morph'
+import { isJsxOnly } from '../utils/is-jsx-only'
 import { getHighlighter, type Theme } from './highlighter'
 import { project } from './project'
 import { CodeView } from './CodeView'
@@ -78,7 +79,6 @@ export async function Code({
 
   let finalValue
   let finalLanguage = languageMap[language] ?? language
-  let isJsxOnly = false
 
   if ('value' in props) {
     finalValue = props.value
@@ -107,22 +107,14 @@ export async function Code({
       overwrite: true,
     })
 
-    const importCount = sourceFile.getImportDeclarations().length
-
-    sourceFile.fixMissingImports()
-
-    // If there were no imports, then this is a JSX-only source file.
-    if (importCount === 0 && sourceFile.getImportDeclarations().length > 0) {
-      isJsxOnly = true
-    }
-
-    sourceFile.formatText({ indentSize: 2 })
+    sourceFile.fixMissingImports().formatText({ indentSize: 2 })
   }
 
   unregisterCodeComponent()
 
+  const jsxOnly = isJsxOnly(finalValue)
   const highlighter = await getHighlighter({ theme })
-  const tokens = highlighter(finalValue, finalLanguage, sourceFile, isJsxOnly)
+  const tokens = highlighter(finalValue, finalLanguage, sourceFile, jsxOnly)
 
   return (
     <CodeView
@@ -134,7 +126,7 @@ export async function Code({
       highlight={highlight}
       language={finalLanguage}
       theme={theme}
-      isJsxOnly={isJsxOnly}
+      isJsxOnly={jsxOnly}
       isNestedInEditor={isNestedInEditor}
       showErrors={showErrors}
       className={className}

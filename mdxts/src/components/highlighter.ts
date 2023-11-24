@@ -278,13 +278,3 @@ function getSourceFileDiagnostics(sourceFile?: SourceFile) {
 
   return diagnostics
 }
-
-function isJsxOnly(sourceFile: SourceFile) {
-  const sourceFileText = sourceFile
-    .getFullText()
-    .replace(/import.*\n/g, '')
-    .trim()
-  return sourceFileText.startsWith('<') && sourceFileText.endsWith('>')
-}
-
-export const MdxtsJsxOnly = 'MdxtsJsxOnly'

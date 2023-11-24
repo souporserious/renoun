@@ -1,7 +1,7 @@
 import * as React from 'react'
 import type { SourceFile } from 'ts-morph'
 import { Identifier, SyntaxKind } from 'ts-morph'
-import { type Theme, MdxtsJsxOnly } from './highlighter'
+import { type Theme } from './highlighter'
 import { Symbol } from './Symbol'
 import { QuickInfo } from './QuickInfo'
 import { RegisterSourceFile } from './RegisterSourceFile'
@@ -235,7 +235,6 @@ function getIdentifierBounds(
   const bounds = identifiers
     .filter((identifier) => {
       const parent = identifier.getParent()
-      const isJsxOnlyIdentifier = identifier.getText() === MdxtsJsxOnly
       const isJsxOnlyImport = isJsxOnly
         ? parent?.getKind() === SyntaxKind.ImportSpecifier ||
           parent?.getKind() === SyntaxKind.ImportClause
@@ -243,7 +242,6 @@ function getIdentifierBounds(
       return (
         !Identifier.isJSDocTag(parent) &&
         !Identifier.isJSDoc(parent) &&
-        !isJsxOnlyIdentifier &&
         !isJsxOnlyImport
       )
     })
