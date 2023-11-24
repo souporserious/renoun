@@ -96,11 +96,15 @@ export async function Code({
     finalLanguage = sourcePath.split('.').pop()
   }
 
-  const filename =
-    'source' in props
-      ? props.source
-      : filenameProp ?? `${id}.mdxts.${finalLanguage}`
+  let filename = 'source' in props ? props.source : filenameProp
   let sourceFile: SourceFile
+
+  if (!filename) {
+    filename = `${id}.${finalLanguage}`
+  }
+
+  // Scope the filename since it can conflict with other files on disk.
+  filename = `mdxts.${filename}`
 
   if (['js', 'jsx', 'ts', 'tsx'].includes(finalLanguage)) {
     sourceFile = project.createSourceFile(filename, finalValue, {
