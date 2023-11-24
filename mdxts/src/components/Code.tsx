@@ -103,8 +103,10 @@ export async function Code({
     filename = `${id}.${finalLanguage}`
   }
 
-  // Scope the filename since it can conflict with other files on disk.
-  filename = `mdxts.${filename}`
+  // Scope code block source files since they can conflict with other files on disk.
+  if ('value' in props) {
+    filename = `mdxts/${filename}`
+  }
 
   if (['js', 'jsx', 'ts', 'tsx'].includes(finalLanguage)) {
     sourceFile = project.createSourceFile(filename, finalValue, {

@@ -9,7 +9,7 @@ export async function bundle(
   source: string,
   external: string[] = []
 ) {
-  const entryPoint = `mdxts.${source}`
+  const entryPoint = `mdxts/${source}`
   const externalPackages = [
     'react',
     'react-dom',
@@ -68,11 +68,6 @@ export async function bundle(
               )
             ) {
               return { path, external: true }
-            }
-
-            // This is a hack to make sure that mdxts imports are resolved correctly.
-            if (!path.includes('mdxts') && path.startsWith('./')) {
-              path = `./mdxts.${path.slice(2)}`
             }
 
             if (path.startsWith('.')) {
