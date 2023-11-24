@@ -25,10 +25,11 @@ export async function bundle(
     }
     const filePath = sourceFile.getFilePath()
     const fileContents = sourceFile.getFullText()
+    const baseFilePath = filePath.replace(process.cwd(), '')
 
-    inMemoryFiles[filePath] = fileContents
+    inMemoryFiles[baseFilePath] = fileContents
 
-    if (filePath === ensureLeadingSlash(entryPoint)) {
+    if (baseFilePath === ensureLeadingSlash(entryPoint)) {
       entryFilePresent = true
     }
   })
@@ -83,8 +84,8 @@ export async function bundle(
 
             const extensions = ['.tsx', '.ts', '.jsx', '.js']
 
-            for (let ext of extensions) {
-              const potentialPath = path + ext
+            for (const extension of extensions) {
+              const potentialPath = path + extension
               if (potentialPath in inMemoryFiles) {
                 return { path: potentialPath, namespace: PLUGIN_NAME }
               }
