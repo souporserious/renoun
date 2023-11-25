@@ -65,7 +65,9 @@ export function Editor({
   children,
 }: EditorProps & { children?: React.ReactNode }) {
   const filenameId = useId()
-  const filename = filenameProp || `index-${filenameId.slice(1, -1)}.tsx`
+  const filename = `mdxts/${
+    filenameProp || `index-${filenameId.slice(1, -1)}.tsx`
+  }`
   const language = languageMap[languageProp] || languageProp
   const [stateValue, setStateValue] = useState(defaultValue)
   const [tokens, setTokens] = useState<Tokens[]>([])
