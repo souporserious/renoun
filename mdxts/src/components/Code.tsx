@@ -111,7 +111,7 @@ export async function Code({
   }
 
   // Format code block.
-  if (!filename.includes('shellscript')) {
+  if (!filename.includes('shellscript') && !filename.includes('mdx')) {
     finalValue = format(filename, finalValue, {
       lineWidth: 60,
       indentWidth: 2,
