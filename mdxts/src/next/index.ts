@@ -164,6 +164,7 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
         serverComponentsExternalPackages: [
           ...(nextConfig.experimental?.serverComponentsExternalPackages ?? []),
           'esbuild',
+          'dprint-node',
           'shiki',
           'vscode-oniguruma',
           'ts-morph',

@@ -142,23 +142,38 @@ export function Editor({
       return
     }
 
-    const nextSourceFile = project.createSourceFile(filename, resolvedValue, {
-      overwrite: true,
-    })
-    setSourceFile(nextSourceFile)
+    async function init() {
+      const [prettier, estreePlugin, typescriptPlugin] = await Promise.all([
+        import('prettier/standalone'),
+        import('prettier/plugins/estree'),
+        import('prettier/plugins/typescript'),
+      ])
+      const formattedValue = await prettier.format(resolvedValue, {
+        parser: 'typescript',
+        plugins: [estreePlugin.default, typescriptPlugin.default],
+        printWidth: 60,
+      })
+      const nextSourceFile = project.createSourceFile(
+        filename,
+        formattedValue,
+        { overwrite: true }
+      )
+      setSourceFile(nextSourceFile)
 
-    if (isJavaScriptBasedLanguage) {
-      const diagnostics = nextSourceFile.getPreEmitDiagnostics()
-      setDiagnostics(diagnostics)
+      if (isJavaScriptBasedLanguage) {
+        const diagnostics = nextSourceFile.getPreEmitDiagnostics()
+        setDiagnostics(diagnostics)
 
-      if (highlighter) {
-        const tokens = highlighter(resolvedValue, language, sourceFile)
+        if (highlighter) {
+          const tokens = highlighter(formattedValue, language, sourceFile)
+          setTokens(tokens)
+        }
+      } else if (highlighter) {
+        const tokens = highlighter(formattedValue, language)
         setTokens(tokens)
       }
-    } else if (highlighter) {
-      const tokens = highlighter(resolvedValue, language)
-      setTokens(tokens)
     }
+    init()
   }, [resolvedValue, highlighter])
 
   useEffect(() => {

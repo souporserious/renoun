@@ -2,6 +2,7 @@ import React from 'react'
 import { join } from 'node:path'
 import { readFile, writeFile } from 'node:fs/promises'
 import type { SourceFile } from 'ts-morph'
+import { format } from 'dprint-node'
 import { isJsxOnly } from '../utils/is-jsx-only'
 import { getHighlighter, type Theme } from './highlighter'
 import { project } from './project'
@@ -96,6 +97,7 @@ export async function Code({
     finalLanguage = sourcePath.split('.').pop()
   }
 
+  const jsxOnly = isJsxOnly(finalValue)
   let filename = 'source' in props ? props.source : filenameProp
   let sourceFile: SourceFile
 
@@ -108,17 +110,24 @@ export async function Code({
     filename = `mdxts/${filename}`
   }
 
+  // Format code block.
+  if (!filename.includes('shellscript')) {
+    finalValue = format(filename, finalValue, {
+      lineWidth: 60,
+      indentWidth: 2,
+    })
+  }
+
   if (['js', 'jsx', 'ts', 'tsx'].includes(finalLanguage)) {
     sourceFile = project.createSourceFile(filename, finalValue, {
       overwrite: true,
     })
 
-    sourceFile.fixMissingImports().formatText({ indentSize: 2 })
+    sourceFile.fixMissingImports()
   }
 
   unregisterCodeComponent()
 
-  const jsxOnly = isJsxOnly(finalValue)
   const highlighter = await getHighlighter({ theme })
   const tokens = highlighter(finalValue, finalLanguage, sourceFile, jsxOnly)
 
