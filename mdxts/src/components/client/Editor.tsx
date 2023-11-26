@@ -310,7 +310,7 @@ export function Editor({
               padding: '0.8rem 1rem',
             }}
           >
-            {filename}
+            {filename.replace('mdxts/', '')}
           </div>
         ) : null}
         <button
