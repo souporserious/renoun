@@ -152,6 +152,8 @@ export function Editor({
         parser: 'typescript',
         plugins: [estreePlugin.default, typescriptPlugin.default],
         printWidth: 60,
+        singleQuote: true,
+        semi: false,
       })
       const nextSourceFile = project.createSourceFile(
         filename,
