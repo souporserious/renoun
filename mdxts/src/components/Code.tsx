@@ -56,7 +56,6 @@ export type CodeProps =
 
 const languageMap = {
   shell: 'shellscript',
-  bash: 'shellscript',
   mjs: 'javascript',
 }
 let filenameId = 0
@@ -79,7 +78,7 @@ export async function Code({
   const unregisterCodeComponent = registerCodeComponent(id)
 
   let finalValue
-  let finalLanguage = languageMap[language] ?? language
+  let finalLanguage = languageMap[language] || language || 'bash'
 
   if ('value' in props) {
     finalValue = props.value
@@ -98,6 +97,9 @@ export async function Code({
   }
 
   const jsxOnly = isJsxOnly(finalValue)
+  const isJavaScriptLanguage = ['js', 'jsx', 'ts', 'tsx'].includes(
+    finalLanguage
+  )
   let filename = 'source' in props ? props.source : filenameProp
   let sourceFile: SourceFile
 
@@ -105,13 +107,12 @@ export async function Code({
     filename = `${id}.${finalLanguage}`
   }
 
-  // Format code block.
-  if (!filename.includes('shellscript') && !filename.includes('mdx')) {
+  // Format JavaScript code blocks.
+  if (isJavaScriptLanguage) {
     finalValue = format(filename, finalValue, {
       lineWidth: 60,
       indentWidth: 2,
       quoteStyle: 'preferSingle',
-      semiColons: 'asi',
     })
   }
 
@@ -120,7 +121,7 @@ export async function Code({
     filename = `mdxts/${filename}`
   }
 
-  if (['js', 'jsx', 'ts', 'tsx'].includes(finalLanguage)) {
+  if (isJavaScriptLanguage) {
     sourceFile = project.createSourceFile(filename, finalValue, {
       overwrite: true,
     })
