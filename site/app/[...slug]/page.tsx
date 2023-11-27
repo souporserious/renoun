@@ -8,13 +8,13 @@ export function generateStaticParams() {
 }
 
 export default async function Page({ params }) {
-  const doc = allDocs.get(params.slug)
+  const doc = await allDocs.get(params.slug)
 
-  if (doc.active === undefined) {
+  if (doc === null) {
     return notFound()
   }
 
-  const { Component, headings } = await doc.active
+  const { Component, headings } = doc.active
 
   return (
     <>
@@ -73,25 +73,23 @@ export default async function Page({ params }) {
 }
 
 
-async function SiblingLink({ doc, direction }: {
-  doc: any
+ function SiblingLink({ doc, direction }: {
+  doc: { pathname: string, title: string }
   direction: 'previous' | 'next'
 }) {
   if (!doc) {
     return null
   }
 
-  const { title, pathname } = await doc
-
   return (
     <a
-      href={pathname}
+      href={doc.pathname}
       style={{
         gridColumn: direction === 'previous' ? 1 : 3,
         textAlign: direction === 'previous' ? 'left' : 'right',
       }}
     >
-      {title}
+      {doc.title}
     </a>
   )
 }

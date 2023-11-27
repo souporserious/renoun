@@ -80,10 +80,10 @@ Use the [[get]] helper from the modules loader to render MDX content:
 import { notFound } from 'next/navigation'
 import { allDocs } from './data'
 
-export default function Page({ params }) {
-  const doc = allDocs.get(params.slug)
+export default async function Page({ params }) {
+  const doc = await allDocs.get(params.slug)
 
-  if (doc.active === undefined) {
+  if (doc === null) {
     return notFound()
   }
 

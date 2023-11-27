@@ -19,7 +19,7 @@ export type Module = {
  *
  * @example
  * export const allDocs = loadModules(
- *   require.context('./docs', true, /\.mdx$/),
+ *   require.context('./docs', true, /\.mdx$/, 'lazy'),
  *   'docs'
  * )
  */
@@ -60,7 +60,7 @@ export function loadModules<Type>(
       )
     },
     get(pathname: string[]) {
-      return getPathData(allModules, pathname)
+      return getPathData<Type>(allModules, pathname)
     },
   }
 }
@@ -82,22 +82,27 @@ async function parseModule(pathname: string, module: any) {
 }
 
 /** Returns the active and sibling data based on the active pathname. */
-function getPathData(
+async function getPathData<Type>(
   /** The collected data from a source. */
   data: Record<string, Promise<Module>>,
 
   /** The pathname of the active page. */
   pathname: string[]
-): {
-  active?: Promise<Module>
-  previous?: Promise<Module>
-  next?: Promise<Module>
-} {
+): Promise<{
+  active?: Module
+  previous?: Module
+  next?: Module
+}> {
   const allKeys = Object.keys(data)
   const allData = Object.values(data) as Promise<Module>[]
-  const index = Object.keys(data).findIndex((dataPathname) =>
+  const activeIndex = Object.keys(data).findIndex((dataPathname) =>
     dataPathname.includes(pathname.join('/'))
   )
+  const activeData = allData[activeIndex]
+
+  if (activeData === undefined) {
+    return null
+  }
 
   function getSiblingPath(startIndex: number, direction: number) {
     const siblingIndex = startIndex + direction
@@ -110,9 +115,15 @@ function getPathData(
     return allData[siblingIndex]
   }
 
+  const modulePromises = await Promise.all([
+    activeData,
+    getSiblingPath(activeIndex, -1),
+    getSiblingPath(activeIndex, 1),
+  ])
+
   return {
-    active: allData[index],
-    previous: getSiblingPath(index, -1),
-    next: getSiblingPath(index, 1),
-  }
+    active: modulePromises[0],
+    previous: modulePromises[1],
+    next: modulePromises[2],
+  } as Record<'active' | 'previous' | 'next', Module & Type>
 }
