@@ -1,5 +1,6 @@
 import { build } from 'esbuild'
 import type { Project } from 'ts-morph'
+import { isJsxOnly } from './is-jsx-only'
 
 const PLUGIN_NAME = 'mdxts'
 
@@ -138,9 +139,8 @@ function maybeTransformJsxOnly(sourceText: string) {
   const importRegex = /import\s+[\s\S]*?from\s+['"][^'"]+['"];?/g
   const importStatements = (sourceText.match(importRegex) || []).join('\n')
   const jsxContent = sourceText.replace(/^import.*;$/gm, '').trim()
-  const isJsxOnly = jsxContent.startsWith('<') && jsxContent.endsWith('>')
 
-  if (isJsxOnly) {
+  if (isJsxOnly(jsxContent)) {
     return `${importStatements}\n\nexport default () => ${jsxContent}`
   }
 

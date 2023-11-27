@@ -4,6 +4,6 @@
  */
 export function isJsxOnly(code: string) {
   const jsxContent = code.replace(/^import.*;$/gm, '').trim()
-  const isJsxOnly = jsxContent.startsWith('<') && jsxContent.endsWith('>')
+  const isJsxOnly = /^<.*(?:>;$|>$)/.test(jsxContent)
   return isJsxOnly
 }
