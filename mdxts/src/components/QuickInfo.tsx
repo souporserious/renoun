@@ -1,4 +1,4 @@
-import * as React from 'react'
+import React, { Fragment } from 'react'
 import { type Diagnostic } from 'ts-morph'
 import { languageService } from './project'
 import { getDiagnosticMessageText } from './diagnostics'
@@ -43,6 +43,9 @@ export function QuickInfo({
           position: 'absolute',
           translate: bounds.top < 40 ? '0px 20px' : '0px -100%',
           fontSize: 13,
+          lineHeight: '20px',
+          maxWidth: 540,
+          overflow: 'auto',
           zIndex: 1000,
           borderRadius: 3,
           border: `1px solid ${theme.colors['editorHoverWidget.border']}`,
@@ -53,8 +56,7 @@ export function QuickInfo({
           <>
             <div
               style={{
-                padding: '5px 8px',
-                fontSize: 13,
+                padding: '4px 8px',
                 color: theme.colors['editorHoverWidget.foreground'],
               }}
             >
@@ -70,27 +72,23 @@ export function QuickInfo({
                 border: 'none',
                 backgroundColor: theme.colors['editorHoverWidget.border'],
                 opacity: 0.5,
+                position: 'sticky',
+                left: 0,
               }}
             />
           </>
         ) : null}
-        <div style={{ padding: '5px 0px' }}>
-          {displayTextTokens.map((line, index) => {
-            return (
-              <div
-                key={index}
-                style={{ lineHeight: '20px', padding: '0px 8px' }}
-              >
-                {line.map((token, index) => {
-                  return (
-                    <span key={index} style={{ color: token.color }}>
-                      {token.content}
-                    </span>
-                  )
-                })}
-              </div>
-            )
-          })}
+        <div style={{ padding: '4px 8px' }}>
+          {displayTextTokens.map((line, index) => (
+            <Fragment key={index}>
+              {index === 0 ? null : '\n'}
+              {line.map((token, index) => (
+                <span key={index} style={{ color: token.color }}>
+                  {token.content}
+                </span>
+              ))}
+            </Fragment>
+          ))}
         </div>
         {docText ? (
           <>
@@ -100,9 +98,11 @@ export function QuickInfo({
                 border: 'none',
                 backgroundColor: theme.colors['editorHoverWidget.border'],
                 opacity: 0.5,
+                position: 'sticky',
+                left: 0,
               }}
             />
-            <p style={{ fontSize: 13, padding: '5px 8px', margin: 0 }}>
+            <p style={{ fontSize: 'inherit', padding: '4px 8px', margin: 0 }}>
               {docText}
             </p>
           </>
@@ -113,7 +113,7 @@ export function QuickInfo({
             style={{
               display: 'flex',
               justifyContent: 'end',
-              padding: '5px 8px',
+              padding: '4px 8px',
             }}
           >
             <button
