@@ -105,19 +105,19 @@ export async function Code({
     filename = `${id}.${finalLanguage}`
   }
 
-  // Scope code block source files since they can conflict with other files on disk.
-  if ('value' in props) {
-    filename = `mdxts/${filename}`
-  }
-
   // Format code block.
-  if (!filename.includes('shellscript') || !filename.includes('mdx')) {
+  if (!filename.includes('shellscript') && !filename.includes('mdx')) {
     finalValue = format(filename, finalValue, {
       lineWidth: 60,
       indentWidth: 2,
       quoteStyle: 'preferSingle',
       semiColons: 'asi',
     })
+  }
+
+  // Scope code block source files since they can conflict with other files on disk.
+  if ('value' in props) {
+    filename = `mdxts/${filename}`
   }
 
   if (['js', 'jsx', 'ts', 'tsx'].includes(finalLanguage)) {
