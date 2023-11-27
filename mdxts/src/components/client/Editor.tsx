@@ -65,9 +65,8 @@ export function Editor({
   children,
 }: EditorProps & { children?: React.ReactNode }) {
   const filenameId = useId()
-  const filename = `mdxts/${
-    filenameProp || `index-${filenameId.slice(1, -1)}.tsx`
-  }`
+  const filename = filenameProp || `index-${filenameId.slice(1, -1)}.tsx`
+  const scopedFilename = `mdxts/${filename}`
   const language = languageMap[languageProp] || languageProp
   const [stateValue, setStateValue] = useState(defaultValue)
   const [tokens, setTokens] = useState<Tokens[]>([])
@@ -142,40 +141,27 @@ export function Editor({
       return
     }
 
-    async function init() {
-      const [prettier, estreePlugin, typescriptPlugin] = await Promise.all([
-        import('prettier/standalone'),
-        import('prettier/plugins/estree'),
-        import('prettier/plugins/typescript'),
-      ])
-      const formattedValue = await prettier.format(resolvedValue, {
-        parser: 'typescript',
-        plugins: [estreePlugin.default, typescriptPlugin.default],
-        printWidth: 60,
-        singleQuote: true,
-        semi: false,
-      })
-      const nextSourceFile = project.createSourceFile(
-        filename,
-        formattedValue,
-        { overwrite: true }
-      )
-      setSourceFile(nextSourceFile)
+    const nextSourceFile = project.createSourceFile(
+      scopedFilename,
+      resolvedValue,
+      {
+        overwrite: true,
+      }
+    )
+    setSourceFile(nextSourceFile)
 
-      if (isJavaScriptBasedLanguage) {
-        const diagnostics = nextSourceFile.getPreEmitDiagnostics()
-        setDiagnostics(diagnostics)
+    if (isJavaScriptBasedLanguage) {
+      const diagnostics = nextSourceFile.getPreEmitDiagnostics()
+      setDiagnostics(diagnostics)
 
-        if (highlighter) {
-          const tokens = highlighter(formattedValue, language, sourceFile)
-          setTokens(tokens)
-        }
-      } else if (highlighter) {
-        const tokens = highlighter(formattedValue, language)
+      if (highlighter) {
+        const tokens = highlighter(resolvedValue, language, sourceFile)
         setTokens(tokens)
       }
+    } else if (highlighter) {
+      const tokens = highlighter(resolvedValue, language)
+      setTokens(tokens)
     }
-    init()
   }, [resolvedValue, highlighter])
 
   useEffect(() => {
@@ -188,7 +174,7 @@ export function Editor({
 
   function getAutocompletions(position) {
     const completions = languageService.getCompletionsAtPosition(
-      filename,
+      scopedFilename,
       position,
       {
         includeCompletionsForModuleExports: false,
@@ -310,7 +296,7 @@ export function Editor({
               padding: '0.8rem 1rem',
             }}
           >
-            {filename.replace('mdxts/', '')}
+            {filename}
           </div>
         ) : null}
         <button
@@ -355,7 +341,7 @@ export function Editor({
               tokens={tokens}
               lineNumbers={lineNumbers}
               sourceFile={sourceFile}
-              filename={filename}
+              filename={scopedFilename}
               highlighter={highlighter}
               highlight={highlight}
               language={language}
