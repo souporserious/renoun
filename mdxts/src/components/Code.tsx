@@ -2,7 +2,7 @@ import React from 'react'
 import { join } from 'node:path'
 import { readFile, writeFile } from 'node:fs/promises'
 import type { SourceFile } from 'ts-morph'
-import { format } from 'dprint-node'
+import { format } from 'prettier'
 import { isJsxOnly } from '../utils/is-jsx-only'
 import { getHighlighter, type Theme } from './highlighter'
 import { project } from './project'
@@ -109,10 +109,9 @@ export async function Code({
 
   // Format JavaScript code blocks.
   if (isJavaScriptLanguage) {
-    finalValue = format(filename, finalValue, {
-      lineWidth: 60,
-      indentWidth: 2,
-      quoteStyle: 'preferSingle',
+    finalValue = await format(finalValue, {
+      filepath: filename,
+      printWidth: 60,
     })
   }
 
