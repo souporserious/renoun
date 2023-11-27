@@ -7,14 +7,14 @@ export function generateStaticParams() {
   return allDocs.paths().map((pathname) => ({ slug: pathname }))
 }
 
-export default function Page({ params }) {
+export default async function Page({ params }) {
   const doc = allDocs.get(params.slug)
 
   if (doc.active === undefined) {
     return notFound()
   }
 
-  const { Component } = doc.active
+  const { Component, headings } = await doc.active
 
   return (
     <>
@@ -41,7 +41,7 @@ export default function Page({ params }) {
               top: '2rem',
             }}
           >
-            {doc.active.headings?.map(({ text, depth, id }) =>
+            {headings?.map(({ text, depth, id }) =>
               depth > 1 ? (
                 <li
                   key={id}
@@ -65,23 +65,33 @@ export default function Page({ params }) {
           padding: '4rem 0 2rem',
         }}
       >
-        {doc.previous ? (
-          <a
-            href={doc.previous.pathname}
-            style={{ gridColumn: 1, textAlign: 'left' }}
-          >
-            {doc.previous.title}
-          </a>
-        ) : null}
-        {doc.next ? (
-          <a
-            href={doc.next.pathname}
-            style={{ gridColumn: 3, textAlign: 'right' }}
-          >
-            {doc.next.title}
-          </a>
-        ) : null}
+        <SiblingLink doc={doc.previous} direction="previous" />
+        <SiblingLink doc={doc.next} direction="next" />
       </nav>
     </>
+  )
+}
+
+
+async function SiblingLink({ doc, direction }: {
+  doc: any
+  direction: 'previous' | 'next'
+}) {
+  if (!doc) {
+    return null
+  }
+
+  const { title, pathname } = await doc
+
+  return (
+    <a
+      href={pathname}
+      style={{
+        gridColumn: direction === 'previous' ? 1 : 3,
+        textAlign: direction === 'previous' ? 'left' : 'right',
+      }}
+    >
+      {title}
+    </a>
   )
 }

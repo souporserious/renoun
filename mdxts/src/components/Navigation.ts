@@ -14,24 +14,27 @@ function markDirectories(node: Node): void {
     node.title = title(node.part)
     node.children.forEach(markDirectories)
     delete node.headings
-  } else {
-    node.isDirectory = false
   }
 }
 
-function createTreeFromModules(allModules: Record<string, any>): Node[] {
+async function createTreeFromModules(
+  allModules: Record<string, Promise<Module>>
+): Promise<Node[]> {
   const root: Node[] = []
+  const resolvedModules = await Promise.all(
+    Object.entries(allModules).map(async ([path, modulePromise]) => ({
+      path,
+      module: await modulePromise,
+    }))
+  )
 
-  for (let path in allModules) {
-    const module = allModules[path]
+  for (const { path, module } of resolvedModules) {
     const parts = path.split('/')
     let pathSegments: string[] = []
-
     let currentNode: Node[] = root
 
     for (let index = 0; index < parts.length; index++) {
       const part = parts[index]
-
       pathSegments.push(part)
 
       let existingNode = currentNode.find((node) => node.part === part)
@@ -43,6 +46,7 @@ function createTreeFromModules(allModules: Record<string, any>): Node[] {
           ...module,
           part,
           pathSegments,
+          isDirectory: false,
           children: [],
         }
         currentNode.push(newNode)
@@ -58,8 +62,8 @@ function createTreeFromModules(allModules: Record<string, any>): Node[] {
   return []
 }
 
-function renderNavigation(
-  allModules: Record<string, Module>,
+async function renderNavigation(
+  allModules: Record<string, Promise<Module>>,
   renderList: (list: { children: JSX.Element[]; order: number }) => JSX.Element,
   renderItem: (
     item: Omit<Node, 'children'> & { children?: JSX.Element }
@@ -79,7 +83,7 @@ function renderNavigation(
     })
   }
 
-  const tree = createTreeFromModules(allModules)
+  const tree = await createTreeFromModules(allModules)
   tree.forEach(markDirectories)
   return buildNavigationTree(tree, 0)
 }

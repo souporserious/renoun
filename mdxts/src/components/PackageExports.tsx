@@ -52,8 +52,8 @@ export function PackageExports({
           const readmeModule = readmeModules[parsedExportPath]
 
           return {
+            module: readmeModule,
             exportPath: parsedExportPath,
-            ...readmeModule,
             ...(process.env.NODE_ENV === 'development'
               ? { sourcePath, editorPath: getEditorPath({ path: sourcePath }) }
               : {}),
@@ -79,52 +79,62 @@ export function PackageExports({
       }}
     >
       {exportsList.map(
-        ({ exportPath, sourcePath, editorPath, summary }, index) => (
-          <li
-            key={index}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'flex-start',
-              gap: '1rem',
-            }}
-          >
-            <code>{exportPath}</code>
-            {summary ? (
-              <p>{summary}</p>
-            ) : process.env.NODE_ENV === 'development' ? (
-              <form
-                action={async function createReadme() {
-                  'use server'
-                  // create the README file if it doesn't exist
-                  if (!fs.existsSync(sourcePath)) {
-                    fs.writeFileSync(
-                      sourcePath,
-                      `# ${exportPath}\n\nThis is the README for the ${exportPath} export from the ${name} package.`
-                    )
-                  }
+        async ({ module, exportPath, sourcePath, editorPath }, index) => {
+          if (module === undefined) {
+            if (process.env.NODE_ENV === 'development') {
+              return (
+                <form
+                  action={async function createReadme() {
+                    'use server'
+                    // create the README file if it doesn't exist
+                    if (!fs.existsSync(sourcePath)) {
+                      fs.writeFileSync(
+                        sourcePath,
+                        `# ${exportPath}\n\nThis is the README for the ${exportPath} export from the ${name} package.`
+                      )
+                    }
 
-                  // open the README file in the editor
-                  redirect(editorPath)
-                }}
-              >
-                <button
-                  style={{
-                    letterSpacing: '0.015em',
-                    fontWeight: 600,
-                    padding: '0.5rem 0.8rem',
-                    border: '1px solid #0479df',
-                    borderRadius: '8px',
-                    background: '#1871be',
-                    color: 'white',
+                    // open the README file in the editor
+                    redirect(editorPath)
                   }}
                 >
-                  Create README
-                </button>
-              </form>
-            ) : null}
-          </li>
-        )
+                  <button
+                    style={{
+                      letterSpacing: '0.015em',
+                      fontWeight: 600,
+                      padding: '0.5rem 0.8rem',
+                      border: '1px solid #0479df',
+                      borderRadius: '8px',
+                      background: '#1871be',
+                      color: 'white',
+                    }}
+                  >
+                    Create README
+                  </button>
+                </form>
+              )
+            }
+
+            return null
+          }
+
+          const { summary } = await module
+
+          return (
+            <li
+              key={index}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-start',
+                gap: '1rem',
+              }}
+            >
+              <code>{exportPath}</code>
+              {summary}
+            </li>
+          )
+        }
       )}
     </ul>
   )
