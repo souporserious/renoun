@@ -2,7 +2,7 @@ import React from 'react'
 import { join } from 'node:path'
 import { readFile, writeFile } from 'node:fs/promises'
 import type { SourceFile } from 'ts-morph'
-import { format } from 'prettier'
+import { format, resolveConfig } from 'prettier'
 import { isJsxOnly } from '../utils/is-jsx-only'
 import { getHighlighter, type Theme } from './highlighter'
 import { project } from './project'
@@ -109,10 +109,10 @@ export async function Code({
 
   // Format JavaScript code blocks.
   if (isJavaScriptLanguage) {
-    finalValue = await format(finalValue, {
-      filepath: filename,
-      printWidth: 60,
-    })
+    const config = await resolveConfig(filename)
+    config.filepath = filename
+    config.printWidth = 60
+    finalValue = await format(finalValue, config)
   }
 
   // Scope code block source files since they can conflict with other files on disk.
