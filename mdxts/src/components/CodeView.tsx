@@ -1,4 +1,4 @@
-import * as React from 'react'
+import React, { Fragment } from 'react'
 import type { SourceFile } from 'ts-morph'
 import { Identifier, SyntaxKind } from 'ts-morph'
 import { type Theme } from './highlighter'
@@ -172,33 +172,40 @@ export function CodeView({
           )
         })}
         {tokens.map((line, lineIndex) => {
+          const Wrapper = ({ children }: { children: React.ReactNode }) =>
+            shouldHighlightLine(lineIndex) ? (
+              <div
+                style={{
+                  height: 20,
+                  backgroundColor: '#87add726',
+                }}
+              >
+                {children}
+              </div>
+            ) : (
+              <Fragment>
+                {lineIndex === 0 ? null : '\n'}
+                {children}
+              </Fragment>
+            )
+
           return (
-            <div
-              key={lineIndex}
-              style={{
-                height: 20,
-                backgroundColor: shouldHighlightLine(lineIndex)
-                  ? '#87add726'
-                  : undefined,
-              }}
-            >
-              {line.map((token, tokenIndex) => {
-                return (
-                  <span
-                    key={tokenIndex}
-                    style={{
-                      ...token.fontStyle,
-                      color: token.color,
-                      textDecoration: token.hasError
-                        ? 'red wavy underline'
-                        : 'none',
-                    }}
-                  >
-                    {token.content}
-                  </span>
-                )
-              })}
-            </div>
+            <Wrapper key={lineIndex}>
+              {line.map((token, tokenIndex) => (
+                <span
+                  key={tokenIndex}
+                  style={{
+                    ...token.fontStyle,
+                    color: token.color,
+                    textDecoration: token.hasError
+                      ? 'red wavy underline'
+                      : 'none',
+                  }}
+                >
+                  {token.content}
+                </span>
+              ))}
+            </Wrapper>
           )
         })}
       </pre>
