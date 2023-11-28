@@ -113,6 +113,15 @@ export async function Code({
     config.filepath = filename
     config.printWidth = 60
     finalValue = await format(finalValue, config)
+
+    // Trim semicolon and trailing newline from formatting.
+    if (jsxOnly) {
+      finalValue = finalValue.trimEnd()
+
+      if (finalValue.startsWith(';')) {
+        finalValue = finalValue.slice(1)
+      }
+    }
   }
 
   // Scope code block source files since they can conflict with other files on disk.
