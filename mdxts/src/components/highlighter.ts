@@ -114,8 +114,8 @@ export function processToken(token: Token, diagnostic?: Diagnostic): Tokens {
   }
 }
 
-/** Returns an array of tokens with symbol information. */
-function processSymbol(
+/** Returns an array of tokens from a token with symbol information attached. */
+function processSubTokens(
   token: Token,
   ranges: Array<{ start: number; end: number }>
 ): Tokens {
@@ -125,7 +125,7 @@ function processSymbol(
   }
 
   const intersectingRanges = ranges.filter(
-    (range) => token.end > range.start && token.start < range.end
+    (range) => range.start >= token.start && range.end <= token.end
   )
 
   if (intersectingRanges.length === 0) {
@@ -165,7 +165,10 @@ function processSymbol(
 
   // Remove the processed range and recursively process the split tokens
   const remainingRanges = intersectingRanges.slice(1)
-  return tokensAfterProcessing.flatMap((t) => processSymbol(t, remainingRanges))
+
+  return tokensAfterProcessing.flatMap((token) =>
+    processSubTokens(token, remainingRanges)
+  )
 }
 
 /** Returns a function that converts code to an array of highlighted tokens */
@@ -252,7 +255,9 @@ export async function getHighlighter(options: any): Promise<Highlighter> {
           }
         }
 
-        return processedTokens.flatMap((token) => processSymbol(token, ranges))
+        return processedTokens.flatMap((token) =>
+          processSubTokens(token, ranges)
+        )
       })
     })
 
