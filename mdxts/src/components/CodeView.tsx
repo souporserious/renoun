@@ -71,8 +71,7 @@ export function CodeView({
           style={{
             display: 'grid',
             gridTemplateColumns: 'auto 1fr',
-            padding: '10px 0',
-            // overflow: 'auto',
+            position: 'relative',
           }}
           {...props}
         />
@@ -84,6 +83,7 @@ export function CodeView({
         filename={filename}
         source={sourceFile?.getFullText()}
       />
+
       {lineNumbers ? (
         <div
           className={className}
@@ -97,6 +97,7 @@ export function CodeView({
             textAlign: 'right',
             userSelect: 'none',
             whiteSpace: 'pre',
+            color: theme.colors['editorLineNumber.foreground'],
           }}
         >
           {tokens.map((_, lineIndex) => {
@@ -106,11 +107,7 @@ export function CodeView({
               shouldHighlight || isActive ? (
                 <div
                   style={{
-                    color:
-                      shouldHighlight || isActive
-                        ? theme.colors['editorLineNumber.activeForeground']
-                        : theme.colors['editorLineNumber.foreground'],
-                    backgroundColor: shouldHighlight ? '#87add726' : undefined,
+                    color: theme.colors['editorLineNumber.activeForeground'],
                   }}
                 >
                   {children}
@@ -125,6 +122,7 @@ export function CodeView({
           })}
         </div>
       ) : null}
+
       <pre
         className={className}
         style={{
@@ -176,44 +174,62 @@ export function CodeView({
             </Symbol>
           )
         })}
-        {tokens.map((line, lineIndex) => {
-          const Wrapper = ({ children }: { children: React.ReactNode }) =>
-            shouldHighlightLine(lineIndex) ? (
-              <div
+
+        {tokens.map((line, lineIndex) => (
+          <Fragment key={lineIndex}>
+            {line.map((token, tokenIndex) => (
+              <span
+                key={tokenIndex}
                 style={{
-                  height: 20,
-                  backgroundColor: '#87add726',
+                  ...token.fontStyle,
+                  color: token.color,
+                  textDecoration: token.hasError
+                    ? 'red wavy underline'
+                    : 'none',
                 }}
               >
-                {children}
-              </div>
-            ) : (
-              <Fragment>
-                {children}
-                {'\n'}
-              </Fragment>
-            )
-
-          return (
-            <Wrapper key={lineIndex}>
-              {line.map((token, tokenIndex) => (
-                <span
-                  key={tokenIndex}
-                  style={{
-                    ...token.fontStyle,
-                    color: token.color,
-                    textDecoration: token.hasError
-                      ? 'red wavy underline'
-                      : 'none',
-                  }}
-                >
-                  {token.content}
-                </span>
-              ))}
-            </Wrapper>
-          )
-        })}
+                {token.content}
+              </span>
+            ))}
+            {'\n'}
+          </Fragment>
+        ))}
       </pre>
+
+      {highlight
+        ? highlight
+            .split(',')
+            .map((range) => {
+              const [start, end] = range.split('-')
+              const parsedStart = parseInt(start, 10)
+              const parsedEnd = end ? parseInt(end, 10) : parsedStart
+              return {
+                start: parsedStart,
+                end: parsedEnd,
+              }
+            })
+            .map((range, index) => {
+              const start = range.start - 1
+              const end = range.end ? range.end - 1 : start
+              const top = start * lineHeight
+              const height = (end - start + 1) * lineHeight
+
+              return (
+                <div
+                  key={index}
+                  style={{
+                    position: 'absolute',
+                    top,
+                    left: 0,
+                    width: '100%',
+                    height,
+                    backgroundColor: '#87add726',
+                    pointerEvents: 'none',
+                  }}
+                />
+              )
+            })
+        : null}
     </Container>
   )
 }
