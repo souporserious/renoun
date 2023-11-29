@@ -2,6 +2,7 @@ import React from 'react'
 import { join } from 'node:path'
 import { readFile, writeFile } from 'node:fs/promises'
 import type { SourceFile } from 'ts-morph'
+import { findRoot } from '@manypkg/find-root'
 import { format, resolveConfig } from 'prettier'
 import { isJsxOnly } from '../utils/is-jsx-only'
 import { getHighlighter, type Theme } from './highlighter'
@@ -141,6 +142,8 @@ export async function Code({
 
   const highlighter = await getHighlighter({ theme })
   const tokens = highlighter(finalValue, finalLanguage, sourceFile, jsxOnly)
+  const rootDirectory = (await findRoot(process.cwd())).rootDir
+  const baseDirectory = process.cwd().replace(rootDirectory, '')
 
   return (
     <CodeView
@@ -156,6 +159,8 @@ export async function Code({
       isNestedInEditor={isNestedInEditor}
       showErrors={showErrors}
       className={className}
+      rootDirectory={rootDirectory}
+      baseDirectory={baseDirectory}
       edit={
         process.env.NODE_ENV === 'development'
           ? async function () {

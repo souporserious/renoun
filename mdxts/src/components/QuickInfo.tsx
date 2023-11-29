@@ -1,5 +1,5 @@
 import React, { Fragment } from 'react'
-import { type Diagnostic } from 'ts-morph'
+import { type ts, type Diagnostic } from 'ts-morph'
 import { languageService } from './project'
 import { getDiagnosticMessageText } from './diagnostics'
 import { QuickInfoContainer } from './QuickInfoContainer'
@@ -13,6 +13,8 @@ export function QuickInfo({
   diagnostics,
   edit,
   isQuickInfoOpen,
+  rootDirectory = '',
+  baseDirectory = '',
 }: {
   bounds: any
   filename: string
@@ -22,6 +24,8 @@ export function QuickInfo({
   diagnostics: Diagnostic[]
   edit: any
   isQuickInfoOpen?: boolean
+  rootDirectory?: string
+  baseDirectory?: string
 }) {
   const quickInfo = languageService.getQuickInfoAtPosition(
     filename,
@@ -32,17 +36,20 @@ export function QuickInfo({
     return null
   }
 
+  const formatDisplayParts = (parts: ts.SymbolDisplayPart[]) =>
+    parts
+      .map((part) => part.text)
+      .join('')
+      // First, replace root directory to handle root node_modules
+      .replace(rootDirectory, '.')
+      // Next, replace base directory for on disk paths
+      .replace(baseDirectory, '')
+      // Finally, replace the in-memory mdxts directory
+      .replace('/mdxts', '')
   const displayParts = quickInfo.displayParts || []
   const documentation = quickInfo.documentation || []
-  const directoryPathToTrim = process.cwd().replace('site', '')
-  const displayText = displayParts
-    .map((part) => part.text)
-    .join('')
-    .replace(directoryPathToTrim, '')
-  const docText = documentation
-    .map((part) => part.text)
-    .join('')
-    .replace(directoryPathToTrim, '')
+  const displayText = formatDisplayParts(displayParts)
+  const docText = formatDisplayParts(documentation)
   const displayTextTokens = highlighter(displayText, language)
   return (
     <QuickInfoContainer

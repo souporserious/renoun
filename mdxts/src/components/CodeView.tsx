@@ -50,6 +50,8 @@ export function CodeView({
   isJsxOnly,
   className,
   isNestedInEditor,
+  rootDirectory,
+  baseDirectory,
   edit,
 }: CodeProps & {
   row?: [number, number]
@@ -58,6 +60,8 @@ export function CodeView({
   highlighter: any
   isJsxOnly?: boolean
   isNestedInEditor?: boolean
+  rootDirectory?: string
+  baseDirectory?: string
   edit?: any
 }) {
   const editorForeground = theme.colors['editor.foreground'].toLowerCase()
@@ -184,6 +188,8 @@ export function CodeView({
                 diagnostics={filteredDiagnostics}
                 edit={edit}
                 isQuickInfoOpen={isQuickInfoOpen}
+                rootDirectory={rootDirectory}
+                baseDirectory={baseDirectory}
               />
             </Symbol>
           )

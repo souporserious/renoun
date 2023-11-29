@@ -26,9 +26,7 @@ export function getDiagnosticMessageText(
     return message
   } else {
     const nextMessages = message.getNext()
-    let result = message
-      .getMessageText()
-      .replace(process.cwd().replace('site', ''), '')
+    let result = message.getMessageText()
 
     if (Array.isArray(nextMessages)) {
       for (const nextMessage of nextMessages) {

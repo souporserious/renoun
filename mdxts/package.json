@@ -108,6 +108,7 @@
     "webpack": "^5.89.0"
   },
   "dependencies": {
+    "@manypkg/find-root": "^2.2.1",
     "@mdx-js/loader": "^2.3.0",
     "@mdx-js/mdx": "^2.3.0",
     "@next/mdx": "13.4.19",
