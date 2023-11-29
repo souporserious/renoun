@@ -60,6 +60,7 @@ export function CodeView({
   isNestedInEditor?: boolean
   edit?: any
 }) {
+  const editorForeground = theme.colors['editor.foreground'].toLowerCase()
   const symbolBounds = sourceFile
     ? getSymbolBounds(sourceFile, isJsxOnly, lineHeight)
     : []
@@ -124,7 +125,10 @@ export function CodeView({
         </div>
       ) : null}
 
-      <Pre className={className}>
+      <Pre
+        className={className}
+        style={{ color: theme.colors['editor.foreground'] }}
+      >
         {diagnostics
           ? diagnostics.map((diagnostic) => {
               const start = diagnostic.getStart()
@@ -187,21 +191,30 @@ export function CodeView({
 
         {tokens.map((line, lineIndex) => (
           <Fragment key={lineIndex}>
-            {line.map((token, tokenIndex) => (
-              <span
-                key={tokenIndex}
-                style={{
-                  ...token.fontStyle,
-                  color: token.color,
-                  textDecoration: token.hasError
-                    ? 'red wavy underline'
-                    : 'none',
-                }}
-              >
-                {token.content}
-              </span>
-            ))}
-            {'\n'}
+            {line.map((token, tokenIndex) => {
+              if (
+                token.color.toLowerCase() === editorForeground ||
+                token.content.trim() === ''
+              ) {
+                return token.content
+              }
+
+              return (
+                <span
+                  key={tokenIndex}
+                  style={{
+                    ...token.fontStyle,
+                    color: token.color,
+                    textDecoration: token.hasError
+                      ? 'red wavy underline'
+                      : 'none',
+                  }}
+                >
+                  {token.content}
+                </span>
+              )
+            })}
+            {lineIndex === tokens.length - 1 ? null : '\n'}
           </Fragment>
         ))}
       </Pre>

@@ -73,7 +73,8 @@ export async function getHighlighter(options: any): Promise<Highlighter> {
     value: string,
     language: any,
     sourceFile?: SourceFile,
-    isJsxOnly: boolean = false
+    isJsxOnly: boolean = false,
+    splitTokens: boolean = false
   ) {
     const code = sourceFile ? sourceFile.getFullText() : value
     const tokens = highlighter
@@ -121,6 +122,10 @@ export async function getHighlighter(options: any): Promise<Highlighter> {
           fontStyle: getFontStyle(token.fontStyle),
           start: tokenStart,
           end: tokenEnd,
+        }
+
+        if (!splitTokens) {
+          return [initialToken]
         }
 
         let processedTokens: Tokens = []
