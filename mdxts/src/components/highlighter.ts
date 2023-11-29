@@ -1,7 +1,6 @@
 import { getHighlighter as shikiGetHighlighter } from 'shiki'
-import type { Diagnostic, SourceFile } from 'ts-morph'
+import type { SourceFile } from 'ts-morph'
 import { SyntaxKind } from 'ts-morph'
-import { getDiagnosticForToken } from './diagnostics'
 
 type Color = string
 
@@ -31,8 +30,6 @@ export type Token = {
   fontStyle: Record<string, string | number>
   start: number
   end: number
-  hasError: boolean
-  isSymbol: boolean
 }
 
 export type Tokens = Token[]
@@ -79,7 +76,6 @@ export async function getHighlighter(options: any): Promise<Highlighter> {
     isJsxOnly: boolean = false
   ) {
     const code = sourceFile ? sourceFile.getFullText() : value
-    const diagnostics = getSourceFileDiagnostics(sourceFile)
     const tokens = highlighter
       .codeToThemedTokens(code, language, null, {
         includeExplanation: false,
@@ -92,32 +88,22 @@ export async function getHighlighter(options: any): Promise<Highlighter> {
 
         return true
       })
-    const identifierRanges: Array<{ start: number; end: number }> = sourceFile
+    const importSpecifiers = sourceFile
       ? sourceFile
-          .getDescendantsOfKind(SyntaxKind.Identifier)
-          .filter((node) => {
-            // filter out imports when jsx only source file
-            if (isJsxOnly) {
-              const parent = node.getParent()
-              return (
-                parent?.getKind() !== SyntaxKind.ImportSpecifier &&
-                parent?.getKind() === SyntaxKind.ImportClause
-              )
-            }
-
-            return true
-          })
-          .map((node) => {
-            const start = node.getStart()
-            const end = start + node.getWidth()
-            return { start, end }
-          })
-      : null
+          .getImportDeclarations()
+          .map((importDeclaration) => importDeclaration.getModuleSpecifier())
+      : []
+    const identifiers = sourceFile
+      ? sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)
+      : []
+    const allNodes = [...importSpecifiers, ...identifiers]
+    const ranges = allNodes.map((node) => ({
+      start: node.getStart(),
+      end: node.getEnd(),
+    }))
     let position = 0
-    if (identifierRanges) {
-      console.log('identifierRanges', identifierRanges)
-    }
     const parsedTokens = tokens.map((line) => {
+      // increment position for line breaks
       if (line.length === 0) {
         position += 1
       }
@@ -126,6 +112,7 @@ export async function getHighlighter(options: any): Promise<Highlighter> {
         const tokenEnd = tokenStart + token.content.length
         const lastToken = tokenIndex === line.length - 1
 
+        // account for newlines
         position = lastToken ? tokenEnd + 1 : tokenEnd
 
         const initialToken = {
@@ -134,21 +121,20 @@ export async function getHighlighter(options: any): Promise<Highlighter> {
           fontStyle: getFontStyle(token.fontStyle),
           start: tokenStart,
           end: tokenEnd,
-          hasError: false,
-          isSymbol: false,
         }
-        let processedTokens: Tokens = [,]
+
+        let processedTokens: Tokens = []
 
         // split tokens by identifier ranges
-        if (identifierRanges) {
-          const tokenRange = identifierRanges.find((range) => {
+        if (ranges) {
+          const tokenRange = ranges.find((range) => {
             return range.start >= tokenStart && range.end <= tokenEnd
           })
           const inFullRange = tokenRange
             ? tokenRange.start === tokenStart && tokenRange.end === tokenEnd
             : false
 
-          // If not the full token range, split the token to isolate the identifier
+          // split the token to isolate the identifier
           if (tokenRange && !inFullRange) {
             const identifierStart = tokenRange.start - tokenStart
             const identifierEnd = tokenRange.end - tokenStart
@@ -191,25 +177,11 @@ export async function getHighlighter(options: any): Promise<Highlighter> {
       })
     })
 
-    // remove first line if it's jsx only since it's leftover whitespace from import statements
+    // remove first line if this is jsx only since it's leftover whitespace from import statements
     if (isJsxOnly) {
       parsedTokens.shift()
     }
 
     return parsedTokens
   }
-}
-
-function getSourceFileDiagnostics(sourceFile?: SourceFile) {
-  if (!sourceFile) {
-    return
-  }
-
-  const diagnostics = sourceFile.getPreEmitDiagnostics()
-
-  if (diagnostics.length === 0) {
-    return
-  }
-
-  return diagnostics
 }

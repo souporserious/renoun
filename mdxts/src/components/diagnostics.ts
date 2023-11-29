@@ -1,41 +1,22 @@
 import type { Diagnostic, DiagnosticMessageChain } from 'ts-morph'
+import type { Token } from './highlighter'
 
-export function getDiagnosticForToken(
-  token: any,
-  tokenIndex: number,
-  lineIndex: number,
-  tokens: any[],
-  diagnostics: Diagnostic[],
-  code: string
-): Diagnostic | null {
-  const linesBeforeToken = code.split('\n').slice(0, lineIndex)
-  const charsBeforeTokenLine = linesBeforeToken.reduce(
-    (sum, line) => sum + line.length + 1, // +1 for the newline character
-    0
-  )
+export function getDiagnosticsForToken(
+  token: Token,
+  diagnostics: Diagnostic[]
+): Diagnostic[] {
+  let tokenDiagnostics: Diagnostic[] = []
 
-  // Calculate position of the token within its line by summing up lengths of previous tokens in the same line
-  const positionWithinLine = tokens[lineIndex]
-    .slice(0, tokenIndex)
-    .reduce((sum, prevToken) => sum + prevToken.content.length, 0)
-  const tokenStart = charsBeforeTokenLine + positionWithinLine
-  const tokenEnd = tokenStart + token.content.length
-
-  // Iterate over the diagnostics to see if any of them overlap with the token's position.
   for (let diagnostic of diagnostics) {
     const diagnosticStart = diagnostic.getStart()
     const diagnosticEnd = diagnosticStart + diagnostic.getLength()
 
-    if (
-      (diagnosticStart >= tokenStart && diagnosticStart <= tokenEnd) ||
-      (diagnosticEnd >= tokenStart && diagnosticEnd <= tokenEnd) ||
-      (diagnosticStart <= tokenStart && diagnosticEnd >= tokenEnd)
-    ) {
-      return diagnostic
+    if (token.start >= diagnosticStart && token.end <= diagnosticEnd) {
+      tokenDiagnostics.push(diagnostic)
     }
   }
 
-  return null
+  return tokenDiagnostics
 }
 
 export function getDiagnosticMessageText(
@@ -44,15 +25,17 @@ export function getDiagnosticMessageText(
   if (typeof message === 'string') {
     return message
   } else {
-    const nextMessage = message.getNext()
-    let result = message.getMessageText()
+    const nextMessages = message.getNext()
+    let result = message
+      .getMessageText()
+      .replace(process.cwd().replace('site', ''), '')
 
-    if (Array.isArray(nextMessage)) {
-      for (const msg of nextMessage) {
-        result += '\n' + getDiagnosticMessageText(msg)
+    if (Array.isArray(nextMessages)) {
+      for (const nextMessage of nextMessages) {
+        result += '\n' + getDiagnosticMessageText(nextMessage)
       }
-    } else if (nextMessage) {
-      result += '\n' + getDiagnosticMessageText(nextMessage)
+    } else if (nextMessages) {
+      result += '\n' + getDiagnosticMessageText(nextMessages)
     }
 
     return result

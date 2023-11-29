@@ -6,7 +6,6 @@ import { getDiagnosticMessageText } from './diagnostics'
 export function QuickInfo({
   bounds,
   filename,
-  position,
   highlighter,
   language,
   theme,
@@ -16,7 +15,6 @@ export function QuickInfo({
 }: {
   bounds: any
   filename: string
-  position: number
   highlighter: any
   language: string
   theme: any
@@ -24,7 +22,10 @@ export function QuickInfo({
   edit: any
   isQuickInfoOpen?: boolean
 }) {
-  const quickInfo = languageService.getQuickInfoAtPosition(filename, position)
+  const quickInfo = languageService.getQuickInfoAtPosition(
+    filename,
+    bounds.start
+  )
 
   if (!quickInfo) {
     return null
@@ -32,14 +33,21 @@ export function QuickInfo({
 
   const displayParts = quickInfo.displayParts || []
   const documentation = quickInfo.documentation || []
-  const displayText = displayParts.map((part) => part.text).join('')
-  const docText = documentation.map((part) => part.text).join('')
+  const directoryPathToTrim = process.cwd().replace('site', '')
+  const displayText = displayParts
+    .map((part) => part.text)
+    .join('')
+    .replace(directoryPathToTrim, '')
+  const docText = documentation
+    .map((part) => part.text)
+    .join('')
+    .replace(directoryPathToTrim, '')
   const displayTextTokens = highlighter(displayText, language)
-
   return (
     <>
       <div
         style={{
+          pointerEvents: 'auto',
           position: 'absolute',
           translate: bounds.top < 40 ? '0px 20px' : '0px -100%',
           fontSize: 13,

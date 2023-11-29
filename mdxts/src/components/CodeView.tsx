@@ -1,6 +1,6 @@
 import React, { Fragment } from 'react'
 import type { SourceFile } from 'ts-morph'
-import { Identifier, SyntaxKind } from 'ts-morph'
+import { Node, SyntaxKind } from 'ts-morph'
 import { type Theme } from './highlighter'
 import { Symbol } from './Symbol'
 import { QuickInfo } from './QuickInfo'
@@ -59,8 +59,8 @@ export function CodeView({
   isNestedInEditor?: boolean
   edit?: any
 }) {
-  const identifierBounds = sourceFile
-    ? getIdentifierBounds(sourceFile, isJsxOnly, lineHeight)
+  const symbolBounds = sourceFile
+    ? getSymbolBounds(sourceFile, isJsxOnly, lineHeight)
     : []
   const shouldHighlightLine = calculateLinesToHighlight(highlight)
   const diagnostics = sourceFile?.getPreEmitDiagnostics()
@@ -142,7 +142,35 @@ export function CodeView({
           overflow: 'visible',
         }}
       >
-        {identifierBounds.map((bounds, index) => {
+        {diagnostics
+          ? diagnostics.map((diagnostic) => {
+              const start = diagnostic.getStart()
+              const end = start + diagnostic.getLength()
+              const { line, column } = sourceFile.getLineAndColumnAtPos(start)
+              const yOffset = isJsxOnly ? 2 : 1
+              const top = (line - yOffset) * lineHeight
+              const height = lineHeight
+              const width = end - start
+              return (
+                <div
+                  key={start}
+                  style={{
+                    position: 'absolute',
+                    top,
+                    left: `calc(${column - 1} * 1ch)`,
+                    width: `calc(${width} * 1ch)`,
+                    height,
+                    backgroundImage: `url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%206%203'%20enable-background%3D'new%200%200%206%203'%20height%3D'3'%20width%3D'6'%3E%3Cg%20fill%3D'%23f14c4c'%3E%3Cpolygon%20points%3D'5.5%2C0%202.5%2C3%201.1%2C3%204.1%2C0'%2F%3E%3Cpolygon%20points%3D'4%2C0%206%2C2%206%2C0.6%205.4%2C0'%2F%3E%3Cpolygon%20points%3D'0%2C2%201%2C3%202.4%2C3%200%2C0.6'%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E")`,
+                    backgroundRepeat: 'repeat-x',
+                    backgroundPosition: 'bottom left',
+                    pointerEvents: 'none',
+                  }}
+                />
+              )
+            })
+          : null}
+
+        {symbolBounds.map((bounds, index) => {
           const filteredDiagnostics = diagnostics.filter((diagnostic) => {
             const start = diagnostic.getStart()
             const end = start + diagnostic.getLength()
@@ -165,7 +193,6 @@ export function CodeView({
                 filename={filename}
                 highlighter={highlighter}
                 language={language}
-                position={bounds.start}
                 theme={theme}
                 diagnostics={filteredDiagnostics}
                 edit={edit}
@@ -252,36 +279,32 @@ function calculateLinesToHighlight(meta) {
   }
 }
 
-/* Get the bounding rectangle of all identifiers in a source file. */
-function getIdentifierBounds(
+/* Get the bounding rectangle of all module import specifiers and identifiers in a source file. */
+function getSymbolBounds(
   sourceFile: SourceFile,
   isJsxOnly: boolean,
   lineHeight: number
 ) {
+  const importSpecifiers = sourceFile
+    .getImportDeclarations()
+    .map((importDeclaration) => importDeclaration.getModuleSpecifier())
   const identifiers = sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)
   const importCount = sourceFile.getImportDeclarations().length
-  const bounds = identifiers
+  const allNodes = [...importSpecifiers, ...identifiers]
+  const bounds = allNodes
     .filter((identifier) => {
       const parent = identifier.getParent()
-      const isJsxOnlyImport = isJsxOnly
-        ? parent?.getKind() === SyntaxKind.ImportSpecifier ||
-          parent?.getKind() === SyntaxKind.ImportClause
-        : false
-      return (
-        !Identifier.isJSDocTag(parent) &&
-        !Identifier.isJSDoc(parent) &&
-        !isJsxOnlyImport
-      )
+      return !Node.isJSDocTag(parent) && !Node.isJSDoc(parent)
     })
-    .map((identifier) => {
-      const start = identifier.getStart()
+    .map((node) => {
+      const start = node.getStart()
       const { line, column } = sourceFile.getLineAndColumnAtPos(start)
       const yOffset = isJsxOnly ? importCount + 2 : 1
       return {
         start,
         top: (line - yOffset) * lineHeight,
         left: column - 1,
-        width: identifier.getWidth(),
+        width: node.getWidth(),
         height: lineHeight,
       }
     })
