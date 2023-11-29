@@ -240,6 +240,9 @@ importers:
       next:
         specifier: 14.0.3
         version: 14.0.3(@babel/core@7.23.0)(react-dom@18.2.0)(react@18.2.0)
+      prettier:
+        specifier: ^3.1.0
+        version: 3.1.0
       react:
         specifier: ^18.2.0
         version: 18.2.0
