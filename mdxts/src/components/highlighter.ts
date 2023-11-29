@@ -68,109 +68,6 @@ function getFontStyle(fontStyle: number): any {
   return style
 }
 
-/** Returns an array of tokens with error information. */
-export function processToken(token: Token, diagnostic?: Diagnostic): Tokens {
-  const diagnosticStart = diagnostic?.getStart()
-  const diagnosticEnd = diagnosticStart + diagnostic?.getLength()
-
-  if (diagnosticStart > token.start && diagnosticEnd < token.end) {
-    // If only a part of the token is an error, split it
-    return [
-      {
-        ...token,
-        content: token.content.slice(0, diagnosticStart - token.start),
-        hasError: false,
-      },
-      {
-        ...token,
-        content: token.content.slice(
-          diagnosticStart - token.start,
-          diagnosticEnd - token.start
-        ),
-        hasError: true,
-      },
-      {
-        ...token,
-        content: token.content.slice(diagnosticEnd - token.start),
-        hasError: false,
-      },
-    ]
-  } else if (token.start >= diagnosticStart && token.end <= diagnosticEnd) {
-    // If the whole token is an error
-    return [
-      {
-        ...token,
-        hasError: true,
-      },
-    ]
-  } else {
-    // No error in this token
-    return [
-      {
-        ...token,
-        hasError: false,
-      },
-    ]
-  }
-}
-
-/** Returns an array of tokens from a token with symbol information attached. */
-function processSubTokens(
-  token: Token,
-  ranges: Array<{ start: number; end: number }>
-): Tokens {
-  // If no ranges, return token as-is
-  if (!ranges || ranges.length === 0) {
-    return [{ ...token, isSymbol: false }]
-  }
-
-  const intersectingRanges = ranges.filter(
-    (range) => range.start >= token.start && range.end <= token.end
-  )
-
-  if (intersectingRanges.length === 0) {
-    return [{ ...token, isSymbol: false }]
-  }
-
-  // Process the first intersecting range and split the token accordingly
-  const firstRange = intersectingRanges[0]
-  let tokensAfterProcessing: Tokens = []
-
-  if (firstRange.start > token.start) {
-    tokensAfterProcessing.push({
-      ...token,
-      content: token.content.slice(0, firstRange.start - token.start),
-      isSymbol: false,
-    })
-  }
-
-  if (token.start < firstRange.end && token.end > firstRange.start) {
-    tokensAfterProcessing.push({
-      ...token,
-      content: token.content.slice(
-        Math.max(token.start, firstRange.start) - token.start,
-        Math.min(token.end, firstRange.end) - token.start
-      ),
-      isSymbol: true,
-    })
-  }
-
-  if (firstRange.end < token.end) {
-    tokensAfterProcessing.push({
-      ...token,
-      content: token.content.slice(firstRange.end - token.start),
-      isSymbol: false,
-    })
-  }
-
-  // Remove the processed range and recursively process the split tokens
-  const remainingRanges = intersectingRanges.slice(1)
-
-  return tokensAfterProcessing.flatMap((token) =>
-    processSubTokens(token, remainingRanges)
-  )
-}
-
 /** Returns a function that converts code to an array of highlighted tokens */
 export async function getHighlighter(options: any): Promise<Highlighter> {
   const highlighter = await shikiGetHighlighter(options)
@@ -195,69 +92,102 @@ export async function getHighlighter(options: any): Promise<Highlighter> {
 
         return true
       })
-    const ranges: Array<{ start: number; end: number }> = sourceFile
-      ?.getDescendantsOfKind(SyntaxKind.Identifier)
-      .filter((node) => {
-        // filter out imports when jsx only source file
-        if (isJsxOnly) {
-          const parent = node.getParent()
-          return (
-            parent?.getKind() !== SyntaxKind.ImportSpecifier &&
-            parent?.getKind() === SyntaxKind.ImportClause
-          )
-        }
+    const identifierRanges: Array<{ start: number; end: number }> = sourceFile
+      ? sourceFile
+          .getDescendantsOfKind(SyntaxKind.Identifier)
+          .filter((node) => {
+            // filter out imports when jsx only source file
+            if (isJsxOnly) {
+              const parent = node.getParent()
+              return (
+                parent?.getKind() !== SyntaxKind.ImportSpecifier &&
+                parent?.getKind() === SyntaxKind.ImportClause
+              )
+            }
 
-        return true
-      })
-      .map((node) => {
-        const start = node.getStart()
-        const end = node.getEnd()
-        return { start, end }
-      })
+            return true
+          })
+          .map((node) => {
+            const start = node.getStart()
+            const end = start + node.getWidth()
+            return { start, end }
+          })
+      : null
     let position = 0
-    const parsedTokens = tokens.map((line, lineIndex) => {
+    if (identifierRanges) {
+      console.log('identifierRanges', identifierRanges)
+    }
+    const parsedTokens = tokens.map((line) => {
+      if (line.length === 0) {
+        position += 1
+      }
       return line.flatMap((token, tokenIndex) => {
-        const isLastToken = tokenIndex === line.length - 1
         const tokenStart = position
-        position += token.content.length
-        const tokenEnd = position
+        const tokenEnd = tokenStart + token.content.length
+        const lastToken = tokenIndex === line.length - 1
 
-        // Offset the position by 1 to account for new lines
-        if (isLastToken) {
-          position += 1
+        position = lastToken ? tokenEnd + 1 : tokenEnd
+
+        const initialToken = {
+          color: token.color,
+          content: token.content,
+          fontStyle: getFontStyle(token.fontStyle),
+          start: tokenStart,
+          end: tokenEnd,
+          hasError: false,
+          isSymbol: false,
         }
+        let processedTokens: Tokens = [,]
 
-        let processedTokens: Tokens = [
-          {
-            color: token.color,
-            content: token.content,
-            fontStyle: getFontStyle(token.fontStyle),
-            start: tokenStart,
-            end: tokenEnd,
-            hasError: false,
-            isSymbol: false,
-          },
-        ]
+        // split tokens by identifier ranges
+        if (identifierRanges) {
+          const tokenRange = identifierRanges.find((range) => {
+            return range.start >= tokenStart && range.end <= tokenEnd
+          })
+          const inFullRange = tokenRange
+            ? tokenRange.start === tokenStart && tokenRange.end === tokenEnd
+            : false
 
-        // Check for diagnostics
-        if (diagnostics) {
-          const diagnostic = getDiagnosticForToken(
-            token,
-            tokenIndex,
-            lineIndex,
-            tokens,
-            diagnostics,
-            code
-          )
+          // If not the full token range, split the token to isolate the identifier
+          if (tokenRange && !inFullRange) {
+            const identifierStart = tokenRange.start - tokenStart
+            const identifierEnd = tokenRange.end - tokenStart
+            const identifier = token.content.slice(
+              identifierStart,
+              identifierEnd
+            )
+            const identifierToken = {
+              ...initialToken,
+              content: identifier,
+              start: tokenStart + identifierStart,
+              end: tokenStart + identifierEnd,
+            }
+            const beforeIdentifierToken = {
+              ...initialToken,
+              content: token.content.slice(0, identifierStart),
+              start: tokenStart,
+              end: tokenStart + identifierStart,
+            }
+            const afterIdentifierToken = {
+              ...initialToken,
+              content: token.content.slice(identifierEnd),
+              start: tokenStart + identifierEnd,
+              end: tokenEnd,
+            }
 
-          if (diagnostic) {
-            processedTokens = processToken(processedTokens[0], diagnostic)
+            processedTokens = [
+              beforeIdentifierToken,
+              identifierToken,
+              afterIdentifierToken,
+            ]
+          } else {
+            processedTokens.push(initialToken)
           }
+        } else {
+          processedTokens.push(initialToken)
         }
 
-        return processedTokens.flatMap((token) =>
-          processSubTokens(token, ranges)
-        )
+        return processedTokens
       })
     })
 
