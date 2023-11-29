@@ -14,7 +14,7 @@ function parsePath(path: string, name: string) {
   return path === '.' ? name : path.replace(/^\.\//, `${name}/`)
 }
 
-export function PackageExports({
+export async function PackageExports({
   name,
   context,
 }: {
@@ -68,6 +68,13 @@ export function PackageExports({
     )
   }
 
+  const resolvedExportsList = await Promise.all(
+    exportsList.map(async ({ module, ...rest }) => ({
+      ...rest,
+      module: module instanceof Promise ? await module : module,
+    }))
+  )
+
   return (
     <ul
       style={{
@@ -78,8 +85,8 @@ export function PackageExports({
         listStyle: 'none',
       }}
     >
-      {exportsList.map(
-        async ({ module, exportPath, sourcePath, editorPath }, index) => {
+      {resolvedExportsList.map(
+        ({ module, exportPath, sourcePath, editorPath }, index) => {
           if (module === undefined) {
             if (process.env.NODE_ENV === 'development') {
               return (
@@ -118,7 +125,7 @@ export function PackageExports({
             return null
           }
 
-          const { summary } = await module
+          const { summary } = module
 
           return (
             <li

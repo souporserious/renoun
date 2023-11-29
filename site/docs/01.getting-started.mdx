@@ -23,7 +23,7 @@ This library includes exports for various use cases that work best when used tog
 
 <PackageExports
   name="mdxts"
-  context={require.context('../../mdxts/src', true, /README\.mdx$/)}
+  context={require.context('../../mdxts/src', true, /README\.mdx$/, 'lazy')}
 />
 
 ## Guided Setup
