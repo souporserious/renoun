@@ -5,6 +5,7 @@ import { type Theme } from './highlighter'
 import { Symbol } from './Symbol'
 import { QuickInfo } from './QuickInfo'
 import { RegisterSourceFile } from './RegisterSourceFile'
+import { Pre } from './Pre'
 
 export type CodeProps = {
   /** Code snippet to be highlighted. */
@@ -123,25 +124,7 @@ export function CodeView({
         </div>
       ) : null}
 
-      <pre
-        className={className}
-        style={{
-          gridColumn: 2,
-          gridRow: 1,
-          whiteSpace: 'pre',
-          wordWrap: 'break-word',
-          fontSize: 14,
-          lineHeight: '20px',
-          letterSpacing: '0px',
-          tabSize: 4,
-          padding: 0,
-          margin: 0,
-          borderRadius: 4,
-          pointerEvents: 'none',
-          position: 'relative',
-          overflow: 'visible',
-        }}
-      >
+      <Pre className={className}>
         {diagnostics
           ? diagnostics.map((diagnostic) => {
               const start = diagnostic.getStart()
@@ -221,7 +204,7 @@ export function CodeView({
             {'\n'}
           </Fragment>
         ))}
-      </pre>
+      </Pre>
 
       {highlight
         ? highlight
