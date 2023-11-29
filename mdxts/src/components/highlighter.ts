@@ -1,6 +1,6 @@
 import { getHighlighter as shikiGetHighlighter } from 'shiki'
 import type { SourceFile } from 'ts-morph'
-import { SyntaxKind } from 'ts-morph'
+import { Node, SyntaxKind } from 'ts-morph'
 
 type Color = string
 
@@ -89,19 +89,31 @@ export async function getHighlighter(options: any): Promise<Highlighter> {
 
         return true
       })
-    const importSpecifiers = sourceFile
-      ? sourceFile
-          .getImportDeclarations()
-          .map((importDeclaration) => importDeclaration.getModuleSpecifier())
-      : []
+    const importSpecifiers =
+      sourceFile && !isJsxOnly
+        ? sourceFile
+            .getImportDeclarations()
+            .map((importDeclaration) => importDeclaration.getModuleSpecifier())
+        : []
     const identifiers = sourceFile
       ? sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)
       : []
     const allNodes = [...importSpecifiers, ...identifiers]
-    const ranges = allNodes.map((node) => ({
-      start: node.getStart(),
-      end: node.getEnd(),
-    }))
+    const ranges = allNodes
+      .filter((node) => {
+        const parent = node.getParent()
+        const isJsxOnlyImport = isJsxOnly
+          ? parent?.getKind() === SyntaxKind.ImportSpecifier ||
+            parent?.getKind() === SyntaxKind.ImportClause
+          : false
+        return (
+          !Node.isJSDocTag(parent) && !Node.isJSDoc(parent) && !isJsxOnlyImport
+        )
+      })
+      .map((node) => ({
+        start: node.getStart(),
+        end: node.getEnd(),
+      }))
     let position = 0
     const parsedTokens = tokens.map((line) => {
       // increment position for line breaks
