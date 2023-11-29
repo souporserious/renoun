@@ -1,5 +1,11 @@
 'use client'
-import React, { createContext, useContext, useState } from 'react'
+import React, {
+  createContext,
+  useContext,
+  useRef,
+  useEffect,
+  useState,
+} from 'react'
 
 const PreContext = createContext(false)
 
@@ -9,12 +15,24 @@ export function usePreContext() {
 
 export function Pre({ children, ...props }: React.HTMLProps<HTMLPreElement>) {
   const [pointerDown, setPointerDown] = useState(false)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const cancelPointerDown = () => {
+    // allow enough time for text selection
+    timeoutRef.current = setTimeout(() => setPointerDown(false), 200)
+  }
+
+  useEffect(() => {
+    return () => {
+      clearTimeout(timeoutRef.current)
+    }
+  }, [])
+
   return (
     <pre
       {...props}
       onPointerDown={() => setPointerDown(true)}
-      onPointerUp={() => setPointerDown(false)}
-      onPointerCancel={() => setPointerDown(false)}
+      onPointerUp={cancelPointerDown}
+      onPointerCancel={cancelPointerDown}
       style={{
         gridColumn: 2,
         gridRow: 1,
