@@ -90,39 +90,62 @@ export async function PackageExports({
           if (module === undefined) {
             if (process.env.NODE_ENV === 'development') {
               return (
-                <form
-                  action={async function createReadme() {
-                    'use server'
-                    // create the README file if it doesn't exist
-                    if (!fs.existsSync(sourcePath)) {
-                      fs.writeFileSync(
-                        sourcePath,
-                        `# ${exportPath}\n\nThis is the README for the ${exportPath} export from the ${name} package.`
-                      )
-                    }
-
-                    // open the README file in the editor
-                    redirect(editorPath)
+                <li
+                  key={index}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'flex-start',
+                    gap: '1rem',
                   }}
                 >
-                  <button
-                    style={{
-                      letterSpacing: '0.015em',
-                      fontWeight: 600,
-                      padding: '0.5rem 0.8rem',
-                      border: '1px solid #0479df',
-                      borderRadius: '8px',
-                      background: '#1871be',
-                      color: 'white',
+                  <code>{exportPath}</code>
+                  <form
+                    action={async function createReadme() {
+                      'use server'
+                      // create the README file if it doesn't exist
+                      if (!fs.existsSync(sourcePath)) {
+                        fs.writeFileSync(
+                          sourcePath,
+                          `# ${exportPath}\n\nThis is the README for the ${exportPath} export from the ${name} package.`
+                        )
+                      }
+
+                      // open the README file in the editor
+                      redirect(editorPath)
                     }}
                   >
-                    Create README
-                  </button>
-                </form>
+                    <button
+                      style={{
+                        letterSpacing: '0.015em',
+                        fontWeight: 600,
+                        padding: '0.5rem 0.8rem',
+                        border: '1px solid #0479df',
+                        borderRadius: '8px',
+                        background: '#1871be',
+                        color: 'white',
+                      }}
+                    >
+                      Create README
+                    </button>
+                  </form>
+                </li>
               )
             }
 
-            return null
+            return (
+              <li
+                key={index}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'flex-start',
+                  gap: '1rem',
+                }}
+              >
+                <code>{exportPath}</code>
+              </li>
+            )
           }
 
           const { summary } = module
