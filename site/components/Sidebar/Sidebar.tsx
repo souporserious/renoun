@@ -1,5 +1,5 @@
 import { Navigation } from 'mdxts/components'
-import { allDocs } from 'data'
+import { allDocs, allComponents } from 'data'
 import { Text } from 'components/Text'
 import { Logo } from 'components/Logo'
 import { SidebarLink } from './SidebarLink'
@@ -41,34 +41,70 @@ export function Sidebar() {
         </a>
       </div>
 
-      <Navigation
-        data={allDocs}
-        renderList={(props) => (
-          <ul
-            style={{
-              paddingLeft: props.order * 0.8 + 'rem',
-              listStyle: 'none',
-            }}
-          >
-            {props.children}
-          </ul>
-        )}
-        renderItem={(props) => (
-          <li
-            key={props.title}
-            style={{ color: props.children ? 'grey' : 'white' }}
-          >
-            {props.children ? (
-              <div style={{ padding: '0.25rem 0', cursor: 'default' }}>
-                <Text>{props.title}</Text>
-              </div>
-            ) : (
-              <SidebarLink pathname={props.pathname} name={props.title} />
-            )}
-            {props.children}
-          </li>
-        )}
-      />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+        <h3>Docs</h3>
+        <Navigation
+          data={allDocs}
+          renderList={(props) => (
+            <ul
+              style={{
+                paddingLeft: props.order * 0.8 + 'rem',
+                listStyle: 'none',
+              }}
+            >
+              {props.children}
+            </ul>
+          )}
+          renderItem={(props) => (
+            <li
+              key={props.title}
+              style={{ color: props.children ? 'grey' : 'white' }}
+            >
+              {props.children ? (
+                <div style={{ padding: '0.25rem 0', cursor: 'default' }}>
+                  <Text>{props.title}</Text>
+                </div>
+              ) : (
+                <SidebarLink pathname={props.pathname} name={props.title} />
+              )}
+              {props.children}
+            </li>
+          )}
+        />
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+        <h3>Components</h3>
+        <Navigation
+          data={allComponents}
+          baseDirectory="components"
+          renderList={(props) => (
+            <ul
+              style={{
+                paddingLeft: props.order * 0.8 + 'rem',
+                listStyle: 'none',
+              }}
+            >
+              {props.children}
+            </ul>
+          )}
+          renderItem={(props) => (
+            <li
+              key={props.title}
+              style={{ color: props.children ? 'grey' : 'white' }}
+            >
+              {props.children ? (
+                <div style={{ padding: '0.25rem 0', cursor: 'default' }}>
+                  <Text>{props.title}</Text>
+                </div>
+              ) : (
+                <SidebarLink pathname={props.pathname} name={props.title} />
+              )}
+              {props.children}
+            </li>
+          )}
+        />
+      </div>
     </aside>
   )
 }

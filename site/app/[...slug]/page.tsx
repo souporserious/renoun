@@ -1,20 +1,24 @@
 import { notFound } from 'next/navigation'
-import { allDocs } from 'data'
+import { allDocs, allComponents } from 'data'
 
 export const dynamic = 'force-static'
 
 export function generateStaticParams() {
-  return allDocs.paths().map((pathname) => ({ slug: pathname }))
+  return [...allDocs.paths(), ...allComponents.paths()].map((pathname) => ({
+    slug: pathname,
+  }))
 }
 
-export default async function Page({ params }) {
+export default async function Page({ params }: { params: { slug: string[] } }) {
   const doc = await allDocs.get(params.slug)
+  const component = await allComponents.get(params.slug)
+  const module = doc || component || null
 
-  if (doc === null) {
+  if (module === null) {
     return notFound()
   }
 
-  const { Component, headings } = doc.active
+  const { Component, headings } = module.active
 
   return (
     <>
@@ -65,31 +69,33 @@ export default async function Page({ params }) {
           padding: '4rem 0 2rem',
         }}
       >
-        <SiblingLink doc={doc.previous} direction="previous" />
-        <SiblingLink doc={doc.next} direction="next" />
+        <SiblingLink module={module.previous} direction="previous" />
+        <SiblingLink module={module.next} direction="next" />
       </nav>
     </>
   )
 }
 
-
- function SiblingLink({ doc, direction }: {
-  doc: { pathname: string, title: string }
+function SiblingLink({
+  module,
+  direction,
+}: {
+  module: { pathname: string; title: string }
   direction: 'previous' | 'next'
 }) {
-  if (!doc) {
+  if (!module) {
     return null
   }
 
   return (
     <a
-      href={doc.pathname}
+      href={module.pathname}
       style={{
         gridColumn: direction === 'previous' ? 1 : 3,
         textAlign: direction === 'previous' ? 'left' : 'right',
       }}
     >
-      {doc.title}
+      {module.title}
     </a>
   )
 }

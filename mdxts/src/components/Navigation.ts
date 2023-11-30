@@ -56,7 +56,7 @@ async function createTreeFromModules(
   }
 
   if (root.length > 0) {
-    return root[0].children
+    return root
   }
 
   return []
@@ -91,14 +91,25 @@ async function renderNavigation(
 /** Renders a navigation tree from a collection of modules. */
 export function Navigation({
   data,
+  baseDirectory,
   renderList,
   renderItem,
 }: {
   data: ReturnType<typeof loadModules>
+  baseDirectory?: string
   renderList: (list: { children: JSX.Element[]; order: number }) => JSX.Element
   renderItem: (
     item: Omit<Node, 'children'> & { children?: JSX.Element }
   ) => JSX.Element
 }) {
-  return renderNavigation(data.all(), renderList, renderItem)
+  const allData = data.all()
+  const parsedData = baseDirectory
+    ? Object.fromEntries(
+        Object.entries(allData).map(([path, module]) => [
+          path.replace(baseDirectory ? `${baseDirectory}/` : '', ''),
+          module,
+        ])
+      )
+    : allData
+  return renderNavigation(parsedData, renderList, renderItem)
 }

@@ -30,6 +30,7 @@ export function loadModules<Type>(
   const allModules = Object.fromEntries(
     context
       .keys()
+      // Filter out duplicates
       .filter((key) => !key.startsWith('./'))
       .map((key) => {
         const pathname = key
@@ -40,7 +41,11 @@ export function loadModules<Type>(
           // Remove leading sorting number
           .replace(/\/\d+\./g, '/')
           // Remove base directory
-          .replace(baseDirectory, '')
+          .replace(baseDirectory ? `${baseDirectory}/` : '', '')
+          // Remove trailing "/README" or "/index"
+          .replace(/\/(README|index)$/, '')
+          // Convert to lowercase for case-insensitive routes
+          .toLowerCase()
         const parsedModule = parseModule(pathname, context(key))
         return [pathname, parsedModule]
       })
@@ -53,10 +58,10 @@ export function loadModules<Type>(
     paths(): string[][] {
       return Object.keys(allModules).map((pathname) =>
         pathname
-          // Remove leading "/"
-          .slice(1)
           // Split pathname into an array
           .split('/')
+          // Remove empty strings
+          .filter(Boolean)
       )
     },
     get(pathname: string[]) {
@@ -73,8 +78,7 @@ async function parseModule(pathname: string, module: any) {
   return {
     Component,
     title: metadata?.title || headings?.[0]?.text || title(slug),
-    pathname,
-    slug,
+    pathname: `/${pathname}`,
     headings,
     metadata,
     ...exports,
