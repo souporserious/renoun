@@ -16,6 +16,14 @@ async function fetchTypes(
       projectName: 'mdxts',
       typescript: ts,
       logger: console,
+      fetcher: async (url: string) => {
+        return fetch(url).catch((error) => {
+          throw new Error(
+            `mdxts(createMdxtsPlugin > types): Could not fetch types for "${name}", make sure the package is either defined in the package.json and is available to the current workspace or is published to NPM.`,
+            { cause: error }
+          )
+        })
+      },
       delegate: {
         receivedFile: (code: string, path: string) => {
           types.push({ code, path: path.replace('@types/', '') })
