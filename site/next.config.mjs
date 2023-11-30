@@ -7,7 +7,6 @@ const withMdxts = createMdxtsPlugin({
     'react',
     'mdxts',
     'mdxts/components',
-    'mdxts/components/client',
     'mdxts/next',
     'mdxts/rehype',
     'mdxts/remark',

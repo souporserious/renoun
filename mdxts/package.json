@@ -19,11 +19,6 @@
       "require": "./dist/cjs/components/index.js",
       "types": "./dist/components/index.d.ts"
     },
-    "./components/client": {
-      "import": "./dist/components/client/index.js",
-      "require": "./dist/cjs/components/client/index.js",
-      "types": "./dist/components/client/index.d.ts"
-    },
     "./rehype": {
       "import": "./dist/rehype/index.js",
       "require": "./dist/cjs/rehype/index.js",
@@ -59,9 +54,6 @@
     "*": {
       "components": [
         "./dist/components/index.d.ts"
-      ],
-      "components/client": [
-        "./dist/components/client/index.d.ts"
       ],
       "rehype": [
         "./dist/rehype/index.d.ts"

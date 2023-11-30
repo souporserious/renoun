@@ -66,14 +66,24 @@ export function useMDXComponents() {
 
       return editable ? (
         <Editor
+          defaultValue={value}
           filename={filename}
           language={metadata?.language}
           lineNumbers={lineNumbers}
           highlight={highlight}
-          defaultValue={value}
           theme={theme as any}
           className={GeistMono.className}
-        />
+        >
+          <Code
+            value={value}
+            filename={filename}
+            language={metadata?.language}
+            lineNumbers={lineNumbers}
+            highlight={highlight}
+            theme={theme as any}
+            isNestedInEditor
+          />
+        </Editor>
       ) : (
         <Code
           filename={filename}
