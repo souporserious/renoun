@@ -21,6 +21,9 @@ export function Button({
   /** Provides a label for the button. */
   label: string
 
+  /** The size of the button. */
+  size?: 'small' | 'medium' | 'large'
+
   /** Called when an action for this button is requested. */
   onAction: () => void
 }) {
@@ -41,7 +44,7 @@ Button.tsx
 Button.examples.tsx
 ```
 
-```tsx filename="Button.examples.tsx"
+```tsx
 import { Button } from './Button'
 
 export function BasicUsage() {
@@ -71,7 +74,7 @@ Button/
 
 Export a default component to enhance examples with additional rendering, behavior, or to provide a consistent layout for all examples in the file:
 
-```tsx filename="Button.examples.tsx" highlight="4-10"
+```tsx highlight="4-10"
 import { Button } from './Button'
 import { Theme } from './Theme'
 
@@ -99,33 +102,29 @@ Refer to the next section on [rendering](./02.rendering.mdx) to learn how to use
 
 ## Metadata
 
-By default, metadata is auto-generated based on the function name and its accompanying comment. However, for broader customization or individual tailoring, the `metadata` export or function property can be used:
+Metadata is auto-generated based on the example's function name and its accompanying comment. Use the default export to provide additional metadata for the file:
 
-```tsx filename="Button.examples.tsx" highlight="3-6"
+```tsx highlight="3-4,12-13,22-23"
 import { Button } from './Button'
 
-export const metadata = {
-  title: `All Button Examples`,
-  description: `A collection of examples for the button component.`,
+/** A collection of examples for the button component. */
+export default function AllButtonExamples({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return children
 }
 
+/** A basic example of using a button. */
 export function BasicUsage() {
   return <Button label="Say hello" onAction={() => alert('Hello!')} />
 }
 
-BasicUsage.metadata = {
-  title: `Basic Usage`,
-  description: `A basic example of using the button.`,
-}
-
+/** An example of using a button with different sizes. */
 export function DifferentSizes() {
   return ['small', 'medium', 'large'].map((size) => (
     <Button label="Say hello" size={size} />
   ))
-}
-
-DifferentSizes.metadata = {
-  title: `Different Sizes`,
-  description: `A basic example of using the button.`,
 }
 ```
