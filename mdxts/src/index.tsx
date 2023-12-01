@@ -27,7 +27,7 @@ export function loadModules<Type>(
   context: __WebpackModuleApi.RequireContext,
   baseDirectory: string = ''
 ) {
-  const allModules = Object.fromEntries(
+  const allContextKeys = Object.fromEntries(
     context
       .keys()
       // Filter out duplicates
@@ -46,17 +46,92 @@ export function loadModules<Type>(
           .replace(/\/(README|index)$/, '')
           // Convert to lowercase for case-insensitive routes
           .toLowerCase()
-        const parsedModule = parseModule(pathname, context(key))
-        return [pathname, parsedModule]
+        return [pathname, key]
       })
-  ) as Record<string, Promise<Module & Type>>
+  ) as Record<string, string>
+
+  /** Parses and attaches metadata to a module. */
+  async function parseModule(pathname: string) {
+    if (pathname === undefined) {
+      return null
+    }
+
+    const contextKey = allContextKeys[pathname]
+
+    if (contextKey === undefined) {
+      return null
+    }
+
+    const {
+      default: Component,
+      headings,
+      metadata,
+      ...exports
+    } = await context(contextKey)
+    const slug = pathname.split('/').pop()
+
+    return {
+      Component,
+      title: metadata?.title || headings?.[0]?.text || title(slug),
+      pathname: `/${pathname}`,
+      headings,
+      metadata,
+      ...exports,
+    }
+  }
+
+  /** Returns the active and sibling data based on the active pathname. */
+  async function getPathData<Type>(
+    /** The pathname of the active page. */
+    pathname: string[]
+  ): Promise<{
+    active?: Module
+    previous?: Module
+    next?: Module
+  }> {
+    const activeIndex = Object.keys(allContextKeys).findIndex((dataPathname) =>
+      dataPathname.includes(pathname.join('/'))
+    )
+
+    function getSiblingPathname(startIndex: number, direction: number) {
+      const siblingIndex = startIndex + direction
+      const siblingPathname = allContextKeys[siblingIndex]
+      if (siblingPathname === null) {
+        return getSiblingPathname(siblingIndex, direction)
+      }
+      return siblingPathname
+    }
+
+    const [active, previous, next] = await Promise.all([
+      parseModule(pathname.join('/')),
+      parseModule(getSiblingPathname(activeIndex, -1)),
+      parseModule(getSiblingPathname(activeIndex, 1)),
+    ])
+
+    if (active === null) {
+      return null
+    }
+
+    return { active, previous, next } as Record<
+      'active' | 'previous' | 'next',
+      Module & Type
+    >
+  }
 
   return {
-    all() {
-      return allModules
+    async all() {
+      const allModules = await Promise.all(
+        Object.keys(allContextKeys).map((pathname) => parseModule(pathname))
+      )
+      return Object.fromEntries(
+        Object.keys(allContextKeys).map((pathname, index) => [
+          pathname,
+          allModules[index],
+        ])
+      ) as Record<string, Promise<Module & Type>>
     },
     paths(): string[][] {
-      return Object.keys(allModules).map((pathname) =>
+      return Object.keys(allContextKeys).map((pathname) =>
         pathname
           // Split pathname into an array
           .split('/')
@@ -64,70 +139,9 @@ export function loadModules<Type>(
           .filter(Boolean)
       )
     },
-    get(pathname: string[]) {
-      return getPathData<Type>(allModules, pathname)
+    async get(pathname: string[]) {
+      const data = await getPathData<Type>(pathname)
+      return data
     },
   }
-}
-
-/** Parses and attaches metadata to a module. */
-async function parseModule(pathname: string, module: any) {
-  const { default: Component, headings, metadata, ...exports } = await module
-  const slug = pathname.split('/').pop()
-
-  return {
-    Component,
-    title: metadata?.title || headings?.[0]?.text || title(slug),
-    pathname: `/${pathname}`,
-    headings,
-    metadata,
-    ...exports,
-  }
-}
-
-/** Returns the active and sibling data based on the active pathname. */
-async function getPathData<Type>(
-  /** The collected data from a source. */
-  data: Record<string, Promise<Module>>,
-
-  /** The pathname of the active page. */
-  pathname: string[]
-): Promise<{
-  active?: Module
-  previous?: Module
-  next?: Module
-}> {
-  const allKeys = Object.keys(data)
-  const allData = Object.values(data) as Promise<Module>[]
-  const activeIndex = Object.keys(data).findIndex((dataPathname) =>
-    dataPathname.includes(pathname.join('/'))
-  )
-  const activeData = allData[activeIndex]
-
-  if (activeData === undefined) {
-    return null
-  }
-
-  function getSiblingPath(startIndex: number, direction: number) {
-    const siblingIndex = startIndex + direction
-    const siblingPathname = allKeys[siblingIndex]
-
-    if (siblingPathname === null) {
-      return getSiblingPath(siblingIndex, direction)
-    }
-
-    return allData[siblingIndex]
-  }
-
-  const modulePromises = await Promise.all([
-    activeData,
-    getSiblingPath(activeIndex, -1),
-    getSiblingPath(activeIndex, 1),
-  ])
-
-  return {
-    active: modulePromises[0],
-    previous: modulePromises[1],
-    next: modulePromises[2],
-  } as Record<'active' | 'previous' | 'next', Module & Type>
 }

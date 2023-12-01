@@ -89,7 +89,7 @@ async function renderNavigation(
 }
 
 /** Renders a navigation tree from a collection of modules. */
-export function Navigation({
+export async function Navigation({
   data,
   baseDirectory,
   renderList,
@@ -102,11 +102,11 @@ export function Navigation({
     item: Omit<Node, 'children'> & { children?: JSX.Element }
   ) => JSX.Element
 }) {
-  const allData = data.all()
+  const allData = await data.all()
   const parsedData = baseDirectory
     ? Object.fromEntries(
-        Object.entries(allData).map(([path, module]) => [
-          path.replace(baseDirectory ? `${baseDirectory}/` : '', ''),
+        Object.entries(allData).map(([pathname, module]) => [
+          pathname.replace(baseDirectory ? `${baseDirectory}/` : '', ''),
           module,
         ])
       )
