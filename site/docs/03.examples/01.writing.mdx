@@ -4,53 +4,13 @@ export const metadata = {
 
 # Writing Examples
 
-Examples can be written several ways. Choose the one that best fits your needs.
-
-## Comment
-
-JSDoc comments can be used to document examples. All examples will be compiled and available in the returned object.
-
-```tsx live
-/**
- * Say hello.
- *
- * @example
- * <Hello name="Penny" />
- */
-function Hello({ name }: { name: string }) {
-  return <div>Hello, {name}</div>
-}
-```
-
-Gather all `@example` tags from a file and render them in MDX:
-
-```Button/index.tsx
-/**
- * Used for taking actions and navigating.
- *
- * @example
- * <Button label="Say hello" onPress={() => alert('Hello!')} />
- */
-export function Button({
-  label,
-  onPress,
-}: {
-  label: string
-  onPress: () => void
-}) {
-  return <button onClick={onPress}>{label}</button>
-}
-```
-
-```Button/README.mdx
-<Example identifier="Button" />
-```
+Examples can be written inline, exported alongside your component, or in a separate file.
 
 ## Module
 
 Module examples can be exported alongside your component using the [[example]] helper:
 
-```Button.tsx live
+```tsx filename="Button.tsx"
 import { example } from 'mdxts'
 
 /** Used for taking actions and navigating. */
@@ -81,7 +41,7 @@ Button.tsx
 Button.examples.tsx
 ```
 
-```Button.examples.tsx
+```tsx filename="Button.examples.tsx"
 import { Button } from './Button'
 
 export function BasicUsage() {
@@ -105,4 +65,67 @@ Button/
 ├── examples/
 │ ├── 01.Basic.tsx
 │ ├── 02.Advanced.tsx
+```
+
+## Templating
+
+Export a default component to enhance examples with additional rendering, behavior, or to provide a consistent layout for all examples in the file:
+
+```tsx filename="Button.examples.tsx" highlight="4-10"
+import { Button } from './Button'
+import { Theme } from './Theme'
+
+export default function Layout({ children }: { children: React.ReactNode }) {
+  return <Theme>{children}</Theme>
+}
+
+export function BasicUsage() {
+  return <Button label="Say hello" onAction={() => alert('Hello!')} />
+}
+
+export function DifferentSizes() {
+  return ['small', 'medium', 'large'].map((size) => (
+    <Button label="Say hello" size={size} />
+  ))
+}
+```
+
+<Note>
+  This is also how MDX files work. The default export is used to control the
+  layout of the file.
+</Note>
+
+Refer to the next section on [rendering](./02.rendering.mdx) to learn how to use the data helper to render examples as routes.
+
+## Metadata
+
+By default, metadata is auto-generated based on the function name and its accompanying comment. However, for broader customization or individual tailoring, the `metadata` export or function property can be used:
+
+```tsx filename="Button.examples.tsx" highlight="3-6"
+import { Button } from './Button'
+
+export const metadata = {
+  title: `All Button Examples`,
+  description: `A collection of examples for the button component.`,
+}
+
+export function BasicUsage() {
+  return <Button label="Say hello" onAction={() => alert('Hello!')} />
+}
+
+BasicUsage.metadata = {
+  title: `Basic Usage`,
+  description: `A basic example of using the button.`,
+}
+
+export function DifferentSizes() {
+  return ['small', 'medium', 'large'].map((size) => (
+    <Button label="Say hello" size={size} />
+  ))
+}
+
+DifferentSizes.metadata = {
+  title: `Different Sizes`,
+  description: `A basic example of using the button.`,
+}
 ```
