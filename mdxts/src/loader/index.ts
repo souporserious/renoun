@@ -1,24 +1,27 @@
 import * as webpack from 'webpack'
+import { dirname } from 'node:path'
 import { glob } from 'fast-glob'
-import { dirname, resolve } from 'node:path'
 import { Node, Project, SyntaxKind } from 'ts-morph'
 
+/**
+ * Augments `createSourceFiles` calls with MDX file paths resolved from the provided file pattern.
+ * If a TypeScript file pattern is provided, the closest README.mdx or MDX file with the same name will be used.
+ */
 export default async function loader(
   this: webpack.LoaderContext<{}>,
   source: string | Buffer
 ) {
   this.cacheable(true)
   const callback = this.async()
+  const sourceString = source.toString()
 
   if (
     /.*import\s\{\screateSourceFiles\s\}\sfrom\s['"]mdxts['"].*/.test(
-      source.toString()
+      sourceString
     )
   ) {
-    const project = new Project({
-      useInMemoryFileSystem: true,
-    })
-    const sourceFile = project.createSourceFile('index.ts', source.toString())
+    const project = new Project({ useInMemoryFileSystem: true })
+    const sourceFile = project.createSourceFile('index.ts', sourceString)
     const createSourceFilesCalls = sourceFile
       .getDescendantsOfKind(SyntaxKind.CallExpression)
       .filter((call) => call.getExpression().getText() === 'createSourceFiles')
@@ -30,23 +33,13 @@ export default async function loader(
         if (Node.isStringLiteral(firstArgument)) {
           const globPattern = firstArgument.getLiteralText()
           const filePaths = await glob(
-            // if globPattern does not include mdx look for the cloest mdx file if it exists
-            // the mdx file can be a README or a file named the same in the same directory
             globPattern.includes('mdx')
               ? globPattern
               : `${dirname(globPattern)}/*.mdx`,
             { cwd: dirname(this.resourcePath) }
           )
           const objectLiteralText = `{${filePaths
-            .map((filePath) => {
-              const pathname = getPathnameFromFilename(
-                resolve(dirname(this.resourcePath), filePath).replace(
-                  `${process.cwd()}/`,
-                  ''
-                )
-              )
-              return `"${pathname}": import('${filePath}')`
-            })
+            .map((filePath) => `"${filePath}": import('${filePath}')`)
             .join(', ')}}`
 
           call.insertArguments(0, [objectLiteralText])
@@ -57,21 +50,8 @@ export default async function loader(
       }
     }
 
-    const modifiedSource = sourceFile.getFullText()
-    callback(null, modifiedSource)
+    callback(null, sourceFile.getFullText())
   } else {
     callback(null, source)
   }
-}
-
-function getPathnameFromFilename(filename: string) {
-  return (
-    filename
-      // Remove file extensions
-      .replace(/\.[^/.]+$/, '')
-      // Remove leading "./"
-      .replace(/^\.\//, '')
-      // Remove leading sorting number
-      .replace(/\/\d+\./g, '/')
-  )
 }
