@@ -81,6 +81,12 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
         }
 
         config.module.rules.push({
+          test: /\.(?:js|tsx?)$/,
+          exclude: /node_modules/,
+          use: ['mdxts/loader'],
+        })
+
+        config.module.rules.push({
           test: /onig\.wasm$/,
           type: 'asset/resource',
         })

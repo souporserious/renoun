@@ -1,5 +1,6 @@
 import title from 'title'
 import type { ComponentType } from 'react'
+import { kebabCase } from 'case-anything'
 import type { CodeBlocks } from './remark/add-code-blocks'
 import type { Headings } from './remark/add-headings'
 
@@ -23,42 +24,42 @@ export type Module = {
  *   'docs'
  * )
  */
-export function loadModules<Type>(
-  context: __WebpackModuleApi.RequireContext,
-  baseDirectory: string = ''
+export function createSourceFiles<Type>(
+  pattern: string,
+  options: { baseDirectory?: string } = {}
 ) {
-  const allContextKeys = Object.fromEntries(
-    context
-      .keys()
-      // Filter out duplicates
-      .filter((key) => !key.startsWith('./'))
-      .map((key) => {
-        const pathname = key
-          // Remove file extensions
-          .replace(/\.[^/.]+$/, '')
-          // Remove leading "./"
-          .replace(/^\.\//, '')
-          // Remove leading sorting number
-          .replace(/\/\d+\./g, '/')
-          // Remove base directory
-          .replace(baseDirectory ? `${baseDirectory}/` : '', '')
-          // Remove trailing "/README" or "/index"
-          .replace(/\/(README|index)$/, '')
-          // Convert to lowercase for case-insensitive routes
-          .toLowerCase()
-        return [pathname, key]
-      })
-  ) as Record<string, string>
+  const allModules = pattern as unknown as Record<
+    string,
+    Promise<{ default: any } & Omit<Module, 'Component'> & Type>
+  >
+
+  if (typeof allModules === 'string') {
+    throw new Error(
+      'mdxts: createSourceFiles requires the mdxts/loader package is configured as a Webpack loader.'
+    )
+  }
+
+  const globPattern = options as unknown as string
+  const { baseDirectory = '' } = (arguments[2] || {}) as unknown as {
+    baseDirectory: string
+  }
+
+  const allModulesKeysByPathname = Object.fromEntries(
+    Object.keys(allModules).map((key) => {
+      const pathname = filePathToUrl(key, baseDirectory)
+      return [pathname, key]
+    })
+  )
 
   /** Parses and attaches metadata to a module. */
-  async function parseModule(pathname: string) {
+  async function parseModule(pathname?: string) {
     if (pathname === undefined) {
       return null
     }
 
-    const contextKey = allContextKeys[pathname]
+    const moduleKey = allModulesKeysByPathname[pathname]
 
-    if (contextKey === undefined) {
+    if (moduleKey === undefined) {
       return null
     }
 
@@ -67,7 +68,7 @@ export function loadModules<Type>(
       headings,
       metadata,
       ...exports
-    } = await context(contextKey)
+    } = await allModules[moduleKey]
     const slug = pathname.split('/').pop()
 
     return {
@@ -77,11 +78,11 @@ export function loadModules<Type>(
       headings,
       metadata,
       ...exports,
-    }
+    } as Module & Type
   }
 
   /** Returns the active and sibling data based on the active pathname. */
-  async function getPathData<Type>(
+  async function getPathData(
     /** The pathname of the active page. */
     pathname: string[]
   ): Promise<{
@@ -89,13 +90,15 @@ export function loadModules<Type>(
     previous?: Module
     next?: Module
   }> {
-    const activeIndex = Object.keys(allContextKeys).findIndex((dataPathname) =>
-      dataPathname.includes(pathname.join('/'))
+    const activeIndex = Object.keys(allModulesKeysByPathname).findIndex(
+      (dataPathname) => dataPathname.includes(pathname.join('/'))
     )
 
     function getSiblingPathname(startIndex: number, direction: number) {
       const siblingIndex = startIndex + direction
-      const siblingPathname = allContextKeys[siblingIndex]
+      const siblingPathname = Object.keys(allModulesKeysByPathname)[
+        siblingIndex
+      ]
       if (siblingPathname === null) {
         return getSiblingPathname(siblingIndex, direction)
       }
@@ -121,17 +124,23 @@ export function loadModules<Type>(
   return {
     async all() {
       const allModules = await Promise.all(
-        Object.keys(allContextKeys).map((pathname) => parseModule(pathname))
+        Object.keys(allModulesKeysByPathname).map((pathname) =>
+          parseModule(pathname)
+        )
       )
       return Object.fromEntries(
-        Object.keys(allContextKeys).map((pathname, index) => [
+        Object.keys(allModulesKeysByPathname).map((pathname, index) => [
           pathname,
           allModules[index],
         ])
-      ) as Record<string, Promise<Module & Type>>
+      )
+    },
+    async get(pathname: string[]) {
+      const data = await getPathData(pathname)
+      return data
     },
     paths(): string[][] {
-      return Object.keys(allContextKeys).map((pathname) =>
+      return Object.keys(allModulesKeysByPathname).map((pathname) =>
         pathname
           // Split pathname into an array
           .split('/')
@@ -139,9 +148,30 @@ export function loadModules<Type>(
           .filter(Boolean)
       )
     },
-    async get(pathname: string[]) {
-      const data = await getPathData<Type>(pathname)
-      return data
-    },
   }
+}
+
+/** Converts a file system path to a URL-friendly path. */
+function filePathToUrl(filepath: string, baseDirectory?: string) {
+  const parsedFilepath = filepath
+    // Remove file extensions
+    .replace(/\.[^/.]+$/, '')
+    // Remove leading separator "./"
+    .replace(/^\.\//, '')
+    // Remove leading sorting number
+    .replace(/\/\d+\./g, '/')
+    // Remove base directory
+    .replace(baseDirectory ? `${baseDirectory}/` : '', '')
+    // Remove trailing "/README" or "/index"
+    .replace(/\/(README|index)$/, '')
+    // Remove working directory
+    .replace(process.cwd(), '')
+
+  // Convert component names to kebab case for case-insensitive paths
+  const segments = parsedFilepath.split('/')
+
+  return segments
+    .map((segment) => (/[A-Z]/.test(segment[0]) ? kebabCase(segment) : segment))
+    .filter(Boolean)
+    .join('/')
 }

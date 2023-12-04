@@ -1,5 +1,5 @@
 import title from 'title'
-import type { Module, loadModules } from '../index'
+import type { Module, createSourceFiles } from '../index'
 
 type Node = Module & {
   part: string
@@ -17,18 +17,10 @@ function markDirectories(node: Node): void {
   }
 }
 
-async function createTreeFromModules(
-  allModules: Record<string, Promise<Module>>
-): Promise<Node[]> {
+function createTreeFromModules(allModules: Record<string, Module>): Node[] {
   const root: Node[] = []
-  const resolvedModules = await Promise.all(
-    Object.entries(allModules).map(async ([path, modulePromise]) => ({
-      path,
-      module: await modulePromise,
-    }))
-  )
 
-  for (const { path, module } of resolvedModules) {
+  for (const [path, module] of Object.entries(allModules)) {
     const parts = path.split('/')
     let pathSegments: string[] = []
     let currentNode: Node[] = root
@@ -62,8 +54,8 @@ async function createTreeFromModules(
   return []
 }
 
-async function renderNavigation(
-  allModules: Record<string, Promise<Module>>,
+function renderNavigation(
+  allModules: Record<string, Module>,
   renderList: (list: { children: JSX.Element[]; order: number }) => JSX.Element,
   renderItem: (
     item: Omit<Node, 'children'> & { children?: JSX.Element }
@@ -83,7 +75,7 @@ async function renderNavigation(
     })
   }
 
-  const tree = await createTreeFromModules(allModules)
+  const tree = createTreeFromModules(allModules)
   tree.forEach(markDirectories)
   return buildNavigationTree(tree, 0)
 }
@@ -95,7 +87,7 @@ export async function Navigation({
   renderList,
   renderItem,
 }: {
-  data: ReturnType<typeof loadModules>
+  data: ReturnType<typeof createSourceFiles>
   baseDirectory?: string
   renderList: (list: { children: JSX.Element[]; order: number }) => JSX.Element
   renderItem: (
