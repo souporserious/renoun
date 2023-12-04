@@ -17,10 +17,12 @@ function markDirectories(node: Node): void {
   }
 }
 
-function createTreeFromModules(allModules: Record<string, Module>): Node[] {
+function createTreeFromSourceFiles(
+  sourceFiles: Record<string, Module>
+): Node[] {
   const root: Node[] = []
 
-  for (const [path, module] of Object.entries(allModules)) {
+  for (const [path, module] of Object.entries(sourceFiles)) {
     const parts = path.split('/')
     let pathSegments: string[] = []
     let currentNode: Node[] = root
@@ -55,7 +57,7 @@ function createTreeFromModules(allModules: Record<string, Module>): Node[] {
 }
 
 function renderNavigation(
-  allModules: Record<string, Module>,
+  allSourceFiles: Record<string, Module>,
   renderList: (list: { children: JSX.Element[]; order: number }) => JSX.Element,
   renderItem: (
     item: Omit<Node, 'children'> & { children?: JSX.Element }
@@ -75,33 +77,40 @@ function renderNavigation(
     })
   }
 
-  const tree = createTreeFromModules(allModules)
+  const tree = createTreeFromSourceFiles(allSourceFiles)
   tree.forEach(markDirectories)
   return buildNavigationTree(tree, 0)
 }
 
 /** Renders a navigation tree from a collection of modules. */
 export async function Navigation({
-  data,
+  sourceFiles,
   baseDirectory,
   renderList,
   renderItem,
 }: {
-  data: ReturnType<typeof createSourceFiles>
+  /** A collection of source files returned from `createSourceFiles`. */
+  sourceFiles: ReturnType<typeof createSourceFiles>
+
+  /** The base directory to render. */
   baseDirectory?: string
+
+  /** A function that renders a list of navigation items. */
   renderList: (list: { children: JSX.Element[]; order: number }) => JSX.Element
+
+  /** A function that renders a navigation item. */
   renderItem: (
     item: Omit<Node, 'children'> & { children?: JSX.Element }
   ) => JSX.Element
 }) {
-  const allData = await data.all()
-  const parsedData = baseDirectory
+  const allSourceFiles = await sourceFiles.all()
+  const parsedSourceFiles = baseDirectory
     ? Object.fromEntries(
-        Object.entries(allData).map(([pathname, module]) => [
+        Object.entries(allSourceFiles).map(([pathname, module]) => [
           pathname.replace(baseDirectory ? `${baseDirectory}/` : '', ''),
           module,
         ])
       )
-    : allData
-  return renderNavigation(parsedData, renderList, renderItem)
+    : allSourceFiles
+  return renderNavigation(parsedSourceFiles, renderList, renderItem)
 }
