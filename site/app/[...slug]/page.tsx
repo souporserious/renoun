@@ -18,7 +18,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
     return notFound()
   }
 
-  const { Component, headings } = module.active
+  const { Component, headings, types } = module.active
 
   return (
     <>
@@ -31,6 +31,59 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
       >
         <div>
           <Component />
+          {types?.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+              <h2>Props</h2>
+              <div
+                style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+              >
+                {types.map((doc) => (
+                  <div
+                    key={doc.name}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 16,
+                    }}
+                  >
+                    <h3>{doc.name}</h3>
+                    {/* {doc.path && (
+                    <a href={getSourceLink({ path: doc.path })}>View Source</a>
+                  )} */}
+                    {doc.props?.map((type) => (
+                      <div
+                        key={type.name}
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 8,
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'baseline',
+                            gap: 8,
+                          }}
+                        >
+                          <h4 style={{ fontWeight: 600, margin: 0 }}>
+                            {type.name} {type.required && '*'}
+                          </h4>
+                          <code>
+                            {type.type}{' '}
+                            {type.defaultValue && `= ${type.defaultValue}`}
+                          </code>
+                        </div>
+                        {type.description && (
+                          <p style={{ margin: 0 }}>{type.description}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         <nav>
           <ul

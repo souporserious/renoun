@@ -1,8 +1,11 @@
 import title from 'title'
 import type { ComponentType } from 'react'
 import { kebabCase } from 'case-anything'
+import type { getPropTypes } from '@tsxmod/utils'
 import type { CodeBlocks } from './remark/add-code-blocks'
 import type { Headings } from './remark/add-headings'
+import { project } from './components/project'
+import { getExportedPropTypes } from './utils/get-exported-prop-types'
 
 export type Module = {
   Component: ComponentType
@@ -12,17 +15,26 @@ export type Module = {
   headings: Headings
   codeBlocks: CodeBlocks
   summary: string
+  types:
+    | {
+        name: string
+        slug: string
+        path: string
+        props: ReturnType<typeof getPropTypes>
+      }[]
+    | null
   metadata?: { title: string; description: string }
 }
 
 /**
- * Loads modules and parses metadata from Webpack `require.context`.
+ * Loads content and metadata related to MDX and TypeScript files.
  *
  * @example
- * export const allDocs = loadModules(
- *   require.context('./docs', true, /\.mdx$/, 'lazy'),
- *   'docs'
- * )
+ * export const allDocs = createSourceFiles('./docs/*.mdx', { baseDirectory: 'docs' })
+ * "docs/01.getting-started.mdx" -> "/getting-started"
+ *
+ * export const allComponents = createSourceFiles('./components/**\/index.tsx')
+ * "components/01.Button/index.tsx" -> "/components/button"
  */
 export function createSourceFiles<Type>(
   pattern: string,
@@ -51,6 +63,14 @@ export function createSourceFiles<Type>(
     })
   )
 
+  /**
+   * Analyze TypeScript source files.
+   * TODO: compile MDX and analyze AST in ts-morph.
+   */
+  const sourceFiles = /ts(x)?/.test(globPattern)
+    ? project.addSourceFilesAtPaths(globPattern)
+    : null
+
   /** Parses and attaches metadata to a module. */
   async function parseModule(pathname?: string) {
     if (pathname === undefined) {
@@ -63,6 +83,10 @@ export function createSourceFiles<Type>(
       return null
     }
 
+    const sourceFile = sourceFiles?.find((sourceFile) => {
+      return filePathToUrl(sourceFile.getFilePath(), baseDirectory) === pathname
+    })
+    const propTypes = sourceFile ? getExportedPropTypes(sourceFile) : null
     const {
       default: Component,
       headings,
@@ -77,6 +101,7 @@ export function createSourceFiles<Type>(
       pathname: `/${pathname}`,
       headings,
       metadata,
+      types: propTypes,
       ...exports,
     } as Module & Type
   }
