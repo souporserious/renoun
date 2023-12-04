@@ -38,6 +38,11 @@ export default async function loader(
               : `${dirname(globPattern)}/README.mdx`,
             { cwd: dirname(this.resourcePath) }
           )
+
+          filePaths.forEach((filePath) => {
+            this.addDependency(filePath)
+          })
+
           const objectLiteralText = `{${filePaths
             .map((filePath) => `"${filePath}": import('${filePath}')`)
             .join(', ')}}`
