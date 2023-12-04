@@ -3,7 +3,7 @@ import { createContext, useContext } from 'react'
 import styled from 'styled-components'
 import { textStyles } from '../../theme'
 
-export type DropDollarPrefix<T> = {
+type DropDollarPrefix<T> = {
   [K in keyof T as K extends `$${infer I}` ? I : K]: T[K]
 }
 
