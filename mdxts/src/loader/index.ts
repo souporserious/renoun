@@ -1,5 +1,5 @@
 import * as webpack from 'webpack'
-import { dirname } from 'node:path'
+import { dirname, join } from 'node:path'
 import { glob } from 'fast-glob'
 import { Node, Project, SyntaxKind } from 'ts-morph'
 
@@ -40,7 +40,7 @@ export default async function loader(
           )
 
           filePaths.forEach((filePath) => {
-            this.addDependency(filePath)
+            this.addDependency(join(dirname(this.resourcePath), filePath))
           })
 
           const objectLiteralText = `{${filePaths
