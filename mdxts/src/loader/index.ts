@@ -35,7 +35,7 @@ export default async function loader(
           const filePaths = await glob(
             globPattern.includes('mdx')
               ? globPattern
-              : `${dirname(globPattern)}/*.mdx`,
+              : `${dirname(globPattern)}/README.mdx`,
             { cwd: dirname(this.resourcePath) }
           )
           const objectLiteralText = `{${filePaths
