@@ -50,7 +50,7 @@ export default withMdxts({
 
 ### Enable Type Checking
 
-To enable type checking, you need to add a `tsconfig.json` file to your project. The `mdxts` package will
+To enable type checking code blocks, add the respective package types that should be included:
 
 ```ts filename="next.config.ts"
 import { createMdxtsPlugin } from 'mdxts/next'
@@ -67,17 +67,16 @@ const withMdxts = createMdxtsPlugin({
 Use the `loadModules` function exported from the `mdxts` package to generate metadata and paths from a set of modules:
 
 ```ts filename="data.ts"
-import { loadModules } from 'mdxts'
+import { createSourceFiles } from 'mdxts'
 
-export const allDocs = loadModules(
-  require.context('./docs', true, /\.mdx$/),
-  'docs'
-)
+export const allDocs = createSourceFiles('docs/**/*.mdx', {
+  baseDirectory: 'docs',
+})
 ```
 
 ### Rendering Content
 
-Use the [[get]] helper from the modules loader to render MDX content:
+Use the get helper from the modules loader to render MDX content:
 
 ```tsx filename="page.tsx"
 import { notFound } from 'next/navigation'
@@ -90,9 +89,9 @@ export default async function Page({ params }) {
     return notFound()
   }
 
-  const { Component } = doc.active
+  const { Content } = doc
 
-  return <Component />
+  return <Content />
 }
 ```
 

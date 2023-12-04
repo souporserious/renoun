@@ -18,7 +18,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
     return notFound()
   }
 
-  const { Component, headings, types } = module.active
+  const { Content, headings, types } = module
 
   return (
     <>
@@ -30,7 +30,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
         }}
       >
         <div>
-          <Component />
+          <Content />
           {types?.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
               <h2>Props</h2>

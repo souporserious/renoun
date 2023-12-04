@@ -8,7 +8,7 @@ import { project } from './components/project'
 import { getExportedPropTypes } from './utils/get-exported-prop-types'
 
 export type Module = {
-  Component: ComponentType
+  Content: ComponentType
   title: string
   pathname: string
   slug: string
@@ -88,7 +88,7 @@ export function createSourceFiles<Type>(
     })
     const propTypes = sourceFile ? getExportedPropTypes(sourceFile) : null
     const {
-      default: Component,
+      default: Content,
       headings,
       metadata,
       ...exports
@@ -96,7 +96,7 @@ export function createSourceFiles<Type>(
     const slug = pathname.split('/').pop()
 
     return {
-      Component,
+      Content,
       title: metadata?.title || headings?.[0]?.text || title(slug),
       pathname: `/${pathname}`,
       headings,
@@ -110,11 +110,12 @@ export function createSourceFiles<Type>(
   async function getPathData(
     /** The pathname of the active page. */
     pathname: string[]
-  ): Promise<{
-    active?: Module
-    previous?: Module
-    next?: Module
-  }> {
+  ): Promise<
+    Module & {
+      previous?: Module
+      next?: Module
+    }
+  > {
     const activeIndex = Object.keys(allModulesKeysByPathname).findIndex(
       (dataPathname) => dataPathname.includes(pathname.join('/'))
     )
@@ -140,10 +141,11 @@ export function createSourceFiles<Type>(
       return null
     }
 
-    return { active, previous, next } as Record<
-      'active' | 'previous' | 'next',
-      Module & Type
-    >
+    return Object.assign(active, { previous, next }) as Module &
+      Type & {
+        previous?: Module & Type
+        next?: Module & Type
+      }
   }
 
   return {
