@@ -32,10 +32,15 @@ export default async function loader(
 
         if (Node.isStringLiteral(firstArgument)) {
           const globPattern = firstArgument.getLiteralText()
+          const baseGlobPattern = dirname(globPattern)
           const filePaths = await glob(
             globPattern.includes('mdx')
               ? globPattern
-              : `${dirname(globPattern)}/README.mdx`,
+              : [
+                  `${baseGlobPattern}/README.mdx`,
+                  `${baseGlobPattern}/*.examples.(ts|tsx)`,
+                  `${baseGlobPattern}/examples/*.(ts|tsx)`,
+                ],
             { cwd: dirname(this.resourcePath) }
           )
 

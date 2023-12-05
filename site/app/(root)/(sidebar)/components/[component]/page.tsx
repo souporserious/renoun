@@ -1,24 +1,24 @@
 import { notFound } from 'next/navigation'
-import { allDocs, allComponents } from 'data'
+import { allComponents } from 'data'
 
 export const dynamic = 'force-static'
 
 export function generateStaticParams() {
-  return [...allDocs.paths(), ...allComponents.paths()].map((pathname) => ({
-    slug: pathname,
-  }))
+  return allComponents.paths()
 }
 
-export default async function Page({ params }: { params: { slug: string[] } }) {
-  const doc = await allDocs.get(params.slug)
-  const component = await allComponents.get(params.slug)
-  const module = doc || component || null
+export default async function Page({
+  params,
+}: {
+  params: { component: string }
+}) {
+  const component = await allComponents.get(params.component)
 
-  if (module === null) {
+  if (component === null) {
     return notFound()
   }
 
-  const { Content, headings, types } = module
+  const { Content, headings, types } = component
 
   return (
     <>
@@ -37,20 +37,20 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
               <div
                 style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
               >
-                {types.map((doc) => (
+                {types.map((type) => (
                   <div
-                    key={doc.name}
+                    key={type.name}
                     style={{
                       display: 'flex',
                       flexDirection: 'column',
                       gap: 16,
                     }}
                   >
-                    <h3>{doc.name}</h3>
+                    <h3>{type.name}</h3>
                     {/* {doc.path && (
                     <a href={getSourceLink({ path: doc.path })}>View Source</a>
                   )} */}
-                    {doc.props?.map((type) => (
+                    {type.props?.map((type) => (
                       <div
                         key={type.name}
                         style={{
@@ -122,8 +122,8 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
           padding: '4rem 0 2rem',
         }}
       >
-        <SiblingLink module={module.previous} direction="previous" />
-        <SiblingLink module={module.next} direction="next" />
+        <SiblingLink module={component.previous} direction="previous" />
+        <SiblingLink module={component.next} direction="next" />
       </nav>
     </>
   )

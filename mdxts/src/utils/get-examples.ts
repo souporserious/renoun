@@ -1,6 +1,6 @@
 import type { Directory, FunctionLikeDeclaration, SourceFile } from 'ts-morph'
 import { SyntaxKind } from 'ts-morph'
-import { extractExportByIdentifier } from './extract-export-by-identifier'
+import { extractExportByIdentifier } from '@tsxmod/utils'
 
 /** Gathers examples from a declaration's JSDoc example tags. */
 export function getExamplesFromComments(declaration: FunctionLikeDeclaration) {
@@ -50,18 +50,11 @@ export function getExamplesFromDirectory(directory: Directory) {
     return []
   }
 
-  return examplesDirectory.getSourceFiles().flatMap((exampleSourceFile) => {
-    const exportedDeclarations = exampleSourceFile.getExportedDeclarations()
+  const sourceFiles = examplesDirectory.getSourceFiles()
 
-    return Array.from(exportedDeclarations).flatMap(([, declarations]) => {
-      return declarations.map((declaration) =>
-        extractExportByIdentifier(
-          exampleSourceFile,
-          declaration
-            .getFirstDescendantByKindOrThrow(SyntaxKind.Identifier)
-            .getText()
-        )
-      )
-    })
-  })
+  if (sourceFiles.length === 0) {
+    return examplesDirectory.addSourceFilesAtPaths('**/*.{ts,tsx}')
+  }
+
+  return sourceFiles
 }

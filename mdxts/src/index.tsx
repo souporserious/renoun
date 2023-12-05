@@ -6,6 +6,7 @@ import type { CodeBlocks } from './remark/add-code-blocks'
 import type { Headings } from './remark/add-headings'
 import { project } from './components/project'
 import { getExportedPropTypes } from './utils/get-exported-prop-types'
+import { getExamplesFromDirectory } from './utils/get-examples'
 
 export type Module = {
   Content: ComponentType
@@ -21,6 +22,14 @@ export type Module = {
         slug: string
         path: string
         props: ReturnType<typeof getPropTypes>
+      }[]
+    | null
+  examples:
+    | {
+        name: string
+        slug: string
+        pathname: string
+        module: Promise<Record<string, any>>
       }[]
     | null
   metadata?: { title: string; description: string }
@@ -87,6 +96,25 @@ export function createSourceFiles<Type>(
       return filePathToUrl(sourceFile.getFilePath(), baseDirectory) === pathname
     })
     const propTypes = sourceFile ? getExportedPropTypes(sourceFile) : null
+    const examples = sourceFile
+      ? getExamplesFromDirectory(sourceFile.getDirectory()).map(
+          (sourceFile) => {
+            const pathname = filePathToUrl(
+              sourceFile.getFilePath(),
+              baseDirectory
+            )
+            const moduleKey = allModulesKeysByPathname[pathname]
+            const module = allModules[moduleKey]
+            const name = sourceFile.getBaseNameWithoutExtension()
+            return {
+              name,
+              pathname,
+              module,
+              slug: kebabCase(name),
+            }
+          }
+        )
+      : null
     const {
       default: Content,
       headings,
@@ -102,6 +130,7 @@ export function createSourceFiles<Type>(
       headings,
       metadata,
       types: propTypes,
+      examples,
       ...exports,
     } as Module & Type
   }
@@ -109,15 +138,18 @@ export function createSourceFiles<Type>(
   /** Returns the active and sibling data based on the active pathname. */
   async function getPathData(
     /** The pathname of the active page. */
-    pathname: string[]
+    pathname: string | string[]
   ): Promise<
     Module & {
       previous?: Module
       next?: Module
     }
   > {
+    const stringPathname = Array.isArray(pathname)
+      ? pathname.join('/')
+      : pathname
     const activeIndex = Object.keys(allModulesKeysByPathname).findIndex(
-      (dataPathname) => dataPathname.includes(pathname.join('/'))
+      (dataPathname) => dataPathname.includes(stringPathname)
     )
 
     function getSiblingPathname(startIndex: number, direction: number) {
@@ -132,7 +164,7 @@ export function createSourceFiles<Type>(
     }
 
     const [active, previous, next] = await Promise.all([
-      parseModule(pathname.join('/')),
+      parseModule(stringPathname),
       parseModule(getSiblingPathname(activeIndex, -1)),
       parseModule(getSiblingPathname(activeIndex, 1)),
     ])
@@ -162,7 +194,7 @@ export function createSourceFiles<Type>(
         ])
       )
     },
-    async get(pathname: string[]) {
+    async get(pathname: string | string[]) {
       const data = await getPathData(pathname)
       return data
     },
