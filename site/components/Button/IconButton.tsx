@@ -1,5 +1,7 @@
+'use client'
 import * as React from 'react'
-import { Box, ButtonProps, variants } from 'components'
+import { Box } from 'components/Box'
+import { ButtonProps, variants } from 'components/Button'
 
 /**
  * IconButton allows users to take specific actions using a simplified icon graphic.

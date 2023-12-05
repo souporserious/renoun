@@ -1,5 +1,6 @@
+'use client'
 import * as React from 'react'
-import { Box } from '../Box'
+import { Box } from 'components/Box'
 
 export const variants = {
   primary: {

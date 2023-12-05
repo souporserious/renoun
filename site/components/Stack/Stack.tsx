@@ -1,3 +1,4 @@
+'use client'
 import styled from 'styled-components'
 
 export type StackProps = {
@@ -44,8 +45,8 @@ export const Stack = styled.div<StackProps>(
       props.justifyContent === 'fill'
         ? undefined
         : props.justifyContent
-        ? distributions[props.justifyContent]
-        : undefined,
+          ? distributions[props.justifyContent]
+          : undefined,
     background: props.background,
     ...getSize('width', props.width),
     ...getSize('height', props.height),

@@ -1,3 +1,4 @@
+'use client'
 import * as React from 'react'
 
 export type BoxProps<Element extends React.ElementType> = {
@@ -10,7 +11,7 @@ export type BoxProps<Element extends React.ElementType> = {
 } & React.HTMLAttributes<HTMLElement>
 
 export const Box = React.forwardRef(function Box<
-  Element extends React.ElementType = 'div'
+  Element extends React.ElementType = 'div',
 >(
   {
     as: Element = 'div',

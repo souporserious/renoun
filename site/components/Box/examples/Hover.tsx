@@ -1,4 +1,5 @@
-import { Box } from 'components'
+'use client'
+import { Box } from 'components/Box'
 import { useHover } from 'hooks/useHover'
 
 export default function Hover() {

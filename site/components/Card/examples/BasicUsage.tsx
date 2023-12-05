@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Card } from 'components'
+import { Card } from 'components/Card'
 
 export default function BasicUsage() {
   return (

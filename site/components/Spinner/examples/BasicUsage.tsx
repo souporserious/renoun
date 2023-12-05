@@ -1,4 +1,5 @@
-import { Stack, Spinner, spinnerSizes } from 'components'
+import { Stack } from 'components/Stack'
+import { Spinner, spinnerSizes } from 'components/Spinner'
 
 export default function BasicUsage() {
   return (
