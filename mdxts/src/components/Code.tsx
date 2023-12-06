@@ -35,6 +35,18 @@ export type BaseCodeProps = {
   /** Line to scroll to. */
   line?: number
 
+  /** Padding to apply to the code block. */
+  padding?: string
+
+  /** Horizontal padding to apply to the code block. */
+  paddingHorizontal?: string
+
+  /** Vertical padding to apply to the code block. */
+  paddingVertical?: string
+
+  /** Whether or not the code is presented inline or as a block-level element. */
+  inline?: boolean
+
   /** Class name to be applied to the code block. */
   className?: string
 
@@ -73,6 +85,10 @@ export async function Code({
   sourcePath,
   line,
   isNestedInEditor,
+  padding,
+  paddingHorizontal,
+  paddingVertical,
+  inline,
   ...props
 }: CodeProps) {
   const id = 'source' in props ? props.source : filenameProp ?? filenameId++
@@ -155,6 +171,10 @@ export async function Code({
       highlighter={highlighter}
       highlight={highlight}
       language={finalLanguage}
+      padding={padding}
+      paddingHorizontal={paddingHorizontal}
+      paddingVertical={paddingVertical}
+      inline={inline}
       theme={theme}
       isJsxOnly={jsxOnly}
       isNestedInEditor={isNestedInEditor}

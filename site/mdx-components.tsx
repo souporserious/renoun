@@ -3,7 +3,7 @@ import type { MDXComponents } from 'mdx/types'
 import { getMetadataFromClassName } from 'mdxts/utils'
 import { Code, Editor, Preview, PackageExports } from 'mdxts/components'
 import { GeistMono } from 'geist/font/mono'
-import theme from './theme.json'
+import theme from 'theme.json'
 
 export function useMDXComponents() {
   return {

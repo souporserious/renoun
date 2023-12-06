@@ -1,5 +1,7 @@
 import { notFound } from 'next/navigation'
+import { Code } from 'mdxts/components'
 import { allComponents } from 'data'
+import theme from 'theme.json'
 
 export const dynamic = 'force-static'
 
@@ -68,13 +70,25 @@ export default async function Page({
                             gap: 8,
                           }}
                         >
-                          <h4 style={{ fontWeight: 600, margin: 0 }}>
+                          <h4
+                            style={{
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              flexShrink: 0,
+                              margin: 0,
+                              fontWeight: 600,
+                            }}
+                          >
                             {type.name} {type.required && '*'}
                           </h4>
-                          <code>
-                            {type.type}{' '}
-                            {type.defaultValue && `= ${type.defaultValue}`}
-                          </code>
+                          <Code
+                            inline
+                            value={type.type}
+                            language="typescript"
+                            theme={theme as any}
+                            paddingHorizontal="0.5rem"
+                            paddingVertical="0.2rem"
+                          />
                         </div>
                         {type.description && (
                           <p style={{ margin: 0 }}>{type.description}</p>

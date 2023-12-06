@@ -27,6 +27,18 @@ export type CodeProps = {
   /** VS Code-based theme for highlighting. */
   theme?: Theme
 
+  /** Padding to apply to the code block. */
+  padding?: string
+
+  /** Horizontal padding to apply to the code block. */
+  paddingHorizontal?: string
+
+  /** Vertical padding to apply to the code block. */
+  paddingVertical?: string
+
+  /** Whether or not the code is presented inline or as a block-level element. */
+  inline?: boolean
+
   /** Show or hide errors. */
   showErrors?: boolean
 
@@ -56,6 +68,10 @@ export function CodeView({
   baseDirectory,
   edit,
   value,
+  padding = '1rem',
+  paddingHorizontal = padding,
+  paddingVertical = padding,
+  inline,
 }: CodeProps & {
   row?: [number, number]
   tokens: any
@@ -79,10 +95,10 @@ export function CodeView({
     : (props) => (
         <div
           style={{
-            display: 'grid',
+            display: inline ? 'inline-grid' : 'grid',
             gridTemplateColumns: 'auto 1fr',
             position: 'relative',
-            margin: '0 0 1.6rem',
+            margin: inline ? undefined : '0 0 1.6rem',
             borderRadius: 5,
             border: `1px solid ${theme.colors['contrastBorder']}`,
             backgroundColor: theme.colors['editor.background'],
@@ -91,7 +107,6 @@ export function CodeView({
           {...props}
         />
       )
-  const padding = '1rem'
 
   return (
     <Container>
@@ -146,7 +161,13 @@ export function CodeView({
       <Pre
         isNestedInEditor={isNestedInEditor}
         className={className}
-        style={{ gridRow: filename ? 2 : 1, padding }}
+        style={{
+          gridRow: filename ? 2 : 1,
+          paddingTop: paddingVertical,
+          paddingBottom: paddingVertical,
+          paddingLeft: paddingHorizontal,
+          paddingRight: paddingHorizontal,
+        }}
       >
         {diagnostics
           ? diagnostics.map((diagnostic) => {
@@ -162,8 +183,8 @@ export function CodeView({
                   key={start}
                   style={{
                     position: 'absolute',
-                    top: `calc(${top}px + ${padding})`,
-                    left: `calc(${column - 1} * 1ch + ${padding})`,
+                    top: `calc(${top}px + ${paddingVertical})`,
+                    left: `calc(${column - 1} * 1ch + ${paddingHorizontal})`,
                     width: `calc(${width} * 1ch)`,
                     height,
                     backgroundImage: `url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%206%203'%20enable-background%3D'new%200%200%206%203'%20height%3D'3'%20width%3D'6'%3E%3Cg%20fill%3D'%23f14c4c'%3E%3Cpolygon%20points%3D'5.5%2C0%202.5%2C3%201.1%2C3%204.1%2C0'%2F%3E%3Cpolygon%20points%3D'4%2C0%206%2C2%206%2C0.6%205.4%2C0'%2F%3E%3Cpolygon%20points%3D'0%2C2%201%2C3%202.4%2C3%200%2C0.6'%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E")`,
@@ -188,8 +209,8 @@ export function CodeView({
               key={index}
               isQuickInfoOpen={isQuickInfoOpen}
               style={{
-                top: `calc(${bounds.top}px + ${padding})`,
-                left: `calc(${bounds.left} * 1ch + ${padding})`,
+                top: `calc(${bounds.top}px + ${paddingVertical})`,
+                left: `calc(${bounds.left} * 1ch + ${paddingHorizontal})`,
                 width: `calc(${bounds.width} * 1ch)`,
                 height: bounds.height,
               }}
