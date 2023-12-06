@@ -44,7 +44,7 @@ export function Sidebar() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
         <h3>Docs</h3>
         <Navigation
-          sourceFiles={allDocs}
+          source={allDocs}
           renderList={(props) => (
             <ul
               style={{
@@ -76,7 +76,7 @@ export function Sidebar() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
         <h3>Components</h3>
         <Navigation
-          sourceFiles={allComponents}
+          source={allComponents}
           baseDirectory="components"
           renderList={(props) => (
             <ul

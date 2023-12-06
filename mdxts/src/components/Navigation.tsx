@@ -1,5 +1,5 @@
 import title from 'title'
-import type { Module, createSourceFiles } from '../index'
+import type { Module, createDataSource } from '../index'
 
 type Node = Module & {
   part: string
@@ -84,13 +84,13 @@ function renderNavigation(
 
 /** Renders a navigation tree from a collection of modules. */
 export async function Navigation({
-  sourceFiles,
+  source,
   baseDirectory,
   renderList,
   renderItem,
 }: {
-  /** A collection of source files returned from `createSourceFiles`. */
-  sourceFiles: ReturnType<typeof createSourceFiles>
+  /** A collection of source files returned from `createDataSource`. */
+  source: ReturnType<typeof createDataSource>
 
   /** The base directory to render. */
   baseDirectory?: string
@@ -103,7 +103,7 @@ export async function Navigation({
     item: Omit<Node, 'children'> & { children?: JSX.Element }
   ) => JSX.Element
 }) {
-  const allSourceFiles = await sourceFiles.all()
+  const allSourceFiles = await source.all()
   const parsedSourceFiles = baseDirectory
     ? Object.fromEntries(
         Object.entries(allSourceFiles).map(([pathname, module]) => [

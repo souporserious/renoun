@@ -40,13 +40,13 @@ export type Module = {
  * Loads content and metadata related to MDX and TypeScript files.
  *
  * @example
- * export const allDocs = createSourceFiles('./docs/*.mdx', { baseDirectory: 'docs' })
+ * export const allDocs = createDataSource('./docs/*.mdx', { baseDirectory: 'docs' })
  * "docs/01.getting-started.mdx" -> "/getting-started"
  *
- * export const allComponents = createSourceFiles('./components/**\/index.tsx')
+ * export const allComponents = createDataSource('./components/**\/index.tsx')
  * "components/01.Button/index.tsx" -> "/components/button"
  */
-export function createSourceFiles<Type>(
+export function createDataSource<Type>(
   pattern: string,
   options: { baseDirectory?: string } = {}
 ) {
@@ -57,7 +57,7 @@ export function createSourceFiles<Type>(
 
   if (typeof allModules === 'string') {
     throw new Error(
-      'mdxts: createSourceFiles requires the mdxts/loader package is configured as a Webpack loader.'
+      'mdxts: createDataSource requires that the mdxts/loader package is configured as a Webpack loader.'
     )
   }
 

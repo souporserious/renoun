@@ -4,7 +4,7 @@ import { glob } from 'fast-glob'
 import { Node, Project, SyntaxKind } from 'ts-morph'
 
 /**
- * Augments `createSourceFiles` calls with MDX file paths resolved from the provided file pattern.
+ * Augments `createDataSource` calls with MDX file paths resolved from the provided file pattern.
  * If a TypeScript file pattern is provided, the closest README.mdx or MDX file with the same name will be used.
  */
 export default async function loader(
@@ -16,17 +16,17 @@ export default async function loader(
   const sourceString = source.toString()
 
   if (
-    /.*import\s\{\screateSourceFiles\s\}\sfrom\s['"]mdxts['"].*/.test(
+    /.*import\s\{\screateDataSource\s\}\sfrom\s['"]mdxts['"].*/.test(
       sourceString
     )
   ) {
     const project = new Project({ useInMemoryFileSystem: true })
     const sourceFile = project.createSourceFile('index.ts', sourceString)
-    const createSourceFilesCalls = sourceFile
+    const createDataSourceCalls = sourceFile
       .getDescendantsOfKind(SyntaxKind.CallExpression)
-      .filter((call) => call.getExpression().getText() === 'createSourceFiles')
+      .filter((call) => call.getExpression().getText() === 'createDataSource')
 
-    for (const call of createSourceFilesCalls) {
+    for (const call of createDataSourceCalls) {
       try {
         const [firstArgument] = call.getArguments()
 
