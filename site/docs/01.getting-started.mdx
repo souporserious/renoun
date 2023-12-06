@@ -2,11 +2,10 @@
 
 <Summary>
 
-Build interactive, type-safe content and documentation using MDX and
-TypeScript.
+Build interactive, type-safe content and documentation using MDX,
+TypeScript, and React.
 
-MDXTS generates a graph of prose content, source code, and examples that
-can be rendered through components and utilities in MDX and React.
+MDXTS generates a graph of prose content, source code, type information, and examples that can be rendered through components and utilities using React 18 Server and Client Components.
 
 </Summary>
 
@@ -20,9 +19,9 @@ pnpm install mdxts
 yarn add mdxts
 ```
 
-This library includes exports for various use cases that work best when used together, but can also be used independently.
-
 ## Package Exports
+
+The `mdxts` package exports a main package and a set of sub-packages.
 
 <PackageExports
   name="mdxts"
@@ -48,9 +47,9 @@ export default withMdxts({
 })
 ```
 
-### Enable Type Checking
+### Type Checking
 
-To enable type checking code blocks, add the respective package types that should be included:
+All code blocks will automatically be type-checked using the TypeScript compiler. You can also use the `types` option to specify additional types to include:
 
 ```ts filename="next.config.ts"
 import { createMdxtsPlugin } from 'mdxts/next'
@@ -62,14 +61,16 @@ const withMdxts = createMdxtsPlugin({
 })
 ```
 
+<Note>In a future version, this will be fully automated.</Note>
+
 ### Generating Routes
 
-Use the `loadModules` function exported from the `mdxts` package to generate metadata and paths from a set of modules:
+Use the `createDataSource` function exported from the `mdxts` package to generate metadata and paths from a set of MDX or TypeScript files:
 
 ```ts filename="data.ts"
-import { createSourceFiles } from 'mdxts'
+import { createDataSource } from 'mdxts'
 
-export const allDocs = createSourceFiles('docs/**/*.mdx', {
+export const allDocs = createDataSource('docs/**/*.mdx', {
   baseDirectory: 'docs',
 })
 ```

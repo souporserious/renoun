@@ -71,9 +71,11 @@ export default function Home() {
               fontSize: '6vw',
               lineHeight: 1,
               textAlign: 'center',
+              // @ts-expect-error - missing types
+              textWrap: 'pretty',
             }}
           >
-            Structured content authoring in MDX.
+            A Framework for Type-Safe Content and Documentation
           </h1>
         </section>
 
