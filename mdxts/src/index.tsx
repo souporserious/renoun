@@ -1,4 +1,4 @@
-import title from 'title'
+import parseTitle from 'title'
 import type { ComponentType } from 'react'
 import { kebabCase } from 'case-anything'
 import type { getPropTypes } from '@tsxmod/utils'
@@ -11,11 +11,11 @@ import { getExamplesFromDirectory } from './utils/get-examples'
 export type Module = {
   Content: ComponentType
   title: string
-  pathname: string
-  slug: string
+  summary: string
   headings: Headings
   codeBlocks: CodeBlocks
-  summary: string
+  pathname: string
+  slug: string
   types:
     | {
         name: string
@@ -126,11 +126,17 @@ export function createSourceFiles<Type>(
       metadata,
       ...exports
     } = await allModules[moduleKey]
-    const slug = pathname.split('/').pop()
-
+    const filename = allModulesKeysByPathname[pathname]
+      .split('/')
+      .pop()
+      // Remove file extensions
+      .replace(/\.[^/.]+$/, '')
+    const filenameTitle = isPascalCase(filename)
+      ? filename
+      : parseTitle(filename)
     return {
       Content,
-      title: metadata?.title || headings?.[0]?.text || title(slug),
+      title: metadata?.title || headings?.[0]?.text || filenameTitle,
       pathname: `/${pathname}`,
       headings,
       metadata,
@@ -244,4 +250,10 @@ function filePathToUrlPathname(filepath: string, baseDirectory?: string) {
     .map((segment) => (/[A-Z]/.test(segment[0]) ? kebabCase(segment) : segment))
     .filter(Boolean)
     .join('/')
+}
+
+/** Determines if a string is in PascalCase. */
+function isPascalCase(str: string) {
+  const regex = /^[A-Z][a-zA-Z0-9]*$/
+  return regex.test(str)
 }
