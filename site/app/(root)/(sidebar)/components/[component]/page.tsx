@@ -4,7 +4,9 @@ import { allComponents } from 'data'
 export const dynamic = 'force-static'
 
 export function generateStaticParams() {
-  return allComponents.paths()
+  return Array.from(
+    new Set(allComponents.paths().map((pathname) => pathname[1]))
+  )
 }
 
 export default async function Page({
@@ -12,7 +14,7 @@ export default async function Page({
 }: {
   params: { component: string }
 }) {
-  const component = await allComponents.get(params.component)
+  const component = await allComponents.get(`components/${params.component}`)
 
   if (component === null) {
     return notFound()

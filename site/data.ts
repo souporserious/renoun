@@ -4,6 +4,4 @@ export const allDocs = createSourceFiles('docs/**/*.mdx', {
   baseDirectory: 'docs',
 })
 
-export const allComponents = createSourceFiles('components/**/index.(ts|tsx)', {
-  baseDirectory: 'components',
-})
+export const allComponents = createSourceFiles('components/**/index.(ts|tsx)')

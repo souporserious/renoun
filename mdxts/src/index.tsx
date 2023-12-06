@@ -182,16 +182,22 @@ export function createSourceFiles<Type>(
 
   return {
     async all() {
+      /** Filter out example modules */
+      const filteredKeys = Object.keys(allModulesKeysByPathname).filter(
+        (pathname) => {
+          const moduleKey = allModulesKeysByPathname[pathname]
+          return moduleKey
+            ? moduleKey.includes('examples')
+              ? !/ts(x)?/.test(moduleKey)
+              : true
+            : true
+        }
+      )
       const allModules = await Promise.all(
-        Object.keys(allModulesKeysByPathname).map((pathname) =>
-          parseModule(pathname)
-        )
+        filteredKeys.map((pathname) => parseModule(pathname))
       )
       return Object.fromEntries(
-        Object.keys(allModulesKeysByPathname).map((pathname, index) => [
-          pathname,
-          allModules[index],
-        ])
+        filteredKeys.map((pathname, index) => [pathname, allModules[index]])
       )
     },
     async get(pathname: string | string[]) {
