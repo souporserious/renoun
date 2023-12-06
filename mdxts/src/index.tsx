@@ -1,6 +1,7 @@
 import parseTitle from 'title'
 import type { ComponentType } from 'react'
 import { kebabCase } from 'case-anything'
+import { resolve } from 'node:path'
 import type { getPropTypes } from '@tsxmod/utils'
 import type { CodeBlocks } from './remark/add-code-blocks'
 import type { Headings } from './remark/add-headings'
@@ -229,16 +230,23 @@ export function createSourceFiles<Type>(
 /** Converts a file system path to a URL-friendly pathname. */
 function filePathToUrlPathname(filepath: string, baseDirectory?: string) {
   const parsedFilepath = filepath
-    // Remove file extensions
-    .replace(/\.[^/.]+$/, '')
     // Remove leading separator "./"
     .replace(/^\.\//, '')
-    // Remove leading sorting number
+    // Remove leading sorting number "01."
     .replace(/\/\d+\./g, '/')
+    // Remove working directory
+    .replace(
+      baseDirectory
+        ? `${resolve(process.cwd(), baseDirectory)}/`
+        : process.cwd(),
+      ''
+    )
     // Remove base directory
     .replace(baseDirectory ? `${baseDirectory}/` : '', '')
     // Remove trailing "/README" or "/index"
     .replace(/\/(README|index)$/, '')
+    // Remove file extensions
+    .replace(/\.[^/.]+$/, '')
 
   // Convert component names to kebab case for case-insensitive paths
   const segments = parsedFilepath.split('/')
