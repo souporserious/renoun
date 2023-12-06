@@ -69,7 +69,7 @@ export function createSourceFiles<Type>(
     Object.keys(allModules)
       .sort()
       .map((key) => {
-        const pathname = filePathToUrl(key, baseDirectory)
+        const pathname = filePathnameToUrlPathname(key, baseDirectory)
         return [pathname, key]
       })
   )
@@ -95,13 +95,16 @@ export function createSourceFiles<Type>(
     }
 
     const sourceFile = sourceFiles?.find((sourceFile) => {
-      return filePathToUrl(sourceFile.getFilePath(), baseDirectory) === pathname
+      return (
+        filePathnameToUrlPathname(sourceFile.getFilePath(), baseDirectory) ===
+        pathname
+      )
     })
     const propTypes = sourceFile ? getExportedPropTypes(sourceFile) : null
     const examples = sourceFile
       ? getExamplesFromDirectory(sourceFile.getDirectory()).map(
           (sourceFile) => {
-            const pathname = filePathToUrl(
+            const pathname = filePathnameToUrlPathname(
               sourceFile.getFilePath(),
               baseDirectory
             )
@@ -218,8 +221,8 @@ export function createSourceFiles<Type>(
   }
 }
 
-/** Converts a file system path to a URL-friendly path. */
-function filePathToUrl(filepath: string, baseDirectory?: string) {
+/** Converts a file system pathname to a URL-friendly pathname. */
+function filePathnameToUrlPathname(filepath: string, baseDirectory?: string) {
   const parsedFilepath = filepath
     // Remove file extensions
     .replace(/\.[^/.]+$/, '')
