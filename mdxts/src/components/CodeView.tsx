@@ -48,9 +48,10 @@ export function CodeView({
   language,
   theme,
   showErrors,
-  isJsxOnly,
   className,
+  isJsxOnly,
   isNestedInEditor,
+  shouldRenderFilename,
   rootDirectory,
   baseDirectory,
   edit,
@@ -62,6 +63,7 @@ export function CodeView({
   highlighter: any
   isJsxOnly?: boolean
   isNestedInEditor?: boolean
+  shouldRenderFilename?: boolean
   rootDirectory?: string
   baseDirectory?: string
   edit?: any
@@ -98,7 +100,9 @@ export function CodeView({
         source={sourceFile?.getFullText()}
       />
 
-      {filename ? <CodeToolbar filename={filename} value={value} /> : null}
+      {shouldRenderFilename ? (
+        <CodeToolbar filename={filename} value={value} />
+      ) : null}
 
       {lineNumbers ? (
         <div

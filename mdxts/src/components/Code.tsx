@@ -151,6 +151,7 @@ export async function Code({
       lineNumbers={lineNumbers}
       sourceFile={sourceFile}
       filename={filename}
+      shouldRenderFilename={Boolean(filenameProp)}
       highlighter={highlighter}
       highlight={highlight}
       language={finalLanguage}
