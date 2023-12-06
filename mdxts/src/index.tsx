@@ -130,9 +130,13 @@ export function createSourceFiles<Type>(
     const filename = cleanFilename(
       allModulesKeysByPathname[pathname].split('/').pop()
     )
-    const filenameTitle = isPascalCase(filename)
-      ? filename
-      : parseTitle(filename)
+    const filenameTitle = /(readme|index)$/i.test(filename)
+      ? parseTitle(
+          allModulesKeysByPathname[pathname].split('/').slice(-2, -1).pop()
+        )
+      : isPascalCase(filename)
+        ? filename
+        : parseTitle(filename)
 
     return {
       Content,
@@ -243,10 +247,10 @@ function filePathToUrlPathname(filepath: string, baseDirectory?: string) {
     )
     // Remove base directory
     .replace(baseDirectory ? `${baseDirectory}/` : '', '')
-    // Remove trailing "/README" or "/index"
-    .replace(/\/(README|index)$/, '')
     // Remove file extensions
     .replace(/\.[^/.]+$/, '')
+    // Remove trailing "/readme" or "/index"
+    .replace(/\/(readme|index)$/i, '')
 
   // Convert component names to kebab case for case-insensitive paths
   const segments = parsedFilepath.split('/')
