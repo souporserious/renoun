@@ -13,7 +13,12 @@ export function usePreContext() {
   return useContext(PreContext)
 }
 
-export function Pre({ children, ...props }: React.HTMLProps<HTMLPreElement>) {
+export function Pre({
+  children,
+  style,
+  isNestedInEditor,
+  ...props
+}: { isNestedInEditor: boolean } & React.HTMLProps<HTMLPreElement>) {
   const [pointerDown, setPointerDown] = useState(false)
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const cancelPointerDown = () => {
@@ -45,10 +50,10 @@ export function Pre({ children, ...props }: React.HTMLProps<HTMLPreElement>) {
         padding: 0,
         margin: 0,
         borderRadius: 4,
-        // pointerEvents: 'none', // TODO: toggle if nested in Editor
+        pointerEvents: isNestedInEditor ? 'none' : undefined,
         position: 'relative',
-        overflow: 'visible',
-        ...props.style,
+        overflow: 'auto',
+        ...style,
       }}
     >
       <PreContext.Provider value={pointerDown}>{children}</PreContext.Provider>

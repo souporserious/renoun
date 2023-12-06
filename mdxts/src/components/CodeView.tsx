@@ -6,6 +6,7 @@ import { Symbol } from './Symbol'
 import { QuickInfo } from './QuickInfo'
 import { RegisterSourceFile } from './RegisterSourceFile'
 import { Pre } from './Pre'
+import { CodeToolbar } from './CodeToolbar'
 
 export type CodeProps = {
   /** Code snippet to be highlighted. */
@@ -53,6 +54,7 @@ export function CodeView({
   rootDirectory,
   baseDirectory,
   edit,
+  value,
 }: CodeProps & {
   row?: [number, number]
   tokens: any
@@ -78,7 +80,6 @@ export function CodeView({
             display: 'grid',
             gridTemplateColumns: 'auto 1fr',
             position: 'relative',
-            padding: '1rem',
             margin: '0 0 1.6rem',
             borderRadius: 5,
             border: `1px solid ${theme.colors['contrastBorder']}`,
@@ -88,6 +89,7 @@ export function CodeView({
           {...props}
         />
       )
+  const padding = '1rem'
 
   return (
     <Container>
@@ -96,12 +98,14 @@ export function CodeView({
         source={sourceFile?.getFullText()}
       />
 
+      {filename ? <CodeToolbar filename={filename} value={value} /> : null}
+
       {lineNumbers ? (
         <div
           className={className}
           style={{
             gridColumn: 1,
-            gridRow: 1,
+            gridRow: filename ? 2 : 1,
             width: '6ch',
             fontSize: 14,
             lineHeight: '20px',
@@ -135,7 +139,11 @@ export function CodeView({
         </div>
       ) : null}
 
-      <Pre className={className}>
+      <Pre
+        isNestedInEditor={isNestedInEditor}
+        className={className}
+        style={{ gridRow: filename ? 2 : 1, padding }}
+      >
         {diagnostics
           ? diagnostics.map((diagnostic) => {
               const start = diagnostic.getStart()
@@ -150,8 +158,8 @@ export function CodeView({
                   key={start}
                   style={{
                     position: 'absolute',
-                    top,
-                    left: `calc(${column - 1} * 1ch)`,
+                    top: `calc(${top}px + ${padding})`,
+                    left: `calc(${column - 1} * 1ch + ${padding})`,
                     width: `calc(${width} * 1ch)`,
                     height,
                     backgroundImage: `url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%206%203'%20enable-background%3D'new%200%200%206%203'%20height%3D'3'%20width%3D'6'%3E%3Cg%20fill%3D'%23f14c4c'%3E%3Cpolygon%20points%3D'5.5%2C0%202.5%2C3%201.1%2C3%204.1%2C0'%2F%3E%3Cpolygon%20points%3D'4%2C0%206%2C2%206%2C0.6%205.4%2C0'%2F%3E%3Cpolygon%20points%3D'0%2C2%201%2C3%202.4%2C3%200%2C0.6'%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E")`,
@@ -176,8 +184,8 @@ export function CodeView({
               key={index}
               isQuickInfoOpen={isQuickInfoOpen}
               style={{
-                top: bounds.top,
-                left: `calc(${bounds.left} * 1ch)`,
+                top: `calc(${bounds.top}px + ${padding})`,
+                left: `calc(${bounds.left} * 1ch + ${padding})`,
                 width: `calc(${bounds.width} * 1ch)`,
                 height: bounds.height,
               }}
