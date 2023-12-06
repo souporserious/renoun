@@ -66,10 +66,12 @@ export function createSourceFiles<Type>(
   }
 
   const allModulesKeysByPathname = Object.fromEntries(
-    Object.keys(allModules).map((key) => {
-      const pathname = filePathToUrl(key, baseDirectory)
-      return [pathname, key]
-    })
+    Object.keys(allModules)
+      .sort()
+      .map((key) => {
+        const pathname = filePathToUrl(key, baseDirectory)
+        return [pathname, key]
+      })
   )
 
   /**
