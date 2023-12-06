@@ -78,6 +78,12 @@ export function CodeView({
             display: 'grid',
             gridTemplateColumns: 'auto 1fr',
             position: 'relative',
+            padding: '1rem',
+            margin: '0 0 1.6rem',
+            borderRadius: 5,
+            border: `1px solid ${theme.colors['contrastBorder']}`,
+            backgroundColor: theme.colors['editor.background'],
+            color: theme.colors['editor.foreground'],
           }}
           {...props}
         />
@@ -129,10 +135,7 @@ export function CodeView({
         </div>
       ) : null}
 
-      <Pre
-        className={className}
-        style={{ color: theme.colors['editor.foreground'] }}
-      >
+      <Pre className={className}>
         {diagnostics
           ? diagnostics.map((diagnostic) => {
               const start = diagnostic.getStart()
