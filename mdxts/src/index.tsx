@@ -232,8 +232,8 @@ export function createSourceFiles<Type>(
 }
 
 /** Converts a file system path to a URL-friendly pathname. */
-function filePathToUrlPathname(filepath: string, baseDirectory?: string) {
-  const parsedFilepath = filepath
+function filePathToUrlPathname(filePath: string, baseDirectory?: string) {
+  const parsedFilePath = filePath
     // Remove leading separator "./"
     .replace(/^\.\//, '')
     // Remove leading sorting number "01."
@@ -253,7 +253,7 @@ function filePathToUrlPathname(filepath: string, baseDirectory?: string) {
     .replace(/\/(readme|index)$/i, '')
 
   // Convert component names to kebab case for case-insensitive paths
-  const segments = parsedFilepath.split('/')
+  const segments = parsedFilePath.split('/')
 
   return segments
     .map((segment) => (/[A-Z]/.test(segment[0]) ? kebabCase(segment) : segment))
