@@ -126,14 +126,13 @@ export function createSourceFiles<Type>(
       metadata,
       ...exports
     } = await allModules[moduleKey]
-    const filename = allModulesKeysByPathname[pathname]
-      .split('/')
-      .pop()
-      // Remove file extensions
-      .replace(/\.[^/.]+$/, '')
+    const filename = cleanFilename(
+      allModulesKeysByPathname[pathname].split('/').pop()
+    )
     const filenameTitle = isPascalCase(filename)
       ? filename
       : parseTitle(filename)
+
     return {
       Content,
       title: metadata?.title || headings?.[0]?.text || filenameTitle,
@@ -240,8 +239,6 @@ function filePathToUrlPathname(filepath: string, baseDirectory?: string) {
     .replace(baseDirectory ? `${baseDirectory}/` : '', '')
     // Remove trailing "/README" or "/index"
     .replace(/\/(README|index)$/, '')
-    // Remove working directory
-    .replace(process.cwd(), '')
 
   // Convert component names to kebab case for case-insensitive paths
   const segments = parsedFilepath.split('/')
@@ -250,6 +247,17 @@ function filePathToUrlPathname(filepath: string, baseDirectory?: string) {
     .map((segment) => (/[A-Z]/.test(segment[0]) ? kebabCase(segment) : segment))
     .filter(Boolean)
     .join('/')
+}
+
+/** Cleans a filename for use as a slug or title. */
+function cleanFilename(filename: string) {
+  return (
+    filename
+      // Remove leading sorting number
+      .replace(/^\d+\./, '')
+      // Remove file extensions
+      .replace(/\.[^/.]+$/, '')
+  )
 }
 
 /** Determines if a string is in PascalCase. */
