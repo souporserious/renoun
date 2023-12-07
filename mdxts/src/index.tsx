@@ -2,6 +2,7 @@ import parseTitle from 'title'
 import type { ComponentType } from 'react'
 import { kebabCase } from 'case-anything'
 import { resolve } from 'node:path'
+import type { Directory } from 'ts-morph'
 import type { getPropTypes } from '@tsxmod/utils'
 import type { CodeBlocks } from './remark/add-code-blocks'
 import type { Headings } from './remark/add-headings'
@@ -76,14 +77,45 @@ export function createDataSource<Type>(
 
   /** Merge in TypeSript source file paths and check if there's a matching MDX file */
   if (sourceFiles) {
+    const indexFiles = new Map<Directory, Set<any>>()
     /** Turn paths back into original format from glob pattern. */
-    const sourceFilePaths = sourceFiles.map((sourceFile) => {
-      const filePath = sourceFile.getFilePath()
-      return filePath.replace(
-        resolve(process.cwd(), baseDirectory),
-        baseDirectory
+    const sourceFilePaths = sourceFiles
+      .filter(
+        /**
+         * Filter out "private" modules not re-exported from the index file if present.
+         * TODO: this should add a private field on the module object instead of filtering so the user can control.
+         */
+        (sourceFile) => {
+          const directory = sourceFile.getDirectory()
+          let exportedModules: Set<any> = indexFiles.get(directory)
+
+          if (exportedModules === undefined) {
+            exportedModules = new Set()
+            const indexFile =
+              directory.addSourceFileAtPathIfExists('index.ts') ||
+              directory.addSourceFileAtPathIfExists('index.tsx')
+
+            if (indexFile) {
+              indexFile.getExportedDeclarations().forEach((declarations) => {
+                for (const declaration of declarations) {
+                  exportedModules.add(declaration.getSourceFile().getFilePath())
+                }
+              })
+            }
+
+            indexFiles.set(directory, exportedModules)
+          }
+
+          return exportedModules.has(sourceFile.getFilePath())
+        }
       )
-    })
+      .map((sourceFile) => {
+        const filePath = sourceFile.getFilePath()
+        return filePath.replace(
+          resolve(process.cwd(), baseDirectory),
+          baseDirectory
+        )
+      })
     allModules = {
       ...allModules,
       ...Object.fromEntries(
