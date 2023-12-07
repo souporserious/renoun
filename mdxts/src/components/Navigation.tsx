@@ -92,7 +92,7 @@ export async function Navigation({
   /** A collection of source files returned from `createDataSource`. */
   source: ReturnType<typeof createDataSource>
 
-  /** The base directory to render. */
+  /** The base directory to render the navigation from. */
   baseDirectory?: string
 
   /** A function that renders a list of navigation items. */
