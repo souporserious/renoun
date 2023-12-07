@@ -126,6 +126,8 @@ export function CodeView({
             gridColumn: 1,
             gridRow: filename ? 2 : 1,
             width: '6ch',
+            paddingTop: paddingVertical,
+            paddingBottom: paddingVertical,
             fontSize: 14,
             lineHeight: '20px',
             paddingRight: '2ch',
@@ -259,42 +261,42 @@ export function CodeView({
             {lineIndex === tokens.length - 1 ? null : '\n'}
           </Fragment>
         ))}
+
+        {highlight
+          ? highlight
+              .split(',')
+              .map((range) => {
+                const [start, end] = range.split('-')
+                const parsedStart = parseInt(start, 10)
+                const parsedEnd = end ? parseInt(end, 10) : parsedStart
+                return {
+                  start: parsedStart,
+                  end: parsedEnd,
+                }
+              })
+              .map((range, index) => {
+                const start = range.start - 1
+                const end = range.end ? range.end - 1 : start
+                const top = start * lineHeight
+                const height = (end - start + 1) * lineHeight
+
+                return (
+                  <div
+                    key={index}
+                    style={{
+                      position: 'absolute',
+                      top: `calc(${top}px + ${paddingVertical})`,
+                      left: 0,
+                      width: '100%',
+                      height,
+                      backgroundColor: '#87add726',
+                      pointerEvents: 'none',
+                    }}
+                  />
+                )
+              })
+          : null}
       </Pre>
-
-      {highlight
-        ? highlight
-            .split(',')
-            .map((range) => {
-              const [start, end] = range.split('-')
-              const parsedStart = parseInt(start, 10)
-              const parsedEnd = end ? parseInt(end, 10) : parsedStart
-              return {
-                start: parsedStart,
-                end: parsedEnd,
-              }
-            })
-            .map((range, index) => {
-              const start = range.start - 1
-              const end = range.end ? range.end - 1 : start
-              const top = start * lineHeight
-              const height = (end - start + 1) * lineHeight
-
-              return (
-                <div
-                  key={index}
-                  style={{
-                    position: 'absolute',
-                    top,
-                    left: 0,
-                    width: '100%',
-                    height,
-                    backgroundColor: '#87add726',
-                    pointerEvents: 'none',
-                  }}
-                />
-              )
-            })
-        : null}
     </Container>
   )
 }
