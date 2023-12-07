@@ -50,9 +50,9 @@ export function createDataSource<Type>(
   pattern: string,
   options: { baseDirectory?: string } = {}
 ) {
-  const allModules = pattern as unknown as Record<
+  let allModules = pattern as unknown as Record<
     string,
-    Promise<{ default: any } & Omit<Module, 'Component'> & Type>
+    Promise<{ default: any } & Record<string, any>>
   >
 
   if (typeof allModules === 'string') {
@@ -66,6 +66,48 @@ export function createDataSource<Type>(
     baseDirectory: string
   }
 
+  /**
+   * Analyze TypeScript source files.
+   * TODO: compile MDX and analyze AST in ts-morph.
+   */
+  const sourceFiles = /ts(x)?/.test(globPattern)
+    ? project.addSourceFilesAtPaths(globPattern)
+    : null
+
+  /** Merge in TypeSript source file paths and check if there's a matching MDX file */
+  if (sourceFiles) {
+    /** Turn paths back into original format from glob pattern. */
+    const sourceFilePaths = sourceFiles.map((sourceFile) => {
+      const filePath = sourceFile.getFilePath()
+      return filePath.replace(
+        resolve(process.cwd(), baseDirectory),
+        baseDirectory
+      )
+    })
+    allModules = {
+      ...allModules,
+      ...Object.fromEntries(
+        sourceFilePaths.map((filePath) => {
+          const mdxPath = resolve(
+            process.cwd(),
+            filePath.replace(/\.tsx?$/, '.mdx')
+          )
+          const moduleKey = Object.keys(allModules).find((key) => {
+            const resolvedKey = resolve(process.cwd(), key)
+            return resolvedKey === mdxPath
+          })
+          const mdxModule = allModules[moduleKey]
+
+          if (mdxModule) {
+            return [filePath, mdxModule]
+          }
+
+          return [filePath, Promise.resolve({ default: null })]
+        })
+      ),
+    }
+  }
+
   const allModulesKeysByPathname = Object.fromEntries(
     Object.keys(allModules)
       .sort()
@@ -74,14 +116,6 @@ export function createDataSource<Type>(
         return [pathname, key]
       })
   )
-
-  /**
-   * Analyze TypeScript source files.
-   * TODO: compile MDX and analyze AST in ts-morph.
-   */
-  const sourceFiles = /ts(x)?/.test(globPattern)
-    ? project.addSourceFilesAtPaths(globPattern)
-    : null
 
   /** Parses and attaches metadata to a module. */
   async function parseModule(pathname?: string) {
@@ -121,12 +155,6 @@ export function createDataSource<Type>(
           }
         )
       : null
-    const {
-      default: Content,
-      headings,
-      metadata,
-      ...exports
-    } = await allModules[moduleKey]
     const filename = cleanFilename(
       allModulesKeysByPathname[pathname].split('/').pop()
     )
@@ -137,6 +165,12 @@ export function createDataSource<Type>(
       : isPascalCase(filename)
         ? filename
         : parseTitle(filename)
+    const {
+      default: Content,
+      headings,
+      metadata,
+      ...exports
+    } = await allModules[moduleKey]
 
     return {
       Content,
@@ -208,11 +242,14 @@ export function createDataSource<Type>(
             : true
         }
       )
-      const allModules = await Promise.all(
+      const filteredModules = await Promise.all(
         filteredKeys.map((pathname) => parseModule(pathname))
       )
       return Object.fromEntries(
-        filteredKeys.map((pathname, index) => [pathname, allModules[index]])
+        filteredKeys.map((pathname, index) => [
+          pathname,
+          filteredModules[index],
+        ])
       )
     },
     async get(pathname: string | string[]) {

@@ -1,4 +1,5 @@
 'use client'
+import React from 'react'
 import { useCounter } from './useCounter'
 
 export default function Counter({ initialCount }: { initialCount: number }) {
