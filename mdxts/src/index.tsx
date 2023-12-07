@@ -2,7 +2,8 @@ import parseTitle from 'title'
 import type { ComponentType } from 'react'
 import { kebabCase } from 'case-anything'
 import { resolve } from 'node:path'
-import type { Directory } from 'ts-morph'
+import { Node } from 'ts-morph'
+import type { Directory, Symbol, ts } from 'ts-morph'
 import type { getPropTypes } from '@tsxmod/utils'
 import type { CodeBlocks } from './remark/add-code-blocks'
 import type { Headings } from './remark/add-headings'
@@ -106,11 +107,25 @@ export function createDataSource<Type>(
             indexFiles.set(directory, exportedModules)
           }
 
+          /** Check if there are any exported declarations that have a private JSDoc tag. */
+          sourceFile.getExportedDeclarations().forEach((declarations) => {
+            for (const declaration of declarations) {
+              const symbol = declaration.getSymbol()
+              const implementation = getImplementation(symbol)
+              const isPrivate = hasPrivateTag(implementation)
+
+              if (isPrivate) {
+                exportedModules.delete(sourceFile.getFilePath())
+              }
+            }
+          })
+
           return exportedModules.has(sourceFile.getFilePath())
         }
       )
       .map((sourceFile) => {
         const filePath = sourceFile.getFilePath()
+
         return filePath.replace(
           resolve(process.cwd(), baseDirectory),
           baseDirectory
@@ -345,4 +360,20 @@ function cleanFilename(filename: string) {
 function isPascalCase(str: string) {
   const regex = /^[A-Z][a-zA-Z0-9]*$/
   return regex.test(str)
+}
+
+/** Determines if a symbol is private or not based on the JSDoc tag. */
+function hasPrivateTag(node: Node<ts.Node>) {
+  if (Node.isJSDocable(node)) {
+    const jsDocTags = node.getJsDocs().flatMap((doc) => doc.getTags())
+    return jsDocTags.some((tag) => tag.getTagName() === 'private')
+  }
+  return null
+}
+
+/** Returns the implementation of a symbol. */
+function getImplementation(symbol: Symbol) {
+  const aliasedSymbol = symbol.getAliasedSymbol() || symbol
+  const declarations = aliasedSymbol.getDeclarations()
+  return declarations.length > 0 ? declarations[0] : null
 }
