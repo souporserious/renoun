@@ -74,7 +74,6 @@ export function Sidebar() {
         <h3>Components</h3>
         <Navigation
           source={allComponents}
-          baseDirectory="components"
           renderList={(props) => (
             <ul
               style={{

@@ -85,15 +85,11 @@ function renderNavigation(
 /** Renders a navigation tree from a collection of modules. */
 export async function Navigation({
   source,
-  baseDirectory,
   renderList,
   renderItem,
 }: {
   /** A collection of source files returned from `createDataSource`. */
   source: ReturnType<typeof createDataSource>
-
-  /** The base directory to render the navigation from. */
-  baseDirectory?: string
 
   /** A function that renders a list of navigation items. */
   renderList: (list: { children: JSX.Element[]; order: number }) => JSX.Element
@@ -104,13 +100,5 @@ export async function Navigation({
   ) => JSX.Element
 }) {
   const allSourceFiles = await source.all()
-  const parsedSourceFiles = baseDirectory
-    ? Object.fromEntries(
-        Object.entries(allSourceFiles).map(([pathname, module]) => [
-          pathname.replace(baseDirectory ? `${baseDirectory}/` : '', ''),
-          module,
-        ])
-      )
-    : allSourceFiles
-  return renderNavigation(parsedSourceFiles, renderList, renderItem)
+  return renderNavigation(allSourceFiles, renderList, renderItem)
 }

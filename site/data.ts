@@ -5,5 +5,6 @@ export const allDocs = createDataSource('docs/**/*.mdx', {
 })
 
 export const allComponents = createDataSource('../mdxts/src/components/*.tsx', {
-  baseDirectory: '../mdxts/src',
+  baseDirectory: '../mdxts/src/components',
+  basePath: 'components',
 })

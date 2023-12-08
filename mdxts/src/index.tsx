@@ -1,7 +1,7 @@
 import parseTitle from 'title'
 import type { ComponentType } from 'react'
 import { kebabCase } from 'case-anything'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { Node } from 'ts-morph'
 import type { Directory, Symbol, ts } from 'ts-morph'
 import type { getPropTypes } from '@tsxmod/utils'
@@ -64,8 +64,10 @@ export function createDataSource<Type>(
   }
 
   const globPattern = options as unknown as string
-  const { baseDirectory = '' } = (arguments[2] || {}) as unknown as {
+  const { baseDirectory = '', basePath = '' } = (arguments[2] ||
+    {}) as unknown as {
     baseDirectory: string
+    basePath: string
   }
 
   /**
@@ -92,6 +94,7 @@ export function createDataSource<Type>(
 
           if (exportedModules === undefined) {
             exportedModules = new Set()
+
             const indexFile =
               directory.addSourceFileAtPathIfExists('index.ts') ||
               directory.addSourceFileAtPathIfExists('index.tsx')
@@ -222,7 +225,7 @@ export function createDataSource<Type>(
     return {
       Content,
       title: metadata?.title || headings?.[0]?.text || filenameTitle,
-      pathname: `/${pathname}`,
+      pathname: `/${join(basePath, pathname)}`,
       headings,
       metadata,
       types: propTypes,
@@ -277,6 +280,7 @@ export function createDataSource<Type>(
   }
 
   return {
+    /** Returns all modules. */
     async all() {
       /** Filter out example modules */
       const filteredKeys = Object.keys(allModulesKeysByPathname).filter(
@@ -299,10 +303,14 @@ export function createDataSource<Type>(
         ])
       )
     },
+
+    /** Returns a module by pathname including metadata, examples, and previous/next modules. */
     async get(pathname: string | string[]) {
       const data = await getPathData(pathname)
       return data
     },
+
+    /** Returns paths for all modules calculated from file system paths. */
     paths(): string[][] {
       return Object.keys(allModulesKeysByPathname).map((pathname) =>
         pathname

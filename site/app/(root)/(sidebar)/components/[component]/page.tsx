@@ -6,9 +6,7 @@ import theme from 'theme.json'
 export const dynamic = 'force-static'
 
 export function generateStaticParams() {
-  return Array.from(
-    new Set(allComponents.paths().map((pathname) => pathname[1]))
-  )
+  return allComponents.paths()
 }
 
 export default async function Page({
@@ -16,7 +14,7 @@ export default async function Page({
 }: {
   params: { component: string }
 }) {
-  const component = await allComponents.get(`components/${params.component}`)
+  const component = await allComponents.get(params.component)
 
   if (component === null) {
     return notFound()
