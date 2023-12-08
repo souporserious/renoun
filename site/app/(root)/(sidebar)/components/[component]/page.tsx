@@ -4,7 +4,9 @@ import { allComponents } from 'data'
 export const dynamic = 'force-static'
 
 export function generateStaticParams() {
-  return allComponents.paths()
+  return allComponents
+    .paths()
+    .map((pathname) => ({ component: pathname.at(0) }))
 }
 
 export default async function Page({
