@@ -43,14 +43,20 @@ export type Module = {
  *
  * @example
  * export const allDocs = createDataSource('./docs/*.mdx', { baseDirectory: 'docs' })
- * "docs/01.getting-started.mdx" -> "/getting-started"
- *
- * export const allComponents = createDataSource('./components/**\/index.tsx')
- * "components/01.Button/index.tsx" -> "/components/button"
+ * export const allComponents = createDataSource('./components/**\/index.ts')
  */
 export function createDataSource<Type>(
+  /** A glob pattern to match files. */
   pattern: string,
-  options: { baseDirectory?: string } = {}
+
+  /** Options for configuring the data source. */
+  options: {
+    /** The base directory to use for calculating source paths. */
+    baseDirectory?: string
+
+    /** The base path to use for calculating navigation paths. */
+    basePath?: string
+  } = {}
 ) {
   let allModules = pattern as unknown as Record<
     string,
