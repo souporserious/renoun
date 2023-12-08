@@ -2,6 +2,7 @@ import { kebabCase } from 'case-anything'
 import type { CallExpression, SourceFile } from 'ts-morph'
 import { Node } from 'ts-morph'
 import { getPropTypes } from '@tsxmod/utils'
+import { getSourcePath } from './get-source-path'
 
 /** Gets all exported prop types from a source file. */
 export function getExportedPropTypes(sourceFile: SourceFile) {
@@ -13,15 +14,12 @@ export function getExportedPropTypes(sourceFile: SourceFile) {
 function getReactDocs(name, declaration) {
   const reactFunctionDeclaration = getReactFunctionDeclaration(declaration)
   if (reactFunctionDeclaration) {
-    const path = declaration.getSourceFile().getFilePath()
+    const filePath = declaration.getSourceFile().getFilePath()
     return {
       name,
       slug: kebabCase(name),
       props: getPropTypes(reactFunctionDeclaration),
-      path:
-        process.env.NODE_ENV === 'development'
-          ? path
-          : path.replace(process.cwd(), ''),
+      sourcePath: getSourcePath(filePath),
     }
   }
   return null

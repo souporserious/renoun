@@ -10,6 +10,7 @@ import type { Headings } from './remark/add-headings'
 import { project } from './components/project'
 import { getExportedPropTypes } from './utils/get-exported-prop-types'
 import { getExamplesFromDirectory } from './utils/get-examples'
+import { getSourcePath } from './utils/get-source-path'
 
 export type Module = {
   Content: ComponentType
@@ -18,12 +19,13 @@ export type Module = {
   headings: Headings
   codeBlocks: CodeBlocks
   pathname: string
+  sourcePath: string
   slug: string
   types:
     | {
         name: string
         slug: string
-        path: string
+        sourcePath: string
         props: ReturnType<typeof getPropTypes>
       }[]
     | null
@@ -31,6 +33,7 @@ export type Module = {
     | {
         name: string
         slug: string
+        sourcePath: string
         pathname: string
         module: Promise<Record<string, any>>
       }[]
@@ -207,6 +210,7 @@ export function createDataSource<Type>(
               pathname,
               module,
               slug: kebabCase(name),
+              sourcePath: getSourcePath(sourceFile.getFilePath()),
             }
           }
         )
@@ -236,6 +240,7 @@ export function createDataSource<Type>(
       metadata,
       types: propTypes,
       examples,
+      sourcePath: getSourcePath(resolve(process.cwd(), moduleKey)),
       ...exports,
     } as Module & Type
   }

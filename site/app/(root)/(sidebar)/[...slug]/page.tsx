@@ -14,7 +14,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
     return notFound()
   }
 
-  const { Content, headings } = doc
+  const { Content, headings, sourcePath } = doc
 
   return (
     <>
@@ -26,6 +26,16 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
         }}
       >
         <div>
+          {sourcePath ? (
+            <a
+              href={sourcePath}
+              target="_blank"
+              rel="noreferrer"
+              style={{ fontSize: '0.8rem' }}
+            >
+              View Source
+            </a>
+          ) : null}
           <Content />
         </div>
         <nav>

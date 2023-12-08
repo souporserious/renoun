@@ -20,7 +20,7 @@ export default async function Page({
     return notFound()
   }
 
-  const { Content, headings, types } = component
+  const { Content, headings, types, sourcePath } = component
 
   return (
     <>
@@ -32,6 +32,11 @@ export default async function Page({
         }}
       >
         <div>
+          {sourcePath ? (
+            <a href={sourcePath} target="_blank" rel="noreferrer">
+              View Source
+            </a>
+          ) : null}
           {Content ? <Content /> : null}
           {types?.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -48,10 +53,25 @@ export default async function Page({
                       gap: 16,
                     }}
                   >
-                    <h3>{type.name}</h3>
-                    {/* {doc.path && (
-                    <a href={getSourceLink({ path: doc.path })}>View Source</a>
-                  )} */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'baseline',
+                        gap: '0.5rem',
+                      }}
+                    >
+                      <h3 style={{ margin: 0 }}>{type.name}</h3>
+                      {type.sourcePath && (
+                        <a
+                          href={type.sourcePath}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ fontSize: '0.8rem' }}
+                        >
+                          View Source
+                        </a>
+                      )}
+                    </div>
                     {type.props?.map((type) => (
                       <div
                         key={type.name}
