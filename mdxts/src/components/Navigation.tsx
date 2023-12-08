@@ -29,6 +29,12 @@ function createTreeFromSourceFiles(
 
     for (let index = 0; index < parts.length; index++) {
       const part = parts[index]
+
+      /** Don't include the readme or index files in the navigation since they relate to the directory. */
+      if (/(readme|index)$/i.test(part)) {
+        break
+      }
+
       pathSegments.push(part)
 
       let existingNode = currentNode.find((node) => node.part === part)

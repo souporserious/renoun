@@ -256,6 +256,12 @@ export function createDataSource<Type>(
       const siblingPathname = Object.keys(allModulesKeysByPathname)[
         siblingIndex
       ]
+
+      /** Skip readme and index files since they relate to the directory. */
+      if (/(readme|index)$/i.test(siblingPathname)) {
+        return undefined
+      }
+
       if (siblingPathname === null) {
         return getSiblingPathname(siblingIndex, direction)
       }
