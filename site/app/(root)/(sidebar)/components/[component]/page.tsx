@@ -1,5 +1,7 @@
 import { notFound } from 'next/navigation'
+import { Code } from 'mdxts/components'
 import { allComponents } from 'data'
+import theme from 'theme.json'
 
 export const dynamic = 'force-static'
 
@@ -33,7 +35,12 @@ export default async function Page({
       >
         <div>
           {sourcePath ? (
-            <a href={sourcePath} target="_blank" rel="noreferrer">
+            <a
+              href={sourcePath}
+              target="_blank"
+              rel="noreferrer"
+              style={{ fontSize: '0.8rem' }}
+            >
               View Source
             </a>
           ) : null}
@@ -99,19 +106,27 @@ export default async function Page({
                           >
                             {type.name} {type.required && '*'}
                           </h4>
-                          <code style={{ fontSize: '0.8rem' }}>
-                            {type.type}{' '}
-                            {type.defaultValue && `= ${type.defaultValue}`}
-                          </code>
-                          {/* TODO: fix deployment error not finding highlighter source */}
-                          {/* <Code
-                            inline
-                            value={type.type}
-                            language="typescript"
-                            theme={theme as any}
-                            paddingHorizontal="0.5rem"
-                            paddingVertical="0.2rem"
-                          /> */}
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.5rem',
+                            }}
+                          >
+                            <Code
+                              inline
+                              value={type.type}
+                              language="typescript"
+                              theme={theme as any}
+                              paddingHorizontal="0.5rem"
+                              paddingVertical="0.2rem"
+                            />
+                            {type.defaultValue ? (
+                              <span style={{ fontSize: '0.8rem' }}>
+                                = {type.defaultValue}
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
                         {type.description && (
                           <p style={{ margin: 0 }}>{type.description}</p>
