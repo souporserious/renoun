@@ -329,13 +329,22 @@ export function createDataSource<Type>(
 
     /** Returns paths for all modules calculated from file system paths. */
     paths(): string[][] {
-      return Object.keys(allModulesKeysByPathname).map((pathname) =>
-        pathname
-          // Split pathname into an array
-          .split('/')
-          // Remove empty strings
-          .filter(Boolean)
-      )
+      return Object.keys(allModulesKeysByPathname)
+        .filter((pathname) => {
+          /** Skip readme and index files since they relate to the directory. */
+          if (/(readme|index)$/i.test(pathname)) {
+            return false
+          }
+
+          return true
+        })
+        .map((pathname) =>
+          pathname
+            // Split pathname into an array
+            .split('/')
+            // Remove empty strings
+            .filter(Boolean)
+        )
     },
   }
 }
