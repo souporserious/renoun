@@ -2,9 +2,9 @@ import parseTitle from 'title'
 import Slugger from 'github-slugger'
 import type { ComponentType } from 'react'
 import { kebabCase } from 'case-anything'
-import { join, resolve } from 'node:path'
-import { Node } from 'ts-morph'
-import type { Directory, Symbol, ts } from 'ts-morph'
+import { basename, join, resolve } from 'node:path'
+import { Node, SyntaxKind } from 'ts-morph'
+import type { Directory, ExportedDeclarations, Symbol, ts } from 'ts-morph'
 import type { getPropTypes } from '@tsxmod/utils'
 import type { CodeBlocks } from './remark/add-code-blocks'
 import type { Headings } from './remark/add-headings'
@@ -18,6 +18,7 @@ const typeSlugs = new Slugger()
 export type Module = {
   Content: ComponentType
   title: string
+  description: string | null
   summary: string
   headings: Headings
   codeBlocks: CodeBlocks
@@ -197,6 +198,24 @@ export function createDataSource<Type>(
         pathname
       )
     })
+    /**
+     * If there is a source file resolve the "main" export which will either be the default export
+     * or an export with the exact same name as the filename.
+     */
+    const defaultExportSymbol = sourceFile?.getDefaultExportSymbol()
+    const mainExportDeclaration = (
+      sourceFile
+        ? Array.from(sourceFile.getExportedDeclarations())
+            .find(([name, [declaration]]) => {
+              return (
+                defaultExportSymbol === declaration.getSymbol() ||
+                name === basename(cleanFilename(moduleKey))
+              )
+            })
+            .at(1) // Get the declaration
+            .at(0) // Get the first node
+        : null
+    ) as ExportedDeclarations | null
     const propTypes = sourceFile ? getExportedPropTypes(sourceFile) : null
     const examples = sourceFile
       ? getExamplesFromDirectory(sourceFile.getDirectory()).map(
@@ -257,7 +276,10 @@ export function createDataSource<Type>(
 
     return {
       Content,
-      title: metadata?.title || headings?.[0]?.text || filenameTitle,
+      title: metadata?.title || getHeadingTitle(headings) || filenameTitle,
+      description:
+        metadata?.description ||
+        getDescriptionFromDeclaration(mainExportDeclaration),
       pathname: `/${join(basePath, pathname)}`,
       headings: resolvedHeadings,
       metadata,
@@ -433,4 +455,35 @@ function getImplementation(symbol: Symbol) {
   const aliasedSymbol = symbol.getAliasedSymbol() || symbol
   const declarations = aliasedSymbol.getDeclarations()
   return declarations.length > 0 ? declarations[0] : null
+}
+
+/** Returns the first heading title from top-level heading if present. */
+function getHeadingTitle(headings: Headings) {
+  const heading = headings?.at(0)
+  return heading?.depth === 1 ? heading.text : null
+}
+
+/** Returns the first JSDoc as a description from a variable, function, or class declaration. */
+function getDescriptionFromDeclaration(
+  declaration: ExportedDeclarations | null
+) {
+  if (declaration === null) {
+    return null
+  }
+
+  let jsDocs
+
+  if (Node.isFunctionDeclaration(declaration)) {
+    const implementation = declaration.getImplementation()
+    jsDocs = implementation
+      ? implementation.getJsDocs()
+      : declaration.getJsDocs()
+  } else if (Node.isVariableDeclaration(declaration)) {
+    const variableStatement = declaration.getFirstAncestorByKind(
+      SyntaxKind.VariableStatement
+    )
+    jsDocs = variableStatement ? variableStatement.getJsDocs() : []
+  }
+
+  return jsDocs.length > 0 ? jsDocs[0].getDescription().trim() : null
 }

@@ -22,7 +22,7 @@ export default async function Page({
     return notFound()
   }
 
-  const { Content, headings, types, sourcePath } = component
+  const { Content, title, description, headings, types, sourcePath } = component
 
   return (
     <>
@@ -44,7 +44,31 @@ export default async function Page({
               View Source
             </a>
           ) : null}
+
+          {title ? (
+            <h1
+              style={{
+                // @ts-expect-error
+                textWrap: 'balance',
+              }}
+            >
+              {title}
+            </h1>
+          ) : null}
+
+          {description ? (
+            <p
+              style={{
+                // @ts-expect-error
+                textWrap: 'pretty',
+              }}
+            >
+              {description}
+            </p>
+          ) : null}
+
           {Content ? <Content /> : null}
+
           {types?.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
               <h2 id="types">Types</h2>
