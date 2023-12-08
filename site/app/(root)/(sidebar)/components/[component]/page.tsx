@@ -47,7 +47,7 @@ export default async function Page({
           {Content ? <Content /> : null}
           {types?.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-              <h2>Props</h2>
+              <h2 id="types">Types</h2>
               <div
                 style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
               >

@@ -1,4 +1,5 @@
 import parseTitle from 'title'
+import Slugger from 'github-slugger'
 import type { ComponentType } from 'react'
 import { kebabCase } from 'case-anything'
 import { join, resolve } from 'node:path'
@@ -11,6 +12,8 @@ import { project } from './components/project'
 import { getExportedPropTypes } from './utils/get-exported-prop-types'
 import { getExamplesFromDirectory } from './utils/get-examples'
 import { getSourcePath } from './utils/get-source-path'
+
+const typeSlugs = new Slugger()
 
 export type Module = {
   Content: ComponentType
@@ -231,12 +234,32 @@ export function createDataSource<Type>(
       metadata,
       ...exports
     } = await allModules[moduleKey]
+    let resolvedHeadings = headings || []
+
+    /** Append component prop type links to headings data. */
+    if (propTypes?.length > 0) {
+      typeSlugs.reset()
+
+      resolvedHeadings = [
+        ...(headings || []),
+        {
+          text: 'Types',
+          id: 'types',
+          depth: 2,
+        },
+        ...propTypes.map((type) => ({
+          text: type.name,
+          id: typeSlugs.slug(type.name),
+          depth: 3,
+        })),
+      ]
+    }
 
     return {
       Content,
       title: metadata?.title || headings?.[0]?.text || filenameTitle,
       pathname: `/${join(basePath, pathname)}`,
-      headings,
+      headings: resolvedHeadings,
       metadata,
       types: propTypes,
       examples,
