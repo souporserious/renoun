@@ -166,6 +166,7 @@ export async function Code({
     <CodeView
       tokens={tokens}
       lineNumbers={lineNumbers}
+      value={finalValue}
       sourceFile={sourceFile}
       sourcePath={
         sourceFile ? getSourcePath(sourceFile.getFilePath()) : undefined
