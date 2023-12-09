@@ -70,37 +70,34 @@ export function Sidebar() {
         )}
       />
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-        <h3>Components</h3>
-        <Navigation
-          source={allComponents}
-          renderList={(props) => (
-            <ul
-              style={{
-                paddingLeft: props.order * 0.8 + 'rem',
-                listStyle: 'none',
-              }}
-            >
-              {props.children}
-            </ul>
-          )}
-          renderItem={(props) => (
-            <li
-              key={props.title}
-              style={{ color: props.children ? 'grey' : 'white' }}
-            >
-              {props.children ? (
-                <div style={{ padding: '0.25rem 0', cursor: 'default' }}>
-                  <Text>{props.title}</Text>
-                </div>
-              ) : (
-                <SidebarLink pathname={props.pathname} name={props.title} />
-              )}
-              {props.children}
-            </li>
-          )}
-        />
-      </div>
+      <Navigation
+        source={allComponents}
+        renderList={(props) => (
+          <ul
+            style={{
+              paddingLeft: props.order * 0.8 + 'rem',
+              listStyle: 'none',
+            }}
+          >
+            {props.children}
+          </ul>
+        )}
+        renderItem={(props) => (
+          <li
+            key={props.title}
+            style={{ color: props.children ? 'grey' : 'white' }}
+          >
+            {props.children ? (
+              <div style={{ padding: '0.25rem 0', cursor: 'default' }}>
+                <Text>{props.title}</Text>
+              </div>
+            ) : (
+              <SidebarLink pathname={props.pathname} name={props.title} />
+            )}
+            {props.children}
+          </li>
+        )}
+      />
     </aside>
   )
 }

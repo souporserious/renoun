@@ -26,16 +26,6 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
         }}
       >
         <div>
-          {sourcePath ? (
-            <a
-              href={sourcePath}
-              target="_blank"
-              rel="noreferrer"
-              style={{ fontSize: '0.8rem' }}
-            >
-              View Source
-            </a>
-          ) : null}
           <Content />
         </div>
         <nav>
@@ -65,6 +55,29 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
                 </li>
               ) : null
             )}
+            {sourcePath ? (
+              <>
+                <li style={{ margin: '0.5rem 0' }}>
+                  <hr
+                    style={{
+                      border: 'none',
+                      height: 1,
+                      backgroundColor: '#222',
+                    }}
+                  />
+                </li>
+                <li style={{ paddingLeft: '1rem' }}>
+                  <a
+                    href={sourcePath}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ fontSize: '0.8rem' }}
+                  >
+                    View Source
+                  </a>
+                </li>
+              </>
+            ) : null}
           </ul>
         </nav>
       </div>

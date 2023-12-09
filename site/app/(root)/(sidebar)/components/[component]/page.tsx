@@ -8,7 +8,7 @@ export const dynamic = 'force-static'
 export function generateStaticParams() {
   return allComponents
     .paths()
-    .map((pathname) => ({ component: pathname.at(0) }))
+    .map((pathname) => ({ component: pathname.at(1) }))
 }
 
 export default async function Page({
@@ -16,7 +16,7 @@ export default async function Page({
 }: {
   params: { component: string }
 }) {
-  const component = await allComponents.get(params.component)
+  const component = await allComponents.get(`components/${params.component}`)
 
   if (component === null) {
     return notFound()
@@ -34,17 +34,6 @@ export default async function Page({
         }}
       >
         <div>
-          {sourcePath ? (
-            <a
-              href={sourcePath}
-              target="_blank"
-              rel="noreferrer"
-              style={{ fontSize: '0.8rem' }}
-            >
-              View Source
-            </a>
-          ) : null}
-
           {title ? (
             <h1
               style={{
@@ -190,6 +179,29 @@ export default async function Page({
                 </li>
               ) : null
             )}
+            {sourcePath ? (
+              <>
+                <li style={{ margin: '0.5rem 0' }}>
+                  <hr
+                    style={{
+                      border: 'none',
+                      height: 1,
+                      backgroundColor: '#222',
+                    }}
+                  />
+                </li>
+                <li style={{ paddingLeft: '1rem' }}>
+                  <a
+                    href={sourcePath}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ fontSize: '0.8rem' }}
+                  >
+                    View Source
+                  </a>
+                </li>
+              </>
+            ) : null}
           </ul>
         </nav>
       </div>
