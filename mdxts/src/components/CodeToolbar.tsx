@@ -16,6 +16,9 @@ export function CodeToolbar({
   /** The path to the source file on disk in development and the git provider source in production. */
   sourcePath?: string
 }) {
+  const [state, setState] = React.useState<'idle' | 'not-allowed' | 'copied'>(
+    'idle'
+  )
   return (
     <div
       style={{
@@ -43,7 +46,6 @@ export function CodeToolbar({
           display: 'flex',
           alignItems: 'center',
           padding: '0 0.5rem',
-          gap: '0.25rem',
         }}
       >
         {sourcePath ? (
@@ -51,7 +53,10 @@ export function CodeToolbar({
             href={sourcePath}
             target="_blank"
             rel="noopener noreferrer"
-            style={{ display: 'flex', padding: '0.25rem' }}
+            title={`Open source file in ${
+              process.env.NODE_ENV === 'development' ? `VS Code` : `GitHub`
+            }`}
+            style={{ display: 'flex', padding: '0.35rem' }}
           >
             <svg
               width="16"
@@ -88,14 +93,26 @@ export function CodeToolbar({
           </a>
         ) : null}
         <button
+          title="Copy code to clipboard"
           onClick={() => {
-            navigator.clipboard.writeText(value)
+            navigator.clipboard
+              .writeText(value)
+              .then(() => {
+                setState('copied')
+              })
+              .catch(() => {
+                setState('not-allowed')
+              })
+              .finally(() => {
+                setTimeout(() => setState('idle'), 1000)
+              })
           }}
           style={{
             display: 'flex',
             backgroundColor: 'transparent',
-            padding: '0.25rem',
+            padding: '0.35rem',
             border: 0,
+            cursor: 'pointer',
           }}
         >
           <svg
@@ -117,6 +134,33 @@ export function CodeToolbar({
               strokeWidth="2"
               strokeLinecap="round"
             />
+            {state === 'not-allowed' ? (
+              <>
+                <ellipse
+                  cx="14.2718"
+                  cy="14.2718"
+                  rx="3.90612"
+                  ry="3.90612"
+                  fill="#D15252"
+                />
+                <rect
+                  x="12.04"
+                  y="13.7134"
+                  width="4.46414"
+                  height="1.11603"
+                  rx="0.558017"
+                  fill="white"
+                />
+              </>
+            ) : null}
+            {state === 'copied' ? (
+              <path
+                d="M11.7754 14.1599L13.0231 15.6046C13.1335 15.7324 13.3255 15.7495 13.4567 15.6432L17.3556 12.4858"
+                stroke="#3FC47C"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+            ) : null}
           </svg>
         </button>
       </div>
