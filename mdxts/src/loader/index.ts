@@ -2,9 +2,10 @@ import * as webpack from 'webpack'
 import { dirname, join } from 'node:path'
 import { glob } from 'fast-glob'
 import { Node, Project, SyntaxKind } from 'ts-morph'
+import matter from 'gray-matter'
 
 /**
- * Augments `createDataSource` calls with MDX file paths resolved from the provided file pattern.
+ * Exports front matter data for MDX files and augments `createDataSource` calls with MDX file paths resolved from the provided file pattern.
  * If a TypeScript file pattern is provided, the closest README.mdx or MDX file with the same name will be used.
  */
 export default async function loader(
@@ -14,6 +15,21 @@ export default async function loader(
   this.cacheable(true)
   const callback = this.async()
   const sourceString = source.toString()
+
+  if (this.resourcePath.endsWith('.mdx')) {
+    try {
+      const { data, content } = matter(sourceString)
+      const hasData = Object.keys(data).length > 0
+      const stringifiedData = hasData ? JSON.stringify(data) : 'null'
+      callback(
+        null,
+        `export const frontMatter = ${stringifiedData}\n\n${content}`
+      )
+    } catch (error) {
+      callback(error)
+    }
+    return
+  }
 
   if (
     /.*import\s\{\screateDataSource\s\}\sfrom\s['"]mdxts['"].*/.test(

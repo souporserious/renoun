@@ -20,6 +20,7 @@ export type Module = {
   title: string
   description: string | null
   summary: string
+  frontMatter?: Record<string, any>
   headings: Headings
   codeBlocks: CodeBlocks
   pathname: string
@@ -251,6 +252,7 @@ export function createDataSource<Type>(
       default: Content,
       headings,
       metadata,
+      frontMatter,
       ...exports
     } = await allModules[moduleKey]
     let resolvedHeadings = headings || []
@@ -274,6 +276,11 @@ export function createDataSource<Type>(
       ]
     }
 
+    /** Merge front matter data into metadata. */
+    if (frontMatter) {
+      Object.assign(frontMatter, metadata)
+    }
+
     return {
       Content,
       title: metadata?.title || getHeadingTitle(headings) || filenameTitle,
@@ -282,6 +289,7 @@ export function createDataSource<Type>(
         getDescriptionFromDeclaration(mainExportDeclaration),
       pathname: `/${join(basePath, pathname)}`,
       headings: resolvedHeadings,
+      frontMatter: frontMatter || null,
       metadata,
       types: propTypes,
       examples,
