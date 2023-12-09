@@ -1,7 +1,13 @@
 import * as React from 'react'
 import type { MDXComponents } from 'mdx/types'
 import { getMetadataFromClassName } from 'mdxts/utils'
-import { Code, Editor, Preview, PackageExports } from 'mdxts/components'
+import {
+  Code,
+  Editor,
+  Preview,
+  PackageExports,
+  PackageInstall,
+} from 'mdxts/components'
 import { GeistMono } from 'geist/font/mono'
 import theme from 'theme.json'
 
@@ -9,6 +15,7 @@ export function useMDXComponents() {
   return {
     Preview,
     PackageExports,
+    PackageInstall,
     Code: (props) => <Code theme={theme} {...props} />,
     Example: (props) => <div {...props} />,
     Playground: ({ codeBlock, ...props }) => {

@@ -1,3 +1,5 @@
+import theme from 'theme.json'
+
 # Getting Started
 
 <Summary>
@@ -13,11 +15,10 @@ MDXTS generates a graph of prose content, source code, type information, and exa
 
 The `mdxts` library can be installed using your favorite package manager:
 
-```bash
-npm install mdxts
-pnpm install mdxts
-yarn add mdxts
-```
+<PackageInstall
+  packages={['mdxts', 'next', 'react', 'react-dom', 'shiki', 'prettier']}
+  theme={theme}
+/>
 
 ## Package Exports
 
