@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { writeFile } from 'node:fs/promises'
 import CopyPlugin from 'copy-webpack-plugin'
 import remarkTypography from 'remark-typography'
-import createMDXPlugin from '@next/mdx'
+import createMdxPlugin from '@next/mdx'
 import { remarkPlugin } from '../remark'
 import { rehypePlugin } from '../rehype'
 import { renumberFilenames } from '../utils/renumber'
@@ -36,7 +36,7 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
         import('remark-gfm'),
         import('remark-unwrap-images'),
       ])
-      const withMDX = createMDXPlugin({
+      const withMdx = createMdxPlugin({
         options: {
           remarkPlugins: [
             // @ts-expect-error: Typings are incorrect
@@ -81,7 +81,7 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
         }
 
         config.module.rules.push({
-          test: /\.(?:js|tsx?)$/,
+          test: /\.(?:jsx?|tsx?|mdx?)$/,
           exclude: /node_modules/,
           use: ['mdxts/loader'],
         })
@@ -177,7 +177,7 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
         ],
       }
 
-      return withMDX(nextConfig)
+      return withMdx(nextConfig)
     }
   }
 }
