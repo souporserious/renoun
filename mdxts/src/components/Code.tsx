@@ -4,6 +4,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import type { SourceFile } from 'ts-morph'
 import { findRoot } from '@manypkg/find-root'
 import { format, resolveConfig } from 'prettier'
+import { getSourcePath } from '../utils/get-source-path'
 import { isJsxOnly } from '../utils/is-jsx-only'
 import { getHighlighter, type Theme } from './highlighter'
 import { project } from './project'
@@ -166,6 +167,9 @@ export async function Code({
       tokens={tokens}
       lineNumbers={lineNumbers}
       sourceFile={sourceFile}
+      sourcePath={
+        sourceFile ? getSourcePath(sourceFile.getFilePath()) : undefined
+      }
       filename={filename}
       shouldRenderFilename={Boolean(filenameProp)}
       highlighter={highlighter}

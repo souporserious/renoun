@@ -5,12 +5,16 @@ import React from 'react'
 export function CodeToolbar({
   filename,
   value,
+  sourcePath,
 }: {
   /** The filename of the code block. */
   filename?: string
 
   /** The value of the code block. */
   value: string
+
+  /** The path to the source file on disk in development and the git provider source in production. */
+  sourcePath?: string
 }) {
   return (
     <div
@@ -28,35 +32,94 @@ export function CodeToolbar({
         <div
           style={{
             fontSize: '0.8rem',
-            padding: '0.8rem 1rem',
+            padding: '0.5rem 1rem',
           }}
         >
           {filename.replace('mdxts/', '')}
         </div>
       ) : null}
-      <button
-        onClick={() => {
-          navigator.clipboard.writeText(value)
-        }}
+      <div
         style={{
-          backgroundColor: 'transparent',
-          padding: '0.8rem',
-          border: 0,
+          display: 'flex',
+          alignItems: 'center',
+          padding: '0 0.5rem',
+          gap: '0.25rem',
         }}
       >
-        <svg
-          aria-hidden="true"
-          focusable="false"
-          role="img"
-          viewBox="0 0 16 16"
-          width="12"
-          height="12"
-          fill="white"
+        {sourcePath ? (
+          <a
+            href={sourcePath}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ display: 'flex', padding: '0.25rem' }}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M18 8L22.5011 11.1556C23.1663 11.622 23.1663 12.378 22.5011 12.8444L18 16"
+                stroke="#7E7E7E"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+              <path
+                d="M7 8L1.59865 11.1556C0.800449 11.622 0.800449 12.378 1.59865 12.8444L7 16"
+                stroke="#7E7E7E"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+              <path
+                d="M10 19L15 5"
+                stroke="black"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+              <path
+                d="M10 19L15 5"
+                stroke="#7E7E7E"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+            </svg>
+          </a>
+        ) : null}
+        <button
+          onClick={() => {
+            navigator.clipboard.writeText(value)
+          }}
+          style={{
+            display: 'flex',
+            backgroundColor: 'transparent',
+            padding: '0.25rem',
+            border: 0,
+          }}
         >
-          <path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"></path>
-          <path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"></path>
-        </svg>
-      </button>
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M7.23913 16L4.56402 16C3.70023 16 3 15.2998 3 14.436V4.56402C3 3.70023 3.70023 3 4.56402 3L14.436 3C15.2998 3 16 3.70023 16 4.56402V7.52174"
+              stroke="#7E7E7E"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+            <path
+              d="M8 9.56402V19.436C8 20.2998 8.70023 21 9.56402 21L19.436 21C20.2998 21 21 20.2998 21 19.436V9.56402C21 8.70023 20.2998 8 19.436 8H9.56402C8.70023 8 8 8.70023 8 9.56402Z"
+              stroke="#7E7E7E"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
+      </div>
     </div>
   )
 }

@@ -54,6 +54,7 @@ export function CodeView({
   tokens,
   lineNumbers,
   sourceFile,
+  sourcePath,
   filename,
   highlight,
   highlighter,
@@ -76,6 +77,7 @@ export function CodeView({
   row?: [number, number]
   tokens: any
   sourceFile?: SourceFile
+  sourcePath?: string
   highlighter: any
   isJsxOnly?: boolean
   isNestedInEditor?: boolean
@@ -116,7 +118,11 @@ export function CodeView({
       />
 
       {shouldRenderFilename ? (
-        <CodeToolbar filename={filename} value={value} />
+        <CodeToolbar
+          filename={filename}
+          value={value}
+          sourcePath={sourcePath}
+        />
       ) : null}
 
       {lineNumbers ? (
