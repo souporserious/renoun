@@ -86,7 +86,7 @@ export default async function Page({
                           href={type.sourcePath}
                           target="_blank"
                           rel="noreferrer"
-                          style={{ fontSize: '0.8rem' }}
+                          style={{ fontSize: '0.875rem' }}
                         >
                           View Source
                         </a>
@@ -181,21 +181,21 @@ export default async function Page({
             )}
             {sourcePath ? (
               <>
-                <li style={{ margin: '0.5rem 0' }}>
+                <li style={{ margin: '0.8rem 0' }}>
                   <hr
                     style={{
                       border: 'none',
                       height: 1,
-                      backgroundColor: '#222',
+                      backgroundColor: '#333',
                     }}
                   />
                 </li>
-                <li style={{ paddingLeft: '1rem' }}>
+                <li style={{ paddingLeft: '0.5rem' }}>
                   <a
                     href={sourcePath}
                     target="_blank"
                     rel="noreferrer"
-                    style={{ fontSize: '0.8rem' }}
+                    style={{ fontSize: '0.875rem' }}
                   >
                     View Source
                   </a>
