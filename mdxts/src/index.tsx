@@ -320,9 +320,13 @@ export function createDataSource<Type>(
       const siblingPathname = Object.keys(allModulesKeysByPathname)[
         siblingIndex
       ]
+      const moduleKey = allModulesKeysByPathname[siblingPathname]
 
       /** Skip readme and index files since they relate to the directory. */
-      if (/(readme|index)$/i.test(siblingPathname)) {
+      if (
+        moduleKey &&
+        /(readme|index)$/i.test(basename(cleanFilename(moduleKey)))
+      ) {
         return undefined
       }
 
