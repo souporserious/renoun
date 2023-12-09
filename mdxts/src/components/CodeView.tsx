@@ -98,7 +98,7 @@ export function CodeView({
         <div
           style={{
             display: inline ? 'inline-grid' : 'grid',
-            gridTemplateColumns: 'auto 1fr',
+            gridTemplateColumns: 'auto minmax(0, 1fr)',
             position: 'relative',
             margin: inline ? undefined : '0 0 1.6rem',
             borderRadius: 5,
@@ -171,10 +171,10 @@ export function CodeView({
         className={className}
         style={{
           gridRow: filename ? 2 : 1,
-          paddingTop: paddingVertical,
-          paddingBottom: paddingVertical,
-          paddingLeft: paddingHorizontal,
-          paddingRight: paddingHorizontal,
+          // paddingTop: paddingVertical,
+          // paddingBottom: paddingVertical,
+          // paddingLeft: paddingHorizontal,
+          // paddingRight: paddingHorizontal,
         }}
       >
         {diagnostics
@@ -239,34 +239,44 @@ export function CodeView({
           )
         })}
 
-        {tokens.map((line, lineIndex) => (
-          <Fragment key={lineIndex}>
-            {line.map((token, tokenIndex) => {
-              if (
-                token.color.toLowerCase() === editorForeground ||
-                token.content.trim() === ''
-              ) {
-                return token.content
-              }
+        <div
+          style={{
+            paddingTop: paddingVertical,
+            paddingBottom: paddingVertical,
+            paddingLeft: paddingHorizontal,
+            paddingRight: paddingHorizontal,
+            overflow: 'auto',
+          }}
+        >
+          {tokens.map((line, lineIndex) => (
+            <Fragment key={lineIndex}>
+              {line.map((token, tokenIndex) => {
+                if (
+                  token.color.toLowerCase() === editorForeground ||
+                  token.content.trim() === ''
+                ) {
+                  return token.content
+                }
 
-              return (
-                <span
-                  key={tokenIndex}
-                  style={{
-                    ...token.fontStyle,
-                    color: token.color,
-                    textDecoration: token.hasError
-                      ? 'red wavy underline'
-                      : 'none',
-                  }}
-                >
-                  {token.content}
-                </span>
-              )
-            })}
-            {lineIndex === tokens.length - 1 ? null : '\n'}
-          </Fragment>
-        ))}
+                return (
+                  <span
+                    key={tokenIndex}
+                    style={{
+                      ...token.fontStyle,
+                      color: token.color,
+                      textDecoration: token.hasError
+                        ? 'red wavy underline'
+                        : 'none',
+                    }}
+                  >
+                    {token.content}
+                  </span>
+                )
+              })}
+              {lineIndex === tokens.length - 1 ? null : '\n'}
+            </Fragment>
+          ))}
+        </div>
 
         {highlight
           ? highlight

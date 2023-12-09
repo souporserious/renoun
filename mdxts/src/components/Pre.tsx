@@ -52,7 +52,6 @@ export function Pre({
         borderRadius: 4,
         pointerEvents: isNestedInEditor ? 'none' : undefined,
         position: 'relative',
-        overflow: 'auto',
         ...style,
       }}
     >

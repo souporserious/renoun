@@ -56,7 +56,7 @@ export function QuickInfo({
       style={{
         pointerEvents: 'auto',
         position: 'absolute',
-        translate: bounds.top < 40 ? '0px 20px' : '0px -100%',
+        translate: '0px -100%',
         fontSize: 13,
         lineHeight: '20px',
         maxWidth: 540,

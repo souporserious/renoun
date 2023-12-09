@@ -291,7 +291,7 @@ export function Editor({
         ref={scrollRef}
         style={{
           display: 'grid',
-          gridTemplateColumns: 'auto 1fr',
+          gridTemplateColumns: 'auto minmax(0, 1fr)',
           padding: '10px 0',
           // overflow: 'auto',
         }}
