@@ -59,10 +59,22 @@ export default async function Page({
           {Content ? <Content /> : null}
 
           {types?.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-              <h2 id="types">Types</h2>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '1.6rem',
+              }}
+            >
+              <h2 id="types" style={{ margin: 0 }}>
+                Types
+              </h2>
               <div
-                style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '2rem',
+                }}
               >
                 {types.map((type) => (
                   <div
@@ -70,7 +82,6 @@ export default async function Page({
                     style={{
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: 16,
                     }}
                   >
                     <div
@@ -92,13 +103,15 @@ export default async function Page({
                         </a>
                       )}
                     </div>
-                    {type.props?.map((type) => (
+                    {type.props?.map((propType, index) => (
                       <div
-                        key={type.name}
+                        key={propType.name}
                         style={{
                           display: 'flex',
                           flexDirection: 'column',
-                          gap: 8,
+                          padding: '2rem 0',
+                          gap: '0.5rem',
+                          borderTop: index === 0 ? 'none' : '1px solid #333',
                         }}
                       >
                         <div
@@ -117,7 +130,7 @@ export default async function Page({
                               fontWeight: 600,
                             }}
                           >
-                            {type.name} {type.required && '*'}
+                            {propType.name} {propType.required && '*'}
                           </h4>
                           <div
                             style={{
@@ -128,21 +141,21 @@ export default async function Page({
                           >
                             <Code
                               inline
-                              value={type.type}
+                              value={propType.type}
                               language="typescript"
                               theme={theme as any}
                               paddingHorizontal="0.5rem"
                               paddingVertical="0.2rem"
                             />
-                            {type.defaultValue ? (
+                            {propType.defaultValue ? (
                               <span style={{ fontSize: '0.8rem' }}>
-                                = {type.defaultValue}
+                                = {propType.defaultValue}
                               </span>
                             ) : null}
                           </div>
                         </div>
-                        {type.description && (
-                          <p style={{ margin: 0 }}>{type.description}</p>
+                        {propType.description && (
+                          <p style={{ margin: 0 }}>{propType.description}</p>
                         )}
                       </div>
                     ))}
