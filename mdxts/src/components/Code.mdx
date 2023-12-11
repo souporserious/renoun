@@ -1,5 +1,6 @@
 ## Code Blocks
 
+````mdx
 ```tsx filename="useCounter.ts"
 import { useState } from 'react'
 
@@ -13,7 +14,7 @@ export function useCounter(initialValue: number = 0) {
 }
 ```
 
-```tsx filename="Counter.tsx" lineNumbers highlight="5-7,9"
+```tsx filename="Counter.tsx"
 'use client'
 import { useCounter } from './useCounter'
 
@@ -33,20 +34,17 @@ export default function Counter({
 }
 ```
 
-```tsx filename="preview.tsx"
+```tsx
 <Counter initialCount={2} />
 ```
+````
 
-<Preview source="preview.tsx" />
+Pass a `source` prop to the `Code` component to render a code block from a file. For example, the following MDX:
 
-## Components
-
-import Counter from './counter/Counter.tsx'
-
+```mdx filename="Counter.mdx"
 <Code source="./counter/Counter.tsx" />
+```
 
-<Code source="./counter/useCounter.ts" />
+Will produce a code block with the contents of `./counter/Counter.tsx`:
 
-<Playground>
-  <Counter initialCount={3} />
-</Playground>
+<Code allowErrors source="./counter/Counter.tsx" />
