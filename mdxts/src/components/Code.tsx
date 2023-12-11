@@ -45,7 +45,7 @@ export type BaseCodeProps = {
   /** Vertical padding to apply to the code block. */
   paddingVertical?: string
 
-  /** Whether or not the code is presented inline or as a block-level element. */
+  /** Whether or not the code is presented inline or as a block-level element. Note, extra white space will be trimmed when enabled. */
   inline?: boolean
 
   /** Class name to be applied to the code block. */
@@ -140,6 +140,11 @@ export async function Code({
         finalValue = finalValue.slice(1)
       }
     }
+  }
+
+  // Trim extra whitespace from inline code blocks since it's difficult to read.
+  if (inline) {
+    finalValue = finalValue.replace(/\s+/g, ' ')
   }
 
   // Scope code block source files since they can conflict with other files on disk.
