@@ -96,6 +96,7 @@ export function useMDXComponents() {
             lineNumbers={lineNumbers}
             highlight={highlight}
             theme={theme as any}
+            // @ts-expect-error - private prop
             isNestedInEditor
           />
         </Editor>
@@ -110,6 +111,7 @@ export function useMDXComponents() {
           theme={theme as any}
           showErrors={showErrors}
           className={GeistMono.className}
+          // @ts-expect-error - private props
           sourcePath={sourcePath}
           line={line}
         />

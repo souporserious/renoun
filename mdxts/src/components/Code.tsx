@@ -33,12 +33,6 @@ export type BaseCodeProps = {
   /** Whether or not to allow errors. */
   allowErrors?: boolean
 
-  /** Path to the source file on disk. */
-  sourcePath?: string
-
-  /** Line to scroll to. */
-  line?: number
-
   /** Padding to apply to the code block. */
   padding?: string
 
@@ -51,12 +45,20 @@ export type BaseCodeProps = {
   /** Whether or not the code is presented inline or as a block-level element. Note, extra white space will be trimmed when enabled. */
   inline?: boolean
 
-  /** Class name to be applied to the code block. */
+  /** Class name to apply to the code block. */
   className?: string
-
-  /** Whether the code block is nested in an editor. */
-  isNestedInEditor?: boolean
 }
+
+type PrivateCodeProps = Partial<{
+  /** Line to scroll to. */
+  line: number
+
+  /** Path to the source file on disk. */
+  sourcePath: string
+
+  /** Whether the code block is nested in the Editor component. */
+  isNestedInEditor: boolean
+}>
 
 export type CodeProps =
   | ({
@@ -67,7 +69,7 @@ export type CodeProps =
       /** Source code to be highlighted. */
       source?: string
 
-      /** Specify the working directory for the [source]. */
+      /** Specify the working directory for the `source`. */
       workingDirectory?: string
     } & BaseCodeProps)
 
@@ -87,15 +89,13 @@ export async function Code({
   className,
   showErrors,
   allowErrors,
-  sourcePath,
-  line,
-  isNestedInEditor,
   padding,
   paddingHorizontal,
   paddingVertical,
   inline,
   ...props
 }: CodeProps) {
+  const { isNestedInEditor, sourcePath, line } = props as PrivateCodeProps
   const id = 'source' in props ? props.source : filenameProp ?? filenameId++
   const unregisterCodeComponent = registerCodeComponent(id)
 
