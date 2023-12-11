@@ -13,11 +13,14 @@ As an illustration of how this works, let's say we have the following file struc
 │   ├── Basic.tsx
 │   └── Advanced.tsx
 └── README.mdx
+└── Button.tsx
 ```
 
-We can now render the `basic` example in our README like so:
+We can now render the `Basic.tsx` example in the README like so:
 
 ```mdx
+# Button Examples
+
 <Example source="Basic.tsx" />
 ```
 
@@ -33,61 +36,55 @@ export const Basic = () => <div>Basic</div>
 <Example source="Basic.tsx" />
 ````
 
-Or if no source is provided the first previous code block will be used.
-
-````mdx
-```tsx
-export const Basic = () => <div>Basic</div>
-```
-
-<Preview />
-````
-
 ## Templating
 
-While the [[Example]] component is great for content like a blog and one-off situations. It's not very useful for a library, or automated documentation. For this, you can lean on your specific build tool to handle the templating and query the information available in the collected data.
+While the `Example` component is great for content like a blog and one-off situations. It's not very useful for a library, or automated documentation.
 
-Using Next.js, we can create a custom component that will render the example based on the name of the example file:
+For this, you can lean on your specific build tool to handle the templating and query the information available in the collected data. Using Next.js, we can create a custom component that will render the example based on the name of the example file:
 
-```tsx filename="[component]/page/[example]/page.tsx"
+{/* TODO: Use real example from site here <Code source="../../app/(examples)/components/[component]/examples/[example]/page.tsx" baseDirectory="../../app/(examples)" /> */}
+
+```tsx filename="components/[component]/examples/[example]/page.tsx"
 import * as React from 'react'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
-import { loadModules } from 'mdxts'
+import { createDataSource } from 'mdxts'
 
-type Props = {
-  params: {
-    componentSlug: string
-    exampleSlug: string
-  }
+const allComponents = createDataSource('./components/*.tsx')
+
+export async function generateStaticParams() {
+  const sourceFiles = await allComponents.all()
+
+  return Object.entries(sourceFiles)
+    .filter(([, component]) => component.examples?.length > 0)
+    .flatMap(([pathname, component]) => {
+      return component.examples.map((example) => ({
+        component: pathname,
+        example: example.slug,
+      }))
+    })
 }
 
-const allComponents = loadModules(
-  require.context('./components', true, /README\.mdx$/, 'lazy')
-)
+export default async function Page({
+  params,
+}: {
+  params: { component: string; example: string }
+}) {
+  const component = await allComponents.get(params.component)
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const component = await allComponents.get(params.componentSlug)
-  const example = await component.examples.get(params.exampleSlug)
-  return {
-    title: `${component.title} / ${example.title}`,
-  }
-}
-
-export default async function Examples({ params }: Props) {
-  const component = await allComponents.get(params.componentSlug)
-
-  if (!component) {
+  if (component === null) {
     return notFound()
   }
 
-  const example = await component.examples.get(params.exampleSlug)
+  const example = component.examples?.find(
+    (example) => example.slug === params.example
+  )
 
-  if (!example) {
+  if (example === undefined) {
     return notFound()
   }
 
-  const { Component } = example
+  const { default: Component } = await example.module
 
   return <Component />
 }

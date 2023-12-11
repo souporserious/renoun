@@ -4,36 +4,7 @@ export const metadata = {
 
 # Authoring Examples
 
-Examples can be written inline, exported alongside your component, or in a separate file.
-
-## Module
-
-Module examples can be exported alongside your component using the [[example]] helper:
-
-```tsx filename="Button.tsx"
-import { example } from 'mdxts'
-
-/** Used for taking actions and navigating. */
-export function Button({
-  label,
-  onAction,
-}: {
-  /** Provides a label for the button. */
-  label: string
-
-  /** The size of the button. */
-  size?: 'small' | 'medium' | 'large'
-
-  /** Called when an action for this button is requested. */
-  onAction: () => void
-}) {
-  return <button onClick={onAction}>{label}</button>
-}
-
-example(() => <Button label="Say hello" onAction={() => alert('Hello!')} />)
-```
-
-{/* TODO: need a bundler-aware way of stripping out the `example` calls */}
+Examples can be exported alongside your component, or in a separate directory.
 
 ## Extension
 

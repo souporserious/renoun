@@ -11,22 +11,19 @@ MDXTS generates a graph of prose content, source code, type information, and exa
 
 </Summary>
 
+<Note>
+  Server Component support is currently limited in frameworks. This library
+  offers first-class support for Next.js through a plugin. Please open an issue
+  or PR to add support for other frameworks.
+</Note>
+
 ## Install
 
-The `mdxts` library can be installed using your favorite package manager:
+Run the following command in your project directory to install the required dependencies:
 
 <PackageInstall
   packages={['mdxts', 'next', 'react', 'react-dom', 'shiki', 'prettier']}
   theme={theme}
-/>
-
-## Package Exports
-
-The `mdxts` package exports a main package and a set of sub-packages.
-
-<PackageExports
-  name="mdxts"
-  context={require.context('../../mdxts/src', true, /README\.mdx$/, 'lazy')}
 />
 
 ## Guided Setup
@@ -99,4 +96,4 @@ export default async function Page({ params }) {
 
 ## Next steps
 
-Check out the [examples](./examples) to see how to use MDXTS in your project.
+Check out the [examples](./examples/authoring) section to learn how to use MDXTS to build interactive content and documentation.

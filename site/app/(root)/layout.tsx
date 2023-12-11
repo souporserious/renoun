@@ -11,8 +11,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           textAlign: 'center',
         }}
       >
-        This package is still a work in progress. The APIs are not stable and
-        may change.
+        This package is still experimental. The APIs are not stable and may
+        change. Use at your own risk.
       </div>
       {children}
     </>
