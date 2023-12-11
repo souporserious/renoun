@@ -6,9 +6,15 @@ const packageStyles = `
   background-color: #000;
   color: #fff;
 }
-.PackageInstallButton.selected {
+.PackageInstallButton.active {
   background-color: #fff;
   color: #000;
+}
+.Command {
+  display: none;
+}
+.Command.active {
+  display: contents;
 }
 `.trim()
 
@@ -56,22 +62,27 @@ export function PackageInstallClient({
     stateKey,
     defaultPackageManager
   )
-  const command = allHighlightedCommands[activePackageManager]
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
       <style>{packageStyles}</style>
-      <div style={{ display: 'flex', flexDirection: 'row' }}>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'row',
+          marginBottom: '0.25rem',
+        }}
+      >
         {Object.keys(allHighlightedCommands).map((packageManager) => {
-          const isSelected = activePackageManager === packageManager
+          const isActive = activePackageManager === packageManager
           return (
             <button
               key={packageManager}
               id={`package-manager-${packageManager}`}
               onClick={() => setActivePackageManager(packageManager)}
               className={
-                isSelected
-                  ? 'PackageInstallButton selected'
+                isActive
+                  ? 'PackageInstallButton active'
                   : 'PackageInstallButton'
               }
               style={{
@@ -86,13 +97,23 @@ export function PackageInstallClient({
             </button>
           )
         })}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `localStorage.getItem('${stateKey}') && document.getElementById('package-manager-${defaultPackageManager}').classList.remove('selected'); document.getElementById(\`package-manager-$\{localStorage.getItem('${stateKey}')\}\`).classList.add('selected')`,
-          }}
-        />
       </div>
-      {command}
+      {Object.entries(allHighlightedCommands).map(([key, command]) => (
+        <div
+          key={key}
+          id={`package-manager-${key}-command`}
+          className={
+            activePackageManager === key ? 'Command active' : 'Command'
+          }
+        >
+          {command}
+        </div>
+      ))}
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `localStorage.getItem('${stateKey}') && document.getElementById('package-manager-${defaultPackageManager}').classList.remove('active'); document.getElementById(\`package-manager-$\{localStorage.getItem('${stateKey}')\}\`).classList.add('active'); localStorage.getItem('${stateKey}') && document.getElementById('package-manager-${defaultPackageManager}-command').classList.remove('active'); document.getElementById(\`package-manager-$\{localStorage.getItem('${stateKey}')\}-command\`).classList.add('active')`,
+        }}
+      />
     </div>
   )
 }
