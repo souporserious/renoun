@@ -3,17 +3,18 @@ import React, { useRef, useState, useEffect } from 'react'
 
 const packageStyles = `
 .PackageInstallButton {
-  background-color: #fff;
-  color: #000;
-}
-.PackageInstallButton.selected {
   background-color: #000;
   color: #fff;
 }
+.PackageInstallButton.selected {
+  background-color: #fff;
+  color: #000;
+}
 `.trim()
 
-function useLocalStorageState(key: string, defaultValue: string) {
+function useLocalStorageState(key: string, defaultValue?: string) {
   const [state, setState] = useState(defaultValue)
+  const [isLoading, setIsLoading] = useState(true)
   const initialRender = useRef(true)
 
   useEffect(() => {
@@ -26,6 +27,7 @@ function useLocalStorageState(key: string, defaultValue: string) {
       if (saved) {
         setState(saved)
       }
+      setIsLoading(false)
     } else {
       localStorage.setItem(key, state)
     }
@@ -33,7 +35,7 @@ function useLocalStorageState(key: string, defaultValue: string) {
     initialRender.current = false
   }, [state])
 
-  return [state, setState] as const
+  return [state, setState, isLoading] as const
 }
 
 /**
@@ -65,7 +67,7 @@ export function PackageInstallClient({
           return (
             <button
               key={packageManager}
-              id={packageManager}
+              id={`package-manager-${packageManager}`}
               onClick={() => setActivePackageManager(packageManager)}
               className={
                 isSelected
@@ -77,7 +79,6 @@ export function PackageInstallClient({
                 border: '1px solid #000',
                 borderRadius: '0.5rem',
                 cursor: 'pointer',
-                margin: '0.5rem',
               }}
               suppressHydrationWarning
             >
@@ -87,7 +88,7 @@ export function PackageInstallClient({
         })}
         <script
           dangerouslySetInnerHTML={{
-            __html: `localStorage.getItem('${stateKey}') && document.getElementById('${defaultPackageManager}').classList.remove('selected'); document.getElementById(localStorage.getItem('${stateKey}')).classList.add('selected')`,
+            __html: `localStorage.getItem('${stateKey}') && document.getElementById('package-manager-${defaultPackageManager}').classList.remove('selected'); document.getElementById(\`package-manager-$\{localStorage.getItem('${stateKey}')\}\`).classList.add('selected')`,
           }}
         />
       </div>
