@@ -118,10 +118,10 @@ export async function Code({
     finalLanguage = sourcePath.split('.').pop()
   }
 
-  const jsxOnly = isJsxOnly(finalValue)
   const isJavaScriptLanguage = ['js', 'jsx', 'ts', 'tsx'].includes(
     finalLanguage
   )
+  const jsxOnly = isJavaScriptLanguage ? isJsxOnly(finalValue) : false
   let filename = 'source' in props ? props.source : filenameProp
   let sourceFile: SourceFile
 
