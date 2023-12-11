@@ -30,6 +30,9 @@ export type BaseCodeProps = {
   /** Show or hide errors. */
   showErrors?: boolean
 
+  /** Whether or not to allow errors. */
+  allowErrors?: boolean
+
   /** Path to the source file on disk. */
   sourcePath?: string
 
@@ -83,6 +86,7 @@ export async function Code({
   theme,
   className,
   showErrors,
+  allowErrors,
   sourcePath,
   line,
   isNestedInEditor,
@@ -189,6 +193,7 @@ export async function Code({
       isJsxOnly={jsxOnly}
       isNestedInEditor={isNestedInEditor}
       showErrors={showErrors}
+      allowErrors={allowErrors}
       className={className}
       rootDirectory={rootDirectory}
       baseDirectory={baseDirectory}

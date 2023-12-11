@@ -55,6 +55,7 @@ export function useMDXComponents() {
       highlight,
       sourcePath,
       line,
+      allowErrors,
       children,
     }: {
       filename?: string
@@ -64,10 +65,19 @@ export function useMDXComponents() {
       highlight?: string
       sourcePath?: string
       line?: number
+      allowErrors?: boolean
       children: React.ReactElement
     }) => {
       const value = children.props.children.trimStart()
       const metadata = getMetadataFromClassName(children.props.className || '')
+
+      if (editable && allowErrors) {
+        throw new Error(
+          `mdxts: The [editable] and [allowErrors] props cannot be used together ${
+            filename ? `for ${filename}.` : '.'
+          }.`
+        )
+      }
 
       return editable ? (
         <Editor
@@ -91,6 +101,7 @@ export function useMDXComponents() {
         </Editor>
       ) : (
         <Code
+          allowErrors={allowErrors}
           filename={filename}
           language={metadata?.language}
           lineNumbers={lineNumbers}

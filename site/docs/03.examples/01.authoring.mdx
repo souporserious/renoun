@@ -15,7 +15,7 @@ Button.tsx
 Button.examples.tsx
 ```
 
-```tsx
+```tsx allowErrors
 import { Button } from './Button'
 
 export function BasicUsage() {
@@ -45,7 +45,7 @@ Button/
 
 Export a default component to enhance examples with additional rendering, behavior, or to provide a consistent layout for all examples in the file:
 
-```tsx highlight="4-10"
+```tsx allowErrors highlight="4-10"
 import { Button } from './Button'
 import { Theme } from './Theme'
 
@@ -75,7 +75,7 @@ Refer to the next section on [rendering](./02.rendering.mdx) to learn how to use
 
 Metadata is auto-generated based on the example's function name and its accompanying comment. Use the default export to provide additional metadata for the file:
 
-```tsx highlight="3-4,12-13,22-23"
+```tsx allowErrors highlight="3-4,12-13,22-23"
 import { Button } from './Button'
 
 /** A collection of examples for the button component. */

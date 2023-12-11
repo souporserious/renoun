@@ -42,6 +42,9 @@ export type CodeProps = {
   /** Show or hide errors. */
   showErrors?: boolean
 
+  /** Whether or not to allow errors. */
+  allowErrors?: boolean
+
   /** Class name to be applied to the code block. */
   className?: string
 }
@@ -73,6 +76,7 @@ export function CodeView({
   paddingHorizontal = padding,
   paddingVertical = padding,
   inline,
+  allowErrors,
 }: CodeProps & {
   row?: [number, number]
   tokens: any
@@ -91,7 +95,11 @@ export function CodeView({
     ? getSymbolBounds(sourceFile, isJsxOnly, lineHeight)
     : []
   const shouldHighlightLine = calculateLinesToHighlight(highlight)
-  const diagnostics = sourceFile?.getPreEmitDiagnostics()
+  const diagnostics = allowErrors
+    ? []
+    : sourceFile
+      ? sourceFile.getPreEmitDiagnostics()
+      : []
   const Container = isNestedInEditor
     ? React.Fragment
     : (props) => (
