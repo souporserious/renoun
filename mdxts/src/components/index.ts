@@ -1,6 +1,2 @@
 export { Code, type CodeProps } from './Code'
-export { Editor, type EditorProps } from './Editor'
 export { Navigation } from './Navigation'
-export { PackageExports } from './PackageExports'
-export { PackageInstall } from './PackageInstall'
-export { Preview } from './Preview'

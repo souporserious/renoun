@@ -1,13 +1,11 @@
 import * as React from 'react'
 import type { MDXComponents } from 'mdx/types'
 import { getMetadataFromClassName } from 'mdxts/utils'
-import {
-  Code,
-  Editor,
-  Preview,
-  PackageExports,
-  PackageInstall,
-} from 'mdxts/components'
+import { Code } from 'mdxts/components'
+import { Editor } from 'mdxts/components/Editor'
+import { Preview } from 'mdxts/components/Preview'
+import { PackageExports } from 'mdxts/components/PackageExports'
+import { PackageInstall } from 'mdxts/components/PackageInstall'
 import { GeistMono } from 'geist/font/mono'
 import theme from 'theme.json'
 

@@ -52,10 +52,7 @@ const languageMap = {
   mjs: 'javascript',
 }
 
-/**
- * Code editor with syntax highlighting.
- * @private
- */
+/** Code editor with syntax highlighting. */
 export function Editor({
   language: languageProp,
   defaultValue,

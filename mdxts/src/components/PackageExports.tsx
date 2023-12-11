@@ -14,10 +14,7 @@ function parsePath(path: string, name: string) {
   return path === '.' ? name : path.replace(/^\.\//, `${name}/`)
 }
 
-/**
- * Renders a list of exports from a package.
- * @private
- */
+/** Renders a list of exports from a package. */
 export async function PackageExports({
   name,
   context,

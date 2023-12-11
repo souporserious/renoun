@@ -10,10 +10,7 @@ const packageManagers = {
   yarn: 'yarn add',
 }
 
-/**
- * Renders install commands with a picker for each package manager.
- * @private
- */
+/** * Renders install commands with a picker for each package manager. */
 export async function PackageInstall({
   packages,
   theme,

@@ -44,10 +44,7 @@ function useLocalStorageState(key: string, defaultValue?: string) {
   return [state, setState, isLoading] as const
 }
 
-/**
- * The client-side component for the PackageInstall component.
- * @private
- */
+/** The client-side component for the PackageInstall component. */
 export function PackageInstallClient({
   allHighlightedCommands,
 }: {
