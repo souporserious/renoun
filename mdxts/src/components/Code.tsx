@@ -177,9 +177,7 @@ export async function Code({
       lineNumbers={lineNumbers}
       value={finalValue}
       sourceFile={sourceFile}
-      sourcePath={
-        sourceFile ? getSourcePath(sourceFile.getFilePath()) : undefined
-      }
+      sourcePath={sourcePath ? getSourcePath(sourcePath, line) : undefined}
       filename={filename}
       shouldRenderFilename={Boolean(filenameProp)}
       highlighter={highlighter}
