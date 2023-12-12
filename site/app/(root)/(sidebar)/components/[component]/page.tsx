@@ -137,12 +137,12 @@ export default async function Page({
                                   <span
                                     style={{
                                       fontSize: '0.875rem',
-                                      padding: '0.1rem 1rem',
+                                      padding: '0.1rem 1rem 0.25rem',
                                       border: '1px solid #333',
                                       borderRadius: '1rem',
-                                      color: '#666',
+                                      color: '#ccc',
                                       position: 'relative',
-                                      top: -15,
+                                      top: -16,
                                       userSelect: 'none',
                                     }}
                                   >
