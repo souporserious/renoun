@@ -12,11 +12,14 @@ import { renumberFilenames } from '../utils/renumber'
 import { getTypeDeclarations } from '../utils/get-type-declarations'
 
 type PluginOptions = {
-  /** The git source to use for linking to the repository and source files. */
-  gitSource: string
-
   /** Path to the VS Code compatible theme used for syntax highlighting the Code and Editor components. */
   theme: string
+
+  /** The git source to use for linking to the repository and source files. This is automatically inferred from the git remote URL if not provided. */
+  gitSource?: string
+
+  /** The branch to use for linking to the repository and source files. */
+  gitBranch?: string
 
   /** The type declarations to bundle for the Code and Editor components. */
   types?: string[]
@@ -24,7 +27,7 @@ type PluginOptions = {
 
 /** Starts the MDXTS server and bundles all entry points defined in the plugin options. */
 export function createMdxtsPlugin(pluginOptions: PluginOptions) {
-  const { gitSource, theme, types = [] } = pluginOptions
+  const { gitSource, gitBranch = 'main', theme, types = [] } = pluginOptions
   const themePath = resolve(process.cwd(), theme)
 
   return function withMdxts(nextConfig: NextConfig = {}) {
@@ -153,7 +156,8 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
         nextConfig.env = {}
       }
 
-      nextConfig.env.MDXTS_GIT_SOURCE = gitSource
+      nextConfig.env.MDXTS_GIT_SOURCE = gitSource.replace(/\.git$/, '')
+      nextConfig.env.MDXTS_GIT_BRANCH = gitBranch
 
       if (nextConfig.pageExtensions === undefined) {
         nextConfig.pageExtensions = ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx']

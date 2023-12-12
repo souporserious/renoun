@@ -1,5 +1,6 @@
 import { findRootSync } from '@manypkg/find-root'
 import { getEditorPath } from './get-editor-path'
+import { getGitFileUrl } from './get-git-file-url'
 
 let rootDirectory = null
 
@@ -13,5 +14,5 @@ export function getSourcePath(path: string, line?: number, column?: number) {
   if (rootDirectory === null) {
     rootDirectory = findRootSync(process.cwd()).rootDir
   }
-  return `${process.env.MDXTS_GIT_SOURCE}${path.replace(rootDirectory, '')}`
+  return getGitFileUrl(path.replace(`${rootDirectory}/`, ''), line, column)
 }
