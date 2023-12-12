@@ -1,11 +1,8 @@
 import type { Element, Node } from 'hast'
-import type { VFile } from 'vfile'
-import path from 'node:path'
-import { getMetadataFromClassName } from '../utils'
 
 /** Adds code meta props to the code element. */
 export function addCodeMetaProps() {
-  return async (tree: Node, file: VFile) => {
+  return async (tree: Node) => {
     const { visit } = await import('unist-util-visit')
     const { toString } = await import('hast-util-to-string')
 
@@ -23,12 +20,6 @@ export function addCodeMetaProps() {
               ? true
               : value.replace(/^["']|["']$/g, '')
         })
-
-        if (process.env.NODE_ENV === 'development') {
-          props.workingDirectory = file.dirname
-          props.sourcePath = file.path
-          props.line = element.position.start.line
-        }
 
         // Add props to code element
         Object.assign(element.properties, props)

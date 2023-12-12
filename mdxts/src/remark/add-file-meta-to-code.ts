@@ -1,19 +1,24 @@
 import type { Node } from 'mdast'
 import type { VFile } from 'vfile'
 
-/** Adds file meta data to all `Code` components. */
+/** Adds file meta data to all code blocks and `Code` components. */
 export function addFileMetaToCode() {
   return async function (tree: Node, file: VFile) {
     const { visit } = await import('unist-util-visit')
 
+    visit(tree, 'code', (node: any) => {
+      const sourcePathMeta = [
+        `sourcePath="${file.path}"`,
+        `sourcePathLine="${node.position.start.line - 2}"`,
+        `sourcePathColumn="${node.position.start.column}"`,
+        `workingDirectory="${file.dirname}"`,
+      ].join(' ')
+      node.meta = node.meta ? `${node.meta} ${sourcePathMeta}` : sourcePathMeta
+    })
+
     visit(tree, 'mdxJsxFlowElement', (node: any) => {
       if (node.name === 'Code') {
         node.attributes = [
-          {
-            type: 'mdxJsxAttribute',
-            name: 'workingDirectory',
-            value: file.dirname,
-          },
           {
             type: 'mdxJsxAttribute',
             name: 'sourcePath',
@@ -28,6 +33,11 @@ export function addFileMetaToCode() {
             type: 'mdxJsxAttribute',
             name: 'sourcePathColumn',
             value: node.position.start.column,
+          },
+          {
+            type: 'mdxJsxAttribute',
+            name: 'workingDirectory',
+            value: file.dirname,
           },
           ...node.attributes,
         ]
