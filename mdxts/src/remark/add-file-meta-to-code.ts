@@ -1,6 +1,5 @@
-import type { Code, Node } from 'mdast'
+import type { Node } from 'mdast'
 import type { VFile } from 'vfile'
-import { getEditorPath } from '../utils'
 
 /** Adds file meta data to all `Code` components. */
 export function addFileMetaToCode() {
@@ -18,10 +17,17 @@ export function addFileMetaToCode() {
           {
             type: 'mdxJsxAttribute',
             name: 'sourcePath',
-            value:
-              process.env.NODE_ENV === 'development'
-                ? `${file.path}:${node.position.start.line}`
-                : undefined,
+            value: file.path,
+          },
+          {
+            type: 'mdxJsxAttribute',
+            name: 'sourcePathLine',
+            value: node.position.start.line,
+          },
+          {
+            type: 'mdxJsxAttribute',
+            name: 'sourcePathColumn',
+            value: node.position.start.column,
           },
           ...node.attributes,
         ]

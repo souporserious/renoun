@@ -54,7 +54,8 @@ export function useMDXComponents() {
       showErrors,
       highlight,
       sourcePath,
-      line,
+      sourcePathLine,
+      sourcePathColumn,
       allowErrors,
       children,
     }: {
@@ -64,7 +65,8 @@ export function useMDXComponents() {
       showErrors?: boolean
       highlight?: string
       sourcePath?: string
-      line?: number
+      sourcePathLine?: number
+      sourcePathColumn?: number
       allowErrors?: boolean
       children: React.ReactElement
     }) => {
@@ -113,7 +115,8 @@ export function useMDXComponents() {
           className={GeistMono.className}
           // @ts-expect-error - private props
           sourcePath={sourcePath}
-          line={line}
+          sourcePathLine={sourcePathLine}
+          sourcePathColumn={sourcePathColumn}
         />
       )
     },

@@ -63,11 +63,10 @@ export type CodeProps =
     } & BaseCodeProps)
 
 type PrivateCodeProps = Partial<{
-  /** Line to scroll to. */
-  line: number
-
-  /** Path to the source file on disk. */
+  /** Path to the source file on disk provided by the remark plugin. */
   sourcePath: string
+  sourcePathLine: number
+  sourcePathColumn: number
 
   /** Whether the code block is nested in the Editor component. */
   isNestedInEditor: boolean
@@ -95,7 +94,8 @@ export async function Code({
   inline,
   ...props
 }: CodeProps) {
-  const { isNestedInEditor, sourcePath, line } = props as PrivateCodeProps
+  const { isNestedInEditor, sourcePath, sourcePathLine, sourcePathColumn } =
+    props as PrivateCodeProps
   const id = 'source' in props ? props.source : filenameProp ?? filenameId++
   const unregisterCodeComponent = registerCodeComponent(id)
 
@@ -109,13 +109,13 @@ export async function Code({
   if ('source' in props) {
     if (!props.workingDirectory) {
       throw new Error(
-        'The [workingDirectory] prop is required when using the [source] prop in the Code component.'
+        'The [workingDirectory] prop was not provided to the [Code] component. Make sure the mdxts/remark plugin is configured correctly.'
       )
     }
 
-    const sourcePath = join(props.workingDirectory, props.source)
-    finalValue = await readFile(sourcePath, 'utf-8')
-    finalLanguage = sourcePath.split('.').pop()
+    const sourcePropPath = join(props.workingDirectory, props.source)
+    finalValue = await readFile(sourcePropPath, 'utf-8')
+    finalLanguage = sourcePropPath.split('.').pop()
   }
 
   const isJavaScriptLanguage = ['js', 'jsx', 'ts', 'tsx'].includes(
@@ -177,7 +177,11 @@ export async function Code({
       lineNumbers={lineNumbers}
       value={finalValue}
       sourceFile={sourceFile}
-      sourcePath={sourcePath ? getSourcePath(sourcePath, line) : undefined}
+      sourcePath={
+        sourcePath
+          ? getSourcePath(sourcePath, sourcePathLine, sourcePathColumn)
+          : undefined
+      }
       filename={filename}
       shouldRenderFilename={Boolean(filenameProp)}
       highlighter={highlighter}
@@ -199,12 +203,11 @@ export async function Code({
         process.env.NODE_ENV === 'development'
           ? async function () {
               'use server'
-              const sourceLine = line
               const contents = await readFile(sourcePath, 'utf-8')
               const modifiedContents = contents
                 .split('\n')
                 .map((_line, index) => {
-                  if (index === sourceLine - 1) {
+                  if (index === sourcePathLine - 1) {
                     return _line.includes('showErrors')
                       ? _line.replace('showErrors', '')
                       : `${_line.trimEnd()} showErrors`
