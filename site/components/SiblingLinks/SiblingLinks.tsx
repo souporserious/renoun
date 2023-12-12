@@ -51,9 +51,9 @@ function SiblingLink({
             <path
               d="M14 6L8 12L14 18"
               stroke="white"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             />
           </svg>
         ) : null}
@@ -69,9 +69,9 @@ function SiblingLink({
             <path
               d="M10 18L16 12L10 6"
               stroke="white"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             />
           </svg>
         ) : null}
