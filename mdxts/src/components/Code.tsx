@@ -49,6 +49,19 @@ export type BaseCodeProps = {
   className?: string
 }
 
+export type CodeProps =
+  | ({
+      /** Code snippet to be highlighted. */
+      value: string
+    } & BaseCodeProps)
+  | ({
+      /** Source code to be highlighted. */
+      source: string
+
+      /** Specify the working directory for the `source`. */
+      workingDirectory?: string
+    } & BaseCodeProps)
+
 type PrivateCodeProps = Partial<{
   /** Line to scroll to. */
   line: number
@@ -59,19 +72,6 @@ type PrivateCodeProps = Partial<{
   /** Whether the code block is nested in the Editor component. */
   isNestedInEditor: boolean
 }>
-
-export type CodeProps =
-  | ({
-      /** Code snippet to be highlighted. */
-      value?: string
-    } & BaseCodeProps)
-  | ({
-      /** Source code to be highlighted. */
-      source?: string
-
-      /** Specify the working directory for the `source`. */
-      workingDirectory?: string
-    } & BaseCodeProps)
 
 const languageMap = {
   shell: 'shellscript',

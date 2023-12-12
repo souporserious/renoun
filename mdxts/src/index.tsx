@@ -5,7 +5,7 @@ import { kebabCase } from 'case-anything'
 import { basename, join, resolve } from 'node:path'
 import { Node, SyntaxKind } from 'ts-morph'
 import type { Directory, ExportedDeclarations, Symbol, ts } from 'ts-morph'
-import type { getPropTypes } from '@tsxmod/utils'
+import type { getPropTypes } from './utils/get-prop-types'
 import type { CodeBlocks } from './remark/add-code-blocks'
 import type { Headings } from './remark/add-headings'
 import { project } from './components/project'
@@ -31,7 +31,8 @@ export type Module = {
         name: string
         slug: string
         sourcePath: string
-        props: ReturnType<typeof getPropTypes>
+        baseProps: ReturnType<typeof getPropTypes>['baseProps']
+        unionProps: ReturnType<typeof getPropTypes>['unionProps']
       }[]
     | null
   examples:
