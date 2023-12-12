@@ -83,7 +83,7 @@ export default async function Page({
                     style={{
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: '2rem',
+                      gap: type.unionProps.length > 0 ? '2rem' : undefined,
                     }}
                   >
                     <div
