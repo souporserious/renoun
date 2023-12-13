@@ -54,22 +54,33 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
     let startedWatcher = false
 
     return async () => {
-      const [remarkGfm, remarkUnwrapImages] = await Promise.all([
+      const [
+        remarkGemoji,
+        remarkGfm,
+        remarkGitHub,
+        remarkStripBadges,
+        remarkSqueezeParagraphs,
+        remarkUnwrapImages,
+      ] = await Promise.all([
+        import('remark-gemoji'),
         import('remark-gfm'),
+        import('remark-github'),
+        import('remark-strip-badges'),
+        import('remark-squeeze-paragraphs'),
         import('remark-unwrap-images'),
       ])
       const withMdx = createMdxPlugin({
         options: {
           remarkPlugins: [
-            // @ts-expect-error: Typings are incorrect
+            remarkGemoji,
             remarkGfm,
-            // @ts-expect-error: Typings are incorrect
+            remarkGitHub,
+            remarkStripBadges,
+            remarkSqueezeParagraphs,
             remarkUnwrapImages,
-            // @ts-expect-error: Typings are incorrect
             remarkTypography,
-            // @ts-expect-error: Typings are incorrect
             remarkPlugin,
-          ],
+          ] as any,
           rehypePlugins: [rehypePlugin],
         },
       })
