@@ -22,6 +22,16 @@
   box-sizing: border-box;
 }
 
+html {
+  font-size: 1.6vw;
+}
+
+@media (min-width: 80rem) {
+  html {
+    font-size: 1.2vw;
+  }
+}
+
 body {
   font-size: var(--font-size-body);
   letter-spacing: 0.01em;
