@@ -3,7 +3,7 @@ import Slugger from 'github-slugger'
 import type { ComponentType } from 'react'
 import { kebabCase } from 'case-anything'
 import { basename, join, resolve } from 'node:path'
-import { Node, SyntaxKind } from 'ts-morph'
+import { ImportDeclaration, Node, SyntaxKind } from 'ts-morph'
 import type { Directory, ExportedDeclarations, Symbol, ts } from 'ts-morph'
 import type { getPropTypes } from './utils/get-prop-types'
 import type { CodeBlocks } from './remark/add-code-blocks'
@@ -25,6 +25,7 @@ export type Module = {
   codeBlocks: CodeBlocks
   pathname: string
   sourcePath: string
+  isServerOnly: boolean
   slug: string
   types:
     | {
@@ -200,6 +201,12 @@ export function createDataSource<Type>(
         pathname
       )
     })
+    const isServerOnly = sourceFile
+      ? sourceFile.getImportDeclarations().some((importDeclaration) => {
+          const moduleSpecifier = importDeclaration.getModuleSpecifierValue()
+          return moduleSpecifier === 'server-only'
+        })
+      : null
     /**
      * If there is a source file resolve the "main" export which will either be the default export
      * or an export with the exact same name as the filename.
@@ -284,6 +291,7 @@ export function createDataSource<Type>(
 
     return {
       Content,
+      isServerOnly,
       title: metadata?.title || getHeadingTitle(headings) || filenameTitle,
       description:
         metadata?.description ||

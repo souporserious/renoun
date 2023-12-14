@@ -1,4 +1,6 @@
 import title from 'title'
+import 'server-only'
+
 import type { Module, createDataSource } from '../index'
 
 type Node = Module & {

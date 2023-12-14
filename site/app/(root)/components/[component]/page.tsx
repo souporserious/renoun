@@ -25,7 +25,15 @@ export default async function Page({
     return notFound()
   }
 
-  const { Content, title, description, headings, types, sourcePath } = component
+  const {
+    Content,
+    title,
+    description,
+    headings,
+    types,
+    sourcePath,
+    isServerOnly,
+  } = component
 
   return (
     <div
@@ -36,16 +44,38 @@ export default async function Page({
       }}
     >
       <div>
-        {title ? (
-          <h1
-            style={{
-              // @ts-expect-error
-              textWrap: 'balance',
-            }}
-          >
-            {title}
-          </h1>
-        ) : null}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            marginBottom: '1.4rem',
+            gap: '1rem',
+          }}
+        >
+          {title ? (
+            <h1
+              style={{
+                // @ts-expect-error
+                textWrap: 'balance',
+                margin: 0,
+              }}
+            >
+              {title}
+            </h1>
+          ) : null}
+          {isServerOnly ? (
+            <span
+              style={{
+                fontSize: '0.75rem',
+                padding: '0.25rem 0.5rem',
+                border: '1px solid #3F687E',
+                borderRadius: '1rem',
+              }}
+            >
+              Server Only
+            </span>
+          ) : null}
+        </div>
 
         {description ? (
           <p

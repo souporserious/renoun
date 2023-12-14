@@ -4,6 +4,8 @@ import { readFile, writeFile } from 'node:fs/promises'
 import type { SourceFile } from 'ts-morph'
 import { findRoot } from '@manypkg/find-root'
 import { format, resolveConfig } from 'prettier'
+import 'server-only'
+
 import { getSourcePath } from '../utils/get-source-path'
 import { isJsxOnly } from '../utils/is-jsx-only'
 import { getHighlighter, type Theme } from './highlighter'
