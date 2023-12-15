@@ -10,18 +10,20 @@ type Node = Module & {
   isDirectory: boolean
 }
 
+type AllSourceFiles = Awaited<
+  ReturnType<ReturnType<typeof createDataSource>['all']>
+>
+
 function markDirectories(node: Node): void {
   if (node.children.length > 0) {
     node.isDirectory = true
     node.title = title(node.part)
     node.children.forEach(markDirectories)
-    delete node.headings
+    delete (node as Partial<Node>).headings
   }
 }
 
-function createTreeFromSourceFiles(
-  sourceFiles: Record<string, Module>
-): Node[] {
+function createTreeFromSourceFiles(sourceFiles: AllSourceFiles): Node[] {
   const root: Node[] = []
 
   for (const [path, module] of Object.entries(sourceFiles)) {
@@ -44,13 +46,13 @@ function createTreeFromSourceFiles(
       if (existingNode) {
         currentNode = existingNode.children
       } else {
-        const newNode: Node = {
+        const newNode = {
           ...module,
           part,
           pathSegments,
           isDirectory: false,
           children: [],
-        }
+        } as Node
         currentNode.push(newNode)
         currentNode = newNode.children
       }
@@ -65,20 +67,20 @@ function createTreeFromSourceFiles(
 }
 
 function renderNavigation(
-  allSourceFiles: Record<string, Module>,
+  allSourceFiles: AllSourceFiles,
   renderList: (list: { children: JSX.Element[]; order: number }) => JSX.Element,
   renderItem: (
     item: Omit<Node, 'children'> & { children?: JSX.Element }
   ) => JSX.Element
 ) {
-  function buildNavigationTree(children: Node[], order: number) {
+  function buildNavigationTree(children: Node[], order: number): JSX.Element {
     return renderList({
       children: children.map((item) =>
         renderItem({
           ...item,
           children: item.children.length
             ? buildNavigationTree(item.children, order + 1)
-            : null,
+            : undefined,
         })
       ),
       order,

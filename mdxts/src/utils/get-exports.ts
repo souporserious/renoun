@@ -29,13 +29,13 @@ export async function getExports<ComponentType extends any>(
     'react/jsx-runtime': jsxRuntime,
     'react/jsx-dev-runtime': jsxDevRuntime,
     ...dependencies,
-  }
+  } as Record<string, any>
   const functionExports = { default: null }
   const functionModule: {
     exports: { default: React.ComponentType<ComponentType> | null }
   } = { exports: functionExports }
-  const functionRequire = (path) => {
-    if (allDependencies[path]) {
+  const functionRequire = (path: string) => {
+    if (path in allDependencies) {
       return allDependencies[path]
     }
     throw Error(`Module not found: ${path}.`)

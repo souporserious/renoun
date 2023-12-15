@@ -20,7 +20,7 @@ export function Pre({
   ...props
 }: { isNestedInEditor: boolean } & React.HTMLProps<HTMLPreElement>) {
   const [pointerDown, setPointerDown] = useState(false)
-  const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>()
   const cancelPointerDown = () => {
     // allow enough time for text selection
     timeoutRef.current = setTimeout(() => setPointerDown(false), 200)

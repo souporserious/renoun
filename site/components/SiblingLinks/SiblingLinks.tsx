@@ -2,8 +2,8 @@ export function SiblingLinks({
   previous,
   next,
 }: {
-  previous: { pathname: string; title: string }
-  next: { pathname: string; title: string }
+  previous?: { pathname: string; title: string }
+  next?: { pathname: string; title: string }
 }) {
   return (
     <nav
@@ -23,7 +23,7 @@ function SiblingLink({
   module,
   direction,
 }: {
-  module: { pathname: string; title: string }
+  module?: { pathname: string; title: string }
   direction: 'previous' | 'next'
 }) {
   if (!module) {

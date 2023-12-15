@@ -2,7 +2,7 @@ import { findRootSync } from '@manypkg/find-root'
 import { getEditorPath } from './get-editor-path'
 import { getGitFileUrl } from './get-git-file-url'
 
-let rootDirectory = null
+let rootDirectory: string | null = null
 
 /**
  * Returns a constructed source path for the local IDE in development or a git link in production.

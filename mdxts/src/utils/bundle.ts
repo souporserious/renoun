@@ -18,7 +18,7 @@ export async function bundle(
     'react/jsx-dev-runtime',
     ...external,
   ]
-  const inMemoryFiles = {}
+  const inMemoryFiles: Record<string, any> = {}
   let entryFilePresent = false
 
   project.getSourceFiles().forEach((sourceFile) => {
@@ -131,7 +131,7 @@ export async function bundle(
   return result.outputFiles[0].text
 }
 
-function ensureLeadingSlash(path) {
+function ensureLeadingSlash(path: string) {
   return path.startsWith('/') ? path : '/' + path
 }
 

@@ -128,6 +128,7 @@
     "@types/mdast": "^4.0.3",
     "@types/react": "^18.2.45",
     "@types/react-dom": "^18.2.17",
+    "@types/title": "^3.4.3",
     "@types/webpack-env": "1.18.4",
     "@typescript/ata": "^0.9.4",
     "@typescript/vfs": "^1.5.0",

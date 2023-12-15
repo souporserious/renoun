@@ -6,7 +6,7 @@ export function addSummary() {
     const { valueToEstree } = await import('estree-util-value-to-estree')
     const { visit, EXIT } = await import('unist-util-visit')
     const { toString } = await import('mdast-util-to-string')
-    let summary = null
+    let summary: string | null = null
 
     visit(tree, 'paragraph', (node: Paragraph) => {
       if (summary) return EXIT

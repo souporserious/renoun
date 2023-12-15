@@ -34,7 +34,7 @@ function useLocalStorageState(key: string, defaultValue?: string) {
         setState(saved)
       }
       setIsLoading(false)
-    } else {
+    } else if (state) {
       localStorage.setItem(key, state)
     }
 

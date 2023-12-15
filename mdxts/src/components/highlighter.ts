@@ -49,7 +49,7 @@ const FontStyle = {
 }
 
 function getFontStyle(fontStyle: number): any {
-  const style = {}
+  const style: Record<string, any> = {}
   if (fontStyle === FontStyle.Italic) {
     style['fontStyle'] = 'italic'
   }
@@ -78,7 +78,7 @@ export async function getHighlighter(options: any): Promise<Highlighter> {
   ) {
     const code = sourceFile ? sourceFile.getFullText() : value
     const tokens = highlighter
-      .codeToThemedTokens(code, language, null, {
+      .codeToThemedTokens(code, language, undefined, {
         includeExplanation: false,
       })
       .filter((line) => {
@@ -131,7 +131,7 @@ export async function getHighlighter(options: any): Promise<Highlighter> {
         const initialToken = {
           color: token.color,
           content: token.content,
-          fontStyle: getFontStyle(token.fontStyle),
+          fontStyle: getFontStyle(token.fontStyle as number),
           start: tokenStart,
           end: tokenEnd,
         }

@@ -4,9 +4,15 @@ import type { ComponentType } from 'react'
 import { kebabCase } from 'case-anything'
 import { basename, join, resolve } from 'node:path'
 import { Node, SyntaxKind } from 'ts-morph'
-import type { Directory, ExportedDeclarations, Symbol, ts } from 'ts-morph'
+import type {
+  Directory,
+  ExportedDeclarations,
+  JSDoc,
+  Symbol,
+  ts,
+} from 'ts-morph'
+import 'server-only'
 
-import type { getPropTypes } from './utils/get-prop-types'
 import type { CodeBlocks } from './remark/add-code-blocks'
 import type { Headings } from './remark/add-headings'
 import { project } from './components/project'
@@ -17,7 +23,7 @@ import { getSourcePath } from './utils/get-source-path'
 const typeSlugs = new Slugger()
 
 export type Module = {
-  Content: ComponentType
+  Content?: ComponentType
   title: string
   description: string | null
   summary: string
@@ -33,8 +39,8 @@ export type Module = {
         name: string
         slug: string
         sourcePath: string
-        baseProps: ReturnType<typeof getPropTypes>['baseProps']
-        unionProps: ReturnType<typeof getPropTypes>['unionProps']
+        baseProps: any[]
+        unionProps: any[]
       }[]
     | null
   examples:
@@ -107,7 +113,7 @@ export function createDataSource<Type>(
          */
         (sourceFile) => {
           const directory = sourceFile.getDirectory()
-          let exportedModules: Set<any> = indexFiles.get(directory)
+          let exportedModules = indexFiles.get(directory)
 
           if (exportedModules === undefined) {
             exportedModules = new Set()
@@ -119,7 +125,9 @@ export function createDataSource<Type>(
             if (indexFile) {
               indexFile.getExportedDeclarations().forEach((declarations) => {
                 for (const declaration of declarations) {
-                  exportedModules.add(declaration.getSourceFile().getFilePath())
+                  exportedModules!.add(
+                    declaration.getSourceFile().getFilePath()
+                  )
                 }
               })
             }
@@ -131,11 +139,11 @@ export function createDataSource<Type>(
           sourceFile.getExportedDeclarations().forEach((declarations) => {
             for (const declaration of declarations) {
               const symbol = declaration.getSymbol()
-              const implementation = getImplementation(symbol)
-              const isPrivate = hasPrivateTag(implementation)
-
-              if (isPrivate) {
-                exportedModules.delete(sourceFile.getFilePath())
+              if (symbol) {
+                const implementation = getImplementation(symbol)
+                if (hasPrivateTag(implementation)) {
+                  exportedModules!.delete(sourceFile.getFilePath())
+                }
               }
             }
           })
@@ -163,9 +171,9 @@ export function createDataSource<Type>(
             const resolvedKey = resolve(process.cwd(), key)
             return resolvedKey === mdxPath
           })
-          const mdxModule = allModules[moduleKey]
 
-          if (mdxModule) {
+          if (moduleKey && moduleKey in allModules) {
+            const mdxModule = allModules[moduleKey]
             return [filePath, mdxModule]
           }
 
@@ -213,17 +221,18 @@ export function createDataSource<Type>(
      * or an export with the exact same name as the filename.
      */
     const defaultExportSymbol = sourceFile?.getDefaultExportSymbol()
+    const exportedDeclarations = sourceFile?.getExportedDeclarations()
     const mainExportDeclaration = (
-      sourceFile
-        ? Array.from(sourceFile.getExportedDeclarations())
+      exportedDeclarations
+        ? Array.from(exportedDeclarations)
             .find(([name, [declaration]]) => {
               return (
                 defaultExportSymbol === declaration.getSymbol() ||
                 name === basename(cleanFilename(moduleKey))
               )
             })
-            .at(1) // Get the declaration
-            .at(0) // Get the first node
+            ?.at(1) // Get the declaration
+            ?.at(0) // Get the first node
         : null
     ) as ExportedDeclarations | null
     const propTypes = sourceFile ? getExportedPropTypes(sourceFile) : null
@@ -247,13 +256,9 @@ export function createDataSource<Type>(
           }
         )
       : null
-    const filename = cleanFilename(
-      allModulesKeysByPathname[pathname].split('/').pop()
-    )
+    const filename = cleanFilename(moduleKey.split('/').pop() || '')
     const filenameTitle = /(readme|index)$/i.test(filename)
-      ? parseTitle(
-          allModulesKeysByPathname[pathname].split('/').slice(-2, -1).pop()
-        )
+      ? parseTitle(moduleKey.split('/').slice(-2, -1).pop() || '')
       : isPascalCase(filename)
         ? filename
         : parseTitle(filename)
@@ -267,7 +272,7 @@ export function createDataSource<Type>(
     let resolvedHeadings = headings || []
 
     /** Append component prop type links to headings data. */
-    if (propTypes?.length > 0) {
+    if (propTypes && propTypes.length > 0) {
       typeSlugs.reset()
 
       resolvedHeadings = [
@@ -313,10 +318,11 @@ export function createDataSource<Type>(
     /** The pathname of the active page. */
     pathname: string | string[]
   ): Promise<
-    Module & {
-      previous?: Module
-      next?: Module
-    }
+    | (Module & {
+        previous?: Module
+        next?: Module
+      })
+    | null
   > {
     const stringPathname = Array.isArray(pathname)
       ? pathname.join('/')
@@ -464,8 +470,8 @@ function isPascalCase(str: string) {
 }
 
 /** Determines if a symbol is private or not based on the JSDoc tag. */
-function hasPrivateTag(node: Node<ts.Node>) {
-  if (Node.isJSDocable(node)) {
+function hasPrivateTag(node: Node<ts.Node> | null) {
+  if (node && Node.isJSDocable(node)) {
     const jsDocTags = node.getJsDocs().flatMap((doc) => doc.getTags())
     return jsDocTags.some((tag) => tag.getTagName() === 'private')
   }
@@ -493,7 +499,7 @@ function getDescriptionFromDeclaration(
     return null
   }
 
-  let jsDocs
+  let jsDocs: JSDoc[] = []
 
   if (Node.isFunctionDeclaration(declaration)) {
     const implementation = declaration.getImplementation()
@@ -510,10 +516,10 @@ function getDescriptionFromDeclaration(
   return jsDocs.length > 0 ? jsDocs[0].getDescription().trim() : null
 }
 
-let theme
+let theme: any = null
 
 /** Sets the current theme. */
-export function setTheme(newTheme) {
+export function setTheme(newTheme: any) {
   theme = newTheme
 }
 

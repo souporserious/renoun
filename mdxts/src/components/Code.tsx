@@ -75,7 +75,7 @@ type PrivateCodeProps = Partial<{
   isNestedInEditor: boolean
 }>
 
-const languageMap = {
+const languageMap: Record<string, any> = {
   shell: 'shellscript',
   mjs: 'javascript',
 }
@@ -110,8 +110,11 @@ export async function Code({
   const id = 'source' in props ? props.source : filenameProp ?? filenameId++
   const unregisterCodeComponent = registerCodeComponent(id)
 
-  let finalValue
-  let finalLanguage = languageMap[language] || language || 'bash'
+  let finalValue: string = ''
+  let finalLanguage =
+    language && language in languageMap
+      ? languageMap[language]
+      : language || 'bash'
 
   if ('value' in props) {
     finalValue = props.value
@@ -134,7 +137,7 @@ export async function Code({
   )
   const jsxOnly = isJavaScriptLanguage ? isJsxOnly(finalValue) : false
   let filename = 'source' in props ? props.source : filenameProp
-  let sourceFile: SourceFile
+  let sourceFile: SourceFile | undefined
 
   if (!filename) {
     filename = `${id}.${finalLanguage}`
@@ -142,7 +145,7 @@ export async function Code({
 
   // Format JavaScript code blocks.
   if (isJavaScriptLanguage) {
-    const config = await resolveConfig(filename)
+    const config = (await resolveConfig(filename)) || {}
     config.filepath = filename
     config.printWidth = 60
     finalValue = await format(finalValue, config)
@@ -214,6 +217,11 @@ export async function Code({
         process.env.NODE_ENV === 'development'
           ? async function () {
               'use server'
+              if (!sourcePath || !sourcePathLine) {
+                throw new Error(
+                  'The [sourcePath] prop was not provided to the [Code] component. Make sure the mdxts/remark plugin is configured correctly.'
+                )
+              }
               const contents = await readFile(sourcePath, 'utf-8')
               const modifiedContents = contents
                 .split('\n')

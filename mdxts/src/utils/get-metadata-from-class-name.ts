@@ -1,4 +1,4 @@
-const languages = {
+const languages: Record<string, any> = {
   mjs: 'javascript',
 }
 

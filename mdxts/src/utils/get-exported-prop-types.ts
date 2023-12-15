@@ -1,5 +1,11 @@
 import { kebabCase } from 'case-anything'
-import type { CallExpression, SourceFile } from 'ts-morph'
+import type {
+  CallExpression,
+  Expression,
+  ExportedDeclarations,
+  SourceFile,
+  ts,
+} from 'ts-morph'
 import { Node } from 'ts-morph'
 import { getPropTypes } from './get-prop-types'
 import { getSourcePath } from './get-source-path'
@@ -8,18 +14,20 @@ import { getSourcePath } from './get-source-path'
 export function getExportedPropTypes(sourceFile: SourceFile) {
   return Array.from(sourceFile.getExportedDeclarations())
     .map(([name, [declaration]]) => getReactDocs(name, declaration))
-    .filter(Boolean)
+    .filter((doc): doc is NonNullable<ReturnType<typeof getReactDocs>> =>
+      Boolean(doc)
+    )
 }
 
-function getReactDocs(name, declaration) {
+function getReactDocs(name: string, declaration: ExportedDeclarations) {
   const reactFunctionDeclaration = getReactFunctionDeclaration(declaration)
   if (reactFunctionDeclaration) {
     const filePath = declaration.getSourceFile().getFilePath()
-    const { baseProps, unionProps } = getPropTypes(reactFunctionDeclaration)
+    const propTypes = getPropTypes(reactFunctionDeclaration)
     return {
       name,
-      baseProps,
-      unionProps,
+      baseProps: propTypes ? propTypes.baseProps : null,
+      unionProps: propTypes ? propTypes.unionProps : null,
       slug: kebabCase(name),
       sourcePath: getSourcePath(filePath),
     }
@@ -27,11 +35,13 @@ function getReactDocs(name, declaration) {
   return null
 }
 
-export function isComponent(name) {
-  return /[A-Z]/.test(name.charAt(0))
+export function isComponent(name: string | undefined) {
+  return name ? /[A-Z]/.test(name.charAt(0)) : false
 }
 
-export function isForwardRefExpression(initializer) {
+export function isForwardRefExpression(
+  initializer: Expression<ts.Expression> | undefined
+) {
   if (Node.isCallExpression(initializer)) {
     const expression = initializer.getExpression()
 
@@ -59,7 +69,7 @@ export function isForwardRefExpression(initializer) {
   return false
 }
 
-function getReactFunctionDeclaration(declaration: Node): Node {
+function getReactFunctionDeclaration(declaration: Node) {
   if (Node.isVariableDeclaration(declaration)) {
     const name = declaration.getName()
     const initializer = declaration.getInitializer()

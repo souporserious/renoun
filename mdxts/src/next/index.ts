@@ -97,7 +97,7 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
           // silence ts-morph warnings
           new webpack.ContextReplacementPlugin(
             /\/@ts-morph\/common\//,
-            (data) => {
+            (data: { dependencies: Array<{ critical?: boolean }> }) => {
               for (const dependency of data.dependencies) {
                 delete dependency.critical
               }
@@ -187,7 +187,7 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
         nextConfig.env = {}
       }
 
-      nextConfig.env.MDXTS_GIT_SOURCE = gitSource.replace(/\.git$/, '')
+      nextConfig.env.MDXTS_GIT_SOURCE = gitSource!.replace(/\.git$/, '')
       nextConfig.env.MDXTS_GIT_BRANCH = gitBranch
 
       if (nextConfig.pageExtensions === undefined) {

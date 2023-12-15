@@ -45,29 +45,30 @@ export function useMDXComponents() {
         {...props}
       />
     ),
-    pre: ({
-      filename,
-      editable,
-      lineNumbers,
-      showErrors,
-      highlight,
-      sourcePath,
-      sourcePathLine,
-      sourcePathColumn,
-      allowErrors,
-      children,
-    }: {
-      filename?: string
-      editable?: boolean
-      lineNumbers?: boolean
-      showErrors?: boolean
-      highlight?: string
-      sourcePath?: string
-      sourcePathLine?: number
-      sourcePathColumn?: number
-      allowErrors?: boolean
-      children: React.ReactElement
-    }) => {
+    pre: (props) => {
+      const {
+        filename,
+        editable,
+        lineNumbers,
+        showErrors,
+        highlight,
+        sourcePath,
+        sourcePathLine,
+        sourcePathColumn,
+        allowErrors,
+        children,
+      } = props as {
+        filename?: string
+        editable?: boolean
+        lineNumbers?: boolean
+        showErrors?: boolean
+        highlight?: string
+        sourcePath?: string
+        sourcePathLine?: number
+        sourcePathColumn?: number
+        allowErrors?: boolean
+        children: React.ReactElement
+      }
       const value = children.props.children.trimStart()
       const metadata = getMetadataFromClassName(children.props.className || '')
 

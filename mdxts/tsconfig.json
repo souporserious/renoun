@@ -3,7 +3,7 @@
     "target": "esnext",
     "lib": ["esnext", "dom"],
     "skipLibCheck": true,
-    "strict": false,
+    "strict": true,
     "forceConsistentCasingInFileNames": true,
     "esModuleInterop": true,
     "module": "esnext",
@@ -12,7 +12,6 @@
     "isolatedModules": true,
     "jsx": "react",
     "declaration": true,
-    "emitDeclarationOnly": true,
     "rootDir": "./src",
     "outDir": "./dist"
   },

@@ -22,7 +22,7 @@ export const Box = React.forwardRef(function Box<
     style,
     ...props
   }: BoxProps<Element>,
-  ref
+  ref: React.Ref<HTMLElement>
 ) {
   return (
     <Element

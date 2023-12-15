@@ -7,7 +7,7 @@ export function RegisterSourceFile({
   source,
 }: {
   filename: string
-  source: string
+  source: string | undefined
 }) {
   if (!source) {
     return

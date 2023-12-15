@@ -22,7 +22,12 @@ export async function PackageExports({
   name: string
   context: __WebpackModuleApi.RequireContext
 }) {
-  let exportsList = []
+  let exportsList: {
+    module: any
+    exportPath: string
+    sourcePath?: string
+    editorPath?: string
+  }[] = []
 
   try {
     const packageDirectoryPath = path.resolve(
@@ -34,11 +39,14 @@ export async function PackageExports({
     const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))
     const tsconfigPath = path.join(packageDirectoryPath, 'tsconfig.json')
     const tsconfig = JSON.parse(fs.readFileSync(tsconfigPath, 'utf8'))
-    const readmeModules = context.keys().reduce((allModules, key) => {
-      const normalizedKey = normalizeKey(key, name)
-      allModules[normalizedKey] = context(key)
-      return allModules
-    }, {})
+    const readmeModules = context.keys().reduce(
+      (allModules, key) => {
+        const normalizedKey = normalizeKey(key, name)
+        allModules[normalizedKey] = context(key)
+        return allModules
+      },
+      {} as Record<string, any>
+    )
     if (packageJson.exports) {
       exportsList = Object.keys(packageJson.exports).map(
         (exportPath: string) => {
@@ -105,7 +113,7 @@ export async function PackageExports({
                     action={async function createReadme() {
                       'use server'
                       // create the README file if it doesn't exist
-                      if (!fs.existsSync(sourcePath)) {
+                      if (sourcePath && !fs.existsSync(sourcePath)) {
                         fs.writeFileSync(
                           sourcePath,
                           `# ${exportPath}\n\nThis is the README for the ${exportPath} export from the ${name} package.`
@@ -113,7 +121,9 @@ export async function PackageExports({
                       }
 
                       // open the README file in the editor
-                      redirect(editorPath)
+                      if (editorPath) {
+                        redirect(editorPath)
+                      }
                     }}
                   >
                     <button

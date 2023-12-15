@@ -9,7 +9,8 @@ export function getTopLevelDirectories(sourceFiles: SourceFile[]) {
   })
 
   const topLevelDirectories = Array.from(allDirectories).filter((directory) => {
-    return !allDirectories.has(directory.getParent())
+    const parentDirectory = directory.getParent()
+    return parentDirectory ? !allDirectories.has(parentDirectory) : true
   })
 
   return topLevelDirectories

@@ -1,7 +1,8 @@
 import React, { Fragment } from 'react'
 import type { SourceFile } from 'ts-morph'
 import { Node, SyntaxKind } from 'ts-morph'
-import { type Theme } from './highlighter'
+
+import type { Theme, getHighlighter } from './highlighter'
 import { Symbol } from './Symbol'
 import { QuickInfo } from './QuickInfo'
 import { RegisterSourceFile } from './RegisterSourceFile'
@@ -10,7 +11,7 @@ import { CodeToolbar } from './CodeToolbar'
 
 export type CodeProps = {
   /** Code snippet to be highlighted. */
-  value?: string
+  value: string
 
   /** Name of the file. */
   filename?: string
@@ -25,7 +26,7 @@ export type CodeProps = {
   highlight?: string
 
   /** VS Code-based theme for highlighting. */
-  theme?: Theme
+  theme: Theme
 
   /** Padding to apply to the code block. */
   padding?: string
@@ -65,8 +66,8 @@ export function CodeView({
   theme,
   showErrors,
   className,
-  isJsxOnly,
-  isNestedInEditor,
+  isJsxOnly = false,
+  isNestedInEditor = false,
   shouldRenderFilename,
   rootDirectory,
   baseDirectory,
@@ -78,8 +79,8 @@ export function CodeView({
   inline,
   allowErrors,
 }: CodeProps & {
-  row?: [number, number]
-  tokens: any
+  row?: number[] | null
+  tokens: ReturnType<Awaited<ReturnType<typeof getHighlighter>>>
   sourceFile?: SourceFile
   sourcePath?: string
   highlighter: any
@@ -102,7 +103,7 @@ export function CodeView({
       : []
   const Container = isNestedInEditor
     ? React.Fragment
-    : (props) => (
+    : (props: Record<string, unknown>) => (
         <div
           style={{
             display: inline ? 'inline-grid' : 'grid',
@@ -120,10 +121,12 @@ export function CodeView({
 
   return (
     <Container>
-      <RegisterSourceFile
-        filename={filename}
-        source={sourceFile?.getFullText()}
-      />
+      {filename ? (
+        <RegisterSourceFile
+          filename={filename}
+          source={sourceFile?.getFullText()}
+        />
+      ) : null}
 
       {shouldRenderFilename ? (
         <CodeToolbar
@@ -151,7 +154,7 @@ export function CodeView({
             color: theme.colors['editorLineNumber.foreground'],
           }}
         >
-          {tokens.map((_, lineIndex) => {
+          {tokens.map((_: any, lineIndex: number) => {
             const shouldHighlight = shouldHighlightLine(lineIndex)
             const isActive = row && row[0] <= lineIndex && lineIndex <= row[1]
             const Wrapper = ({ children }: { children: React.ReactNode }) =>
@@ -177,18 +180,18 @@ export function CodeView({
       <Pre
         isNestedInEditor={isNestedInEditor}
         className={className}
-        style={{
-          gridRow: filename ? 2 : 1,
-          // paddingTop: paddingVertical,
-          // paddingBottom: paddingVertical,
-          // paddingLeft: paddingHorizontal,
-          // paddingRight: paddingHorizontal,
-        }}
+        style={{ gridRow: filename ? 2 : 1 }}
       >
         {diagnostics
           ? diagnostics.map((diagnostic) => {
               const start = diagnostic.getStart()
-              const end = start + diagnostic.getLength()
+              const length = diagnostic.getLength()
+
+              if (!start || !length || !sourceFile) {
+                return null
+              }
+
+              const end = start + length
               const { line, column } = sourceFile.getLineAndColumnAtPos(start)
               const yOffset = isJsxOnly ? 2 : 1
               const top = (line - yOffset) * lineHeight
@@ -213,39 +216,45 @@ export function CodeView({
             })
           : null}
 
-        {symbolBounds.map((bounds, index) => {
-          const filteredDiagnostics = diagnostics.filter((diagnostic) => {
-            const start = diagnostic.getStart()
-            const end = start + diagnostic.getLength()
-            return start <= bounds.start && bounds.start <= end
-          })
-          const isQuickInfoOpen = showErrors && filteredDiagnostics.length > 0
-          return (
-            <Symbol
-              key={index}
-              isQuickInfoOpen={isQuickInfoOpen}
-              style={{
-                top: `calc(${bounds.top}px + ${paddingVertical})`,
-                left: `calc(${bounds.left} * 1ch + ${paddingHorizontal})`,
-                width: `calc(${bounds.width} * 1ch)`,
-                height: bounds.height,
-              }}
-            >
-              <QuickInfo
-                bounds={bounds}
-                filename={filename}
-                highlighter={highlighter}
-                language={language}
-                theme={theme}
-                diagnostics={filteredDiagnostics}
-                edit={edit}
+        {filename &&
+          language &&
+          symbolBounds.map((bounds, index) => {
+            const filteredDiagnostics = diagnostics.filter((diagnostic) => {
+              const start = diagnostic.getStart()
+              const length = diagnostic.getLength()
+              if (!start || !length) {
+                return false
+              }
+              const end = start + length
+              return start <= bounds.start && bounds.start <= end
+            })
+            const isQuickInfoOpen = showErrors && filteredDiagnostics.length > 0
+            return (
+              <Symbol
+                key={index}
                 isQuickInfoOpen={isQuickInfoOpen}
-                rootDirectory={rootDirectory}
-                baseDirectory={baseDirectory}
-              />
-            </Symbol>
-          )
-        })}
+                style={{
+                  top: `calc(${bounds.top}px + ${paddingVertical})`,
+                  left: `calc(${bounds.left} * 1ch + ${paddingHorizontal})`,
+                  width: `calc(${bounds.width} * 1ch)`,
+                  height: bounds.height,
+                }}
+              >
+                <QuickInfo
+                  bounds={bounds}
+                  filename={filename}
+                  highlighter={highlighter}
+                  language={language}
+                  theme={theme}
+                  diagnostics={filteredDiagnostics}
+                  edit={edit}
+                  isQuickInfoOpen={isQuickInfoOpen}
+                  rootDirectory={rootDirectory}
+                  baseDirectory={baseDirectory}
+                />
+              </Symbol>
+            )
+          })}
 
         <div
           style={{
@@ -260,7 +269,7 @@ export function CodeView({
             <Fragment key={lineIndex}>
               {line.map((token, tokenIndex) => {
                 if (
-                  token.color.toLowerCase() === editorForeground ||
+                  token.color?.toLowerCase() === editorForeground ||
                   token.content.trim() === ''
                 ) {
                   return token.content
@@ -269,13 +278,7 @@ export function CodeView({
                 return (
                   <span
                     key={tokenIndex}
-                    style={{
-                      ...token.fontStyle,
-                      color: token.color,
-                      textDecoration: token.hasError
-                        ? 'red wavy underline'
-                        : 'none',
-                    }}
+                    style={{ ...token.fontStyle, color: token.color }}
                   >
                     {token.content}
                   </span>
@@ -326,17 +329,17 @@ export function CodeView({
 }
 
 /** Calculate which lines to highlight based on the range meta string added by the rehype plugin. */
-function calculateLinesToHighlight(meta) {
-  if (meta === undefined || meta === '') {
+function calculateLinesToHighlight(meta: string | undefined) {
+  if (meta === '' || meta === undefined) {
     return () => false
   }
   const lineNumbers = meta
     .split(',')
-    .map((value) => value.split('-').map((y) => parseInt(y, 10)))
+    .map((value: string) => value.split('-').map((y) => parseInt(y, 10)))
 
-  return (index) => {
+  return (index: number) => {
     const lineNumber = index + 1
-    const inRange = lineNumbers.some(([start, end]) =>
+    const inRange = lineNumbers.some(([start, end]: number[]) =>
       end ? lineNumber >= start && lineNumber <= end : lineNumber === start
     )
     return inRange

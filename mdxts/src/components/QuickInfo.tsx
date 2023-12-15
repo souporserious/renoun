@@ -1,5 +1,7 @@
 import React, { Fragment } from 'react'
 import { type ts, type Diagnostic } from 'ts-morph'
+
+import { type getHighlighter } from './highlighter'
 import { languageService } from './project'
 import { getDiagnosticMessageText } from './diagnostics'
 import { QuickInfoContainer } from './QuickInfoContainer'
@@ -18,7 +20,7 @@ export function QuickInfo({
 }: {
   bounds: any
   filename: string
-  highlighter: any
+  highlighter: Awaited<ReturnType<typeof getHighlighter>>
   language: string
   theme: any
   diagnostics: Diagnostic[]

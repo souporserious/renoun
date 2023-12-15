@@ -16,7 +16,7 @@ async function fetchTypes(
       projectName: 'mdxts',
       typescript: ts,
       logger: console,
-      fetcher: async (url: string) => {
+      fetcher: async (url) => {
         return fetch(url).catch((error) => {
           throw new Error(
             `mdxts(createMdxtsPlugin > types): Could not fetch types for "${name}", make sure the package is either defined in the package.json and is available to the current workspace or is published to NPM.`,
@@ -118,7 +118,7 @@ async function findParentNodeModulesPath(
 async function findTypesPath(
   packageJson: Record<string, any>,
   packageName: string
-): Promise<string> {
+): Promise<string | null> {
   const typesField = packageJson.types || packageJson.typings
   const isSubmodule = packageName.includes('/')
 
@@ -157,7 +157,15 @@ function getRootPackageName(packageName: string): string {
     return packageName.split('/').slice(0, 2).join('/')
   }
 
-  return packageName.split('/').shift()
+  const root = packageName.split('/').shift()
+
+  if (!root) {
+    throw new Error(
+      `mdxts: Could not parse root package name from "${packageName}"`
+    )
+  }
+
+  return root
 }
 
 /** Fetches the types for a locally installed NPM package. */

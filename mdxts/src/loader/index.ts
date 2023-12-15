@@ -42,7 +42,11 @@ export default async function loader(
         `export const frontMatter = ${stringifiedData}\n\n${content}`
       )
     } catch (error) {
-      callback(error)
+      if (error instanceof Error) {
+        callback(error)
+      } else {
+        throw error
+      }
     }
     return
   }
@@ -67,7 +71,7 @@ export default async function loader(
         if (Node.isStringLiteral(firstArgument)) {
           const globPattern = firstArgument.getLiteralText()
           const baseGlobPattern = dirname(globPattern)
-          const isMdxPattern = globPattern.split('/').at(-1).includes('mdx')
+          const isMdxPattern = globPattern.split('/').at(-1)?.includes('mdx')
           let filePaths = await glob(
             isMdxPattern
               ? globPattern
@@ -90,7 +94,7 @@ export default async function loader(
             })
 
             allSourceFilePaths.forEach((sourceFilePath) => {
-              const sourceFilename = sourceFilePath.split('/').pop()
+              const sourceFilename = sourceFilePath.split('/').pop() ?? ''
               const mdxFilename = sourceFilename.replace(/\.[^/.]+$/, '.mdx')
               const mdxFilePath = sourceFilePath.replace(
                 sourceFilename,
@@ -114,7 +118,11 @@ export default async function loader(
           call.insertArguments(0, [objectLiteralText])
         }
       } catch (error) {
-        callback(error)
+        if (error instanceof Error) {
+          callback(error)
+        } else {
+          throw error
+        }
         return
       }
     }

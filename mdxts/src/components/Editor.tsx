@@ -6,13 +6,14 @@ import React, {
   useId,
   useState,
 } from 'react'
-import type { Diagnostic, SourceFile } from 'ts-morph'
+import type { Diagnostic, SourceFile, ts } from 'ts-morph'
+
 import { getDiagnosticMessageText } from './diagnostics'
 import type { Highlighter, Theme, Tokens } from './highlighter'
 import { getHighlighter } from './highlighter'
 import { project, languageService } from './project'
-import { CodeView } from './CodeView'
 import { CodeToolbar } from './CodeToolbar'
+import { CodeView } from './CodeView'
 
 const isClient = typeof document !== 'undefined'
 let fetchPromise = isClient ? fetch('/_next/static/mdxts/types.json') : null
@@ -46,7 +47,7 @@ export type EditorProps = {
   onChange?: (event: React.ChangeEvent<HTMLTextAreaElement>) => void
 }
 
-const languageMap = {
+const languageMap: Record<string, string> = {
   shell: 'shellscript',
   bash: 'shellscript',
   mjs: 'javascript',
@@ -65,18 +66,29 @@ export function Editor({
   className,
   children,
 }: EditorProps & { children?: React.ReactNode }) {
+  if (!theme) {
+    throw new Error(
+      'The [theme] prop was not provided to the [Code] component. Pass an explicit theme or make sure the mdxts/loader package is configured correctly.'
+    )
+  }
+
   const filenameId = useId()
   const filename = filenameProp || `index-${filenameId.slice(1, -1)}.tsx`
   const scopedFilename = `mdxts/${filename}`
-  const language = languageMap[languageProp] || languageProp
-  const [stateValue, setStateValue] = useState(defaultValue)
+  const language =
+    languageProp && languageProp in languageMap
+      ? languageMap[languageProp]
+      : languageProp
+  const [stateValue, setStateValue] = useState(defaultValue ?? '')
   const [tokens, setTokens] = useState<Tokens[]>([])
-  const [row, setRow] = useState(null)
+  const [row, setRow] = useState<number[] | null>(null)
+  const [column, setColumn] = useState<number[] | null>(null)
   const [focus, setFocus] = useState(false)
-  const [column, setColumn] = useState(null)
-  const [sourceFile, setSourceFile] = useState<SourceFile | null>(null)
+  const [sourceFile, setSourceFile] = useState<SourceFile | undefined>(
+    undefined
+  )
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([])
-  const [suggestions, setSuggestions] = useState([])
+  const [suggestions, setSuggestions] = useState<ts.CompletionEntry[]>([])
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [highlightedIndex, setHighlightedIndex] = useState(0)
   const [highlighter, setHighlighter] = useState<Highlighter | null>(null)
@@ -104,7 +116,10 @@ export function Editor({
       // Wait for the types to be fetched before creating declaration source files
       if (fetchPromise) {
         const response = await fetchPromise
-        const typeDeclarations = await response.clone().json()
+        const typeDeclarations = (await response.clone().json()) as {
+          path: string
+          code: string
+        }[]
 
         typeDeclarations.forEach(({ path, code }) => {
           project.createSourceFile(path, code, { overwrite: true })
@@ -155,25 +170,25 @@ export function Editor({
       const diagnostics = nextSourceFile.getPreEmitDiagnostics()
       setDiagnostics(diagnostics)
 
-      if (highlighter) {
+      if (highlighter && resolvedValue && sourceFile) {
         const tokens = highlighter(resolvedValue, language, sourceFile)
         setTokens(tokens)
       }
-    } else if (highlighter) {
+    } else if (highlighter && resolvedValue) {
       const tokens = highlighter(resolvedValue, language)
       setTokens(tokens)
     }
   }, [resolvedValue, highlighter])
 
   useEffect(() => {
-    if (nextCursorPositionRef.current) {
+    if (textareaRef.current && nextCursorPositionRef.current) {
       textareaRef.current.selectionStart = nextCursorPositionRef.current
       textareaRef.current.selectionEnd = nextCursorPositionRef.current
       nextCursorPositionRef.current = null
     }
   }, [stateValue])
 
-  function getAutocompletions(position) {
+  function getAutocompletions(position: number) {
     const completions = languageService.getCompletionsAtPosition(
       scopedFilename,
       position,
@@ -190,10 +205,10 @@ export function Editor({
     return completions ? completions.entries : []
   }
 
-  function selectSuggestion(suggestion) {
+  function selectSuggestion(suggestion: any) {
     const currentPosition = textareaRef.current?.selectionStart || 0
-    const beforeCursor = resolvedValue.substring(0, currentPosition)
-    const match = beforeCursor.match(/[a-zA-Z_]+$/)
+    const beforeCursor = resolvedValue?.substring(0, currentPosition)
+    const match = beforeCursor?.match(/[a-zA-Z_]+$/)
     const prefix = match ? match[0] : ''
 
     for (let index = 0; index < prefix.length; index++) {
@@ -256,10 +271,13 @@ export function Editor({
       event.key === 'Backspace' ||
       (event.key === ' ' && ctrlKeyRef.current)
     ) {
-      const lastChar = resolvedValue.at(-1)
+      const lastChar = resolvedValue?.at(-1)
 
       // don't trigger suggestions if there is space before the cursor
-      if (!/^[a-zA-Z.]$/.test(lastChar) || ['\n', ' '].includes(lastChar)) {
+      if (
+        lastChar &&
+        (!/^[a-zA-Z.]$/.test(lastChar) || ['\n', ' '].includes(lastChar))
+      ) {
         setIsDropdownOpen(false)
       } else {
         const cursorPosition = textareaRef.current?.selectionStart || 0
@@ -307,6 +325,7 @@ export function Editor({
               highlight={highlight}
               language={language}
               theme={theme}
+              value={resolvedValue}
               isNestedInEditor
             />
           )}
@@ -372,7 +391,7 @@ export function Editor({
             margin: 0,
             overflow: 'auto',
             position: 'absolute',
-            top: row * 20 + 80,
+            top: row ? row[0] * 20 + 80 : 80,
             left: `calc(${column} * 1ch + 6ch)`,
             zIndex: 1000,
             borderRadius: 3,
@@ -446,7 +465,7 @@ function Suggestion({
   )
 }
 
-function getCaretPositions(textarea) {
+function getCaretPositions(textarea: HTMLTextAreaElement) {
   const start = textarea.selectionStart
   const end = textarea.selectionEnd
   const textBeforeStart = textarea.value.substring(0, start)
@@ -460,7 +479,7 @@ function getCaretPositions(textarea) {
   }
 }
 
-function getPositionFromText(text) {
+function getPositionFromText(text: string) {
   const lines = text.split('\n')
   const row = lines.length - 1
   const col = lines[lines.length - 1].length + 1

@@ -98,6 +98,9 @@ importers:
       '@types/react-dom':
         specifier: ^18.2.17
         version: 18.2.17
+      '@types/title':
+        specifier: ^3.4.3
+        version: 3.4.3
       '@types/webpack-env':
         specifier: 1.18.4
         version: 1.18.4
@@ -2046,6 +2049,10 @@ packages:
 
   /@types/stylis@4.2.1:
     resolution: {integrity: sha512-OSaMrXUKxVigGlKRrET39V2xdhzlztQ9Aqumn1WbCBKHOi9ry7jKSd7rkyj0GzmWaU960Rd+LpOFpLfx5bMQAg==}
+    dev: false
+
+  /@types/title@3.4.3:
+    resolution: {integrity: sha512-mjupLOb4kwUuoUFokkacy/VMRVBH2qtqZ5AX7K7iha6+iKIkX80n/Y4EoNVEVRmer8dYJU/ry+fppUaDFVQh7Q==}
     dev: false
 
   /@types/tough-cookie@4.0.3:

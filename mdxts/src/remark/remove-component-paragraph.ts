@@ -12,7 +12,9 @@ export function removeComponentParagraph() {
 
       if (
         ancestor.type === 'mdxJsxFlowElement' &&
-        firstChild?.type === 'text'
+        firstChild?.type === 'text' &&
+        ancestor.position &&
+        node.position
       ) {
         const componentStartLine = ancestor.position.start.line
         const paragraphStartLine = node.position.start.line

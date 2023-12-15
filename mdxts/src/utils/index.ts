@@ -1,5 +1,4 @@
 export * from './bundle'
-export * from './flatten-data'
 export * from './get-editor-path'
 export * from './get-examples'
 export * from './get-exports'

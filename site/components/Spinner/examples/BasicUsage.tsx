@@ -2,9 +2,12 @@ import { Stack } from 'components/Stack'
 import { Spinner, spinnerSizes } from 'components/Spinner'
 
 export default function BasicUsage() {
+  const spinnerSizeKeys = Object.keys(
+    spinnerSizes
+  ) as (keyof typeof spinnerSizes)[]
   return (
     <Stack flexDirection="row" padding="8px" gap="8px">
-      {Object.keys(spinnerSizes).map((size: keyof typeof spinnerSizes) => (
+      {spinnerSizeKeys.map((size) => (
         <Spinner
           key={size}
           size={size}

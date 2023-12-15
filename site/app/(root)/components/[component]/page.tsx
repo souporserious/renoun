@@ -89,7 +89,7 @@ export default async function Page({
 
         {Content ? <Content /> : null}
 
-        {types?.length > 0 && (
+        {types && types.length > 0 && (
           <div
             style={{
               display: 'flex',

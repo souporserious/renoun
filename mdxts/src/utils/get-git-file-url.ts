@@ -4,8 +4,8 @@ export function getGitFileUrl(
   line?: number,
   column?: number
 ): string {
-  const normalizedUrl = process.env.MDXTS_GIT_SOURCE
-  const branch = process.env.MDXTS_GIT_BRANCH
+  const normalizedUrl = process.env.MDXTS_GIT_SOURCE!
+  const branch = process.env.MDXTS_GIT_BRANCH!
   const url = new URL(normalizedUrl)
   let fileUrl: string
 

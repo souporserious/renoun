@@ -9,10 +9,14 @@ export function getDiagnosticsForToken(
 
   for (let diagnostic of diagnostics) {
     const diagnosticStart = diagnostic.getStart()
-    const diagnosticEnd = diagnosticStart + diagnostic.getLength()
+    const diagnosticLength = diagnostic.getLength()
 
-    if (token.start >= diagnosticStart && token.end <= diagnosticEnd) {
-      tokenDiagnostics.push(diagnostic)
+    if (diagnosticStart && diagnosticLength) {
+      const diagnosticEnd = diagnosticStart + diagnosticLength
+
+      if (token.start >= diagnosticStart && token.end <= diagnosticEnd) {
+        tokenDiagnostics.push(diagnostic)
+      }
     }
   }
 

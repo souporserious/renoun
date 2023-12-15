@@ -25,8 +25,8 @@ function sortFilesAndFolders(a: string, b: string) {
 }
 
 /** Returns the first number in a string, or null if there is none. */
-function getFirstNumberInString(str) {
-  const match = str.match(/\d+/)
+function getFirstNumberInString(string: string) {
+  const match = string.match(/\d+/)
   return match ? parseInt(match[0], 10) : null
 }
 

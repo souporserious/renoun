@@ -38,7 +38,7 @@ export function getPropTypes(declaration: Node) {
   const baseProps = basePropsType
     .getApparentProperties()
     .map((property) => processProperty(property, declaration, defaultValues))
-  let unionProps = []
+  let unionProps: ReturnType<typeof processProperty>[] = []
 
   if (propsType.isUnion()) {
     propsType.getUnionTypes().forEach((type) => {
