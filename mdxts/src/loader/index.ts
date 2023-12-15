@@ -1,5 +1,5 @@
 import * as webpack from 'webpack'
-import { dirname, join } from 'node:path'
+import { dirname, basename, join, relative } from 'node:path'
 import { glob } from 'fast-glob'
 import { Node, Project, SyntaxKind } from 'ts-morph'
 import matter from 'gray-matter'
@@ -9,13 +9,29 @@ import matter from 'gray-matter'
  * If a TypeScript file pattern is provided, the closest README.mdx or MDX file with the same name will be used.
  */
 export default async function loader(
-  this: webpack.LoaderContext<{}>,
+  this: webpack.LoaderContext<{
+    themePath?: string
+  }>,
   source: string | Buffer
 ) {
   this.cacheable(true)
   const callback = this.async()
+  const options = this.getOptions()
   const sourceString = source.toString()
 
+  /** Add Next.js entry layout files to set the theme. */
+  if (isNextJsEntryLayout(this.resourcePath) && options.themePath) {
+    const relativeThemePath = relative(
+      dirname(this.resourcePath),
+      options.themePath
+    )
+    // Normalize path for import (replace backslashes on Windows)
+    const normalizedThemePath = relativeThemePath.split('\\').join('/')
+
+    source = `import { setTheme } from 'mdxts';\nimport theme from '${normalizedThemePath}';\nsetTheme(theme);\n\n${source}`
+  }
+
+  /** Export front matter from MDX files. */
   if (this.resourcePath.endsWith('.mdx')) {
     try {
       const { data, content } = matter(sourceString)
@@ -31,6 +47,7 @@ export default async function loader(
     return
   }
 
+  /** Augment `createDataSource` calls with MDX/TypeScript file paths. */
   if (
     /.*import\s\{\screateDataSource\s\}\sfrom\s['"]mdxts['"].*/.test(
       sourceString
@@ -106,4 +123,15 @@ export default async function loader(
   } else {
     callback(null, source)
   }
+}
+
+/** Returns true if the provided file path is a Next.js entry layout file. */
+function isNextJsEntryLayout(filePath: string) {
+  const topLevelPath = join(
+    dirname(filePath).replace(`${process.cwd()}/`, ''),
+    basename(filePath)
+  )
+  return (
+    topLevelPath === 'app/layout.tsx' || topLevelPath === 'src/app/layout.js'
+  )
 }

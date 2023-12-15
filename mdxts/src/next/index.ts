@@ -7,6 +7,7 @@ import { writeFile } from 'node:fs/promises'
 import CopyPlugin from 'copy-webpack-plugin'
 import remarkTypography from 'remark-typography'
 import createMdxPlugin from '@next/mdx'
+
 import { remarkPlugin } from '../remark'
 import { rehypePlugin } from '../rehype'
 import { renumberFilenames } from '../utils/renumber'
@@ -116,7 +117,7 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
         config.module.rules.push({
           test: /\.(?:jsx?|tsx?|mdx?)$/,
           exclude: /node_modules/,
-          use: ['mdxts/loader'],
+          use: [{ loader: 'mdxts/loader', options: { themePath } }],
         })
 
         config.module.rules.push({

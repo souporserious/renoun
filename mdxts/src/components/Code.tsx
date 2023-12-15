@@ -6,6 +6,7 @@ import { findRoot } from '@manypkg/find-root'
 import { format, resolveConfig } from 'prettier'
 import 'server-only'
 
+import { getTheme } from '../index'
 import { getSourcePath } from '../utils/get-source-path'
 import { isJsxOnly } from '../utils/is-jsx-only'
 import { getHighlighter, type Theme } from './highlighter'
@@ -86,7 +87,7 @@ export async function Code({
   language,
   lineNumbers,
   highlight,
-  theme,
+  theme: themeProp,
   className,
   showErrors,
   allowErrors,
@@ -98,6 +99,14 @@ export async function Code({
 }: CodeProps) {
   const { isNestedInEditor, sourcePath, sourcePathLine, sourcePathColumn } =
     props as PrivateCodeProps
+  const theme = themeProp ?? getTheme()
+
+  if (!theme) {
+    throw new Error(
+      'The [theme] prop was not provided to the [Code] component. Pass an explicit theme or make sure the mdxts/loader package is configured correctly.'
+    )
+  }
+
   const id = 'source' in props ? props.source : filenameProp ?? filenameId++
   const unregisterCodeComponent = registerCodeComponent(id)
 

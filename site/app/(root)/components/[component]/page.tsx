@@ -4,7 +4,6 @@ import { Code } from 'mdxts/components'
 import { SiblingLinks } from 'components/SiblingLinks'
 import { TableOfContents } from 'components/TableOfContents'
 import { allComponents } from 'data'
-import theme from 'theme.json'
 
 export const dynamic = 'force-static'
 
@@ -253,7 +252,6 @@ function Props({ props }: { props: any[] }) {
             inline
             value={propType.type}
             language="typescript"
-            theme={theme as any}
             paddingHorizontal="0.5rem"
             paddingVertical="0.2rem"
           />

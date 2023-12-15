@@ -3,8 +3,9 @@ import Slugger from 'github-slugger'
 import type { ComponentType } from 'react'
 import { kebabCase } from 'case-anything'
 import { basename, join, resolve } from 'node:path'
-import { ImportDeclaration, Node, SyntaxKind } from 'ts-morph'
+import { Node, SyntaxKind } from 'ts-morph'
 import type { Directory, ExportedDeclarations, Symbol, ts } from 'ts-morph'
+
 import type { getPropTypes } from './utils/get-prop-types'
 import type { CodeBlocks } from './remark/add-code-blocks'
 import type { Headings } from './remark/add-headings'
@@ -507,4 +508,16 @@ function getDescriptionFromDeclaration(
   }
 
   return jsDocs.length > 0 ? jsDocs[0].getDescription().trim() : null
+}
+
+let theme
+
+/** Sets the current theme. */
+export function setTheme(newTheme) {
+  theme = newTheme
+}
+
+/** Returns the current theme. */
+export function getTheme() {
+  return theme
 }

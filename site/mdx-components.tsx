@@ -7,14 +7,13 @@ import { Preview } from 'mdxts/components/Preview'
 import { PackageExports } from 'mdxts/components/PackageExports'
 import { PackageInstall } from 'mdxts/components/PackageInstall'
 import { GeistMono } from 'geist/font/mono'
-import theme from 'theme.json'
 
 export function useMDXComponents() {
   return {
     Preview,
     PackageExports,
     PackageInstall,
-    Code: (props) => <Code theme={theme} {...props} />,
+    Code: (props) => <Code {...props} />,
     Example: (props) => <div {...props} />,
     Playground: ({ codeBlock, ...props }) => {
       return (
@@ -22,7 +21,6 @@ export function useMDXComponents() {
           <Code
             className={GeistMono.className}
             language="tsx"
-            theme={theme as any}
             value={codeBlock}
           />
           <div {...props} />
@@ -88,7 +86,6 @@ export function useMDXComponents() {
           language={metadata?.language}
           lineNumbers={lineNumbers}
           highlight={highlight}
-          theme={theme as any}
           className={GeistMono.className}
         >
           <Code
@@ -97,7 +94,6 @@ export function useMDXComponents() {
             language={metadata?.language}
             lineNumbers={lineNumbers}
             highlight={highlight}
-            theme={theme as any}
             // @ts-expect-error - private prop
             isNestedInEditor
           />
@@ -110,7 +106,6 @@ export function useMDXComponents() {
           lineNumbers={lineNumbers}
           highlight={highlight}
           value={value}
-          theme={theme as any}
           showErrors={showErrors}
           className={GeistMono.className}
           // @ts-expect-error - private props

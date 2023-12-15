@@ -1,5 +1,5 @@
 import React from 'react'
-import { type Theme } from './highlighter'
+
 import { Code } from './Code'
 import { PackageInstallClient } from './PackageInstallClient'
 
@@ -11,21 +11,11 @@ const packageManagers = {
 }
 
 /** * Renders install commands with a picker for each package manager. */
-export async function PackageInstall({
-  packages,
-  theme,
-}: {
-  packages: string[]
-  theme?: Theme
-}) {
+export async function PackageInstall({ packages }: { packages: string[] }) {
   const allHighlightedCommands = Object.fromEntries(
     Object.entries(packageManagers).map(([command, install]) => [
       command,
-      <Code
-        value={`${install} ${packages.join(' ')}`}
-        language="shell"
-        theme={theme}
-      />,
+      <Code value={`${install} ${packages.join(' ')}`} language="shell" />,
     ])
   )
 
