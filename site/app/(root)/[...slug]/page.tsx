@@ -27,7 +27,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
       }}
     >
       <div>
-        <Content />
+        {Content ? <Content /> : null}
         <SiblingLinks previous={doc.previous} next={doc.next} />
       </div>
       <TableOfContents headings={headings} sourcePath={sourcePath} />

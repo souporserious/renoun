@@ -7,9 +7,11 @@ export async function generateStaticParams() {
   const sourceFiles = await allComponents.all()
 
   return Object.entries(sourceFiles)
-    .filter(([, component]) => component.examples?.length > 0)
+    .filter(
+      ([, component]) => component.examples && component.examples?.length > 0
+    )
     .flatMap(([pathname, component]) => {
-      return component.examples.map((example) => ({
+      return component.examples!.map((example) => ({
         component: pathname,
         example: example.slug,
       }))

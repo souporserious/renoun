@@ -391,7 +391,7 @@ export function createDataSource<Type>(
           pathname,
           filteredModules[index],
         ])
-      )
+      ) as Record<string, Module & Type>
     },
 
     /** Returns a module by pathname including metadata, examples, and previous/next modules. */
