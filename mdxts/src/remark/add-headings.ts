@@ -45,6 +45,7 @@ export function addHeadings() {
     tree.children.unshift({
       // @ts-expect-error
       type: 'mdxjsEsm',
+      value: '',
       data: {
         // @ts-expect-error
         estree: {
