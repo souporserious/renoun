@@ -226,9 +226,11 @@ export function createDataSource<Type>(
       exportedDeclarations
         ? Array.from(exportedDeclarations)
             .find(([name, [declaration]]) => {
+              const baseFilename = basename(cleanFilename(moduleKey))
               return (
                 defaultExportSymbol === declaration.getSymbol() ||
-                name === basename(cleanFilename(moduleKey))
+                name === baseFilename ||
+                kebabCase(name) === baseFilename // normalize camel case function name against kebab case filename
               )
             })
             ?.at(1) // Get the declaration
