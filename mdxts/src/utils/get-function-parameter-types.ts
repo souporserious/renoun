@@ -1,5 +1,5 @@
 import type { Symbol, Type } from 'ts-morph'
-import { Node, SyntaxKind, TypeFormatFlags, TypeChecker } from 'ts-morph'
+import { Node, TypeFormatFlags, TypeChecker } from 'ts-morph'
 import { kebabCase } from 'case-anything'
 import { getDefaultValuesFromProperties } from '@tsxmod/utils'
 
@@ -13,8 +13,7 @@ export function getFunctionParameterTypes(declaration: Node) {
     return null
   }
 
-  const [signature] = signatures
-  const parameters = signature.getParameters()
+  const parameters = signatures.at(0)!.getParameters()
 
   if (parameters.length === 0) {
     return null
@@ -31,6 +30,7 @@ export function getFunctionParameterTypes(declaration: Node) {
   return parameterTypes
 }
 
+/** Processes a signature parameter into a metadata object. */
 function processType(
   parameter: Symbol,
   declaration: Node,
@@ -42,16 +42,18 @@ function processType(
   let defaultValue
 
   if (Node.isParameterDeclaration(valueDeclaration)) {
-    isObjectBindingPattern =
-      valueDeclaration.getNameNode()?.getKind() ===
-      SyntaxKind.ObjectBindingPattern
+    isObjectBindingPattern = Node.isObjectBindingPattern(
+      valueDeclaration.getNameNode()
+    )
 
     const initializer = valueDeclaration.getInitializer()
     if (initializer) {
       defaultValue = initializer.getText()
     }
 
-    required = !valueDeclaration?.hasQuestionToken() && !defaultValue
+    required = valueDeclaration
+      ? !valueDeclaration?.hasQuestionToken() && !defaultValue
+      : !defaultValue
   }
 
   const metadata: {
@@ -61,7 +63,7 @@ function processType(
     defaultValue: any
     required: boolean
     type: string
-    properties?: ReturnType<typeof processProperties> | null
+    properties?: ReturnType<typeof processTypeProperties> | null
     sourcePath?: string
   } = {
     defaultValue,
@@ -99,7 +101,7 @@ function processType(
     ? getDefaultValuesFromProperties(firstChild.getElements())
     : {}
 
-  metadata.properties = processProperties(
+  metadata.properties = processTypeProperties(
     parameterType,
     declaration,
     typeChecker,
@@ -120,7 +122,8 @@ export interface PropertyMetadata {
   sourcePath?: string
 }
 
-function processProperties(
+/** Processes the properties of a type. */
+function processTypeProperties(
   type: Type,
   declaration: Node,
   typeChecker: TypeChecker,
@@ -136,6 +139,7 @@ function processProperties(
     )
 }
 
+/** Processes a property into a metadata object. */
 function processProperty(
   property: Symbol,
   declaration: Node,
@@ -144,7 +148,7 @@ function processProperty(
 ) {
   const valueDeclaration = property.getValueDeclaration()
 
-  if (valueDeclaration?.getSourceFile().isInNodeModules()) {
+  if (!valueDeclaration || valueDeclaration.getSourceFile().isInNodeModules()) {
     return null
   }
 
@@ -172,7 +176,7 @@ function processProperty(
 
   if (propertyType.isObject()) {
     const firstChild = valueDeclaration?.getFirstChild()
-    propertyMetadata.properties = processProperties(
+    propertyMetadata.properties = processTypeProperties(
       propertyType,
       declaration,
       typeChecker,
@@ -185,6 +189,7 @@ function processProperty(
   return propertyMetadata
 }
 
+/** Gets the description from a symbol's jsdocs. */
 function getDescriptionFromJsDocs(symbol: Symbol) {
   const description = symbol
     .getDeclarations()
