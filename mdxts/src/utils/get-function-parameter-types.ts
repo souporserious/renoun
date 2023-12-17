@@ -1,11 +1,5 @@
 import type { Symbol, Type } from 'ts-morph'
-import {
-  Node,
-  SyntaxKind,
-  TypeFlags,
-  TypeFormatFlags,
-  TypeChecker,
-} from 'ts-morph'
+import { Node, SyntaxKind, TypeFormatFlags, TypeChecker } from 'ts-morph'
 import { kebabCase } from 'case-anything'
 import { getDefaultValuesFromProperties } from '@tsxmod/utils'
 
@@ -44,8 +38,8 @@ function processType(
 ) {
   const valueDeclaration = parameter.getValueDeclaration()
   let isObjectBindingPattern = false
+  let required = false
   let defaultValue
-  let required
 
   if (Node.isParameterDeclaration(valueDeclaration)) {
     isObjectBindingPattern =
@@ -96,7 +90,7 @@ function processType(
     ?.getSourceFile()
     .isInNodeModules()
 
-  if (isPrimitiveType(parameterType) || isTypeInNodeModules) {
+  if (isTypeInNodeModules) {
     return metadata
   }
 
@@ -150,14 +144,7 @@ function processProperty(
 ) {
   const valueDeclaration = property.getValueDeclaration()
 
-  /**
-   * Skip if the property is a method or property signature.
-   * e.g. `onPress?: () => void` or `onPress(): void`
-   */
-  if (
-    !Node.isMethodSignature(valueDeclaration) ||
-    !Node.isPropertySignature(valueDeclaration)
-  ) {
+  if (valueDeclaration?.getSourceFile().isInNodeModules()) {
     return null
   }
 
@@ -169,7 +156,9 @@ function processProperty(
     name: propertyName,
     slug: kebabCase(propertyName),
     description: getDescriptionFromJsDocs(property),
-    required: !valueDeclaration?.hasQuestionToken() && !defaultValue,
+    required: Node.isPropertySignature(valueDeclaration)
+      ? !valueDeclaration?.hasQuestionToken() && !defaultValue
+      : !defaultValue,
     type: propertyType.getText(
       declaration,
       TypeFormatFlags.UseAliasDefinedOutsideCurrentScope
@@ -182,7 +171,7 @@ function processProperty(
   }
 
   if (propertyType.isObject()) {
-    const firstChild = valueDeclaration.getFirstChild()
+    const firstChild = valueDeclaration?.getFirstChild()
     propertyMetadata.properties = processProperties(
       propertyType,
       declaration,
@@ -209,19 +198,4 @@ function getDescriptionFromJsDocs(symbol: Symbol) {
     .join('\n')
 
   return description || null
-}
-
-/** Determines if a given type is a primitive type. */
-function isPrimitiveType(type: Type): boolean {
-  const typeFlags = type.getFlags()
-  return (
-    (typeFlags & TypeFlags.String) !== 0 ||
-    (typeFlags & TypeFlags.Number) !== 0 ||
-    (typeFlags & TypeFlags.Boolean) !== 0 ||
-    (typeFlags & TypeFlags.Undefined) !== 0 ||
-    (typeFlags & TypeFlags.Null) !== 0 ||
-    (typeFlags & TypeFlags.Any) !== 0 ||
-    (typeFlags & TypeFlags.Unknown) !== 0 ||
-    (typeFlags & TypeFlags.Void) !== 0
-  )
 }
