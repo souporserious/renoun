@@ -1,0 +1,55 @@
+import { kebabCase } from 'case-anything'
+import type { SourceFile } from 'ts-morph'
+import { Node } from 'ts-morph'
+import { getSymbolDescription, isJsxComponent } from '@tsxmod/utils'
+import {
+  getFunctionParameterTypes,
+  type PropertyMetadata,
+} from './get-function-parameter-types'
+import { getSourcePath } from './get-source-path'
+
+export type ExportedType = NonNullable<
+  ReturnType<typeof getFunctionParameterTypes>
+>
+
+/** Gets all exported prop types from a source file. */
+export function getExportedTypes(sourceFile: SourceFile) {
+  return Array.from(sourceFile.getExportedDeclarations())
+    .map(([name, [declaration]]) => {
+      if (
+        Node.isFunctionDeclaration(declaration) ||
+        Node.isFunctionExpression(declaration) ||
+        Node.isArrowFunction(declaration)
+      ) {
+        const filePath = declaration.getSourceFile().getFilePath()
+        const types = getFunctionParameterTypes(declaration) as
+          | (PropertyMetadata | null)[]
+          | null
+        const symbol = declaration.getSymbol()
+
+        return {
+          name,
+          types,
+          description: symbol ? getSymbolDescription(symbol) : null,
+          isComponent: isJsxComponent(declaration),
+          slug: kebabCase(name),
+          sourcePath: getSourcePath(filePath),
+        }
+      }
+      return null
+    })
+    .filter(
+      (
+        source
+      ): source is NonNullable<{
+        name: string
+        types: (PropertyMetadata | null)[] | null
+        description: string | null
+        isComponent: boolean
+        slug: string
+        sourcePath: string
+      }> => {
+        return Boolean(source)
+      }
+    )
+}

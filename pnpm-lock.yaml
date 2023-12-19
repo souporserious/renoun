@@ -84,8 +84,8 @@ importers:
         specifier: ^1.3.100
         version: 1.3.100
       '@tsxmod/utils':
-        specifier: ^0.0.0
-        version: 0.0.0(ts-morph@21.0.1)
+        specifier: ^0.1.0
+        version: 0.1.0(ts-morph@21.0.1)
       '@types/hast':
         specifier: ^3.0.3
         version: 3.0.3
@@ -1836,8 +1836,8 @@ packages:
       path-browserify: 1.0.1
     dev: false
 
-  /@tsxmod/utils@0.0.0(ts-morph@21.0.1):
-    resolution: {integrity: sha512-wginVz4kZ4Ff8V29H3gEWGvSaOcz8LKJllOUnFcAIWBuyy3Q1hpEqWaWdUP+/KKT4xXXrZsp+E2DHuU5HysvXA==}
+  /@tsxmod/utils@0.1.0(ts-morph@21.0.1):
+    resolution: {integrity: sha512-TFMWZY85sJGVjIEbkVFLohGAh0Bc1Sh5UaSo+yZHPDBbEOZfjhl2ljpBjUUivv5r7H/uMgbnqyUIpsh8zmkY0Q==}
     peerDependencies:
       ts-morph: '>=17.0.0'
     dependencies:

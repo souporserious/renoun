@@ -1,12 +1,21 @@
-import type { Symbol, Type } from 'ts-morph'
+import type {
+  ArrowFunction,
+  FunctionDeclaration,
+  FunctionExpression,
+  Symbol,
+  Type,
+  ts,
+} from 'ts-morph'
 import { Node, TypeFormatFlags, TypeChecker } from 'ts-morph'
-import { kebabCase } from 'case-anything'
-import { getDefaultValuesFromProperties } from '@tsxmod/utils'
-
-import { getSourcePath } from './get-source-path'
+import {
+  getDefaultValuesFromProperties,
+  getSymbolDescription,
+} from '@tsxmod/utils'
 
 /** Gets the types for a function declaration. */
-export function getFunctionParameterTypes(declaration: Node) {
+export function getFunctionParameterTypes(
+  declaration: ArrowFunction | FunctionDeclaration | FunctionExpression
+) {
   const signatures = declaration.getType().getCallSignatures()
 
   if (signatures.length === 0) {
@@ -20,7 +29,7 @@ export function getFunctionParameterTypes(declaration: Node) {
   }
 
   const typeChecker = declaration.getProject().getTypeChecker()
-  let parameterTypes = []
+  let parameterTypes: ReturnType<typeof processType>[] = []
 
   for (const parameter of parameters) {
     const parameterType = processType(parameter, declaration, typeChecker)
@@ -37,11 +46,12 @@ function processType(
   typeChecker: TypeChecker
 ) {
   const valueDeclaration = parameter.getValueDeclaration()
+  const isParameterDeclaration = Node.isParameterDeclaration(valueDeclaration)
   let isObjectBindingPattern = false
   let required = false
   let defaultValue
 
-  if (Node.isParameterDeclaration(valueDeclaration)) {
+  if (isParameterDeclaration) {
     isObjectBindingPattern = Node.isObjectBindingPattern(
       valueDeclaration.getNameNode()
     )
@@ -58,27 +68,21 @@ function processType(
 
   const metadata: {
     name: string | null
-    slug: string | null
     description: string | null
     defaultValue: any
     required: boolean
     type: string
     properties?: ReturnType<typeof processTypeProperties> | null
-    sourcePath?: string
+    unionProperties?: ReturnType<typeof processUnionType> | null
   } = {
     defaultValue,
     required,
     name: isObjectBindingPattern ? null : parameter.getName(),
-    slug: isObjectBindingPattern ? null : kebabCase(parameter.getName()),
-    description: getDescriptionFromJsDocs(parameter),
+    description: getSymbolDescription(parameter),
     type: parameter
       .getTypeAtLocation(declaration)
       .getText(declaration, TypeFormatFlags.UseAliasDefinedOutsideCurrentScope),
     properties: null,
-    sourcePath: getSourcePath(
-      declaration.getSourceFile().getFilePath(),
-      declaration.getStartLineNumber()
-    ),
   }
 
   if (!valueDeclaration) {
@@ -86,13 +90,25 @@ function processType(
   }
 
   const parameterType = typeChecker.getTypeAtLocation(valueDeclaration)
+  const typeDeclaration = parameterType.getSymbol()?.getDeclarations()?.at(0)
   const isTypeInNodeModules = parameterType
     .getSymbol()
     ?.getValueDeclaration()
     ?.getSourceFile()
     .isInNodeModules()
+  const isLocalType = typeDeclaration
+    ? declaration.getSourceFile().getFilePath() ===
+      typeDeclaration.getSourceFile().getFilePath()
+    : true
 
-  if (isTypeInNodeModules) {
+  if (isTypeInNodeModules || !isLocalType) {
+    // If the type is imported from a node module or not in the same file, return
+    // the type name and don't process the properties any further.
+    if (isParameterDeclaration) {
+      const parameterTypeNode = valueDeclaration.getTypeNodeOrThrow()
+      metadata.type = parameterTypeNode.getText()
+    }
+
     return metadata
   }
 
@@ -108,18 +124,47 @@ function processType(
     defaultValues
   )
 
+  if (parameterType.isUnion()) {
+    metadata.unionProperties = processUnionType(
+      parameterType,
+      declaration,
+      typeChecker,
+      defaultValues
+    )
+  }
+
   return metadata
 }
 
 export interface PropertyMetadata {
   name: string
-  slug: string
   description: string | null
   defaultValue: any
   required: boolean
   type: string
   properties: (PropertyMetadata | null)[] | null
-  sourcePath?: string
+  unionProperties?: PropertyMetadata[][]
+}
+
+/** Processes union types into an array of property arrays. */
+function processUnionType(
+  unionType: Type<ts.UnionType>,
+  declaration: Node,
+  typeChecker: TypeChecker,
+  defaultValues: Record<string, any>
+): PropertyMetadata[][] {
+  const baseProperties = new Set(
+    unionType.getProperties().map((prop) => prop.getName())
+  )
+  return unionType.getUnionTypes().map((subType) => {
+    const subTypeProperties = processTypeProperties(
+      subType,
+      declaration,
+      typeChecker,
+      defaultValues
+    )
+    return subTypeProperties.filter((prop) => !baseProperties.has(prop.name))
+  })
 }
 
 /** Processes the properties of a type. */
@@ -155,52 +200,53 @@ function processProperty(
   const propertyName = property.getName()
   const propertyType = property.getTypeAtLocation(declaration)
   const defaultValue = defaultValues[propertyName]
+
+  let typeText
+
+  if (
+    Node.isParameterDeclaration(valueDeclaration) ||
+    Node.isVariableDeclaration(valueDeclaration) ||
+    Node.isPropertySignature(valueDeclaration)
+  ) {
+    const typeNode = valueDeclaration.getTypeNodeOrThrow()
+    typeText = typeNode.getText()
+  } else {
+    typeText = propertyType.getText(
+      declaration,
+      TypeFormatFlags.UseAliasDefinedOutsideCurrentScope
+    )
+  }
+
   const propertyMetadata: PropertyMetadata = {
     defaultValue,
     name: propertyName,
-    slug: kebabCase(propertyName),
-    description: getDescriptionFromJsDocs(property),
+    description: getSymbolDescription(property),
     required: Node.isPropertySignature(valueDeclaration)
       ? !valueDeclaration?.hasQuestionToken() && !defaultValue
       : !defaultValue,
-    type: propertyType.getText(
-      declaration,
-      TypeFormatFlags.UseAliasDefinedOutsideCurrentScope
-    ),
+    type: typeText,
     properties: null,
-    sourcePath: getSourcePath(
-      declaration.getSourceFile().getFilePath(),
-      declaration.getStartLineNumber()
-    ),
   }
 
   if (propertyType.isObject()) {
-    const firstChild = valueDeclaration?.getFirstChild()
-    propertyMetadata.properties = processTypeProperties(
-      propertyType,
-      declaration,
-      typeChecker,
-      Node.isObjectBindingPattern(firstChild)
-        ? getDefaultValuesFromProperties(firstChild.getElements())
-        : {}
-    )
+    const typeDeclaration = propertyType.getSymbol()?.getDeclarations()?.[0]
+    const isLocalType = typeDeclaration
+      ? declaration.getSourceFile().getFilePath() ===
+        typeDeclaration.getSourceFile().getFilePath()
+      : false
+
+    if (isLocalType) {
+      const firstChild = valueDeclaration?.getFirstChild()
+      propertyMetadata.properties = processTypeProperties(
+        propertyType,
+        declaration,
+        typeChecker,
+        Node.isObjectBindingPattern(firstChild)
+          ? getDefaultValuesFromProperties(firstChild.getElements())
+          : {}
+      )
+    }
   }
 
   return propertyMetadata
-}
-
-/** Gets the description from a symbol's jsdocs. */
-function getDescriptionFromJsDocs(symbol: Symbol) {
-  const description = symbol
-    .getDeclarations()
-    .filter(Node.isJSDocable)
-    .map((declaration) =>
-      declaration
-        .getJsDocs()
-        .map((doc) => doc.getComment())
-        .flat()
-    )
-    .join('\n')
-
-  return description || null
 }

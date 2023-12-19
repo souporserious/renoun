@@ -16,7 +16,7 @@ import 'server-only'
 import type { CodeBlocks } from './remark/add-code-blocks'
 import type { Headings } from './remark/add-headings'
 import { project } from './components/project'
-import { getExportedPropTypes } from './utils/get-exported-prop-types'
+import { getExportedTypes } from './utils/get-exported-types'
 import { getExamplesFromDirectory } from './utils/get-examples'
 import { getSourcePath } from './utils/get-source-path'
 
@@ -34,20 +34,11 @@ export type Module = {
   sourcePath: string
   isServerOnly: boolean
   slug: string
-  types:
-    | {
-        name: string
-        slug: string
-        sourcePath: string
-        baseProps: any[]
-        unionProps: any[]
-      }[]
-    | null
+  exportedTypes: ReturnType<typeof getExportedTypes> | null
   examples:
     | {
         name: string
         slug: string
-        sourcePath: string
         pathname: string
         module: Promise<Record<string, any>>
       }[]
@@ -237,7 +228,7 @@ export function createDataSource<Type>(
             ?.at(0) // Get the first node
         : null
     ) as ExportedDeclarations | null
-    const propTypes = sourceFile ? getExportedPropTypes(sourceFile) : null
+    const exportedTypes = sourceFile ? getExportedTypes(sourceFile) : null
     const examples = sourceFile
       ? getExamplesFromDirectory(sourceFile.getDirectory()).map(
           (sourceFile) => {
@@ -274,17 +265,17 @@ export function createDataSource<Type>(
     let resolvedHeadings = headings || []
 
     /** Append component prop type links to headings data. */
-    if (propTypes && propTypes.length > 0) {
+    if (exportedTypes && exportedTypes.length > 0) {
       typeSlugs.reset()
 
       resolvedHeadings = [
         ...(headings || []),
         {
-          text: 'Types',
-          id: 'types',
+          text: 'Exports',
+          id: 'exports',
           depth: 2,
         },
-        ...propTypes.map((type) => ({
+        ...exportedTypes.map((type) => ({
           text: type.name,
           id: typeSlugs.slug(type.name),
           depth: 3,
@@ -313,7 +304,7 @@ export function createDataSource<Type>(
       headings: resolvedHeadings,
       frontMatter: frontMatter || null,
       metadata,
-      types: propTypes,
+      exportedTypes,
       examples,
       sourcePath: getSourcePath(resolve(process.cwd(), moduleKey)),
       ...exports,

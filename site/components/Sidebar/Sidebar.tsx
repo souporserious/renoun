@@ -1,5 +1,5 @@
 import { Navigation } from 'mdxts/components'
-import { allDocs, allComponents } from 'data'
+import { allDocs, allPackages } from 'data'
 import { Text } from 'components/Text'
 import { Logo } from 'components/Logo'
 import { SidebarLink } from './SidebarLink'
@@ -43,61 +43,43 @@ export function Sidebar() {
 
       <Navigation
         source={allDocs}
-        renderList={(props) => (
-          <ul
-            style={{
-              paddingLeft: props.order * 0.8 + 'rem',
-              listStyle: 'none',
-            }}
-          >
-            {props.children}
-          </ul>
-        )}
-        renderItem={(props) => (
-          <li
-            key={props.title}
-            style={{ color: props.children ? 'grey' : 'white' }}
-          >
-            {props.children ? (
-              <div style={{ padding: '0.25rem 0', cursor: 'default' }}>
-                <Text>{props.title}</Text>
-              </div>
-            ) : (
-              <SidebarLink pathname={props.pathname} name={props.title} />
-            )}
-            {props.children}
-          </li>
-        )}
+        renderList={renderList}
+        renderItem={renderItem}
       />
 
       <Navigation
-        source={allComponents}
-        renderList={(props) => (
-          <ul
-            style={{
-              paddingLeft: props.order * 0.8 + 'rem',
-              listStyle: 'none',
-            }}
-          >
-            {props.children}
-          </ul>
-        )}
-        renderItem={(props) => (
-          <li
-            key={props.title}
-            style={{ color: props.children ? 'grey' : 'white' }}
-          >
-            {props.children ? (
-              <div style={{ padding: '0.25rem 0', cursor: 'default' }}>
-                <Text>{props.title}</Text>
-              </div>
-            ) : (
-              <SidebarLink pathname={props.pathname} name={props.title} />
-            )}
-            {props.children}
-          </li>
-        )}
+        source={allPackages}
+        renderList={renderList}
+        renderItem={renderItem}
       />
     </aside>
+  )
+}
+
+function renderList(props: any) {
+  return (
+    <ul
+      style={{
+        paddingLeft: props.order * 0.8 + 'rem',
+        listStyle: 'none',
+      }}
+    >
+      {props.children}
+    </ul>
+  )
+}
+
+function renderItem(props: any) {
+  return (
+    <li key={props.title} style={{ color: props.children ? 'grey' : 'white' }}>
+      {props.children ? (
+        <div style={{ padding: '0.25rem 0', cursor: 'default' }}>
+          <Text>{props.title}</Text>
+        </div>
+      ) : (
+        <SidebarLink pathname={props.pathname} name={props.title} />
+      )}
+      {props.children}
+    </li>
   )
 }

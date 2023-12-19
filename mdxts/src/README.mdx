@@ -1,4 +1,11 @@
 # mdxts
 
-The primary package for the `mdxts` library that provides a set of 
-utilities for working with a collection of module imports.
+The primary package for the `mdxts` library that provides a utility for working with a collection of module imports.
+
+```ts filename="data.ts"
+import { createDataSource } from 'mdxts'
+
+export const allDocs = createDataSource('docs/**/*.mdx', {
+  baseDirectory: 'docs',
+})
+```
