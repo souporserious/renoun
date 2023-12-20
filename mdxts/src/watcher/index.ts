@@ -15,7 +15,6 @@ export function createWatcher(
         (path) =>
           !path.includes('node_modules') &&
           !path.includes('dist') &&
-          !path.includes('.mdxts') &&
           !path.includes('.next') &&
           !path.includes('.turbo')
       ),
