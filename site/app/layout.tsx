@@ -12,7 +12,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <link rel="canonical" href="https://www.mdxts.com" />
+        <link rel="canonical" href="https://www.mdxts.dev" />
       </head>
       <body className={GeistSans.className}>
         <div
