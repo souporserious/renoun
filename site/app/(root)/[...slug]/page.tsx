@@ -16,7 +16,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
     return notFound()
   }
 
-  const { Content, headings, sourcePath } = doc
+  const { Content, title, headings, sourcePath } = doc
 
   return (
     <div
@@ -27,6 +27,17 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
       }}
     >
       <div>
+        {title ? (
+          <h1
+            style={{
+              // @ts-expect-error
+              textWrap: 'balance',
+              margin: '0 0 1.4rem',
+            }}
+          >
+            {title}
+          </h1>
+        ) : null}
         {Content ? <Content /> : null}
         <SiblingLinks previous={doc.previous} next={doc.next} />
       </div>
