@@ -92,7 +92,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
               gap: '1.6rem',
             }}
           >
-            <h2 id="types" style={{ margin: 0 }}>
+            <h2 id="exports" style={{ margin: 0 }}>
               Exports
             </h2>
             <div
@@ -102,58 +102,74 @@ export default async function Page({ params }: { params: { slug: string } }) {
                 gap: '2rem',
               }}
             >
-              {exportedTypes.map((type) => (
-                <div
-                  key={type.name}
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    // gap:
-                    //   type.unionProps && type.unionProps.length > 0
-                    //     ? '2rem'
-                    //     : undefined,
-                  }}
-                >
+              {exportedTypes.map((type) => {
+                console.log(singlePackage.pathname, type.pathname)
+                const isActive = singlePackage.pathname === type.pathname
+                return (
                   <div
+                    key={type.name}
                     style={{
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: '0.5rem',
                     }}
                   >
                     <div
                       style={{
                         display: 'flex',
-                        alignItems: 'baseline',
+                        flexDirection: 'column',
                         gap: '0.5rem',
                       }}
                     >
-                      <h3 style={{ margin: 0 }}>{type.name}</h3>
-                      {type.sourcePath && (
-                        <a
-                          href={type.sourcePath}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{ fontSize: '0.875rem' }}
-                        >
-                          View Source
-                        </a>
-                      )}
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'baseline',
+                          gap: '0.5rem',
+                        }}
+                      >
+                        {isActive ? (
+                          <h3 id={type.slug} style={{ margin: 0 }}>
+                            {type.name}
+                          </h3>
+                        ) : (
+                          <a href={type.pathname}>
+                            <h3 id={type.slug} style={{ margin: 0 }}>
+                              {type.name}
+                            </h3>
+                          </a>
+                        )}
+
+                        {type.sourcePath && (
+                          <a
+                            href={type.sourcePath}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{ fontSize: '0.875rem' }}
+                          >
+                            View Source
+                          </a>
+                        )}
+                      </div>
+                      {type.description ? (
+                        <p style={{ margin: 0 }}>{type.description}</p>
+                      ) : null}
                     </div>
-                    {type.description ? (
-                      <p style={{ margin: 0 }}>{type.description}</p>
+
+                    {isActive && type.types && type.types.length > 0 ? (
+                      <>
+                        <h4 style={{ margin: '1rem 0 0' }}>
+                          {type.isComponent ? 'Props' : 'Types'}
+                        </h4>
+
+                        <Props
+                          props={type.types}
+                          isComponent={type.isComponent}
+                        />
+                      </>
                     ) : null}
                   </div>
-
-                  <h4 style={{ margin: '1rem 0 0' }}>
-                    {type.isComponent ? 'Props' : 'Types'}
-                  </h4>
-
-                  {type.types && type.types.length > 0 ? (
-                    <Props props={type.types} isComponent={type.isComponent} />
-                  ) : null}
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         )}

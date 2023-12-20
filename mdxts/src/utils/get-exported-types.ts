@@ -6,7 +6,6 @@ import {
   getFunctionParameterTypes,
   type PropertyMetadata,
 } from './get-function-parameter-types'
-import { getSourcePath } from './get-source-path'
 
 export type ExportedType = NonNullable<
   ReturnType<typeof getFunctionParameterTypes>
@@ -33,7 +32,7 @@ export function getExportedTypes(sourceFile: SourceFile) {
           description: symbol ? getSymbolDescription(symbol) : null,
           isComponent: isJsxComponent(declaration),
           slug: kebabCase(name),
-          sourcePath: getSourcePath(filePath),
+          filePath: filePath as string,
         }
       }
       return null
@@ -47,7 +46,7 @@ export function getExportedTypes(sourceFile: SourceFile) {
         description: string | null
         isComponent: boolean
         slug: string
-        sourcePath: string
+        filePath: string
       }> => {
         return Boolean(source)
       }

@@ -34,13 +34,19 @@ export type Module = {
   sourcePath: string
   isServerOnly: boolean
   slug: string
-  exportedTypes: ReturnType<typeof getExportedTypes> | null
+  exportedTypes:
+    | (ReturnType<typeof getExportedTypes>[number] & {
+        pathname: string
+        sourcePath: string
+      })[]
+    | null
   examples:
     | {
         name: string
         slug: string
-        pathname: string
         module: Promise<Record<string, any>>
+        pathname: string
+        sourcePath: string
       }[]
     | null
   metadata?: { title: string; description: string }
@@ -231,7 +237,16 @@ export function createDataSource<Type>(
             ?.at(0) // Get the first node
         : null
     ) as ExportedDeclarations | null
-    const exportedTypes = sourceFile ? getExportedTypes(sourceFile) : null
+    const exportedTypes = sourceFile
+      ? getExportedTypes(sourceFile).map(({ filePath, ...fileExport }) => {
+          const pathname = filePathToUrlPathname(filePath, baseDirectory)
+          return {
+            ...fileExport,
+            pathname: `/${join(basePath, pathname)}`,
+            sourcePath: getSourcePath(filePath),
+          }
+        })
+      : null
     const examples = sourceFile
       ? getExamplesFromDirectory(sourceFile.getDirectory()).map(
           (sourceFile) => {
