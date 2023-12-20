@@ -68,7 +68,7 @@ export function createDataSource<Type>(
 ) {
   let allModules = pattern as unknown as Record<
     string,
-    Promise<{ default: any } & Record<string, any>>
+    Promise<{ default: any } & Record<string, any>> | null
   >
 
   if (typeof allModules === 'string') {
@@ -168,7 +168,7 @@ export function createDataSource<Type>(
             return [filePath, mdxModule]
           }
 
-          return [filePath, Promise.resolve({ default: null })]
+          return [filePath, null]
         })
       ),
     }
@@ -179,7 +179,10 @@ export function createDataSource<Type>(
       .sort()
       .map((key) => {
         const pathname = filePathToUrlPathname(key, baseDirectory)
-        return [pathname, key]
+        // TODO: file data and readme data should be normalized and merged together
+        const readmeKey = key.replace(/index\.tsx?$/, 'README.mdx')
+        const hasReadme = Boolean(allModules[readmeKey])
+        return [pathname, hasReadme ? readmeKey : key]
       })
   )
 
@@ -261,7 +264,7 @@ export function createDataSource<Type>(
       metadata,
       frontMatter,
       ...exports
-    } = await allModules[moduleKey]
+    } = (await allModules[moduleKey]) || { default: null }
     let resolvedHeadings = headings || []
 
     /** Append component prop type links to headings data. */
