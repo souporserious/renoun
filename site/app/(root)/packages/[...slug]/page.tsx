@@ -150,7 +150,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
                   </h4>
 
                   {type.types && type.types.length > 0 ? (
-                    <Props props={type.types} />
+                    <Props props={type.types} isComponent={type.isComponent} />
                   ) : null}
                 </div>
               ))}
@@ -168,13 +168,23 @@ export default async function Page({ params }: { params: { slug: string } }) {
   )
 }
 
-function Props({ props }: { props: (PropertyMetadata | null)[] | null }) {
+function Props({
+  props,
+  isComponent,
+}: {
+  props: (PropertyMetadata | null)[] | null
+  isComponent: boolean
+}) {
   return props?.map((propType, index) => {
     if (propType === null) {
       return null
     }
 
-    if (propType.unionProperties && propType.unionProperties.length > 0) {
+    if (
+      isComponent &&
+      propType.unionProperties &&
+      propType.unionProperties.length > 0
+    ) {
       return (
         <div
           style={{
@@ -183,6 +193,17 @@ function Props({ props }: { props: (PropertyMetadata | null)[] | null }) {
             gap: '2rem',
           }}
         >
+          <div
+            style={{
+              display: 'flex',
+              gap: '2rem',
+            }}
+          >
+            <span>{propType.type}</span>
+          </div>
+          {propType.description && (
+            <p style={{ margin: 0 }}>{propType.description}</p>
+          )}
           <div>
             <h4>Union Props</h4>
             {propType.unionProperties.map((props, index) => (
@@ -226,13 +247,13 @@ function Props({ props }: { props: (PropertyMetadata | null)[] | null }) {
                     />
                   </div>
                 ) : null}
-                <Props props={props} />
+                <Props props={props} isComponent={isComponent} />
               </Fragment>
             ))}
           </div>
           <div>
             <h4>Base Props</h4>
-            <Props props={propType.properties} />
+            <Props props={propType.properties} isComponent={isComponent} />
           </div>
         </div>
       )
@@ -248,9 +269,11 @@ function Props({ props }: { props: (PropertyMetadata | null)[] | null }) {
             gap: '1rem',
           }}
         >
-          <Props props={propType.properties} />
+          <Props props={propType.properties} isComponent={isComponent} />
         </div>
-      ) : null
+      ) : (
+        propType.type
+      )
     }
 
     return (
@@ -308,7 +331,7 @@ function Props({ props }: { props: (PropertyMetadata | null)[] | null }) {
         )}
 
         {propType.properties && propType.properties.length > 0 ? (
-          <Props props={propType.properties} />
+          <Props props={propType.properties} isComponent={isComponent} />
         ) : null}
       </div>
     )
