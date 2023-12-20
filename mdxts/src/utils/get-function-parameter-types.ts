@@ -149,7 +149,7 @@ export interface PropertyMetadata {
   required: boolean
   type: string
   properties: (PropertyMetadata | null)[] | null
-  unionProperties?: (PropertyMetadata | PropertyMetadata[])[][]
+  unionProperties?: PropertyMetadata[][]
 }
 
 /** Processes union types into an array of property arrays. */
