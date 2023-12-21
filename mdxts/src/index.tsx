@@ -147,8 +147,8 @@ export function createDataSource<Type>(
     }
 
     const absoluteModuleKey = resolve(process.cwd(), moduleKey)
-    const moduleKeyTs = absoluteModuleKey.replace('README.mdx', 'index.ts')
-    const moduleKeyTsx = absoluteModuleKey.replace('README.mdx', 'index.tsx')
+    const moduleKeyTs = absoluteModuleKey.replace(/readme\.mdx?/i, 'index.ts')
+    const moduleKeyTsx = absoluteModuleKey.replace(/readme\.mdx?/i, 'index.tsx')
     const sourceFile = sourceFiles?.find((sourceFile) => {
       return (
         sourceFile.getFilePath() === moduleKeyTs ||
@@ -464,18 +464,6 @@ function getHeadingTitle(headings: Headings) {
   return heading?.depth === 1 ? heading.text : null
 }
 
-let theme: any = null
-
-/** Sets the current theme. */
-export function setTheme(newTheme: any) {
-  theme = newTheme
-}
-
-/** Returns the current theme. */
-export function getTheme() {
-  return theme
-}
-
 /** Returns the name of a function, variable, or class declaration. */
 function getNameFromDeclaration(declaration: Node): string | undefined {
   switch (declaration.getKind()) {
@@ -595,4 +583,16 @@ function sourceFilesToTree(sourceFiles: AllSourceFiles, basePath: string) {
   }
 
   return tree
+}
+
+let theme: any = null
+
+/** Sets the current theme. */
+export function setTheme(newTheme: any) {
+  theme = newTheme
+}
+
+/** Returns the current theme. */
+export function getTheme() {
+  return theme
 }
