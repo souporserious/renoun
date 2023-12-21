@@ -365,12 +365,6 @@ export function createDataSource<Type>(
 
     /** Returns a module by pathname including metadata, examples, and previous/next modules. Defaults to `basePath` if `pathname` is undefined. */
     async get(pathname: string | string[] | undefined) {
-      /** Return null if the pathname is the base path. */
-      if (pathname === basePath || pathname?.at(0) === basePath) {
-        return null
-      }
-
-      /** Undefined signals that the base path should be used. */
       if (pathname === undefined) {
         pathname = basePath
       }
