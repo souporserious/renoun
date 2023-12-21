@@ -4,7 +4,8 @@ import type { ComponentType } from 'react'
 import { kebabCase } from 'case-anything'
 import { basename, join, resolve, sep } from 'node:path'
 import { Node, SyntaxKind } from 'ts-morph'
-import type { ExportedDeclarations, JSDoc, SourceFile, ts } from 'ts-morph'
+import type { ExportedDeclarations, SourceFile, ts } from 'ts-morph'
+import { getSymbolDescription } from '@tsxmod/utils'
 import 'server-only'
 
 import type { CodeBlocks } from './remark/add-code-blocks'
@@ -181,6 +182,7 @@ export function createDataSource<Type>(
             ?.at(0) // Get the first node
         : null
     ) as ExportedDeclarations | null
+    const mainExportDeclarationSymbol = mainExportDeclaration?.getSymbol()
     const exportedTypes = sourceFile
       ? getExportedTypes(sourceFile).map(({ filePath, ...fileExport }) => {
           const pathname = filePathToUrlPathname(filePath, baseDirectory)
@@ -264,7 +266,9 @@ export function createDataSource<Type>(
           : filenameTitle),
       description:
         metadata?.description ||
-        getDescriptionFromDeclaration(mainExportDeclaration),
+        (mainExportDeclarationSymbol
+          ? getSymbolDescription(mainExportDeclarationSymbol)
+          : null),
       pathname:
         basePath === pathname
           ? join(sep, basePath)
@@ -458,31 +462,6 @@ function hasPrivateTag(node: Node<ts.Node> | null) {
 function getHeadingTitle(headings: Headings) {
   const heading = headings?.at(0)
   return heading?.depth === 1 ? heading.text : null
-}
-
-/** Returns the first JSDoc as a description from a variable, function, or class declaration. */
-function getDescriptionFromDeclaration(
-  declaration: ExportedDeclarations | null
-) {
-  if (declaration === null) {
-    return null
-  }
-
-  let jsDocs: JSDoc[] = []
-
-  if (Node.isFunctionDeclaration(declaration)) {
-    const implementation = declaration.getImplementation()
-    jsDocs = implementation
-      ? implementation.getJsDocs()
-      : declaration.getJsDocs()
-  } else if (Node.isVariableDeclaration(declaration)) {
-    const variableStatement = declaration.getFirstAncestorByKind(
-      SyntaxKind.VariableStatement
-    )
-    jsDocs = variableStatement ? variableStatement.getJsDocs() : []
-  }
-
-  return jsDocs.length > 0 ? jsDocs[0].getDescription().trim() : null
 }
 
 let theme: any = null
