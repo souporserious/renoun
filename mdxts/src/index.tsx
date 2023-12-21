@@ -145,10 +145,13 @@ export function createDataSource<Type>(
       return null
     }
 
+    const absoluteModuleKey = resolve(process.cwd(), moduleKey)
+    const moduleKeyTs = absoluteModuleKey.replace('README.mdx', 'index.ts')
+    const moduleKeyTsx = absoluteModuleKey.replace('README.mdx', 'index.tsx')
     const sourceFile = sourceFiles?.find((sourceFile) => {
       return (
-        filePathToUrlPathname(sourceFile.getFilePath(), baseDirectory) ===
-        pathname
+        sourceFile.getFilePath() === moduleKeyTs ||
+        sourceFile.getFilePath() === moduleKeyTsx
       )
     })
     const isServerOnly = sourceFile
