@@ -241,7 +241,7 @@ export function createDataSource<Type>(
 
     /** Merge front matter data into metadata. */
     if (frontMatter) {
-      Object.assign(frontMatter, metadata)
+      Object.assign(metadata, frontMatter)
     }
 
     return {
