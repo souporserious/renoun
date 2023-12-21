@@ -4,13 +4,7 @@ import type { ComponentType } from 'react'
 import { kebabCase } from 'case-anything'
 import { basename, join, resolve, sep } from 'node:path'
 import { Node, SyntaxKind } from 'ts-morph'
-import type {
-  ExportedDeclarations,
-  JSDoc,
-  SourceFile,
-  Symbol,
-  ts,
-} from 'ts-morph'
+import type { ExportedDeclarations, JSDoc, SourceFile, ts } from 'ts-morph'
 import 'server-only'
 
 import type { CodeBlocks } from './remark/add-code-blocks'
@@ -211,9 +205,9 @@ export function createDataSource<Type>(
           }
         )
       : null
-    const filename = cleanFilename(moduleKey.split('/').pop() || '')
+    const filename = cleanFilename(moduleKey.split(sep).pop() || '')
     const filenameTitle = /(readme|index)$/i.test(filename)
-      ? parseTitle(moduleKey.split('/').slice(-2, -1).pop() || '')
+      ? parseTitle(moduleKey.split(sep).slice(-2, -1).pop() || '')
       : isPascalCase(filename)
         ? filename
         : parseTitle(filename)
@@ -262,7 +256,7 @@ export function createDataSource<Type>(
       description:
         metadata?.description ||
         getDescriptionFromDeclaration(mainExportDeclaration),
-      pathname: `/${join(basePath, pathname)}`,
+      pathname: join(sep, basePath, pathname),
       headings: resolvedHeadings,
       frontMatter: frontMatter || null,
       metadata,
@@ -285,7 +279,7 @@ export function createDataSource<Type>(
     | null
   > {
     const stringPathname = Array.isArray(pathname)
-      ? pathname.join('/')
+      ? pathname.join(sep)
       : pathname
     const activeIndex = Object.keys(allModulesKeysByPathname).findIndex(
       (dataPathname) => dataPathname.includes(stringPathname)
@@ -380,7 +374,7 @@ export function createDataSource<Type>(
         .map((pathname) =>
           pathname
             // Split pathname into an array
-            .split('/')
+            .split(sep)
             // Remove empty strings
             .filter(Boolean)
         )
@@ -394,7 +388,7 @@ function filePathToUrlPathname(filePath: string, baseDirectory?: string) {
     // Remove leading separator "./"
     .replace(/^\.\//, '')
     // Remove leading sorting number "01."
-    .replace(/\/\d+\./g, '/')
+    .replace(/\/\d+\./g, sep)
     // Remove working directory
     .replace(
       baseDirectory
@@ -410,12 +404,12 @@ function filePathToUrlPathname(filePath: string, baseDirectory?: string) {
     .replace(/\/(readme|index)$/i, '')
 
   // Convert component names to kebab case for case-insensitive paths
-  const segments = parsedFilePath.split('/')
+  const segments = parsedFilePath.split(sep)
 
   return segments
     .map((segment) => (/[A-Z]/.test(segment[0]) ? kebabCase(segment) : segment))
     .filter(Boolean)
-    .join('/')
+    .join(sep)
 }
 
 /** Cleans a filename for use as a slug or title. */
