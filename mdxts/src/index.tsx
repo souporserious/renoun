@@ -2,12 +2,12 @@ import parseTitle from 'title'
 import Slugger from 'github-slugger'
 import type { ComponentType } from 'react'
 import { kebabCase } from 'case-anything'
-import { basename, join, resolve } from 'node:path'
+import { basename, join, resolve, sep } from 'node:path'
 import { Node, SyntaxKind } from 'ts-morph'
 import type {
-  Directory,
   ExportedDeclarations,
   JSDoc,
+  SourceFile,
   Symbol,
   ts,
 } from 'ts-morph'
@@ -90,88 +90,32 @@ export function createDataSource<Type>(
     basePath: string
   }
 
-  /**
-   * Analyze TypeScript source files.
-   * TODO: compile MDX and analyze AST in ts-morph.
-   */
+  /** Analyze TypeScript source files. */
   const sourceFiles = /ts(x)?/.test(globPattern)
     ? project.addSourceFilesAtPaths(globPattern)
     : null
 
   /** Merge in TypeSript source file paths and check if there's a matching MDX file */
   if (sourceFiles) {
-    const indexFiles = new Map<Directory, Set<any>>()
-    /** Turn paths back into original format from glob pattern. */
-    const sourceFilePaths = sourceFiles
-      .filter(
-        /**
-         * Filter out "private" modules not re-exported from the index file if present.
-         * TODO: this should add a private field on the module object instead of filtering so the user can control.
-         */
-        (sourceFile) => {
-          const directory = sourceFile.getDirectory()
-          let exportedModules = indexFiles.get(directory)
-
-          if (exportedModules === undefined) {
-            exportedModules = new Set()
-
-            const indexFile =
-              directory.addSourceFileAtPathIfExists('index.ts') ||
-              directory.addSourceFileAtPathIfExists('index.tsx')
-
-            if (indexFile) {
-              indexFile.getExportedDeclarations().forEach((declarations) => {
-                for (const declaration of declarations) {
-                  exportedModules!.add(
-                    declaration.getSourceFile().getFilePath()
-                  )
-                }
-              })
-            }
-
-            indexFiles.set(directory, exportedModules)
-          }
-
-          /** Check if there are any exported declarations that have a private JSDoc tag. */
-          sourceFile.getExportedDeclarations().forEach((declarations) => {
-            for (const declaration of declarations) {
-              const symbol = declaration.getSymbol()
-              if (symbol) {
-                const implementation = getImplementation(symbol)
-                if (hasPrivateTag(implementation)) {
-                  exportedModules!.delete(sourceFile.getFilePath())
-                }
-              }
-            }
-          })
-
-          return exportedModules.has(sourceFile.getFilePath())
-        }
-      )
-      .map((sourceFile) => {
-        const filePath = sourceFile.getFilePath()
-
-        return filePath.replace(
-          resolve(process.cwd(), baseDirectory),
-          baseDirectory
-        )
-      })
+    const exportedSourceFilePaths = getExportedSourceFilePaths(
+      sourceFiles,
+      baseDirectory
+    )
     allModules = {
       ...allModules,
       ...Object.fromEntries(
-        sourceFilePaths.map((filePath) => {
+        exportedSourceFilePaths.map((filePath) => {
           const mdxPath = resolve(
             process.cwd(),
             filePath.replace(/\.tsx?$/, '.mdx')
           )
-          const moduleKey = Object.keys(allModules).find((key) => {
+          const mdxModuleKey = Object.keys(allModules).find((key) => {
             const resolvedKey = resolve(process.cwd(), key)
             return resolvedKey === mdxPath
           })
 
-          if (moduleKey && moduleKey in allModules) {
-            const mdxModule = allModules[moduleKey]
-            return [filePath, mdxModule]
+          if (mdxModuleKey && mdxModuleKey in allModules) {
+            return [filePath, allModules[mdxModuleKey]]
           }
 
           return [filePath, null]
@@ -567,4 +511,99 @@ function getNameFromDeclaration(declaration: Node): string | undefined {
         `Unsupported declaration kind: ${declaration.getKindName()}`
       )
   }
+}
+
+/** Returns the source file paths that are exported from the index file. */
+function getExportedSourceFilePaths(
+  sourceFiles: SourceFile[],
+  baseDirectory: string
+) {
+  const indexFiles = new Map()
+
+  return sourceFiles
+    .filter((sourceFile) => {
+      const directory = sourceFile.getDirectory()
+      let exportedModules = indexFiles.get(directory)
+
+      if (!exportedModules) {
+        exportedModules = new Set()
+        indexFiles.set(directory, exportedModules)
+
+        const indexFile =
+          directory.addSourceFileAtPathIfExists('index.ts') ||
+          directory.addSourceFileAtPathIfExists('index.tsx')
+
+        if (indexFile) {
+          indexFile.getExportedDeclarations().forEach((declarations) => {
+            declarations.forEach((declaration) => {
+              exportedModules.add(declaration.getSourceFile().getFilePath())
+            })
+          })
+        }
+      }
+
+      sourceFile.getExportedDeclarations().forEach((declarations) => {
+        declarations.forEach((declaration) => {
+          const symbol = declaration.getSymbol()
+          if (symbol && hasPrivateTag(declaration)) {
+            exportedModules.delete(sourceFile.getFilePath())
+          }
+        })
+      })
+
+      return exportedModules.has(sourceFile.getFilePath())
+    })
+    .map((sourceFile) => {
+      return sourceFile
+        .getFilePath()
+        .replace(resolve(process.cwd(), baseDirectory), baseDirectory)
+    })
+}
+
+type AllSourceFiles = Awaited<
+  ReturnType<ReturnType<typeof createDataSource>['all']>
+>
+
+/** Turns a collection of source files into a tree. */
+export function sourceFilesToTree(sourceFiles: AllSourceFiles) {
+  const paths = Object.keys(sourceFiles)
+  const tree: any[] = []
+
+  for (let pathIndex = 0; pathIndex < paths.length; pathIndex++) {
+    const currentPath = paths[pathIndex]
+    const pathParts = currentPath.split(sep)
+    const allPaths: Record<string, any> = {}
+    let nodes = tree
+
+    for (
+      let pathPartIndex = 0;
+      pathPartIndex < pathParts.length;
+      pathPartIndex++
+    ) {
+      const name = pathParts[pathPartIndex]
+      const pathname = pathParts.slice(0, pathPartIndex + 1).join(sep)
+      let node = nodes.find((node) => node.name === name)
+
+      if (!node) {
+        node = {
+          name,
+          pathname: `/${pathname}`,
+          title: parseTitle(name),
+          children: [],
+        }
+
+        const sourceFile = sourceFiles[pathname]
+        if (sourceFile) {
+          Object.assign(node, sourceFile)
+        }
+
+        nodes.push(node)
+      }
+
+      allPaths[pathname] = node
+      nodes = node.children
+    }
+  }
+
+  return tree
 }

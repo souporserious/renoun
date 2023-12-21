@@ -103,7 +103,6 @@ export default async function Page({ params }: { params: { slug: string } }) {
               }}
             >
               {exportedTypes.map((type) => {
-                console.log(singlePackage.pathname, type.pathname)
                 const isActive = singlePackage.pathname === type.pathname
                 return (
                   <div
@@ -139,7 +138,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
                           </a>
                         )}
 
-                        {type.sourcePath && (
+                        {isActive && type.sourcePath && (
                           <a
                             href={type.sourcePath}
                             target="_blank"

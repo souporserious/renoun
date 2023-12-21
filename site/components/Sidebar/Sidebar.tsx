@@ -1,6 +1,5 @@
 import { Navigation } from 'mdxts/components'
 import { allDocs, allPackages } from 'data'
-import { Text } from 'components/Text'
 import { Logo } from 'components/Logo'
 import { SidebarLink } from './SidebarLink'
 
@@ -72,13 +71,7 @@ function renderList(props: any) {
 function renderItem(props: any) {
   return (
     <li key={props.title} style={{ color: props.children ? 'grey' : 'white' }}>
-      {props.children ? (
-        <div style={{ padding: '0.25rem 0', cursor: 'default' }}>
-          <Text>{props.title}</Text>
-        </div>
-      ) : (
-        <SidebarLink pathname={props.pathname} name={props.title} />
-      )}
+      <SidebarLink pathname={props.pathname} name={props.title} />
       {props.children}
     </li>
   )
