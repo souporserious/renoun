@@ -573,19 +573,20 @@ function sourceFilesToTree(sourceFiles: AllSourceFiles, basePath: string) {
       pathPartIndex < pathParts.length;
       pathPartIndex++
     ) {
-      const name = pathParts[pathPartIndex]
       const pathname = pathParts.slice(0, pathPartIndex + 1).join(sep)
-      let node = nodes.find((node) => node.name === name)
+      const segment = pathParts[pathPartIndex]
+      let node = nodes.find((node) => node.segment === segment)
 
       if (!node) {
         node = {
-          name,
+          segment,
           pathname: join(sep, basePath, pathname),
-          title: parseTitle(name),
+          title: parseTitle(segment),
           children: [],
         }
 
         const sourceFile = sourceFiles[pathname]
+
         if (sourceFile) {
           Object.assign(node, sourceFile)
         }
