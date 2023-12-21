@@ -16,9 +16,7 @@ export async function Navigation({
   renderList: (list: { children: JSX.Element[]; order: number }) => JSX.Element
 
   /** A function that renders a navigation item. */
-  renderItem: (
-    item: Omit<Node, 'children'> & { children?: JSX.Element }
-  ) => JSX.Element
+  renderItem: (item: { children?: JSX.Element }) => JSX.Element
 }) {
   const allSourceFiles = await source.all()
   const tree = sourceFilesToTree(allSourceFiles)
