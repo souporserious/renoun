@@ -1,0 +1,23 @@
+# Routing
+
+Define file glob patterns using `createDataSource`.
+
+- `**/\*.mdx` matches all MDX files in all directories.
+
+- `src/**/\*.ts` targets all TypeScript files in the src directory and its subdirectories.
+
+## Content
+
+MDX files primarily serve as the content layer in your documentation.
+
+## Type Inference
+
+When targeting TypeScript source files, the tyoe checker is used to infer the types of all exports.
+
+The declarations exported from the `index` file in each directory are analyzed and used to generate the documentation.
+
+## Naming Conventions
+
+Source files named `Component.tsx` can have an accompanying `Component.mdx`. This is the same for hooks or utilities like `useHook.ts` and `useHook.mdx`.
+
+For `index.ts` or `index.tsx`, the accompanying file can be `index.md`, `index.mdx`, `README.md`, or `README.mdx`.
