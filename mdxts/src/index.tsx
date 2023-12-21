@@ -180,7 +180,7 @@ export function createDataSource<Type>(
           const pathname = filePathToUrlPathname(filePath, baseDirectory)
           return {
             ...fileExport,
-            pathname: `/${join(basePath, pathname)}`,
+            pathname: join(sep, basePath, pathname),
             sourcePath: getSourcePath(filePath),
           }
         })
@@ -580,7 +580,7 @@ function sourceFilesToTree(sourceFiles: AllSourceFiles, basePath: string) {
       if (!node) {
         node = {
           name,
-          pathname: `/${basePath}/${pathname}`,
+          pathname: join(sep, basePath, pathname),
           title: parseTitle(name),
           children: [],
         }
