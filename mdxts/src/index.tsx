@@ -123,11 +123,14 @@ export function createDataSource<Type>(
       .sort()
       .map((key) => {
         const pathname = filePathToUrlPathname(key, baseDirectory)
-        // TODO: file data and readme data should be normalized and merged together
-        const readmeKey = key.replace(/index\.tsx?$/, 'README.mdx')
-        const hasReadme = Boolean(allModules[readmeKey])
-        return [pathname, hasReadme ? readmeKey : key]
+        const normalizedPathname = pathname.replace(
+          /^(index|readme)$/,
+          basePath
+        )
+        const normalizedKey = key.replace(/index\.tsx?$/, 'README.mdx')
+        return [normalizedPathname, normalizedKey]
       })
+      .filter(Boolean) as [string, string][]
   )
 
   /** Parses and attaches metadata to a module. */
@@ -180,7 +183,10 @@ export function createDataSource<Type>(
           const pathname = filePathToUrlPathname(filePath, baseDirectory)
           return {
             ...fileExport,
-            pathname: join(sep, basePath, pathname),
+            pathname:
+              basePath === pathname
+                ? join(sep, basePath)
+                : join(sep, basePath, pathname),
             sourcePath: getSourcePath(filePath),
           }
         })
@@ -197,7 +203,7 @@ export function createDataSource<Type>(
             const name = sourceFile.getBaseNameWithoutExtension()
             return {
               name,
-              pathname,
+              pathname: basePath === pathname ? join(sep, basePath) : pathname,
               module,
               slug: kebabCase(name),
               sourcePath: getSourcePath(sourceFile.getFilePath()),
@@ -256,7 +262,10 @@ export function createDataSource<Type>(
       description:
         metadata?.description ||
         getDescriptionFromDeclaration(mainExportDeclaration),
-      pathname: join(sep, basePath, pathname),
+      pathname:
+        basePath === pathname
+          ? join(sep, basePath)
+          : join(sep, basePath, pathname),
       headings: resolvedHeadings,
       frontMatter: frontMatter || null,
       metadata,
@@ -354,8 +363,18 @@ export function createDataSource<Type>(
       return sourceFilesToTree(all, basePath)
     },
 
-    /** Returns a module by pathname including metadata, examples, and previous/next modules. */
-    async get(pathname: string | string[]) {
+    /** Returns a module by pathname including metadata, examples, and previous/next modules. Defaults to `basePath` if `pathname` is undefined. */
+    async get(pathname: string | string[] | undefined) {
+      /** Return null if the pathname is the base path. */
+      if (pathname === basePath || pathname?.at(0) === basePath) {
+        return null
+      }
+
+      /** Undefined signals that the base path should be used. */
+      if (pathname === undefined) {
+        pathname = basePath
+      }
+
       const data = await getPathData(pathname)
       return data
     },
