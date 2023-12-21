@@ -64,6 +64,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
                 padding: '0.25rem 0.5rem',
                 border: '1px solid #3F687E',
                 borderRadius: '1rem',
+                flexShrink: 0,
               }}
             >
               Server Only
@@ -335,7 +336,7 @@ function Props({
               paddingVertical="0.2rem"
             />
             {propType.defaultValue ? (
-              <span style={{ fontSize: '0.8rem' }}>
+              <span style={{ fontSize: '0.8rem', flexShrink: 0 }}>
                 = {propType.defaultValue}
               </span>
             ) : null}
