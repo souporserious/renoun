@@ -1,7 +1,6 @@
 import 'server-only'
 
 import type { createDataSource } from '../index'
-import { sourceFilesToTree } from '../index'
 
 /** Renders a navigation tree from a collection of modules. */
 export async function Navigation({
@@ -18,8 +17,7 @@ export async function Navigation({
   /** A function that renders a navigation item. */
   renderItem: (item: { children?: JSX.Element }) => JSX.Element
 }) {
-  const allSourceFiles = await source.all()
-  const tree = sourceFilesToTree(allSourceFiles)
+  const tree = await source.tree()
 
   function buildNavigationTree(children: any[], order: number): JSX.Element {
     return renderList({

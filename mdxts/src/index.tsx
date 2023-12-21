@@ -331,7 +331,7 @@ export function createDataSource<Type>(
 
   return {
     /** Returns all modules. */
-    async all() {
+    async all(): Promise<Record<string, Module & Type>> {
       /** Filter out example modules */
       const filteredKeys = Object.keys(allModulesKeysByPathname).filter(
         (pathname) => {
@@ -352,6 +352,12 @@ export function createDataSource<Type>(
           filteredModules[index],
         ])
       ) as Record<string, Module & Type>
+    },
+
+    /** Returns a tree of all modules. */
+    async tree(): Promise<any[]> {
+      const all = await this.all()
+      return sourceFilesToTree(all, basePath)
     },
 
     /** Returns a module by pathname including metadata, examples, and previous/next modules. */
@@ -436,13 +442,6 @@ function hasPrivateTag(node: Node<ts.Node> | null) {
     return jsDocTags.some((tag) => tag.getTagName() === 'private')
   }
   return null
-}
-
-/** Returns the implementation of a symbol. */
-function getImplementation(symbol: Symbol) {
-  const aliasedSymbol = symbol.getAliasedSymbol() || symbol
-  const declarations = aliasedSymbol.getDeclarations()
-  return declarations.length > 0 ? declarations[0] : null
 }
 
 /** Returns the first heading title from top-level heading if present. */
@@ -565,7 +564,7 @@ type AllSourceFiles = Awaited<
 >
 
 /** Turns a collection of source files into a tree. */
-export function sourceFilesToTree(sourceFiles: AllSourceFiles) {
+function sourceFilesToTree(sourceFiles: AllSourceFiles, basePath: string) {
   const paths = Object.keys(sourceFiles)
   const tree: any[] = []
 
@@ -587,7 +586,7 @@ export function sourceFilesToTree(sourceFiles: AllSourceFiles) {
       if (!node) {
         node = {
           name,
-          pathname: `/${pathname}`,
+          pathname: `/${basePath}/${pathname}`,
           title: parseTitle(name),
           children: [],
         }
