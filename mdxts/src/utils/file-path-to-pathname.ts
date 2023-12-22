@@ -2,7 +2,11 @@ import { resolve, sep } from 'node:path'
 import { kebabCase } from 'case-anything'
 
 /** Converts a file system path to a URL-friendly pathname. */
-export function filePathToPathname(filePath: string, baseDirectory?: string) {
+export function filePathToPathname(
+  filePath: string,
+  baseDirectory?: string,
+  basePath?: string
+) {
   const [baseDirectoryPath, baseFilePath] = baseDirectory
     ? filePath.split(baseDirectory)
     : ['', filePath]
@@ -24,9 +28,26 @@ export function filePathToPathname(filePath: string, baseDirectory?: string) {
     .replace(/\/(readme|index)$/i, '')
 
   // Convert component names to kebab case for case-insensitive paths
-  return parsedFilePath
+  parsedFilePath = parsedFilePath
     .split(sep)
     .map((segment) => (/[A-Z]/.test(segment[0]) ? kebabCase(segment) : segment))
     .filter(Boolean)
     .join(sep)
+
+  // Use directory for root index and readme
+  if (parsedFilePath === 'index' || parsedFilePath === 'readme') {
+    if (basePath) {
+      return basePath
+    }
+
+    if (baseDirectory) {
+      return baseDirectory
+    }
+
+    throw new Error(
+      `Cannot determine base path for file path "${filePath}". Please provide a base directory or base path.`
+    )
+  }
+
+  return parsedFilePath
 }

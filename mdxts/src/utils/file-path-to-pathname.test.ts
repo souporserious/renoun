@@ -1,8 +1,10 @@
 import { filePathToPathname } from './file-path-to-pathname'
 
+const workingDirectory = '/Users/username/Code/mdxts/mdxts'
+
 describe('filePathToUrlPathname', () => {
   beforeEach(() => {
-    jest.spyOn(process, 'cwd').mockReturnValue('/Users/mdxts')
+    jest.spyOn(process, 'cwd').mockReturnValue(workingDirectory)
   })
 
   afterEach(() => {
@@ -10,9 +12,9 @@ describe('filePathToUrlPathname', () => {
   })
 
   it('converts a file system path to a URL-friendly pathname', () => {
-    expect(filePathToPathname('/mdxts/src/components/Code.tsx', 'src')).toBe(
-      'components/code'
-    )
+    expect(
+      filePathToPathname(workingDirectory + '/src/components/Code.tsx', 'src')
+    ).toBe('components/code')
   })
 
   it('removes sorting numbers', () => {
@@ -23,12 +25,23 @@ describe('filePathToUrlPathname', () => {
 
   it('uses directory for index and readme', () => {
     expect(
-      filePathToPathname('/Users/mdxts/src/components/index.tsx', 'src')
+      filePathToPathname(
+        workingDirectory + '/src/components/index.tsx',
+        'components'
+      )
     ).toBe('components')
 
     expect(filePathToPathname('mdxts/src/components/README.mdx')).toBe(
       'mdxts/src/components'
     )
+
+    expect(
+      filePathToPathname(
+        workingDirectory + '/src/README.mdx',
+        'src',
+        'packages'
+      )
+    ).toBe('packages')
   })
 
   it('accounts for base directory', () => {
