@@ -27,9 +27,18 @@ export function filePathToPathname(
     // Remove trailing "/readme" or "/index"
     .replace(/\/(readme|index)$/i, '')
 
+  const segments = parsedFilePath.split(sep)
+
+  // Remove duplicate segment if last directory name matches file name (e.g. "Button/Button.tsx")
+  if (
+    segments.length > 1 &&
+    segments.at(-2)!.toLowerCase() === segments.at(-1)!.toLowerCase()
+  ) {
+    segments.pop()
+  }
+
   // Convert component names to kebab case for case-insensitive paths
-  parsedFilePath = parsedFilePath
-    .split(sep)
+  parsedFilePath = segments
     .map((segment) => (/[A-Z]/.test(segment[0]) ? kebabCase(segment) : segment))
     .filter(Boolean)
     .join(sep)

@@ -49,4 +49,10 @@ describe('filePathToUrlPathname', () => {
       'components'
     )
   })
+
+  it('handles the same directory and base name', () => {
+    expect(filePathToPathname('src/components/Button/Button.tsx', 'src')).toBe(
+      'components/button'
+    )
+  })
 })
