@@ -11,7 +11,7 @@ import { getExportedTypes } from './get-exported-types'
 type Pathname = string
 type ModuleImport = Promise<{ default: any } & Record<string, any>>
 
-export function createDataSource({
+export function getAllData({
   allModules,
   globPattern,
   baseDirectory,
@@ -72,7 +72,7 @@ export function createDataSource({
         filePath: string
         pathname: string
       }[]
-      exportedTypes?: (ReturnType<typeof getExportedTypes>[number] & {
+      types?: (ReturnType<typeof getExportedTypes>[number] & {
         isMainExport: boolean
         pathname: string
       })[]
@@ -100,7 +100,7 @@ export function createDataSource({
           }
         }
       )
-      const exportedTypes = getExportedTypes(sourceFile).map(
+      const types = getExportedTypes(sourceFile).map(
         ({ filePath, ...fileExport }) => {
           const pathname = filePathToPathname(filePath, baseDirectory)
           return {
@@ -126,7 +126,7 @@ export function createDataSource({
         tsPath: path,
         isServerOnly,
         examples,
-        exportedTypes,
+        types,
       }
     }
 
@@ -140,5 +140,5 @@ export function createDataSource({
     }
   })
 
-  console.log(allData)
+  return allData
 }
