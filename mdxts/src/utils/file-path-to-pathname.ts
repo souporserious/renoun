@@ -7,6 +7,11 @@ export function filePathToPathname(
   baseDirectory?: string,
   basePath?: string
 ) {
+  // Convert relative paths to absolute paths
+  if (baseDirectory?.startsWith('.')) {
+    baseDirectory = resolve(process.cwd(), baseDirectory)
+  }
+
   const [baseDirectoryPath, baseFilePath] = baseDirectory
     ? filePath.split(baseDirectory)
     : ['', filePath]

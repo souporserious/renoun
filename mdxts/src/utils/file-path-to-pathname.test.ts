@@ -55,4 +55,13 @@ describe('filePathToUrlPathname', () => {
       'components/button'
     )
   })
+
+  it('normalizes relative paths', () => {
+    expect(
+      filePathToPathname(
+        workingDirectory + '/src/components/index.ts',
+        '../mdxts/src'
+      )
+    ).toBe('components')
+  })
 })
