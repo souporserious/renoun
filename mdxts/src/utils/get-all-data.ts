@@ -1,7 +1,8 @@
 import parseTitle from 'title'
-import { join, resolve, sep } from 'node:path'
+import { basename, join, resolve, sep } from 'node:path'
 import { readPackageUpSync } from 'read-package-up'
-import { getSymbolDescription } from '@tsxmod/utils'
+import type { SourceFile } from 'ts-morph'
+import { getSymbolDescription, resolveExpression } from '@tsxmod/utils'
 
 import { project } from '../components/project'
 import { findCommonRootPath } from './find-common-root-path'
@@ -69,6 +70,7 @@ export function getAllData({
     {
       title: string | null
       description: string | null
+      order: number | null
       mdxPath?: string
       tsPath?: string
       isServerOnly?: boolean
@@ -87,6 +89,7 @@ export function getAllData({
 
   allPublicPaths.forEach((path) => {
     const pathname = filePathToPathname(path, baseDirectory, basePath)
+    const order = getSortOrder(basename(path))
     const previouseData = allData[pathname]
 
     /** Handle TypeScript source files */
@@ -143,7 +146,7 @@ export function getAllData({
 
       allData[pathname] = {
         ...previouseData,
-        title,
+        title: title.replace(/-/g, ' '),
         description,
         isServerOnly,
         examples,
@@ -154,12 +157,61 @@ export function getAllData({
 
     /** Handle MDX content */
     if (path.endsWith('.md') || path.endsWith('.mdx')) {
+      const sourceFile = project.addSourceFileAtPath(path)
+      const metadata = getMetadata(sourceFile)
+      let title = findFirstHeading(sourceFile.getText())
+      let description = null
+
+      if (metadata?.title) {
+        title = metadata.title
+      }
+
+      if (metadata?.description) {
+        description = metadata.description
+      }
+
       allData[pathname] = {
         ...previouseData,
+        title,
+        description,
+        order,
         mdxPath: path,
       }
     }
   })
 
-  return allData
+  return Object.fromEntries(
+    Object.entries(allData).sort((a, b) => {
+      if (a[1].order !== null && b[1].order !== null) {
+        return a[1].order - b[1].order
+      }
+      return a[0].localeCompare(b[0])
+    })
+  )
+}
+
+/** Returns the sorting order of a filename. */
+function getSortOrder(filename: string) {
+  const match = filename.match(/^\d+/)
+  return match ? parseInt(match[0], 10) : null
+}
+
+/** Returns the first heading in a Markdown string. */
+function findFirstHeading(sourceFileText: string) {
+  const headingRegex = /(^|\n)#+\s(.+)/
+  const match = sourceFileText.match(headingRegex)
+  if (match) {
+    return match[2]
+  }
+  return null
+}
+
+/** Returns the metadata from a source file. */
+function getMetadata(sourceFile: SourceFile) {
+  const metadataExport = sourceFile.getVariableDeclaration('metadata')
+  if (metadataExport) {
+    const metadata = resolveExpression(metadataExport.getInitializer()!)
+    return metadata as Record<string, any>
+  }
+  return null
 }
