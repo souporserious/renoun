@@ -1,7 +1,6 @@
 import * as React from 'react'
 import type { MDXComponents } from 'mdx/types'
-import { getMetadataFromClassName } from 'mdxts/utils'
-import { Code } from 'mdxts/components'
+import { Code, getMetadataFromClassName } from 'mdxts/components/Code'
 import { Editor } from 'mdxts/components/Editor'
 import { Preview } from 'mdxts/components/Preview'
 import { PackageExports } from 'mdxts/components/PackageExports'

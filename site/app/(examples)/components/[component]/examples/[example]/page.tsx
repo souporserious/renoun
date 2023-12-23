@@ -8,10 +8,11 @@ export async function generateStaticParams() {
 
   return Object.entries(sourceFiles)
     .filter(
-      ([, component]) => component.examples && component.examples?.length > 0
+      ([, component]: [string, any]) =>
+        component.examples && component.examples?.length > 0
     )
-    .flatMap(([pathname, component]) => {
-      return component.examples!.map((example) => ({
+    .flatMap(([pathname, component]: [string, any]) => {
+      return component.examples!.map((example: any) => ({
         component: pathname,
         example: example.slug,
       }))

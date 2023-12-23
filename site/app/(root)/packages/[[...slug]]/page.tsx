@@ -1,6 +1,5 @@
 import { Fragment } from 'react'
 import { notFound } from 'next/navigation'
-import type { PropertyMetadata } from 'mdxts/utils'
 import { Code } from 'mdxts/components'
 import { SiblingLinks } from 'components/SiblingLinks'
 import { TableOfContents } from 'components/TableOfContents'
@@ -24,7 +23,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
     title,
     description,
     headings,
-    exportedTypes,
+    types,
     sourcePath,
     isServerOnly,
   } = singlePackage
@@ -85,7 +84,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
 
         {Content ? <Content /> : null}
 
-        {exportedTypes && exportedTypes.length > 0 && (
+        {types && types.length > 0 && (
           <div
             style={{
               display: 'flex',
@@ -103,7 +102,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
                 gap: '2rem',
               }}
             >
-              {exportedTypes.map((type) => {
+              {types.map((type) => {
                 const isActive = singlePackage.pathname === type.pathname
                 return (
                   <div
@@ -188,7 +187,7 @@ function Props({
   props,
   isComponent,
 }: {
-  props: (PropertyMetadata | null)[] | null
+  props: any[] | null
   isComponent: boolean
 }) {
   return props?.map((propType, index) => {
@@ -222,7 +221,7 @@ function Props({
           )}
           <div>
             <h4>Union Props</h4>
-            {propType.unionProperties.map((props, index) => (
+            {propType.unionProperties.map((props: any, index: number) => (
               <Fragment key={index}>
                 {index > 0 ? (
                   <div

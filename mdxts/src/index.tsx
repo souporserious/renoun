@@ -2,18 +2,17 @@ import parseTitle from 'title'
 import Slugger from 'github-slugger'
 import type { ComponentType } from 'react'
 import { kebabCase } from 'case-anything'
-import { basename, join, resolve, sep } from 'node:path'
-import { Node, SyntaxKind } from 'ts-morph'
-import type { ExportedDeclarations, SourceFile, ts } from 'ts-morph'
-import { getSymbolDescription } from '@tsxmod/utils'
+import { join, resolve, sep } from 'node:path'
+import { Node } from 'ts-morph'
+import type { SourceFile, ts } from 'ts-morph'
 import 'server-only'
 
 import type { CodeBlocks } from './remark/add-code-blocks'
 import type { Headings } from './remark/add-headings'
 import { project } from './components/project'
 import { getExportedTypes } from './utils/get-exported-types'
-import { getExamplesFromDirectory } from './utils/get-examples'
 import { getSourcePath } from './utils/get-source-path'
+import { getAllData } from './utils/get-all-data'
 
 const typeSlugs = new Slugger()
 
@@ -29,7 +28,7 @@ export type Module = {
   sourcePath: string
   isServerOnly: boolean
   slug: string
-  exportedTypes:
+  types:
     | (ReturnType<typeof getExportedTypes>[number] & {
         pathname: string
         sourcePath: string
@@ -84,6 +83,12 @@ export function createDataSource<Type>(
     baseDirectory: string
     basePath: string
   }
+  const allData = getAllData({
+    allModules,
+    globPattern,
+    baseDirectory,
+    basePath,
+  })
 
   /** Analyze TypeScript source files. */
   const sourceFiles = /ts(x)?/.test(globPattern)
@@ -141,81 +146,12 @@ export function createDataSource<Type>(
     }
 
     const moduleKey = allModulesKeysByPathname[pathname]
+    const data = allData[pathname]
 
     if (moduleKey === undefined) {
       return null
     }
 
-    const absoluteModuleKey = resolve(process.cwd(), moduleKey)
-    const moduleKeyTs = absoluteModuleKey.replace(/readme\.mdx?/i, 'index.ts')
-    const moduleKeyTsx = absoluteModuleKey.replace(/readme\.mdx?/i, 'index.tsx')
-    const sourceFile = sourceFiles?.find((sourceFile) => {
-      return (
-        sourceFile.getFilePath() === moduleKeyTs ||
-        sourceFile.getFilePath() === moduleKeyTsx
-      )
-    })
-    const isServerOnly = sourceFile
-      ? sourceFile.getImportDeclarations().some((importDeclaration) => {
-          const moduleSpecifier = importDeclaration.getModuleSpecifierValue()
-          return moduleSpecifier === 'server-only'
-        })
-      : null
-    /**
-     * If there is a source file resolve the "main" export which will either be the default export
-     * or an export with the exact same name as the filename.
-     */
-    const defaultExportSymbol = sourceFile?.getDefaultExportSymbol()
-    const exportedDeclarations = sourceFile?.getExportedDeclarations()
-    const mainExportDeclaration = (
-      exportedDeclarations
-        ? Array.from(exportedDeclarations)
-            .find(([name, [declaration]]) => {
-              const baseFilename = basename(cleanFilename(moduleKey))
-              return (
-                defaultExportSymbol === declaration.getSymbol() ||
-                name === baseFilename ||
-                kebabCase(name) === baseFilename // normalize camel case function name against kebab case filename
-              )
-            })
-            ?.at(1) // Get the declaration
-            ?.at(0) // Get the first node
-        : null
-    ) as ExportedDeclarations | null
-    const mainExportDeclarationSymbol = mainExportDeclaration?.getSymbol()
-    const exportedTypes = sourceFile
-      ? getExportedTypes(sourceFile).map(({ filePath, ...fileExport }) => {
-          const pathname = filePathToUrlPathname(filePath, baseDirectory)
-          return {
-            ...fileExport,
-            pathname:
-              basePath === pathname
-                ? join(sep, basePath)
-                : join(sep, basePath, pathname),
-            sourcePath: getSourcePath(filePath),
-          }
-        })
-      : null
-    const examples = sourceFile
-      ? getExamplesFromDirectory(sourceFile.getDirectory()).map(
-          (sourceFile) => {
-            const pathname = filePathToUrlPathname(
-              sourceFile.getFilePath(),
-              baseDirectory
-            )
-            const moduleKey = allModulesKeysByPathname[pathname]
-            const module = allModules[moduleKey]
-            const name = sourceFile.getBaseNameWithoutExtension()
-            return {
-              name,
-              pathname: basePath === pathname ? join(sep, basePath) : pathname,
-              module,
-              slug: kebabCase(name),
-              sourcePath: getSourcePath(sourceFile.getFilePath()),
-            }
-          }
-        )
-      : null
     const filename = cleanFilename(moduleKey.split(sep).pop() || '')
     const filenameTitle = /(readme|index)$/i.test(filename)
       ? parseTitle(moduleKey.split(sep).slice(-2, -1).pop() || '')
@@ -232,7 +168,7 @@ export function createDataSource<Type>(
     let resolvedHeadings = headings || []
 
     /** Append component prop type links to headings data. */
-    if (exportedTypes && exportedTypes.length > 0) {
+    if (data.types && data.types.length > 0) {
       typeSlugs.reset()
 
       resolvedHeadings = [
@@ -242,7 +178,7 @@ export function createDataSource<Type>(
           id: 'exports',
           depth: 2,
         },
-        ...exportedTypes.map((type) => ({
+        ...data.types.map((type) => ({
           text: type.name,
           id: typeSlugs.slug(type.name),
           depth: 3,
@@ -257,18 +193,13 @@ export function createDataSource<Type>(
 
     return {
       Content,
-      isServerOnly,
+      isServerOnly: data.isServerOnly,
       title:
         metadata?.title ||
         getHeadingTitle(headings) ||
-        (mainExportDeclaration
-          ? getNameFromDeclaration(mainExportDeclaration) || filenameTitle
-          : filenameTitle),
-      description:
-        metadata?.description ||
-        (mainExportDeclarationSymbol
-          ? getSymbolDescription(mainExportDeclarationSymbol)
-          : null),
+        data.title ||
+        filenameTitle,
+      description: metadata?.description || data.description,
       pathname:
         basePath === pathname
           ? join(sep, basePath)
@@ -276,14 +207,13 @@ export function createDataSource<Type>(
       headings: resolvedHeadings,
       frontMatter: frontMatter || null,
       metadata,
-      exportedTypes,
-      examples,
+      types: data.types,
+      examples: data.examples,
       sourcePath: getSourcePath(resolve(process.cwd(), moduleKey)),
       ...exports,
     } as Module & Type
   }
 
-  /** Returns the active and sibling data based on the active pathname. */
   async function getPathData(
     /** The pathname of the active page. */
     pathname: string | string[]
@@ -297,24 +227,13 @@ export function createDataSource<Type>(
     const stringPathname = Array.isArray(pathname)
       ? pathname.join(sep)
       : pathname
-    const activeIndex = Object.keys(allModulesKeysByPathname).findIndex(
-      (dataPathname) => dataPathname.includes(stringPathname)
+    const activeIndex = Object.keys(allData).findIndex((dataPathname) =>
+      dataPathname.includes(stringPathname)
     )
 
     function getSiblingPathname(startIndex: number, direction: number) {
       const siblingIndex = startIndex + direction
-      const siblingPathname = Object.keys(allModulesKeysByPathname)[
-        siblingIndex
-      ]
-      const moduleKey = allModulesKeysByPathname[siblingPathname]
-
-      /** Skip readme and index files since they relate to the directory. */
-      if (
-        moduleKey &&
-        /(readme|index)$/i.test(basename(cleanFilename(moduleKey)))
-      ) {
-        return undefined
-      }
+      const siblingPathname = Object.keys(allData)[siblingIndex]
 
       if (siblingPathname === null) {
         return getSiblingPathname(siblingIndex, direction)
@@ -341,33 +260,13 @@ export function createDataSource<Type>(
 
   return {
     /** Returns all modules. */
-    async all(): Promise<Record<string, Module & Type>> {
-      /** Filter out example modules */
-      const filteredKeys = Object.keys(allModulesKeysByPathname).filter(
-        (pathname) => {
-          const moduleKey = allModulesKeysByPathname[pathname]
-          return moduleKey
-            ? moduleKey.includes('examples')
-              ? !/ts(x)?/.test(moduleKey)
-              : true
-            : true
-        }
-      )
-      const filteredModules = await Promise.all(
-        filteredKeys.map((pathname) => parseModule(pathname))
-      )
-      return Object.fromEntries(
-        filteredKeys.map((pathname, index) => [
-          pathname,
-          filteredModules[index],
-        ])
-      ) as Record<string, Module & Type>
+    async all(): Promise<any> {
+      return allData
     },
 
     /** Returns a tree of all modules. */
     async tree(): Promise<any[]> {
-      const all = await this.all()
-      return sourceFilesToTree(all, basePath)
+      return sourceFilesToTree(allData, basePath)
     },
 
     /** Returns a module by pathname including metadata, examples, and previous/next modules. Defaults to `basePath` if `pathname` is undefined. */
@@ -382,22 +281,13 @@ export function createDataSource<Type>(
 
     /** Returns paths for all modules calculated from file system paths. */
     paths(): string[][] {
-      return Object.keys(allModulesKeysByPathname)
-        .filter((pathname) => {
-          /** Skip readme and index files since they relate to the directory. */
-          if (/(readme|index)$/i.test(pathname)) {
-            return false
-          }
-
-          return true
-        })
-        .map((pathname) =>
-          pathname
-            // Split pathname into an array
-            .split(sep)
-            // Remove empty strings
-            .filter(Boolean)
-        )
+      return Object.keys(allData).map((pathname) =>
+        pathname
+          // Split pathname into an array
+          .split(sep)
+          // Remove empty strings
+          .filter(Boolean)
+      )
     },
   }
 }
@@ -462,31 +352,6 @@ function hasPrivateTag(node: Node<ts.Node> | null) {
 function getHeadingTitle(headings: Headings) {
   const heading = headings?.at(0)
   return heading?.depth === 1 ? heading.text : null
-}
-
-/** Returns the name of a function, variable, or class declaration. */
-function getNameFromDeclaration(declaration: Node): string | undefined {
-  switch (declaration.getKind()) {
-    case SyntaxKind.FunctionDeclaration:
-      return declaration.asKind(SyntaxKind.FunctionDeclaration)?.getName()
-    case SyntaxKind.VariableDeclaration:
-      const initializer = declaration
-        .asKind(SyntaxKind.VariableDeclaration)
-        ?.getInitializer()
-      if (
-        initializer?.getKind() === SyntaxKind.ArrowFunction ||
-        initializer?.getKind() === SyntaxKind.FunctionExpression
-      ) {
-        return declaration.asKind(SyntaxKind.VariableDeclaration)?.getName()
-      }
-      break
-    case SyntaxKind.ClassDeclaration:
-      return declaration.asKind(SyntaxKind.ClassDeclaration)?.getName()
-    default:
-      throw new Error(
-        `Unsupported declaration kind: ${declaration.getKindName()}`
-      )
-  }
 }
 
 /** Returns the source file paths that are exported from the index file. */

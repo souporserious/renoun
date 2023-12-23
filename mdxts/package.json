@@ -44,16 +44,6 @@
       "require": "./dist/cjs/next/index.js",
       "types": "./dist/next/index.d.ts"
     },
-    "./transform": {
-      "import": "./dist/transform/index.js",
-      "require": "./dist/cjs/transform/index.js",
-      "types": "./dist/transform/index.d.ts"
-    },
-    "./utils": {
-      "import": "./dist/utils/index.js",
-      "require": "./dist/cjs/utils/index.js",
-      "types": "./dist/utils/index.d.ts"
-    },
     "./watcher": {
       "import": "./dist/watcher/index.js",
       "require": "./dist/cjs/watcher/index.js",
@@ -82,9 +72,6 @@
       ],
       "transform": [
         "./dist/transform/index.d.ts"
-      ],
-      "utils": [
-        "./dist/utils/index.d.ts"
       ],
       "watcher": [
         "./dist/watcher/index.d.ts"

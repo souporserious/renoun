@@ -14,6 +14,8 @@ import { project } from './project'
 import { CodeView } from './CodeView'
 import { registerCodeComponent } from './state'
 
+export { getMetadataFromClassName } from '../utils/get-metadata-from-class-name'
+
 export type BaseCodeProps = {
   /** Name of the file. */
   filename?: string
