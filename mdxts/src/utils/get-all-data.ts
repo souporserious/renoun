@@ -79,6 +79,7 @@ export function getAllData({
       mdxPath?: string
       tsPath?: string
       sourcePath?: string
+      isMainExport?: boolean
       isServerOnly?: boolean
       examples?: {
         name: string
@@ -163,6 +164,7 @@ export function getAllData({
           }
         }
       )
+      const isMainExport = pathname === packageName
       const isServerOnly = sourceFile
         .getImportDeclarations()
         .some((importDeclaration) => {
@@ -193,6 +195,7 @@ export function getAllData({
         title,
         label,
         description,
+        isMainExport,
         isServerOnly,
         examples,
         types,
@@ -217,9 +220,26 @@ export function getAllData({
 
   return Object.fromEntries(
     Object.entries(allData).sort((a, b) => {
+      // Give the main export the highest priority
+      if (a[1].isMainExport) {
+        return -1
+      }
+      if (b[1].isMainExport) {
+        return 1
+      }
+
+      // Sort by order if available
       if (a[1].order !== null && b[1].order !== null) {
         return a[1].order - b[1].order
       }
+      if (a[1].order !== null) {
+        return -1
+      }
+      if (b[1].order !== null) {
+        return 1
+      }
+
+      // Fallback to alphabetical order
       return a[0].localeCompare(b[0])
     })
   )
