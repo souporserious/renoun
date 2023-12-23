@@ -19,6 +19,7 @@ const typeSlugs = new Slugger()
 export type Module = {
   Content?: ComponentType
   title: string
+  label: string
   description: string | null
   summary: string
   frontMatter?: Record<string, any>
@@ -148,30 +149,23 @@ export function createDataSource<Type>(
     const moduleKey = allModulesKeysByPathname[pathname]
     const data = allData[pathname]
 
-    if (moduleKey === undefined) {
+    if (data === undefined) {
       return null
     }
 
-    const filename = cleanFilename(moduleKey.split(sep).pop() || '')
-    const filenameTitle = /(readme|index)$/i.test(filename)
-      ? parseTitle(moduleKey.split(sep).slice(-2, -1).pop() || '')
-      : isPascalCase(filename)
-        ? filename
-        : parseTitle(filename)
-    const {
+    let {
       default: Content,
-      headings,
+      headings = [],
       metadata,
       frontMatter,
       ...exports
     } = (await allModules[moduleKey]) || { default: null }
-    let resolvedHeadings = headings || []
 
     /** Append component prop type links to headings data. */
     if (data.types && data.types.length > 0) {
       typeSlugs.reset()
 
-      resolvedHeadings = [
+      headings = [
         ...(headings || []),
         {
           text: 'Exports',
@@ -194,17 +188,14 @@ export function createDataSource<Type>(
     return {
       Content,
       isServerOnly: data.isServerOnly,
-      title:
-        metadata?.title ||
-        getHeadingTitle(headings) ||
-        data.title ||
-        filenameTitle,
-      description: metadata?.description || data.description,
+      title: data.title,
+      label: data.label,
+      description: data.description,
       pathname:
         basePath === pathname
           ? join(sep, basePath)
           : join(sep, basePath, pathname),
-      headings: resolvedHeadings,
+      headings,
       frontMatter: frontMatter || null,
       metadata,
       types: data.types,

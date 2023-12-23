@@ -89,13 +89,41 @@ export function getAllData({
   > = {}
 
   allPublicPaths.forEach((path) => {
+    const type =
+      path.endsWith('.ts') || path.endsWith('.tsx')
+        ? 'ts'
+        : path.endsWith('.md') || path.endsWith('.mdx')
+          ? 'md'
+          : null
     const pathname = filePathToPathname(path, baseDirectory, basePath)
     const order = getSortOrder(basename(path))
     const previouseData = allData[pathname]
+    const sourceFile = project.addSourceFileAtPath(path)
+    const sourceFileTitle = getSourceFileTitle(sourceFile)
+    const metadata = getMetadata(sourceFile)
+    let title =
+      type === 'md'
+        ? findFirstHeading(sourceFile.getText()) || sourceFileTitle
+        : sourceFileTitle
+    let label = null
+    let description = null
+
+    if (metadata?.title) {
+      title = metadata.title
+    }
+
+    if (metadata?.label) {
+      label = metadata.label
+    } else {
+      label = title
+    }
+
+    if (metadata?.description) {
+      description = metadata.description
+    }
 
     /** Handle TypeScript source files */
-    if (path.endsWith('.ts') || path.endsWith('.tsx')) {
-      const sourceFile = project.getSourceFileOrThrow(path)
+    if (type === 'ts') {
       const examples = getExamplesFromDirectory(sourceFile.getDirectory()).map(
         (sourceFile) => {
           const filePath = sourceFile.getFilePath()
@@ -132,22 +160,27 @@ export function getAllData({
         })
       const mainExportDeclaration = getMainExportDeclaration(sourceFile)
       const mainExportDeclarationSymbol = mainExportDeclaration?.getSymbol()
-      const filename = sourceFile.getBaseNameWithoutExtension()
-      const filenameTitle = /(readme|index)$/i.test(filename)
-        ? parseTitle(sourceFile.getDirectory().getBaseName())
-        : /^[A-Z][a-zA-Z0-9]*$/.test(filename) // don't parse if PascalCase
-          ? filename
-          : parseTitle(filename)
-      const title = mainExportDeclaration
-        ? getNameFromDeclaration(mainExportDeclaration) ?? filenameTitle
-        : filenameTitle
-      const description = mainExportDeclarationSymbol
-        ? getSymbolDescription(mainExportDeclarationSymbol)
-        : null
+
+      if (mainExportDeclaration) {
+        const declarationName = getNameFromDeclaration(mainExportDeclaration)
+        if (declarationName) {
+          title = declarationName
+        }
+      }
+
+      if (mainExportDeclarationSymbol) {
+        const symbolDescription = getSymbolDescription(
+          mainExportDeclarationSymbol
+        )
+        if (symbolDescription) {
+          description = symbolDescription
+        }
+      }
 
       allData[pathname] = {
         ...previouseData,
-        title: title.replace(/-/g, ' '),
+        title,
+        label,
         description,
         isServerOnly,
         examples,
@@ -157,25 +190,7 @@ export function getAllData({
     }
 
     /** Handle MDX content */
-    if (path.endsWith('.md') || path.endsWith('.mdx')) {
-      const sourceFile = project.addSourceFileAtPath(path)
-      const metadata = getMetadata(sourceFile)
-      let title = findFirstHeading(sourceFile.getText())
-      let label = null
-      let description = null
-
-      if (metadata?.title) {
-        title = metadata.title
-      }
-
-      if (metadata?.label) {
-        label = metadata.label
-      }
-
-      if (metadata?.description) {
-        description = metadata.description
-      }
-
+    if (type === 'md') {
       allData[pathname] = {
         ...previouseData,
         title,
@@ -203,9 +218,20 @@ function getSortOrder(filename: string) {
   return match ? parseInt(match[0], 10) : null
 }
 
-/** Returns the first heading in a Markdown string. */
+/** Returns the title of a source file based on its filename. */
+function getSourceFileTitle(sourceFile: SourceFile) {
+  const filename = sourceFile.getBaseNameWithoutExtension()
+  const title = /(readme|index)$/i.test(filename)
+    ? parseTitle(sourceFile.getDirectory().getBaseName())
+    : /^[A-Z][a-zA-Z0-9]*$/.test(filename) // don't parse if PascalCase
+      ? filename
+      : parseTitle(filename)
+  return title.replace(/-/g, ' ') // replace dashes with spaces
+}
+
+/** Returns the first h1 heading in a Markdown string. */
 function findFirstHeading(sourceFileText: string) {
-  const headingRegex = /(^|\n)#+\s(.+)/
+  const headingRegex = /(^|\n)#\s(.+)/
   const match = sourceFileText.match(headingRegex)
   if (match) {
     return match[2]
