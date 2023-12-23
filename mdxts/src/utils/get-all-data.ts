@@ -1,5 +1,6 @@
 import { join, resolve, sep } from 'node:path'
 import { readPackageUpSync } from 'read-package-up'
+import { getSymbolDescription } from '@tsxmod/utils'
 
 import { project } from '../components/project'
 import { findCommonRootPath } from './find-common-root-path'
@@ -7,6 +8,8 @@ import { filePathToPathname } from './file-path-to-pathname'
 import { getExamplesFromDirectory } from './get-examples'
 import { getExportedSourceFiles } from './get-exported-source-files'
 import { getExportedTypes } from './get-exported-types'
+import { getMainExportDeclaration } from './get-main-export-declaration'
+import { getNameFromDeclaration } from './get-name-from-declaration'
 
 type Pathname = string
 type ModuleImport = Promise<{ default: any } & Record<string, any>>
@@ -63,6 +66,8 @@ export function getAllData({
   const allData: Record<
     Pathname,
     {
+      title: string | null
+      description: string | null
       mdxPath?: string
       tsPath?: string
       isServerOnly?: boolean
@@ -120,13 +125,23 @@ export function getAllData({
           const moduleSpecifier = importDeclaration.getModuleSpecifierValue()
           return moduleSpecifier === 'server-only'
         })
+      const mainExportDeclaration = getMainExportDeclaration(sourceFile)
+      const mainExportDeclarationSymbol = mainExportDeclaration?.getSymbol()
+      const title = mainExportDeclaration
+        ? getNameFromDeclaration(mainExportDeclaration)
+        : null
+      const description = mainExportDeclarationSymbol
+        ? getSymbolDescription(mainExportDeclarationSymbol)
+        : null
 
       allData[pathname] = {
         ...previouseData,
-        tsPath: path,
+        title,
+        description,
         isServerOnly,
         examples,
         types,
+        tsPath: path,
       }
     }
 
