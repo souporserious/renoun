@@ -1,5 +1,5 @@
 export const metadata = {
-  label: 'Examples',
+  label: 'Rendering',
 }
 
 # Rendering Examples
@@ -38,9 +38,9 @@ export const Basic = () => <div>Basic</div>
 
 ## Templating
 
-While the `Example` component is great for content like a blog and one-off situations. It's not very useful for a library, or automated documentation.
+The `Example` component is ideal for blogs or individual situations. However, it is less effective for handling a multitude of examples as found in libraries and applications.
 
-For this, you can lean on your specific build tool to handle the templating and query the information available in the collected data. Using Next.js, we can create a custom component that will render the example based on the name of the example file:
+For this, you can lean on your specific framework to handle templating and querying the metadata in the data collected from `createDataSource`. Using Next.js as an example framework, we can create a custom page that will render the example based on the name of the example file:
 
 {/* TODO: Use real example from site here <Code source="../../app/(examples)/components/[component]/examples/[example]/page.tsx" baseDirectory="../../app/(examples)" /> */}
 

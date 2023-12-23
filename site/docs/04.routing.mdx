@@ -1,20 +1,35 @@
 # Routing
 
-Define file glob patterns using `createDataSource`.
+Define file glob patterns using `createDataSource`, for example:
 
 - `**/\*.mdx` matches all MDX files in all directories.
 
-- `src/**/\*.ts` targets all TypeScript files in the src directory and its subdirectories.
+- `src/**/\*.ts` targets all TypeScript files in the `src` directory and its subdirectories.
 
 ## Content
 
-MDX files primarily serve as the content layer in your documentation.
+MDX files primarily serve as the content layer in your documentation. The content can be rendered using the `Content` component exported from the data source:
+
+```tsx filename="page.tsx"
+import { createDataSource } from 'mdxts'
+import { notFound } from 'next/navigation'
+
+const allDocs = createDataSource('docs/**/*.mdx')
+
+export default async function Page({ params }) {
+  const doc = await allDocs.get(params.slug)
+
+  if (doc === null) return notFound()
+
+  const { Content } = doc
+
+  return <Content />
+}
+```
 
 ## Type Inference
 
-When targeting TypeScript source files, the tyoe checker is used to infer the types of all exports.
-
-The declarations exported from the `index` file in each directory are analyzed and used to generate the documentation.
+When targeting TypeScript source files, the type checker is used to infer the types of all exports from `index.(ts|tsx)` files. If `package.json` exports are defined for the package, they will be used to narrow the set of exports to analyze when generating type documentation.
 
 ## Naming Conventions
 
