@@ -255,7 +255,7 @@ function sourceFilesToTree(sourceFiles: AllSourceFiles, basePath: string) {
         node = {
           segment,
           pathname: join(sep, basePath, pathname),
-          title: parseTitle(segment),
+          label: parseTitle(segment),
           children: [],
         }
 
