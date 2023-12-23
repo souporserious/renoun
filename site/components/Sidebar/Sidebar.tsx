@@ -71,7 +71,7 @@ function renderList(props: any) {
 function renderItem(props: any) {
   return (
     <li key={props.title} style={{ color: props.children ? 'grey' : 'white' }}>
-      <SidebarLink pathname={props.pathname} name={props.title} />
+      <SidebarLink pathname={props.pathname} name={props.label} />
       {props.children}
     </li>
   )

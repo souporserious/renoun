@@ -69,6 +69,7 @@ export function getAllData({
     Pathname,
     {
       title: string | null
+      label: string | null
       description: string | null
       order: number | null
       mdxPath?: string
@@ -160,10 +161,15 @@ export function getAllData({
       const sourceFile = project.addSourceFileAtPath(path)
       const metadata = getMetadata(sourceFile)
       let title = findFirstHeading(sourceFile.getText())
+      let label = null
       let description = null
 
       if (metadata?.title) {
         title = metadata.title
+      }
+
+      if (metadata?.label) {
+        label = metadata.label
       }
 
       if (metadata?.description) {
@@ -173,6 +179,7 @@ export function getAllData({
       allData[pathname] = {
         ...previouseData,
         title,
+        label,
         description,
         order,
         mdxPath: path,
