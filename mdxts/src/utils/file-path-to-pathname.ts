@@ -5,7 +5,8 @@ import { kebabCase } from 'case-anything'
 export function filePathToPathname(
   filePath: string,
   baseDirectory?: string,
-  basePath?: string
+  basePath?: string,
+  packageName?: string
 ) {
   // Convert relative paths to absolute paths
   if (baseDirectory?.startsWith('.')) {
@@ -50,6 +51,10 @@ export function filePathToPathname(
 
   // Use directory for root index and readme
   if (parsedFilePath === 'index' || parsedFilePath === 'readme') {
+    if (packageName) {
+      return packageName
+    }
+
     if (basePath) {
       return basePath
     }

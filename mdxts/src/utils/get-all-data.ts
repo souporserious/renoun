@@ -46,13 +46,19 @@ export function getAllData({
     ...(typeScriptSourceFiles?.map((file) => file.getFilePath()) ?? []),
   ]
   const commonRootPath = findCommonRootPath(allPaths)
-  const packageJsonExports = readPackageUpSync({
+  const packageJson = readPackageUpSync({
     cwd: commonRootPath,
-  })?.packageJson.exports
+  })?.packageJson
+  const hasMainExport = packageJson
+    ? packageJson.exports
+      ? Boolean((packageJson.exports as Record<string, any>)['.'])
+      : false
+    : false
+  const packageName = hasMainExport ? packageJson!.name : undefined
   const entrySourceFiles = project.addSourceFilesAtPaths(
-    packageJsonExports
+    packageJson?.exports
       ? /** If package.json exports found use that for calculating public paths. */
-        Object.keys(packageJsonExports).map((key) =>
+        Object.keys(packageJson.exports).map((key) =>
           join(resolve(commonRootPath, key), 'index.(ts|tsx)')
         )
       : /** Otherwise default to a root index file. */
@@ -94,7 +100,12 @@ export function getAllData({
         : path.endsWith('.md') || path.endsWith('.mdx')
           ? 'md'
           : null
-    const pathname = filePathToPathname(path, baseDirectory, basePath)
+    const pathname = filePathToPathname(
+      path,
+      baseDirectory,
+      basePath,
+      packageName
+    )
     const order = getSortOrder(basename(path))
     const previouseData = allData[pathname]
     const sourceFile = project.addSourceFileAtPath(path)
