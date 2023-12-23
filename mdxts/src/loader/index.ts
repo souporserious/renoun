@@ -76,7 +76,7 @@ export default async function loader(
             isMdxPattern
               ? globPattern
               : [
-                  `${baseGlobPattern}/README.mdx`,
+                  `${baseGlobPattern}/(readme|README).mdx`,
                   `${baseGlobPattern}/*.examples.(ts|tsx)`,
                   `${baseGlobPattern}/examples/*.(ts|tsx)`,
                 ],
