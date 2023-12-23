@@ -1,3 +1,4 @@
+import parseTitle from 'title'
 import { join, resolve, sep } from 'node:path'
 import { readPackageUpSync } from 'read-package-up'
 import { getSymbolDescription } from '@tsxmod/utils'
@@ -127,9 +128,15 @@ export function getAllData({
         })
       const mainExportDeclaration = getMainExportDeclaration(sourceFile)
       const mainExportDeclarationSymbol = mainExportDeclaration?.getSymbol()
+      const filename = sourceFile.getBaseNameWithoutExtension()
+      const filenameTitle = /(readme|index)$/i.test(filename)
+        ? parseTitle(sourceFile.getDirectory().getBaseName())
+        : /^[A-Z][a-zA-Z0-9]*$/.test(filename) // don't parse if PascalCase
+          ? filename
+          : parseTitle(filename)
       const title = mainExportDeclaration
-        ? getNameFromDeclaration(mainExportDeclaration)
-        : null
+        ? getNameFromDeclaration(mainExportDeclaration) ?? filenameTitle
+        : filenameTitle
       const description = mainExportDeclarationSymbol
         ? getSymbolDescription(mainExportDeclarationSymbol)
         : null
@@ -147,7 +154,6 @@ export function getAllData({
 
     /** Handle MDX content */
     if (path.endsWith('.md') || path.endsWith('.mdx')) {
-      // const mdxModule = allAbsoluteMdxModules[path]
       allData[pathname] = {
         ...previouseData,
         mdxPath: path,
