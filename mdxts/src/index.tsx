@@ -1,18 +1,13 @@
 import parseTitle from 'title'
 import Slugger from 'github-slugger'
 import type { ComponentType } from 'react'
-import { kebabCase } from 'case-anything'
 import { join, resolve, sep } from 'node:path'
-import { Node } from 'ts-morph'
-import type { SourceFile, ts } from 'ts-morph'
 import 'server-only'
 
 import type { CodeBlocks } from './remark/add-code-blocks'
 import type { Headings } from './remark/add-headings'
-import { project } from './components/project'
+import { getAllData, type AllModules } from './utils/get-all-data'
 import { getExportedTypes } from './utils/get-exported-types'
-import { getSourcePath } from './utils/get-source-path'
-import { getAllData } from './utils/get-all-data'
 
 const typeSlugs = new Slugger()
 
@@ -67,16 +62,21 @@ export function createDataSource<Type>(
     basePath?: string
   } = {}
 ) {
-  let allModules = pattern as unknown as Record<
-    string,
-    Promise<{ default: any } & Record<string, any>> | null
-  >
+  let allModules = pattern as unknown as AllModules
 
   if (typeof allModules === 'string') {
     throw new Error(
       'mdxts: createDataSource requires that the mdxts/loader package is configured as a Webpack loader.'
     )
   }
+
+  /** Convert all modules to absolute paths. */
+  allModules = Object.fromEntries(
+    Object.entries(allModules).map(([pathname, moduleImport]) => [
+      resolve(process.cwd(), pathname),
+      moduleImport,
+    ])
+  )
 
   const globPattern = options as unknown as string
   const { baseDirectory = '', basePath = '' } = (arguments[2] ||
@@ -91,62 +91,12 @@ export function createDataSource<Type>(
     basePath,
   })
 
-  /** Analyze TypeScript source files. */
-  const sourceFiles = /ts(x)?/.test(globPattern)
-    ? project.addSourceFilesAtPaths(globPattern)
-    : null
-
-  /** Merge in TypeSript source file paths and check if there's a matching MDX file */
-  if (sourceFiles) {
-    const exportedSourceFilePaths = getExportedSourceFilePaths(
-      sourceFiles,
-      baseDirectory
-    )
-    allModules = {
-      ...allModules,
-      ...Object.fromEntries(
-        exportedSourceFilePaths.map((filePath) => {
-          const mdxPath = resolve(
-            process.cwd(),
-            filePath.replace(/\.tsx?$/, '.mdx')
-          )
-          const mdxModuleKey = Object.keys(allModules).find((key) => {
-            const resolvedKey = resolve(process.cwd(), key)
-            return resolvedKey === mdxPath
-          })
-
-          if (mdxModuleKey && mdxModuleKey in allModules) {
-            return [filePath, allModules[mdxModuleKey]]
-          }
-
-          return [filePath, null]
-        })
-      ),
-    }
-  }
-
-  const allModulesKeysByPathname = Object.fromEntries(
-    Object.keys(allModules)
-      .sort()
-      .map((key) => {
-        const pathname = filePathToUrlPathname(key, baseDirectory)
-        const normalizedPathname = pathname.replace(
-          /^(index|readme)$/,
-          basePath
-        )
-        const normalizedKey = key.replace(/index\.tsx?$/, 'README.mdx')
-        return [normalizedPathname, normalizedKey]
-      })
-      .filter(Boolean) as [string, string][]
-  )
-
   /** Parses and attaches metadata to a module. */
-  async function parseModule(pathname?: string) {
+  async function getModule(pathname?: string) {
     if (pathname === undefined) {
       return null
     }
 
-    const moduleKey = allModulesKeysByPathname[pathname]
     const data = allData[pathname]
 
     if (data === undefined) {
@@ -156,10 +106,10 @@ export function createDataSource<Type>(
     let {
       default: Content,
       headings = [],
-      metadata,
-      frontMatter,
+      metadata = null,
+      frontMatter = null,
       ...exports
-    } = (await allModules[moduleKey]) || { default: null }
+    } = data.mdxPath ? await allModules[data.mdxPath] : { default: null }
 
     /** Append component prop type links to headings data. */
     if (data.types && data.types.length > 0) {
@@ -191,6 +141,9 @@ export function createDataSource<Type>(
       title: data.title,
       label: data.label,
       description: data.description,
+      types: data.types,
+      examples: data.examples,
+      sourcePath: data.sourcePath,
       pathname:
         basePath === pathname
           ? join(sep, basePath)
@@ -198,9 +151,6 @@ export function createDataSource<Type>(
       headings,
       frontMatter: frontMatter || null,
       metadata,
-      types: data.types,
-      examples: data.examples,
-      sourcePath: getSourcePath(resolve(process.cwd(), moduleKey)),
       ...exports,
     } as Module & Type
   }
@@ -208,13 +158,7 @@ export function createDataSource<Type>(
   async function getPathData(
     /** The pathname of the active page. */
     pathname: string | string[]
-  ): Promise<
-    | (Module & {
-        previous?: Module
-        next?: Module
-      })
-    | null
-  > {
+  ): Promise<(Module & { previous?: Module; next?: Module }) | null> {
     const stringPathname = Array.isArray(pathname)
       ? pathname.join(sep)
       : pathname
@@ -233,9 +177,9 @@ export function createDataSource<Type>(
     }
 
     const [active, previous, next] = await Promise.all([
-      parseModule(stringPathname),
-      parseModule(getSiblingPathname(activeIndex, -1)),
-      parseModule(getSiblingPathname(activeIndex, 1)),
+      getModule(stringPathname),
+      getModule(getSiblingPathname(activeIndex, -1)),
+      getModule(getSiblingPathname(activeIndex, 1)),
     ])
 
     if (active === null) {
@@ -281,115 +225,6 @@ export function createDataSource<Type>(
       )
     },
   }
-}
-
-/** Converts a file system path to a URL-friendly pathname. */
-function filePathToUrlPathname(filePath: string, baseDirectory?: string) {
-  const parsedFilePath = filePath
-    // Remove leading separator "./"
-    .replace(/^\.\//, '')
-    // Remove leading sorting number "01."
-    .replace(/\/\d+\./g, sep)
-    // Remove working directory
-    .replace(
-      baseDirectory
-        ? `${resolve(process.cwd(), baseDirectory)}/`
-        : process.cwd(),
-      ''
-    )
-    // Remove base directory
-    .replace(baseDirectory ? `${baseDirectory}/` : '', '')
-    // Remove file extensions
-    .replace(/\.[^/.]+$/, '')
-    // Remove trailing "/readme" or "/index"
-    .replace(/\/(readme|index)$/i, '')
-
-  // Convert component names to kebab case for case-insensitive paths
-  const segments = parsedFilePath.split(sep)
-
-  return segments
-    .map((segment) => (/[A-Z]/.test(segment[0]) ? kebabCase(segment) : segment))
-    .filter(Boolean)
-    .join(sep)
-}
-
-/** Cleans a filename for use as a slug or title. */
-function cleanFilename(filename: string) {
-  return (
-    filename
-      // Remove leading sorting number
-      .replace(/^\d+\./, '')
-      // Remove file extensions
-      .replace(/\.[^/.]+$/, '')
-  )
-}
-
-/** Determines if a string is in PascalCase. */
-function isPascalCase(str: string) {
-  const regex = /^[A-Z][a-zA-Z0-9]*$/
-  return regex.test(str)
-}
-
-/** Determines if a symbol is private or not based on the JSDoc tag. */
-function hasPrivateTag(node: Node<ts.Node> | null) {
-  if (node && Node.isJSDocable(node)) {
-    const jsDocTags = node.getJsDocs().flatMap((doc) => doc.getTags())
-    return jsDocTags.some((tag) => tag.getTagName() === 'private')
-  }
-  return null
-}
-
-/** Returns the first heading title from top-level heading if present. */
-function getHeadingTitle(headings: Headings) {
-  const heading = headings?.at(0)
-  return heading?.depth === 1 ? heading.text : null
-}
-
-/** Returns the source file paths that are exported from the index file. */
-function getExportedSourceFilePaths(
-  sourceFiles: SourceFile[],
-  baseDirectory: string
-) {
-  const indexFiles = new Map()
-
-  return sourceFiles
-    .filter((sourceFile) => {
-      const directory = sourceFile.getDirectory()
-      let exportedModules = indexFiles.get(directory)
-
-      if (!exportedModules) {
-        exportedModules = new Set()
-        indexFiles.set(directory, exportedModules)
-
-        const indexFile =
-          directory.addSourceFileAtPathIfExists('index.ts') ||
-          directory.addSourceFileAtPathIfExists('index.tsx')
-
-        if (indexFile) {
-          indexFile.getExportedDeclarations().forEach((declarations) => {
-            declarations.forEach((declaration) => {
-              exportedModules.add(declaration.getSourceFile().getFilePath())
-            })
-          })
-        }
-      }
-
-      sourceFile.getExportedDeclarations().forEach((declarations) => {
-        declarations.forEach((declaration) => {
-          const symbol = declaration.getSymbol()
-          if (symbol && hasPrivateTag(declaration)) {
-            exportedModules.delete(sourceFile.getFilePath())
-          }
-        })
-      })
-
-      return exportedModules.has(sourceFile.getFilePath())
-    })
-    .map((sourceFile) => {
-      return sourceFile
-        .getFilePath()
-        .replace(resolve(process.cwd(), baseDirectory), baseDirectory)
-    })
 }
 
 type AllSourceFiles = Awaited<

@@ -5,6 +5,7 @@ import type { SourceFile } from 'ts-morph'
 import { getSymbolDescription, resolveExpression } from '@tsxmod/utils'
 
 import { project } from '../components/project'
+import { getSourcePath } from '../utils/get-source-path'
 import { findCommonRootPath } from './find-common-root-path'
 import { filePathToPathname } from './file-path-to-pathname'
 import { getExamplesFromDirectory } from './get-examples'
@@ -13,8 +14,11 @@ import { getExportedTypes } from './get-exported-types'
 import { getMainExportDeclaration } from './get-main-export-declaration'
 import { getNameFromDeclaration } from './get-name-from-declaration'
 
-type Pathname = string
-type ModuleImport = Promise<{ default: any } & Record<string, any>>
+export type Pathname = string
+
+export type ModuleImport = Promise<Record<string, any>>
+
+export type AllModules = Record<Pathname, ModuleImport>
 
 export function getAllData({
   allModules,
@@ -23,7 +27,7 @@ export function getAllData({
   basePath = '',
 }: {
   /** A map of all MDX modules keyed by their pathname. */
-  allModules: Record<Pathname, ModuleImport | null>
+  allModules: AllModules
 
   /** The glob pattern used to calculate `allModules`. */
   globPattern: string
@@ -34,17 +38,11 @@ export function getAllData({
   /** The base path to use when calculating navigation paths. */
   basePath?: string
 }) {
-  const allAbsoluteModules = Object.fromEntries(
-    Object.entries(allModules).map(([pathname, module]) => [
-      resolve(process.cwd(), pathname), // use absolute paths for all modules
-      module,
-    ])
-  )
   const typeScriptSourceFiles = /ts(x)?/.test(globPattern)
     ? project.addSourceFilesAtPaths(globPattern)
     : null
   const allPaths = [
-    ...Object.keys(allAbsoluteModules),
+    ...Object.keys(allModules),
     ...(typeScriptSourceFiles?.map((file) => file.getFilePath()) ?? []),
   ]
   const commonRootPath = findCommonRootPath(allPaths)
@@ -64,7 +62,7 @@ export function getAllData({
   const allPublicPaths = entrySourceFiles
     .concat(exportedSourceFiles)
     .map((sourceFile) => sourceFile.getFilePath() as string)
-    .concat(Object.keys(allAbsoluteModules))
+    .concat(Object.keys(allModules))
   const allData: Record<
     Pathname,
     {
@@ -74,6 +72,7 @@ export function getAllData({
       order: number | null
       mdxPath?: string
       tsPath?: string
+      sourcePath?: string
       isServerOnly?: boolean
       examples?: {
         name: string
@@ -100,6 +99,7 @@ export function getAllData({
     const previouseData = allData[pathname]
     const sourceFile = project.addSourceFileAtPath(path)
     const sourceFileTitle = getSourceFileTitle(sourceFile)
+    const sourcePath = getSourcePath(path)
     const metadata = getMetadata(sourceFile)
     let title =
       type === 'md'
@@ -128,7 +128,7 @@ export function getAllData({
         (sourceFile) => {
           const filePath = sourceFile.getFilePath()
           const pathname = filePathToPathname(filePath, baseDirectory)
-          const module = allAbsoluteModules[filePath]
+          const module = allModules[filePath]
           const name = sourceFile.getBaseNameWithoutExtension()
           return {
             name,
@@ -185,6 +185,7 @@ export function getAllData({
         isServerOnly,
         examples,
         types,
+        sourcePath,
         tsPath: path,
       }
     }
@@ -197,6 +198,7 @@ export function getAllData({
         label,
         description,
         order,
+        sourcePath,
         mdxPath: path,
       }
     }
