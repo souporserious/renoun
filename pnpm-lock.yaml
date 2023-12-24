@@ -264,6 +264,9 @@ importers:
       '@types/webpack-env':
         specifier: 1.18.4
         version: 1.18.4
+      '@vercel/analytics':
+        specifier: ^1.1.1
+        version: 1.1.1
       case-anything:
         specifier: ^2.1.13
         version: 2.1.13
@@ -2111,6 +2114,12 @@ packages:
 
   /@ungap/structured-clone@1.2.0:
     resolution: {integrity: sha512-zuVdFrMJiuCDQUMCzQaD6KL28MjnqqN8XnAqiEq9PNm/hCPTSGfrXCOfwj1ow4LFb/tNymJPwsNbVePc1xFqrQ==}
+
+  /@vercel/analytics@1.1.1:
+    resolution: {integrity: sha512-+NqgNmSabg3IFfxYhrWCfB/H+RCUOCR5ExRudNG2+pcRehq628DJB5e1u1xqwpLtn4pAYii4D98w7kofORAGQA==}
+    dependencies:
+      server-only: 0.0.1
+    dev: false
 
   /@webassemblyjs/ast@1.11.6:
     resolution: {integrity: sha512-IN1xI7PwOvLPgjcf180gC1bqn3q/QaOCwYUahIOhbYUu8KA/3tw2RT/T0Gidi1l7Hhj5D/INhJxiICObqpMu4Q==}

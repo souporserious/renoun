@@ -1,5 +1,7 @@
 import React from 'react'
 import { GeistSans } from 'geist/font/sans'
+import { Analytics } from '@vercel/analytics/react'
+
 import { AppProvider } from './app-provider'
 
 import './layout.css'
@@ -29,6 +31,7 @@ export default function RootLayout({
           change. Use at your own risk.
         </div>
         <AppProvider>{children}</AppProvider>
+        <Analytics />
       </body>
     </html>
   )
