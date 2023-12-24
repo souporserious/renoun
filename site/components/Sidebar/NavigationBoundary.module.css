@@ -1,8 +1,10 @@
-@media screen and (max-width: 767px) {
-  .container[data-open='true'] {
-    display: block;
-  }
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
 
+@media screen and (max-width: 767px) {
   .container[data-open='false'] {
     display: none;
   }

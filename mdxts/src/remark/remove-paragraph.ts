@@ -1,7 +1,7 @@
 import type { Paragraph, Parent, Node } from 'mdast'
 
-/** Removes the paragraph wrapper around an immediate component child. */
-export function removeComponentParagraph() {
+/** Removes the paragraph element added around list items and component children. */
+export function removeParagraphs() {
   return async function (tree: Node) {
     const { visitParents } = await import('unist-util-visit-parents')
 
@@ -9,6 +9,12 @@ export function removeComponentParagraph() {
       const { children } = node
       const [firstChild] = children
       const ancestor = ancestors[ancestors.length - 1]
+
+      if (ancestor.type === 'listItem') {
+        const { children } = node
+        const startIndex = ancestor.children.indexOf(node)
+        ancestor.children.splice(startIndex, 1, ...children)
+      }
 
       if (
         ancestor.type === 'mdxJsxFlowElement' &&

@@ -44,6 +44,18 @@ export function useMDXComponents() {
         {...props}
       />
     ),
+    ul: (props) => (
+      <ul
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          padding: '0 0 0 1.4rem',
+          gap: '1rem',
+          fontSize: 'var(--font-size-body-2)',
+        }}
+        {...props}
+      />
+    ),
     pre: (props) => {
       const {
         filename,
