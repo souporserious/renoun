@@ -1,6 +1,6 @@
 :root {
   --color-foreground: #fff;
-  --color-foreground-interactive: hsla(0, 0%, 100%, 0.9);
+  --color-foreground-interactive: hsl(150, 4%, 56%);
   --color-background: #000;
   --color-surface: #222;
   --color-separator: hsla(0, 0%, 100%, 0.96);
@@ -45,7 +45,6 @@ a {
 }
 
 a:hover {
-  color: white;
   text-decoration: underline;
 }
 

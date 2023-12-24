@@ -50,7 +50,7 @@ function SiblingLink({
           >
             <path
               d="M14 6L8 12L14 18"
-              stroke="white"
+              stroke="var(--color-foreground-interactive)"
               strokeWidth="1.5"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -68,7 +68,7 @@ function SiblingLink({
           >
             <path
               d="M10 18L16 12L10 6"
-              stroke="white"
+              stroke="var(--color-foreground-interactive)"
               strokeWidth="1.5"
               strokeLinecap="round"
               strokeLinejoin="round"

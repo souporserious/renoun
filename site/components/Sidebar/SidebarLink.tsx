@@ -18,7 +18,10 @@ export function SidebarLink({
       style={{
         display: 'block',
         padding: '0.25rem 0',
-        color: pathname === currentPathname ? 'white' : '#8e9491',
+        color:
+          pathname === currentPathname
+            ? 'white'
+            : 'var(--color-foreground-interactive)',
       }}
     >
       <Text>{name}</Text>
