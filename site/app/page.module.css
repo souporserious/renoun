@@ -1,0 +1,14 @@
+.section {
+  display: flex;
+  flex-direction: column;
+  padding: 1rem 4rem 4rem;
+  gap: 4rem;
+}
+
+@media screen and (min-width: 768px) {
+  .section {
+    flex-direction: row;
+    padding: 2rem 8rem 8rem;
+    gap: 2rem;
+  }
+}

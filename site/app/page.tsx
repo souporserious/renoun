@@ -1,32 +1,13 @@
-import { Code } from 'mdxts/components'
 import { Logo } from 'components/Logo'
 import Link from 'next/link'
 
-const counterSourceText = `
-import { useState } from 'react'
-
-export function useCounter(initialValue: number = 0) {
-  const [count, setCount] = useState(initialValue)
-  return {
-    count,
-    increment: () => setCount(count + 1),
-    decrement: () => setCount(count - 1),
-  }
-}
-`.trim()
+import styles from './page.module.css'
 
 export default function Home() {
   return (
     <div>
       <main>
-        <section
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            padding: '2rem 8rem 8rem',
-            gap: '2rem',
-          }}
-        >
+        <section className={styles.section}>
           <div
             style={{
               display: 'flex',
@@ -42,6 +23,7 @@ export default function Home() {
               <header
                 style={{
                   display: 'flex',
+                  alignItems: 'center',
                   marginBottom: '3rem',
                   gap: '1rem',
                 }}
@@ -61,7 +43,7 @@ export default function Home() {
               <h1
                 style={{
                   gridColumn: 2,
-                  fontSize: '5vw',
+                  fontSize: 'var(--font-size-heading-1)',
                   lineHeight: 1,
                   // @ts-expect-error - missing types
                   textWrap: 'balance',
@@ -73,7 +55,7 @@ export default function Home() {
                 style={{
                   // @ts-expect-error - missing types
                   textWrap: 'balance',
-                  fontSize: '2.2vw',
+                  fontSize: 'var(--font-size-heading-2)',
                   lineHeight: 1.3,
                   maxWidth: '24ch',
                   color: '#CDEDFF',
@@ -89,7 +71,6 @@ export default function Home() {
                 display: 'flex',
                 alignItems: 'center',
                 marginTop: '2rem',
-                marginLeft: '-1rem',
                 gap: '1rem',
               }}
             >
@@ -122,8 +103,16 @@ export default function Home() {
               </div> */}
             </div>
           </div>
-          <div style={{ scale: 1.3 }}>
-            <Code value={counterSourceText} language="tsx" />
+          <div
+            style={{
+              display: 'grid',
+              placeItems: 'center',
+              aspectRatio: '16 / 12',
+              width: '100%',
+              border: '1px solid white',
+            }}
+          >
+            Illustration Here
           </div>
         </section>
       </main>
