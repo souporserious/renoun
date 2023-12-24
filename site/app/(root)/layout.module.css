@@ -1,0 +1,11 @@
+.container {
+  display: grid;
+  margin: 0 auto;
+}
+
+@media screen and (min-width: 768px) {
+  .container {
+    grid-template-columns: auto minmax(0, 1fr);
+    max-width: 60rem;
+  }
+}

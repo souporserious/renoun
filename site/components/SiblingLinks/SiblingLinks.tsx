@@ -34,7 +34,7 @@ function SiblingLink({
     <a
       href={module.pathname}
       style={{
-        fontSize: '1rem',
+        fontSize: 'var(--font-size-body-2)',
         gridColumn: direction === 'previous' ? 1 : 3,
         textAlign: direction === 'previous' ? 'left' : 'right',
       }}

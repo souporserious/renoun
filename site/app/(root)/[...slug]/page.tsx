@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import { PageContainer } from 'components/PageContainer'
 import { SiblingLinks } from 'components/SiblingLinks'
 import { TableOfContents } from 'components/TableOfContents'
 import { allDocs } from 'data'
@@ -19,13 +20,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
   const { Content, title, headings, sourcePath } = doc
 
   return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1fr) 140px',
-        gap: '2rem',
-      }}
-    >
+    <PageContainer>
       <div>
         {title ? (
           <h1
@@ -42,6 +37,6 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
         <SiblingLinks previous={doc.previous} next={doc.next} />
       </div>
       <TableOfContents headings={headings} sourcePath={sourcePath} />
-    </div>
+    </PageContainer>
   )
 }

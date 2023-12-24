@@ -1,6 +1,9 @@
 import { Navigation } from 'mdxts/components'
 import { allDocs, allPackages } from 'data'
 import { Logo } from 'components/Logo'
+
+import { NavigationBoundary } from './NavigationBoundary'
+import { NavigationToggle } from './NavigationToggle'
 import { SidebarLink } from './SidebarLink'
 
 export function Sidebar() {
@@ -18,7 +21,7 @@ export function Sidebar() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: '1rem',
+          gap: '2rem',
         }}
       >
         <a href="/" style={{ display: 'block' }}>
@@ -27,6 +30,7 @@ export function Sidebar() {
           </h1>
         </a>
 
+        <NavigationToggle />
         <a
           href="https://github.com/souporserious/mdxts/"
           style={{ display: 'block', height: 20 }}
@@ -40,17 +44,19 @@ export function Sidebar() {
         </a>
       </div>
 
-      <Navigation
-        source={allDocs}
-        renderList={renderList}
-        renderItem={renderItem}
-      />
+      <NavigationBoundary>
+        <Navigation
+          source={allDocs}
+          renderList={renderList}
+          renderItem={renderItem}
+        />
 
-      <Navigation
-        source={allPackages}
-        renderList={renderList}
-        renderItem={renderItem}
-      />
+        <Navigation
+          source={allPackages}
+          renderList={renderList}
+          renderItem={renderItem}
+        />
+      </NavigationBoundary>
     </aside>
   )
 }

@@ -1,6 +1,7 @@
 import { Fragment } from 'react'
 import { notFound } from 'next/navigation'
 import { Code } from 'mdxts/components'
+import { PageContainer } from 'components/PageContainer'
 import { SiblingLinks } from 'components/SiblingLinks'
 import { TableOfContents } from 'components/TableOfContents'
 import { allPackages } from 'data'
@@ -29,13 +30,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
   } = singlePackage
 
   return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1fr) 140px',
-        gap: '2rem',
-      }}
-    >
+    <PageContainer>
       <div>
         <div
           style={{
@@ -143,7 +138,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
                             href={type.sourcePath}
                             target="_blank"
                             rel="noreferrer"
-                            style={{ fontSize: '0.875rem' }}
+                            style={{ fontSize: 'var(--font-size-body-2)' }}
                           >
                             View Source
                           </a>
@@ -179,7 +174,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
         />
       </div>
       <TableOfContents headings={headings} sourcePath={sourcePath} />
-    </div>
+    </PageContainer>
   )
 }
 
@@ -241,7 +236,7 @@ function Props({
                     <div style={{ height: 1 }}>
                       <span
                         style={{
-                          fontSize: '0.875rem',
+                          fontSize: 'var(--font-size-body-2)',
                           padding: '0.1rem 1rem 0.25rem',
                           border: '1px solid #333',
                           borderRadius: '1rem',

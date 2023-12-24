@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@mdx-js/mdx": "^3.0.0",
+    "@preact/signals-core": "^1.5.1",
     "@types/mdx": "^2.0.10",
     "@types/react": "^18.2.45",
     "@types/react-dom": "^18.2.17",

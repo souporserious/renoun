@@ -1,0 +1,15 @@
+.container {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: white;
+}
+
+@media screen and (min-width: 768px) {
+  .container {
+    display: none;
+  }
+}

@@ -34,12 +34,12 @@ export function useMDXComponents() {
     Note: (props) => (
       <div
         style={{
-          fontSize: '0.875rem',
-          padding: '0.875rem',
+          fontSize: 'var(--font-size-body-2)',
+          padding: '1em',
           margin: '1rem 0',
           border: '1px solid #333',
           borderRadius: '0.5rem',
-          backgroundColor: '#222',
+          backgroundColor: 'var(--color-surface-2)',
         }}
         {...props}
       />

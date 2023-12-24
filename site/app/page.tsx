@@ -61,7 +61,7 @@ export default function Home() {
               <h1
                 style={{
                   gridColumn: 2,
-                  fontSize: '6vw',
+                  fontSize: '5vw',
                   lineHeight: 1,
                   // @ts-expect-error - missing types
                   textWrap: 'balance',
@@ -73,7 +73,7 @@ export default function Home() {
                 style={{
                   // @ts-expect-error - missing types
                   textWrap: 'balance',
-                  fontSize: '2.8vw',
+                  fontSize: '2.2vw',
                   lineHeight: 1.3,
                   maxWidth: '24ch',
                   color: '#CDEDFF',
@@ -100,11 +100,12 @@ export default function Home() {
                   border: '1px solid #3F687E',
                   borderRadius: '0.25rem',
                   textDecoration: 'none',
+                  color: 'white',
                 }}
               >
                 Get Started
               </Link>
-              <div
+              {/* <div
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -112,16 +113,16 @@ export default function Home() {
                   gap: '0.5rem',
                   backgroundColor: '#2A4655',
                   borderRadius: '0.25rem',
-                  fontSize: 'var(--font-size-body)',
+                  fontSize: 'var(--font-size-body-1)',
                   cursor: 'copy',
                 }}
               >
                 <span style={{ color: '#B6D8ED' }}>$</span>
                 <span>npm create mdxts</span>
-              </div>
+              </div> */}
             </div>
           </div>
-          <div style={{ scale: 1.5 }}>
+          <div style={{ scale: 1.3 }}>
             <Code value={counterSourceText} language="tsx" />
           </div>
         </section>

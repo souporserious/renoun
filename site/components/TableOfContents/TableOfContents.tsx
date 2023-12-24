@@ -1,4 +1,5 @@
 import type { Headings } from 'mdxts/dist/remark/add-headings'
+import styles from './TableOfContents.module.css'
 
 export function TableOfContents({
   headings,
@@ -8,7 +9,7 @@ export function TableOfContents({
   sourcePath: string
 }) {
   return (
-    <nav>
+    <nav className={styles.container}>
       <ul
         style={{
           listStyle: 'none',
@@ -26,7 +27,7 @@ export function TableOfContents({
             <li
               key={id}
               style={{
-                fontSize: '0.875rem',
+                fontSize: 'var(--font-size-body-2)',
                 padding: '0.25rem 0',
                 paddingLeft: (depth - 1) * 0.5 + 'rem',
               }}
@@ -51,7 +52,7 @@ export function TableOfContents({
                 href={sourcePath}
                 target="_blank"
                 rel="noreferrer"
-                style={{ fontSize: '0.875rem' }}
+                style={{ fontSize: 'var(--font-size-body-2)' }}
               >
                 View Source
               </a>

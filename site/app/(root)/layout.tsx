@@ -1,15 +1,9 @@
 import { Sidebar } from 'components/Sidebar'
+import styles from './layout.module.css'
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'auto minmax(0, 1fr)',
-        maxWidth: '60rem',
-        margin: '0 auto',
-      }}
-    >
+    <div className={styles.container}>
       <Sidebar />
       <main>{children}</main>
     </div>
