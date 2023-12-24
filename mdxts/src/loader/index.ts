@@ -1,5 +1,5 @@
 import * as webpack from 'webpack'
-import { dirname, basename, join, relative, resolve } from 'node:path'
+import { dirname, basename, join, relative, resolve, sep } from 'node:path'
 import { glob } from 'fast-glob'
 import { Node, Project, SyntaxKind } from 'ts-morph'
 import matter from 'gray-matter'
@@ -111,18 +111,23 @@ export default async function loader(
                   resolve(commonRootPath, '**/index.(ts|tsx)')
             )
             const exportedSourceFiles = getExportedSourceFiles(entrySourceFiles)
+            const exportedSourceFilePaths = entrySourceFiles
+              .concat(exportedSourceFiles)
+              .map((sourceFile) => sourceFile.getFilePath())
 
-            /** Add MDX files that match README if index or are the same name as the source files. */
+            /** Add MDX file paths that match README if index or are the same name as the source files. */
             allSourceFilePaths
               .filter((sourceFilePath) => {
                 const resolvedSourceFilePath = resolve(sourceFilePath)
-                const isExported = exportedSourceFiles.some((sourceFile) => {
-                  return sourceFile.getFilePath() === resolvedSourceFilePath
-                })
+                const isExported = exportedSourceFilePaths.some(
+                  (exportedSourceFilePath) => {
+                    return exportedSourceFilePath === resolvedSourceFilePath
+                  }
+                )
                 return isExported
               })
               .forEach((sourceFilePath) => {
-                const sourceFilename = sourceFilePath.split('/').pop() ?? ''
+                const sourceFilename = sourceFilePath.split(sep).pop() ?? ''
                 const mdxFilePath = sourceFilename.includes('index')
                   ? join(dirname(sourceFilePath), 'README.mdx')
                   : sourceFilePath.replace(
