@@ -1,5 +1,18 @@
 # mdxts
 
+## 0.2.0
+
+### Minor Changes
+
+- 070c2f2: Partial rewrite to remove the `bundle` package in favor of the framework's bundler.
+
+### Patch Changes
+
+- 353140d: Add Editor based on starry-night highlighter.
+- cc81cfb: Add remark-typography plugin.
+- 27366fd: Replace starry-night with shiki.
+- d435839: Adds initial format handling using dprint-node on the server and prettier on the client. The different formatters is required until prettier works with Server Components.
+
 ## 0.1.5
 
 ### Patch Changes
