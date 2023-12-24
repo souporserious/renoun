@@ -55,7 +55,7 @@ export default function Home() {
                     borderRadius: '1rem',
                   }}
                 >
-                  Beta
+                  Preview
                 </span>
               </header>
               <h1

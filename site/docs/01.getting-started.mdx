@@ -5,14 +5,14 @@
 Build interactive, type-safe content and documentation using MDX,
 TypeScript, and React.
 
-MDXTS generates a graph of prose content, source code, type information, and examples that can be rendered through components and utilities using React 18 Server and Client Components.
+MDXTS generates a graph of prose content, source code, type information, and examples that can be rendered through components and utilities using [React 18 Server Components](https://react.dev/blog/2023/03/22/react-labs-what-we-have-been-working-on-march-2023#react-server-components).
 
 </Summary>
 
 <Note>
   Server Component support is currently limited in frameworks. This library
-  offers first-class support for Next.js through a plugin. Please open an issue
-  or PR to add support for other frameworks.
+  offers first-class support for Next.js through a [plugin](packages/next).
+  Please open an issue or PR to add support for other frameworks.
 </Note>
 
 ## Install
@@ -44,7 +44,7 @@ export default withMdxts({
 
 ### Type Checking
 
-All code blocks will automatically be type-checked using the TypeScript compiler. You can also use the `types` option to specify additional types to include:
+All code blocks will automatically be type-checked using the TypeScript compiler. You can also use the `types` plugin option to specify additional package types to include for the client:
 
 ```ts filename="next.config.ts"
 import { createMdxtsPlugin } from 'mdxts/next'
@@ -56,8 +56,6 @@ const withMdxts = createMdxtsPlugin({
 })
 ```
 
-<Note>In a future version, this will be fully automated.</Note>
-
 ### Generating Routes
 
 Use the `createDataSource` function exported from the `mdxts` package to generate metadata and paths from a set of MDX or TypeScript files:
@@ -68,11 +66,13 @@ import { createDataSource } from 'mdxts'
 export const allDocs = createDataSource('docs/**/*.mdx', {
   baseDirectory: 'docs',
 })
+
+allDocs.paths() // => ['docs/getting-started.mdx', 'docs/authoring.mdx']
 ```
 
 ### Rendering Content
 
-Use the get helper from the modules loader to render MDX content:
+Use the `get` helper from the modules loader to render MDX content:
 
 ```tsx filename="page.tsx"
 import { notFound } from 'next/navigation'

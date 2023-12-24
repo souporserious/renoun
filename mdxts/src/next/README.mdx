@@ -4,24 +4,38 @@ Next.js plugin to enable MDXTS.
 
 ## Usage
 
-First, create a plugin using [[createMdxtsPlugin]] and export it along with any other configuration you need.
+First, create a plugin using `createMdxtsPlugin` and export it along with any other configuration you need:
 
 ```next.config.mjs
 import { createMdxtsPlugin } from 'mdxts/next'
 
-const withMdxts = createMdxtsPlugin({
-  docs: {
-    include: 'docs/**/*.mdx',
-    loader: 'loaders/docs.ts',
-  },
-  packages: {
-    include: '../packages/*/src/**/*.(ts|tsx|mdx)',
-  },
-})
+const withMdxts = createMdxtsPlugin()
 
 export default withMdxts({
   compiler: { styledComponents: true },
 })
 ```
 
-Note, files can be included from anywhere. This is especially useful in monorepos for including files that are outside of your Next.js project.
+Then, add the plugin to your Next.js configuration:
+
+```tsx filename="blog/[slug]/page.tsx"
+import { createDataSource } from 'mdxts'
+import { notFound } from 'next/navigation'
+
+const allDocs = createDataSource('docs/**/*.mdx')
+
+export default async function Page({ params }) {
+  const doc = await allDocs.get(params.slug)
+
+  if (doc === null) return notFound()
+
+  const { Content } = doc
+
+  return <Content />
+}
+```
+
+<Note>
+  Files can be included from anywhere. This is especially useful in monorepos
+  for including files that are outside of your Next.js project.
+</Note>

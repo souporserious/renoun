@@ -24,16 +24,6 @@
       "require": "./dist/cjs/components/*.js",
       "types": "./dist/components/*.d.ts"
     },
-    "./rehype": {
-      "import": "./dist/rehype/index.js",
-      "require": "./dist/cjs/rehype/index.js",
-      "types": "./dist/rehype/index.d.ts"
-    },
-    "./remark": {
-      "import": "./dist/remark/index.js",
-      "require": "./dist/cjs/remark/index.js",
-      "types": "./dist/remark/index.d.ts"
-    },
     "./loader": {
       "import": "./dist/loader/index.js",
       "require": "./dist/cjs/loader/index.js",
@@ -43,11 +33,6 @@
       "import": "./dist/cjs/next/index.js",
       "require": "./dist/cjs/next/index.js",
       "types": "./dist/next/index.d.ts"
-    },
-    "./watcher": {
-      "import": "./dist/watcher/index.js",
-      "require": "./dist/cjs/watcher/index.js",
-      "types": "./dist/watcher/index.d.ts"
     }
   },
   "typesVersions": {
@@ -58,23 +43,11 @@
       "components/*": [
         "./dist/components/*.d.ts"
       ],
-      "rehype": [
-        "./dist/rehype/index.d.ts"
-      ],
-      "remark": [
-        "./dist/remark/index.d.ts"
-      ],
       "loader": [
         "./dist/loader/index.d.ts"
       ],
       "next": [
         "./dist/next/index.d.ts"
-      ],
-      "transform": [
-        "./dist/transform/index.d.ts"
-      ],
-      "watcher": [
-        "./dist/watcher/index.d.ts"
       ]
     }
   },

@@ -40,7 +40,7 @@ body {
 }
 
 a {
-  color: inherit;
+  color: var(--color-foreground-interactive);
   text-decoration: none;
 }
 
