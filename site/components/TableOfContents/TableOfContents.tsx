@@ -43,7 +43,7 @@ export function TableOfContents({
                 style={{
                   border: 'none',
                   height: 1,
-                  backgroundColor: '#333',
+                  backgroundColor: 'var(--color-separator)',
                 }}
               />
             </li>

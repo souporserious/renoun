@@ -1,10 +1,10 @@
 :root {
   --color-foreground: #fff;
-  --color-foreground-interactive: hsl(150, 4%, 56%);
-  --color-background: #000;
+  --color-foreground-interactive: hsl(200deg 20% 62%);
+  --color-background: hsl(0, 0%, 0%);
   --color-surface-1: #222;
-  --color-surface-2: #111;
-  --color-separator: hsla(0, 0%, 100%, 0.96);
+  --color-surface-2: hsl(200deg 18% 6%);
+  --color-separator: hsl(206deg, 56%, 16%);
   --font-size-heading-1: 4rem;
   --font-size-heading-2: 3rem;
   --font-size-heading-3: 2rem;

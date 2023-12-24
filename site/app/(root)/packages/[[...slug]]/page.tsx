@@ -230,7 +230,7 @@ function Props({
                     <div
                       style={{
                         height: 1,
-                        backgroundColor: '#333',
+                        backgroundColor: 'var(--color-separator)',
                       }}
                     />
                     <div style={{ height: 1 }}>
@@ -238,7 +238,7 @@ function Props({
                         style={{
                           fontSize: 'var(--font-size-body-2)',
                           padding: '0.1rem 1rem 0.25rem',
-                          border: '1px solid #333',
+                          border: '1px solid var(--color-separator)',
                           borderRadius: '1rem',
                           color: '#ccc',
                           position: 'relative',
@@ -252,7 +252,7 @@ function Props({
                     <div
                       style={{
                         height: 1,
-                        backgroundColor: '#333',
+                        backgroundColor: 'var(--color-separator)',
                       }}
                     />
                   </div>
@@ -294,7 +294,7 @@ function Props({
           flexDirection: 'column',
           padding: '2rem 0',
           gap: '0.5rem',
-          borderTop: index === 0 ? 'none' : '1px solid #333',
+          borderTop: index === 0 ? 'none' : '1px solid var(--color-separator)',
         }}
       >
         <div
