@@ -1,8 +1,12 @@
 import * as webpack from 'webpack'
-import { dirname, basename, join, relative } from 'node:path'
+import { dirname, basename, join, relative, resolve } from 'node:path'
 import { glob } from 'fast-glob'
 import { Node, Project, SyntaxKind } from 'ts-morph'
 import matter from 'gray-matter'
+
+import { project } from '../components/project'
+import { getExportedSourceFiles } from '../utils/get-exported-source-files'
+import { findCommonRootPath } from '../utils/find-common-root-path'
 
 /**
  * Exports front matter data for MDX files and augments `createDataSource` calls with MDX file paths resolved from the provided file pattern.
@@ -18,13 +22,11 @@ export default async function loader(
   const callback = this.async()
   const options = this.getOptions()
   const sourceString = source.toString()
+  const workingDirectory = dirname(this.resourcePath)
 
   /** Add Next.js entry layout files to set the theme. */
   if (isNextJsEntryLayout(this.resourcePath) && options.themePath) {
-    const relativeThemePath = relative(
-      dirname(this.resourcePath),
-      options.themePath
-    )
+    const relativeThemePath = relative(workingDirectory, options.themePath)
     // Normalize path for import (replace backslashes on Windows)
     const normalizedThemePath = relativeThemePath.split('\\').join('/')
 
@@ -57,12 +59,12 @@ export default async function loader(
       sourceString
     )
   ) {
-    const project = new Project({ useInMemoryFileSystem: true })
-    const sourceFile = project.createSourceFile('index.ts', sourceString)
+    const sourceFile = new Project({
+      useInMemoryFileSystem: true,
+    }).createSourceFile('index.ts', sourceString)
     const createDataSourceCalls = sourceFile
       .getDescendantsOfKind(SyntaxKind.CallExpression)
       .filter((call) => call.getExpression().getText() === 'createDataSource')
-    const workingDirectory = dirname(this.resourcePath)
 
     for (const call of createDataSourceCalls) {
       try {
@@ -76,7 +78,6 @@ export default async function loader(
             isMdxPattern
               ? globPattern
               : [
-                  `${baseGlobPattern}/(readme|README).mdx`,
                   `${baseGlobPattern}/*.examples.(ts|tsx)`,
                   `${baseGlobPattern}/examples/*.(ts|tsx)`,
                 ],
@@ -85,6 +86,7 @@ export default async function loader(
 
           /** Search for MDX files named the same as the source files (e.g. `Button.mdx` for `Button.tsx`) */
           if (!isMdxPattern) {
+            const { readPackageUp } = await import('read-package-up')
             const allSourceFilePaths = await glob(globPattern, {
               cwd: workingDirectory,
               ignore: ['**/*.examples.(ts|tsx)'],
@@ -92,19 +94,45 @@ export default async function loader(
             const allMdxFilePaths = await glob(`${baseGlobPattern}/*.mdx`, {
               cwd: workingDirectory,
             })
+            const allPaths = [...allSourceFilePaths, ...allMdxFilePaths]
+            const commonRootPath = findCommonRootPath(allPaths)
+            const packageJson = (
+              await readPackageUp({
+                cwd: commonRootPath,
+              })
+            )?.packageJson
+            const entrySourceFiles = project.addSourceFilesAtPaths(
+              packageJson?.exports
+                ? /** If package.json exports found use that for calculating public paths. */
+                  Object.keys(packageJson.exports).map((key) =>
+                    join(resolve(commonRootPath, key), 'index.(ts|tsx)')
+                  )
+                : /** Otherwise default to a root index file. */
+                  resolve(commonRootPath, '**/index.(ts|tsx)')
+            )
+            const exportedSourceFiles = getExportedSourceFiles(entrySourceFiles)
 
-            allSourceFilePaths.forEach((sourceFilePath) => {
-              const sourceFilename = sourceFilePath.split('/').pop() ?? ''
-              const mdxFilename = sourceFilename.replace(/\.[^/.]+$/, '.mdx')
-              const mdxFilePath = sourceFilePath.replace(
-                sourceFilename,
-                mdxFilename
-              )
-
-              if (allMdxFilePaths.includes(mdxFilePath)) {
-                filePaths.push(mdxFilePath)
-              }
-            })
+            /** Add MDX files that match README if index or are the same name as the source files. */
+            allSourceFilePaths
+              .filter((sourceFilePath) => {
+                const resolvedSourceFilePath = resolve(sourceFilePath)
+                const isExported = exportedSourceFiles.some((sourceFile) => {
+                  return sourceFile.getFilePath() === resolvedSourceFilePath
+                })
+                return isExported
+              })
+              .forEach((sourceFilePath) => {
+                const sourceFilename = sourceFilePath.split('/').pop() ?? ''
+                const mdxFilePath = sourceFilename.includes('index')
+                  ? join(dirname(sourceFilePath), 'README.mdx')
+                  : sourceFilePath.replace(
+                      sourceFilename,
+                      sourceFilename.replace(/\.[^/.]+$/, '.mdx')
+                    )
+                if (allMdxFilePaths.includes(mdxFilePath)) {
+                  filePaths.push(mdxFilePath)
+                }
+              })
           }
 
           filePaths.forEach((filePath) => {
