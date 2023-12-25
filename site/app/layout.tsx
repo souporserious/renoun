@@ -25,7 +25,7 @@ export default function RootLayout({
         <div
           style={{
             fontWeight: 600,
-            fontSize: 14,
+            fontSize: 'var(--font-size-body-2)',
             padding: '1rem',
             backgroundColor: '#d39e5a',
             color: '#1c1309',

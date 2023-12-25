@@ -8,7 +8,7 @@
   color: white;
 }
 
-@media screen and (min-width: 768px) {
+@media screen and (min-width: 60rem) {
   .container {
     display: none;
   }

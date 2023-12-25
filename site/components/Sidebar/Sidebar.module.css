@@ -5,7 +5,7 @@
   gap: 2.5rem;
 }
 
-@media screen and (min-width: 768px) {
+@media screen and (min-width: 60rem) {
   .container {
     padding: 6rem 2rem 2rem;
   }

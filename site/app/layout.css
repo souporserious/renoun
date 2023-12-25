@@ -20,7 +20,7 @@
   --letter-spacing-body: 0.025rem;
 }
 
-@media screen and (min-width: 768px) {
+@media screen and (min-width: 60rem) {
   :root {
     --font-size-heading-1: 3.4rem;
     --font-size-heading-2: 1.8rem;
@@ -41,10 +41,10 @@
 }
 
 html {
-  font-size: 1.6vw;
+  font-size: 2.15vw;
 }
 
-@media (min-width: 80rem) {
+@media (min-width: 60rem) {
   html {
     font-size: 1.2vw;
   }
@@ -97,7 +97,7 @@ main {
   padding: 2rem;
 }
 
-@media screen and (min-width: 768px) {
+@media screen and (min-width: 60rem) {
   main {
     padding: 6rem 2rem 2rem;
   }

@@ -2,7 +2,7 @@
   display: grid;
 }
 
-@media screen and (min-width: 768px) {
+@media screen and (min-width: 60rem) {
   .container {
     grid-template-columns: minmax(0, 1fr) 140px;
     gap: 2rem;

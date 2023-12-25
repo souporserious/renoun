@@ -4,8 +4,12 @@
   gap: 2rem;
 }
 
-@media screen and (max-width: 767px) {
+.container[data-open='false'] {
+  display: none;
+}
+
+@media screen and (min-width: 60rem) {
   .container[data-open='false'] {
-    display: none;
+    display: flex;
   }
 }
