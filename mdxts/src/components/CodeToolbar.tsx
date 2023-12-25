@@ -34,7 +34,7 @@ export function CodeToolbar({
       {filename ? (
         <div
           style={{
-            fontSize: '0.8rem',
+            fontSize: 'var(--font-size-body-2)',
             padding: '0.5rem 1rem',
           }}
         >

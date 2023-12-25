@@ -35,6 +35,7 @@ export function useMDXComponents() {
       <div
         style={{
           fontSize: 'var(--font-size-body-2)',
+          lineHeight: 'var(--line-height-body-2)',
           padding: '1em',
           margin: '1rem 0',
           border: '1px solid var(--color-separator)',

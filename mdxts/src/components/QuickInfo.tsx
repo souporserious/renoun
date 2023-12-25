@@ -137,7 +137,7 @@ export function QuickInfo({
             style={{
               letterSpacing: '0.015em',
               fontWeight: 600,
-              fontSize: '0.8rem',
+              fontSize: 'var(--font-size-body-2)',
               padding: '0.25rem 0.5rem',
               border: '1px solid #0479df',
               borderRadius: '6px',

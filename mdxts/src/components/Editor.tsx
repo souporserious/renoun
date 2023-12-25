@@ -417,7 +417,7 @@ export function Editor({
         <ul
           style={{
             listStyle: 'none',
-            fontSize: '0.8rem',
+            fontSize: 'var(--font-size-body-2)',
             padding: '0.6rem',
             margin: 0,
             backgroundColor: 'red',

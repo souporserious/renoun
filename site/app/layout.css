@@ -9,11 +9,12 @@
   --font-size-heading-2: 3rem;
   --font-size-heading-3: 2rem;
   --font-size-body-1: 1.8rem;
-  --font-size-body-2: 1.2rem;
+  --font-size-body-2: 1.6rem;
   --line-height-heading-1: 4rem;
   --line-height-heading-2: 3.4rem;
   --line-height-heading-3: 2.2rem;
-  --line-height-body: 2.1rem;
+  --line-height-body-1: 2.5rem;
+  --line-height-body-2: 2rem;
   --font-weight-heading: 700;
   --font-weight-body: 400;
   --letter-spacing-body: 0.025rem;
@@ -29,7 +30,8 @@
     --line-height-heading-1: 3rem;
     --line-height-heading-2: 2.4rem;
     --line-height-heading-3: 1.8rem;
-    --line-height-body: 1.6rem;
+    --line-height-body-1: 1.8rem;
+    --line-height-body-2: 1.35rem;
   }
 }
 
@@ -49,8 +51,10 @@ html {
 }
 
 body {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   font-size: var(--font-size-body-1);
-  letter-spacing: 0.01em;
+  letter-spacing: 0.015em;
   background-color: var(--color-background);
   color: var(--color-foreground);
 }
@@ -84,8 +88,9 @@ h3 {
 
 p {
   font-size: var(--font-size-body-1);
-  line-height: var(--line-height-body);
+  line-height: var(--line-height-body-1);
   font-weight: var(--font-weight-body);
+  text-wrap: pretty;
 }
 
 main {

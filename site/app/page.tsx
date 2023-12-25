@@ -31,7 +31,7 @@ export default function Home() {
                 <Logo />
                 <span
                   style={{
-                    fontSize: '0.75rem',
+                    fontSize: 'var(--font-size-body-2)',
                     padding: '0.25rem 0.5rem',
                     border: '1px solid #3F687E',
                     borderRadius: '1rem',
