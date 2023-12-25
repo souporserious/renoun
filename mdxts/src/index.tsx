@@ -54,8 +54,8 @@ export function createDataSource<Type>(
     /** The base directory to use for calculating source paths. */
     baseDirectory?: string
 
-    /** The base path to use for calculating navigation paths. */
-    basePath?: string
+    /** The base pathname to use for calculating navigation paths. */
+    basePathname?: string
   } = {}
 ) {
   let allModules = pattern as unknown as AllModules
@@ -75,16 +75,16 @@ export function createDataSource<Type>(
   )
 
   const globPattern = options as unknown as string
-  const { baseDirectory = '', basePath = '' } = (arguments[2] ||
+  const { baseDirectory = '', basePathname = '' } = (arguments[2] ||
     {}) as unknown as {
     baseDirectory: string
-    basePath: string
+    basePathname: string
   }
   const allData = getAllData({
     allModules,
     globPattern,
     baseDirectory,
-    basePath,
+    basePathname,
   })
 
   /** Parses and attaches metadata to a module. */
@@ -143,9 +143,9 @@ export function createDataSource<Type>(
       examples: data.examples,
       sourcePath: data.sourcePath,
       pathname:
-        basePath === pathname
-          ? join(sep, basePath)
-          : join(sep, basePath, pathname),
+        basePathname === pathname
+          ? join(sep, basePathname)
+          : join(sep, basePathname, pathname),
       headings,
       frontMatter,
       metadata,
@@ -224,7 +224,7 @@ export function createDataSource<Type>(
           if (!node) {
             node = {
               segment,
-              pathname: join(sep, basePath, pathname),
+              pathname: join(sep, basePathname, pathname),
               label: parseTitle(segment),
               children: [],
             }
@@ -245,10 +245,10 @@ export function createDataSource<Type>(
       return tree
     },
 
-    /** Returns a module by pathname including metadata, examples, and previous/next modules. Defaults to `basePath` if `pathname` is undefined. */
+    /** Returns a module by pathname including metadata, examples, and previous/next modules. Defaults to `basePathname` if `pathname` is undefined. */
     async get(pathname: string | string[] | undefined) {
       if (pathname === undefined) {
-        pathname = basePath
+        pathname = basePathname
       }
 
       const data = await getPathData(pathname)

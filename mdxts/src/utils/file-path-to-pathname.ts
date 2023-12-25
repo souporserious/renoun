@@ -5,7 +5,7 @@ import { kebabCase } from 'case-anything'
 export function filePathToPathname(
   filePath: string,
   baseDirectory?: string,
-  basePath?: string,
+  basePathname?: string,
   packageName?: string
 ) {
   // Convert relative paths to absolute paths
@@ -55,8 +55,8 @@ export function filePathToPathname(
       return packageName
     }
 
-    if (basePath) {
-      return basePath
+    if (basePathname) {
+      return basePathname
     }
 
     if (baseDirectory) {

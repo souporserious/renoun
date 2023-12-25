@@ -24,7 +24,7 @@ export function getAllData({
   allModules,
   globPattern,
   baseDirectory,
-  basePath = '',
+  basePathname = '',
 }: {
   /** A map of all MDX modules keyed by their pathname. */
   allModules: AllModules
@@ -36,7 +36,7 @@ export function getAllData({
   baseDirectory?: string
 
   /** The base path to use when calculating navigation paths. */
-  basePath?: string
+  basePathname?: string
 }) {
   const typeScriptSourceFiles = /ts(x)?/.test(globPattern)
     ? project.addSourceFilesAtPaths(globPattern)
@@ -104,7 +104,7 @@ export function getAllData({
     const pathname = filePathToPathname(
       path,
       baseDirectory,
-      basePath,
+      basePathname,
       packageName
     )
     const order = getSortOrder(basename(path))
@@ -146,7 +146,8 @@ export function getAllData({
             name,
             module,
             filePath,
-            pathname: basePath === pathname ? join(sep, basePath) : pathname,
+            pathname:
+              basePathname === pathname ? join(sep, basePathname) : pathname,
           }
         }
       )
@@ -158,9 +159,9 @@ export function getAllData({
             filePath,
             isMainExport: filePath === path,
             pathname:
-              basePath === pathname
-                ? join(sep, basePath)
-                : join(sep, basePath, pathname),
+              basePathname === pathname
+                ? join(sep, basePathname)
+                : join(sep, basePathname, pathname),
           }
         }
       )
