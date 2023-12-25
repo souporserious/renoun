@@ -2,9 +2,14 @@ import React from 'react'
 import { GeistSans } from 'geist/font/sans'
 import { Analytics } from '@vercel/analytics/react'
 
+import { getSiteMetadata } from 'utils/get-site-metadata'
 import { AppProvider } from './app-provider'
 
 import './layout.css'
+
+export function generateMetadata() {
+  return getSiteMetadata()
+}
 
 export default function RootLayout({
   children,

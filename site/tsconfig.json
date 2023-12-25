@@ -18,7 +18,9 @@
     "paths": {
       "components": ["components/index.ts"],
       "theme": ["./theme.ts"],
-      "data": ["./data.ts"]
+      "data": ["./data.ts"],
+      "hooks": ["./hooks/*.ts"],
+      "utils": ["./utils/*.ts"]
     },
     "plugins": [
       {
