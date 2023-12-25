@@ -197,7 +197,7 @@ export function createDataSource<Type>(
       return allData
     },
 
-    /** Returns a tree of all modules. */
+    /** Returns a tree of all module metadata. */
     async tree() {
       const paths = Object.keys(allData)
       const tree: {
@@ -256,7 +256,7 @@ export function createDataSource<Type>(
     },
 
     /** Returns paths for all modules calculated from file system paths. */
-    paths(): string[][] {
+    paths() {
       return Object.keys(allData).map((pathname) =>
         pathname
           // Split pathname into an array
