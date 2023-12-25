@@ -72,10 +72,10 @@ export function getAllData({
   const allData: Record<
     Pathname,
     {
-      title: string | null
-      label: string | null
-      description: string | null
-      order: number | null
+      title?: string
+      label?: string
+      description?: string
+      order?: number
       mdxPath?: string
       tsPath?: string
       sourcePath?: string
@@ -83,7 +83,7 @@ export function getAllData({
       isServerOnly?: boolean
       examples?: {
         name: string
-        module: ModuleImport | null
+        module?: ModuleImport
         filePath: string
         pathname: string
       }[]
@@ -117,8 +117,8 @@ export function getAllData({
       type === 'md'
         ? findFirstHeading(sourceFile.getText()) || sourceFileTitle
         : sourceFileTitle
-    let label = null
-    let description = null
+    let label
+    let description
 
     if (metadata?.title) {
       title = metadata.title
@@ -229,13 +229,13 @@ export function getAllData({
       }
 
       // Sort by order if available
-      if (a[1].order !== null && b[1].order !== null) {
+      if (a[1].order && b[1].order) {
         return a[1].order - b[1].order
       }
-      if (a[1].order !== null) {
+      if (a[1].order) {
         return -1
       }
-      if (b[1].order !== null) {
+      if (b[1].order) {
         return 1
       }
 
@@ -248,7 +248,7 @@ export function getAllData({
 /** Returns the sorting order of a filename. */
 function getSortOrder(filename: string) {
   const match = filename.match(/^\d+/)
-  return match ? parseInt(match[0], 10) : null
+  return match ? parseInt(match[0], 10) : undefined
 }
 
 /** Returns the title of a source file based on its filename. */

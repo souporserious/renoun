@@ -15,7 +15,7 @@ export type Module = {
   Content?: ComponentType
   title: string
   label: string
-  description: string | null
+  description: string
   summary: string
   frontMatter?: Record<string, any>
   headings: Headings
@@ -24,21 +24,17 @@ export type Module = {
   sourcePath: string
   isServerOnly: boolean
   slug: string
-  types:
-    | (ReturnType<typeof getExportedTypes>[number] & {
-        pathname: string
-        sourcePath: string
-      })[]
-    | null
-  examples:
-    | {
-        name: string
-        slug: string
-        module: Promise<Record<string, any>>
-        pathname: string
-        sourcePath: string
-      }[]
-    | null
+  types?: (ReturnType<typeof getExportedTypes>[number] & {
+    pathname: string
+    sourcePath: string
+  })[]
+  examples?: {
+    name: string
+    slug: string
+    module: Promise<Record<string, any>>
+    pathname: string
+    sourcePath: string
+  }[]
   metadata?: { title: string; description: string }
 }
 
@@ -106,10 +102,12 @@ export function createDataSource<Type>(
     let {
       default: Content,
       headings = [],
-      metadata = null,
-      frontMatter = null,
+      metadata,
+      frontMatter,
       ...exports
-    } = data.mdxPath ? await allModules[data.mdxPath] : { default: null }
+    } = data.mdxPath
+      ? await allModules[data.mdxPath]
+      : { default: undefined, metadata: undefined, frontMatter: undefined }
 
     /** Append component prop type links to headings data. */
     if (data.types && data.types.length > 0) {
@@ -149,7 +147,7 @@ export function createDataSource<Type>(
           ? join(sep, basePath)
           : join(sep, basePath, pathname),
       headings,
-      frontMatter: frontMatter || null,
+      frontMatter,
       metadata,
       ...exports,
     } as Module & Type
