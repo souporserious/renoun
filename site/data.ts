@@ -10,5 +10,5 @@ export const allComponents = createDataSource('../mdxts/src/components/*.tsx', {
 
 export const allPackages = createDataSource('../mdxts/src/**/*.(ts|tsx)', {
   baseDirectory: '../mdxts/src',
-  basePath: 'packages',
+  basePathname: 'packages',
 })
