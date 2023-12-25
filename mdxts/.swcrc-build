@@ -1,0 +1,18 @@
+{
+  "jsc": {
+    "target": "es2020",
+    "parser": {
+      "syntax": "typescript",
+      "tsx": true
+    },
+    "transform": {
+      "react": {
+        "pragma": "React.createElement",
+        "pragmaFrag": "React.Fragment"
+      }
+    }
+  },
+  "exclude": [
+    ".test.ts"
+  ]
+}

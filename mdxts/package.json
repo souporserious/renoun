@@ -53,7 +53,7 @@
   },
   "scripts": {
     "build": "pnpm build:esm && pnpm build:cjs && pnpm build:types",
-    "build:esm": "swc ./src -d ./dist --ignore **/*.test.ts",
+    "build:esm": "swc ./src -d ./dist --config-file .swcrc-build",
     "build:cjs": "tsup",
     "build:types": "tsc --emitDeclarationOnly",
     "dev": "pnpm build:esm --watch",

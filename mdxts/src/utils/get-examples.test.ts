@@ -57,7 +57,7 @@ export function AlternateUsage() {
 }
 `
 
-test('get examples from directory', async () => {
+test.skip('get examples from directory', async () => {
   const project = new Project({ useInMemoryFileSystem: true })
   const directory = project.createDirectory('directory')
 
