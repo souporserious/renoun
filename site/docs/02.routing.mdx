@@ -16,7 +16,9 @@ import { notFound } from 'next/navigation'
 
 const allDocs = createDataSource('docs/**/*.mdx')
 
-export default async function Page({ params }) {
+type Props = { params: { slug: string } }
+
+export default async function Page({ params }: Props) {
   const doc = await allDocs.get(params.slug)
 
   if (doc === null) return notFound()

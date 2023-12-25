@@ -193,13 +193,56 @@ export function createDataSource<Type>(
 
   return {
     /** Returns all modules. */
-    async all(): Promise<any> {
+    async all() {
       return allData
     },
 
     /** Returns a tree of all modules. */
-    async tree(): Promise<any[]> {
-      return sourceFilesToTree(allData, basePath)
+    async tree() {
+      const paths = Object.keys(allData)
+      const tree: {
+        segment: string
+        pathname: string
+        label: string
+        children: any[]
+      }[] = []
+
+      for (let pathIndex = 0; pathIndex < paths.length; pathIndex++) {
+        const currentPath = paths[pathIndex]
+        const pathParts = currentPath.split(sep)
+        let nodes = tree
+
+        for (
+          let pathPartIndex = 0;
+          pathPartIndex < pathParts.length;
+          pathPartIndex++
+        ) {
+          const pathname = pathParts.slice(0, pathPartIndex + 1).join(sep)
+          const segment = pathParts[pathPartIndex]
+          let node = nodes.find((node) => node.segment === segment)
+
+          if (!node) {
+            node = {
+              segment,
+              pathname: join(sep, basePath, pathname),
+              label: parseTitle(segment),
+              children: [],
+            }
+
+            const sourceFile = allData[pathname]
+
+            if (sourceFile) {
+              Object.assign(node, sourceFile)
+            }
+
+            nodes.push(node)
+          }
+
+          nodes = node.children
+        }
+      }
+
+      return tree
     },
 
     /** Returns a module by pathname including metadata, examples, and previous/next modules. Defaults to `basePath` if `pathname` is undefined. */
@@ -223,55 +266,6 @@ export function createDataSource<Type>(
       )
     },
   }
-}
-
-type AllSourceFiles = Awaited<
-  ReturnType<ReturnType<typeof createDataSource>['all']>
->
-
-/** Turns a collection of source files into a tree. */
-function sourceFilesToTree(sourceFiles: AllSourceFiles, basePath: string) {
-  const paths = Object.keys(sourceFiles)
-  const tree: any[] = []
-
-  for (let pathIndex = 0; pathIndex < paths.length; pathIndex++) {
-    const currentPath = paths[pathIndex]
-    const pathParts = currentPath.split(sep)
-    const allPaths: Record<string, any> = {}
-    let nodes = tree
-
-    for (
-      let pathPartIndex = 0;
-      pathPartIndex < pathParts.length;
-      pathPartIndex++
-    ) {
-      const pathname = pathParts.slice(0, pathPartIndex + 1).join(sep)
-      const segment = pathParts[pathPartIndex]
-      let node = nodes.find((node) => node.segment === segment)
-
-      if (!node) {
-        node = {
-          segment,
-          pathname: join(sep, basePath, pathname),
-          label: parseTitle(segment),
-          children: [],
-        }
-
-        const sourceFile = sourceFiles[pathname]
-
-        if (sourceFile) {
-          Object.assign(node, sourceFile)
-        }
-
-        nodes.push(node)
-      }
-
-      allPaths[pathname] = node
-      nodes = node.children
-    }
-  }
-
-  return tree
 }
 
 let theme: any = null
