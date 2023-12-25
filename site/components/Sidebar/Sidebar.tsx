@@ -1,6 +1,7 @@
 import { Navigation } from 'mdxts/components'
 import { allDocs, allPackages } from 'data'
 import { Logo } from 'components/Logo'
+import styles from './Sidebar.module.css'
 
 import { NavigationBoundary } from './NavigationBoundary'
 import { NavigationToggle } from './NavigationToggle'
@@ -8,14 +9,7 @@ import { SidebarLink } from './SidebarLink'
 
 export function Sidebar() {
   return (
-    <aside
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        padding: '6rem 2rem 2rem',
-        gap: '2.5rem',
-      }}
-    >
+    <aside className={styles.container}>
       <div
         style={{
           display: 'flex',

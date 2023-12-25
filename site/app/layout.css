@@ -94,7 +94,13 @@ p {
 }
 
 main {
-  padding: 6rem 2rem 2rem;
+  padding: 2rem;
+}
+
+@media screen and (min-width: 768px) {
+  main {
+    padding: 6rem 2rem 2rem;
+  }
 }
 
 main h1,
