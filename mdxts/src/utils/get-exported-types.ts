@@ -21,14 +21,12 @@ export function getExportedTypes(sourceFile: SourceFile) {
         Node.isArrowFunction(declaration)
       ) {
         const filePath = declaration.getSourceFile().getFilePath()
-        const types = getFunctionParameterTypes(declaration) as
-          | (PropertyMetadata | null)[]
-          | null
+        const types = getFunctionParameterTypes(declaration) || []
         const symbol = declaration.getSymbol()
 
         return {
           name,
-          types,
+          types: types as PropertyMetadata[],
           description: symbol ? getSymbolDescription(symbol) : null,
           isComponent: isJsxComponent(declaration),
           slug: kebabCase(name),
@@ -42,7 +40,7 @@ export function getExportedTypes(sourceFile: SourceFile) {
         source
       ): source is NonNullable<{
         name: string
-        types: (PropertyMetadata | null)[] | null
+        types: PropertyMetadata[]
         description: string | null
         isComponent: boolean
         slug: string

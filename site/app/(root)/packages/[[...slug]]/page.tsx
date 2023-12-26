@@ -222,7 +222,7 @@ function Props({
               gap: '2rem',
             }}
           >
-            <span>{propType.type}</span>
+            <span>{propType.text}</span>
           </div>
           {propType.description && (
             <p style={{ margin: 0 }}>{propType.description}</p>
@@ -337,7 +337,7 @@ function Props({
           >
             <Code
               inline
-              value={propType.type}
+              value={propType.text}
               language="typescript"
               paddingHorizontal="0.5rem"
               paddingVertical="0.2rem"

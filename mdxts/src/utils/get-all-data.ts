@@ -210,11 +210,11 @@ export function getAllData({
       allData[pathname] = {
         ...previouseData,
         mdxPath: path,
-        exportedTypes: [],
-        examples: [],
+        exportedTypes: previouseData?.exportedTypes || [],
+        examples: previouseData?.examples || [],
+        description: previouseData?.description || description,
         title,
         label,
-        description,
         order,
         sourcePath,
       }
