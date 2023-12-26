@@ -20,6 +20,15 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <link rel="canonical" href="https://www.mdxts.dev" />
+        <link
+          rel="icon"
+          type="image/svg+xml"
+          href={
+            process.env.NODE_ENV === 'development'
+              ? '/favicon-dev.svg'
+              : '/favicon.svg'
+          }
+        />
       </head>
       <body className={GeistSans.className}>
         <div
