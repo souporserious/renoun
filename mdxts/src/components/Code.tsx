@@ -149,7 +149,7 @@ export async function Code({
   if (isJavaScriptLanguage) {
     const config = (await resolveConfig(filename)) || {}
     config.filepath = filename
-    config.printWidth = 60
+    config.printWidth = 80
     finalValue = await format(finalValue, config)
 
     // Trim semicolon and trailing newline from formatting.
