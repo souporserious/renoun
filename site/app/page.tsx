@@ -32,7 +32,7 @@ export default function Home() {
                 <span
                   style={{
                     fontSize: 'var(--font-size-body-2)',
-                    padding: '0.25rem 0.5rem',
+                    padding: '0.25rem 0.8rem',
                     border: '1px solid #3F687E',
                     borderRadius: '1rem',
                   }}
