@@ -2,22 +2,20 @@
 
 <Summary>
 
-Build interactive, type-safe content and documentation using MDX,
-TypeScript, and React.
-
-MDXTS generates a graph of prose content, source code, type information, and examples that can be rendered through components and utilities using [React 18 Server Components](https://react.dev/blog/2023/03/22/react-labs-what-we-have-been-working-on-march-2023#react-server-components).
+MDXTS generates a graph of prose content, type documentation, and examples that can be rendered through components and utilities using [React 18 Server Components](https://react.dev/blog/2023/03/22/react-labs-what-we-have-been-working-on-march-2023#react-server-components).
 
 </Summary>
 
 <Note>
   Server Component support is currently limited in frameworks. This library
   offers first-class support for Next.js through a [plugin](packages/next).
-  Please open an issue or PR to add support for other frameworks.
+  Please open an issue or PR if you are interested in supporting other
+  frameworks.
 </Note>
 
 ## Install
 
-Run the following command in your project directory to install the required dependencies:
+To get started, run the following command to install the required dependencies:
 
 <PackageInstall
   packages={['mdxts', 'next', 'react', 'react-dom', 'shiki', 'prettier']}
@@ -25,7 +23,7 @@ Run the following command in your project directory to install the required depe
 
 ## Guided Setup
 
-### Configure Plugin
+### Configuring the Next.js Plugin
 
 Once the `mdxts` package is installed, you can configure the Next.js plugin to use a custom theme and git source:
 
@@ -58,7 +56,7 @@ const withMdxts = createMdxtsPlugin({
 
 ### Generating Routes
 
-Use the `createDataSource` function exported from the `mdxts` package to generate metadata and paths from a set of MDX or TypeScript files:
+Use the `createDataSource` function exported from the `mdxts` package to generate metadata and a `paths` helper for a set of MDX or TypeScript source files:
 
 ```ts filename="data.ts"
 import { createDataSource } from 'mdxts'
@@ -67,16 +65,18 @@ export const allDocs = createDataSource('docs/**/*.mdx', {
   baseDirectory: 'docs',
 })
 
-allDocs.paths() // => []'docs', 'getting-started'], ['docs, 'authoring']]
+allDocs.paths() // => [['docs', 'getting-started'], ['docs, 'authoring']]
 ```
+
+Visit the [routing](/routing) section for more information on the `paths` method.
 
 ### Rendering Content
 
-Use the `get` helper from the modules loader to render MDX content:
+Use the `get` method from the modules loader to render MDX content:
 
-```tsx filename="page.tsx"
+```tsx filename="blog/[slug]/page.tsx"
 import { notFound } from 'next/navigation'
-import { allDocs } from './data'
+import { allDocs } from '../../data'
 
 type Props = { params: { slug: string } }
 
@@ -90,6 +90,55 @@ export default async function Page({ params }: Props) {
   const { Content } = doc
 
   return <Content />
+}
+```
+
+If the targeted source file is a TypeScript file, its types will be analyzed and included along with other metadata:
+
+```tsx filename="components/[slug]/page.tsx"
+import { createDataSource } from 'mdxts'
+import { notFound } from 'next/navigation'
+
+type Props = { params: { slug: string } }
+
+const allComponents = createDataSource('components/**/*.tsx')
+
+export default async function Page({ params }: Props) {
+  const component = await allComponents.get(params.slug)
+
+  if (component === null) {
+    return notFound()
+  }
+
+  const { Content, exportedTypes } = component
+
+  return (
+    <>
+      <Content />
+      <ul>
+        {exportedTypes.map((type) => (
+          <li key={type.name}>
+            <h4>{type.name}</h4>
+            <p>{type.description}</p>
+            {type.types.map((type) =>
+              type.properties ? (
+                <ul>
+                  {type.properties.map((property) => (
+                    <li key={property.name}>
+                      <h5>{property.name}</h5>
+                      <p>{property.description}</p>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                type.text
+              )
+            )}
+          </li>
+        ))}
+      </ul>
+    </>
+  )
 }
 ```
 
