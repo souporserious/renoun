@@ -27,7 +27,7 @@ export function Sidebar() {
         <NavigationToggle />
         <a
           href="https://github.com/souporserious/mdxts/"
-          style={{ display: 'block', height: 20 }}
+          style={{ display: 'flex', height: 20 }}
         >
           <svg width="20" height="20" viewBox="0 0 16 16" fill="#fff">
             <path

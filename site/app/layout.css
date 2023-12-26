@@ -17,7 +17,7 @@
   --line-height-body-2: 1.65rem;
   --font-weight-heading: 700;
   --font-weight-body: 400;
-  --letter-spacing-body: 0.025rem;
+  --letter-spacing-body: 0.01em;
 }
 
 @media screen and (min-width: 60rem) {
@@ -26,7 +26,7 @@
     --font-size-heading-2: 1.8rem;
     --font-size-heading-3: 1.6rem;
     --font-size-body-1: 1.3rem;
-    --font-size-body-2: 0.875rem;
+    --font-size-body-2: 1rem;
     --line-height-heading-1: 3rem;
     --line-height-heading-2: 2.4rem;
     --line-height-heading-3: 1.8rem;
@@ -54,7 +54,7 @@ body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   font-size: var(--font-size-body-1);
-  letter-spacing: 0.01em;
+  letter-spacing: var(--letter-spacing-body);
   background-color: var(--color-background);
   color: var(--color-foreground);
 }
@@ -94,8 +94,8 @@ h3 {
 
 p {
   font-size: var(--font-size-body-1);
-  line-height: var(--line-height-body-1);
   font-weight: var(--font-weight-body);
+  line-height: var(--line-height-body-1);
   text-wrap: pretty;
 }
 

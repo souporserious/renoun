@@ -6,6 +6,6 @@
 @media screen and (min-width: 60rem) {
   .container {
     grid-template-columns: auto minmax(0, 1fr);
-    max-width: 60rem;
+    max-width: 72rem;
   }
 }
