@@ -37,7 +37,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
     title,
     description,
     headings,
-    types,
+    exportedTypes,
     sourcePath,
     isServerOnly,
   } = singlePackage
@@ -92,7 +92,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
 
         {Content ? <Content /> : null}
 
-        {types && types.length > 0 && (
+        {exportedTypes.length > 0 && (
           <div
             style={{
               display: 'flex',
@@ -110,7 +110,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
                 gap: '2rem',
               }}
             >
-              {types.map((type) => {
+              {exportedTypes.map((type) => {
                 const isActive = singlePackage.pathname === type.pathname
                 return (
                   <div
@@ -162,7 +162,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
                       ) : null}
                     </div>
 
-                    {isActive && type.types && type.types.length > 0 ? (
+                    {isActive && type.types.length > 0 ? (
                       <>
                         <h4 style={{ margin: '1rem 0 0' }}>
                           {type.isComponent ? 'Props' : 'Types'}
@@ -295,7 +295,7 @@ function Props({
           <Props props={propType.properties} isComponent={isComponent} />
         </div>
       ) : (
-        propType.type
+        propType.text
       )
     }
 

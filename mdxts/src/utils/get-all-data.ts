@@ -81,16 +81,16 @@ export function getAllData({
       sourcePath?: string
       isMainExport?: boolean
       isServerOnly?: boolean
-      examples?: {
+      exportedTypes: (ReturnType<typeof getExportedTypes>[number] & {
+        isMainExport: boolean
+        pathname: string
+      })[]
+      examples: {
         name: string
         module?: ModuleImport
         filePath: string
         pathname: string
       }[]
-      types?: (ReturnType<typeof getExportedTypes>[number] & {
-        isMainExport: boolean
-        pathname: string
-      })[]
     }
   > = {}
 
@@ -136,6 +136,20 @@ export function getAllData({
 
     /** Handle TypeScript source files */
     if (type === 'ts') {
+      const exportedTypes = getExportedTypes(sourceFile).map(
+        ({ filePath, ...fileExport }) => {
+          const pathname = filePathToPathname(filePath, baseDirectory)
+          return {
+            ...fileExport,
+            filePath,
+            isMainExport: filePath === path,
+            pathname:
+              basePathname === pathname
+                ? join(sep, basePathname)
+                : join(sep, basePathname, pathname),
+          }
+        }
+      )
       const examples = getExamplesFromDirectory(sourceFile.getDirectory()).map(
         (sourceFile) => {
           const filePath = sourceFile.getFilePath()
@@ -148,20 +162,6 @@ export function getAllData({
             filePath,
             pathname:
               basePathname === pathname ? join(sep, basePathname) : pathname,
-          }
-        }
-      )
-      const types = getExportedTypes(sourceFile).map(
-        ({ filePath, ...fileExport }) => {
-          const pathname = filePathToPathname(filePath, baseDirectory)
-          return {
-            ...fileExport,
-            filePath,
-            isMainExport: filePath === path,
-            pathname:
-              basePathname === pathname
-                ? join(sep, basePathname)
-                : join(sep, basePathname, pathname),
           }
         }
       )
@@ -193,15 +193,15 @@ export function getAllData({
 
       allData[pathname] = {
         ...previouseData,
+        tsPath: path,
+        exportedTypes,
+        examples,
         title,
         label,
         description,
         isMainExport,
         isServerOnly,
-        examples,
-        types,
         sourcePath,
-        tsPath: path,
       }
     }
 
@@ -209,12 +209,14 @@ export function getAllData({
     if (type === 'md') {
       allData[pathname] = {
         ...previouseData,
+        mdxPath: path,
+        exportedTypes: [],
+        examples: [],
         title,
         label,
         description,
         order,
         sourcePath,
-        mdxPath: path,
       }
     }
   })

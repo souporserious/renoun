@@ -24,11 +24,11 @@ export type Module = {
   sourcePath: string
   isServerOnly: boolean
   slug: string
-  types?: (ReturnType<typeof getExportedTypes>[number] & {
+  exportedTypes: (ReturnType<typeof getExportedTypes>[number] & {
     pathname: string
     sourcePath: string
   })[]
-  examples?: {
+  examples: {
     name: string
     slug: string
     module: Promise<Record<string, any>>
@@ -110,7 +110,7 @@ export function createDataSource<Type>(
       : { default: undefined, metadata: undefined, frontMatter: undefined }
 
     /** Append component prop type links to headings data. */
-    if (data.types && data.types.length > 0) {
+    if (data.exportedTypes.length > 0) {
       typeSlugs.reset()
 
       headings = [
@@ -120,7 +120,7 @@ export function createDataSource<Type>(
           id: 'exports',
           depth: 2,
         },
-        ...data.types.map((type) => ({
+        ...data.exportedTypes.map((type) => ({
           text: type.name,
           id: typeSlugs.slug(type.name),
           depth: 3,
@@ -139,7 +139,7 @@ export function createDataSource<Type>(
       title: data.title,
       label: data.label,
       description: data.description,
-      types: data.types,
+      exportedTypes: data.exportedTypes,
       examples: data.examples,
       sourcePath: data.sourcePath,
       pathname:
