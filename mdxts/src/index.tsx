@@ -13,11 +13,11 @@ const typeSlugs = new Slugger()
 
 export type Module = {
   Content?: ComponentType
+  pathname: string
   codeBlocks: CodeBlocks
   frontMatter?: Record<string, any>
   headings: Headings
   summary: string
-  pathname: string
   metadata?: { title: string; description: string }
 } & Omit<ModuleData, 'mdxPath' | 'tsPath'>
 
@@ -129,7 +129,6 @@ export function createDataSource<Type>(
     }
 
     return {
-      Content,
       isServerOnly: data.isServerOnly,
       isMainExport: data.isMainExport,
       title: data.title,
@@ -138,12 +137,10 @@ export function createDataSource<Type>(
       exportedTypes: data.exportedTypes,
       examples: data.examples,
       sourcePath: data.sourcePath,
-      pathname:
-        basePathname === pathname
-          ? join(sep, basePathname)
-          : join(sep, basePathname, pathname),
-      headings,
+      Content,
+      pathname,
       frontMatter,
+      headings,
       metadata,
       ...exports,
     } as Module & Type
