@@ -31,19 +31,6 @@ export default function RootLayout({
         />
       </head>
       <body className={GeistSans.className}>
-        <div
-          style={{
-            fontWeight: 600,
-            fontSize: 'var(--font-size-body-2)',
-            padding: '1rem',
-            backgroundColor: '#d39e5a',
-            color: '#1c1309',
-            textAlign: 'center',
-          }}
-        >
-          This package is still experimental. The APIs are not stable and may
-          change. Use at your own risk.
-        </div>
         <AppProvider>{children}</AppProvider>
         <Analytics />
       </body>

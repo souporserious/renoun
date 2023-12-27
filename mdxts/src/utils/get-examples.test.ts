@@ -1,36 +1,9 @@
 import { Project } from 'ts-morph'
 import {
-  getExamplesFromComments,
   getExamplesFromDirectory,
   getExamplesFromExtension,
+  getExamplesFromSourceFile,
 } from './get-examples'
-
-const commentsSourceFile = `
-/**
- * Adds two numbers together.
- * 
- * @example
- * const a = 1
- * const b = 2
- * const c = add(a, b)
- * 
- * console.log(c)
- */
-export function add(a: number, b: number) {
-    return a + b
-}
-`
-
-test('get examples from comments', async () => {
-  const project = new Project({ useInMemoryFileSystem: true })
-  const sourceFile = project.createSourceFile(
-    'comments.tsx',
-    commentsSourceFile
-  )
-  const examples = getExamplesFromComments(sourceFile.getFunctionOrThrow('add'))
-
-  expect(examples).toMatchSnapshot()
-})
 
 const buttonSourceFile = `
 /** Used for taking actions and navigating. */
@@ -57,7 +30,7 @@ export function AlternateUsage() {
 }
 `
 
-test.skip('get examples from directory', async () => {
+test('get examples from directory', async () => {
   const project = new Project({ useInMemoryFileSystem: true })
   const directory = project.createDirectory('directory')
 
@@ -69,18 +42,32 @@ test.skip('get examples from directory', async () => {
 
   const examples = getExamplesFromDirectory(sourceFile.getDirectory())
 
-  expect(JSON.stringify(examples, null, 2)).toMatchSnapshot()
+  expect(examples.map((example) => example.getFilePath())).toMatchSnapshot()
 })
 
 test('get examples from extension', async () => {
   const project = new Project({ useInMemoryFileSystem: true })
-  const directory = project.createDirectory('directory')
+  const sourceFile = project.createSourceFile('Button.tsx', buttonSourceFile)
 
-  const sourceFile = directory.createSourceFile('Button.tsx', buttonSourceFile)
-
-  directory.createSourceFile('Button.examples.tsx', basicUsageSourceFile)
+  project.createSourceFile('Button.examples.tsx', basicUsageSourceFile)
 
   const examples = getExamplesFromExtension(sourceFile)
 
-  expect(JSON.stringify(examples, null, 2)).toMatchSnapshot()
+  expect(examples!.getFilePath()).toMatchSnapshot()
+})
+
+test('get examples from source file', async () => {
+  const project = new Project({ useInMemoryFileSystem: true })
+  const sourceFile = project.createSourceFile('Button.tsx', buttonSourceFile)
+
+  project.createSourceFile('Button.examples.tsx', basicUsageSourceFile)
+
+  const examples = await getExamplesFromSourceFile(sourceFile, {
+    '/Button.examples.tsx': Promise.resolve({
+      BasicUsage: () => null,
+      AlternateUsage: () => null,
+    }),
+  })
+
+  expect(examples).toMatchSnapshot()
 })

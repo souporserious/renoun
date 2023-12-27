@@ -1,5 +1,5 @@
 import parseTitle from 'title'
-import { basename, join, resolve, sep } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import { readPackageUpSync } from 'read-package-up'
 import type { SourceFile } from 'ts-morph'
 import { getSymbolDescription, resolveExpression } from '@tsxmod/utils'
@@ -8,7 +8,7 @@ import { project } from '../components/project'
 import { getSourcePath } from '../utils/get-source-path'
 import { findCommonRootPath } from './find-common-root-path'
 import { filePathToPathname } from './file-path-to-pathname'
-import { getExamplesFromDirectory } from './get-examples'
+import { getExamplesFromSourceFile } from './get-examples'
 import { getExportedSourceFiles } from './get-exported-source-files'
 import { getExportedTypes } from './get-exported-types'
 import { getMainExportDeclaration } from './get-main-export-declaration'
@@ -19,6 +19,27 @@ export type Pathname = string
 export type ModuleImport = Promise<Record<string, any>>
 
 export type AllModules = Record<Pathname, ModuleImport>
+
+export type ModuleData = {
+  title: string
+  label?: string
+  description?: string
+  order?: number
+  mdxPath?: string
+  tsPath?: string
+  sourcePath: string
+  isMainExport?: boolean
+  isServerOnly?: boolean
+  exportedTypes: (Omit<
+    ReturnType<typeof getExportedTypes>[number],
+    'filePath'
+  > & {
+    pathname: string
+    sourcePath: string
+    isMainExport: boolean
+  })[]
+  examples: ReturnType<typeof getExamplesFromSourceFile>
+}
 
 export function getAllData({
   allModules,
@@ -69,30 +90,7 @@ export function getAllData({
     .concat(exportedSourceFiles)
     .map((sourceFile) => sourceFile.getFilePath() as string)
     .concat(Object.keys(allModules))
-  const allData: Record<
-    Pathname,
-    {
-      title?: string
-      label?: string
-      description?: string
-      order?: number
-      mdxPath?: string
-      tsPath?: string
-      sourcePath?: string
-      isMainExport?: boolean
-      isServerOnly?: boolean
-      exportedTypes: (ReturnType<typeof getExportedTypes>[number] & {
-        isMainExport: boolean
-        pathname: string
-      })[]
-      examples: {
-        name: string
-        module?: ModuleImport
-        filePath: string
-        pathname: string
-      }[]
-    }
-  > = {}
+  const allData: Record<Pathname, ModuleData> = {}
 
   allPublicPaths.forEach((path) => {
     const type =
@@ -138,33 +136,20 @@ export function getAllData({
     if (type === 'ts') {
       const exportedTypes = getExportedTypes(sourceFile).map(
         ({ filePath, ...fileExport }) => {
-          const pathname = filePathToPathname(filePath, baseDirectory)
+          const pathname = filePathToPathname(
+            filePath,
+            baseDirectory,
+            basePathname
+          )
           return {
             ...fileExport,
-            filePath,
+            pathname,
+            sourcePath: getSourcePath(filePath),
             isMainExport: filePath === path,
-            pathname:
-              basePathname === pathname
-                ? join(sep, basePathname)
-                : join(sep, basePathname, pathname),
           }
         }
       )
-      const examples = getExamplesFromDirectory(sourceFile.getDirectory()).map(
-        (sourceFile) => {
-          const filePath = sourceFile.getFilePath()
-          const pathname = filePathToPathname(filePath, baseDirectory)
-          const module = allModules[filePath]
-          const name = sourceFile.getBaseNameWithoutExtension()
-          return {
-            name,
-            module,
-            filePath,
-            pathname:
-              basePathname === pathname ? join(sep, basePathname) : pathname,
-          }
-        }
-      )
+      const examples = getExamplesFromSourceFile(sourceFile, allModules)
       const isMainExport = pathname === packageName
       const isServerOnly = sourceFile
         .getImportDeclarations()

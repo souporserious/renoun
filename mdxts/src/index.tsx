@@ -1,42 +1,25 @@
 import parseTitle from 'title'
 import Slugger from 'github-slugger'
 import type { ComponentType } from 'react'
-import { join, resolve, sep } from 'node:path'
+import { basename, dirname, extname, join, resolve, sep } from 'node:path'
 import 'server-only'
 
 import type { CodeBlocks } from './remark/add-code-blocks'
 import type { Headings } from './remark/add-headings'
-import { getAllData, type AllModules } from './utils/get-all-data'
-import { getExportedTypes } from './utils/get-exported-types'
+import type { AllModules, ModuleData } from './utils/get-all-data'
+import { getAllData } from './utils/get-all-data'
 
 const typeSlugs = new Slugger()
 
 export type Module = {
   Content?: ComponentType
-  title: string
-  label: string
-  description: string
-  summary: string
+  codeBlocks: CodeBlocks
   frontMatter?: Record<string, any>
   headings: Headings
-  codeBlocks: CodeBlocks
+  summary: string
   pathname: string
-  sourcePath: string
-  isServerOnly: boolean
-  slug: string
-  exportedTypes: (ReturnType<typeof getExportedTypes>[number] & {
-    pathname: string
-    sourcePath: string
-  })[]
-  examples: {
-    name: string
-    slug: string
-    module: Promise<Record<string, any>>
-    pathname: string
-    sourcePath: string
-  }[]
   metadata?: { title: string; description: string }
-}
+} & Omit<ModuleData, 'mdxPath' | 'tsPath'>
 
 /**
  * Loads content and metadata related to MDX and TypeScript files.
@@ -85,6 +68,18 @@ export function createDataSource<Type>(
     globPattern,
     baseDirectory,
     basePathname,
+  })
+  const filteredDataKeys = Object.keys(allData).filter((pathname) => {
+    const moduleData = allData[pathname]
+    if (moduleData?.tsPath) {
+      const isExtensionExample = basename(
+        moduleData.tsPath,
+        extname(moduleData.tsPath)
+      ).endsWith('.examples')
+      const isDirectoryExample = dirname(moduleData.tsPath).endsWith('examples')
+      return !isExtensionExample && !isDirectoryExample
+    }
+    return true
   })
 
   /** Parses and attaches metadata to a module. */
@@ -136,6 +131,7 @@ export function createDataSource<Type>(
     return {
       Content,
       isServerOnly: data.isServerOnly,
+      isMainExport: data.isMainExport,
       title: data.title,
       label: data.label,
       description: data.description,
@@ -194,12 +190,14 @@ export function createDataSource<Type>(
   return {
     /** Returns all modules. */
     async all() {
-      return allData
+      return Object.fromEntries(
+        filteredDataKeys.map((pathname) => [pathname, allData[pathname]])
+      )
     },
 
     /** Returns a tree of all module metadata. */
     async tree() {
-      const paths = Object.keys(allData)
+      const paths = filteredDataKeys
       const tree: {
         segment: string
         pathname: string
@@ -229,10 +227,10 @@ export function createDataSource<Type>(
               children: [],
             }
 
-            const sourceFile = allData[pathname]
+            const sourceFileData = allData[pathname]
 
-            if (sourceFile) {
-              Object.assign(node, sourceFile)
+            if (sourceFileData) {
+              Object.assign(node, sourceFileData)
             }
 
             nodes.push(node)
@@ -257,7 +255,7 @@ export function createDataSource<Type>(
 
     /** Returns paths for all modules calculated from file system paths. */
     paths() {
-      return Object.keys(allData).map((pathname) =>
+      return filteredDataKeys.map((pathname) =>
         pathname
           // Split pathname into an array
           .split(sep)

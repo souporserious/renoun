@@ -1,20 +1,4 @@
-import type { Directory, FunctionLikeDeclaration, SourceFile } from 'ts-morph'
-import { SyntaxKind } from 'ts-morph'
-import { extractExportByIdentifier } from '@tsxmod/utils'
-
-/** Gathers examples from a declaration's JSDoc example tags. */
-export function getExamplesFromComments(declaration: FunctionLikeDeclaration) {
-  const docs = declaration.getJsDocs()
-
-  return docs.flatMap(
-    (doc) =>
-      doc
-        .getTags()
-        .filter((tag) => tag.getTagName() === 'example')
-        .map((tag) => tag.getCommentText())
-        .filter(Boolean) as string[]
-  )
-}
+import type { Directory, SourceFile } from 'ts-morph'
 
 /** Gathers examples from a source file with the same base name and `.examples` extension. */
 export function getExamplesFromExtension(sourceFile: SourceFile) {
@@ -25,21 +9,10 @@ export function getExamplesFromExtension(sourceFile: SourceFile) {
     )
 
   if (!exampleSourceFile) {
-    return []
+    return null
   }
 
-  const exportedDeclarations = exampleSourceFile.getExportedDeclarations()
-
-  return Array.from(exportedDeclarations).flatMap(([, declarations]) => {
-    return declarations.map((declaration) =>
-      extractExportByIdentifier(
-        exampleSourceFile,
-        declaration
-          .getFirstDescendantByKindOrThrow(SyntaxKind.Identifier)
-          .getText()
-      )
-    )
-  })
+  return exampleSourceFile
 }
 
 /** Gathers examples from the closest `examples` directory. */
@@ -57,4 +30,57 @@ export function getExamplesFromDirectory(directory: Directory) {
   }
 
   return sourceFiles
+}
+
+/** Gathers examples from a source file. */
+export async function getExamplesFromSourceFile(
+  sourceFile: SourceFile,
+  allModules: Record<string, Promise<Record<string, any>>>
+) {
+  const extensionExampleSourceFile = getExamplesFromExtension(sourceFile)
+  const allExamples: {
+    name: string
+    moduleExport: any
+  }[] = []
+
+  if (extensionExampleSourceFile) {
+    const sourceFilePath = extensionExampleSourceFile.getFilePath()
+
+    if (sourceFilePath in allModules) {
+      allExamples.push(
+        ...parseExamplesFromModule(
+          extensionExampleSourceFile,
+          await allModules[sourceFilePath]
+        )
+      )
+    } else {
+      throw new Error(`Module not found for ${sourceFilePath}`)
+    }
+  }
+
+  // TODO: Add support for examples directory.
+  // const directoryExamples = getExamplesFromDirectory(sourceFile.getDirectory())
+
+  return allExamples
+}
+
+function parseExamplesFromModule(
+  sourceFile: SourceFile,
+  moduleImport: Record<string, any>
+) {
+  const exportedDeclarations = sourceFile.getExportedDeclarations()
+  const examples: {
+    name: string
+    moduleExport: any
+  }[] = []
+
+  Array.from(exportedDeclarations.keys()).forEach((name) => {
+    const moduleExport = moduleImport[name]
+    examples.push({
+      name,
+      moduleExport,
+    })
+  })
+
+  return examples
 }

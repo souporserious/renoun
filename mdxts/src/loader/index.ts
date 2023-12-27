@@ -24,13 +24,23 @@ export default async function loader(
   const sourceString = source.toString()
   const workingDirectory = dirname(this.resourcePath)
 
-  /** Add Next.js entry layout files to set the theme. */
-  if (isNextJsEntryLayout(this.resourcePath) && options.themePath) {
+  /** Add theme to Next.js entry layout files and examples. */
+  const isExample = this.resourcePath.endsWith('.examples.tsx')
+  if (
+    (isNextJsEntryLayout(this.resourcePath) || isExample) &&
+    options.themePath
+  ) {
     const relativeThemePath = relative(workingDirectory, options.themePath)
-    // Normalize path for import (replace backslashes on Windows)
-    const normalizedThemePath = relativeThemePath.split('\\').join('/')
 
-    source = `import { setTheme } from 'mdxts';\nimport theme from '${normalizedThemePath}';\nsetTheme(theme);\n\n${source}`
+    if (isExample) {
+      source =
+        `import theme from '${relativeThemePath}';\n${source}`.replaceAll(
+          '<Code',
+          '<Code theme={theme}'
+        )
+    } else {
+      source = `import { setTheme } from 'mdxts';\nimport theme from '${relativeThemePath}';\nsetTheme(theme);\n${source}`
+    }
   }
 
   /** Export front matter from MDX files. */
