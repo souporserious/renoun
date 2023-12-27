@@ -153,13 +153,13 @@ export function createDataSource<Type>(
     const stringPathname = Array.isArray(pathname)
       ? pathname.join(sep)
       : pathname
-    const activeIndex = Object.keys(allData).findIndex((dataPathname) =>
+    const activeIndex = filteredDataKeys.findIndex((dataPathname) =>
       dataPathname.includes(stringPathname)
     )
 
     function getSiblingPathname(startIndex: number, direction: number) {
       const siblingIndex = startIndex + direction
-      const siblingPathname = Object.keys(allData)[siblingIndex]
+      const siblingPathname = filteredDataKeys[siblingIndex]
 
       if (siblingPathname === null) {
         return getSiblingPathname(siblingIndex, direction)
@@ -194,7 +194,6 @@ export function createDataSource<Type>(
 
     /** Returns a tree of all module metadata. */
     async tree() {
-      const paths = filteredDataKeys
       const tree: {
         segment: string
         pathname: string
@@ -202,8 +201,12 @@ export function createDataSource<Type>(
         children: any[]
       }[] = []
 
-      for (let pathIndex = 0; pathIndex < paths.length; pathIndex++) {
-        const currentPath = paths[pathIndex]
+      for (
+        let pathIndex = 0;
+        pathIndex < filteredDataKeys.length;
+        pathIndex++
+      ) {
+        const currentPath = filteredDataKeys[pathIndex]
         const pathParts = currentPath.split(sep)
         let nodes = tree
 
