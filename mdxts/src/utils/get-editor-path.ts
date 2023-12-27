@@ -36,5 +36,7 @@ export function getEditorPath({
     case 'vscode-insiders':
     case 'vscode':
       return `${editor}://file/${path}:${line}:${column}`
+    default:
+      throw new Error(`Unsupported editor: ${editor}`)
   }
 }
