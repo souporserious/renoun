@@ -264,10 +264,30 @@ export function createDataSource<Type>(
       )
     },
 
-    /** Returns helpers for working with examples. */
+    /**
+     * Returns a module example by pathname. Note, the pathname must include the source module
+     * pathname as well. For example, to get the `basic` example from the `button` module, the
+     * pathname would be `['components', 'button', 'examples', 'basic']`.
+     */
+    async getExample(slug: string[]) {
+      const dataSlug = slug.slice(0, 2)
+      const dataItem = await this.get(dataSlug)
+
+      if (dataItem === undefined) {
+        return
+      }
+
+      const exampleSlug = slug.slice(2).at(0)!
+      const examples = await dataItem.examples
+      return examples?.find(
+        (example) => example.name.toLowerCase() === exampleSlug
+      )
+    },
+
+    /** Returns paths for all module examples. */
     async examplePaths() {
-      const allPaths = this.paths()
       const allData = await this.all()
+      const allPaths = this.paths()
       const allExamples = await Promise.all(
         Object.values(allData).map((data) => data.examples)
       )

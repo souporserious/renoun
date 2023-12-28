@@ -15,21 +15,10 @@ export async function generateMetadata({
 }: {
   params: { example: string[] }
 }) {
-  const packageSlug = params.example.slice(0, 2)
-  const exampleSlug = params.example.slice(2).at(0)!
-  const component = await allPackages.get(packageSlug)
-
-  if (component === undefined) {
-    return notFound()
-  }
-
-  const examples = await component.examples
-  const example = examples?.find(
-    (example) => example.name.toLowerCase() === exampleSlug
-  )
+  const example = await allPackages.getExample(params.example)
 
   if (example === undefined) {
-    return
+    return notFound()
   }
 
   return getSiteMetadata({
@@ -42,18 +31,7 @@ export default async function Page({
 }: {
   params: { example: string[] }
 }) {
-  const packageSlug = params.example.slice(0, 2)
-  const exampleSlug = params.example.slice(2).at(0)!
-  const component = await allPackages.get(packageSlug)
-
-  if (component === undefined) {
-    return notFound()
-  }
-
-  const examples = await component.examples
-  const example = examples?.find(
-    (example) => example.name.toLowerCase() === exampleSlug
-  )
+  const example = await allPackages.getExample(params.example)
 
   if (example === undefined) {
     return notFound()
