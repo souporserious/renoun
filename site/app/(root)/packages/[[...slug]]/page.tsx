@@ -37,6 +37,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
     title,
     description,
     headings,
+    examples,
     exportedTypes,
     sourcePath,
     isServerOnly,
@@ -92,94 +93,129 @@ export default async function Page({ params }: { params: { slug: string } }) {
 
         {Content ? <Content /> : null}
 
-        {exportedTypes.length > 0 && (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '1.6rem',
-            }}
-          >
-            <h2 id="exports" style={{ margin: 0 }}>
-              Exports
-            </h2>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '2.8rem',
+          }}
+        >
+          {examples.length > 0 && (
             <div
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '2rem',
+                gap: '1.6rem',
               }}
             >
-              {exportedTypes.map((type) => {
-                const isActive = singlePackage.pathname === type.pathname
-                return (
-                  <div
-                    key={type.name}
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                    }}
-                  >
+              <h2 id="examples" style={{ margin: 0 }}>
+                Examples
+              </h2>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '2rem',
+                }}
+              >
+                {examples.map((example) => (
+                  <a key={example.slug} href={`/example/${example.pathname}`}>
+                    <h3>{example.name}</h3>
+                    <example.moduleExport />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+          {exportedTypes.length > 0 && (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '1.6rem',
+              }}
+            >
+              <h2 id="exports" style={{ margin: 0 }}>
+                Exports
+              </h2>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '2rem',
+                }}
+              >
+                {exportedTypes.map((type) => {
+                  const isActive = singlePackage.pathname === type.pathname
+                  return (
                     <div
+                      key={type.name}
                       style={{
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: '0.5rem',
                       }}
                     >
                       <div
                         style={{
                           display: 'flex',
-                          alignItems: 'baseline',
+                          flexDirection: 'column',
                           gap: '0.5rem',
                         }}
                       >
-                        {isActive ? (
-                          <h3 id={type.slug} style={{ margin: 0 }}>
-                            {type.name}
-                          </h3>
-                        ) : (
-                          <a href={type.pathname}>
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'baseline',
+                            gap: '0.5rem',
+                          }}
+                        >
+                          {isActive ? (
                             <h3 id={type.slug} style={{ margin: 0 }}>
                               {type.name}
                             </h3>
-                          </a>
-                        )}
+                          ) : (
+                            <a href={type.pathname}>
+                              <h3 id={type.slug} style={{ margin: 0 }}>
+                                {type.name}
+                              </h3>
+                            </a>
+                          )}
 
-                        {isActive && type.sourcePath && (
-                          <a
-                            href={type.sourcePath}
-                            target="_blank"
-                            rel="noreferrer"
-                            style={{ fontSize: 'var(--font-size-body-2)' }}
-                          >
-                            View Source
-                          </a>
-                        )}
+                          {isActive && type.sourcePath && (
+                            <a
+                              href={type.sourcePath}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{ fontSize: 'var(--font-size-body-2)' }}
+                            >
+                              View Source
+                            </a>
+                          )}
+                        </div>
+                        {type.description ? (
+                          <p style={{ margin: 0 }}>{type.description}</p>
+                        ) : null}
                       </div>
-                      {type.description ? (
-                        <p style={{ margin: 0 }}>{type.description}</p>
+
+                      {isActive && type.types.length > 0 ? (
+                        <>
+                          <h4 style={{ margin: '1rem 0 0' }}>
+                            {type.isComponent ? 'Props' : 'Types'}
+                          </h4>
+
+                          <Props
+                            props={type.types}
+                            isComponent={type.isComponent}
+                          />
+                        </>
                       ) : null}
                     </div>
-
-                    {isActive && type.types.length > 0 ? (
-                      <>
-                        <h4 style={{ margin: '1rem 0 0' }}>
-                          {type.isComponent ? 'Props' : 'Types'}
-                        </h4>
-
-                        <Props
-                          props={type.types}
-                          isComponent={type.isComponent}
-                        />
-                      </>
-                    ) : null}
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         <SiblingLinks
           previous={singlePackage.previous}

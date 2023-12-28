@@ -13,13 +13,14 @@ const typeSlugs = new Slugger()
 
 export type Module = {
   Content?: ComponentType
+  examples: (Awaited<ModuleData['examples']>[number] & { pathname: string })[]
   pathname: string
   codeBlocks: CodeBlocks
   frontMatter?: Record<string, any>
   headings: Headings
   summary: string
   metadata?: { title: string; description: string }
-} & Omit<ModuleData, 'mdxPath' | 'tsPath'>
+} & Omit<ModuleData, 'mdxPath' | 'tsPath' | 'examples'>
 
 /**
  * Loads content and metadata related to MDX and TypeScript files.
@@ -83,7 +84,7 @@ export function createDataSource<Type>(
   })
 
   /** Parses and attaches metadata to a module. */
-  async function getModule(pathname?: string) {
+  async function getModule(pathname?: string, isActive?: boolean) {
     if (pathname === undefined) {
       return null
     }
@@ -103,6 +104,27 @@ export function createDataSource<Type>(
     } = data.mdxPath
       ? await allModules[data.mdxPath]
       : { default: undefined, metadata: undefined, frontMatter: undefined }
+
+    /** Append example links to headings data. */
+    const examples = (isActive ? await data.examples : []).map((example) => ({
+      ...example,
+      pathname: join(pathname, example.slug),
+    }))
+    if (examples.length > 0) {
+      headings = [
+        ...(headings || []),
+        {
+          text: 'Examples',
+          id: 'examples',
+          depth: 2,
+        },
+        ...examples.map((example) => ({
+          text: example.name,
+          id: example.slug,
+          depth: 3,
+        })),
+      ]
+    }
 
     /** Append component prop type links to headings data. */
     if (data.exportedTypes.length > 0) {
@@ -135,9 +157,9 @@ export function createDataSource<Type>(
       label: data.label,
       description: data.description,
       exportedTypes: data.exportedTypes,
-      examples: data.examples,
       sourcePath: data.sourcePath,
       Content,
+      examples,
       pathname,
       frontMatter,
       headings,
@@ -168,7 +190,7 @@ export function createDataSource<Type>(
     }
 
     const [active, previous, next] = await Promise.all([
-      getModule(stringPathname),
+      getModule(stringPathname, true),
       getModule(getSiblingPathname(activeIndex, -1)),
       getModule(getSiblingPathname(activeIndex, 1)),
     ])
@@ -278,8 +300,7 @@ export function createDataSource<Type>(
       }
 
       const exampleSlug = slug.slice(2).at(0)!
-      const examples = await dataItem.examples
-      return examples?.find((example) => example.slug === exampleSlug)
+      return dataItem.examples.find((example) => example.slug === exampleSlug)
     },
 
     /** Returns paths for all module examples. */
