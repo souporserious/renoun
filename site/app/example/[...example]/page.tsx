@@ -5,15 +5,9 @@ import { getSiteMetadata } from 'utils/get-site-metadata'
 export const dynamic = 'force-static'
 
 export async function generateStaticParams() {
-  const allPaths = allPackages.paths()
-  const allPackageData = await allPackages.all()
-  const allExamples = await Promise.all(
-    Object.values(allPackageData).map((data) => data.examples)
-  )
-
-  return allExamples.flatMap((examples, index) =>
-    examples.map((example) => [...allPaths[index], example.name.toLowerCase()])
-  )
+  return (await allPackages.examplePaths()).map((pathname) => ({
+    example: pathname,
+  }))
 }
 
 export async function generateMetadata({

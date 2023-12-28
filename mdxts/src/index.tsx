@@ -263,6 +263,21 @@ export function createDataSource<Type>(
           .filter(Boolean)
       )
     },
+
+    /** Returns helpers for working with examples. */
+    async examplePaths() {
+      const allPaths = this.paths()
+      const allData = await this.all()
+      const allExamples = await Promise.all(
+        Object.values(allData).map((data) => data.examples)
+      )
+      return allExamples.flatMap((examples, index) =>
+        examples.map((example) => [
+          ...allPaths[index],
+          example.name.toLowerCase(),
+        ])
+      )
+    },
   }
 }
 
