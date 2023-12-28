@@ -149,7 +149,7 @@ export function createDataSource<Type>(
   async function getPathData(
     /** The pathname of the active page. */
     pathname: string | string[]
-  ): Promise<(Module & { previous?: Module; next?: Module }) | null> {
+  ): Promise<(Module & { previous?: Module; next?: Module }) | undefined> {
     const stringPathname = Array.isArray(pathname)
       ? pathname.join(sep)
       : pathname
@@ -174,7 +174,7 @@ export function createDataSource<Type>(
     ])
 
     if (active === null) {
-      return null
+      return
     }
 
     return Object.assign(active, { previous, next }) as Module &

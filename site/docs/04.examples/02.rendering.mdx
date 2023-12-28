@@ -72,7 +72,7 @@ export default async function Page({
 }) {
   const component = await allComponents.get(params.component)
 
-  if (component === null) {
+  if (component === undefined) {
     return notFound()
   }
 

@@ -83,7 +83,7 @@ type Props = { params: { slug: string } }
 export default async function Page({ params }: Props) {
   const doc = await allDocs.get(params.slug)
 
-  if (doc === null) {
+  if (doc === undefined) {
     return notFound()
   }
 
@@ -106,7 +106,7 @@ const allComponents = createDataSource('components/**/*.tsx')
 export default async function Page({ params }: Props) {
   const component = await allComponents.get(params.slug)
 
-  if (component === null) {
+  if (component === undefined) {
     return notFound()
   }
 

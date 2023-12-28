@@ -21,7 +21,7 @@ type Props = { params: { slug: string } }
 export default async function Page({ params }: Props) {
   const doc = await allDocs.get(params.slug)
 
-  if (doc === null) return notFound()
+  if (doc === undefined) return notFound()
 
   const { Content } = doc
 

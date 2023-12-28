@@ -25,7 +25,7 @@ export async function generateMetadata({
   const exampleSlug = params.example.slice(2).at(0)!
   const component = await allPackages.get(packageSlug)
 
-  if (component === null) {
+  if (component === undefined) {
     return notFound()
   }
 
@@ -52,7 +52,7 @@ export default async function Page({
   const exampleSlug = params.example.slice(2).at(0)!
   const component = await allPackages.get(packageSlug)
 
-  if (component === null) {
+  if (component === undefined) {
     return notFound()
   }
 
