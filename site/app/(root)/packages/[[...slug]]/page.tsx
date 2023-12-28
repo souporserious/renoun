@@ -113,16 +113,59 @@ export default async function Page({ params }: { params: { slug: string } }) {
               </h2>
               <div
                 style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '2rem',
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(11rem, 1fr))',
+                  gridAutoRows: 'minmax(13rem, 1fr)',
+                  gap: '1rem',
                 }}
               >
                 {examples.map((example) => (
-                  <a key={example.slug} href={`/example/${example.pathname}`}>
-                    <h3>{example.name}</h3>
-                    <example.moduleExport />
-                  </a>
+                  <div
+                    key={example.slug}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      position: 'relative',
+                      padding: '0.5rem',
+                      gap: '0.5rem',
+                      borderRadius: '0.25rem',
+                      backgroundColor: 'var(--color-surface-2)',
+                    }}
+                  >
+                    <h3 style={{ margin: 0 }}>{example.name}</h3>
+                    <div
+                      style={{
+                        flex: 1,
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        overflow: 'hidden',
+                        translate: 0, // put on compositor so overflow works
+                      }}
+                    >
+                      <div
+                        style={{
+                          [String('--scale')]: 0.35,
+                          position: 'absolute',
+                          top: '50%',
+                          left: '50%',
+                          transform: `scale(var(--scale)) translate(-50%, -50%)`,
+                          transformOrigin: 'top left',
+                          maxWidth: 'calc(100% / var(--scale))',
+                          width: 'max-content',
+                        }}
+                      >
+                        <example.moduleExport />
+                      </div>
+                    </div>
+                    <a
+                      href={`/example/${example.pathname}`}
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                      }}
+                    />
+                  </div>
                 ))}
               </div>
             </div>
