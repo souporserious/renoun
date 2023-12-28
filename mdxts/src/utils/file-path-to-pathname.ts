@@ -43,7 +43,7 @@ export function filePathToPathname(
     segments.pop()
   }
 
-  // Convert component names to kebab case for case-insensitive paths
+  // Convert camel case names to kebab case for case-insensitive paths
   parsedFilePath = segments
     .map((segment) => (/[A-Z]/.test(segment[0]) ? kebabCase(segment) : segment))
     .filter(Boolean)

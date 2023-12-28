@@ -279,9 +279,7 @@ export function createDataSource<Type>(
 
       const exampleSlug = slug.slice(2).at(0)!
       const examples = await dataItem.examples
-      return examples?.find(
-        (example) => example.name.toLowerCase() === exampleSlug
-      )
+      return examples?.find((example) => example.slug === exampleSlug)
     },
 
     /** Returns paths for all module examples. */
@@ -292,10 +290,7 @@ export function createDataSource<Type>(
         Object.values(allData).map((data) => data.examples)
       )
       return allExamples.flatMap((examples, index) =>
-        examples.map((example) => [
-          ...allPaths[index],
-          example.name.toLowerCase(),
-        ])
+        examples.map((example) => [...allPaths[index], example.slug])
       )
     },
   }
