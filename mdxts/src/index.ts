@@ -162,7 +162,6 @@ export function createDataSource<Type>(
       sourcePath: data.sourcePath,
       Content,
       examples,
-      pathname,
       frontMatter,
       headings,
       metadata,

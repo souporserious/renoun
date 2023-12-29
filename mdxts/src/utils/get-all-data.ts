@@ -1,5 +1,5 @@
 import parseTitle from 'title'
-import { basename, join, resolve } from 'node:path'
+import { basename, join, resolve, sep } from 'node:path'
 import { readPackageUpSync } from 'read-package-up'
 import type { Project, SourceFile } from 'ts-morph'
 import { getSymbolDescription, resolveExpression } from '@tsxmod/utils'
@@ -26,6 +26,7 @@ export type ModuleData = {
   order?: number
   mdxPath?: string
   tsPath?: string
+  pathname: string
   sourcePath: string
   isMainExport?: boolean
   isServerOnly?: boolean
@@ -102,14 +103,18 @@ export function getAllData({
         : path.endsWith('.md') || path.endsWith('.mdx')
           ? 'md'
           : null
-    const pathname = filePathToPathname(
+    const pathnameKey = filePathToPathname(
       path,
       baseDirectory,
       basePathname,
       packageName
     )
+    const pathname =
+      basePathname === pathnameKey
+        ? join(sep, basePathname)
+        : join(sep, basePathname, pathnameKey)
     const order = getSortOrder(basename(path))
-    const previouseData = allData[pathname]
+    const previouseData = allData[pathnameKey]
     const sourceFile = project.addSourceFileAtPath(path)
     const sourceFileTitle = getSourceFileTitle(sourceFile)
     const sourcePath = getSourcePath(path)
@@ -153,7 +158,7 @@ export function getAllData({
         }
       )
       const examples = getExamplesFromSourceFile(sourceFile, allModules)
-      const isMainExport = pathname === packageName
+      const isMainExport = pathnameKey === packageName
       const isServerOnly = sourceFile
         .getImportDeclarations()
         .some((importDeclaration) => {
@@ -179,7 +184,7 @@ export function getAllData({
         }
       }
 
-      allData[pathname] = {
+      allData[pathnameKey] = {
         ...previouseData,
         tsPath: path,
         exportedTypes,
@@ -189,13 +194,14 @@ export function getAllData({
         description,
         isMainExport,
         isServerOnly,
+        pathname,
         sourcePath,
       }
     }
 
     /** Handle MDX content */
     if (type === 'md') {
-      allData[pathname] = {
+      allData[pathnameKey] = {
         ...previouseData,
         mdxPath: path,
         exportedTypes: previouseData?.exportedTypes || [],
@@ -204,6 +210,7 @@ export function getAllData({
         title,
         label,
         order,
+        pathname,
         sourcePath,
       }
     }
