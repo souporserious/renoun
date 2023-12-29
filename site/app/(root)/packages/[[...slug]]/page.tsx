@@ -115,7 +115,6 @@ export default async function Page({ params }: { params: { slug: string } }) {
                 style={{
                   display: 'grid',
                   gridTemplateColumns: 'repeat(auto-fill, minmax(11rem, 1fr))',
-                  gridAutoRows: 'minmax(13rem, 1fr)',
                   gap: '1rem',
                 }}
               >
@@ -132,30 +131,29 @@ export default async function Page({ params }: { params: { slug: string } }) {
                       backgroundColor: 'var(--color-surface-2)',
                     }}
                   >
-                    <h3 style={{ margin: 0 }}>{example.name}</h3>
+                    <h3 style={{ flexShrink: 0, margin: 0 }}>{example.name}</h3>
                     <div
                       style={{
-                        flex: 1,
-                        display: 'flex',
-                        justifyContent: 'center',
-                        alignItems: 'center',
+                        height: '10rem',
+                        padding: '1rem',
                         overflow: 'hidden',
-                        translate: 0, // put on compositor so overflow works
+                        backgroundColor: 'var(--color-background)',
+                        border: '1px solid var(--color-separator)',
                       }}
                     >
                       <div
                         style={{
-                          [String('--scale')]: 0.35,
-                          position: 'absolute',
-                          top: '50%',
-                          left: '50%',
-                          transform: `scale(var(--scale)) translate(-50%, -50%)`,
+                          [String('--scale')]: 0.4,
+                          display: 'flex',
                           transformOrigin: 'top left',
-                          maxWidth: 'calc(100% / var(--scale))',
-                          width: 'max-content',
+                          scale: 'var(--scale)',
+                          width: 'calc(100% / var(--scale))',
+                          height: 'calc(100% / var(--scale))',
                         }}
                       >
-                        <example.moduleExport />
+                        <div style={{ margin: 'auto' }}>
+                          <example.moduleExport />
+                        </div>
                       </div>
                     </div>
                     <a
