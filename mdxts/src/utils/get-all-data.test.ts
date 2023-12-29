@@ -22,12 +22,14 @@ describe('getAllData', () => {
 
     project.createSourceFile(
       'components/Button.tsx',
-      `/** Used for any type of user action, including navigation. */\nexport function Button() {}`
+      `/** Used for any type of user action, including navigation. */\nexport function Button() {}`,
+      { overwrite: true }
     )
 
     project.createSourceFile(
       'components/Button.mdx',
-      `# Button\n\nButtons allow for users to take actions in your application.`
+      `# Button\n\nButtons allow for users to take actions in your application.`,
+      { overwrite: true }
     )
 
     const allData = getAllData({

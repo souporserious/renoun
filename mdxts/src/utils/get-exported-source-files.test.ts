@@ -7,15 +7,18 @@ describe('getExportedSourceFiles', () => {
   it('gets exported source files', () => {
     project.createSourceFile(
       `src/components/Button.tsx`,
-      `export function Button() {}`
+      `export function Button() {}`,
+      { overwrite: true }
     )
     project.createSourceFile(
       `src/components/Menu.tsx`,
-      `export function Menu() {}`
+      `export function Menu() {}`,
+      { overwrite: true }
     )
     const sourceFile = project.createSourceFile(
       'src/index.ts',
-      `export * from './components/Menu'`
+      `export * from './components/Menu'`,
+      { overwrite: true }
     )
     const [exportedSourceFile] = getExportedSourceFiles([sourceFile])
 
