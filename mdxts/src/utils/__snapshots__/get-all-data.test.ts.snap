@@ -1,0 +1,16 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`getAllData should initialize correctly with basic input 1`] = `
+{
+  "button": {
+    "description": undefined,
+    "examples": [],
+    "exportedTypes": [],
+    "label": "Button",
+    "mdxPath": "/components/Button.mdx",
+    "order": undefined,
+    "sourcePath": "",
+    "title": "Button",
+  },
+}
+`;

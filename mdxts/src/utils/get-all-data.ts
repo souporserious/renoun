@@ -1,10 +1,9 @@
 import parseTitle from 'title'
 import { basename, join, resolve } from 'node:path'
 import { readPackageUpSync } from 'read-package-up'
-import type { SourceFile } from 'ts-morph'
+import type { Project, SourceFile } from 'ts-morph'
 import { getSymbolDescription, resolveExpression } from '@tsxmod/utils'
 
-import { project } from '../components/project'
 import { getSourcePath } from '../utils/get-source-path'
 import { findCommonRootPath } from './find-common-root-path'
 import { filePathToPathname } from './file-path-to-pathname'
@@ -44,6 +43,7 @@ export type ModuleData = {
 export function getAllData({
   allModules,
   globPattern,
+  project,
   baseDirectory,
   basePathname = '',
 }: {
@@ -52,6 +52,9 @@ export function getAllData({
 
   /** The glob pattern used to calculate `allModules`. */
   globPattern: string
+
+  /** The ts-morph project to use for parsing source files. */
+  project: Project
 
   /** The base directory to use when calculating source paths. */
   baseDirectory?: string

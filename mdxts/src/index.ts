@@ -4,6 +4,7 @@ import type { ComponentType } from 'react'
 import { basename, dirname, extname, join, resolve, sep } from 'node:path'
 import 'server-only'
 
+import { project } from './components/project'
 import type { CodeBlocks } from './remark/add-code-blocks'
 import type { Headings } from './remark/add-headings'
 import type { AllModules, ModuleData } from './utils/get-all-data'
@@ -67,6 +68,7 @@ export function createDataSource<Type>(
   const allData = getAllData({
     allModules,
     globPattern,
+    project,
     baseDirectory,
     basePathname,
   })
