@@ -27,7 +27,7 @@ export function getGitFileUrl(
       break
 
     default:
-      throw new Error('Git provider not recognized. Returning base file URL.')
+      throw new Error(`Git provider not recognized for ${normalizedUrl}`)
   }
 
   return fileUrl
