@@ -1,4 +1,6 @@
+import { join, sep } from 'node:path'
 import { findRootSync } from '@manypkg/find-root'
+
 import { getEditorPath } from './get-editor-path'
 import { getGitFileUrl } from './get-git-file-url'
 
@@ -11,8 +13,15 @@ export function getSourcePath(path: string, line?: number, column?: number) {
   if (process.env.NODE_ENV === 'development') {
     return getEditorPath({ path, line, column })
   }
-  if (rootDirectory === null) {
-    rootDirectory = findRootSync(process.cwd()).rootDir
+  if (process.env.NODE_ENV === 'production') {
+    if (rootDirectory === null) {
+      rootDirectory = findRootSync(process.cwd()).rootDir
+    }
+    return getGitFileUrl(
+      path.replace(join(rootDirectory, sep), ''),
+      line,
+      column
+    )
   }
-  return getGitFileUrl(path.replace(`${rootDirectory}/`, ''), line, column)
+  return ''
 }
