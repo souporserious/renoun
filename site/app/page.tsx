@@ -75,7 +75,7 @@ export default function Home() {
               }}
             >
               <Link
-                href="/getting-started"
+                href="/docs/getting-started"
                 style={{
                   padding: '0.5rem 1rem',
                   border: '1px solid #3F687E',

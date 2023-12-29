@@ -2,6 +2,7 @@ import { createDataSource } from 'mdxts'
 
 export const allDocs = createDataSource('docs/**/*.mdx', {
   baseDirectory: 'docs',
+  basePathname: 'docs',
 })
 
 export const allComponents = createDataSource('../mdxts/src/components/*.tsx', {

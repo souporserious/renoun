@@ -157,7 +157,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
                       </div>
                     </div>
                     <a
-                      href={`/example/${example.pathname}`}
+                      href={`/examples/${example.pathname}`}
                       style={{
                         position: 'absolute',
                         inset: 0,
