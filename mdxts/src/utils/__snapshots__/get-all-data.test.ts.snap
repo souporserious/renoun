@@ -9,6 +9,7 @@ exports[`getAllData should initialize correctly with basic input 1`] = `
     "label": "Button",
     "mdxPath": "/components/Button.mdx",
     "order": undefined,
+    "pathname": "/button",
     "sourcePath": "",
     "title": "Button",
   },
