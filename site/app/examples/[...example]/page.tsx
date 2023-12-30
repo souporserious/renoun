@@ -45,6 +45,7 @@ export default async function Page({
         display: 'grid',
         placeItems: 'center',
         height: '100dvh',
+        padding: '2rem',
         overflow: 'auto',
       }}
     >
