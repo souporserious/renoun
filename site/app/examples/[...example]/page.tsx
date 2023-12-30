@@ -37,8 +37,6 @@ export default async function Page({
     return notFound()
   }
 
-  const Component = example.moduleExport
-
   return (
     <div
       style={{
@@ -47,9 +45,23 @@ export default async function Page({
         height: '100dvh',
         padding: '2rem',
         overflow: 'auto',
+        position: 'relative',
       }}
     >
-      <Component />
+      <a
+        href={example.sourcePath}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          fontSize: 'var(--font-size-body-3)',
+          position: 'absolute',
+          top: '1rem',
+          right: '1rem',
+        }}
+      >
+        View Source
+      </a>
+      <example.moduleExport />
     </div>
   )
 }

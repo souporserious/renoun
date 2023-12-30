@@ -1,6 +1,8 @@
 import type { Directory, SourceFile } from 'ts-morph'
 import { kebabCase } from 'case-anything'
 
+import { getSourcePath } from './get-source-path'
+
 /** Gathers examples from a source file with the same base name and `.examples` extension. */
 export function getExamplesFromExtension(sourceFile: SourceFile) {
   const exampleSourceFile = sourceFile
@@ -42,6 +44,9 @@ export type ExampleItem = {
 
   /** The slug for the example. */
   slug: string
+
+  /** The path to the example source file. */
+  sourcePath: string
 }
 
 /** Gathers examples from a source file. */
@@ -80,14 +85,19 @@ function parseExamplesFromModule(
   const exportedDeclarations = sourceFile.getExportedDeclarations()
   const examples: ExampleItem[] = []
 
-  Array.from(exportedDeclarations.keys()).forEach((name) => {
-    const moduleExport = moduleImport[name]
-    examples.push({
-      name,
-      moduleExport,
-      slug: kebabCase(name),
-    })
-  })
+  Array.from(exportedDeclarations.entries()).forEach(
+    ([name, [exportedDeclaration]]) => {
+      const moduleExport = moduleImport[name]
+      const line = exportedDeclaration.getStartLineNumber()
+      const column = exportedDeclaration.getStartLinePos()
+      examples.push({
+        name,
+        moduleExport,
+        slug: kebabCase(name),
+        sourcePath: getSourcePath(sourceFile.getFilePath(), line, column),
+      })
+    }
+  )
 
   return examples
 }
