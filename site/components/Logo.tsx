@@ -1,10 +1,12 @@
 export function Logo() {
   return (
     <svg
-      height="24"
       viewBox="0 0 93 27"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
+      style={{
+        height: 'var(--font-size-body-1)',
+      }}
     >
       <path
         d="M47 8.02295L57 26.023L37 26.023L47 8.02295Z"

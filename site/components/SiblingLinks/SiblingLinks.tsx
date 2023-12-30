@@ -42,11 +42,12 @@ function SiblingLink({
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
         {direction === 'previous' ? (
           <svg
-            width="24"
-            height="24"
             viewBox="0 0 24 24"
             fill="none"
-            xmlns="http://www.w3.org/2000/svg"
+            style={{
+              width: 'var(--font-size-body-2)',
+              height: 'var(--font-size-body-2)',
+            }}
           >
             <path
               d="M14 6L8 12L14 18"
@@ -60,11 +61,12 @@ function SiblingLink({
         <span>{module.title}</span>
         {direction === 'next' ? (
           <svg
-            width="24"
-            height="24"
             viewBox="0 0 24 24"
             fill="none"
-            xmlns="http://www.w3.org/2000/svg"
+            style={{
+              width: 'var(--font-size-body-2)',
+              height: 'var(--font-size-body-2)',
+            }}
           >
             <path
               d="M10 18L16 12L10 6"
