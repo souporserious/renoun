@@ -102,7 +102,7 @@ export function createDataSource<Type>(
       headings = [],
       metadata,
       frontMatter,
-      ...exports
+      ...moduleExports
     } = data.mdxPath
       ? await allModules[data.mdxPath]
       : { default: undefined, metadata: undefined, frontMatter: undefined }
@@ -159,13 +159,14 @@ export function createDataSource<Type>(
       label: data.label,
       description: data.description,
       exportedTypes: data.exportedTypes,
+      pathname: data.pathname,
       sourcePath: data.sourcePath,
       Content,
       examples,
       frontMatter,
       headings,
       metadata,
-      ...exports,
+      ...moduleExports,
     } as Module & Type
   }
 

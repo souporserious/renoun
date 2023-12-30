@@ -147,11 +147,15 @@ export function getAllData({
           const pathname = filePathToPathname(
             filePath,
             baseDirectory,
-            basePathname
+            basePathname,
+            packageName
           )
           return {
             ...fileExport,
-            pathname,
+            pathname:
+              basePathname === pathname
+                ? join(sep, basePathname)
+                : join(sep, basePathname, pathname),
             sourcePath: getSourcePath(filePath),
             isMainExport: filePath === path,
           }
