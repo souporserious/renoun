@@ -128,5 +128,21 @@ export function useMDXComponents() {
         />
       )
     },
+    code: (props) => {
+      if (typeof props.children !== 'string') {
+        return <code {...props} />
+      }
+
+      return (
+        <Code
+          inline
+          paddingHorizontal="0.25rem"
+          paddingVertical="0.1rem"
+          value={props.children}
+          language="typescript"
+          className={GeistMono.className}
+        />
+      )
+    },
   } satisfies MDXComponents
 }
