@@ -36,7 +36,7 @@ export default async function loader(
       source =
         `import theme from '${relativeThemePath}';\n${source}`.replaceAll(
           '<Code',
-          '<Code theme={theme}'
+          `<Code theme={theme} workingDirectory="${workingDirectory}"`
         )
     } else {
       source = `import { setTheme } from 'mdxts';\nimport theme from '${relativeThemePath}';\nsetTheme(theme);\n${source}`

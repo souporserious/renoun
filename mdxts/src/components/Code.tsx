@@ -125,7 +125,7 @@ export async function Code({
   if ('source' in props) {
     if (!props.workingDirectory) {
       throw new Error(
-        'The [workingDirectory] prop was not provided to the [Code] component. Make sure the mdxts/remark plugin is configured correctly.'
+        'The [workingDirectory] prop was not provided to the [Code] component. Make sure the mdxts/remark plugin and mdxts/loader are configured correctly.'
       )
     }
 
