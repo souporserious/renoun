@@ -27,14 +27,14 @@ export function CodeToolbar({
         display: 'grid',
         gridTemplateColumns: '1fr auto',
         alignItems: 'center',
-        height: '40px',
+        height: '3rem',
         borderBottom: '1px solid #293742',
       }}
     >
       {filename ? (
         <div
           style={{
-            fontSize: 'var(--font-size-body-2)',
+            fontSize: 'var(--font-size-body-3)',
             padding: '0.5rem 1rem',
           }}
         >
@@ -59,8 +59,8 @@ export function CodeToolbar({
             style={{ display: 'flex', padding: '0.35rem' }}
           >
             <svg
-              width="16"
-              height="16"
+              width="1rem"
+              height="1rem"
               viewBox="0 0 24 24"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
@@ -116,8 +116,8 @@ export function CodeToolbar({
           }}
         >
           <svg
-            width="16"
-            height="16"
+            width="1rem"
+            height="1rem"
             viewBox="0 0 24 24"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
