@@ -58,9 +58,9 @@ export function QuickInfo({
       style={{
         pointerEvents: 'auto',
         position: 'absolute',
-        translate: '0px -100%',
-        fontSize: 13,
-        lineHeight: '20px',
+        translate: '0 -100%',
+        fontSize: '0.875rem',
+        lineHeight: '1.4rem',
         maxWidth: 540,
         overflow: 'auto',
         zIndex: 1000,
@@ -73,7 +73,7 @@ export function QuickInfo({
         <>
           <div
             style={{
-              padding: '4px 8px',
+              padding: '0.25rem 0.5rem',
               color: theme.colors['editorHoverWidget.foreground'],
             }}
           >
@@ -95,7 +95,7 @@ export function QuickInfo({
           />
         </>
       ) : null}
-      <div style={{ padding: '4px 8px' }}>
+      <div style={{ padding: '0.25rem 0.5rem' }}>
         {displayTextTokens.map((line, index) => (
           <Fragment key={index}>
             {index === 0 ? null : '\n'}
@@ -119,7 +119,14 @@ export function QuickInfo({
               left: 0,
             }}
           />
-          <p style={{ fontSize: 'inherit', padding: '4px 8px', margin: 0 }}>
+          <p
+            style={{
+              fontSize: 'inherit',
+              lineHeight: 'inherit',
+              padding: '0.25rem 0.5rem',
+              margin: 0,
+            }}
+          >
             {docText}
           </p>
         </>
@@ -130,7 +137,7 @@ export function QuickInfo({
           style={{
             display: 'flex',
             justifyContent: 'end',
-            padding: '4px 8px',
+            padding: '0.25rem 0.5rem',
           }}
         >
           <button
@@ -140,7 +147,7 @@ export function QuickInfo({
               fontSize: 'var(--font-size-body-2)',
               padding: '0.25rem 0.5rem',
               border: '1px solid #0479df',
-              borderRadius: '6px',
+              borderRadius: '0.3rem',
               background: '#1871be',
               color: 'white',
             }}
