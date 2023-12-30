@@ -30,5 +30,11 @@ export function Basic() {
 }
 
 export function Inline() {
-  return <Code inline value="const x = 123" language="typescript" />
+  return (
+    <p>
+      In React,{' '}
+      <Code inline value="<span style={{ color: 'blue' }}>" language="tsx" />{' '}
+      changes the color of the text to blue.
+    </p>
+  )
 }

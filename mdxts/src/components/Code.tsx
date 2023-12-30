@@ -137,7 +137,8 @@ export async function Code({
   const isJavaScriptLanguage = ['js', 'jsx', 'ts', 'tsx'].includes(
     finalLanguage
   )
-  const jsxOnly = isJavaScriptLanguage ? isJsxOnly(finalValue) : false
+  const jsxOnly =
+    !inline && isJavaScriptLanguage ? isJsxOnly(finalValue) : false
   let filename = 'source' in props ? props.source : filenameProp
   let sourceFile: SourceFile | undefined
 
@@ -147,10 +148,14 @@ export async function Code({
 
   // Format JavaScript code blocks.
   if (isJavaScriptLanguage) {
-    const config = (await resolveConfig(filename)) || {}
-    config.filepath = filename
-    config.printWidth = 80
-    finalValue = await format(finalValue, config)
+    try {
+      const config = (await resolveConfig(filename)) || {}
+      config.filepath = filename
+      config.printWidth = 80
+      finalValue = await format(finalValue, config)
+    } catch (error) {
+      // Ignore formatting errors.
+    }
 
     // Trim semicolon and trailing newline from formatting.
     if (jsxOnly) {

@@ -73,10 +73,10 @@ export function CodeView({
   baseDirectory,
   edit,
   value,
-  padding = '1rem',
+  inline,
+  padding = inline ? '0.25rem' : '1rem',
   paddingHorizontal = padding,
   paddingVertical = padding,
-  inline,
   allowErrors,
 }: CodeProps & {
   row?: number[] | null
@@ -96,15 +96,17 @@ export function CodeView({
     ? getSymbolBounds(sourceFile, isJsxOnly, lineHeight)
     : []
   const shouldHighlightLine = calculateLinesToHighlight(highlight)
-  const diagnostics = allowErrors
-    ? []
-    : sourceFile
-      ? sourceFile.getPreEmitDiagnostics()
-      : []
+  const diagnostics =
+    allowErrors || inline
+      ? []
+      : sourceFile
+        ? sourceFile.getPreEmitDiagnostics()
+        : []
+  const Element = inline ? 'span' : 'div'
   const Container = isNestedInEditor
     ? React.Fragment
     : (props: Record<string, unknown>) => (
-        <div
+        <Element
           style={{
             display: inline ? 'inline-grid' : 'grid',
             gridTemplateColumns: 'auto minmax(0, 1fr)',
@@ -114,6 +116,7 @@ export function CodeView({
             border: `1px solid ${theme.colors['contrastBorder']}`,
             backgroundColor: theme.colors['editor.background'],
             color: theme.colors['editor.foreground'],
+            verticalAlign: inline ? 'middle' : undefined,
           }}
           {...props}
         />
@@ -136,7 +139,7 @@ export function CodeView({
         />
       ) : null}
 
-      {lineNumbers ? (
+      {!inline && lineNumbers ? (
         <div
           className={className}
           style={{
@@ -178,6 +181,7 @@ export function CodeView({
       ) : null}
 
       <Pre
+        inline={inline}
         isNestedInEditor={isNestedInEditor}
         className={className}
         style={{ gridRow: filename ? 2 : 1 }}
@@ -216,7 +220,8 @@ export function CodeView({
             })
           : null}
 
-        {filename &&
+        {!inline &&
+          filename &&
           language &&
           symbolBounds.map((bounds, index) => {
             const filteredDiagnostics = diagnostics.filter((diagnostic) => {
@@ -256,8 +261,9 @@ export function CodeView({
             )
           })}
 
-        <div
+        <Element
           style={{
+            display: inline ? 'inline-block' : 'block',
             paddingTop: paddingVertical,
             paddingBottom: paddingVertical,
             paddingLeft: paddingHorizontal,
@@ -287,7 +293,7 @@ export function CodeView({
               {lineIndex === tokens.length - 1 ? null : '\n'}
             </Fragment>
           ))}
-        </div>
+        </Element>
 
         {highlight
           ? highlight
