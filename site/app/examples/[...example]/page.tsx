@@ -31,9 +31,10 @@ export default async function Page({
 }: {
   params: { example: string[] }
 }) {
+  const singlePackage = await allPackages.get(params.example.slice(0, -1))
   const example = await allPackages.getExample(params.example)
 
-  if (example === undefined) {
+  if (singlePackage === undefined || example === undefined) {
     return notFound()
   }
 
@@ -48,6 +49,32 @@ export default async function Page({
         position: 'relative',
       }}
     >
+      <a
+        href={singlePackage.pathname}
+        style={{
+          fontSize: 'var(--font-size-body-3)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.25rem',
+          position: 'absolute',
+          top: '1rem',
+          left: '1rem',
+        }}
+      >
+        <svg
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          viewBox="0 0 24 24"
+          width="1rem"
+          height="1rem"
+        >
+          <path d="M15 18l-6-6 6-6" />
+        </svg>
+        <span>
+          Back to <strong>{singlePackage.label}</strong>
+        </span>
+      </a>
       <a
         href={example.sourcePath}
         target="_blank"
