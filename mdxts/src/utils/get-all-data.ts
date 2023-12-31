@@ -256,7 +256,7 @@ function getSourceFileTitle(sourceFile: SourceFile) {
     .replace(/\d+\.?/g, '')
   const title = /(readme|index)$/i.test(filename)
     ? parseTitle(sourceFile.getDirectory().getBaseName())
-    : /^[A-Z][a-zA-Z0-9]*$/.test(filename) // don't parse if PascalCase
+    : /^[A-Za-z][a-zA-Z0-9]*$/.test(filename) // match both PascalCase and camelCase
       ? filename
       : parseTitle(filename)
   return title.replace(/-/g, ' ') // replace dashes with spaces
