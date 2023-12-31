@@ -161,6 +161,8 @@ export function createDataSource<Type>(
       exportedTypes: data.exportedTypes,
       pathname: data.pathname,
       sourcePath: data.sourcePath,
+      previous: data.previous,
+      next: data.next,
       Content,
       examples,
       frontMatter,
@@ -168,44 +170,6 @@ export function createDataSource<Type>(
       metadata,
       ...moduleExports,
     } as Module & Type
-  }
-
-  async function getPathData(
-    /** The pathname of the active page. */
-    pathname: string | string[]
-  ): Promise<(Module & { previous?: Module; next?: Module }) | undefined> {
-    const stringPathname = Array.isArray(pathname)
-      ? pathname.join(sep)
-      : pathname
-    const activeIndex = filteredDataKeys.findIndex((dataPathname) =>
-      dataPathname.includes(stringPathname)
-    )
-
-    function getSiblingPathname(startIndex: number, direction: number) {
-      const siblingIndex = startIndex + direction
-      const siblingPathname = filteredDataKeys[siblingIndex]
-
-      if (siblingPathname === null) {
-        return getSiblingPathname(siblingIndex, direction)
-      }
-      return siblingPathname
-    }
-
-    const [active, previous, next] = await Promise.all([
-      getModule(stringPathname, true),
-      getModule(getSiblingPathname(activeIndex, -1)),
-      getModule(getSiblingPathname(activeIndex, 1)),
-    ])
-
-    if (active === null) {
-      return
-    }
-
-    return Object.assign(active, { previous, next }) as Module &
-      Type & {
-        previous?: Module & Type
-        next?: Module & Type
-      }
   }
 
   return {
@@ -291,8 +255,16 @@ export function createDataSource<Type>(
         pathname = basePathname
       }
 
-      const data = await getPathData(pathname)
-      return data
+      const stringPathname = Array.isArray(pathname)
+        ? pathname.join(sep)
+        : pathname
+      const active = await getModule(stringPathname, true)
+
+      if (active === null) {
+        return
+      }
+
+      return active
     },
 
     /** Returns paths for all modules calculated from file system paths. */

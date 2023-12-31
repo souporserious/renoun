@@ -2,8 +2,8 @@ export function SiblingLinks({
   previous,
   next,
 }: {
-  previous?: { pathname: string; title: string }
-  next?: { pathname: string; title: string }
+  previous?: { pathname: string; label: string }
+  next?: { pathname: string; label: string }
 }) {
   return (
     <nav
@@ -23,7 +23,7 @@ function SiblingLink({
   module,
   direction,
 }: {
-  module?: { pathname: string; title: string }
+  module?: { pathname: string; label: string }
   direction: 'previous' | 'next'
 }) {
   if (!module) {
@@ -58,7 +58,7 @@ function SiblingLink({
             />
           </svg>
         ) : null}
-        <span>{module.title}</span>
+        <span>{module.label}</span>
         {direction === 'next' ? (
           <svg
             viewBox="0 0 24 24"
