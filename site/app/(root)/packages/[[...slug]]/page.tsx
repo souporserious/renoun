@@ -233,7 +233,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
                             </a>
                           )}
                         </div>
-                        {type.description ? (
+                        {!type.isMainExport && type.description ? (
                           <p style={{ margin: 0 }}>{type.description}</p>
                         ) : null}
                       </div>
