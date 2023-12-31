@@ -1,7 +1,7 @@
 import parseTitle from 'title'
 import { join, resolve, sep } from 'node:path'
 import { readPackageUpSync } from 'read-package-up'
-import type { Project, SourceFile } from 'ts-morph'
+import type { Directory, Project, SourceFile } from 'ts-morph'
 import { getSymbolDescription, resolveExpression } from '@tsxmod/utils'
 
 import { getSourcePath } from '../utils/get-source-path'
@@ -71,6 +71,8 @@ export function getAllData({
     ...(typeScriptSourceFiles?.map((file) => file.getFilePath()) ?? []),
   ]
   const commonRootPath = findCommonRootPath(allPaths)
+  const commonDirectory = project.addDirectoryAtPath(commonRootPath)
+  const sourceFilesSortOrder = getDirectorySourceFilesOrder(commonDirectory)
   const packageJson = readPackageUpSync({
     cwd: commonRootPath,
   })?.packageJson
@@ -116,7 +118,7 @@ export function getAllData({
     const previouseData = allData[pathnameKey]
     const sourceFile = project.addSourceFileAtPath(path)
     const sourceFileTitle = getSourceFileTitle(sourceFile)
-    const order = getSourceFileSortOrder(sourceFile)
+    const order = sourceFilesSortOrder[path]
     const sourcePath = getSourcePath(path)
     const metadata = getMetadata(sourceFile)
     let title =
@@ -247,37 +249,6 @@ export function getAllData({
   )
 }
 
-/** Returns the sorting order of a filename, taking into account directory nesting. */
-function getSourceFileSortOrder(sourceFile: SourceFile) {
-  const fileOrderMatch = sourceFile.getBaseNameWithoutExtension().match(/^\d+/)
-  let currentDirectory = sourceFile.getDirectory()
-  let parts: number[] = []
-
-  if (fileOrderMatch) {
-    parts.push(parseInt(fileOrderMatch[0], 10))
-  }
-
-  while (currentDirectory) {
-    const directoryName = currentDirectory.getBaseName()
-    const directoryOrderMatch = directoryName.match(/^\d+/)
-
-    if (directoryOrderMatch) {
-      parts.unshift(parseInt(directoryOrderMatch[0], 10))
-    } else {
-      break
-    }
-
-    const parentDirectory = currentDirectory.getParent()
-    if (parentDirectory) {
-      currentDirectory = parentDirectory
-    } else {
-      break
-    }
-  }
-
-  return parts.length > 0 ? parseFloat(parts.join('.')) : -1
-}
-
 /** Returns the title of a source file based on its filename. */
 function getSourceFileTitle(sourceFile: SourceFile) {
   const filename = sourceFile
@@ -309,4 +280,49 @@ function getMetadata(sourceFile: SourceFile) {
     return metadata as Record<string, any>
   }
   return null
+}
+
+/** Returns a map of source file paths to their sort order. */
+function getDirectorySourceFilesOrder(
+  directory: Directory
+): Record<string, number> {
+  const orderMap: Record<string, string> = {}
+  traverseDirectory(directory, '', orderMap, new Set(), true)
+  return Object.fromEntries(
+    Object.entries(orderMap).map(([key, value]) => [key, parseFloat(value)])
+  )
+}
+
+/** Recursively traverses a directory, adding each file to the order map. */
+function traverseDirectory(
+  directory: Directory,
+  prefix: string,
+  orderMap: Record<string, string>,
+  seenBaseNames: Set<string>,
+  isRoot: boolean = false
+) {
+  let index = 1
+
+  if (!isRoot) {
+    orderMap[directory.getPath()] = prefix.slice(0, -1) // Remove trailing dot from prefix
+  }
+
+  // Iterate through all files in the current directory
+  for (const file of directory.getSourceFiles()) {
+    // Extract the base part of the file name up to the first period e.g. `Button` from `Button.test.tsx`
+    const baseName = file.getBaseName().split('.').at(0)
+    if (baseName && !seenBaseNames.has(baseName)) {
+      orderMap[file.getFilePath()] = `${prefix}${index}`
+      seenBaseNames.add(baseName)
+      index++
+    } else {
+      orderMap[file.getFilePath()] = `${prefix}${index - 1}`
+    }
+  }
+
+  // Iterate through subdirectories
+  for (const subdirectory of directory.getDirectories()) {
+    traverseDirectory(subdirectory, `${prefix}${index}.`, orderMap, new Set())
+    index++
+  }
 }
