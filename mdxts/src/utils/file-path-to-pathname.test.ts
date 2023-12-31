@@ -64,4 +64,16 @@ describe('filePathToUrlPathname', () => {
       )
     ).toBe('components')
   })
+
+  it('handles pascal case filenames', () => {
+    expect(filePathToPathname('src/components/CodeBlock.tsx', 'src')).toBe(
+      'components/code-block'
+    )
+  })
+
+  it('handles camel case filenames', () => {
+    expect(filePathToPathname('src/hooks/useHover.ts', 'src')).toBe(
+      'hooks/use-hover'
+    )
+  })
 })

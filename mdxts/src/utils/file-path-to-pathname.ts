@@ -43,14 +43,21 @@ export function filePathToPathname(
     segments.pop()
   }
 
-  // Convert camel case names to kebab case for case-insensitive paths
+  // Convert camel and pascal case names to kebab case for case-insensitive paths
   parsedFilePath = segments
-    .map((segment) => (/[A-Z]/.test(segment[0]) ? kebabCase(segment) : segment))
+    .map((segment) => {
+      const isPascalCase = /^[A-Z][a-z]+(?:[A-Z][a-z]+)*$/.test(segment)
+      const isCamelCase = /^[a-z]+(?:[A-Z][a-z]+)*$/.test(segment)
+      return isPascalCase || isCamelCase ? kebabCase(segment) : segment
+    })
     .filter(Boolean)
     .join(sep)
 
   // Use directory for root index and readme
-  if (parsedFilePath === 'index' || parsedFilePath === 'readme') {
+  if (
+    parsedFilePath.toLowerCase() === 'index' ||
+    parsedFilePath.toLowerCase() === 'readme'
+  ) {
     if (packageName) {
       return packageName
     }
