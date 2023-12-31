@@ -1,6 +1,6 @@
 import { sep } from 'path'
 
-/** Finds the common root path for a set of paths. */
+/** Finds the common root directory path for a set of paths. */
 export function findCommonRootPath(paths: string[]) {
   let pathSegments = paths.map((path) => path.split(sep))
 
@@ -8,6 +8,7 @@ export function findCommonRootPath(paths: string[]) {
   let shortestPath = pathSegments.reduce((a, b) =>
     a.length < b.length ? a : b
   )
+
   let commonRoot = []
 
   for (let index = 0; index < shortestPath.length; index++) {
@@ -18,6 +19,10 @@ export function findCommonRootPath(paths: string[]) {
     } else {
       break
     }
+  }
+
+  if (commonRoot.length > 1 && commonRoot.at(-1)!.includes('.')) {
+    commonRoot.pop()
   }
 
   return commonRoot.join(sep)
