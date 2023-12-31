@@ -280,7 +280,9 @@ function getSourceFileSortOrder(sourceFile: SourceFile) {
 
 /** Returns the title of a source file based on its filename. */
 function getSourceFileTitle(sourceFile: SourceFile) {
-  const filename = sourceFile.getBaseNameWithoutExtension()
+  const filename = sourceFile
+    .getBaseNameWithoutExtension()
+    .replace(/\d+\.?/g, '')
   const title = /(readme|index)$/i.test(filename)
     ? parseTitle(sourceFile.getDirectory().getBaseName())
     : /^[A-Z][a-zA-Z0-9]*$/.test(filename) // don't parse if PascalCase
