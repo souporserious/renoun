@@ -222,6 +222,7 @@ export function createDataSource<Type>(
         segment: string
         pathname: string
         label: string
+        hasData: boolean
         children: any[]
       }[] = []
 
@@ -244,17 +245,34 @@ export function createDataSource<Type>(
           let node = nodes.find((node) => node.segment === segment)
 
           if (!node) {
+            const sourceFileData = allData[pathname]
+
             node = {
               segment,
               pathname: join(sep, basePathname, pathname),
               label: parseTitle(segment),
+              hasData: sourceFileData !== undefined,
               children: [],
             }
 
-            const sourceFileData = allData[pathname]
-
             if (sourceFileData) {
               Object.assign(node, sourceFileData)
+            } else {
+              /** If no data for this pathname, find the next available pathname. */
+              for (
+                let index = pathIndex;
+                index < filteredDataKeys.length;
+                index++
+              ) {
+                const nextPath = filteredDataKeys[index]
+                if (
+                  nextPath.startsWith(pathname) &&
+                  allData[nextPath] !== undefined
+                ) {
+                  node.pathname = join(sep, basePathname, nextPath)
+                  break
+                }
+              }
             }
 
             nodes.push(node)

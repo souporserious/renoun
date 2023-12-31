@@ -6,11 +6,14 @@ import { Text } from 'components/Text'
 export function SidebarLink({
   pathname,
   name,
+  hasData,
 }: {
   pathname: string
   name: string
+  hasData: boolean
 }) {
   const currentPathname = usePathname()
+  const isCurrent = hasData ? pathname === currentPathname : false
 
   return (
     <Link
@@ -18,10 +21,7 @@ export function SidebarLink({
       style={{
         display: 'block',
         padding: '0.25rem 0',
-        color:
-          pathname === currentPathname
-            ? 'white'
-            : 'var(--color-foreground-interactive)',
+        color: isCurrent ? 'white' : 'var(--color-foreground-interactive)',
       }}
     >
       <Text>{name}</Text>
