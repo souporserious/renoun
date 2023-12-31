@@ -1,5 +1,5 @@
 import parseTitle from 'title'
-import { basename, join, resolve, sep } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 import { readPackageUpSync } from 'read-package-up'
 import type { Project, SourceFile } from 'ts-morph'
 import { getSymbolDescription, resolveExpression } from '@tsxmod/utils'
@@ -113,10 +113,10 @@ export function getAllData({
       basePathname === pathnameKey
         ? join(sep, basePathname)
         : join(sep, basePathname, pathnameKey)
-    const order = getSortOrder(basename(path))
     const previouseData = allData[pathnameKey]
     const sourceFile = project.addSourceFileAtPath(path)
     const sourceFileTitle = getSourceFileTitle(sourceFile)
+    const order = getSourceFileSortOrder(sourceFile)
     const sourcePath = getSourcePath(path)
     const metadata = getMetadata(sourceFile)
     let title =
@@ -247,10 +247,35 @@ export function getAllData({
   )
 }
 
-/** Returns the sorting order of a filename. */
-function getSortOrder(filename: string) {
-  const match = filename.match(/^\d+/)
-  return match ? parseInt(match[0], 10) : undefined
+/** Returns the sorting order of a filename, taking into account directory nesting. */
+function getSourceFileSortOrder(sourceFile: SourceFile) {
+  const fileOrderMatch = sourceFile.getBaseNameWithoutExtension().match(/^\d+/)
+  let currentDirectory = sourceFile.getDirectory()
+  let parts: number[] = []
+
+  if (fileOrderMatch) {
+    parts.push(parseInt(fileOrderMatch[0], 10))
+  }
+
+  while (currentDirectory) {
+    const directoryName = currentDirectory.getBaseName()
+    const directoryOrderMatch = directoryName.match(/^\d+/)
+
+    if (directoryOrderMatch) {
+      parts.unshift(parseInt(directoryOrderMatch[0], 10))
+    } else {
+      break
+    }
+
+    const parentDirectory = currentDirectory.getParent()
+    if (parentDirectory) {
+      currentDirectory = parentDirectory
+    } else {
+      break
+    }
+  }
+
+  return parts.length > 0 ? parseFloat(parts.join('.')) : -1
 }
 
 /** Returns the title of a source file based on its filename. */

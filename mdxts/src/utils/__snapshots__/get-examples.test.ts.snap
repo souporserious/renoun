@@ -14,11 +14,13 @@ exports[`get examples from source file 1`] = `
     "moduleExport": [Function],
     "name": "BasicUsage",
     "slug": "basic-usage",
+    "sourcePath": "",
   },
   {
     "moduleExport": [Function],
     "name": "AlternateUsage",
     "slug": "alternate-usage",
+    "sourcePath": "",
   },
 ]
 `;
