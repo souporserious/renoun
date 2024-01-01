@@ -3,12 +3,12 @@ import React, { useRef, useState, useEffect } from 'react'
 
 const packageStyles = `
 .PackageInstallButton {
-  background-color: #000;
+  background-color: var(--color-surface-2);
   color: #fff;
 }
 .PackageInstallButton.active {
   background-color: #fff;
-  color: #000;
+  color: var(--color-surface-2);
 }
 .Command {
   display: none;
