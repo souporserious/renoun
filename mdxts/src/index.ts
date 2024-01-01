@@ -1,5 +1,4 @@
 import parseTitle from 'title'
-import Slugger from 'github-slugger'
 import type { ComponentType } from 'react'
 import { basename, dirname, extname, join, resolve, sep } from 'node:path'
 import 'server-only'
@@ -9,8 +8,6 @@ import type { CodeBlocks } from './remark/add-code-blocks'
 import type { Headings } from './remark/add-headings'
 import type { AllModules, ModuleData } from './utils/get-all-data'
 import { getAllData } from './utils/get-all-data'
-
-const typeSlugs = new Slugger()
 
 export type Module = {
   Content?: ComponentType
@@ -130,8 +127,6 @@ export function createDataSource<Type>(
 
     /** Append component prop type links to headings data. */
     if (data.exportedTypes.length > 0) {
-      typeSlugs.reset()
-
       headings = [
         ...(headings || []),
         {
@@ -141,7 +136,7 @@ export function createDataSource<Type>(
         },
         ...data.exportedTypes.map((type) => ({
           text: type.name,
-          id: typeSlugs.slug(type.name),
+          id: type.slug,
           depth: 3,
         })),
       ]
