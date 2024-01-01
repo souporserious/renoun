@@ -121,6 +121,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
                 {examples.map((example) => (
                   <div
                     key={example.slug}
+                    id={example.slug}
                     style={{
                       display: 'flex',
                       flexDirection: 'column',
