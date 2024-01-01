@@ -67,13 +67,13 @@ export function CodeToolbar({
             >
               <path
                 d="M18 8L22.5011 11.1556C23.1663 11.622 23.1663 12.378 22.5011 12.8444L18 16"
-                stroke="#7E7E7E"
+                stroke="var(--color-foreground-interactive)"
                 strokeWidth="2"
                 strokeLinecap="round"
               />
               <path
                 d="M7 8L1.59865 11.1556C0.800449 11.622 0.800449 12.378 1.59865 12.8444L7 16"
-                stroke="#7E7E7E"
+                stroke="var(--color-foreground-interactive)"
                 strokeWidth="2"
                 strokeLinecap="round"
               />
@@ -85,7 +85,7 @@ export function CodeToolbar({
               />
               <path
                 d="M10 19L15 5"
-                stroke="#7E7E7E"
+                stroke="var(--color-foreground-interactive)"
                 strokeWidth="2"
                 strokeLinecap="round"
               />
@@ -124,13 +124,13 @@ export function CodeToolbar({
           >
             <path
               d="M7.23913 16L4.56402 16C3.70023 16 3 15.2998 3 14.436V4.56402C3 3.70023 3.70023 3 4.56402 3L14.436 3C15.2998 3 16 3.70023 16 4.56402V7.52174"
-              stroke="#7E7E7E"
+              stroke="var(--color-foreground-interactive)"
               strokeWidth="2"
               strokeLinecap="round"
             />
             <path
               d="M8 9.56402V19.436C8 20.2998 8.70023 21 9.56402 21L19.436 21C20.2998 21 21 20.2998 21 19.436V9.56402C21 8.70023 20.2998 8 19.436 8H9.56402C8.70023 8 8 8.70023 8 9.56402Z"
-              stroke="#7E7E7E"
+              stroke="var(--color-foreground-interactive)"
               strokeWidth="2"
               strokeLinecap="round"
             />
