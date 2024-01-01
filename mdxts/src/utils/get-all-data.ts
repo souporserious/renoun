@@ -96,131 +96,131 @@ export function getAllData({
     .concat(exportedSourceFiles)
     .map((sourceFile) => sourceFile.getFilePath() as string)
     .concat(Object.keys(allModules))
+    .filter((path) => !path.includes('.examples.tsx'))
   const allData: Record<Pathname, ModuleData> = {}
 
-  allPublicPaths
-    .filter((path) => !path.includes('.examples.tsx'))
-    .forEach((path) => {
-      const type =
-        path.endsWith('.ts') || path.endsWith('.tsx')
-          ? 'ts'
-          : path.endsWith('.md') || path.endsWith('.mdx')
-            ? 'md'
-            : null
-      const pathnameKey = filePathToPathname(
-        path,
-        baseDirectory,
-        basePathname,
-        packageName
-      )
-      const pathname =
-        basePathname === pathnameKey
-          ? join(sep, basePathname)
-          : join(sep, basePathname, pathnameKey)
-      const previouseData = allData[pathnameKey]
-      const sourceFile = project.addSourceFileAtPath(path)
-      const sourceFileTitle = getSourceFileTitle(sourceFile)
-      const sourcePath = getSourcePath(path)
-      const metadata = getMetadata(sourceFile)
-      let title =
-        type === 'md'
-          ? findFirstHeading(sourceFile.getText()) || sourceFileTitle
-          : sourceFileTitle
-      let label
-      let description
+  allPublicPaths.forEach((path) => {
+    const type =
+      path.endsWith('.ts') || path.endsWith('.tsx')
+        ? 'ts'
+        : path.endsWith('.md') || path.endsWith('.mdx')
+          ? 'md'
+          : null
+    const pathnameKey = filePathToPathname(
+      path,
+      baseDirectory,
+      basePathname,
+      packageName
+    )
+    const pathname =
+      basePathname === pathnameKey
+        ? join(sep, basePathname)
+        : join(sep, basePathname, pathnameKey)
+    const previouseData = allData[pathnameKey]
+    const sourceFile = project.addSourceFileAtPath(path)
+    const sourceFileTitle = getSourceFileTitle(sourceFile)
+    const sourcePath = getSourcePath(path)
+    const metadata = getMetadata(sourceFile)
+    let title =
+      type === 'md'
+        ? findFirstHeading(sourceFile.getText()) || sourceFileTitle
+        : sourceFileTitle
+    let label
+    let description
 
-      if (metadata?.title) {
-        title = metadata.title
-      }
+    if (metadata?.title) {
+      title = metadata.title
+    }
 
-      if (metadata?.label) {
-        label = metadata.label
-      } else {
-        label = title
-      }
+    if (metadata?.label) {
+      label = metadata.label
+    } else {
+      label = title
+    }
 
-      if (metadata?.description) {
-        description = metadata.description
-      }
+    if (metadata?.description) {
+      description = metadata.description
+    }
 
-      /** Handle TypeScript source files */
-      if (type === 'ts') {
-        const exportedTypes = getExportedTypes(sourceFile).map(
-          ({ filePath, ...fileExport }) => {
-            const pathname = filePathToPathname(
-              filePath,
-              baseDirectory,
-              basePathname,
-              packageName
-            )
-            return {
-              ...fileExport,
-              pathname:
-                basePathname === pathname
-                  ? join(sep, basePathname)
-                  : join(sep, basePathname, pathname),
-              sourcePath: getSourcePath(filePath),
-              isMainExport: filePath === path,
-            }
-          }
-        )
-        const examples = getExamplesFromSourceFile(sourceFile, allModules)
-        const isMainExport = pathnameKey === packageName
-        const isServerOnly = sourceFile
-          .getImportDeclarations()
-          .some((importDeclaration) => {
-            const moduleSpecifier = importDeclaration.getModuleSpecifierValue()
-            return moduleSpecifier === 'server-only'
-          })
-        const mainExportDeclaration = getMainExportDeclaration(sourceFile)
-        const mainExportDeclarationSymbol = mainExportDeclaration?.getSymbol()
-
-        if (mainExportDeclaration) {
-          const declarationName = getNameFromDeclaration(mainExportDeclaration)
-          if (declarationName) {
-            title = declarationName
-          }
-        }
-
-        if (mainExportDeclarationSymbol) {
-          const symbolDescription = getSymbolDescription(
-            mainExportDeclarationSymbol
+    /** Handle TypeScript source files */
+    if (type === 'ts') {
+      const exportedTypes = getExportedTypes(sourceFile).map(
+        ({ filePath, ...fileExport }) => {
+          const isPublic = allPublicPaths.includes(filePath)
+          const pathname = filePathToPathname(
+            isPublic ? filePath : sourceFile.getFilePath(),
+            baseDirectory,
+            basePathname,
+            packageName
           )
-          if (symbolDescription) {
-            description = symbolDescription
+          return {
+            ...fileExport,
+            pathname:
+              basePathname === pathname
+                ? join(sep, basePathname)
+                : join(sep, basePathname, pathname),
+            sourcePath: getSourcePath(filePath),
+            isMainExport: filePath === path,
           }
         }
+      )
+      const examples = getExamplesFromSourceFile(sourceFile, allModules)
+      const isMainExport = pathnameKey === packageName
+      const isServerOnly = sourceFile
+        .getImportDeclarations()
+        .some((importDeclaration) => {
+          const moduleSpecifier = importDeclaration.getModuleSpecifierValue()
+          return moduleSpecifier === 'server-only'
+        })
+      const mainExportDeclaration = getMainExportDeclaration(sourceFile)
+      const mainExportDeclarationSymbol = mainExportDeclaration?.getSymbol()
 
-        allData[pathnameKey] = {
-          ...previouseData,
-          tsPath: path,
-          exportedTypes,
-          examples,
-          title,
-          label,
-          description,
-          isMainExport,
-          isServerOnly,
-          pathname,
-          sourcePath,
+      if (mainExportDeclaration) {
+        const declarationName = getNameFromDeclaration(mainExportDeclaration)
+        if (declarationName) {
+          title = declarationName
         }
       }
 
-      /** Handle MDX content */
-      if (type === 'md') {
-        allData[pathnameKey] = {
-          ...previouseData,
-          mdxPath: path,
-          exportedTypes: previouseData?.exportedTypes || [],
-          examples: previouseData?.examples || [],
-          description: previouseData?.description || description,
-          title,
-          label,
-          pathname,
-          sourcePath,
+      if (mainExportDeclarationSymbol) {
+        const symbolDescription = getSymbolDescription(
+          mainExportDeclarationSymbol
+        )
+        if (symbolDescription) {
+          description = symbolDescription
         }
       }
-    })
+
+      allData[pathnameKey] = {
+        ...previouseData,
+        tsPath: path,
+        exportedTypes,
+        examples,
+        title,
+        label,
+        description,
+        isMainExport,
+        isServerOnly,
+        pathname,
+        sourcePath,
+      }
+    }
+
+    /** Handle MDX content */
+    if (type === 'md') {
+      allData[pathnameKey] = {
+        ...previouseData,
+        mdxPath: path,
+        exportedTypes: previouseData?.exportedTypes || [],
+        examples: previouseData?.examples || [],
+        description: previouseData?.description || description,
+        title,
+        label,
+        pathname,
+        sourcePath,
+      }
+    }
+  })
 
   // Add order, this must be done after all data has been collected and added to the project above
   const commonDirectory = project.addDirectoryAtPath(commonRootPath)
