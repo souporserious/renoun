@@ -182,7 +182,12 @@ function isNextJsEntryLayout(filePath: string) {
     dirname(filePath).replace(`${process.cwd()}/`, ''),
     basename(filePath)
   )
-  return (
-    topLevelPath === 'app/layout.tsx' || topLevelPath === 'src/app/layout.js'
-  )
+  return [
+    'app/layout.js',
+    'src/app/layout.js',
+    'app/layout.jsx',
+    'src/app/layout.jsx',
+    'app/layout.tsx',
+    'src/app/layout.tsx',
+  ].includes(topLevelPath)
 }
