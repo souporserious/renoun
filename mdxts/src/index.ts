@@ -82,105 +82,17 @@ export function createDataSource<Type>(
     return true
   })
 
-  /** Parses and attaches metadata to a module. */
-  async function getModule(pathname?: string, isActive?: boolean) {
-    if (pathname === undefined) {
-      return null
-    }
-
-    const data = allData[pathname]
-
-    if (data === undefined) {
-      return null
-    }
-
-    let {
-      default: Content,
-      headings = [],
-      metadata,
-      frontMatter,
-      ...moduleExports
-    } = data.mdxPath
-      ? await allModules[data.mdxPath]
-      : { default: undefined, metadata: undefined, frontMatter: undefined }
-
-    /** Append example links to headings data. */
-    const examples = (isActive ? await data.examples : []).map((example) => ({
-      ...example,
-      pathname: join(pathname, example.slug),
-    }))
-    if (examples.length > 0) {
-      headings = [
-        ...(headings || []),
-        {
-          text: 'Examples',
-          id: 'examples',
-          depth: 2,
-        },
-        ...examples.map((example) => ({
-          text: example.name,
-          id: example.slug,
-          depth: 3,
-        })),
-      ]
-    }
-
-    /** Append component prop type links to headings data. */
-    if (data.exportedTypes.length > 0) {
-      headings = [
-        ...(headings || []),
-        {
-          text: 'Exports',
-          id: 'exports',
-          depth: 2,
-        },
-        ...data.exportedTypes.map((type) => ({
-          text: type.name,
-          id: type.slug,
-          depth: 3,
-        })),
-      ]
-    }
-
-    /** Merge front matter data into metadata. */
-    if (frontMatter) {
-      Object.assign(metadata, frontMatter)
-    }
-
-    return {
-      isServerOnly: data.isServerOnly,
-      isMainExport: data.isMainExport,
-      title: data.title,
-      label: data.label,
-      description: data.description,
-      exportedTypes: data.exportedTypes,
-      pathname: data.pathname,
-      sourcePath: data.sourcePath,
-      previous: data.previous,
-      next: data.next,
-      Content,
-      examples,
-      frontMatter,
-      headings,
-      metadata,
-      ...moduleExports,
-    } as Module & Type
-  }
-
   return {
     /** Returns all modules. */
-    async all() {
+    all() {
       return Object.fromEntries(
-        filteredDataKeys.map((pathname) => {
-          const { mdxPath, tsPath, ...data } = allData[pathname]
-          return [pathname, data]
-        })
+        filteredDataKeys.map((pathname) => [pathname, allData[pathname]])
       )
     },
 
-    /** Returns a tree of all module metadata. */
-    async tree() {
-      const allData = await this.all()
+    /** Returns a tree of all module metadata related to navigation. */
+    tree() {
+      const allData = this.all()
       const tree: {
         segment: string
         pathname: string
@@ -248,24 +160,6 @@ export function createDataSource<Type>(
       return tree
     },
 
-    /** Returns a module by pathname including metadata, examples, and previous/next modules. Defaults to `basePathname` if `pathname` is undefined. */
-    async get(pathname: string | string[] | undefined) {
-      if (pathname === undefined) {
-        pathname = basePathname
-      }
-
-      const stringPathname = Array.isArray(pathname)
-        ? pathname.join(sep)
-        : pathname
-      const active = await getModule(stringPathname, true)
-
-      if (active === null) {
-        return
-      }
-
-      return active
-    },
-
     /** Returns paths for all modules calculated from file system paths. */
     paths() {
       return filteredDataKeys.map((pathname) =>
@@ -275,6 +169,112 @@ export function createDataSource<Type>(
           // Remove empty strings
           .filter(Boolean)
       )
+    },
+
+    /** Returns paths for all module examples. */
+    async examplePaths() {
+      const allData = this.all()
+      const allPaths = this.paths()
+      const allExamples = await Promise.all(
+        Object.values(allData).map((data) => data.examples)
+      )
+      return allExamples.flatMap((examples, index) =>
+        examples.map((example) => [...allPaths[index], example.slug])
+      )
+    },
+
+    /** Returns a module by pathname including metadata, examples, and previous/next modules. Defaults to `basePathname` if `pathname` is `undefined`. */
+    async get(pathname: string | string[] | undefined) {
+      const allData = this.all()
+
+      if (pathname === undefined) {
+        pathname = basePathname
+      }
+
+      const stringPathname = Array.isArray(pathname)
+        ? pathname.join(sep)
+        : pathname
+      if (pathname === undefined) {
+        return
+      }
+
+      const data = allData[stringPathname]
+
+      if (data === undefined) {
+        return
+      }
+
+      let {
+        default: Content,
+        headings = [],
+        metadata,
+        frontMatter,
+        ...moduleExports
+      } = data.mdxPath
+        ? await allModules[data.mdxPath]
+        : { default: undefined, metadata: undefined, frontMatter: undefined }
+
+      /** Append example links to headings data. */
+      const examples = (await data.examples).map((example) => ({
+        ...example,
+        pathname: join(stringPathname, example.slug),
+      }))
+      if (examples.length > 0) {
+        headings = [
+          ...(headings || []),
+          {
+            text: 'Examples',
+            id: 'examples',
+            depth: 2,
+          },
+          ...examples.map((example) => ({
+            text: example.name,
+            id: example.slug,
+            depth: 3,
+          })),
+        ]
+      }
+
+      /** Append component prop type links to headings data. */
+      if (data.exportedTypes.length > 0) {
+        headings = [
+          ...(headings || []),
+          {
+            text: 'Exports',
+            id: 'exports',
+            depth: 2,
+          },
+          ...data.exportedTypes.map((type) => ({
+            text: type.name,
+            id: type.slug,
+            depth: 3,
+          })),
+        ]
+      }
+
+      /** Merge front matter data into metadata. */
+      if (frontMatter) {
+        Object.assign(metadata, frontMatter)
+      }
+
+      return {
+        isServerOnly: data.isServerOnly,
+        isMainExport: data.isMainExport,
+        title: data.title,
+        label: data.label,
+        description: data.description,
+        exportedTypes: data.exportedTypes,
+        pathname: data.pathname,
+        sourcePath: data.sourcePath,
+        previous: data.previous,
+        next: data.next,
+        Content,
+        examples,
+        frontMatter,
+        headings,
+        metadata,
+        ...moduleExports,
+      } as Module & Type
     },
 
     /**
@@ -293,18 +293,98 @@ export function createDataSource<Type>(
       const exampleSlug = slug.slice(2).at(0)!
       return dataItem.examples.find((example) => example.slug === exampleSlug)
     },
+  }
+}
 
-    /** Returns paths for all module examples. */
-    async examplePaths() {
-      const allData = await this.all()
-      const allPaths = this.paths()
-      const allExamples = await Promise.all(
-        Object.values(allData).map((data) => data.examples)
-      )
-      return allExamples.flatMap((examples, index) =>
-        examples.map((example) => [...allPaths[index], example.slug])
-      )
-    },
+/** Merges multiple data sources into a single data source. */
+export function mergeDataSources(
+  ...dataSources: ReturnType<typeof createDataSource>[]
+) {
+  function all() {
+    const combinedEntries = dataSources.flatMap((dataSource) =>
+      Object.entries(dataSource.all())
+    )
+    combinedEntries.forEach(([, data], index) => {
+      const previousData = combinedEntries[index - 1]
+      const nextData = combinedEntries[index + 1]
+      if (previousData) {
+        data.previous = {
+          label: previousData[1].label,
+          pathname: previousData[1].pathname,
+        }
+      }
+      if (nextData) {
+        data.next = {
+          label: nextData[1].label,
+          pathname: nextData[1].pathname,
+        }
+      }
+    })
+    return Object.fromEntries(combinedEntries)
+  }
+
+  function tree() {
+    return dataSources.flatMap((dataSource) => dataSource.tree())
+  }
+
+  function paths() {
+    return dataSources.flatMap((dataSource) => dataSource.paths())
+  }
+
+  async function examplePaths() {
+    return await Promise.all(
+      dataSources.flatMap((dataSource) => dataSource.examplePaths())
+    )
+  }
+
+  async function get(pathname: string) {
+    let result
+
+    for (const dataSource of dataSources) {
+      result = await dataSource.get(pathname)
+      if (result) break
+    }
+
+    if (!result) {
+      return
+    }
+
+    const allEntries = Object.entries(all())
+    const currentIndex = allEntries.findIndex(([path]) => path === pathname)
+    const previousEntry = allEntries[currentIndex - 1]
+    const nextEntry = allEntries[currentIndex + 1]
+
+    if (previousEntry) {
+      result.previous = {
+        label: previousEntry[1].label,
+        pathname: previousEntry[1].pathname,
+      }
+    }
+
+    if (nextEntry) {
+      result.next = {
+        label: nextEntry[1].label,
+        pathname: nextEntry[1].pathname,
+      }
+    }
+
+    return result
+  }
+
+  async function getExample(slug: string[]) {
+    for (const dataSource of dataSources) {
+      const result = await dataSource.getExample(slug)
+      if (result) return result
+    }
+  }
+
+  return {
+    all,
+    tree,
+    paths,
+    examplePaths,
+    get,
+    getExample,
   }
 }
 
