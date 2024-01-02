@@ -10,7 +10,7 @@ export function SidebarLink({
 }: {
   pathname: string
   name: string
-  hasData: boolean
+  hasData?: boolean
 }) {
   const currentPathname = usePathname()
   const isCurrent = hasData ? pathname === currentPathname : false

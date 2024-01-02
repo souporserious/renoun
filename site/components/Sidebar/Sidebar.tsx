@@ -48,25 +48,30 @@ export function Sidebar() {
       <NavigationBoundary>
         <Navigation
           source={allDocs}
-          renderList={renderList}
+          renderList={renderList(0)}
           renderItem={renderItem}
         />
 
-        <Navigation
-          source={allPackages}
-          renderList={renderList}
-          renderItem={renderItem}
-        />
+        <ul style={{ paddingLeft: 0, listStyle: 'none' }}>
+          <li>
+            <SidebarLink pathname="/packages" name="Packages" />
+          </li>
+          <Navigation
+            source={allPackages}
+            renderList={renderList(1)}
+            renderItem={renderItem}
+          />
+        </ul>
       </NavigationBoundary>
     </aside>
   )
 }
 
-function renderList(props: any) {
-  return (
+function renderList(initialOrder: number) {
+  return (props: any) => (
     <ul
       style={{
-        paddingLeft: props.order * 0.8 + 'rem',
+        paddingLeft: (props.order + initialOrder) * 0.8 + 'rem',
         listStyle: 'none',
       }}
     >
@@ -77,7 +82,7 @@ function renderList(props: any) {
 
 function renderItem(props: any) {
   return (
-    <li key={props.label} style={{ color: props.children ? 'grey' : 'white' }}>
+    <li key={props.label}>
       <SidebarLink
         pathname={props.pathname}
         name={props.label}
