@@ -171,7 +171,10 @@ export function createDataSource<Type>(
     /** Returns all modules. */
     async all() {
       return Object.fromEntries(
-        filteredDataKeys.map((pathname) => [pathname, allData[pathname]])
+        filteredDataKeys.map((pathname) => {
+          const { mdxPath, tsPath, ...data } = allData[pathname]
+          return [pathname, data]
+        })
       )
     },
 

@@ -19,7 +19,6 @@ export default async function Page() {
               singlePackage.order?.toString().split('.').length === 1
           )
           .map((singlePackage) => {
-            console.log(singlePackage.tsPath)
             return (
               <div key={singlePackage.pathname}>
                 <a href={singlePackage.pathname}>
