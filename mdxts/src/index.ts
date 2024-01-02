@@ -180,6 +180,7 @@ export function createDataSource<Type>(
 
     /** Returns a tree of all module metadata. */
     async tree() {
+      const allData = await this.all()
       const tree: {
         segment: string
         pathname: string
