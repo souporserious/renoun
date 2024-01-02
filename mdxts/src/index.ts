@@ -337,7 +337,7 @@ export function mergeDataSources(
     )
   }
 
-  async function get(pathname: string) {
+  async function get(pathname: string | string[]) {
     let result
 
     for (const dataSource of dataSources) {
@@ -350,7 +350,12 @@ export function mergeDataSources(
     }
 
     const allEntries = Object.entries(all())
-    const currentIndex = allEntries.findIndex(([path]) => path === pathname)
+    const stringPathname = Array.isArray(pathname)
+      ? pathname.join(sep)
+      : pathname
+    const currentIndex = allEntries.findIndex(
+      ([path]) => path === stringPathname
+    )
     const previousEntry = allEntries[currentIndex - 1]
     const nextEntry = allEntries[currentIndex + 1]
 

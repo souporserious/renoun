@@ -1,5 +1,5 @@
 import { Navigation } from 'mdxts/components'
-import { allDocs, allPackages } from 'data'
+import { allData } from 'data'
 import { Logo } from 'components/Logo'
 import styles from './Sidebar.module.css'
 
@@ -47,31 +47,20 @@ export function Sidebar() {
 
       <NavigationBoundary>
         <Navigation
-          source={allDocs}
-          renderList={renderList(0)}
+          source={allData}
+          renderList={renderList}
           renderItem={renderItem}
         />
-
-        <ul style={{ paddingLeft: 0, listStyle: 'none' }}>
-          <li>
-            <SidebarLink pathname="/packages" name="Packages" />
-          </li>
-          <Navigation
-            source={allPackages}
-            renderList={renderList(1)}
-            renderItem={renderItem}
-          />
-        </ul>
       </NavigationBoundary>
     </aside>
   )
 }
 
-function renderList(initialOrder: number) {
-  return (props: any) => (
+function renderList(props: any) {
+  return (
     <ul
       style={{
-        paddingLeft: (props.order + initialOrder) * 0.8 + 'rem',
+        paddingLeft: props.order * 0.8 + 'rem',
         listStyle: 'none',
       }}
     >

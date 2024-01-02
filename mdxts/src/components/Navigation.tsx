@@ -1,6 +1,6 @@
 import 'server-only'
 
-import type { createDataSource } from '../index'
+import type { createDataSource, mergeDataSources } from '../index'
 
 /** Renders a navigation tree from a collection of modules. */
 export async function Navigation({
@@ -8,8 +8,10 @@ export async function Navigation({
   renderList,
   renderItem,
 }: {
-  /** A collection of source files returned from `createDataSource`. */
-  source: ReturnType<typeof createDataSource>
+  /** A collection of source files returned from `createDataSource` or `mergeDataSources`. */
+  source:
+    | ReturnType<typeof createDataSource>
+    | ReturnType<typeof mergeDataSources>
 
   /** A function that renders a list of navigation items. */
   renderList: (list: { children: JSX.Element[]; order: number }) => JSX.Element

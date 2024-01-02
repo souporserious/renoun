@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 import { PageContainer } from 'components/PageContainer'
 import { SiblingLinks } from 'components/SiblingLinks'
 import { TableOfContents } from 'components/TableOfContents'
-import { allDocs } from 'data'
+import { allData, allDocs } from 'data'
 import { getSiteMetadata } from 'utils/get-site-metadata'
 
 export const dynamic = 'force-static'
@@ -24,7 +24,7 @@ export async function generateMetadata({
 }
 
 export default async function Page({ params }: { params: { slug: string[] } }) {
-  const doc = await allDocs.get(params.slug)
+  const doc = await allData.get(params.slug)
 
   if (doc === undefined) {
     return notFound()

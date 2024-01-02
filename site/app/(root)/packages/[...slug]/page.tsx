@@ -4,7 +4,7 @@ import { Code } from 'mdxts/components'
 import { PageContainer } from 'components/PageContainer'
 import { SiblingLinks } from 'components/SiblingLinks'
 import { TableOfContents } from 'components/TableOfContents'
-import { allPackages } from 'data'
+import { allData, allPackages } from 'data'
 import { getSiteMetadata } from 'utils/get-site-metadata'
 
 export const dynamic = 'force-static'
@@ -26,7 +26,7 @@ export async function generateMetadata({
 }
 
 export default async function Page({ params }: { params: { slug: string } }) {
-  const singlePackage = await allPackages.get(params.slug)
+  const singlePackage = await allData.get(params.slug)
 
   if (singlePackage === undefined) {
     return notFound()
