@@ -65,7 +65,7 @@ export default async function loader(
 
   /** Augment `createDataSource` calls with MDX/TypeScript file paths. */
   if (
-    /.*import\s\{\screateDataSource\s\}\sfrom\s['"]mdxts['"].*/.test(
+    /.*import\s\{[^}]*createDataSource[^}]*\}\sfrom\s['"]mdxts['"].*/.test(
       sourceString
     )
   ) {
