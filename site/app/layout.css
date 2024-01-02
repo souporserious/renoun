@@ -74,6 +74,7 @@ h1,
 h2,
 h3 {
   letter-spacing: normal;
+  text-wrap: balance;
 }
 
 h1 {

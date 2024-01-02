@@ -43,10 +43,7 @@ export default function Home() {
               <h1
                 style={{
                   gridColumn: 2,
-                  fontSize: 'var(--font-size-heading-1)',
                   lineHeight: 1,
-                  // @ts-expect-error - missing types
-                  textWrap: 'balance',
                 }}
               >
                 Exceptional Content & Docs

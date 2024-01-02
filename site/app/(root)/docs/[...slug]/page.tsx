@@ -35,17 +35,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
   return (
     <PageContainer>
       <div>
-        {title ? (
-          <h1
-            style={{
-              // @ts-expect-error
-              textWrap: 'balance',
-              margin: '0 0 1.4rem',
-            }}
-          >
-            {title}
-          </h1>
-        ) : null}
+        {title ? <h1>{title}</h1> : null}
         {Content ? <Content /> : null}
         <SiblingLinks previous={doc.previous} next={doc.next} />
       </div>
