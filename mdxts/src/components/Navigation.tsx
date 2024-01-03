@@ -14,24 +14,24 @@ export async function Navigation({
     | ReturnType<typeof mergeDataSources>
 
   /** A function that renders a list of navigation items. */
-  renderList: (list: { children: JSX.Element[]; order: number }) => JSX.Element
+  renderList: (list: { children: JSX.Element[]; depth: number }) => JSX.Element
 
   /** A function that renders a navigation item. */
   renderItem: (item: { children?: JSX.Element }) => JSX.Element
 }) {
   const tree = await source.tree()
 
-  function buildNavigationTree(children: any[], order: number): JSX.Element {
+  function buildNavigationTree(children: any[], depth: number): JSX.Element {
     return renderList({
       children: children.map((item) =>
         renderItem({
           ...item,
           children: item.children.length
-            ? buildNavigationTree(item.children, order + 1)
+            ? buildNavigationTree(item.children, depth + 1)
             : undefined,
         })
       ),
-      order,
+      depth,
     })
   }
 

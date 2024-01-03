@@ -7,10 +7,12 @@ export function SidebarLink({
   pathname,
   name,
   hasData,
+  style,
 }: {
   pathname: string
   name: string
   hasData?: boolean
+  style?: React.CSSProperties
 }) {
   const currentPathname = usePathname()
   const isCurrent = hasData ? pathname === currentPathname : false
@@ -22,6 +24,7 @@ export function SidebarLink({
         display: 'block',
         padding: '0.25rem 0',
         color: isCurrent ? 'white' : 'var(--color-foreground-interactive)',
+        ...style,
       }}
     >
       <Text>{name}</Text>

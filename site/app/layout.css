@@ -11,6 +11,7 @@
   --font-size-body-1: 1.8rem;
   --font-size-body-2: 1.2rem;
   --font-size-body-3: 1rem;
+  --font-size-title: 0.875rem;
   --line-height-heading-1: 4rem;
   --line-height-heading-2: 3.4rem;
   --line-height-heading-3: 2.2rem;
@@ -29,6 +30,7 @@
     --font-size-body-1: 1.3rem;
     --font-size-body-2: 1rem;
     --font-size-body-3: 0.875rem;
+    --font-size-title: 0.6rem;
     --line-height-heading-1: 3rem;
     --line-height-heading-2: 2.4rem;
     --line-height-heading-3: 1.8rem;

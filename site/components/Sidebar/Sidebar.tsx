@@ -57,16 +57,30 @@ export function Sidebar() {
 }
 
 function renderList(props: any) {
-  return (
-    <ul
-      style={{
-        paddingLeft: props.order * 0.8 + 'rem',
-        listStyle: 'none',
-      }}
-    >
-      {props.children}
-    </ul>
-  )
+  const styles: React.CSSProperties = {
+    fontSize: 'var(--font-size-body-2)',
+    textTransform: 'initial',
+    letterSpacing: 'initial',
+    display: 'flex',
+    flexDirection: 'column',
+    listStyle: 'none',
+    paddingLeft: 0,
+  }
+
+  if (props.depth === 0) {
+    styles.fontSize = 'var(--font-size-title)'
+    styles.textTransform = 'uppercase'
+    styles.letterSpacing = '0.02rem'
+    styles.gap = '1.5rem'
+  } else if (props.depth === 1) {
+    styles.paddingLeft = '0.8rem'
+    styles.marginLeft = '0.05rem'
+    styles.borderLeft = '1px solid var(--color-separator)'
+  } else {
+    styles.paddingLeft = props.depth * 0.4 + 'rem'
+  }
+
+  return <ul style={styles}>{props.children}</ul>
 }
 
 function renderItem(props: any) {
@@ -76,6 +90,7 @@ function renderItem(props: any) {
         pathname={props.pathname}
         name={props.label}
         hasData={props.hasData}
+        style={{ marginBottom: props.depth === 0 ? '0.5rem' : 0 }}
       />
       {props.children}
     </li>
