@@ -107,7 +107,7 @@ export function createDataSource<Type>(
         pathIndex++
       ) {
         const currentPath = filteredDataKeys[pathIndex]
-        const pathParts = currentPath.split(sep)
+        const pathParts = currentPath.split(sep).filter(Boolean)
         let nodes = tree
 
         for (
@@ -120,7 +120,7 @@ export function createDataSource<Type>(
           let node = nodes.find((node) => node.segment === segment)
 
           if (!node) {
-            const sourceFileData = allData[pathname]
+            const sourceFileData = allData[join(sep, pathname)]
 
             node = {
               segment,
