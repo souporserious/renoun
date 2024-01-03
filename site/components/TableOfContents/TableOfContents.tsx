@@ -22,6 +22,9 @@ export function TableOfContents({
           top: '2rem',
         }}
       >
+        <li style={{ padding: '0.25rem 0px', marginBottom: '0.5rem' }}>
+          <h4 className="title">On this page</h4>
+        </li>
         {headings?.map(({ text, depth, id }) =>
           depth > 1 ? (
             <li
@@ -29,7 +32,7 @@ export function TableOfContents({
               style={{
                 fontSize: 'var(--font-size-body-2)',
                 padding: '0.25rem 0',
-                paddingLeft: (depth - 1) * 0.5 + 'rem',
+                paddingLeft: (depth - 2) * 0.8 + 'rem',
               }}
             >
               <a href={`#${id}`}>{text}</a>
