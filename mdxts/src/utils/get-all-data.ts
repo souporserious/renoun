@@ -118,7 +118,7 @@ export function getAllData({
     const sourceFileTitle = getSourceFileTitle(sourceFile)
     const sourcePath = getSourcePath(path)
     const metadata = getMetadata(sourceFile)
-    const depth = pathname.split(sep).length - 1
+    const depth = pathname.split(sep).length - 2
     let title =
       type === 'md'
         ? findFirstHeading(sourceFile.getText()) || sourceFileTitle

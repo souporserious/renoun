@@ -97,6 +97,7 @@ export function createDataSource<Type>(
         segment: string
         pathname: string
         label: string
+        depth: number
         hasData: boolean
         children: any[]
       }[] = []
@@ -115,24 +116,27 @@ export function createDataSource<Type>(
           pathPartIndex < pathParts.length;
           pathPartIndex++
         ) {
-          const pathname = pathParts.slice(0, pathPartIndex + 1).join(sep)
+          const pathname = join(
+            sep,
+            pathParts.slice(0, pathPartIndex + 1).join(sep)
+          )
           const segment = pathParts[pathPartIndex]
           let node = nodes.find((node) => node.segment === segment)
 
           if (!node) {
-            const sourceFileData = allData[join(sep, pathname)]
+            const sourceFileData = allData[pathname]
+            const hasData = sourceFileData !== undefined
 
             node = {
               segment,
-              pathname: join(sep, pathname),
-              label: parseTitle(segment),
-              hasData: sourceFileData !== undefined,
+              pathname,
+              hasData,
+              label: hasData ? sourceFileData.label : parseTitle(segment),
+              depth: pathPartIndex,
               children: [],
             }
 
-            if (sourceFileData) {
-              Object.assign(node, sourceFileData)
-            } else {
+            if (!hasData) {
               /** If no data for this pathname, find the next available pathname. */
               for (
                 let index = pathIndex;
