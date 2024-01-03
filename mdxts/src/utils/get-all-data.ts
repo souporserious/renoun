@@ -23,7 +23,8 @@ export type ModuleData = {
   title: string
   label: string
   description?: string
-  order?: number
+  order: number
+  depth: number
   mdxPath?: string
   tsPath?: string
   pathname: string
@@ -117,6 +118,7 @@ export function getAllData({
     const sourceFileTitle = getSourceFileTitle(sourceFile)
     const sourcePath = getSourcePath(path)
     const metadata = getMetadata(sourceFile)
+    const depth = pathname.split(sep).length - 1
     let title =
       type === 'md'
         ? findFirstHeading(sourceFile.getText()) || sourceFileTitle
@@ -196,6 +198,7 @@ export function getAllData({
         title,
         label,
         description,
+        depth,
         isMainExport,
         isServerOnly,
         pathname: pathname,
@@ -213,6 +216,7 @@ export function getAllData({
         description: previouseData?.description || description,
         title,
         label,
+        depth,
         pathname: pathname,
         sourcePath,
       }

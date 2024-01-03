@@ -14,10 +14,7 @@ export default async function Page() {
       </p>
       <nav style={{ display: 'flex', flexDirection: 'column' }}>
         {Object.values(allData)
-          .filter(
-            (singlePackage) =>
-              singlePackage.order?.toString().split('.').length === 1
-          )
+          .filter((singlePackage) => singlePackage.depth === 2)
           .map((singlePackage) => {
             return (
               <div key={singlePackage.pathname}>

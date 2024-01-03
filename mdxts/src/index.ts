@@ -264,6 +264,8 @@ export function createDataSource<Type>(
         title: data.title,
         label: data.label,
         description: data.description,
+        order: data.order,
+        depth: data.depth,
         exportedTypes: data.exportedTypes,
         pathname: data.pathname,
         sourcePath: data.sourcePath,
