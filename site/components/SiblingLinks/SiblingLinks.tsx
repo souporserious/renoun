@@ -31,15 +31,37 @@ function SiblingLink({
   }
 
   return (
-    <a
-      href={module.pathname}
+    <div
       style={{
+        display: 'grid',
+        gridTemplateColumns: 'auto auto',
+        gridTemplateRows: 'auto auto',
+        gap: '0.5rem',
         fontSize: 'var(--font-size-body-2)',
         gridColumn: direction === 'previous' ? 1 : 3,
         textAlign: direction === 'previous' ? 'left' : 'right',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+      <div
+        className="title"
+        style={{
+          gridColumn: direction === 'previous' ? 2 : 1,
+          gridRow: 1,
+          textDecoration: 'none',
+        }}
+      >
+        {direction === 'previous' ? 'Previous' : 'Next'}
+      </div>
+      <a
+        href={module.pathname}
+        style={{
+          gridColumn: '1 / -1',
+          gridRow: 2,
+          display: 'grid',
+          gridTemplateColumns: 'subgrid',
+          alignItems: 'center',
+        }}
+      >
         {direction === 'previous' ? (
           <svg
             viewBox="0 0 24 24"
@@ -77,7 +99,7 @@ function SiblingLink({
             />
           </svg>
         ) : null}
-      </div>
-    </a>
+      </a>
+    </div>
   )
 }

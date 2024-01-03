@@ -59,6 +59,7 @@ export function Sidebar() {
 function renderList(props: any) {
   const styles: React.CSSProperties = {
     fontSize: 'var(--font-size-body-2)',
+    fontWeight: 400,
     textTransform: 'initial',
     letterSpacing: 'initial',
     display: 'flex',
@@ -69,8 +70,9 @@ function renderList(props: any) {
 
   if (props.depth === 0) {
     styles.fontSize = 'var(--font-size-title)'
+    styles.fontWeight = 600
     styles.textTransform = 'uppercase'
-    styles.letterSpacing = '0.02rem'
+    styles.letterSpacing = '0.1rem'
     styles.gap = '1.5rem'
   } else if (props.depth === 1) {
     styles.paddingLeft = '0.8rem'

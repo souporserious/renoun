@@ -27,7 +27,7 @@ export function SidebarLink({
         ...style,
       }}
     >
-      <Text>{name}</Text>
+      {name}
     </Link>
   )
 }
