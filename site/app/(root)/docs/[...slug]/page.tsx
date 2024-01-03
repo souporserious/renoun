@@ -8,7 +8,7 @@ import { getSiteMetadata } from 'utils/get-site-metadata'
 export const dynamic = 'force-static'
 
 export function generateStaticParams() {
-  return allDocs.paths().map((pathname) => ({ slug: pathname }))
+  return allDocs.paths().map((pathname) => ({ slug: pathname.slice(1) }))
 }
 
 export async function generateMetadata({
@@ -16,7 +16,7 @@ export async function generateMetadata({
 }: {
   params: { slug: string[] }
 }) {
-  const data = await allDocs.get(params.slug)
+  const data = await allDocs.get(['docs', ...params.slug])
   return getSiteMetadata({
     title: `${data?.title} - MDXTS`,
     description: data?.description,
@@ -24,7 +24,7 @@ export async function generateMetadata({
 }
 
 export default async function Page({ params }: { params: { slug: string[] } }) {
-  const doc = await allData.get(params.slug)
+  const doc = await allData.get(['docs', ...params.slug])
 
   if (doc === undefined) {
     return notFound()

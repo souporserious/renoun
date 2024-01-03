@@ -14,12 +14,12 @@ describe('filePathToUrlPathname', () => {
   it('converts a file system path to a URL-friendly pathname', () => {
     expect(
       filePathToPathname(workingDirectory + '/src/components/Code.tsx', 'src')
-    ).toBe('components/code')
+    ).toBe('/components/code')
   })
 
   it('removes sorting numbers', () => {
     expect(filePathToPathname('docs/examples/02.authoring.mdx')).toBe(
-      'docs/examples/authoring'
+      '/docs/examples/authoring'
     )
   })
 
@@ -29,10 +29,10 @@ describe('filePathToUrlPathname', () => {
         workingDirectory + '/src/components/index.tsx',
         'components'
       )
-    ).toBe('components')
+    ).toBe('/components')
 
     expect(filePathToPathname('mdxts/src/components/README.mdx')).toBe(
-      'mdxts/src/components'
+      '/mdxts/src/components'
     )
 
     expect(
@@ -41,18 +41,18 @@ describe('filePathToUrlPathname', () => {
         'src',
         'packages'
       )
-    ).toBe('packages')
+    ).toBe('/packages')
   })
 
   it('accounts for base directory', () => {
     expect(filePathToPathname('../../src/components/index.tsx', 'src')).toBe(
-      'components'
+      '/components'
     )
   })
 
   it('handles the same directory and base name', () => {
     expect(filePathToPathname('src/components/Button/Button.tsx', 'src')).toBe(
-      'components/button'
+      '/components/button'
     )
   })
 
@@ -62,18 +62,18 @@ describe('filePathToUrlPathname', () => {
         workingDirectory + '/src/components/index.ts',
         '../mdxts/src'
       )
-    ).toBe('components')
+    ).toBe('/components')
   })
 
   it('handles pascal case filenames', () => {
     expect(filePathToPathname('src/components/CodeBlock.tsx', 'src')).toBe(
-      'components/code-block'
+      '/components/code-block'
     )
   })
 
   it('handles camel case filenames', () => {
     expect(filePathToPathname('src/hooks/useHover.ts', 'src')).toBe(
-      'hooks/use-hover'
+      '/hooks/use-hover'
     )
   })
 })

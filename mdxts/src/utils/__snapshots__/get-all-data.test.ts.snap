@@ -2,7 +2,7 @@
 
 exports[`getAllData should initialize correctly with basic input 1`] = `
 {
-  "button": {
+  "/button": {
     "description": undefined,
     "examples": [],
     "exportedTypes": [],

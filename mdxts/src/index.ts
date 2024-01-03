@@ -124,7 +124,7 @@ export function createDataSource<Type>(
 
             node = {
               segment,
-              pathname: join(sep, basePathname, pathname),
+              pathname: join(sep, pathname),
               label: parseTitle(segment),
               hasData: sourceFileData !== undefined,
               children: [],
@@ -139,12 +139,12 @@ export function createDataSource<Type>(
                 index < filteredDataKeys.length;
                 index++
               ) {
-                const nextPath = filteredDataKeys[index]
+                const nextPathname = filteredDataKeys[index]
                 if (
-                  nextPath.startsWith(pathname) &&
-                  allData[nextPath] !== undefined
+                  nextPathname.startsWith(pathname) &&
+                  allData[nextPathname] !== undefined
                 ) {
-                  node.pathname = join(sep, basePathname, nextPath)
+                  node.pathname = join(sep, nextPathname)
                   break
                 }
               }
@@ -191,13 +191,14 @@ export function createDataSource<Type>(
         pathname = basePathname
       }
 
-      const stringPathname = Array.isArray(pathname)
-        ? pathname.join(sep)
-        : pathname
       if (pathname === undefined) {
         return
       }
 
+      const stringPathname = join(
+        sep,
+        Array.isArray(pathname) ? pathname.join(sep) : pathname
+      )
       const data = allData[stringPathname]
 
       if (data === undefined) {
@@ -283,14 +284,14 @@ export function createDataSource<Type>(
      * pathname would be `['components', 'button', 'examples', 'basic']`.
      */
     async getExample(slug: string[]) {
-      const dataSlug = slug.slice(0, 2)
+      const dataSlug = slug.slice(0, -1)
       const dataItem = await this.get(dataSlug)
 
       if (dataItem === undefined) {
         return
       }
 
-      const exampleSlug = slug.slice(2).at(0)!
+      const exampleSlug = slug.slice(-1).at(0)!
       return dataItem.examples.find((example) => example.slug === exampleSlug)
     },
   }
@@ -350,9 +351,10 @@ export function mergeDataSources(
     }
 
     const allEntries = Object.entries(all())
-    const stringPathname = Array.isArray(pathname)
-      ? pathname.join(sep)
-      : pathname
+    const stringPathname = join(
+      sep,
+      Array.isArray(pathname) ? pathname.join(sep) : pathname
+    )
     const currentIndex = allEntries.findIndex(
       ([path]) => path === stringPathname
     )

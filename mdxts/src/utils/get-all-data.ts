@@ -106,17 +106,13 @@ export function getAllData({
         : path.endsWith('.md') || path.endsWith('.mdx')
           ? 'md'
           : null
-    const pathnameKey = filePathToPathname(
+    const pathname = filePathToPathname(
       path,
       baseDirectory,
       basePathname,
       packageName
     )
-    const pathname =
-      basePathname === pathnameKey
-        ? join(sep, basePathname)
-        : join(sep, basePathname, pathnameKey)
-    const previouseData = allData[pathnameKey]
+    const previouseData = allData[pathname]
     const sourceFile = project.addSourceFileAtPath(path)
     const sourceFileTitle = getSourceFileTitle(sourceFile)
     const sourcePath = getSourcePath(path)
@@ -155,17 +151,18 @@ export function getAllData({
           )
           return {
             ...fileExport,
-            pathname:
-              basePathname === pathname
-                ? join(sep, basePathname)
-                : join(sep, basePathname, pathname),
+            pathname,
             sourcePath: getSourcePath(filePath),
             isMainExport: filePath === path,
           }
         }
       )
       const examples = getExamplesFromSourceFile(sourceFile, allModules)
-      const isMainExport = pathnameKey === packageName
+      const isMainExport = packageName
+        ? basePathname
+          ? pathname === join(sep, basePathname, packageName)
+          : pathname === join(sep, packageName)
+        : false
       const isServerOnly = sourceFile
         .getImportDeclarations()
         .some((importDeclaration) => {
@@ -191,7 +188,7 @@ export function getAllData({
         }
       }
 
-      allData[pathnameKey] = {
+      allData[pathname] = {
         ...previouseData,
         tsPath: path,
         exportedTypes,
@@ -201,14 +198,14 @@ export function getAllData({
         description,
         isMainExport,
         isServerOnly,
-        pathname,
+        pathname: pathname,
         sourcePath,
       }
     }
 
     /** Handle MDX content */
     if (type === 'md') {
-      allData[pathnameKey] = {
+      allData[pathname] = {
         ...previouseData,
         mdxPath: path,
         exportedTypes: previouseData?.exportedTypes || [],
@@ -216,7 +213,7 @@ export function getAllData({
         description: previouseData?.description || description,
         title,
         label,
-        pathname,
+        pathname: pathname,
         sourcePath,
       }
     }

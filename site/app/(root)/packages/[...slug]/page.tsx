@@ -10,7 +10,7 @@ import { getSiteMetadata } from 'utils/get-site-metadata'
 export const dynamic = 'force-static'
 
 export function generateStaticParams() {
-  return allPackages.paths().map((pathname) => ({ slug: pathname }))
+  return allPackages.paths().map((pathname) => ({ slug: pathname.slice(1) }))
 }
 
 export async function generateMetadata({
@@ -18,15 +18,15 @@ export async function generateMetadata({
 }: {
   params: { slug: string[] }
 }) {
-  const data = await allPackages.get(params.slug)
+  const data = await allPackages.get(['packages', ...params.slug])
   return getSiteMetadata({
     title: `${data?.title} - MDXTS`,
     description: data?.description,
   })
 }
 
-export default async function Page({ params }: { params: { slug: string } }) {
-  const singlePackage = await allData.get(params.slug)
+export default async function Page({ params }: { params: { slug: string[] } }) {
+  const singlePackage = await allData.get(['packages', ...params.slug])
 
   if (singlePackage === undefined) {
     return notFound()
@@ -148,7 +148,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
                       </div>
                     </div>
                     <a
-                      href={`/examples/${example.pathname}`}
+                      href={`/examples${example.pathname}`}
                       style={{
                         position: 'absolute',
                         inset: 0,

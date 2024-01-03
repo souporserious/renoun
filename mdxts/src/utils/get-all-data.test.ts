@@ -85,42 +85,44 @@ describe('getAllData', () => {
       baseDirectory: 'package',
     })
 
-    expect(allData['components/button'].order).toBe(1.1)
-    expect(allData['components/card'].order).toBe(1.2)
-    expect(allData['hooks/use-focus'].order).toBe(2.1)
-    expect(allData['hooks/use-pressable'].order).toBe(2.2)
+    expect(allData['/components/button'].order).toBe(1.1)
+    expect(allData['/components/card'].order).toBe(1.2)
+    expect(allData['/hooks/use-focus'].order).toBe(2.1)
+    expect(allData['/hooks/use-pressable'].order).toBe(2.2)
   })
 
   it('parses order from file path', () => {
     const allData = getDocsData()
 
-    expect(allData['docs/getting-started'].order).toBe(1)
-    expect(allData['docs/routing'].order).toBe(2)
-    expect(allData['docs/examples/authoring'].order).toBe(3.1)
-    expect(allData['docs/examples/rendering'].order).toBe(3.2)
+    expect(allData['/docs/getting-started'].order).toBe(1)
+    expect(allData['/docs/routing'].order).toBe(2)
+    expect(allData['/docs/examples/authoring'].order).toBe(3.1)
+    expect(allData['/docs/examples/rendering'].order).toBe(3.2)
   })
 
   it('adds previous and next pathnames', () => {
     const allData = getDocsData()
 
-    expect(allData['docs/getting-started'].previous).toBeUndefined()
-    expect(allData['docs/getting-started'].next?.pathname).toBe('/docs/routing')
-    expect(allData['docs/routing'].previous?.pathname).toBe(
-      '/docs/getting-started'
-    )
-    expect(allData['docs/routing'].next?.pathname).toBe(
-      '/docs/examples/authoring'
-    )
-    expect(allData['docs/examples/authoring'].previous?.pathname).toBe(
+    expect(allData['/docs/getting-started'].previous).toBeUndefined()
+    expect(allData['/docs/getting-started'].next?.pathname).toBe(
       '/docs/routing'
     )
-    expect(allData['docs/examples/authoring'].next?.pathname).toBe(
-      '/docs/examples/rendering'
+    expect(allData['/docs/routing'].previous?.pathname).toBe(
+      '/docs/getting-started'
     )
-    expect(allData['docs/examples/rendering'].previous?.pathname).toBe(
+    expect(allData['/docs/routing'].next?.pathname).toBe(
       '/docs/examples/authoring'
     )
-    expect(allData['docs/examples/rendering'].next).toBeUndefined()
+    expect(allData['/docs/examples/authoring'].previous?.pathname).toBe(
+      '/docs/routing'
+    )
+    expect(allData['/docs/examples/authoring'].next?.pathname).toBe(
+      '/docs/examples/rendering'
+    )
+    expect(allData['/docs/examples/rendering'].previous?.pathname).toBe(
+      '/docs/examples/authoring'
+    )
+    expect(allData['/docs/examples/rendering'].next).toBeUndefined()
   })
 })
 

@@ -1,4 +1,4 @@
-import { resolve, sep } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 import { kebabCase } from 'case-anything'
 
 /** Converts a file system path to a URL-friendly pathname. */
@@ -8,6 +8,15 @@ export function filePathToPathname(
   basePathname?: string,
   packageName?: string
 ) {
+  // Creates a path from a file path accounting for the base pathname if defined.
+  function createPathame(filePath: string) {
+    return basePathname
+      ? basePathname === filePath
+        ? join(sep, basePathname)
+        : join(sep, basePathname, filePath)
+      : join(sep, filePath)
+  }
+
   // Convert relative paths to absolute paths
   if (baseDirectory?.startsWith('.')) {
     baseDirectory = resolve(process.cwd(), baseDirectory)
@@ -59,15 +68,15 @@ export function filePathToPathname(
     parsedFilePath.toLowerCase() === 'readme'
   ) {
     if (packageName) {
-      return packageName
+      return createPathame(packageName)
     }
 
     if (basePathname) {
-      return basePathname
+      return createPathame(basePathname)
     }
 
     if (baseDirectory) {
-      return baseDirectory
+      return createPathame(baseDirectory)
     }
 
     throw new Error(
@@ -75,5 +84,5 @@ export function filePathToPathname(
     )
   }
 
-  return parsedFilePath
+  return createPathame(parsedFilePath)
 }
