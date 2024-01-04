@@ -10,7 +10,9 @@ export function SiblingLinks({
       style={{
         display: 'grid',
         gridTemplateColumns: 'auto minmax(16px, 1fr) auto',
-        padding: '8rem 0 2rem',
+        marginTop: '6rem',
+        padding: '2rem 0',
+        borderTop: '1px solid var(--color-separator)',
       }}
     >
       <SiblingLink module={previous} direction="previous" />
@@ -31,7 +33,8 @@ function SiblingLink({
   }
 
   return (
-    <div
+    <a
+      href={module.pathname}
       style={{
         display: 'grid',
         gridTemplateColumns: 'auto auto',
@@ -47,13 +50,11 @@ function SiblingLink({
         style={{
           gridColumn: direction === 'previous' ? 2 : 1,
           gridRow: 1,
-          textDecoration: 'none',
         }}
       >
         {direction === 'previous' ? 'Previous' : 'Next'}
       </div>
-      <a
-        href={module.pathname}
+      <div
         style={{
           gridColumn: '1 / -1',
           gridRow: 2,
@@ -99,7 +100,7 @@ function SiblingLink({
             />
           </svg>
         ) : null}
-      </a>
-    </div>
+      </div>
+    </a>
   )
 }

@@ -68,7 +68,7 @@ a {
   text-decoration: none;
 }
 
-a:hover {
+a:hover :not(.title) {
   text-decoration: underline;
 }
 
@@ -135,8 +135,12 @@ code {
 }
 
 .link {
-  display: block;
-  padding: 0.5rem 0;
+  color: var(--color-foreground-interactive);
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
 }
 
 .title {
@@ -144,4 +148,5 @@ code {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.1rem;
+  color: var(--color-foreground);
 }
