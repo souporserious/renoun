@@ -1,5 +1,29 @@
 # mdxts
 
+## 0.3.0
+
+### Minor Changes
+
+- 7b3a555: Fix data source item order not taking directory into account.
+- 329ed73: Add `depth` property to data item.
+- 3fb551f: Fix <Code inline /> hydration issue by rendering spans instead of divs.
+- 3e7e3a4: Use a root relative pathname as the data key.
+- 445c961: Link to the first immediate page with data in `tree` utility.
+- 038ac17: Add `mergeDataSources` function to merge multiple sources returned from `createDataSource`.
+- c17d469: Fix previous/next sort order.
+- df9c8ee: Adds a `getExample` helper attached to the data source.
+- 10d66a4: Add support for examples extension.
+- 3d4105a: Add pathname and slug to example items.
+- e4a68eb: Pass `workingDirectory` to Code component used in examples.
+
+### Patch Changes
+
+- 6fe9356: Fix type table of contents slug.
+- e15d50e: Expand type documentation if it is not publicly linkable.
+- 53cbf75: Fix `createDataSource` loader transform not working when other imports are present.
+- 500d3ca: Remove leading numbers from title generated from filename.
+- 66b8629: Fix camel case filename to pathname conversion.
+
 ## 0.2.0
 
 ### Minor Changes
