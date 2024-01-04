@@ -1,45 +1,24 @@
 ## Code Blocks
 
-````mdx
-```tsx filename="useCounter.ts"
-import { useState } from 'react'
-
-export function useCounter(initialValue: number = 0) {
-  const [count, setCount] = useState(initialValue)
-  return {
-    count,
-    increment: () => setCount(count + 1),
-    decrement: () => setCount(count - 1),
-  }
-}
-```
-
-```tsx filename="Counter.tsx"
-'use client'
-import { useCounter } from './useCounter'
-
-export default function Counter({
-  initialCount = 0,
-}: {
-  initialCount: number
-}) {
-  const { count, decrement, increment } = useCounter(initialCount)
-  return (
-    <div>
-      <button onClick={decrement}>-</button>
-      <span>{count}</span>
-      <button onClick={increment}>+</button>
-    </div>
-  )
-}
-```
+The `Code` component is automatically set up through the [Next.js plugin](/packages/next) and is used to highlight code blocks. Alternatively, you can define custom MDX components in a top-level `mdx-components.tsx` file:
 
 ```tsx
-<Counter initialCount={2} />
-```
-````
+import type { MDXComponents } from 'mdx/types'
+import { Code } from 'mdxts/components'
 
-Pass a `source` prop to the `Code` component to render a code block from a file. For example, the following MDX:
+export function useMDXComponents() {
+  return {
+    code: (props) => {
+      if (typeof props.children === 'string') {
+        return <Code inline value={props.children} />
+      }
+      return <code {...props} />
+    },
+  } satisfies MDXComponents
+}
+```
+
+Use the `source` prop to render a code block from a source file. For example, the following MDX:
 
 ```mdx filename="Counter.mdx"
 <Code source="./counter/Counter.tsx" />
