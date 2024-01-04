@@ -1,5 +1,6 @@
 :root {
   --color-foreground: #fff;
+  --color-foreground-secondary: #cdedff;
   --color-foreground-interactive: hsl(200deg 20% 62%);
   --color-background: hsl(215deg 48% 6%);
   --color-surface-1: hsl(210deg 50% 7%);

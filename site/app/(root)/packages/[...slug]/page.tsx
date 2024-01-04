@@ -202,12 +202,18 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
                           }}
                         >
                           {isActive ? (
-                            <h3 id={type.slug} style={{ margin: 0 }}>
+                            <h3
+                              id={type.slug}
+                              style={{ fontWeight: 500, margin: 0 }}
+                            >
                               {type.name}
                             </h3>
                           ) : (
                             <a href={type.pathname}>
-                              <h3 id={type.slug} style={{ margin: 0 }}>
+                              <h3
+                                id={type.slug}
+                                style={{ fontWeight: 500, margin: 0 }}
+                              >
                                 {type.name}
                               </h3>
                             </a>
@@ -275,17 +281,13 @@ function Props({
           style={{
             display: 'flex',
             flexDirection: 'column',
+            marginTop: '2rem',
             gap: '2rem',
           }}
         >
-          <div
-            style={{
-              display: 'flex',
-              gap: '2rem',
-            }}
-          >
-            <span>{propType.text}</span>
-          </div>
+          <span style={{ color: 'var(--color-foreground-secondary)' }}>
+            {propType.text}
+          </span>
           {propType.description && (
             <p style={{ margin: 0 }}>{propType.description}</p>
           )}

@@ -55,7 +55,7 @@ export default function Home() {
                   fontSize: 'var(--font-size-heading-2)',
                   lineHeight: 1.3,
                   maxWidth: '24ch',
-                  color: '#CDEDFF',
+                  color: 'var(--color-foreground-secondary)',
                 }}
               >
                 Build interactive, type-safe content and documentation in MDX,
