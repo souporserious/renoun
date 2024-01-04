@@ -54,7 +54,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
             gap: '1rem',
           }}
         >
-          {title ? <h1>{title}</h1> : null}
+          {title ? <h1 style={{ margin: 0 }}>{title}</h1> : null}
           {isServerOnly ? (
             <span
               style={{
