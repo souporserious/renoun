@@ -167,8 +167,8 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
                 gap: '1.6rem',
               }}
             >
-              <h2 id="exports" style={{ margin: 0 }}>
-                Exports
+              <h2 id="api-reference" style={{ margin: 0 }}>
+                API Reference
               </h2>
               <div
                 style={{
@@ -230,16 +230,10 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
                       </div>
 
                       {isActive && type.types.length > 0 ? (
-                        <>
-                          <h4 style={{ margin: '1rem 0 0' }}>
-                            {type.isComponent ? 'Props' : 'Types'}
-                          </h4>
-
-                          <Props
-                            props={type.types}
-                            isComponent={type.isComponent}
-                          />
-                        </>
+                        <Props
+                          props={type.types}
+                          isComponent={type.isComponent}
+                        />
                       ) : null}
                     </div>
                   )

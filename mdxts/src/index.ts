@@ -245,8 +245,8 @@ export function createDataSource<Type>(
         headings = [
           ...(headings || []),
           {
-            text: 'Exports',
-            id: 'exports',
+            text: 'API Reference',
+            id: 'api-reference',
             depth: 2,
           },
           ...data.exportedTypes.map((type) => ({
