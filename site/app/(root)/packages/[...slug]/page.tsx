@@ -319,7 +319,7 @@ function Props({
                           borderRadius: '1rem',
                           color: '#ccc',
                           position: 'relative',
-                          top: -16,
+                          top: '-0.95rem',
                           userSelect: 'none',
                         }}
                       >
@@ -387,7 +387,8 @@ function Props({
               alignItems: 'flex-start',
               flexShrink: 0,
               margin: 0,
-              fontWeight: 600,
+              fontWeight: 400,
+              color: 'var(--color-foreground-secondary)',
             }}
           >
             {propType.name} {propType.required && '*'}
