@@ -1,6 +1,6 @@
 # mdxts
 
-![MDXTS - Exceptional Content & Docs](../site/app/opengraph-image.png)
+![MDXTS - Exceptional Content & Docs](/site/app/opengraph-image.png)
 
 > **Warning**
 > This project and all packages are still a work in progress. The APIs are not stable and may change.
@@ -17,4 +17,4 @@ https://mdxts.dev/
 
 ## License
 
-[MIT](../LICENSE.md) © [souporserious](https://souporserious.com/)
+[MIT](/LICENSE.md) © [souporserious](https://souporserious.com/)
