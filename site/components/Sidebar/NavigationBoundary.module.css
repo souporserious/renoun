@@ -1,6 +1,7 @@
 .container {
-  display: flex;
+  grid-area: 1 / 1;
   flex-direction: column;
+  margin-top: calc(var(--font-size-heading-1) + 1rem);
 }
 
 .container[data-open='false'] {

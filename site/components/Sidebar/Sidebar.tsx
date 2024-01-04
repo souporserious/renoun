@@ -12,6 +12,7 @@ export function Sidebar() {
     <aside className={styles.container}>
       <div
         style={{
+          gridArea: '1 / 1',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -59,9 +60,6 @@ export function Sidebar() {
 function renderList(props: any) {
   const styles: React.CSSProperties = {
     fontSize: 'var(--font-size-body-2)',
-    fontWeight: 400,
-    textTransform: 'initial',
-    letterSpacing: 'initial',
     display: 'flex',
     flexDirection: 'column',
     listStyle: 'none',
@@ -69,10 +67,6 @@ function renderList(props: any) {
   }
 
   if (props.depth === 0) {
-    styles.fontSize = 'var(--font-size-title)'
-    styles.fontWeight = 600
-    styles.textTransform = 'uppercase'
-    styles.letterSpacing = '0.1rem'
     styles.gap = '1.5rem'
   } else if (props.depth === 1) {
     styles.paddingLeft = '0.8rem'
@@ -88,12 +82,20 @@ function renderList(props: any) {
 function renderItem(props: any) {
   return (
     <li key={props.label}>
-      <SidebarLink
-        pathname={props.pathname}
-        name={props.label}
-        hasData={props.hasData}
-        style={{ marginBottom: props.depth === 0 ? '0.5rem' : 0 }}
-      />
+      {props.depth === 0 ? (
+        <div
+          className="title"
+          style={{ padding: '0.25rem 0px', marginBottom: '0.5rem' }}
+        >
+          {props.label}
+        </div>
+      ) : (
+        <SidebarLink
+          pathname={props.pathname}
+          name={props.label}
+          hasData={props.hasData}
+        />
+      )}
       {props.children}
     </li>
   )

@@ -30,7 +30,7 @@ export function TableOfContents({
             <li
               key={id}
               style={{
-                fontSize: 'var(--font-size-body-2)',
+                fontSize: 'var(--font-size-body-3)',
                 padding: '0.25rem 0',
                 paddingLeft: (depth - 2) * 0.8 + 'rem',
               }}
@@ -55,7 +55,7 @@ export function TableOfContents({
                 href={sourcePath}
                 target="_blank"
                 rel="noreferrer"
-                style={{ fontSize: 'var(--font-size-body-2)' }}
+                style={{ fontSize: 'var(--font-size-body-3)' }}
               >
                 View Source
               </a>
