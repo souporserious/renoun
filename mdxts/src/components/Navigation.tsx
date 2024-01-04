@@ -2,7 +2,7 @@ import 'server-only'
 
 import type { createDataSource, mergeDataSources } from '../index'
 
-/** Renders a navigation tree from a collection of modules. */
+/** Renders a navigation tree from a data source. */
 export async function Navigation({
   source,
   renderList,
