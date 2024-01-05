@@ -19,10 +19,10 @@ export default withMdxts({
 Then, add the plugin to your Next.js configuration:
 
 ```tsx filename="blog/[slug]/page.tsx"
-import { createDataSource } from 'mdxts'
+import { createSource } from 'mdxts'
 import { notFound } from 'next/navigation'
 
-const allDocs = createDataSource('docs/**/*.mdx')
+const allDocs = createSource('docs/**/*.mdx')
 
 type Props = { params: { slug: string } }
 

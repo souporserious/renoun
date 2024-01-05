@@ -24,10 +24,10 @@ export type Module = {
  * Loads content and metadata related to MDX and TypeScript files.
  *
  * @example
- * export const allDocs = createDataSource('./docs/*.mdx', { baseDirectory: 'docs' })
- * export const allComponents = createDataSource('./components/**\/index.ts')
+ * export const allDocs = createSource('./docs/*.mdx', { baseDirectory: 'docs' })
+ * export const allComponents = createSource('./components/**\/index.ts')
  */
-export function createDataSource<Type>(
+export function createSource<Type>(
   /** A glob pattern to match files. */
   pattern: string,
 
@@ -44,7 +44,7 @@ export function createDataSource<Type>(
 
   if (typeof allModules === 'string') {
     throw new Error(
-      'mdxts: createDataSource requires that the mdxts/loader package is configured as a Webpack loader.'
+      'mdxts: createSource requires that the mdxts/loader package is configured as a Webpack loader.'
     )
   }
 
@@ -304,11 +304,9 @@ export function createDataSource<Type>(
 }
 
 /** Merges multiple data sources into a single data source. */
-export function mergeDataSources(
-  ...dataSources: ReturnType<typeof createDataSource>[]
-) {
+export function mergeSources(...sources: ReturnType<typeof createSource>[]) {
   function all() {
-    const combinedEntries = dataSources.flatMap((dataSource) =>
+    const combinedEntries = sources.flatMap((dataSource) =>
       Object.entries(dataSource.all())
     )
     combinedEntries.forEach(([, data], index) => {
@@ -331,23 +329,23 @@ export function mergeDataSources(
   }
 
   function tree() {
-    return dataSources.flatMap((dataSource) => dataSource.tree())
+    return sources.flatMap((dataSource) => dataSource.tree())
   }
 
   function paths() {
-    return dataSources.flatMap((dataSource) => dataSource.paths())
+    return sources.flatMap((dataSource) => dataSource.paths())
   }
 
   async function examplePaths() {
     return await Promise.all(
-      dataSources.flatMap((dataSource) => dataSource.examplePaths())
+      sources.flatMap((dataSource) => dataSource.examplePaths())
     )
   }
 
   async function get(pathname: string | string[]) {
     let result
 
-    for (const dataSource of dataSources) {
+    for (const dataSource of sources) {
       result = await dataSource.get(pathname)
       if (result) break
     }
@@ -385,7 +383,7 @@ export function mergeDataSources(
   }
 
   async function getExample(slug: string[]) {
-    for (const dataSource of dataSources) {
+    for (const dataSource of sources) {
       const result = await dataSource.getExample(slug)
       if (result) return result
     }

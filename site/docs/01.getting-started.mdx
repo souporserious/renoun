@@ -56,12 +56,12 @@ const withMdxts = createMdxtsPlugin({
 
 ### Generating Routes
 
-Use the `createDataSource` function exported from the `mdxts` package to generate metadata and a `paths` helper for a set of MDX or TypeScript source files:
+Use the `createSource` function exported from the `mdxts` package to generate metadata and a `paths` helper for a set of MDX or TypeScript source files:
 
 ```ts filename="data.ts"
-import { createDataSource } from 'mdxts'
+import { createSource } from 'mdxts'
 
-export const allDocs = createDataSource('docs/**/*.mdx', {
+export const allDocs = createSource('docs/**/*.mdx', {
   baseDirectory: 'docs',
 })
 
@@ -96,12 +96,12 @@ export default async function Page({ params }: Props) {
 If the targeted source file is a TypeScript file, its types will be analyzed and included along with other metadata:
 
 ```tsx filename="components/[slug]/page.tsx"
-import { createDataSource } from 'mdxts'
+import { createSource } from 'mdxts'
 import { notFound } from 'next/navigation'
 
 type Props = { params: { slug: string } }
 
-const allComponents = createDataSource('components/**/*.tsx')
+const allComponents = createSource('components/**/*.tsx')
 
 export default async function Page({ params }: Props) {
   const component = await allComponents.get(params.slug)

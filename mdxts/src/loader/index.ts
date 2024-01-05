@@ -9,7 +9,7 @@ import { getExportedSourceFiles } from '../utils/get-exported-source-files'
 import { findCommonRootPath } from '../utils/find-common-root-path'
 
 /**
- * Exports front matter data for MDX files and augments `createDataSource` calls with MDX file paths resolved from the provided file pattern.
+ * Exports front matter data for MDX files and augments `createSource` calls with MDX file paths resolved from the provided file pattern.
  * If a TypeScript file pattern is provided, the closest README.mdx or MDX file with the same name will be used.
  */
 export default async function loader(
@@ -63,20 +63,20 @@ export default async function loader(
     return
   }
 
-  /** Augment `createDataSource` calls with MDX/TypeScript file paths. */
+  /** Augment `createSource` calls with MDX/TypeScript file paths. */
   if (
-    /.*import\s\{[^}]*createDataSource[^}]*\}\sfrom\s['"]mdxts['"].*/.test(
+    /.*import\s\{[^}]*createSource[^}]*\}\sfrom\s['"]mdxts['"].*/.test(
       sourceString
     )
   ) {
     const sourceFile = new Project({
       useInMemoryFileSystem: true,
     }).createSourceFile('index.ts', sourceString)
-    const createDataSourceCalls = sourceFile
+    const createSourceCalls = sourceFile
       .getDescendantsOfKind(SyntaxKind.CallExpression)
-      .filter((call) => call.getExpression().getText() === 'createDataSource')
+      .filter((call) => call.getExpression().getText() === 'createSource')
 
-    for (const call of createDataSourceCalls) {
+    for (const call of createSourceCalls) {
       try {
         const [firstArgument] = call.getArguments()
 
