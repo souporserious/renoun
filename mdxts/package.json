@@ -10,29 +10,29 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "require": "./dist/cjs/index.js",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/cjs/index.js"
     },
     "./components": {
+      "types": "./dist/components/index.d.ts",
       "import": "./dist/components/index.js",
-      "require": "./dist/cjs/components/index.js",
-      "types": "./dist/components/index.d.ts"
+      "require": "./dist/cjs/components/index.js"
     },
     "./components/*": {
+      "types": "./dist/components/*.d.ts",
       "import": "./dist/components/*.js",
-      "require": "./dist/cjs/components/*.js",
-      "types": "./dist/components/*.d.ts"
+      "require": "./dist/cjs/components/*.js"
     },
     "./loader": {
+      "types": "./dist/loader/index.d.ts",
       "import": "./dist/loader/index.js",
-      "require": "./dist/cjs/loader/index.js",
-      "types": "./dist/loader/index.d.ts"
+      "require": "./dist/cjs/loader/index.js"
     },
     "./next": {
+      "types": "./dist/next/index.d.ts",
       "import": "./dist/cjs/next/index.js",
-      "require": "./dist/cjs/next/index.js",
-      "types": "./dist/next/index.d.ts"
+      "require": "./dist/cjs/next/index.js"
     }
   },
   "typesVersions": {
