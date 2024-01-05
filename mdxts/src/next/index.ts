@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { execSync } from 'node:child_process'
 import { writeFile } from 'node:fs/promises'
 import CopyPlugin from 'copy-webpack-plugin'
+import NodePolyfillPlugin from 'node-polyfill-webpack-plugin'
 import remarkTypography from 'remark-typography'
 import createMdxPlugin from '@next/mdx'
 
@@ -172,7 +173,8 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
                   to: 'static/mdxts',
                 },
               ],
-            })
+            }),
+            new NodePolyfillPlugin()
           )
         }
 
