@@ -32,6 +32,9 @@ export type BaseCodeProps = {
   /** VS Code-based theme for highlighting. */
   theme?: Theme
 
+  /** Show or hide the copy button. */
+  allowCopy?: boolean
+
   /** Show or hide errors. */
   showErrors?: boolean
 
@@ -93,6 +96,7 @@ export async function Code({
   className,
   showErrors,
   allowErrors,
+  allowCopy,
   padding,
   paddingHorizontal,
   paddingVertical,
@@ -217,6 +221,7 @@ export async function Code({
       isNestedInEditor={isNestedInEditor}
       showErrors={showErrors}
       allowErrors={allowErrors}
+      allowCopy={allowCopy}
       className={className}
       rootDirectory={rootDirectory}
       baseDirectory={baseDirectory}

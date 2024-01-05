@@ -28,6 +28,9 @@ export type CodeProps = {
   /** VS Code-based theme for highlighting. */
   theme: Theme
 
+  /** Show or hide the copy button. */
+  allowCopy?: boolean
+
   /** Padding to apply to the code block. */
   padding?: string
 
@@ -78,6 +81,7 @@ export function CodeView({
   paddingHorizontal = padding,
   paddingVertical = padding,
   allowErrors,
+  allowCopy,
 }: CodeProps & {
   row?: number[] | null
   tokens: ReturnType<Awaited<ReturnType<typeof getHighlighter>>>
@@ -131,9 +135,9 @@ export function CodeView({
         />
       ) : null}
 
-      {shouldRenderFilename ? (
+      {shouldRenderFilename || allowCopy ? (
         <CodeToolbar
-          filename={filename}
+          filename={shouldRenderFilename ? filename : undefined}
           value={value}
           sourcePath={sourcePath}
         />

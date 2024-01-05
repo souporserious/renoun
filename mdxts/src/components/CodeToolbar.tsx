@@ -1,21 +1,26 @@
 'use client'
 import React from 'react'
 
-/** A toolbar for code blocks that displays the filename and a copy button. */
-export function CodeToolbar({
-  filename,
-  value,
-  sourcePath,
-}: {
-  /** The filename of the code block. */
-  filename?: string
-
+type BaseCodeToolbarProps = {
   /** The value of the code block. */
   value: string
 
   /** The path to the source file on disk in development and the git provider source in production. */
   sourcePath?: string
-}) {
+}
+
+type CodeToolbarProps =
+  | (BaseCodeToolbarProps & {
+      /** The children of the toolbar. */
+      children?: React.ReactNode
+    })
+  | (BaseCodeToolbarProps & {
+      /** The filename of the code block. */
+      filename?: string
+    })
+
+/** A toolbar for code blocks that displays the filename and a copy button. */
+export function CodeToolbar({ value, sourcePath, ...props }: CodeToolbarProps) {
   const [state, setState] = React.useState<'idle' | 'not-allowed' | 'copied'>(
     'idle'
   )
@@ -31,21 +36,24 @@ export function CodeToolbar({
         borderBottom: '1px solid #293742',
       }}
     >
-      {filename ? (
+      {'filename' in props ? (
         <div
           style={{
             fontSize: 'var(--font-size-body-3)',
             padding: '0.5rem 1rem',
           }}
         >
-          {filename.replace('mdxts/', '')}
+          {props.filename!.replace('mdxts/', '')}
         </div>
+      ) : 'children' in props ? (
+        props.children
       ) : null}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           padding: '0 0.5rem',
+          marginLeft: 'auto',
         }}
       >
         {sourcePath ? (
