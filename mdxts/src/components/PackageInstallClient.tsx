@@ -3,12 +3,12 @@ import React, { useRef, useState, useEffect } from 'react'
 
 const packageStyles = `
 .PackageInstallButton {
-  background-color: var(--color-surface-2);
+  border: none;
+  border-bottom: 1px solid transparent;
   color: #fff;
 }
 .PackageInstallButton.active {
-  background-color: #fff;
-  color: var(--color-surface-2);
+  border-bottom: 1px solid #fff;
 }
 .Command {
   display: none;
@@ -61,13 +61,18 @@ export function PackageInstallClient({
   )
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
+    <div
+      style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}
+    >
       <style>{packageStyles}</style>
       <div
         style={{
           display: 'flex',
           flexDirection: 'row',
-          marginBottom: '0.25rem',
+          position: 'absolute',
+          top: 0,
+          left: 1,
+          zIndex: 1,
         }}
       >
         {Object.keys(allHighlightedCommands).map((packageManager) => {
@@ -83,9 +88,8 @@ export function PackageInstallClient({
                   : 'PackageInstallButton'
               }
               style={{
-                padding: '0.5rem 1rem',
-                border: '1px solid #000',
-                borderRadius: '0.5rem',
+                padding: '1rem',
+                backgroundColor: 'transparent',
                 cursor: 'pointer',
               }}
               suppressHydrationWarning
