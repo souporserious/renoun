@@ -164,87 +164,83 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '1.6rem',
               }}
             >
               <h2 id="api-reference" style={{ margin: 0 }}>
                 API Reference
               </h2>
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '6rem',
-                }}
-              >
-                {exportedTypes.map((type) => {
-                  const isActive = singlePackage.pathname === type.pathname
-                  return (
+              {exportedTypes.map((type, index) => {
+                const isActive = singlePackage.pathname === type.pathname
+                return (
+                  <div
+                    key={type.name}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      padding: '3rem 0 2rem',
+                      borderTop:
+                        index === 0
+                          ? undefined
+                          : '1px solid var(--color-separator)',
+                    }}
+                  >
                     <div
-                      key={type.name}
                       style={{
                         display: 'flex',
                         flexDirection: 'column',
+                        gap: '0.5rem',
                       }}
                     >
                       <div
                         style={{
                           display: 'flex',
-                          flexDirection: 'column',
+                          alignItems: 'baseline',
                           gap: '0.5rem',
                         }}
                       >
-                        <div
-                          style={{
-                            display: 'flex',
-                            alignItems: 'baseline',
-                            gap: '0.5rem',
-                          }}
-                        >
-                          {isActive ? (
+                        {isActive ? (
+                          <h3
+                            id={type.slug}
+                            style={{ fontWeight: 500, margin: 0 }}
+                          >
+                            {type.name}
+                          </h3>
+                        ) : (
+                          <a href={type.pathname}>
                             <h3
                               id={type.slug}
                               style={{ fontWeight: 500, margin: 0 }}
                             >
                               {type.name}
                             </h3>
-                          ) : (
-                            <a href={type.pathname}>
-                              <h3
-                                id={type.slug}
-                                style={{ fontWeight: 500, margin: 0 }}
-                              >
-                                {type.name}
-                              </h3>
-                            </a>
-                          )}
+                          </a>
+                        )}
 
-                          {isActive && type.sourcePath && (
-                            <a
-                              href={type.sourcePath}
-                              target="_blank"
-                              rel="noreferrer"
-                              style={{ fontSize: 'var(--font-size-body-2)' }}
-                            >
-                              View Source
-                            </a>
-                          )}
-                        </div>
-                        {!type.isMainExport && type.description ? (
-                          <p style={{ margin: 0 }}>{type.description}</p>
-                        ) : null}
+                        {isActive && type.sourcePath && (
+                          <a
+                            href={type.sourcePath}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{ fontSize: 'var(--font-size-body-2)' }}
+                          >
+                            View Source
+                          </a>
+                        )}
                       </div>
-
-                      {isActive && type.types.length > 0 ? (
-                        <Props
-                          props={type.types}
-                          isComponent={type.isComponent}
-                        />
+                      {type.description ? (
+                        <p style={{ margin: 0 }}>{type.description}</p>
                       ) : null}
                     </div>
-                  )
-                })}
-              </div>
+
+                    {isActive && type.types.length > 0 ? (
+                      <Props
+                        props={type.types}
+                        isComponent={type.isComponent}
+                      />
+                    ) : null}
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
@@ -281,7 +277,7 @@ function Props({
           style={{
             display: 'flex',
             flexDirection: 'column',
-            marginTop: '2rem',
+            marginTop: '1.5rem',
           }}
         >
           <h4
@@ -298,8 +294,8 @@ function Props({
           )}
           <div
             style={{
-              padding: '0 2rem',
-              margin: '0 0 0 -2rem',
+              padding: '0 1.5rem',
+              margin: '0 0 0 -1.5rem',
               border: '1px solid var(--color-separator)',
               borderRadius: '1rem',
               position: 'relative',
@@ -393,7 +389,7 @@ function Props({
         style={{
           display: 'flex',
           flexDirection: 'column',
-          padding: '2rem 0',
+          padding: '1.5rem 0',
           gap: '0.5rem',
           borderTop: index === 0 ? 'none' : '1px solid var(--color-separator)',
         }}
@@ -448,7 +444,9 @@ function Props({
         )}
 
         {propType.properties && propType.properties.length > 0 ? (
-          <Props props={propType.properties} isComponent={isComponent} />
+          <div style={{ paddingLeft: '2rem' }}>
+            <Props props={propType.properties} isComponent={isComponent} />
+          </div>
         ) : null}
       </div>
     )
