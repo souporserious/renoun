@@ -10,7 +10,7 @@ export function SiblingLinks({
       style={{
         display: 'grid',
         gridTemplateColumns: 'auto minmax(16px, 1fr) auto',
-        marginTop: '6rem',
+        marginTop: '8rem',
         padding: '2rem 0',
         borderTop: '1px solid var(--color-separator)',
       }}

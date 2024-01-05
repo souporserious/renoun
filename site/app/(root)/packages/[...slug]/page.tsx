@@ -174,7 +174,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '2rem',
+                  gap: '6rem',
                 }}
               >
                 {exportedTypes.map((type) => {
@@ -282,17 +282,43 @@ function Props({
             display: 'flex',
             flexDirection: 'column',
             marginTop: '2rem',
-            gap: '2rem',
           }}
         >
-          <span style={{ color: 'var(--color-foreground-secondary)' }}>
+          <h4
+            style={{
+              fontWeight: 500,
+              marginBottom: '2rem',
+              color: 'var(--color-foreground-secondary)',
+            }}
+          >
             {propType.text}
-          </span>
+          </h4>
           {propType.description && (
             <p style={{ margin: 0 }}>{propType.description}</p>
           )}
-          <div>
-            <h4>Union Props</h4>
+          <div
+            style={{
+              padding: '0 2rem',
+              margin: '0 0 0 -2rem',
+              border: '1px solid var(--color-separator)',
+              borderRadius: '1rem',
+              position: 'relative',
+            }}
+          >
+            <span
+              className="title"
+              style={{
+                position: 'absolute',
+                left: '2rem',
+                top: 0,
+                translate: '0 -50%',
+                padding: '0 0.5rem',
+                margin: '0 -0.5rem',
+                backgroundColor: 'var(--color-background)',
+              }}
+            >
+              Union
+            </span>
             {propType.unionProperties.map((props: any, index: number) => (
               <Fragment key={index}>
                 {index > 0 ? (
@@ -301,6 +327,7 @@ function Props({
                       display: 'grid',
                       gridTemplateColumns: '1fr auto 1fr',
                       alignItems: 'center',
+                      margin: '0 -2rem',
                       gap: '8px',
                     }}
                   >
@@ -338,10 +365,7 @@ function Props({
               </Fragment>
             ))}
           </div>
-          <div>
-            <h4>Base Props</h4>
-            <Props props={propType.properties} isComponent={isComponent} />
-          </div>
+          <Props props={propType.properties} isComponent={isComponent} />
         </div>
       )
     }
@@ -391,7 +415,12 @@ function Props({
               color: 'var(--color-foreground-secondary)',
             }}
           >
-            {propType.name} {propType.required && '*'}
+            {propType.name}{' '}
+            {propType.required && (
+              <span style={{ color: 'oklch(0.8 0.15 36.71)' }} title="required">
+                *
+              </span>
+            )}
           </h4>
           <div
             style={{
