@@ -118,6 +118,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
                       position: 'relative',
                       padding: '0.5rem',
                       gap: '0.5rem',
+                      border: '1px solid var(--color-separator)',
                       borderRadius: '0.25rem',
                       backgroundColor: 'var(--color-surface-2)',
                     }}
@@ -129,7 +130,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
                         padding: '1rem',
                         overflow: 'hidden',
                         backgroundColor: 'var(--color-background)',
-                        border: '1px solid var(--color-separator)',
+                        border: '1px solid var(--color-separator-secondary)',
                       }}
                     >
                       <div
@@ -181,7 +182,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
                       borderTop:
                         index === 0
                           ? undefined
-                          : '1px solid var(--color-separator)',
+                          : '1px solid var(--color-separator-secondary)',
                     }}
                   >
                     <div
@@ -296,7 +297,7 @@ function Props({
             style={{
               padding: '0 1.5rem',
               margin: '0 0 0 -1.5rem',
-              border: '1px solid var(--color-separator)',
+              border: '1px solid var(--color-separator-secondary)',
               borderRadius: '1rem',
               position: 'relative',
             }}
@@ -308,9 +309,10 @@ function Props({
                 left: '2rem',
                 top: 0,
                 translate: '0 -50%',
-                padding: '0 0.5rem',
-                margin: '0 -0.5rem',
-                backgroundColor: 'var(--color-background)',
+                padding: '0.25rem 0.5rem',
+                margin: '0 0 0 -1rem',
+                borderRadius: '1rem',
+                backgroundColor: 'var(--color-separator-secondary)',
               }}
             >
               Union
@@ -323,8 +325,7 @@ function Props({
                       display: 'grid',
                       gridTemplateColumns: '1fr auto 1fr',
                       alignItems: 'center',
-                      margin: '0 -2rem',
-                      gap: '8px',
+                      margin: '0 -1.5rem',
                     }}
                   >
                     <div
@@ -340,7 +341,7 @@ function Props({
                           padding: '0.1rem 1rem 0.25rem',
                           border: '1px solid var(--color-separator)',
                           borderRadius: '1rem',
-                          color: '#ccc',
+                          color: 'var(--color-foreground-secondary)',
                           position: 'relative',
                           top: '-0.95rem',
                           userSelect: 'none',
