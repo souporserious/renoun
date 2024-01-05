@@ -28,15 +28,21 @@ export type Module = {
  * export const allComponents = createSource('./components/**\/index.ts')
  */
 export function createSource<Type>(
-  /** A glob pattern to match files. */
+  /** A glob pattern to match source files. */
   pattern: string,
 
   /** Options for configuring the data source. */
   options: {
-    /** The base directory to use for calculating source paths. */
+    /**
+     * The base directory to use for calculating source paths. This is useful in monorepos where
+     * source files can be located outside of the workspace.
+     */
     baseDirectory?: string
 
-    /** The base pathname to use for calculating navigation paths. */
+    /**
+     * The base pathname to use for calculating navigation paths. This includes everything after
+     * the hostname (e.g. `/docs` in `https://mdxts.com/docs`).
+     */
     basePathname?: string
   } = {}
 ) {
