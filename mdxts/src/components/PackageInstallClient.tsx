@@ -8,6 +8,7 @@ const packageStyles = `
   color: #fff;
 }
 .PackageInstallButton.active {
+  font-weight: 600;
   border-bottom: 1px solid #fff;
 }
 .Command {
