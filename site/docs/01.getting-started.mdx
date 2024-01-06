@@ -30,10 +30,7 @@ Once the `mdxts` package is installed, you can configure the Next.js plugin to u
 ```ts filename="next.config.ts"
 import { createMdxtsPlugin } from 'mdxts/next'
 
-const withMdxts = createMdxtsPlugin({
-  theme: 'theme.json',
-  gitSource: 'souporserious/mdxts',
-})
+const withMdxts = createMdxtsPlugin({ theme: 'nord' })
 
 export default withMdxts({
   // Next.js config options...
@@ -48,8 +45,6 @@ All code blocks will automatically be type-checked using the TypeScript compiler
 import { createMdxtsPlugin } from 'mdxts/next'
 
 const withMdxts = createMdxtsPlugin({
-  theme: 'theme.json',
-  gitSource: 'souporserious/mdxts',
   types: ['mdxts/components', 'react', 'react-dom'],
 })
 ```
