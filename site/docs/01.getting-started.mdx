@@ -30,28 +30,18 @@ Once the `mdxts` package is installed, you can configure the Next.js plugin to u
 ```ts filename="next.config.ts"
 import { createMdxtsPlugin } from 'mdxts/next'
 
-const withMdxts = createMdxtsPlugin({ theme: 'nord' })
+const withMdxts = createMdxtsPlugin({
+  theme: 'nord',
+})
 
 export default withMdxts({
   // Next.js config options...
 })
 ```
 
-### Type Checking
+### Defining a Data Source
 
-All code blocks will automatically be type-checked using the TypeScript compiler. You can also use the `types` plugin option to specify additional package types to include for the client:
-
-```ts filename="next.config.ts"
-import { createMdxtsPlugin } from 'mdxts/next'
-
-const withMdxts = createMdxtsPlugin({
-  types: ['mdxts/components', 'react', 'react-dom'],
-})
-```
-
-### Generating Routes
-
-Use the `createSource` function exported from the `mdxts` package to generate metadata and a `paths` helper for a set of MDX or TypeScript source files:
+Use the `createSource` function exported from the `mdxts` package to generate metadata and helpers for MDX and TypeScript source files that can be used to build routes for content and documentation:
 
 ```ts filename="data.ts"
 import { createSource } from 'mdxts'
@@ -63,11 +53,11 @@ export const allDocs = createSource('docs/**/*.mdx', {
 allDocs.paths() // => [['docs', 'getting-started'], ['docs, 'authoring']]
 ```
 
-Visit the [routing](/routing) section for more information on the `paths` method.
+Visit the [routing](/routing) section for more information on how to use `paths` to generate routes.
 
 ### Rendering Content
 
-Use the `get` method from the modules loader to render MDX content:
+Use the `get` method from the modules loader to retrieve the metadata for a specific source file and render it:
 
 ```tsx filename="blog/[slug]/page.tsx"
 import { notFound } from 'next/navigation'
@@ -137,6 +127,29 @@ export default async function Page({ params }: Props) {
 }
 ```
 
+### Type Checking
+
+All code blocks will automatically be type-checked using the TypeScript compiler. Notice the following will throw a type error:
+
+```tsx
+const a = 1
+a + b
+```
+
+Pass `allowErrors` to disable type checking:
+
+````mdx
+```tsx allowErrors
+const a = 1
+a + b
+```
+````
+
+```tsx allowErrors
+const a = 1
+a + b
+```
+
 ## Next steps
 
-Check out the [examples](./examples/authoring) section to learn how to use MDXTS to build interactive content and documentation.
+Check out the [routing](./routing) section to learn how to generate routes for your content and documentation.
