@@ -118,7 +118,14 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
         config.module.rules.push({
           test: /\.(?:jsx?|tsx?|mdx?)$/,
           exclude: /node_modules/,
-          use: [{ loader: 'mdxts/loader', options: { themePath } }],
+          use: [
+            {
+              loader: 'mdxts/loader',
+              options: {
+                themePath: theme.endsWith('.json') ? themePath : theme,
+              },
+            },
+          ],
         })
 
         config.module.rules.push({

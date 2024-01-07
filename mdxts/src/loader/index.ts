@@ -1,5 +1,6 @@
 import * as webpack from 'webpack'
 import { dirname, basename, join, relative, resolve, sep } from 'node:path'
+import { existsSync } from 'node:fs'
 import { glob } from 'fast-glob'
 import { Node, Project, SyntaxKind } from 'ts-morph'
 import matter from 'gray-matter'
@@ -30,7 +31,17 @@ export default async function loader(
     (isNextJsEntryLayout(this.resourcePath) || isExample) &&
     options.themePath
   ) {
-    const relativeThemePath = relative(workingDirectory, options.themePath)
+    let relativeThemePath = relative(workingDirectory, options.themePath)
+
+    if (options.themePath.endsWith('.json') && !existsSync(options.themePath)) {
+      throw new Error(
+        `mdxts: Could not find theme at ${options.themePath} or ${relativeThemePath}. Please provide a valid theme path.`
+      )
+    }
+
+    if (!options.themePath.endsWith('.json')) {
+      relativeThemePath = `shiki/themes/${options.themePath}.json`
+    }
 
     if (isExample) {
       source =
