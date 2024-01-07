@@ -8,6 +8,7 @@ import CopyPlugin from 'copy-webpack-plugin'
 import NodePolyfillPlugin from 'node-polyfill-webpack-plugin'
 import remarkTypography from 'remark-typography'
 import createMdxPlugin from '@next/mdx'
+import { BUNDLED_THEMES } from 'shiki'
 
 import { remarkPlugin } from '../remark'
 import { rehypePlugin } from '../rehype'
@@ -17,7 +18,7 @@ import { addGitSourceToMdxtsConfig } from './add-git-source'
 
 type PluginOptions = {
   /** Path to the VS Code compatible theme used for syntax highlighting the Code and Editor components. */
-  theme: string
+  theme: (typeof BUNDLED_THEMES)[number] | (string & {})
 
   /** The git source to use for linking to the repository and source files. This is automatically inferred from the git remote URL if not provided. */
   gitSource?: string
