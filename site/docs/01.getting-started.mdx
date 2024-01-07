@@ -41,14 +41,12 @@ export default withMdxts({
 
 ### Defining a Data Source
 
-Use the `createSource` function exported from the `mdxts` package to generate metadata and helpers for MDX and TypeScript source files that can be used to build routes for content and documentation:
+Use the `createSource` utility to generate metadata and helpers for MDX and TypeScript source files that can be used to build routes for content and documentation:
 
 ```ts filename="data.ts"
 import { createSource } from 'mdxts'
 
-export const allDocs = createSource('docs/**/*.mdx', {
-  baseDirectory: 'docs',
-})
+export const allDocs = createSource('docs/**/*.mdx')
 
 allDocs.paths() // => [['docs', 'getting-started'], ['docs, 'authoring']]
 ```
@@ -57,7 +55,7 @@ Visit the [routing](/routing) section for more information on how to use `paths`
 
 ### Rendering Content
 
-Use the `get` method from the modules loader to retrieve the metadata for a specific source file and render it:
+Use the `get` method from the data source to retrieve the metadata for a specific source file and render it:
 
 ```tsx filename="blog/[slug]/page.tsx"
 import { notFound } from 'next/navigation'
@@ -78,7 +76,7 @@ export default async function Page({ params }: Props) {
 }
 ```
 
-If the targeted source file is a TypeScript file, its types will be analyzed and included along with other metadata:
+If the targeted source file is a TypeScript file, its types will also be analyzed and included along with other metadata:
 
 ```tsx filename="components/[slug]/page.tsx"
 import { createSource } from 'mdxts'
@@ -126,6 +124,22 @@ export default async function Page({ params }: Props) {
   )
 }
 ```
+
+### Examples
+
+To associate examples with a source file, create a sibling file with the same name and a `.examples.tsx` extension:
+
+```tsx filename="components/Button.tsx"
+export const Button = ({ children }) => <button>{children}</button>
+```
+
+```tsx filename="components/Button.examples.tsx"
+import { Button } from './Button'
+
+export const Basic = () => <Button>Click Me</Button>
+```
+
+Read more about [examples](/examples/authoring) to learn how to use them to generate interactive documentation.
 
 ### Type Checking
 
