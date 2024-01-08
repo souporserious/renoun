@@ -6,6 +6,9 @@
     "dist/*"
   ],
   "sideEffects": false,
+  "bin": {
+    "mdxts": "dist/cli/index.js"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -56,6 +59,7 @@
     "build:esm": "swc ./src -d ./dist --config-file .swcrc-build",
     "build:cjs": "tsup",
     "build:types": "tsc --emitDeclarationOnly",
+    "build:cli": "tsup ./cli/index.tsx --out-dir ./dist/cli --no-config",
     "dev": "pnpm build:esm --watch",
     "test": "jest"
   },
@@ -76,6 +80,7 @@
     "webpack": "^5.89.0"
   },
   "dependencies": {
+    "@antfu/install-pkg": "^0.3.1",
     "@manypkg/find-root": "^2.2.1",
     "@mdx-js/loader": "^2.3.0",
     "@mdx-js/mdx": "^2.3.0",
