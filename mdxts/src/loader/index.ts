@@ -116,6 +116,13 @@ export default async function loader(
               cwd: workingDirectory,
             })
             const allPaths = [...allSourceFilePaths, ...allMdxFilePaths]
+
+            if (allPaths.length === 0) {
+              throw new Error(
+                `mdxts: Could not find any files matching ${globPattern}. Please provide a valid file pattern.`
+              )
+            }
+
             const commonRootPath = findCommonRootPath(allPaths)
             const packageJson = (
               await readPackageUp({

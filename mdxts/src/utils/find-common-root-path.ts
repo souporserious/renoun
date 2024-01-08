@@ -4,6 +4,10 @@ import { sep } from 'path'
 export function findCommonRootPath(paths: string[]) {
   let pathSegments = paths.map((path) => path.split(sep))
 
+  if (pathSegments.length === 0) {
+    throw new Error('mdxts: cannot find common root path for empty array')
+  }
+
   // Find the shortest path to limit the comparison
   let shortestPath = pathSegments.reduce((a, b) =>
     a.length < b.length ? a : b

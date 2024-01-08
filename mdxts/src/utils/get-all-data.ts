@@ -4,7 +4,7 @@ import { readPackageUpSync } from 'read-package-up'
 import type { Directory, Project, SourceFile } from 'ts-morph'
 import { getSymbolDescription, resolveExpression } from '@tsxmod/utils'
 
-import { getSourcePath } from '../utils/get-source-path'
+import { getSourcePath } from './get-source-path'
 import { findCommonRootPath } from './find-common-root-path'
 import { filePathToPathname } from './file-path-to-pathname'
 import { getExamplesFromSourceFile } from './get-examples'
@@ -73,6 +73,13 @@ export function getAllData({
     ...Object.keys(allModules),
     ...(typeScriptSourceFiles?.map((file) => file.getFilePath()) ?? []),
   ]
+
+  if (allPaths.length === 0) {
+    throw new Error(
+      `mdxts: Could not find any files matching ${globPattern}. Please provide a valid file pattern.`
+    )
+  }
+
   const commonRootPath = findCommonRootPath(allPaths)
   const packageJson = readPackageUpSync({
     cwd: commonRootPath,
