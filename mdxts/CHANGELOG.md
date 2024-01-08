@@ -1,5 +1,18 @@
 # mdxts
 
+## 0.4.0
+
+### Minor Changes
+
+- 913fc68: Add Node polyfill plugin for Editor.
+- e3ed63f: Rename `createDataSource` -> `createSource` and `mergeDataSources` -> `mergeSources`
+- 4bbb048: Add `allowCopy` `Code` prop for controlling the rendering of the copy button.
+- cb95470: Add cli tool to scaffold initial project.
+
+### Patch Changes
+
+- 576b808: Fix loading shiki themes.
+
 ## 0.3.0
 
 ### Minor Changes
