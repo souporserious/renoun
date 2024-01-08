@@ -60,7 +60,7 @@ importers:
         specifier: ^5.3.3
         version: 5.3.3
 
-  mdxts:
+  packages/mdxts:
     dependencies:
       '@antfu/install-pkg':
         specifier: ^0.3.1
@@ -287,7 +287,7 @@ importers:
         version: 1.2.0(next@14.0.4)
       mdxts:
         specifier: workspace:*
-        version: link:../mdxts
+        version: link:../packages/mdxts
       next:
         specifier: 14.0.4
         version: 14.0.4(@babel/core@7.23.0)(react-dom@18.2.0)(react@18.2.0)
