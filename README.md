@@ -1,1 +1,1 @@
-mdxts/README.md
+packages/mdxts/README.md
