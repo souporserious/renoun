@@ -3,10 +3,9 @@ import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
 async function init() {
-  const packageJsonPath = join(process.cwd(), 'package.json')
-  const nextConfigPath = join(process.cwd(), 'next.config.js')
-
   // Check for package.json
+  const packageJsonPath = join(process.cwd(), 'package.json')
+
   if (!existsSync(packageJsonPath)) {
     console.error(
       'No package.json found. Please run this command in a Next.js project directory.'
@@ -47,7 +46,10 @@ async function init() {
   }
 
   // Check for next.config.js
-  if (!existsSync(nextConfigPath)) {
+  const nextConfigJsPath = join(process.cwd(), 'next.config.js')
+  const nextConfigMjsPath = join(process.cwd(), 'next.config.mjs')
+
+  if (!existsSync(nextConfigJsPath) && !existsSync(nextConfigMjsPath)) {
     console.log('Creating next.config.mjs and configuring mdxts plugin...')
 
     const nextConfigContent = `
@@ -59,9 +61,9 @@ const withMdxts = createMdxtsPlugin({
 
 export default withMdxts()`.trim()
 
-    writeFileSync(nextConfigPath, nextConfigContent)
+    writeFileSync(nextConfigMjsPath, nextConfigContent)
 
-    console.log('next.config.js created and configured successfully!')
+    console.log('next.config.mjs created and configured successfully!')
   } else {
     // TODO: codemod next config
   }
