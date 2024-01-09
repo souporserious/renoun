@@ -1,0 +1,31 @@
+{
+  "name": "create-mdxts",
+  "version": "0.0.0",
+  "author": "Travis Arnold",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/souporserious/mdxts",
+    "directory": "packages/create-mdxts"
+  },
+  "bugs": "https://github.com/souporserious/mdxts/issues",
+  "homepage": "https://mdxts.dev",
+  "files": [
+    "dist/*"
+  ],
+  "bin": {
+    "create-mdxts": "dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsup ./index.ts"
+  },
+  "devDependencies": {
+    "@types/update-notifier": "^6.0.8"
+  },
+  "dependencies": {
+    "@antfu/install-pkg": "^0.3.1",
+    "update-notifier": "^7.0.0"
+  }
+}

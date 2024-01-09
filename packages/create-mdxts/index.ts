@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { installPackage } from '@antfu/install-pkg'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
+import updateNotifier from 'update-notifier'
 
 async function init() {
   const packageJsonPath = join(process.cwd(), 'package.json')
@@ -17,19 +17,30 @@ async function init() {
 
   const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
 
-  if (!packageJson.dependencies.next) {
+  if (!packageJson.devDependencies.next || !packageJson.dependencies.next) {
     console.error(
-      'Next.js is not installed. Please install Next.js using `npx create-next-app@latest`'
+      'This package requires Next.js. Please install Next.js using `npx create-next-app@latest`'
     )
     process.exit(1)
   }
 
+  const notifier = updateNotifier({ pkg: packageJson })
+
+  if (notifier.update) {
+    notifier.notify({
+      message: `You're using an outdated version of mdxts.\nPlease run \`npm create mdxts@latest\` to use the latest version`,
+    })
+    process.exit(1)
+  }
+
   if (!packageJson.dependencies.mdxts) {
+    const { installPackage } = await import('@antfu/install-pkg')
+
     console.log('mdxts package not found. Installing mdxts...')
 
     await installPackage('mdxts')
 
-    console.log('mdxts installed successfully.')
+    console.log('mdxts installed successfully!')
   }
 
   // Check for next.config.js
