@@ -20,7 +20,7 @@ async function init() {
 
   const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
 
-  if (!packageJson.devDependencies.next || !packageJson.dependencies.next) {
+  if (!packageJson.devDependencies.next && !packageJson.dependencies.next) {
     console.error(
       'This package requires Next.js. Please install Next.js using `npx create-next-app@latest`'
     )
