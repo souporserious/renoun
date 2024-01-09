@@ -1,5 +1,11 @@
 # create-mdxts
 
+## 0.1.1
+
+### Patch Changes
+
+- c396612: Fix bad next dependency conditional.
+
 ## 0.1.0
 
 ### Minor Changes
