@@ -37,9 +37,11 @@ async function init() {
   if (!packageJson.dependencies.mdxts) {
     const { installPackage } = await import('@antfu/install-pkg')
 
-    console.log('mdxts package not found. Installing mdxts...')
+    console.log(
+      'mdxts package not found. Installing mdxts and required dependencies...'
+    )
 
-    await installPackage('mdxts')
+    await installPackage(['mdxts', 'shiki', 'prettier'])
 
     console.log('mdxts installed successfully!')
   }
@@ -58,7 +60,8 @@ const withMdxts = createMdxtsPlugin({
 export default withMdxts()`.trim()
 
     writeFileSync(nextConfigPath, nextConfigContent)
-    console.log('next.config.js created and configured successfully.')
+
+    console.log('next.config.js created and configured successfully!')
   } else {
     // TODO: codemod next config
   }
