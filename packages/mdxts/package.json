@@ -1,7 +1,27 @@
 {
   "name": "mdxts",
   "version": "0.4.0",
-  "description": "Markdown by TypeScript",
+  "description": "Generate a knowledge graph of your MDX and TypeScript files.",
+  "author": "Travis Arnold",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/souporserious/mdxts",
+    "directory": "packages/mdxts"
+  },
+  "bugs": "https://github.com/souporserious/mdxts/issues",
+  "homepage": "https://mdxts.dev",
+  "keywords": [
+    "markdown",
+    "md",
+    "mdx",
+    "typescript",
+    "ts",
+    "tsx",
+    "documentation",
+    "docgen",
+    "react"
+  ],
   "files": [
     "dist/*"
   ],

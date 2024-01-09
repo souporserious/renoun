@@ -5,7 +5,7 @@
 > **Warning**
 > This project and all packages are still a work in progress. The APIs are not stable and may change.
 
-Build a full knowledge graph of your MDX and TypeScript files.
+Generate a knowledge graph of your MDX and TypeScript files.
 
 https://mdxts.dev/
 
