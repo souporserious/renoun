@@ -65,6 +65,9 @@ importers:
       '@antfu/install-pkg':
         specifier: ^0.3.1
         version: 0.3.1
+      ts-morph:
+        specifier: ^21.0.1
+        version: 21.0.1
       update-notifier:
         specifier: ^7.0.0
         version: 7.0.0

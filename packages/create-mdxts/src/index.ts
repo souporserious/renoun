@@ -1,9 +1,14 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
+import { Project } from 'ts-morph'
+
+import {
+  codemodNextJsConfig,
+  codemodNextMjsConfig,
+} from './codemod-next-config'
 
 async function init() {
-  // Check for package.json
   const packageJsonPath = join(process.cwd(), 'package.json')
 
   if (!existsSync(packageJsonPath)) {
@@ -45,9 +50,11 @@ async function init() {
     console.log('mdxts installed successfully!')
   }
 
-  // Check for next.config.js
   const nextConfigJsPath = join(process.cwd(), 'next.config.js')
   const nextConfigMjsPath = join(process.cwd(), 'next.config.mjs')
+  const nextConfigPath = existsSync(nextConfigJsPath)
+    ? nextConfigJsPath
+    : nextConfigMjsPath
 
   if (!existsSync(nextConfigJsPath) && !existsSync(nextConfigMjsPath)) {
     console.log('Creating next.config.mjs and configuring mdxts plugin...')
@@ -63,9 +70,23 @@ export default withMdxts()`.trim()
 
     writeFileSync(nextConfigMjsPath, nextConfigContent)
 
-    console.log('next.config.mjs created and configured successfully!')
+    console.log('next.config.mjs created and mdxts configured successfully!')
   } else {
-    // TODO: codemod next config
+    const project = new Project({ useInMemoryFileSystem: true })
+    const sourceFile = project.createSourceFile(
+      'index.ts',
+      readFileSync(nextConfigPath, 'utf-8')
+    )
+
+    if (nextConfigPath.endsWith('.js')) {
+      codemodNextJsConfig(sourceFile)
+    } else {
+      codemodNextMjsConfig(sourceFile)
+    }
+
+    writeFileSync(nextConfigPath, sourceFile.getFullText())
+
+    console.log('mdxts configured successfully!')
   }
 }
 
