@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
-import updateNotifier from 'update-notifier'
 
 async function init() {
   const packageJsonPath = join(process.cwd(), 'package.json')
@@ -24,7 +23,9 @@ async function init() {
     process.exit(1)
   }
 
-  const notifier = updateNotifier({ pkg: packageJson })
+  const notifier = (await import('update-notifier')).default({
+    pkg: packageJson,
+  })
 
   if (notifier.update) {
     notifier.notify({
