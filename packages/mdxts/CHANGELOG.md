@@ -1,5 +1,11 @@
 # mdxts
 
+## 0.4.1
+
+### Patch Changes
+
+- 6c64d70: Throw error when no files found for `createSource` file pattern.
+
 ## 0.4.0
 
 ### Minor Changes
