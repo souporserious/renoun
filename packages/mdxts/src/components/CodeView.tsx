@@ -101,11 +101,7 @@ export function CodeView({
     : []
   const shouldHighlightLine = calculateLinesToHighlight(highlight)
   const diagnostics =
-    allowErrors || inline
-      ? []
-      : sourceFile
-        ? sourceFile.getPreEmitDiagnostics()
-        : []
+    allowErrors || inline ? [] : sourceFile ? getDiagnostics(sourceFile) : []
   const Element = inline ? 'span' : 'div'
   const Container = isNestedInEditor
     ? React.Fragment
@@ -352,6 +348,26 @@ function calculateLinesToHighlight(meta: string | undefined) {
     )
     return inRange
   }
+}
+
+/** Get the diagnostics for a source file. */
+function getDiagnostics(sourceFile: SourceFile) {
+  // if no imports/exports are found, add an empty export to ensure the file is a module
+  const hasImports = sourceFile.getImportDeclarations().length > 0
+  const hasExports = sourceFile.getExportDeclarations().length > 0
+
+  if (!hasImports && !hasExports) {
+    sourceFile.addExportDeclaration({})
+  }
+
+  const diagnostics = sourceFile.getPreEmitDiagnostics()
+
+  // remove the empty export
+  if (!hasImports && !hasExports) {
+    sourceFile.getExportDeclarations().at(0)!.remove()
+  }
+
+  return diagnostics
 }
 
 /* Get the bounding rectangle of all module import specifiers and identifiers in a source file. */
