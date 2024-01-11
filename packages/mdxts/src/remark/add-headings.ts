@@ -1,10 +1,11 @@
 import type { Root, Heading, Parent } from 'mdast'
-import type Slugger from 'github-slugger'
 
-let slugs: Slugger
+let slugify: ReturnType<
+  typeof import('@sindresorhus/slugify').slugifyWithCounter
+>
 
-import('github-slugger').then(({ default: Slugger }) => {
-  slugs = new Slugger()
+import('@sindresorhus/slugify').then(({ slugifyWithCounter }) => {
+  slugify = slugifyWithCounter()
 })
 
 export type Headings = {
@@ -18,7 +19,7 @@ export function addHeadings() {
   return async function (tree: Root) {
     const { valueToEstree } = await import('estree-util-value-to-estree')
     const headings: Headings = []
-    slugs.reset()
+    slugify.reset()
 
     const { visit } = await import('unist-util-visit')
     const { visitParents } = await import('unist-util-visit-parents')
@@ -28,7 +29,7 @@ export function addHeadings() {
       const text = node.children.map((child) => toString(child)).join('')
       const heading = {
         text,
-        id: slugs.slug(text),
+        id: slugify(text),
         depth: node.depth,
       }
       headings.push(heading)
