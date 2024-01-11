@@ -106,6 +106,7 @@
     "@tsxmod/utils": "^0.1.0",
     "@types/hast": "^3.0.3",
     "@types/mdast": "^4.0.3",
+    "@types/mdx": "^2.0.10",
     "@types/react": "^18.2.45",
     "@types/react-dom": "^18.2.17",
     "@types/title": "^3.4.3",

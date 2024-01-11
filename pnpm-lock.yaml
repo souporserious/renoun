@@ -108,6 +108,9 @@ importers:
       '@types/mdast':
         specifier: ^4.0.3
         version: 4.0.3
+      '@types/mdx':
+        specifier: ^2.0.10
+        version: 2.0.10
       '@types/react':
         specifier: ^18.2.45
         version: 18.2.45
