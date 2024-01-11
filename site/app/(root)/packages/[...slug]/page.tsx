@@ -331,7 +331,7 @@ function Props({
                     <div
                       style={{
                         height: 1,
-                        backgroundColor: 'var(--color-separator)',
+                        backgroundColor: 'var(--color-separator-secondary)',
                       }}
                     />
                     <div style={{ height: 1 }}>
@@ -339,7 +339,7 @@ function Props({
                         style={{
                           fontSize: 'var(--font-size-body-2)',
                           padding: '0.1rem 1rem 0.25rem',
-                          border: '1px solid var(--color-separator)',
+                          border: '1px solid var(--color-separator-secondary)',
                           borderRadius: '1rem',
                           color: 'var(--color-foreground-secondary)',
                           position: 'relative',
@@ -353,7 +353,7 @@ function Props({
                     <div
                       style={{
                         height: 1,
-                        backgroundColor: 'var(--color-separator)',
+                        backgroundColor: 'var(--color-separator-secondary)',
                       }}
                     />
                   </div>
