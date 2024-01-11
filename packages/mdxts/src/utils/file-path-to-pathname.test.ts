@@ -65,6 +65,16 @@ describe('filePathToUrlPathname', () => {
     ).toBe('/components')
   })
 
+  it('handles upper case filenames', () => {
+    expect(filePathToPathname('src/components/MDX.tsx', 'src')).toBe(
+      '/components/mdx'
+    )
+
+    expect(filePathToPathname('src/components/MDXProvider.tsx', 'src')).toBe(
+      '/components/mdx-provider'
+    )
+  })
+
   it('handles pascal case filenames', () => {
     expect(filePathToPathname('src/components/CodeBlock.tsx', 'src')).toBe(
       '/components/code-block'

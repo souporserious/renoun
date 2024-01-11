@@ -1,5 +1,5 @@
 import { join, resolve, sep } from 'node:path'
-import { kebabCase } from 'case-anything'
+import slugify from '@sindresorhus/slugify'
 
 /** Converts a file system path to a URL-friendly pathname. */
 export function filePathToPathname(
@@ -54,11 +54,7 @@ export function filePathToPathname(
 
   // Convert camel and pascal case names to kebab case for case-insensitive paths
   parsedFilePath = segments
-    .map((segment) => {
-      const isPascalCase = /^[A-Z][a-z]+(?:[A-Z][a-z]+)*$/.test(segment)
-      const isCamelCase = /^[a-z]+(?:[A-Z][a-z]+)*$/.test(segment)
-      return isPascalCase || isCamelCase ? kebabCase(segment) : segment
-    })
+    .map((segment) => slugify(segment))
     .filter(Boolean)
     .join(sep)
 
