@@ -13,11 +13,11 @@ import * as jsxDevRuntime from 'react/jsx-dev-runtime'
  *
  * export default function Page({ params }: { params: { slug: string } }) {
  *   const doc = allDocs.find((doc) => doc.slug === params.slug)
- *   const { default: Component } = await getExports(doc.mdx.code)
+ *   const { default: Component } = await executeCode(doc.mdx.code)
  *   return <Component />
  * }
  */
-export async function getExports<ComponentType extends any>(
+export async function executeCode<ComponentType extends any>(
   /** The code to execute. */
   code: string,
 
