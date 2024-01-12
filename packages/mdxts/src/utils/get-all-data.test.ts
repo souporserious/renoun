@@ -22,14 +22,12 @@ describe('getAllData', () => {
 
     project.createSourceFile(
       'components/Button.tsx',
-      `/** Used for any type of user action, including navigation. */\nexport function Button() {}`,
-      { overwrite: true }
+      `/** Used for any type of user action, including navigation. */\nexport function Button() {}`
     )
 
     project.createSourceFile(
       'components/Button.mdx',
-      `# Button\n\nButtons allow for users to take actions in your application.`,
-      { overwrite: true }
+      `# Button\n\nButtons allow for users to take actions in your application.`
     )
 
     const allData = getAllData({
@@ -49,21 +47,13 @@ describe('getAllData', () => {
   it('orders based on files and directories', () => {
     const project = new Project({ useInMemoryFileSystem: true })
 
-    project.createSourceFile('package/components/Button.tsx', ``, {
-      overwrite: true,
-    })
+    project.createSourceFile('package/components/Button.tsx', ``)
 
-    project.createSourceFile('package/components/Card.tsx', ``, {
-      overwrite: true,
-    })
+    project.createSourceFile('package/components/Card.tsx', ``)
 
-    project.createSourceFile('package/hooks/usePressable.ts', ``, {
-      overwrite: true,
-    })
+    project.createSourceFile('package/hooks/usePressable.ts', ``)
 
-    project.createSourceFile('package/hooks/useFocus.ts', ``, {
-      overwrite: true,
-    })
+    project.createSourceFile('package/hooks/useFocus.ts', ``)
 
     const allData = getAllData({
       project,
@@ -131,26 +121,22 @@ function getDocsData() {
 
   project.createSourceFile(
     'docs/01.getting-started.mdx',
-    `# Getting Started\n\nStart here.`,
-    { overwrite: true }
+    `# Getting Started\n\nStart here.`
   )
 
   project.createSourceFile(
     'docs/02.routing.mdx',
-    `# Routing\n\nHelpers for routing.`,
-    { overwrite: true }
+    `# Routing\n\nHelpers for routing.`
   )
 
   project.createSourceFile(
     'docs/03.examples/01.authoring.mdx',
-    `# Authoring\n\nExamples can be written alongside source code.`,
-    { overwrite: true }
+    `# Authoring\n\nExamples can be written alongside source code.`
   )
 
   project.createSourceFile(
     'docs/03.examples/02.rendering.mdx',
-    `# Rendering\n\nExamples can be rendered in the documentation using a bundler.`,
-    { overwrite: true }
+    `# Rendering\n\nExamples can be rendered in the documentation using a bundler.`
   )
 
   return getAllData({
