@@ -1,7 +1,8 @@
 import parseTitle from 'title'
 import { dirname, join, resolve, sep } from 'node:path'
 import { readPackageUpSync } from 'read-package-up'
-import type { Directory, Project, SourceFile } from 'ts-morph'
+import type { Project } from 'ts-morph'
+import { Directory, SourceFile } from 'ts-morph'
 import { getSymbolDescription, resolveExpression } from '@tsxmod/utils'
 
 import { getSourcePath } from './get-source-path'
@@ -232,7 +233,10 @@ export function getAllData({
 
   // Add order, this must be done after all data has been collected and added to the project above
   const commonDirectory = project.addDirectoryAtPath(commonRootPath)
-  const sourceFilesSortOrder = getDirectorySourceFilesOrder(commonDirectory)
+  const sourceFilesSortOrder = getDirectorySourceFilesOrder(
+    commonDirectory,
+    allPublicPaths
+  )
 
   Object.values(allData).forEach((value) => {
     const sourcePath = (value.tsPath || value.mdxPath)!
@@ -332,45 +336,58 @@ function getMetadata(sourceFile: SourceFile) {
 
 /** Returns a map of source file paths to their sort order. */
 function getDirectorySourceFilesOrder(
-  directory: Directory
+  directory: Directory,
+  allPublicPaths: string[]
 ): Record<string, number> {
-  const orderMap: Record<string, string> = {}
-  traverseDirectory(directory, '', orderMap, new Set(), true)
-  return Object.fromEntries(
-    Object.entries(orderMap).map(([key, value]) => [key, parseFloat(value)])
-  )
+  const orderMap: Record<string, number> = {}
+  traverseDirectory(directory, '', orderMap, new Set(), allPublicPaths)
+  return orderMap
 }
 
 /** Recursively traverses a directory, adding each file to the order map. */
 function traverseDirectory(
   directory: Directory,
   prefix: string,
-  orderMap: Record<string, string>,
+  orderMap: Record<string, number>,
   seenBaseNames: Set<string>,
-  isRoot: boolean = false
+  allPublicPaths: string[]
 ) {
+  const isRoot = prefix === ''
   let index = 1
 
   if (!isRoot) {
-    orderMap[directory.getPath()] = prefix.slice(0, -1) // Remove trailing dot from prefix
+    orderMap[directory.getPath()] = parseFloat(prefix.slice(0, -1)) // Remove trailing dot from prefix and convert to float
   }
 
+  const directories = directory
+    .getDirectories()
+    .sort((a, b) => a.getBaseName().localeCompare(b.getBaseName()))
+  const files = directory
+    .getSourceFiles()
+    .filter((file) => allPublicPaths.includes(file.getFilePath()))
+
   // Iterate through all files in the current directory
-  for (const file of directory.getSourceFiles()) {
+  for (const file of files) {
     // Extract the base part of the file name up to the first period e.g. `Button` from `Button.test.tsx`
     const baseName = file.getBaseName().split('.').at(0)
     if (baseName && !seenBaseNames.has(baseName)) {
-      orderMap[file.getFilePath()] = `${prefix}${index}`
+      orderMap[file.getFilePath()] = parseFloat(`${prefix}${index}`)
       seenBaseNames.add(baseName)
       index++
     } else {
-      orderMap[file.getFilePath()] = `${prefix}${index - 1}`
+      orderMap[file.getFilePath()] = parseFloat(`${prefix}${index - 1}`)
     }
   }
 
   // Iterate through subdirectories
-  for (const subdirectory of directory.getDirectories()) {
-    traverseDirectory(subdirectory, `${prefix}${index}.`, orderMap, new Set())
+  for (const subdirectory of directories) {
+    traverseDirectory(
+      subdirectory,
+      `${prefix}${index}.`,
+      orderMap,
+      new Set(),
+      allPublicPaths
+    )
     index++
   }
 }
