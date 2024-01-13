@@ -1,7 +1,25 @@
-import { Project } from 'ts-morph'
+import { Project, InMemoryFileSystemHost } from 'ts-morph'
 import { getAllData } from './get-all-data'
 
-const workingDirectory = '/Users/username/Code/mdxts/mdxts'
+const workingDirectory = '/Users/username/Code/mdxts'
+
+jest.mock('read-package-up', () => ({
+  readPackageUpSync: () => {
+    return {
+      packageJson: {
+        name: 'mdxts',
+        exports: {
+          './components': {
+            types: './dist/components/index.d.ts',
+            import: './dist/components/index.js',
+            require: './dist/cjs/components/index.js',
+          },
+        },
+      },
+      path: `${workingDirectory}/package.json`,
+    }
+  },
+}))
 
 describe('getAllData', () => {
   beforeAll(() => {
@@ -113,6 +131,69 @@ describe('getAllData', () => {
       '/docs/examples/authoring'
     )
     expect(allData['/docs/examples/rendering'].next).toBeUndefined()
+  })
+
+  it('includes only public files based on package exports', () => {
+    const fileSystem = new InMemoryFileSystemHost()
+    const files = [
+      {
+        path: 'components/Button.tsx',
+        content: `export const Button = () => {};`,
+      },
+      {
+        path: 'components/Button.examples.tsx',
+        content: `import { Button } from './Button';\nexport const Basic = () => {};`,
+      },
+      {
+        path: 'components/Card.tsx',
+        content: `export const Card = () => {};`,
+      },
+      {
+        path: 'components/PrivateComponent.tsx',
+        content: `export const PrivateComponent = () => {};`,
+      },
+      {
+        path: 'components/index.ts',
+        content: `export { Button } from './Button'; export { Card } from './Card';`,
+      },
+      {
+        path: 'hooks/usePressable.ts',
+        content: `export const usePressable = () => {};`,
+      },
+      {
+        path: 'hooks/useFocus.ts',
+        content: `export const useFocus = () => {};`,
+      },
+      {
+        path: 'hooks/index.ts',
+        content: `export * from './usePressable';\nexport * from './useFocus';`,
+      },
+    ]
+
+    files.forEach((file) => {
+      fileSystem.writeFileSync(
+        `${workingDirectory}/src/${file.path}`,
+        file.content
+      )
+    })
+
+    const project = new Project({ fileSystem })
+
+    const allData = getAllData({
+      project,
+      allModules: {
+        [`${workingDirectory}/src/components/Button.examples.tsx`]:
+          Promise.resolve({
+            default: () => {},
+          }),
+      },
+      globPattern: `${workingDirectory}/src/**/*.{ts,tsx}`,
+      baseDirectory: `src`,
+    })
+
+    expect(allData['/components/button']).toBeDefined()
+    expect(allData['/components/card']).toBeDefined()
+    expect(allData['/components/private-component']).toBeUndefined()
   })
 })
 
