@@ -1,11 +1,20 @@
 import { Fragment } from 'react'
 import { notFound } from 'next/navigation'
-import { Code } from 'mdxts/components'
+import { Code, MDX } from 'mdxts/components'
 import { PageContainer } from 'components/PageContainer'
 import { SiblingLinks } from 'components/SiblingLinks'
 import { TableOfContents } from 'components/TableOfContents'
 import { allData, allPackages } from 'data'
 import { getSiteMetadata } from 'utils/get-site-metadata'
+
+const mdxComponents = {
+  code: (props) => {
+    if (typeof props.children == 'string') {
+      return <Code inline value={props.children} language="typescript" />
+    }
+    return <code {...props} />
+  },
+} satisfies React.ComponentProps<typeof MDX>['components']
 
 export const dynamic = 'force-static'
 
@@ -71,14 +80,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
         </div>
 
         {description ? (
-          <p
-            style={{
-              // @ts-expect-error
-              textWrap: 'pretty',
-            }}
-          >
-            {description}
-          </p>
+          <MDX value={description} components={mdxComponents} />
         ) : null}
 
         {Content ? <Content /> : null}
@@ -229,7 +231,10 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
                         )}
                       </div>
                       {type.description ? (
-                        <p style={{ margin: 0 }}>{type.description}</p>
+                        <MDX
+                          value={type.description}
+                          components={mdxComponents}
+                        />
                       ) : null}
                     </div>
 
@@ -291,7 +296,7 @@ function Props({
             {propType.text}
           </h4>
           {propType.description && (
-            <p style={{ margin: 0 }}>{propType.description}</p>
+            <MDX value={propType.description} components={mdxComponents} />
           )}
           <div
             style={{
@@ -441,7 +446,7 @@ function Props({
           </div>
         </div>
         {propType.description && (
-          <p style={{ margin: 0 }}>{propType.description}</p>
+          <MDX value={propType.description} components={mdxComponents} />
         )}
 
         {propType.properties && propType.properties.length > 0 ? (
