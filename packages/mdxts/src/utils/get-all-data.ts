@@ -49,6 +49,7 @@ export function getAllData({
   allModules,
   globPattern,
   project,
+  sourceDirectory = 'src',
   baseDirectory,
   basePathname = '',
 }: {
@@ -60,6 +61,9 @@ export function getAllData({
 
   /** The ts-morph project to use for parsing source files. */
   project: Project
+
+  /** The source directory used to calculate package export paths. */
+  sourceDirectory?: string
 
   /** The base directory to use when calculating source paths. */
   baseDirectory?: string
@@ -82,9 +86,9 @@ export function getAllData({
   }
 
   const commonRootPath = findCommonRootPath(allPaths)
-  const packageJson = readPackageUpSync({
+  const { packageJson, path: packageJsonPath } = readPackageUpSync({
     cwd: commonRootPath,
-  })?.packageJson
+  }) || { packageJson: undefined, path: undefined }
   const hasMainExport = packageJson
     ? packageJson.exports
       ? Boolean((packageJson.exports as Record<string, any>)['.'])
@@ -95,10 +99,14 @@ export function getAllData({
     packageJson?.exports
       ? /** If package.json exports found use that for calculating public paths. */
         Object.keys(packageJson.exports).map((key) =>
-          join(resolve(commonRootPath, key), 'index.(ts|tsx)')
+          join(dirname(packageJsonPath), sourceDirectory, key, 'index.{ts,tsx}')
         )
       : /** Otherwise default to a root index file. */
-        resolve(commonRootPath, '**/index.(ts|tsx)')
+        join(
+          packageJsonPath ? dirname(packageJsonPath) : commonRootPath,
+          sourceDirectory,
+          'index.{ts,tsx}'
+        )
   )
   const exportedSourceFiles = getExportedSourceFiles(entrySourceFiles)
   const allPublicPaths = entrySourceFiles
