@@ -311,15 +311,23 @@ export function getAllData({
 
 /** Returns the title of a source file based on its filename. */
 function getSourceFileTitle(sourceFile: SourceFile) {
-  const filename = sourceFile
+  const baseName = sourceFile
     .getBaseNameWithoutExtension()
     .replace(/\d+\.?/g, '')
-  const title = /(readme|index)$/i.test(filename)
-    ? parseTitle(sourceFile.getDirectory().getBaseName())
-    : /^[A-Za-z][a-zA-Z0-9]*$/.test(filename) // match both PascalCase and camelCase
-      ? filename
-      : parseTitle(filename)
-  return title.replace(/-/g, ' ') // replace dashes with spaces
+  return parseTitleFromBaseName(
+    /(readme|index)$/i.test(baseName)
+      ? sourceFile.getDirectory().getBaseName()
+      : baseName
+  )
+}
+
+/** Parses a title from a base name. */
+function parseTitleFromBaseName(baseName: string) {
+  // preserve PascalCase and camelCase names
+  if (/^[A-Za-z][a-zA-Z0-9]*$/.test(baseName)) {
+    return baseName
+  }
+  return parseTitle(baseName).replace(/-/g, ' ') // replace dashes with spaces
 }
 
 /** Returns the first h1 heading in a Markdown string. */
