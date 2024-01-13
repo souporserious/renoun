@@ -440,7 +440,12 @@ function Props({
             />
             {propType.defaultValue ? (
               <span style={{ fontSize: '0.8rem', flexShrink: 0 }}>
-                = {propType.defaultValue}
+                ={' '}
+                <Code
+                  inline
+                  value={propType.defaultValue}
+                  language="typescript"
+                />
               </span>
             ) : null}
           </div>
