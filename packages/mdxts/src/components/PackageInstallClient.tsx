@@ -3,6 +3,7 @@ import React, { useRef, useState, useEffect } from 'react'
 
 const packageStyles = `
 .PackageInstallButton {
+  font-size: 1rem;
   border: none;
   border-bottom: 1px solid transparent;
   color: #fff;
@@ -71,7 +72,7 @@ export function PackageInstallClient({
           display: 'flex',
           flexDirection: 'row',
           position: 'absolute',
-          top: 0,
+          top: -3,
           left: 1,
           zIndex: 1,
         }}
