@@ -385,7 +385,10 @@ function Props({
           <Props props={propType.properties} isComponent={isComponent} />
         </div>
       ) : (
-        propType.text
+        <div key={index}>
+          {isComponent ? 'Props' : 'Types'}{' '}
+          <Code inline value={propType.text} language="typescript" />
+        </div>
       )
     }
 
