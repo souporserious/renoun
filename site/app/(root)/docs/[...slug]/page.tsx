@@ -1,7 +1,5 @@
 import { notFound } from 'next/navigation'
 import { PageContainer } from 'components/PageContainer'
-import { SiblingLinks } from 'components/SiblingLinks'
-import { TableOfContents } from 'components/TableOfContents'
 import { allData, allDocs } from 'data'
 import { getSiteMetadata } from 'utils/get-site-metadata'
 
@@ -30,16 +28,12 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
     return notFound()
   }
 
-  const { Content, title, headings, sourcePath } = doc
+  const { Content, title } = doc
 
   return (
-    <PageContainer>
-      <div>
-        {title ? <h1>{title}</h1> : null}
-        {Content ? <Content /> : null}
-        <SiblingLinks previous={doc.previous} next={doc.next} />
-      </div>
-      <TableOfContents headings={headings} sourcePath={sourcePath} />
+    <PageContainer dataSource={doc}>
+      {title ? <h1>{title}</h1> : null}
+      {Content ? <Content /> : null}
     </PageContainer>
   )
 }

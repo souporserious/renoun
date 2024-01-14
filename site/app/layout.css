@@ -61,6 +61,9 @@ body {
   text-rendering: optimizeLegibility;
   font-size: var(--font-size-body-1);
   letter-spacing: var(--letter-spacing-body);
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
   background-color: var(--color-background);
   color: var(--color-foreground);
 }

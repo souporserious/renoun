@@ -10,9 +10,11 @@ export function SiblingLinks({
       style={{
         display: 'grid',
         gridTemplateColumns: 'auto minmax(16px, 1fr) auto',
-        marginTop: '8rem',
         padding: '2rem 0',
+        marginTop: 'auto',
         borderTop: '1px solid var(--color-separator)',
+        position: 'sticky',
+        bottom: 0,
       }}
     >
       <SiblingLink module={previous} direction="previous" />

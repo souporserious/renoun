@@ -1,6 +1,7 @@
 .container {
   display: grid;
   margin: 0 auto;
+  flex: 1;
 }
 
 @media screen and (min-width: 60rem) {

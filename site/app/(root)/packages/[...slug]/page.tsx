@@ -2,8 +2,6 @@ import { Fragment } from 'react'
 import { notFound } from 'next/navigation'
 import { Code, MDX } from 'mdxts/components'
 import { PageContainer } from 'components/PageContainer'
-import { SiblingLinks } from 'components/SiblingLinks'
-import { TableOfContents } from 'components/TableOfContents'
 import { allData, allPackages } from 'data'
 import { getSiteMetadata } from 'utils/get-site-metadata'
 
@@ -41,222 +39,203 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
     return notFound()
   }
 
-  const {
-    Content,
-    title,
-    description,
-    headings,
-    examples,
-    exportedTypes,
-    sourcePath,
-    isServerOnly,
-  } = singlePackage
+  const { Content, title, description, examples, exportedTypes, isServerOnly } =
+    singlePackage
 
   return (
-    <PageContainer>
-      <div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            marginBottom: '1.4rem',
-            gap: '1rem',
-          }}
-        >
-          {title ? <h1 style={{ margin: 0 }}>{title}</h1> : null}
-          {isServerOnly ? (
-            <span
-              style={{
-                fontSize: 'var(--font-size-body-2)',
-                padding: '0.25rem 0.8rem',
-                border: '1px solid #3F687E',
-                borderRadius: '1rem',
-                flexShrink: 0,
-              }}
-            >
-              Server Only
-            </span>
-          ) : null}
-        </div>
-
-        {description ? (
-          <MDX value={description} components={mdxComponents} />
+    <PageContainer dataSource={singlePackage}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          marginBottom: '1.4rem',
+          gap: '1rem',
+        }}
+      >
+        {title ? <h1 style={{ margin: 0 }}>{title}</h1> : null}
+        {isServerOnly ? (
+          <span
+            style={{
+              fontSize: 'var(--font-size-body-2)',
+              padding: '0.25rem 0.8rem',
+              border: '1px solid #3F687E',
+              borderRadius: '1rem',
+              flexShrink: 0,
+            }}
+          >
+            Server Only
+          </span>
         ) : null}
+      </div>
 
-        {Content ? <Content /> : null}
+      {description ? (
+        <MDX value={description} components={mdxComponents} />
+      ) : null}
 
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '2.8rem',
-          }}
-        >
-          {examples.length > 0 && (
+      {Content ? <Content /> : null}
+
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '2.8rem',
+        }}
+      >
+        {examples.length > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1.6rem',
+            }}
+          >
+            <h2 id="examples" style={{ margin: 0 }}>
+              Examples
+            </h2>
             <div
               style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '1.6rem',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(11rem, 1fr))',
+                gap: '1rem',
               }}
             >
-              <h2 id="examples" style={{ margin: 0 }}>
-                Examples
-              </h2>
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(11rem, 1fr))',
-                  gap: '1rem',
-                }}
-              >
-                {examples.map((example) => (
+              {examples.map((example) => (
+                <div
+                  key={example.slug}
+                  id={example.slug}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    position: 'relative',
+                    padding: '0.5rem',
+                    gap: '0.5rem',
+                    border: '1px solid var(--color-separator)',
+                    borderRadius: '0.25rem',
+                    backgroundColor: 'var(--color-surface-2)',
+                  }}
+                >
+                  <h3 style={{ flexShrink: 0, margin: 0 }}>{example.name}</h3>
                   <div
-                    key={example.slug}
-                    id={example.slug}
                     style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      position: 'relative',
-                      padding: '0.5rem',
-                      gap: '0.5rem',
-                      border: '1px solid var(--color-separator)',
-                      borderRadius: '0.25rem',
-                      backgroundColor: 'var(--color-surface-2)',
+                      height: '10rem',
+                      padding: '1rem',
+                      overflow: 'hidden',
+                      backgroundColor: 'var(--color-background)',
+                      border: '1px solid var(--color-separator-secondary)',
                     }}
                   >
-                    <h3 style={{ flexShrink: 0, margin: 0 }}>{example.name}</h3>
                     <div
                       style={{
-                        height: '10rem',
-                        padding: '1rem',
-                        overflow: 'hidden',
-                        backgroundColor: 'var(--color-background)',
-                        border: '1px solid var(--color-separator-secondary)',
+                        [String('--scale')]: 0.4,
+                        display: 'flex',
+                        transformOrigin: 'top left',
+                        scale: 'var(--scale)',
+                        width: 'calc(100% / var(--scale))',
+                        height: 'calc(100% / var(--scale))',
                       }}
                     >
-                      <div
-                        style={{
-                          [String('--scale')]: 0.4,
-                          display: 'flex',
-                          transformOrigin: 'top left',
-                          scale: 'var(--scale)',
-                          width: 'calc(100% / var(--scale))',
-                          height: 'calc(100% / var(--scale))',
-                        }}
-                      >
-                        <div style={{ margin: 'auto' }}>
-                          <example.moduleExport />
-                        </div>
+                      <div style={{ margin: 'auto' }}>
+                        <example.moduleExport />
                       </div>
                     </div>
-                    <a
-                      href={`/examples${example.pathname}`}
-                      style={{
-                        position: 'absolute',
-                        inset: 0,
-                      }}
-                    />
                   </div>
-                ))}
-              </div>
+                  <a
+                    href={`/examples${example.pathname}`}
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                    }}
+                  />
+                </div>
+              ))}
             </div>
-          )}
-          {exportedTypes.length > 0 && (
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-              }}
-            >
-              <h2 id="api-reference" style={{ margin: 0 }}>
-                API Reference
-              </h2>
-              {exportedTypes.map((type, index) => {
-                const isActive = singlePackage.pathname === type.pathname
-                return (
+          </div>
+        )}
+        {exportedTypes.length > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <h2 id="api-reference" style={{ margin: 0 }}>
+              API Reference
+            </h2>
+            {exportedTypes.map((type, index) => {
+              const isActive = singlePackage.pathname === type.pathname
+              return (
+                <div
+                  key={type.name}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    padding: '3rem 0 2rem',
+                    borderTop:
+                      index === 0
+                        ? undefined
+                        : '1px solid var(--color-separator-secondary)',
+                  }}
+                >
                   <div
-                    key={type.name}
                     style={{
                       display: 'flex',
                       flexDirection: 'column',
-                      padding: '3rem 0 2rem',
-                      borderTop:
-                        index === 0
-                          ? undefined
-                          : '1px solid var(--color-separator-secondary)',
+                      gap: '0.5rem',
                     }}
                   >
                     <div
                       style={{
                         display: 'flex',
-                        flexDirection: 'column',
+                        alignItems: 'baseline',
                         gap: '0.5rem',
                       }}
                     >
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'baseline',
-                          gap: '0.5rem',
-                        }}
-                      >
-                        {isActive ? (
+                      {isActive ? (
+                        <h3
+                          id={type.slug}
+                          style={{ fontWeight: 500, margin: 0 }}
+                        >
+                          {type.name}
+                        </h3>
+                      ) : (
+                        <a href={type.pathname}>
                           <h3
                             id={type.slug}
                             style={{ fontWeight: 500, margin: 0 }}
                           >
                             {type.name}
                           </h3>
-                        ) : (
-                          <a href={type.pathname}>
-                            <h3
-                              id={type.slug}
-                              style={{ fontWeight: 500, margin: 0 }}
-                            >
-                              {type.name}
-                            </h3>
-                          </a>
-                        )}
+                        </a>
+                      )}
 
-                        {isActive && type.sourcePath && (
-                          <a
-                            href={type.sourcePath}
-                            target="_blank"
-                            rel="noreferrer"
-                            style={{ fontSize: 'var(--font-size-body-2)' }}
-                          >
-                            View Source
-                          </a>
-                        )}
-                      </div>
-                      {type.description ? (
-                        <MDX
-                          value={type.description}
-                          components={mdxComponents}
-                        />
-                      ) : null}
+                      {isActive && type.sourcePath && (
+                        <a
+                          href={type.sourcePath}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ fontSize: 'var(--font-size-body-2)' }}
+                        >
+                          View Source
+                        </a>
+                      )}
                     </div>
-
-                    {isActive && type.types.length > 0 ? (
-                      <Props
-                        props={type.types}
-                        isComponent={type.isComponent}
+                    {type.description ? (
+                      <MDX
+                        value={type.description}
+                        components={mdxComponents}
                       />
                     ) : null}
                   </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
 
-        <SiblingLinks
-          previous={singlePackage.previous}
-          next={singlePackage.next}
-        />
+                  {isActive && type.types.length > 0 ? (
+                    <Props props={type.types} isComponent={type.isComponent} />
+                  ) : null}
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
-      <TableOfContents headings={headings} sourcePath={sourcePath} />
     </PageContainer>
   )
 }
