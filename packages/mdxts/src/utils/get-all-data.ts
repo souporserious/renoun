@@ -101,12 +101,8 @@ export function getAllData({
         Object.keys(packageJson.exports).map((key) =>
           join(dirname(packageJsonPath), sourceDirectory, key, 'index.{ts,tsx}')
         )
-      : /** Otherwise default to a root index file. */
-        join(
-          packageJsonPath ? dirname(packageJsonPath) : commonRootPath,
-          sourceDirectory,
-          'index.{ts,tsx}'
-        )
+      : /** Otherwise default to a common root index file. */
+        join(commonRootPath, 'index.{ts,tsx}')
   )
   const exportedSourceFiles = getExportedSourceFiles(entrySourceFiles)
   const allPublicPaths = entrySourceFiles
