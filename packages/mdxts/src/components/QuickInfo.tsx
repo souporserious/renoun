@@ -80,6 +80,7 @@ export function QuickInfo({
             {diagnostics.map((diagnostic, index) => (
               <div key={index}>
                 {getDiagnosticMessageText(diagnostic.getMessageText())}
+                <span style={{ opacity: 0.7 }}>({diagnostic.getCode()})</span>
               </div>
             ))}
           </div>
