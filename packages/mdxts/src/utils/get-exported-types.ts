@@ -1,39 +1,66 @@
 import { kebabCase } from 'case-anything'
-import type { SourceFile } from 'ts-morph'
+import type {
+  FunctionDeclaration,
+  FunctionExpression,
+  ArrowFunction,
+  TaggedTemplateExpression,
+  CallExpression,
+  SourceFile,
+} from 'ts-morph'
 import { Node } from 'ts-morph'
-import { getSymbolDescription, isJsxComponent } from '@tsxmod/utils'
-import { getFunctionParameterTypes } from './get-function-parameter-types'
+import {
+  getTypeDocumentation,
+  getSymbolDescription,
+  isJsxComponent,
+} from '@tsxmod/utils'
 
-export type ExportedType = NonNullable<
-  ReturnType<typeof getFunctionParameterTypes>
->
-
-/** Gets all exported prop types from a source file. */
+/** Gets all exported types from a source file. */
 export function getExportedTypes(sourceFile: SourceFile) {
-  return (
-    Array.from(sourceFile.getExportedDeclarations())
-      .map(([name, [declaration]]) => {
-        if (
-          Node.isFunctionDeclaration(declaration) ||
-          Node.isFunctionExpression(declaration) ||
-          Node.isArrowFunction(declaration)
-        ) {
-          const filePath = declaration.getSourceFile().getFilePath()
-          const types = getFunctionParameterTypes(declaration) || []
-          const symbol = declaration.getSymbol()
+  return Array.from(sourceFile.getExportedDeclarations())
+    .map(([name, [declaration]]) => {
+      if (
+        Node.isFunctionDeclaration(declaration) ||
+        Node.isVariableDeclaration(declaration)
+      ) {
+        const declarationOrExpression = Node.isVariableDeclaration(declaration)
+          ? declaration.getInitializerOrThrow()
+          : declaration
 
-          return {
-            name,
-            types,
-            description: symbol ? getSymbolDescription(symbol) : null,
-            isComponent: isJsxComponent(declaration),
-            slug: kebabCase(name),
-            filePath: filePath as string,
-          }
+        if (!isDeclarationOrExpression(declarationOrExpression)) {
+          return null
         }
-        return null
-      })
-      // Filter out null values and satisfy types.
-      .flatMap((entry) => (entry ? [entry] : []))
+
+        const filePath = declaration.getSourceFile().getFilePath()
+        const symbol = declaration.getSymbol()
+
+        return {
+          name,
+          description: symbol ? getSymbolDescription(symbol) : null,
+          types: getTypeDocumentation(declarationOrExpression) || [],
+          isComponent: isJsxComponent(declaration),
+          slug: kebabCase(name),
+          filePath: filePath as string,
+        }
+      }
+
+      return null
+    })
+    .filter((node): node is NonNullable<typeof node> => Boolean(node))
+}
+
+function isDeclarationOrExpression(
+  node: Node
+): node is
+  | FunctionDeclaration
+  | FunctionExpression
+  | ArrowFunction
+  | TaggedTemplateExpression
+  | CallExpression {
+  return (
+    Node.isFunctionDeclaration(node) ||
+    Node.isFunctionExpression(node) ||
+    Node.isArrowFunction(node) ||
+    Node.isTaggedTemplateExpression(node) ||
+    Node.isCallExpression(node)
   )
 }
