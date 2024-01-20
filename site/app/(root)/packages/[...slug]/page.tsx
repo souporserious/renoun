@@ -6,6 +6,7 @@ import { allData, allPackages } from 'data'
 import { getSiteMetadata } from 'utils/get-site-metadata'
 
 const mdxComponents = {
+  p: (props) => <p {...props} style={{ margin: 0 }} />,
   code: (props) => {
     if (typeof props.children == 'string') {
       return <Code inline value={props.children} language="typescript" />
