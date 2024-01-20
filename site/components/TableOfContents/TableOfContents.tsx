@@ -1,4 +1,5 @@
 import type { Headings } from 'mdxts/dist/remark/add-headings'
+import { ViewSource } from '../ViewSource'
 import styles from './TableOfContents.module.css'
 
 export function TableOfContents({
@@ -50,15 +51,8 @@ export function TableOfContents({
                 }}
               />
             </li>
-            <li style={{ paddingLeft: '0.5rem' }}>
-              <a
-                href={sourcePath}
-                target="_blank"
-                rel="noreferrer"
-                style={{ fontSize: 'var(--font-size-body-3)' }}
-              >
-                View Source
-              </a>
+            <li>
+              <ViewSource href={sourcePath} />
             </li>
           </>
         ) : null}

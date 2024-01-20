@@ -2,6 +2,7 @@ import { Fragment } from 'react'
 import { notFound } from 'next/navigation'
 import { Code, MDX } from 'mdxts/components'
 import { PageContainer } from 'components/PageContainer'
+import { ViewSource } from 'components/ViewSource'
 import { allData, allPackages } from 'data'
 import { getSiteMetadata } from 'utils/get-site-metadata'
 
@@ -188,7 +189,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
                       style={{
                         display: 'flex',
                         alignItems: 'baseline',
-                        gap: '0.5rem',
+                        gap: '1rem',
                       }}
                     >
                       {isActive ? (
@@ -210,14 +211,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
                       )}
 
                       {isActive && type.sourcePath && (
-                        <a
-                          href={type.sourcePath}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{ fontSize: 'var(--font-size-body-2)' }}
-                        >
-                          View Source
-                        </a>
+                        <ViewSource href={type.sourcePath} />
                       )}
                     </div>
                     {type.description ? (

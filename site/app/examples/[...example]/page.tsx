@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { allPackages } from 'data'
+import { ViewSource } from 'components/ViewSource'
 import { getSiteMetadata } from 'utils/get-site-metadata'
 
 export const dynamic = 'force-static'
@@ -75,19 +76,10 @@ export default async function Page({
           Back to <strong>{singlePackage.label}</strong>
         </span>
       </a>
-      <a
+      <ViewSource
         href={example.sourcePath}
-        target="_blank"
-        rel="noopener noreferrer"
-        style={{
-          fontSize: 'var(--font-size-body-3)',
-          position: 'absolute',
-          top: '1rem',
-          right: '1rem',
-        }}
-      >
-        View Source
-      </a>
+        style={{ position: 'absolute', top: '1rem', right: '1rem' }}
+      />
       <example.moduleExport />
     </div>
   )
