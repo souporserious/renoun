@@ -100,11 +100,18 @@ export function CodeView({
     ? getSymbolBounds(sourceFile, isJsxOnly, lineHeight)
     : []
   const shouldHighlightLine = calculateLinesToHighlight(highlight)
-  const diagnostics = inline ? [] : sourceFile ? getDiagnostics(sourceFile) : []
   const allowedErrorCodes =
     typeof allowErrors === 'string'
-      ? allowErrors.split(',').map((code: string) => parseInt(code))
+      ? allowErrors.split(',').map((code) => parseInt(code))
       : []
+  const diagnostics =
+    (allowedErrorCodes.length === 0 && allowErrors) || inline
+      ? []
+      : sourceFile
+        ? getDiagnostics(sourceFile).filter(
+            (diagnostic) => !allowedErrorCodes.includes(diagnostic.getCode())
+          )
+        : []
   const Element = inline ? 'span' : 'div'
   const Container = isNestedInEditor
     ? React.Fragment
@@ -190,42 +197,36 @@ export function CodeView({
         style={{ gridRow: filename ? 2 : 1 }}
       >
         {diagnostics
-          ? diagnostics
-              .filter((diagnostic) => {
-                return allowedErrorCodes.length
-                  ? allowedErrorCodes.includes(diagnostic.getCode())
-                  : true
-              })
-              .map((diagnostic) => {
-                const start = diagnostic.getStart()
-                const length = diagnostic.getLength()
+          ? diagnostics.map((diagnostic) => {
+              const start = diagnostic.getStart()
+              const length = diagnostic.getLength()
 
-                if (!start || !length || !sourceFile) {
-                  return null
-                }
+              if (!start || !length || !sourceFile) {
+                return null
+              }
 
-                const end = start + length
-                const { line, column } = sourceFile.getLineAndColumnAtPos(start)
-                const yOffset = isJsxOnly ? 2 : 1
-                const top = line - yOffset
-                const width = end - start
-                return (
-                  <div
-                    key={start}
-                    style={{
-                      position: 'absolute',
-                      top: `calc(${top} * ${lineHeight} + ${paddingVertical})`,
-                      left: `calc(${column - 1} * 1ch + ${paddingHorizontal})`,
-                      width: `calc(${width} * 1ch)`,
-                      height: lineHeight,
-                      backgroundImage: `url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%206%203'%20enable-background%3D'new%200%200%206%203'%20height%3D'3'%20width%3D'6'%3E%3Cg%20fill%3D'%23f14c4c'%3E%3Cpolygon%20points%3D'5.5%2C0%202.5%2C3%201.1%2C3%204.1%2C0'%2F%3E%3Cpolygon%20points%3D'4%2C0%206%2C2%206%2C0.6%205.4%2C0'%2F%3E%3Cpolygon%20points%3D'0%2C2%201%2C3%202.4%2C3%200%2C0.6'%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E")`,
-                      backgroundRepeat: 'repeat-x',
-                      backgroundPosition: 'bottom left',
-                      pointerEvents: 'none',
-                    }}
-                  />
-                )
-              })
+              const end = start + length
+              const { line, column } = sourceFile.getLineAndColumnAtPos(start)
+              const yOffset = isJsxOnly ? 2 : 1
+              const top = line - yOffset
+              const width = end - start
+              return (
+                <div
+                  key={start}
+                  style={{
+                    position: 'absolute',
+                    top: `calc(${top} * ${lineHeight} + ${paddingVertical})`,
+                    left: `calc(${column - 1} * 1ch + ${paddingHorizontal})`,
+                    width: `calc(${width} * 1ch)`,
+                    height: lineHeight,
+                    backgroundImage: `url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%206%203'%20enable-background%3D'new%200%200%206%203'%20height%3D'3'%20width%3D'6'%3E%3Cg%20fill%3D'%23f14c4c'%3E%3Cpolygon%20points%3D'5.5%2C0%202.5%2C3%201.1%2C3%204.1%2C0'%2F%3E%3Cpolygon%20points%3D'4%2C0%206%2C2%206%2C0.6%205.4%2C0'%2F%3E%3Cpolygon%20points%3D'0%2C2%201%2C3%202.4%2C3%200%2C0.6'%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E")`,
+                    backgroundRepeat: 'repeat-x',
+                    backgroundPosition: 'bottom left',
+                    pointerEvents: 'none',
+                  }}
+                />
+              )
+            })
           : null}
 
         {!inline &&
@@ -233,13 +234,6 @@ export function CodeView({
           language &&
           symbolBounds.map((bounds, index) => {
             const filteredDiagnostics = diagnostics.filter((diagnostic) => {
-              if (
-                allowedErrorCodes.length &&
-                !allowedErrorCodes.includes(diagnostic.getCode())
-              ) {
-                return false
-              }
-
               const start = diagnostic.getStart()
               const length = diagnostic.getLength()
               if (!start || !length) {
