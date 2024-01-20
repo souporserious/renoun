@@ -31,6 +31,12 @@ export type CodeProps = {
   /** Show or hide the copy button. */
   allowCopy?: boolean
 
+  /** Whether or not to allow errors. Accepts a boolean or comma-separated list of allowed error codes. */
+  allowErrors?: boolean | string
+
+  /** Show or hide errors. */
+  showErrors?: boolean
+
   /** Padding to apply to the code block. */
   padding?: string
 
@@ -43,13 +49,7 @@ export type CodeProps = {
   /** Whether or not the code is presented inline or as a block-level element. */
   inline?: boolean
 
-  /** Show or hide errors. */
-  showErrors?: boolean
-
-  /** Whether or not to allow errors. */
-  allowErrors?: boolean
-
-  /** Class name to be applied to the code block. */
+  /** Class name to apply to the code block. */
   className?: string
 }
 
@@ -100,8 +100,11 @@ export function CodeView({
     ? getSymbolBounds(sourceFile, isJsxOnly, lineHeight)
     : []
   const shouldHighlightLine = calculateLinesToHighlight(highlight)
-  const diagnostics =
-    allowErrors || inline ? [] : sourceFile ? getDiagnostics(sourceFile) : []
+  const diagnostics = inline ? [] : sourceFile ? getDiagnostics(sourceFile) : []
+  const allowedErrorCodes =
+    typeof allowErrors === 'string'
+      ? allowErrors.split(',').map((code: string) => parseInt(code))
+      : []
   const Element = inline ? 'span' : 'div'
   const Container = isNestedInEditor
     ? React.Fragment
@@ -187,36 +190,42 @@ export function CodeView({
         style={{ gridRow: filename ? 2 : 1 }}
       >
         {diagnostics
-          ? diagnostics.map((diagnostic) => {
-              const start = diagnostic.getStart()
-              const length = diagnostic.getLength()
+          ? diagnostics
+              .filter((diagnostic) => {
+                return allowedErrorCodes.length
+                  ? allowedErrorCodes.includes(diagnostic.getCode())
+                  : true
+              })
+              .map((diagnostic) => {
+                const start = diagnostic.getStart()
+                const length = diagnostic.getLength()
 
-              if (!start || !length || !sourceFile) {
-                return null
-              }
+                if (!start || !length || !sourceFile) {
+                  return null
+                }
 
-              const end = start + length
-              const { line, column } = sourceFile.getLineAndColumnAtPos(start)
-              const yOffset = isJsxOnly ? 2 : 1
-              const top = line - yOffset
-              const width = end - start
-              return (
-                <div
-                  key={start}
-                  style={{
-                    position: 'absolute',
-                    top: `calc(${top} * ${lineHeight} + ${paddingVertical})`,
-                    left: `calc(${column - 1} * 1ch + ${paddingHorizontal})`,
-                    width: `calc(${width} * 1ch)`,
-                    height: lineHeight,
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%206%203'%20enable-background%3D'new%200%200%206%203'%20height%3D'3'%20width%3D'6'%3E%3Cg%20fill%3D'%23f14c4c'%3E%3Cpolygon%20points%3D'5.5%2C0%202.5%2C3%201.1%2C3%204.1%2C0'%2F%3E%3Cpolygon%20points%3D'4%2C0%206%2C2%206%2C0.6%205.4%2C0'%2F%3E%3Cpolygon%20points%3D'0%2C2%201%2C3%202.4%2C3%200%2C0.6'%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E")`,
-                    backgroundRepeat: 'repeat-x',
-                    backgroundPosition: 'bottom left',
-                    pointerEvents: 'none',
-                  }}
-                />
-              )
-            })
+                const end = start + length
+                const { line, column } = sourceFile.getLineAndColumnAtPos(start)
+                const yOffset = isJsxOnly ? 2 : 1
+                const top = line - yOffset
+                const width = end - start
+                return (
+                  <div
+                    key={start}
+                    style={{
+                      position: 'absolute',
+                      top: `calc(${top} * ${lineHeight} + ${paddingVertical})`,
+                      left: `calc(${column - 1} * 1ch + ${paddingHorizontal})`,
+                      width: `calc(${width} * 1ch)`,
+                      height: lineHeight,
+                      backgroundImage: `url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%206%203'%20enable-background%3D'new%200%200%206%203'%20height%3D'3'%20width%3D'6'%3E%3Cg%20fill%3D'%23f14c4c'%3E%3Cpolygon%20points%3D'5.5%2C0%202.5%2C3%201.1%2C3%204.1%2C0'%2F%3E%3Cpolygon%20points%3D'4%2C0%206%2C2%206%2C0.6%205.4%2C0'%2F%3E%3Cpolygon%20points%3D'0%2C2%201%2C3%202.4%2C3%200%2C0.6'%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E")`,
+                      backgroundRepeat: 'repeat-x',
+                      backgroundPosition: 'bottom left',
+                      pointerEvents: 'none',
+                    }}
+                  />
+                )
+              })
           : null}
 
         {!inline &&
@@ -224,6 +233,13 @@ export function CodeView({
           language &&
           symbolBounds.map((bounds, index) => {
             const filteredDiagnostics = diagnostics.filter((diagnostic) => {
+              if (
+                allowedErrorCodes.length &&
+                !allowedErrorCodes.includes(diagnostic.getCode())
+              ) {
+                return false
+              }
+
               const start = diagnostic.getStart()
               const length = diagnostic.getLength()
               if (!start || !length) {
@@ -236,7 +252,6 @@ export function CodeView({
             return (
               <Symbol
                 key={index}
-                isQuickInfoOpen={isQuickInfoOpen}
                 style={{
                   top: `calc(${bounds.top} * ${lineHeight} + ${paddingVertical})`,
                   left: `calc(${bounds.left} * 1ch + ${paddingHorizontal})`,

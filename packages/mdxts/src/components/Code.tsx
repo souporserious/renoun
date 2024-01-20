@@ -35,11 +35,11 @@ export type BaseCodeProps = {
   /** Show or hide the copy button. */
   allowCopy?: boolean
 
+  /** Whether or not to allow errors. Accepts a boolean or comma-separated list of allowed error codes. */
+  allowErrors?: boolean | string
+
   /** Show or hide errors. */
   showErrors?: boolean
-
-  /** Whether or not to allow errors. */
-  allowErrors?: boolean
 
   /** Padding to apply to the code block. */
   padding?: string
@@ -50,7 +50,7 @@ export type BaseCodeProps = {
   /** Vertical padding to apply to the code block. */
   paddingVertical?: string
 
-  /** Whether or not the code is presented inline or as a block-level element. Note, extra white space will be trimmed when enabled. */
+  /** Whether or not the code is presented inline or as a block-level element. */
   inline?: boolean
 
   /** Class name to apply to the code block. */
