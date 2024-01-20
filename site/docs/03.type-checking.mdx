@@ -1,10 +1,10 @@
 # Type Checking
 
-To help identify and prevent errors, all code blocks are type checked. This is done using the TypeScript compiler, based on the tsconfig.json file local to the project that MDXTS is running in.
+To help identify and prevent errors, all code blocks are type-checked. This is done using the TypeScript compiler based on the `tsconfig.json` file local to the project that MDXTS is running in.
 
 ## Allowing errors
 
-If you want to allow errors for a specific code block, you can add an `allowErrors` prop to the code block:
+If you want to allow errors for a specific code block, you can add an `allowErrors` prop to the code block meta field:
 
 ````mdx
 ```tsx allowErrors
@@ -12,16 +12,20 @@ const a: string = 1
 ```
 ````
 
-This will prevent the code block from erroring when the project is type checked.
+```tsx
+const a: string = 1
+```
+
+This prevents the code block from erroring when the project is type-checked and removes the error indicator and message from the rendered code block.
 
 ### Allowing specific errors
 
-To only allow specific errors, add the `allowErrors` prop with a comma separated list of error codes to allow:
+To allow specific errors, add the `allowErrors` prop with a comma separated list of error codes:
 
 ````mdx
-```tsx allowErrors=2588
+```tsx allowErrors="2322"
 const a: string = 1
 ```
 ````
 
-This is useful for educational purposes, when you want to show the error message to the user.
+This is useful for educational purposes when you want to show the error message to the user. Note, the error number can be found in the error message.
