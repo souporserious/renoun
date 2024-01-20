@@ -4,6 +4,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import type { SourceFile } from 'ts-morph'
 import { findRoot } from '@manypkg/find-root'
 import { format, resolveConfig } from 'prettier'
+import { BUNDLED_LANGUAGES } from 'shiki'
 import 'server-only'
 
 import { getTheme } from '../index'
@@ -16,12 +17,18 @@ import { registerCodeComponent } from './state'
 
 export { getMetadataFromClassName } from '../utils/get-metadata-from-class-name'
 
+const languageMap: Record<string, any> = {
+  shell: 'shellscript',
+  mjs: 'javascript',
+}
+const languageKeys = Object.keys(languageMap)
+
 export type BaseCodeProps = {
   /** Name of the file. */
   filename?: string
 
   /** Language of the code snippet. */
-  language?: string
+  language?: (typeof BUNDLED_LANGUAGES)[number] | (typeof languageKeys)[number]
 
   /** Show or hide line numbers. */
   lineNumbers?: boolean
@@ -80,10 +87,6 @@ type PrivateCodeProps = Partial<{
   isNestedInEditor: boolean
 }>
 
-const languageMap: Record<string, any> = {
-  shell: 'shellscript',
-  mjs: 'javascript',
-}
 let filenameId = 0
 
 /** Renders a code block with syntax highlighting. */
@@ -118,9 +121,9 @@ export async function Code({
 
   let finalValue: string = ''
   let finalLanguage =
-    language && language in languageMap
+    (typeof language === 'string' && language in languageMap
       ? languageMap[language]
-      : language || 'bash'
+      : language) || 'plaintext'
 
   if ('value' in props) {
     finalValue = props.value

@@ -139,7 +139,6 @@ export function useMDXComponents() {
           paddingHorizontal="0.25rem"
           paddingVertical="0.1rem"
           value={props.children}
-          language="typescript"
           className={GeistMono.className}
         />
       )

@@ -76,6 +76,19 @@ export async function getHighlighter(options: any): Promise<Highlighter> {
     isJsxOnly: boolean = false,
     splitTokens: boolean = false
   ) {
+    if (language === 'plaintext') {
+      return [
+        [
+          {
+            content: value,
+            fontStyle: {},
+            start: 0,
+            end: value.length,
+          },
+        ],
+      ]
+    }
+
     const code = sourceFile ? sourceFile.getFullText() : value
     const tokens = highlighter
       .codeToThemedTokens(code, language, undefined, {
