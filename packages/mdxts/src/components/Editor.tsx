@@ -47,9 +47,8 @@ export type EditorProps = {
   onChange?: (event: React.ChangeEvent<HTMLTextAreaElement>) => void
 }
 
-const languageMap: Record<string, string> = {
+export const languageMap: Record<string, any> = {
   shell: 'shellscript',
-  bash: 'shellscript',
   mjs: 'javascript',
 }
 

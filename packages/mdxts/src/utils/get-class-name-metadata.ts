@@ -1,4 +1,5 @@
-const languages: Record<string, any> = {
+const languageMap: Record<string, any> = {
+  shell: 'shellscript',
   mjs: 'javascript',
 }
 
@@ -17,6 +18,6 @@ export function getClassNameMetadata(className: string | string[]) {
 
   return {
     filename: filenameOrLanguage?.includes('.') ? filenameOrLanguage : null,
-    language: languages[extension] || extension,
+    language: languageMap[extension] || extension,
   }
 }
