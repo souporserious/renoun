@@ -15,7 +15,7 @@ import { project } from './project'
 import { CodeView } from './CodeView'
 import { registerCodeComponent } from './state'
 
-export { getMetadataFromClassName } from '../utils/get-metadata-from-class-name'
+export { getClassNameMetadata } from '../utils/get-class-name-metadata'
 
 const languageMap: Record<string, any> = {
   shell: 'shellscript',

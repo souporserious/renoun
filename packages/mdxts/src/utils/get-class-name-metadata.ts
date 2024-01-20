@@ -3,7 +3,7 @@ const languages: Record<string, any> = {
 }
 
 /** Get file metadata from a remark code block class name. */
-export function getMetadataFromClassName(className: string | string[]) {
+export function getClassNameMetadata(className: string | string[]) {
   const classNames = Array.isArray(className) ? className : className.split(' ')
   const filenameOrLanguage = classNames
     .find((name) => name.startsWith('language-'))

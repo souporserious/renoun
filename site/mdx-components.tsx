@@ -1,6 +1,6 @@
 import * as React from 'react'
 import type { MDXComponents } from 'mdx/types'
-import { Code, getMetadataFromClassName } from 'mdxts/components/Code'
+import { Code, getClassNameMetadata } from 'mdxts/components/Code'
 import { Editor } from 'mdxts/components/Editor'
 import { Preview } from 'mdxts/components/Preview'
 import { PackageExports } from 'mdxts/components/PackageExports'
@@ -82,7 +82,7 @@ export function useMDXComponents() {
         children: React.ReactElement
       }
       const value = children.props.children.trimStart()
-      const metadata = getMetadataFromClassName(children.props.className || '')
+      const metadata = getClassNameMetadata(children.props.className || '')
 
       if (editable && allowErrors) {
         throw new Error(
