@@ -71,7 +71,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
       </div>
 
       {description ? (
-        <MDX value={description} components={mdxComponents} />
+        <MDX value={description} components={{ code: mdxComponents.code }} />
       ) : null}
 
       {Content ? <Content /> : null}
