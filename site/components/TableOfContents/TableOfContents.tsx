@@ -1,4 +1,6 @@
+'use client'
 import type { Headings } from 'mdxts/dist/remark/add-headings'
+import { useSectionObserver } from 'hooks/useSectionObserver'
 import { ViewSource } from '../ViewSource'
 import styles from './TableOfContents.module.css'
 
@@ -9,6 +11,7 @@ export function TableOfContents({
   headings: Headings
   sourcePath: string
 }) {
+  const sectionObserver = useSectionObserver()
   return (
     <nav className={styles.container}>
       <ul
@@ -36,7 +39,9 @@ export function TableOfContents({
                 paddingLeft: (depth - 2) * 0.8 + 'rem',
               }}
             >
-              <a href={`#${id}`}>{text}</a>
+              <Link id={id} sectionObserver={sectionObserver}>
+                {text}
+              </Link>
             </li>
           ) : null
         )}
@@ -58,5 +63,31 @@ export function TableOfContents({
         ) : null}
       </ul>
     </nav>
+  )
+}
+
+function Link({
+  id,
+  children,
+  sectionObserver,
+}: {
+  id: string
+  children: React.ReactNode
+  sectionObserver: ReturnType<typeof useSectionObserver>
+}) {
+  const isActive = sectionObserver.useActiveSection(id)
+  return (
+    <a
+      href={`#${id}`}
+      onClick={(event) => {
+        event.preventDefault()
+        sectionObserver.scrollToSection(id)
+      }}
+      style={{
+        color: isActive ? 'white' : 'var(--color-foreground-interactive)',
+      }}
+    >
+      {children}
+    </a>
   )
 }
