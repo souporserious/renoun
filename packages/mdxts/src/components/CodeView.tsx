@@ -99,6 +99,7 @@ export function CodeView({
   baseDirectory?: string
   edit?: any
 }) {
+  const shouldRenderToolbar = shouldRenderFilename || allowCopy
   const editorForeground = theme.colors['editor.foreground'].toLowerCase()
   const symbolBounds = sourceFile
     ? getSymbolBounds(sourceFile, isJsxOnly, lineHeight)
@@ -124,6 +125,7 @@ export function CodeView({
           style={{
             display: inline ? 'inline-grid' : 'grid',
             gridTemplateColumns: 'auto minmax(0, 1fr)',
+            gridTemplateRows: shouldRenderToolbar ? 'auto 1fr' : '0 1fr',
             position: 'relative',
             margin: inline ? undefined : '0 0 1.6rem',
             borderRadius: 5,
@@ -146,7 +148,7 @@ export function CodeView({
         />
       ) : null}
 
-      {shouldRenderFilename || allowCopy ? (
+      {shouldRenderToolbar ? (
         <CodeToolbar
           filename={shouldRenderFilename ? filename : undefined}
           value={value}
