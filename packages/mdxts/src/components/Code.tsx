@@ -1,5 +1,5 @@
 import React from 'react'
-import { join } from 'node:path'
+import { join, isAbsolute } from 'node:path'
 import { readFile, writeFile } from 'node:fs/promises'
 import type { SourceFile } from 'ts-morph'
 import { findRoot } from '@manypkg/find-root'
@@ -127,16 +127,19 @@ export async function Code({
 
   if ('value' in props) {
     finalValue = props.value
-  }
+  } else if ('source' in props) {
+    const isRelative = !isAbsolute(props.source)
 
-  if ('source' in props) {
-    if (!props.workingDirectory) {
+    if (isRelative && !props.workingDirectory) {
       throw new Error(
-        'The [workingDirectory] prop was not provided to the [Code] component. Make sure the mdxts/remark plugin and mdxts/loader are configured correctly.'
+        'The [workingDirectory] prop was not provided to the [Code] component while using a relative path. Pass a valid [workingDirectory] or make sure the mdxts/remark plugin and mdxts/loader are configured correctly if this is being renderend in an MDX file.'
       )
     }
 
-    const sourcePropPath = join(props.workingDirectory, props.source)
+    const sourcePropPath = isRelative
+      ? join(props.workingDirectory!, props.source)
+      : props.source
+
     finalValue = await readFile(sourcePropPath, 'utf-8')
     finalLanguage = sourcePropPath.split('.').pop()
   }
