@@ -1,0 +1,23 @@
+.container {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr 0.33fr;
+}
+
+.preview {
+  grid-row: 1;
+  display: grid;
+  place-items: center;
+  padding: 4rem;
+}
+
+@media screen and (min-width: 60rem) {
+  .container {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: unset;
+  }
+
+  .preview {
+    grid-row: unset;
+  }
+}

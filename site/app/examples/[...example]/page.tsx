@@ -1,7 +1,9 @@
 import { notFound } from 'next/navigation'
+import { Code } from 'mdxts/components'
 import { allPackages } from 'data'
 import { ViewSource } from 'components/ViewSource'
 import { getSiteMetadata } from 'utils/get-site-metadata'
+import styles from './page.module.css'
 
 export const dynamic = 'force-static'
 
@@ -43,9 +45,8 @@ export default async function Page({
     <div
       style={{
         display: 'grid',
-        placeItems: 'center',
         height: '100dvh',
-        padding: '2rem',
+        padding: '3rem 2rem',
         overflow: 'auto',
         position: 'relative',
       }}
@@ -80,7 +81,18 @@ export default async function Page({
         href={example.sourcePath}
         style={{ position: 'absolute', top: '1rem', right: '1rem' }}
       />
-      <example.moduleExport />
+      <div className={styles.container}>
+        <Code
+          allowErrors
+          lineNumbers
+          value={example.sourceText}
+          language="tsx"
+          style={{ margin: 0 }}
+        />
+        <div className={styles.preview}>
+          <example.moduleExport />
+        </div>
+      </div>
     </div>
   )
 }
