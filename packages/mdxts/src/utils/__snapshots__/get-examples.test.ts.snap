@@ -15,12 +15,22 @@ exports[`get examples from source file 1`] = `
     "name": "BasicUsage",
     "slug": "basic-usage",
     "sourcePath": "",
+    "sourceText": "import { Button } from '../Button'
+
+export function BasicUsage() {
+  return <Button label="Say hello" onPress={() => alert('Hello!')} />
+}",
   },
   {
     "moduleExport": [Function],
     "name": "AlternateUsage",
     "slug": "alternate-usage",
     "sourcePath": "",
+    "sourceText": "import { Button } from '../Button'
+
+export function AlternateUsage() {
+  return <Button label="Say goodbye" onPress={() => alert('Goodbye!')} />
+}",
   },
 ]
 `;
