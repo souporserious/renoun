@@ -1,5 +1,6 @@
 import type { Directory, SourceFile } from 'ts-morph'
 import { kebabCase } from 'case-anything'
+import { extractExportByIdentifier } from '@tsxmod/utils'
 
 import { getSourcePath } from './get-source-path'
 
@@ -45,8 +46,11 @@ export type ExampleItem = {
   /** The slug for the example. */
   slug: string
 
-  /** The path to the example source file. */
+  /** The editor or git source path to the example source file */
   sourcePath: string
+
+  /** The source text of the example. */
+  sourceText: string
 }
 
 /** Gathers examples from a source file. */
@@ -95,6 +99,7 @@ function parseExamplesFromModule(
         moduleExport,
         slug: kebabCase(name),
         sourcePath: getSourcePath(sourceFile.getFilePath(), line, column),
+        sourceText: extractExportByIdentifier(sourceFile, name),
       })
     }
   )
