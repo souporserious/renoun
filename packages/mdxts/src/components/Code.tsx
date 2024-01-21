@@ -62,6 +62,9 @@ export type BaseCodeProps = {
 
   /** Class name to apply to the code block. */
   className?: string
+
+  /** Style to apply to the code block. */
+  style?: React.CSSProperties
 }
 
 export type CodeProps =
@@ -104,6 +107,7 @@ export async function Code({
   paddingHorizontal,
   paddingVertical,
   inline,
+  style,
   ...props
 }: CodeProps) {
   const { isNestedInEditor, sourcePath, sourcePathLine, sourcePathColumn } =
@@ -231,6 +235,7 @@ export async function Code({
       className={className}
       rootDirectory={rootDirectory}
       baseDirectory={baseDirectory}
+      style={style}
       edit={
         process.env.NODE_ENV === 'development'
           ? async function () {

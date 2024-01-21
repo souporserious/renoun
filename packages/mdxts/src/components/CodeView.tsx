@@ -51,6 +51,9 @@ export type CodeProps = {
 
   /** Class name to apply to the code block. */
   className?: string
+
+  /** Style to apply to the code block. */
+  style?: React.CSSProperties
 }
 
 const lineHeight = '1.4rem'
@@ -82,6 +85,7 @@ export function CodeView({
   paddingVertical = padding,
   allowErrors,
   allowCopy,
+  style,
 }: CodeProps & {
   row?: number[] | null
   tokens: ReturnType<Awaited<ReturnType<typeof getHighlighter>>>
@@ -127,6 +131,7 @@ export function CodeView({
             backgroundColor: theme.colors['editor.background'],
             color: theme.colors['editor.foreground'],
             verticalAlign: inline ? 'middle' : undefined,
+            ...style,
           }}
           {...props}
         />
