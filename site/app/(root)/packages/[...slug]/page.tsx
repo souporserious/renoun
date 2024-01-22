@@ -277,6 +277,7 @@ function Props({
               margin: '0 0 0 -1.5rem',
               border: '1px solid var(--color-separator-secondary)',
               borderRadius: '1rem',
+              position: 'relative',
             }}
           >
             <span
@@ -319,6 +320,7 @@ function Props({
                           border: '1px solid var(--color-separator-secondary)',
                           borderRadius: '1rem',
                           color: 'var(--color-foreground-secondary)',
+                          position: 'relative',
                           top: '-0.95rem',
                           userSelect: 'none',
                         }}

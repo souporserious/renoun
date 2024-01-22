@@ -44,7 +44,7 @@
 * {
   box-sizing: border-box;
   margin: 0;
-  position: relative;
+  min-width: 0;
 }
 
 html {
