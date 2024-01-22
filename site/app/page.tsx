@@ -1,5 +1,6 @@
-import { Logo } from 'components/Logo'
+import { CopyButton } from 'mdxts/components/CopyButton'
 import Link from 'next/link'
+import { Logo } from 'components/Logo'
 
 import styles from './page.module.css'
 
@@ -35,6 +36,7 @@ export default function Home() {
                     padding: '0.25rem 0.8rem',
                     border: '1px solid #3F687E',
                     borderRadius: '1rem',
+                    whiteSpace: 'nowrap',
                   }}
                 >
                   Preview
@@ -83,7 +85,7 @@ export default function Home() {
               >
                 Get Started
               </Link>
-              {/* <div
+              <div
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -92,12 +94,12 @@ export default function Home() {
                   backgroundColor: '#2A4655',
                   borderRadius: '0.25rem',
                   fontSize: 'var(--font-size-body-1)',
-                  cursor: 'copy',
                 }}
               >
                 <span style={{ color: '#B6D8ED' }}>$</span>
                 <span>npm create mdxts</span>
-              </div> */}
+                <CopyButton value="npm create mdxts" />
+              </div>
             </div>
           </div>
           <div
