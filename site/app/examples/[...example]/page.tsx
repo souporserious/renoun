@@ -48,7 +48,6 @@ export default async function Page({
         height: '100dvh',
         padding: '3rem 2rem',
         overflow: 'auto',
-        position: 'relative',
       }}
     >
       <a

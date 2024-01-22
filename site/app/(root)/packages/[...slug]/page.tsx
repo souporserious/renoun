@@ -108,7 +108,6 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
                   style={{
                     display: 'flex',
                     flexDirection: 'column',
-                    position: 'relative',
                     padding: '0.5rem',
                     gap: '0.5rem',
                     border: '1px solid var(--color-separator)',
@@ -278,7 +277,6 @@ function Props({
               margin: '0 0 0 -1.5rem',
               border: '1px solid var(--color-separator-secondary)',
               borderRadius: '1rem',
-              position: 'relative',
             }}
           >
             <span
@@ -321,7 +319,6 @@ function Props({
                           border: '1px solid var(--color-separator-secondary)',
                           borderRadius: '1rem',
                           color: 'var(--color-foreground-secondary)',
-                          position: 'relative',
                           top: '-0.95rem',
                           userSelect: 'none',
                         }}

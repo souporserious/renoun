@@ -44,8 +44,10 @@ export default function Home() {
               </header>
               <h1
                 style={{
+                  fontSize: 'var(--font-size-heading-1)',
                   gridColumn: 2,
                   lineHeight: 1,
+                  marginBottom: '1rem',
                 }}
               >
                 Exceptional Content & Docs
@@ -96,7 +98,11 @@ export default function Home() {
                   fontSize: 'var(--font-size-body-1)',
                 }}
               >
-                <span style={{ color: '#B6D8ED' }}>$</span>
+                <span
+                  style={{ fontSize: '1rem', color: '#B6D8ED', top: '0.1rem' }}
+                >
+                  $
+                </span>
                 <span>npm create mdxts</span>
                 <CopyButton value="npm create mdxts" />
               </div>

@@ -42,8 +42,9 @@
 }
 
 * {
-  margin: 0;
   box-sizing: border-box;
+  margin: 0;
+  position: relative;
 }
 
 html {
@@ -69,6 +70,7 @@ body {
 }
 
 a {
+  display: inline-block;
   color: var(--color-foreground-interactive);
   text-decoration: none;
 }
@@ -77,36 +79,38 @@ a:hover :not(.title) {
   text-decoration: underline;
 }
 
-h1,
-h2,
-h3 {
+.prose :where(h1, h2, h3) {
   letter-spacing: normal;
   text-wrap: balance;
 }
 
-h1 {
+.prose h1 {
   font-size: var(--font-size-heading-1);
   line-height: var(--line-height-heading-1);
   font-weight: var(--font-weight-heading);
 }
 
-h2 {
+.prose h2 {
   font-size: var(--font-size-heading-2);
   line-height: var(--line-height-heading-2);
   font-weight: var(--font-weight-heading);
 }
 
-h3 {
+.prose h3 {
   font-size: var(--font-size-heading-3);
   line-height: var(--line-height-heading-3);
   font-weight: var(--font-weight-heading);
 }
 
-p {
+.prose p {
   font-size: var(--font-size-body-1);
   font-weight: var(--font-weight-body);
   line-height: var(--line-height-body-1);
   text-wrap: pretty;
+}
+
+.prose :where(h1, h2, h3, pre, ul, p) {
+  margin: 0 0 1.4rem;
 }
 
 main {
@@ -117,15 +121,6 @@ main {
   main {
     padding: 6rem 2rem 2rem;
   }
-}
-
-main h1,
-main h2,
-main h3,
-main pre,
-main ul,
-main p {
-  margin: 0 0 1.4rem;
 }
 
 pre {
