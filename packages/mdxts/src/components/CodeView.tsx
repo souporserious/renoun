@@ -49,6 +49,9 @@ export type CodeProps = {
   /** Whether or not the code is presented inline or as a block-level element. */
   inline?: boolean
 
+  /** Whether or not to show the toolbar. */
+  toolbar?: boolean
+
   /** Class name to apply to the code block. */
   className?: string
 
@@ -85,6 +88,7 @@ export function CodeView({
   paddingVertical = padding,
   allowErrors,
   allowCopy,
+  toolbar,
   style,
 }: CodeProps & {
   row?: number[] | null
@@ -99,7 +103,9 @@ export function CodeView({
   baseDirectory?: string
   edit?: any
 }) {
-  const shouldRenderToolbar = shouldRenderFilename || allowCopy
+  const shouldRenderToolbar = toolbar
+    ? shouldRenderFilename || allowCopy
+    : false
   const editorForeground = theme.colors['editor.foreground'].toLowerCase()
   const symbolBounds = sourceFile
     ? getSymbolBounds(sourceFile, isJsxOnly, lineHeight)

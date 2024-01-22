@@ -60,6 +60,9 @@ export type BaseCodeProps = {
   /** Whether or not the code is presented inline or as a block-level element. */
   inline?: boolean
 
+  /** Whether or not to show the toolbar. */
+  toolbar?: boolean
+
   /** Class name to apply to the code block. */
   className?: string
 
@@ -107,6 +110,7 @@ export async function Code({
   paddingHorizontal,
   paddingVertical,
   inline,
+  toolbar = true,
   style,
   ...props
 }: CodeProps) {
@@ -236,6 +240,7 @@ export async function Code({
       className={className}
       rootDirectory={rootDirectory}
       baseDirectory={baseDirectory}
+      toolbar={toolbar}
       style={style}
       edit={
         process.env.NODE_ENV === 'development'
