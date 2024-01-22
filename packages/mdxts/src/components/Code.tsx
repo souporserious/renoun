@@ -127,7 +127,8 @@ export async function Code({
   let finalLanguage =
     (typeof language === 'string' && language in languageMap
       ? languageMap[language]
-      : language) || 'plaintext'
+      : language) ||
+    (filenameProp ? filenameProp.split('.').pop() : 'plaintext')
 
   if ('value' in props) {
     finalValue = props.value
