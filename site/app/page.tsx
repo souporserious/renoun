@@ -1,6 +1,7 @@
-import { CopyButton } from 'mdxts/components/CopyButton'
 import Link from 'next/link'
+import { CopyButton } from 'mdxts/components/CopyButton'
 import { Logo } from 'components/Logo'
+import { HeroExample } from './HeroExample'
 
 import styles from './page.module.css'
 
@@ -120,6 +121,7 @@ export default function Home() {
             Illustration Here
           </div>
         </section>
+        <HeroExample />
       </main>
     </div>
   )
