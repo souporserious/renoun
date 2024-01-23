@@ -135,7 +135,7 @@ export function CodeView({
             position: 'relative',
             margin: inline ? undefined : '0 0 1.6rem',
             borderRadius: 5,
-            border: `1px solid ${theme.colors['contrastBorder']}`,
+            boxShadow: `0 0 0 1px ${theme.colors['contrastBorder']}`,
             backgroundColor: theme.colors['editor.background'],
             color: theme.colors['editor.foreground'],
             verticalAlign: inline ? 'middle' : undefined,
@@ -159,6 +159,7 @@ export function CodeView({
           filename={shouldRenderFilename ? filename : undefined}
           value={value}
           sourcePath={sourcePath}
+          theme={theme}
         />
       ) : null}
 

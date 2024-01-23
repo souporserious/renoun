@@ -1,6 +1,7 @@
 'use client'
 import React from 'react'
 import { CopyButton } from './CopyButton'
+import type { Theme } from './highlighter'
 
 type BaseCodeToolbarProps = {
   /** The value of the code block. */
@@ -8,6 +9,9 @@ type BaseCodeToolbarProps = {
 
   /** The path to the source file on disk in development and the git provider source in production. */
   sourcePath?: string
+
+  /** The theme to use for highlighting. */
+  theme: Theme
 }
 
 type CodeToolbarProps =
@@ -21,7 +25,12 @@ type CodeToolbarProps =
     })
 
 /** A toolbar for code blocks that displays the filename and a copy button. */
-export function CodeToolbar({ value, sourcePath, ...props }: CodeToolbarProps) {
+export function CodeToolbar({
+  value,
+  sourcePath,
+  theme,
+  ...props
+}: CodeToolbarProps) {
   return (
     <div
       style={{
@@ -31,7 +40,7 @@ export function CodeToolbar({ value, sourcePath, ...props }: CodeToolbarProps) {
         gridTemplateColumns: '1fr auto',
         alignItems: 'center',
         height: '3rem',
-        borderBottom: '1px solid #293742',
+        boxShadow: `inset 0 -1px 0 0 ${theme.colors['contrastBorder']}`,
       }}
     >
       {'filename' in props ? (

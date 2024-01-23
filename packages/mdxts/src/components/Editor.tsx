@@ -300,7 +300,7 @@ export function Editor({
         borderRadius: 4,
       }}
     >
-      <CodeToolbar filename={filename} value={resolvedValue} />
+      <CodeToolbar filename={filename} value={resolvedValue} theme={theme} />
       <div
         ref={scrollRef}
         style={{
