@@ -108,6 +108,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
                   style={{
                     display: 'flex',
                     flexDirection: 'column',
+                    position: 'relative',
                     padding: '0.5rem',
                     gap: '0.5rem',
                     border: '1px solid var(--color-separator)',
