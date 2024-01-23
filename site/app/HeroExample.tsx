@@ -62,12 +62,12 @@ export function HeroExample() {
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(16, 1fr)',
+        gridTemplateColumns: 'repeat(20, 1fr)',
         gridAutoRows: '1.4rem',
         minHeight: '100dvh',
       }}
     >
-      <CanvasCard title="docs" column="6/9" row="2/9">
+      <CanvasCard title="docs" column="6/10" row="2/9">
         <div
           style={{
             display: 'flex',
@@ -111,7 +111,7 @@ export function HeroExample() {
         }}
       />
 
-      <CanvasCard title="data.ts" column="10/16" row="2/7">
+      <CanvasCard title="data.ts" column="11/19" row="2/7">
         <Code
           value={`import { createSource } from 'mdxts'\n\nexport const allDocs = createSource('docs/*.mdx')`}
           filename="data.ts"
@@ -121,18 +121,18 @@ export function HeroExample() {
 
       <div
         style={{
-          gridColumn: '16 / 18',
+          gridColumn: '18 / 20',
           gridRow: '6',
           height: 1,
           backgroundColor: 'white',
         }}
       />
 
-      <CanvasCard title="Sidebar.tsx" column="2/9" row="12/35">
+      <CanvasCard title="Sidebar.tsx" column="3/10" row="12/35">
         <Code value={sidebarSource} filename="Sidebar.tsx" {...codeProps} />
       </CanvasCard>
 
-      <CanvasCard title="docs/[id]/page.tsx" column="10/16" row="12/21">
+      <CanvasCard title="docs/[id]/page.tsx" column="11/19" row="12/21">
         <Code
           value={docsPageSource}
           filename="docs/[id]/page.tsx"
