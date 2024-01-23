@@ -20,6 +20,15 @@ export type Module = {
   metadata?: { title: string; description: string }
 } & Omit<ModuleData, 'mdxPath' | 'tsPath' | 'examples'>
 
+export type SourceTreeItem = {
+  segment: string
+  pathname: string
+  label: string
+  depth: number
+  hasData: boolean
+  children: SourceTreeItem[]
+}
+
 /**
  * Loads content and metadata related to MDX and TypeScript files.
  *
@@ -99,14 +108,7 @@ export function createSource<Type>(
     /** Returns a tree of all module metadata related to navigation. */
     tree() {
       const allData = this.all()
-      const tree: {
-        segment: string
-        pathname: string
-        label: string
-        depth: number
-        hasData: boolean
-        children: any[]
-      }[] = []
+      const tree: SourceTreeItem[] = []
 
       for (
         let pathIndex = 0;

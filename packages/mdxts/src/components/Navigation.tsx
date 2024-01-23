@@ -1,6 +1,6 @@
 import 'server-only'
 
-import type { createSource, mergeSources } from '../index'
+import type { createSource, mergeSources, SourceTreeItem } from '../index'
 
 /** Renders a navigation tree from `createSource` or `mergeSources`. */
 export async function Navigation({
@@ -15,7 +15,7 @@ export async function Navigation({
   renderList: (list: { children: JSX.Element[]; depth: number }) => JSX.Element
 
   /** A function that renders a navigation item. */
-  renderItem: (item: { children?: JSX.Element }) => JSX.Element
+  renderItem: (item: SourceTreeItem & { children?: JSX.Element }) => JSX.Element
 }) {
   const tree = await source.tree()
 
