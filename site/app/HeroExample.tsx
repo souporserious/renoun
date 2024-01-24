@@ -44,6 +44,8 @@ export function Sidebar() {
 }
 `.trim()
 
+const theme = getTheme()
+const LINE_COLOR = theme.colors['panel.border']
 const codeProps = {
   padding: '0.7rem',
   toolbar: false,
@@ -54,10 +56,9 @@ const codeProps = {
   },
 } satisfies Partial<CodeProps>
 
-const theme = getTheme()
-
 export function HeroExample() {
-  const entries = Object.values(allDocs.all())
+  const entries = Object.values(allDocs.all()).filter((doc) => doc.depth === 1)
+  const lastEntriesIndex = entries.length - 1
   return (
     <div
       style={{
@@ -78,7 +79,9 @@ export function HeroExample() {
         >
           {entries
             .filter((doc) => doc.depth === 1)
-            .map((doc) => {
+            .map((doc, index) => {
+              const firstIndex = index === 0
+              const lastIndex = index === lastEntriesIndex
               return (
                 <Link
                   key={doc.pathname}
@@ -89,7 +92,13 @@ export function HeroExample() {
                     lineHeight: '1.4rem',
                     padding: '0.7rem',
                     backgroundColor: theme.colors['editor.background'],
-                    borderRadius: '0.5rem',
+                    boxShadow: firstIndex
+                      ? undefined
+                      : `inset 0 1px 0 0 ${theme.colors['contrastBorder']}`,
+                    borderTopLeftRadius: firstIndex ? '0.5rem' : undefined,
+                    borderTopRightRadius: firstIndex ? '0.5rem' : undefined,
+                    borderBottomLeftRadius: lastIndex ? '0.5rem' : undefined,
+                    borderBottomRightRadius: lastIndex ? '0.5rem' : undefined,
                     color: 'white',
                   }}
                 >
@@ -120,18 +129,40 @@ export function HeroExample() {
         />
       </Card>
 
-      <HorizontalLine column="9 / 11" row="6" />
-      <HorizontalLine column="19 / 20" row="6" />
-      <VerticalLine column="20" row="6 / 10" />
-      <HorizontalLine column="2 / 20" row="10" />
-      <VerticalLine column="10" row="10 / 14" align="center" />
-      <HorizontalLine
-        column="10"
-        row="14"
-        style={{ width: '50%', translate: '100%' }}
+      <div
+        style={{
+          gridColumn: '8 / 20',
+          gridRow: '6 / 10',
+          border: `1px solid ${LINE_COLOR}`,
+          borderLeft: 'none',
+          borderTopRightRadius: '0.5rem',
+          borderBottomRightRadius: '0.5rem',
+        }}
       />
-      <VerticalLine column="2" row="10 / 16" />
-      <HorizontalLine column="2 / 4" row="16" />
+      <div
+        style={{
+          gridColumn: '10',
+          gridRow: '10 / 14',
+          width: '50%',
+          border: `1px solid ${LINE_COLOR}`,
+          borderRight: 'none',
+          translate: '100% -1px',
+          borderBottomLeftRadius: '0.5rem',
+        }}
+      />
+      <div
+        style={{
+          gridColumn: '2 / 9',
+          gridRow: '10 / 16',
+          border: `1px solid ${LINE_COLOR}`,
+          borderRight: 'none',
+          translate: '0 -1px',
+          borderTopLeftRadius: '0.5rem',
+          borderBottomLeftRadius: '0.5rem',
+        }}
+      />
+      <VerticalLine row="1 / 3" column="8" />
+      <VerticalLine row="20 / 40" column="15" />
     </div>
   )
 }
@@ -156,12 +187,14 @@ function Card({
         gridColumn: column,
         gridRow: row,
         position: 'relative',
+        zIndex: 1,
       }}
     >
       <h2
         style={{
           alignSelf: 'start',
           fontSize: '1rem',
+          fontWeight: 400,
           lineHeight: '1rem',
           padding: '0.1rem 0.25rem',
           backgroundColor: theme.colors['button.background'],
@@ -195,7 +228,7 @@ function HorizontalLine({
         gridColumn: column,
         gridRow: row,
         height: 1,
-        backgroundColor: 'white',
+        backgroundColor: LINE_COLOR,
         ...style,
       }}
     />
@@ -220,7 +253,7 @@ function VerticalLine({
         gridColumn: column,
         gridRow: row,
         width: 1,
-        backgroundColor: 'white',
+        backgroundColor: LINE_COLOR,
         ...style,
       }}
     />
