@@ -67,13 +67,11 @@ export function HeroExample() {
         minHeight: '100dvh',
       }}
     >
-      <CanvasCard title="docs" column="6/10" row="2/9">
+      <Card title="docs" column="6/10" row="2/9">
         <div
           style={{
             display: 'flex',
             flexDirection: 'column',
-            // padding: '0.25rem',
-            // gap: '0.25rem',
             boxShadow: `0 0 0 1px ${theme.colors['contrastBorder']}`,
             borderRadius: '0.5rem',
           }}
@@ -100,50 +98,45 @@ export function HeroExample() {
               )
             })}
         </div>
-      </CanvasCard>
+      </Card>
 
-      <div
-        style={{
-          gridColumn: '9 / 11',
-          gridRow: '6',
-          height: 1,
-          backgroundColor: 'white',
-        }}
-      />
-
-      <CanvasCard title="data.ts" column="11/19" row="2/7">
+      <Card title="data.ts" column="11/19" row="2/7">
         <Code
           value={`import { createSource } from 'mdxts'\n\nexport const allDocs = createSource('docs/*.mdx')`}
           filename="data.ts"
           {...codeProps}
         />
-      </CanvasCard>
+      </Card>
 
-      <div
-        style={{
-          gridColumn: '18 / 20',
-          gridRow: '6',
-          height: 1,
-          backgroundColor: 'white',
-        }}
-      />
-
-      <CanvasCard title="Sidebar.tsx" column="3/10" row="12/35">
+      <Card title="Sidebar.tsx" column="3/10" row="12/35">
         <Code value={sidebarSource} filename="Sidebar.tsx" {...codeProps} />
-      </CanvasCard>
+      </Card>
 
-      <CanvasCard title="docs/[id]/page.tsx" column="11/19" row="12/21">
+      <Card title="docs/[id]/page.tsx" column="11/19" row="12/21">
         <Code
           value={docsPageSource}
           filename="docs/[id]/page.tsx"
           {...codeProps}
         />
-      </CanvasCard>
+      </Card>
+
+      <HorizontalLine column="9 / 11" row="6" />
+      <HorizontalLine column="19 / 20" row="6" />
+      <VerticalLine column="20" row="6 / 10" />
+      <HorizontalLine column="2 / 20" row="10" />
+      <VerticalLine column="10" row="10 / 14" align="center" />
+      <HorizontalLine
+        column="10"
+        row="14"
+        style={{ width: '50%', translate: '100%' }}
+      />
+      <VerticalLine column="2" row="10 / 16" />
+      <HorizontalLine column="2 / 4" row="16" />
     </div>
   )
 }
 
-function CanvasCard({
+function Card({
   title,
   column,
   row,
@@ -181,5 +174,55 @@ function CanvasCard({
       </h2>
       {children}
     </div>
+  )
+}
+
+function HorizontalLine({
+  row,
+  column,
+  align,
+  style,
+}: {
+  row: string
+  column: string
+  align?: 'start' | 'center' | 'end'
+  style?: React.CSSProperties
+}) {
+  return (
+    <div
+      style={{
+        alignSelf: align,
+        gridColumn: column,
+        gridRow: row,
+        height: 1,
+        backgroundColor: 'white',
+        ...style,
+      }}
+    />
+  )
+}
+
+function VerticalLine({
+  row,
+  column,
+  align,
+  style,
+}: {
+  row: string
+  column: string
+  align?: 'start' | 'center' | 'end'
+  style?: React.CSSProperties
+}) {
+  return (
+    <div
+      style={{
+        justifySelf: align,
+        gridColumn: column,
+        gridRow: row,
+        width: 1,
+        backgroundColor: 'white',
+        ...style,
+      }}
+    />
   )
 }
