@@ -9,8 +9,7 @@ const docsPageSource = `
 import { allDocs } from '../../data'
 
 export default async function Page({ params }) {
-  const doc = await allDocs.get(params.slug)
-  const { Content } = doc
+  const { Content } = await allDocs.get(params.slug)
   return <Content />
 }
 `.trim()
@@ -117,11 +116,11 @@ export function HeroExample() {
         />
       </Card>
 
-      <Card title="Sidebar.tsx" column="3/10" row="12/35">
+      <Card title="Sidebar.tsx" column="2/10" row="12/35">
         <Code value={sidebarSource} filename="Sidebar.tsx" {...codeProps} />
       </Card>
 
-      <Card title="docs/[id]/page.tsx" column="11/19" row="12/21">
+      <Card title="docs/[id]/page.tsx" column="12/20" row="12/20">
         <Code
           value={docsPageSource}
           filename="docs/[id]/page.tsx"
@@ -141,18 +140,17 @@ export function HeroExample() {
       />
       <div
         style={{
-          gridColumn: '10',
+          gridColumn: '11',
           gridRow: '10 / 14',
-          width: '50%',
           border: `1px solid ${LINE_COLOR}`,
           borderRight: 'none',
-          translate: '100% -1px',
+          translate: '0 -1px',
           borderBottomLeftRadius: '0.5rem',
         }}
       />
       <div
         style={{
-          gridColumn: '2 / 9',
+          gridColumn: '1 / 9',
           gridRow: '10 / 16',
           border: `1px solid ${LINE_COLOR}`,
           borderRight: 'none',
