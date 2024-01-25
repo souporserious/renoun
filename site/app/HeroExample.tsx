@@ -65,6 +65,7 @@ export function HeroExample() {
         gridTemplateColumns: 'repeat(20, 1fr)',
         gridAutoRows: '1.4rem',
         minHeight: '100dvh',
+        transform: 'rotateX(45deg) rotateZ(-45deg)',
       }}
     >
       <Card title="docs" column="6/10" row="2/9">
@@ -155,11 +156,25 @@ export function HeroExample() {
           border: `1px solid ${LINE_COLOR}`,
           borderRight: 'none',
           translate: '0 -1px',
-          borderTopLeftRadius: '0.5rem',
           borderBottomLeftRadius: '0.5rem',
         }}
       />
-      <VerticalLine row="1 / 3" column="8" />
+      <VerticalLine
+        row="1 / 3"
+        column="8"
+        style={{
+          height: '48rem',
+          translate: '0 -90%',
+        }}
+      />
+      <HorizontalLine
+        row="10"
+        column="1 / 20"
+        style={{
+          width: '60rem',
+          translate: '-100% 0',
+        }}
+      />
       <VerticalLine row="20 / 40" column="15" />
     </div>
   )

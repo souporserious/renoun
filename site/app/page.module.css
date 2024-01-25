@@ -1,4 +1,5 @@
 .section {
+  grid-area: 1 / 1;
   display: flex;
   flex-direction: column;
   padding: 1rem 4rem 4rem;
@@ -11,5 +12,12 @@
     grid-template-columns: 1fr 1fr;
     padding: 2rem 8rem 8rem;
     gap: 2rem;
+  }
+
+  .heroExample {
+    grid-area: 1 / 1;
+    scale: 0.9;
+    translate: 32% -10%;
+    transform-origin: top right;
   }
 }
