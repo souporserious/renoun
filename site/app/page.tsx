@@ -55,6 +55,8 @@ export default function Home() {
                 gridColumn: 2,
                 lineHeight: 1,
                 marginBottom: '1rem',
+                position: 'relative',
+                zIndex: 1,
               }}
             >
               Exceptional Content & Docs
@@ -67,6 +69,8 @@ export default function Home() {
                 lineHeight: 1.3,
                 maxWidth: '24ch',
                 color: 'var(--color-foreground-secondary)',
+                position: 'relative',
+                zIndex: 1,
               }}
             >
               Build interactive, type-safe content and documentation in MDX,
@@ -90,6 +94,8 @@ export default function Home() {
                 borderRadius: '0.25rem',
                 textDecoration: 'none',
                 color: 'white',
+                position: 'relative',
+                zIndex: 1,
               }}
             >
               Get Started
@@ -103,6 +109,8 @@ export default function Home() {
                 backgroundColor: '#2A4655',
                 borderRadius: '0.25rem',
                 fontSize: 'var(--font-size-body-1)',
+                position: 'relative',
+                zIndex: 1,
               }}
             >
               <span
