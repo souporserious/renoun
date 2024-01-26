@@ -172,7 +172,7 @@ export function HeroExample() {
         column="1 / 20"
         style={{
           width: '60rem',
-          translate: '-100% 0',
+          translate: '-100% -1px',
         }}
       />
       <VerticalLine row="20 / 40" column="15" />
