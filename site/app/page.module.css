@@ -4,6 +4,7 @@
   flex-direction: column;
   padding: 1rem 4rem 4rem;
   gap: 4rem;
+  z-index: 1;
 }
 
 @media screen and (min-width: 60rem) {
