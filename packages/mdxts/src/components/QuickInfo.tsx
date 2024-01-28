@@ -62,7 +62,7 @@ export function QuickInfo({
         fontSize: '0.875rem',
         lineHeight: '1.4rem',
         maxWidth: 540,
-        overflow: 'auto',
+        width: 'max-content',
         zIndex: 1000,
         borderRadius: 3,
         border: `1px solid ${theme.colors['editorHoverWidget.border']}`,
@@ -96,7 +96,7 @@ export function QuickInfo({
           />
         </>
       ) : null}
-      <div style={{ padding: '0.25rem 0.5rem' }}>
+      <div style={{ whiteSpace: 'pre-wrap', padding: '0.25rem 0.5rem' }}>
         {displayTextTokens.map((line, index) => (
           <Fragment key={index}>
             {index === 0 ? null : '\n'}
