@@ -4,6 +4,7 @@ import { type ts, type Diagnostic } from 'ts-morph'
 import { type getHighlighter } from './highlighter'
 import { languageService } from './project'
 import { getDiagnosticMessageText } from './diagnostics'
+import { MDX } from './MDX'
 import { QuickInfoContainer } from './QuickInfoContainer'
 
 export function QuickInfo({
@@ -49,10 +50,10 @@ export function QuickInfo({
       // Finally, replace the in-memory mdxts directory
       .replace('/mdxts', '')
   const displayParts = quickInfo.displayParts || []
-  const documentation = quickInfo.documentation || []
   const displayText = formatDisplayParts(displayParts)
-  const docText = formatDisplayParts(documentation)
   const displayTextTokens = highlighter(displayText, language)
+  const documentation = quickInfo.documentation || []
+  const documentationText = formatDisplayParts(documentation)
   return (
     <QuickInfoContainer
       style={{
@@ -108,7 +109,7 @@ export function QuickInfo({
           </Fragment>
         ))}
       </div>
-      {docText ? (
+      {documentationText ? (
         <>
           <hr
             style={{
@@ -120,16 +121,24 @@ export function QuickInfo({
               left: 0,
             }}
           />
-          <p
-            style={{
-              fontSize: 'inherit',
-              lineHeight: 'inherit',
-              padding: '0.25rem 0.5rem',
-              margin: 0,
+          <MDX
+            components={{
+              p: ({ children }) => (
+                <p
+                  style={{
+                    fontFamily: 'sans-serif',
+                    fontSize: 'inherit',
+                    lineHeight: 'inherit',
+                    padding: '0.25rem 0.5rem',
+                    margin: 0,
+                  }}
+                >
+                  {children}
+                </p>
+              ),
             }}
-          >
-            {docText}
-          </p>
+            value={documentationText}
+          />
         </>
       ) : null}
       {edit && diagnostics.length > 0 ? (
