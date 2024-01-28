@@ -1,6 +1,6 @@
 {
   "name": "mdxts",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Generate a knowledge graph of your MDX and TypeScript files.",
   "author": "Travis Arnold",
   "license": "MIT",
