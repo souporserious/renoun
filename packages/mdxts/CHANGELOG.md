@@ -1,5 +1,36 @@
 # mdxts
 
+## 0.5.0
+
+### Minor Changes
+
+- f8b71d6: Implement specific allowed errors.
+- 2f1cdbe: Add `toolbar` prop to `Code` for controlling rendering of toolbar.
+- 63939ac: Improve `Navigation` `renderItem` prop types.
+- 20182d4: Default to common root for now when no exports field found.
+- 0d91905: Add `style` prop to `Code`.
+- 515d727: Add diagnostic error code in `QuickInfo` tooltip.
+- bfc8b40: Add plaintext language option to highlighter.
+- b501e32: Add example source text to examples metadata.
+- 86c32e3: Rename `getMetadataFromClassName` -> `getClassNameMetadata`.
+- ad4fd02: Use package json path when calculating entry source files.
+- 61e72cd: Add `MDX` component for rendering mdx source code.
+- d77a29a: Use box shadow instead of border in `Code` to prevent adding to layout.
+- 606c25d: Render quick info documentation text as MDX.
+- 50dc93d: Only require working directory in `Code` when using relative paths.
+- 79e7e5d: Fix file path to pathname slugs for all caps e.g. `MDX.tsx` -> `mdx`
+  and `MDXProvider.tsx` -> `mdx-provider`.
+- ffd4512: Add exhaustive type documentation generation accounting for template literal and call expressions.
+
+### Patch Changes
+
+- cf73027: Fix navigation order by filtering out private files.
+- 5f30ed1: Collapse `Code` toolbar grid row when not used.
+- a4cc4c3: Fixes code blocks being treated as global scope when no imports or exports are present.
+- 2876946: Improve quick info tooltip type wrapping instead of overflowing.
+- e392e3c: Infer `Code` language from filename if provided.
+- 42eea84: Fix parsing directory base name to title.
+
 ## 0.4.1
 
 ### Patch Changes
