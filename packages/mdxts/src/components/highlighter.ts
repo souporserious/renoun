@@ -73,8 +73,7 @@ export async function getHighlighter(options: any): Promise<Highlighter> {
     value: string,
     language: any,
     sourceFile?: SourceFile,
-    isJsxOnly: boolean = false,
-    splitTokens: boolean = false
+    isJsxOnly: boolean = false
   ) {
     if (language === 'plaintext') {
       return [
@@ -148,11 +147,6 @@ export async function getHighlighter(options: any): Promise<Highlighter> {
           start: tokenStart,
           end: tokenEnd,
         }
-
-        if (!splitTokens) {
-          return [initialToken]
-        }
-
         let processedTokens: Tokens = []
 
         // split tokens by identifier ranges
