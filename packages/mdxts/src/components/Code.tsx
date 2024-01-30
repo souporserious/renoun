@@ -93,8 +93,6 @@ type PrivateCodeProps = Partial<{
   isNestedInEditor: boolean
 }>
 
-let filenameId = 0
-
 /** Renders a code block with syntax highlighting. */
 export async function Code({
   filename: filenameProp,
@@ -124,7 +122,10 @@ export async function Code({
     )
   }
 
-  const id = 'source' in props ? props.source : filenameProp ?? filenameId++
+  const id =
+    'source' in props
+      ? props.source
+      : filenameProp ?? Buffer.from(props.value).toString('base64')
   const unregisterCodeComponent = registerCodeComponent(id)
 
   let finalValue: string = ''
