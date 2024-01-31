@@ -1,19 +1,23 @@
 'use client'
-import React, { useState, useEffect } from 'react'
+import React, { useContext, useState, useEffect } from 'react'
 import { usePreContext } from './Pre'
+import { QuickInfoContext } from './QuickInfoContainer'
 
 export function Symbol({
   children,
   style,
-  isQuickInfoOpen,
 }: {
   children: React.ReactNode
   style?: React.CSSProperties
   isQuickInfoOpen?: boolean
 }) {
-  const preContext = usePreContext()
+  const setQuickInfo = useContext(QuickInfoContext)
+
+  if (!setQuickInfo) {
+    throw new Error('Symbol must be used within a QuickInfoContainer')
+  }
+
   const [hover, setHover] = useState(false)
-  const shouldRenderChildren = preContext ? false : isQuickInfoOpen || hover
 
   useEffect(() => {
     function handleScroll() {
@@ -26,18 +30,16 @@ export function Symbol({
   }, [])
 
   return (
-    <div
-      onPointerEnter={() => setHover(true)}
-      onPointerLeave={() => setHover(false)}
-      onPointerCancel={() => setHover(false)}
+    <span
+      onPointerEnter={() => setQuickInfo(children)}
+      onPointerLeave={() => setQuickInfo(null)}
+      onPointerCancel={() => setQuickInfo(null)}
       style={{
-        pointerEvents: preContext ? 'none' : 'auto',
         position: 'absolute',
+        inset: 0,
         backgroundColor: hover ? '#87add73d' : undefined,
         ...style,
       }}
-    >
-      {shouldRenderChildren ? children : null}
-    </div>
+    />
   )
 }

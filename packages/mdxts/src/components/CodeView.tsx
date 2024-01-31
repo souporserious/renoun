@@ -5,6 +5,7 @@ import { Node, SyntaxKind } from 'ts-morph'
 import type { Theme, getHighlighter } from './highlighter'
 import { Symbol } from './Symbol'
 import { QuickInfo } from './QuickInfo'
+import { QuickInfoContainer } from './QuickInfoContainer'
 import { RegisterSourceFile } from './RegisterSourceFile'
 import { Pre } from './Pre'
 import { CodeToolbar } from './CodeToolbar'
@@ -106,7 +107,7 @@ export function CodeView({
   const shouldRenderToolbar = toolbar
     ? shouldRenderFilename || allowCopy
     : false
-  const editorForeground = theme.colors['editor.foreground'].toLowerCase()
+  const editorForegroundColor = theme.colors['editor.foreground'].toLowerCase()
   const symbolBounds = sourceFile
     ? getSymbolBounds(sourceFile, isJsxOnly, lineHeight)
     : []
@@ -210,7 +211,7 @@ export function CodeView({
         className={className}
         style={{ gridRow: filename ? 2 : 1 }}
       >
-        {diagnostics
+        {/* {diagnostics
           ? diagnostics.map((diagnostic) => {
               const start = diagnostic.getStart()
               const length = diagnostic.getLength()
@@ -241,9 +242,9 @@ export function CodeView({
                 />
               )
             })
-          : null}
+          : null} */}
 
-        {!inline &&
+        {/* {!inline &&
           filename &&
           language &&
           symbolBounds.map((bounds, index) => {
@@ -268,7 +269,7 @@ export function CodeView({
                 }}
               >
                 <QuickInfo
-                  bounds={bounds}
+                  position={bounds.start}
                   filename={filename}
                   highlighter={highlighter}
                   language={language}
@@ -281,25 +282,68 @@ export function CodeView({
                 />
               </Symbol>
             )
-          })}
+          })} */}
 
-        <Element
-          style={{
-            display: inline ? 'inline-block' : 'block',
-            paddingTop: paddingVertical,
-            paddingBottom: paddingVertical,
-            paddingLeft: paddingHorizontal,
-            paddingRight: paddingHorizontal,
-            overflow: 'auto',
-          }}
+        <QuickInfoContainer
+          inline={inline}
+          paddingHorizontal={paddingHorizontal}
+          paddingVertical={paddingVertical}
         >
           {tokens.map((line, lineIndex) => (
             <Fragment key={lineIndex}>
               {line.map((token, tokenIndex) => {
-                if (
-                  token.color?.toLowerCase() === editorForeground ||
-                  token.content.trim() === ''
-                ) {
+                const isForegroundColor = token.color
+                  ? token.color.toLowerCase() === editorForegroundColor
+                  : false
+                const isWhitespace = token.content.trim() === ''
+                const bounds = symbolBounds.find(
+                  (bounds) =>
+                    bounds.start === token.start &&
+                    bounds.width === token.end - token.start
+                )
+                if (bounds && filename && language) {
+                  const tokenDiagnostics = diagnostics.filter((diagnostic) => {
+                    const start = diagnostic.getStart()
+                    const length = diagnostic.getLength()
+                    if (!start || !length) {
+                      return false
+                    }
+                    const end = start + length
+                    return start <= token.start && token.end <= end
+                  })
+
+                  return (
+                    <span
+                      key={tokenIndex}
+                      style={{
+                        ...token.fontStyle,
+                        position: 'relative',
+                        color: isForegroundColor ? undefined : token.color,
+                      }}
+                    >
+                      {token.content}
+                      <Symbol>
+                        <QuickInfo
+                          position={token.start}
+                          filename={filename}
+                          highlighter={highlighter}
+                          language={language}
+                          theme={theme}
+                          diagnostics={tokenDiagnostics}
+                          edit={edit}
+                          rootDirectory={rootDirectory}
+                          baseDirectory={baseDirectory}
+                          style={{
+                            top: `calc(${bounds.top} * ${lineHeight} + ${paddingVertical})`,
+                            left: `calc(${bounds.left} * 1ch + ${paddingHorizontal})`,
+                          }}
+                        />
+                      </Symbol>
+                    </span>
+                  )
+                }
+
+                if (isForegroundColor || isWhitespace) {
                   return token.content
                 }
 
@@ -315,7 +359,7 @@ export function CodeView({
               {lineIndex === tokens.length - 1 ? null : '\n'}
             </Fragment>
           ))}
-        </Element>
+        </QuickInfoContainer>
 
         {highlight
           ? highlight

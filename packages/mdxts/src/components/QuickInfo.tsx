@@ -5,10 +5,9 @@ import { type getHighlighter } from './highlighter'
 import { languageService } from './project'
 import { getDiagnosticMessageText } from './diagnostics'
 import { MDX } from './MDX'
-import { QuickInfoContainer } from './QuickInfoContainer'
 
 export function QuickInfo({
-  bounds,
+  position,
   filename,
   highlighter,
   language,
@@ -18,8 +17,9 @@ export function QuickInfo({
   isQuickInfoOpen,
   rootDirectory = '',
   baseDirectory = '',
+  style,
 }: {
-  bounds: any
+  position: number
   filename: string
   highlighter: Awaited<ReturnType<typeof getHighlighter>>
   language: string
@@ -29,11 +29,9 @@ export function QuickInfo({
   isQuickInfoOpen?: boolean
   rootDirectory?: string
   baseDirectory?: string
+  style?: React.CSSProperties
 }) {
-  const quickInfo = languageService.getQuickInfoAtPosition(
-    filename,
-    bounds.start
-  )
+  const quickInfo = languageService.getQuickInfoAtPosition(filename, position)
 
   if (!quickInfo) {
     return null
@@ -55,7 +53,7 @@ export function QuickInfo({
   const documentation = quickInfo.documentation || []
   const documentationText = formatDisplayParts(documentation)
   return (
-    <QuickInfoContainer
+    <div
       style={{
         pointerEvents: 'auto',
         position: 'absolute',
@@ -68,6 +66,7 @@ export function QuickInfo({
         borderRadius: 3,
         border: `1px solid ${theme.colors['editorHoverWidget.border']}`,
         backgroundColor: theme.colors['editorHoverWidget.background'],
+        ...style,
       }}
     >
       {diagnostics.length ? (
@@ -166,6 +165,6 @@ export function QuickInfo({
           </button>
         </form>
       ) : null}
-    </QuickInfoContainer>
+    </div>
   )
 }
