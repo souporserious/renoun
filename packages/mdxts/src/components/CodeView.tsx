@@ -335,7 +335,7 @@ export function CodeView({
                           baseDirectory={baseDirectory}
                           style={{
                             top: `calc(${bounds.top} * ${lineHeight} + ${paddingVertical})`,
-                            left: `calc(${bounds.left} * 1ch + ${paddingHorizontal})`,
+                            left: `calc(${bounds.left} * 1ch + ${paddingHorizontal} - var(--scroll-left-offset, 0px))`,
                           }}
                         />
                       </Symbol>

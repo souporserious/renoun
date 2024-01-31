@@ -1,9 +1,18 @@
 'use client'
-import React from 'react'
+import React, { createContext, useMemo, useRef, useState } from 'react'
 
-export const QuickInfoContext = React.createContext<React.Dispatch<
-  React.SetStateAction<React.ReactNode>
-> | null>(null)
+export const QuickInfoContext = createContext<{
+  quickInfo: React.ReactNode
+  setQuickInfo: React.Dispatch<React.SetStateAction<React.ReactNode>>
+} | null>(null)
+
+export function useQuickInfoContext() {
+  const context = React.useContext(QuickInfoContext)
+  if (!context) {
+    throw new Error('QuickInfoContext must be used within a QuickInfoContainer')
+  }
+  return context
+}
 
 export function QuickInfoContainer({
   inline,
@@ -16,11 +25,20 @@ export function QuickInfoContainer({
   paddingVertical?: string
   children: React.ReactNode
 }) {
-  const [quickInfo, setQuickInfo] = React.useState<React.ReactNode>(null)
+  const [quickInfo, setQuickInfo] = useState<React.ReactNode>(null)
+  const scrollLeftOffset = useRef(0)
   const Element = inline ? 'span' : 'div'
   return (
-    <QuickInfoContext.Provider value={setQuickInfo}>
+    <QuickInfoContext.Provider
+      value={useMemo(() => ({ quickInfo, setQuickInfo }), [quickInfo])}
+    >
       <Element
+        onScroll={(event) => {
+          if (event.target instanceof HTMLElement) {
+            scrollLeftOffset.current = event.target.scrollLeft
+          }
+          setQuickInfo(null)
+        }}
         style={{
           display: inline ? 'inline-block' : 'block',
           paddingTop: paddingVertical,
@@ -32,7 +50,16 @@ export function QuickInfoContainer({
       >
         {children}
       </Element>
-      {quickInfo}
+      {quickInfo ? (
+        <div
+          style={{
+            display: 'contents',
+            [String('--scroll-left-offset')]: scrollLeftOffset.current + 'px',
+          }}
+        >
+          {quickInfo}
+        </div>
+      ) : null}
     </QuickInfoContext.Provider>
   )
 }

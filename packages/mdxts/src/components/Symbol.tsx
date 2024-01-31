@@ -1,7 +1,6 @@
 'use client'
-import React, { useContext, useState, useEffect } from 'react'
-import { usePreContext } from './Pre'
-import { QuickInfoContext } from './QuickInfoContainer'
+import React, { useState } from 'react'
+import { useQuickInfoContext } from './QuickInfoContainer'
 
 export function Symbol({
   children,
@@ -11,33 +10,27 @@ export function Symbol({
   style?: React.CSSProperties
   isQuickInfoOpen?: boolean
 }) {
-  const setQuickInfo = useContext(QuickInfoContext)
-
-  if (!setQuickInfo) {
-    throw new Error('Symbol must be used within a QuickInfoContainer')
-  }
-
+  const { quickInfo, setQuickInfo } = useQuickInfoContext()
   const [hover, setHover] = useState(false)
-
-  useEffect(() => {
-    function handleScroll() {
-      setHover(false)
-    }
-    document.addEventListener('scroll', handleScroll, { passive: true })
-    return () => {
-      document.removeEventListener('scroll', handleScroll)
-    }
-  }, [])
 
   return (
     <span
-      onPointerEnter={() => setQuickInfo(children)}
-      onPointerLeave={() => setQuickInfo(null)}
-      onPointerCancel={() => setQuickInfo(null)}
+      onPointerEnter={() => {
+        setQuickInfo(children)
+        setHover(true)
+      }}
+      onPointerLeave={() => {
+        setQuickInfo(null)
+        setHover(false)
+      }}
+      onPointerCancel={() => {
+        setQuickInfo(null)
+        setHover(false)
+      }}
       style={{
         position: 'absolute',
         inset: 0,
-        backgroundColor: hover ? '#87add73d' : undefined,
+        backgroundColor: quickInfo && hover ? '#87add73d' : undefined,
         ...style,
       }}
     />
