@@ -72,47 +72,25 @@ export function keepElementInView(
     top: popoverRect.top,
     left: popoverRect.left,
   }
-  const overflowsTop = styles.top < viewportRect.top
-  const overflowsLeft = styles.left < viewportRect.left
 
-  // Keep the element in the viewport
-  if (overflowsTop) {
-    styles.top = viewportRect.top
+  if (styles.top < viewportRect.top) {
+    styles.top = anchorRect.bottom
   } else if (styles.top + styles.height > viewportRect.bottom) {
     styles.top = viewportRect.bottom - styles.height
   }
 
-  if (styles.height > viewportRect.height) {
-    styles.top = viewportRect.top
-    styles.height = viewportRect.height
+  if (styles.top + styles.height > viewportRect.bottom) {
+    styles.height = viewportRect.bottom - styles.top
   }
 
-  if (overflowsLeft) {
-    styles.left = viewportRect.left
+  if (styles.left < viewportRect.left) {
+    styles.left = anchorRect.right
   } else if (styles.left + styles.width > viewportRect.right) {
     styles.left = viewportRect.right - styles.width
   }
 
-  if (styles.width > viewportRect.width) {
-    styles.left = viewportRect.left
-    styles.width = viewportRect.width
-  }
-
-  // Flip vertically or horizontally if intersecting with anchor
-  if (
-    overflowsTop &&
-    styles.top < anchorRect.bottom &&
-    styles.top + styles.height > anchorRect.top
-  ) {
-    styles.top = anchorRect.bottom
-  }
-
-  if (
-    overflowsLeft &&
-    styles.left < anchorRect.right &&
-    styles.left + styles.width > anchorRect.left
-  ) {
-    styles.left = anchorRect.right
+  if (styles.left + styles.width > viewportRect.right) {
+    styles.width = viewportRect.right - styles.left
   }
 
   return styles

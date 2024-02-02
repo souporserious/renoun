@@ -14,6 +14,8 @@ export function QuickInfoPopover({ children }: { children: React.ReactNode }) {
       const styles = keepElementInView(popoverNode, anchorNode)
 
       const debugNode = document.createElement('div')
+      debugNode.style.display = 'grid'
+      debugNode.style.placeItems = 'center'
       debugNode.style.position = 'absolute'
       debugNode.style.zIndex = '9999'
       debugNode.style.left = styles.left + 'px'
@@ -21,6 +23,9 @@ export function QuickInfoPopover({ children }: { children: React.ReactNode }) {
       debugNode.style.width = styles.width + 'px'
       debugNode.style.height = styles.height + 'px'
       debugNode.style.backgroundColor = 'rgba(255, 0, 0, 0.5)'
+      const width = styles.width.toFixed(2)
+      const height = styles.height.toFixed(2)
+      debugNode.innerHTML = `${width} x ${height}`
       document.body.appendChild(debugNode)
 
       return () => {
