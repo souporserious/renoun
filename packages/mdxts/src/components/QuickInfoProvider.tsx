@@ -1,9 +1,14 @@
 'use client'
 import React, { createContext, useMemo, useRef, useState } from 'react'
 
+type QuickInfo = {
+  anchorId: string
+  children: React.ReactNode | null
+} | null
+
 export const QuickInfoContext = createContext<{
-  quickInfo: React.ReactNode
-  setQuickInfo: React.Dispatch<React.SetStateAction<React.ReactNode>>
+  quickInfo: QuickInfo
+  setQuickInfo: React.Dispatch<React.SetStateAction<QuickInfo>>
 } | null>(null)
 
 export function useQuickInfoContext() {
@@ -14,7 +19,7 @@ export function useQuickInfoContext() {
   return context
 }
 
-export function QuickInfoContainer({
+export function QuickInfoProvider({
   inline,
   paddingHorizontal,
   paddingVertical,
@@ -25,9 +30,10 @@ export function QuickInfoContainer({
   paddingVertical?: string
   children: React.ReactNode
 }) {
-  const [quickInfo, setQuickInfo] = useState<React.ReactNode>(null)
+  const [quickInfo, setQuickInfo] = useState<QuickInfo>(null)
   const scrollLeftOffset = useRef(0)
   const Element = inline ? 'span' : 'div'
+
   return (
     <QuickInfoContext.Provider
       value={useMemo(() => ({ quickInfo, setQuickInfo }), [quickInfo])}
@@ -57,7 +63,7 @@ export function QuickInfoContainer({
             [String('--scroll-left-offset')]: scrollLeftOffset.current + 'px',
           }}
         >
-          {quickInfo}
+          {quickInfo.children}
         </div>
       ) : null}
     </QuickInfoContext.Provider>

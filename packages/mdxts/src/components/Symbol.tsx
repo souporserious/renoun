@@ -1,6 +1,6 @@
 'use client'
-import React, { useState } from 'react'
-import { useQuickInfoContext } from './QuickInfoContainer'
+import React, { useId, useState } from 'react'
+import { useQuickInfoContext } from './QuickInfoProvider'
 
 export function Symbol({
   children,
@@ -10,13 +10,15 @@ export function Symbol({
   style?: React.CSSProperties
   isQuickInfoOpen?: boolean
 }) {
+  const anchorId = useId()
   const { quickInfo, setQuickInfo } = useQuickInfoContext()
   const [hover, setHover] = useState(false)
 
   return (
     <span
+      id={anchorId}
       onPointerEnter={() => {
-        setQuickInfo(children)
+        setQuickInfo({ anchorId, children })
         setHover(true)
       }}
       onPointerLeave={() => {

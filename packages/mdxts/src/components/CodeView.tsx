@@ -5,7 +5,7 @@ import { Node, SyntaxKind } from 'ts-morph'
 import type { Theme, getHighlighter } from './highlighter'
 import { Symbol } from './Symbol'
 import { QuickInfo } from './QuickInfo'
-import { QuickInfoContainer } from './QuickInfoContainer'
+import { QuickInfoProvider } from './QuickInfoProvider'
 import { RegisterSourceFile } from './RegisterSourceFile'
 import { Pre } from './Pre'
 import { CodeToolbar } from './CodeToolbar'
@@ -284,7 +284,7 @@ export function CodeView({
             )
           })} */}
 
-        <QuickInfoContainer
+        <QuickInfoProvider
           inline={inline}
           paddingHorizontal={paddingHorizontal}
           paddingVertical={paddingVertical}
@@ -359,7 +359,7 @@ export function CodeView({
               {lineIndex === tokens.length - 1 ? null : '\n'}
             </Fragment>
           ))}
-        </QuickInfoContainer>
+        </QuickInfoProvider>
 
         {highlight
           ? highlight
