@@ -33,39 +33,84 @@ function getClosestViewportRect(node: HTMLElement) {
   return { width, height, top, left, bottom: top + height, right: left + width }
 }
 
-/** Keep an element in view in the closest scrollable viewport. */
-export function keepElementInView(node: HTMLElement) {
-  const viewport = getClosestViewportRect(node)
-  const nodeRect = node.getBoundingClientRect()
+/** Get the rect of an element including the scroll. */
+function getRectWithScroll(
+  node: HTMLElement,
+  scrollX: number,
+  scrollY: number
+) {
+  const rect = node.getBoundingClientRect()
+  return {
+    width: rect.width,
+    height: rect.height,
+    top: rect.top + scrollY,
+    bottom: rect.bottom + scrollY,
+    left: rect.left + scrollX,
+    right: rect.right + scrollX,
+  }
+}
+
+/** Adjust the element's position including potential flipping. */
+export function keepElementInView(
+  popoverNode: HTMLElement,
+  anchorNode: HTMLElement
+) {
+  const viewportRect = getClosestViewportRect(popoverNode)
+  const popoverRect = getRectWithScroll(
+    popoverNode,
+    viewportRect.left,
+    viewportRect.top
+  )
+  const anchorRect = getRectWithScroll(
+    anchorNode,
+    viewportRect.left,
+    viewportRect.top
+  )
   const styles = {
-    width: nodeRect.width,
-    height: nodeRect.height,
-    top: nodeRect.top + viewport.top,
-    bottom: nodeRect.bottom,
-    left: nodeRect.left + viewport.left,
-    right: nodeRect.right,
+    width: popoverRect.width,
+    height: popoverRect.height,
+    top: popoverRect.top,
+    left: popoverRect.left,
   }
 
-  if (styles.top < viewport.top) {
-    styles.top = viewport.top
-  } else if (styles.top + styles.height > viewport.bottom) {
-    styles.top = viewport.bottom - styles.height
+  // Keep the element in the viewport
+  if (styles.top < viewportRect.top) {
+    styles.top = viewportRect.top
+  } else if (styles.top + styles.height > viewportRect.bottom) {
+    styles.top = viewportRect.bottom - styles.height
   }
 
-  if (styles.height > viewport.height) {
-    styles.top = viewport.top
-    styles.height = viewport.height
+  if (styles.height > viewportRect.height) {
+    styles.top = viewportRect.top
+    styles.height = viewportRect.height
   }
 
-  if (styles.left < viewport.left) {
-    styles.left = viewport.left
-  } else if (styles.left + styles.width > viewport.right) {
-    styles.left = viewport.right - styles.width
+  if (styles.left < viewportRect.left) {
+    styles.left = viewportRect.left
+  } else if (styles.left + styles.width > viewportRect.right) {
+    styles.left = viewportRect.right - styles.width
   }
 
-  if (styles.width > viewport.width) {
-    styles.left = viewport.left
-    styles.width = viewport.width
+  if (styles.width > viewportRect.width) {
+    styles.left = viewportRect.left
+    styles.width = viewportRect.width
+  }
+
+  // Flip vertically or horizontally if intersecting with anchor
+  if (
+    styles.top < viewportRect.top &&
+    styles.top < anchorRect.bottom &&
+    styles.top + styles.height > anchorRect.top
+  ) {
+    styles.top = anchorRect.bottom
+  }
+
+  if (
+    styles.left < viewportRect.left &&
+    styles.left < anchorRect.right &&
+    styles.left + styles.width > anchorRect.left
+  ) {
+    styles.left = anchorRect.right
   }
 
   return styles

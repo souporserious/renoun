@@ -9,9 +9,9 @@ export function QuickInfoPopover({ children }: { children: React.ReactNode }) {
 
   React.useLayoutEffect(() => {
     if (quickInfo && ref.current) {
-      const anchorNode = document.getElementById(quickInfo.anchorId)
       const popoverNode = ref.current.firstChild as HTMLElement
-      const styles = keepElementInView(popoverNode)
+      const anchorNode = document.getElementById(quickInfo.anchorId)!
+      const styles = keepElementInView(popoverNode, anchorNode)
 
       const debugNode = document.createElement('div')
       debugNode.style.position = 'absolute'
