@@ -333,10 +333,6 @@ export function CodeView({
                           edit={edit}
                           rootDirectory={rootDirectory}
                           baseDirectory={baseDirectory}
-                          style={{
-                            top: `calc(${bounds.top} * ${lineHeight} + ${paddingVertical})`,
-                            left: `calc(${bounds.left} * 1ch + ${paddingHorizontal} - var(--scroll-left-offset, 0px))`,
-                          }}
                         />
                       </Symbol>
                     </span>

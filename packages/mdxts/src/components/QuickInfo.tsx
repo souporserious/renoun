@@ -18,7 +18,6 @@ export function QuickInfo({
   isQuickInfoOpen,
   rootDirectory = '',
   baseDirectory = '',
-  style,
 }: {
   position: number
   filename: string
@@ -30,7 +29,6 @@ export function QuickInfo({
   isQuickInfoOpen?: boolean
   rootDirectory?: string
   baseDirectory?: string
-  style?: React.CSSProperties
 }) {
   const quickInfo = languageService.getQuickInfoAtPosition(filename, position)
 
@@ -61,13 +59,11 @@ export function QuickInfo({
           fontSize: '1rem',
           position: 'absolute',
           zIndex: 1000,
-          translate: '0 -100%',
-          maxWidth: 540,
           width: 'max-content',
+          maxWidth: 540,
           borderRadius: 3,
           border: `1px solid ${theme.colors['editorHoverWidget.border']}`,
           backgroundColor: theme.colors['editorHoverWidget.background'],
-          ...style,
         }}
       >
         <div

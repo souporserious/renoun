@@ -1,5 +1,6 @@
 'use client'
 import React, { createContext, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 type QuickInfo = {
   anchorId: string
@@ -56,16 +57,7 @@ export function QuickInfoProvider({
       >
         {children}
       </Element>
-      {quickInfo ? (
-        <div
-          style={{
-            display: 'contents',
-            [String('--scroll-left-offset')]: scrollLeftOffset.current + 'px',
-          }}
-        >
-          {quickInfo.children}
-        </div>
-      ) : null}
+      {quickInfo ? createPortal(quickInfo.children, document.body) : null}
     </QuickInfoContext.Provider>
   )
 }

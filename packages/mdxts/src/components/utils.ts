@@ -69,8 +69,8 @@ export function keepElementInView(
   const styles = {
     width: popoverRect.width,
     height: popoverRect.height,
-    top: popoverRect.top,
-    left: popoverRect.left,
+    top: anchorRect.top - popoverRect.height,
+    left: anchorRect.left,
   }
 
   if (styles.top < viewportRect.top) {
