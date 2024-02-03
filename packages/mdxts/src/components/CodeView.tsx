@@ -244,46 +244,6 @@ export function CodeView({
             })
           : null} */}
 
-        {/* {!inline &&
-          filename &&
-          language &&
-          symbolBounds.map((bounds, index) => {
-            const filteredDiagnostics = diagnostics.filter((diagnostic) => {
-              const start = diagnostic.getStart()
-              const length = diagnostic.getLength()
-              if (!start || !length) {
-                return false
-              }
-              const end = start + length
-              return start <= bounds.start && bounds.start <= end
-            })
-            const isQuickInfoOpen = showErrors && filteredDiagnostics.length > 0
-            return (
-              <Symbol
-                key={index}
-                style={{
-                  top: `calc(${bounds.top} * ${lineHeight} + ${paddingVertical})`,
-                  left: `calc(${bounds.left} * 1ch + ${paddingHorizontal})`,
-                  width: `calc(${bounds.width} * 1ch)`,
-                  height: bounds.height,
-                }}
-              >
-                <QuickInfo
-                  position={bounds.start}
-                  filename={filename}
-                  highlighter={highlighter}
-                  language={language}
-                  theme={theme}
-                  diagnostics={filteredDiagnostics}
-                  edit={edit}
-                  isQuickInfoOpen={isQuickInfoOpen}
-                  rootDirectory={rootDirectory}
-                  baseDirectory={baseDirectory}
-                />
-              </Symbol>
-            )
-          })} */}
-
         <QuickInfoProvider
           inline={inline}
           paddingHorizontal={paddingHorizontal}
@@ -296,47 +256,52 @@ export function CodeView({
                   ? token.color.toLowerCase() === editorForegroundColor
                   : false
                 const isWhitespace = token.content.trim() === ''
-                const bounds = symbolBounds.find(
-                  (bounds) =>
-                    bounds.start === token.start &&
-                    bounds.width === token.end - token.start
-                )
-                if (bounds && filename && language) {
-                  const tokenDiagnostics = diagnostics.filter((diagnostic) => {
-                    const start = diagnostic.getStart()
-                    const length = diagnostic.getLength()
-                    if (!start || !length) {
-                      return false
-                    }
-                    const end = start + length
-                    return start <= token.start && token.end <= end
-                  })
 
-                  return (
-                    <span
-                      key={tokenIndex}
-                      style={{
-                        ...token.fontStyle,
-                        position: 'relative',
-                        color: isForegroundColor ? undefined : token.color,
-                      }}
-                    >
-                      {token.content}
-                      <Symbol>
-                        <QuickInfo
-                          position={token.start}
-                          filename={filename}
-                          highlighter={highlighter}
-                          language={language}
-                          theme={theme}
-                          diagnostics={tokenDiagnostics}
-                          edit={edit}
-                          rootDirectory={rootDirectory}
-                          baseDirectory={baseDirectory}
-                        />
-                      </Symbol>
-                    </span>
+                if (!inline) {
+                  const bounds = symbolBounds.find(
+                    (bounds) =>
+                      bounds.start === token.start &&
+                      bounds.width === token.end - token.start
                   )
+                  if (bounds && filename && language) {
+                    const tokenDiagnostics = diagnostics.filter(
+                      (diagnostic) => {
+                        const start = diagnostic.getStart()
+                        const length = diagnostic.getLength()
+                        if (!start || !length) {
+                          return false
+                        }
+                        const end = start + length
+                        return start <= token.start && token.end <= end
+                      }
+                    )
+
+                    return (
+                      <span
+                        key={tokenIndex}
+                        style={{
+                          ...token.fontStyle,
+                          position: 'relative',
+                          color: isForegroundColor ? undefined : token.color,
+                        }}
+                      >
+                        {token.content}
+                        <Symbol>
+                          <QuickInfo
+                            position={token.start}
+                            filename={filename}
+                            highlighter={highlighter}
+                            language={language}
+                            theme={theme}
+                            diagnostics={tokenDiagnostics}
+                            edit={edit}
+                            rootDirectory={rootDirectory}
+                            baseDirectory={baseDirectory}
+                          />
+                        </Symbol>
+                      </span>
+                    )
+                  }
                 }
 
                 if (isForegroundColor || isWhitespace) {
