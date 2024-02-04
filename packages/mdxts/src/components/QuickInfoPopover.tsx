@@ -8,14 +8,16 @@ export function QuickInfoPopover({ children }: { children: React.ReactNode }) {
   const { quickInfo } = useQuickInfoContext()
 
   React.useLayoutEffect(() => {
-    if (quickInfo && ref.current) {
+    if (ref.current && quickInfo) {
       const popoverNode = ref.current.firstChild as HTMLElement
       const anchorNode = document.getElementById(quickInfo.anchorId)!
       const styles = keepElementInView(popoverNode, anchorNode)
-      popoverNode.style.width = styles.width + 'px'
-      popoverNode.style.height = styles.height + 'px'
-      popoverNode.style.top = styles.top + 'px'
-      popoverNode.style.left = styles.left + 'px'
+      Object.keys(styles).forEach((key) =>
+        popoverNode.style.setProperty(
+          key,
+          styles[key as keyof typeof styles] + 'px'
+        )
+      )
     }
   }, [])
 

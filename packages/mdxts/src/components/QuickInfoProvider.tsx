@@ -1,5 +1,5 @@
 'use client'
-import React, { createContext, useMemo, useRef, useState } from 'react'
+import React, { createContext, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 type QuickInfo = {
@@ -20,43 +20,12 @@ export function useQuickInfoContext() {
   return context
 }
 
-export function QuickInfoProvider({
-  inline,
-  paddingHorizontal,
-  paddingVertical,
-  children,
-}: {
-  inline?: boolean
-  paddingHorizontal?: string
-  paddingVertical?: string
-  children: React.ReactNode
-}) {
+export function QuickInfoProvider({ children }: { children: React.ReactNode }) {
   const [quickInfo, setQuickInfo] = useState<QuickInfo>(null)
-  const scrollLeftOffset = useRef(0)
-  const Element = inline ? 'span' : 'div'
-
+  const value = useMemo(() => ({ quickInfo, setQuickInfo }), [quickInfo])
   return (
-    <QuickInfoContext.Provider
-      value={useMemo(() => ({ quickInfo, setQuickInfo }), [quickInfo])}
-    >
-      <Element
-        onScroll={(event) => {
-          if (event.target instanceof HTMLElement) {
-            scrollLeftOffset.current = event.target.scrollLeft
-          }
-          setQuickInfo(null)
-        }}
-        style={{
-          display: inline ? 'inline-block' : 'block',
-          paddingTop: paddingVertical,
-          paddingBottom: paddingVertical,
-          paddingLeft: paddingHorizontal,
-          paddingRight: paddingHorizontal,
-          overflow: 'auto',
-        }}
-      >
-        {children}
-      </Element>
+    <QuickInfoContext.Provider value={value}>
+      {children}
       {quickInfo ? createPortal(quickInfo.children, document.body) : null}
     </QuickInfoContext.Provider>
   )

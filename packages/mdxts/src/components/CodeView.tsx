@@ -244,82 +244,89 @@ export function CodeView({
             })
           : null} */}
 
-        <QuickInfoProvider
-          inline={inline}
-          paddingHorizontal={paddingHorizontal}
-          paddingVertical={paddingVertical}
-        >
-          {tokens.map((line, lineIndex) => (
-            <Fragment key={lineIndex}>
-              {line.map((token, tokenIndex) => {
-                const isForegroundColor = token.color
-                  ? token.color.toLowerCase() === editorForegroundColor
-                  : false
-                const isWhitespace = token.content.trim() === ''
+        <QuickInfoProvider>
+          <Element
+            style={{
+              display: inline ? 'inline-block' : 'block',
+              paddingTop: paddingVertical,
+              paddingBottom: paddingVertical,
+              paddingLeft: paddingHorizontal,
+              paddingRight: paddingHorizontal,
+              overflow: 'auto',
+            }}
+          >
+            {tokens.map((line, lineIndex) => (
+              <Fragment key={lineIndex}>
+                {line.map((token, tokenIndex) => {
+                  const isForegroundColor = token.color
+                    ? token.color.toLowerCase() === editorForegroundColor
+                    : false
+                  const isWhitespace = token.content.trim() === ''
 
-                if (!inline) {
-                  const bounds = symbolBounds.find(
-                    (bounds) =>
-                      bounds.start === token.start &&
-                      bounds.width === token.end - token.start
-                  )
-                  if (bounds && filename && language) {
-                    const tokenDiagnostics = diagnostics.filter(
-                      (diagnostic) => {
-                        const start = diagnostic.getStart()
-                        const length = diagnostic.getLength()
-                        if (!start || !length) {
-                          return false
+                  if (!inline) {
+                    const bounds = symbolBounds.find(
+                      (bounds) =>
+                        bounds.start === token.start &&
+                        bounds.width === token.end - token.start
+                    )
+                    if (bounds && filename && language) {
+                      const tokenDiagnostics = diagnostics.filter(
+                        (diagnostic) => {
+                          const start = diagnostic.getStart()
+                          const length = diagnostic.getLength()
+                          if (!start || !length) {
+                            return false
+                          }
+                          const end = start + length
+                          return start <= token.start && token.end <= end
                         }
-                        const end = start + length
-                        return start <= token.start && token.end <= end
-                      }
-                    )
+                      )
 
-                    return (
-                      <span
-                        key={tokenIndex}
-                        style={{
-                          ...token.fontStyle,
-                          position: 'relative',
-                          color: isForegroundColor ? undefined : token.color,
-                        }}
-                      >
-                        {token.content}
-                        <Symbol>
-                          <QuickInfo
-                            position={token.start}
-                            filename={filename}
-                            highlighter={highlighter}
-                            language={language}
-                            theme={theme}
-                            diagnostics={tokenDiagnostics}
-                            edit={edit}
-                            rootDirectory={rootDirectory}
-                            baseDirectory={baseDirectory}
-                          />
-                        </Symbol>
-                      </span>
-                    )
+                      return (
+                        <span
+                          key={tokenIndex}
+                          style={{
+                            ...token.fontStyle,
+                            position: 'relative',
+                            color: isForegroundColor ? undefined : token.color,
+                          }}
+                        >
+                          {token.content}
+                          <Symbol>
+                            <QuickInfo
+                              position={token.start}
+                              filename={filename}
+                              highlighter={highlighter}
+                              language={language}
+                              theme={theme}
+                              diagnostics={tokenDiagnostics}
+                              edit={edit}
+                              rootDirectory={rootDirectory}
+                              baseDirectory={baseDirectory}
+                            />
+                          </Symbol>
+                        </span>
+                      )
+                    }
                   }
-                }
 
-                if (isForegroundColor || isWhitespace) {
-                  return token.content
-                }
+                  if (isForegroundColor || isWhitespace) {
+                    return token.content
+                  }
 
-                return (
-                  <span
-                    key={tokenIndex}
-                    style={{ ...token.fontStyle, color: token.color }}
-                  >
-                    {token.content}
-                  </span>
-                )
-              })}
-              {lineIndex === tokens.length - 1 ? null : '\n'}
-            </Fragment>
-          ))}
+                  return (
+                    <span
+                      key={tokenIndex}
+                      style={{ ...token.fontStyle, color: token.color }}
+                    >
+                      {token.content}
+                    </span>
+                  )
+                })}
+                {lineIndex === tokens.length - 1 ? null : '\n'}
+              </Fragment>
+            ))}
+          </Element>
         </QuickInfoProvider>
 
         {highlight
