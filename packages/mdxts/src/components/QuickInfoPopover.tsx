@@ -12,12 +12,16 @@ export function QuickInfoPopover({ children }: { children: React.ReactNode }) {
       const popoverNode = ref.current.firstChild as HTMLElement
       const anchorNode = document.getElementById(quickInfo.anchorId)!
       const styles = keepElementInView(popoverNode, anchorNode)
-      Object.keys(styles).forEach((key) =>
-        popoverNode.style.setProperty(
-          key,
-          styles[key as keyof typeof styles] + 'px'
-        )
-      )
+      popoverNode.style.setProperty('top', styles.top + 'px')
+      popoverNode.style.setProperty('left', styles.left + 'px')
+      popoverNode.style.setProperty('width', styles.width + 'px')
+      popoverNode.style.setProperty('height', styles.height + 'px')
+      return () => {
+        popoverNode.style.removeProperty('top')
+        popoverNode.style.removeProperty('left')
+        popoverNode.style.removeProperty('width')
+        popoverNode.style.removeProperty('height')
+      }
     }
   }, [])
 
