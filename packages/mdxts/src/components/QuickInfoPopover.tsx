@@ -5,7 +5,7 @@ import { keepElementInView } from './utils'
 
 export function QuickInfoPopover({ children }: { children: React.ReactNode }) {
   const ref = React.useRef<HTMLDivElement>(null)
-  const { quickInfo } = useQuickInfoContext()
+  const { quickInfo, resetQuickInfo, clearTimeout } = useQuickInfoContext()
 
   React.useLayoutEffect(() => {
     if (ref.current && quickInfo) {
@@ -23,10 +23,22 @@ export function QuickInfoPopover({ children }: { children: React.ReactNode }) {
         popoverNode.style.removeProperty('height')
       }
     }
-  }, [])
+  }, [quickInfo])
 
   return (
-    <div ref={ref} style={{ display: 'contents' }}>
+    <div
+      ref={ref}
+      onPointerOver={() => {
+        clearTimeout()
+      }}
+      onPointerLeave={() => {
+        resetQuickInfo()
+      }}
+      onPointerCancel={() => {
+        resetQuickInfo()
+      }}
+      style={{ display: 'contents' }}
+    >
       {children}
     </div>
   )

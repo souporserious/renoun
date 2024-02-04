@@ -1,5 +1,5 @@
 'use client'
-import React, { createContext, useMemo, useState } from 'react'
+import React, { createContext, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 type QuickInfo = {
@@ -10,6 +10,8 @@ type QuickInfo = {
 export const QuickInfoContext = createContext<{
   quickInfo: QuickInfo
   setQuickInfo: React.Dispatch<React.SetStateAction<QuickInfo>>
+  resetQuickInfo: () => void
+  clearTimeout: () => void
 } | null>(null)
 
 export function useQuickInfoContext() {
@@ -22,7 +24,28 @@ export function useQuickInfoContext() {
 
 export function QuickInfoProvider({ children }: { children: React.ReactNode }) {
   const [quickInfo, setQuickInfo] = useState<QuickInfo>(null)
-  const value = useMemo(() => ({ quickInfo, setQuickInfo }), [quickInfo])
+  const timeoutId = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const value = useMemo(
+    () => ({
+      quickInfo,
+      setQuickInfo,
+      resetQuickInfo: () => {
+        if (timeoutId.current) {
+          clearTimeout(timeoutId.current)
+        }
+        timeoutId.current = setTimeout(() => {
+          setQuickInfo(null)
+        }, 180)
+      },
+      clearTimeout: () => {
+        if (timeoutId.current) {
+          clearTimeout(timeoutId.current)
+          timeoutId.current = null
+        }
+      },
+    }),
+    [quickInfo]
+  )
   return (
     <QuickInfoContext.Provider value={value}>
       {children}

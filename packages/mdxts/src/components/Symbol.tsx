@@ -11,22 +11,24 @@ export function Symbol({
   isQuickInfoOpen?: boolean
 }) {
   const anchorId = useId()
-  const { quickInfo, setQuickInfo } = useQuickInfoContext()
+  const { quickInfo, setQuickInfo, resetQuickInfo, clearTimeout } =
+    useQuickInfoContext()
   const [hover, setHover] = useState(false)
 
   return (
     <span
       id={anchorId}
       onPointerEnter={() => {
+        clearTimeout()
         setQuickInfo({ anchorId, children })
         setHover(true)
       }}
       onPointerLeave={() => {
-        setQuickInfo(null)
+        resetQuickInfo()
         setHover(false)
       }}
       onPointerCancel={() => {
-        setQuickInfo(null)
+        resetQuickInfo()
         setHover(false)
       }}
       style={{
