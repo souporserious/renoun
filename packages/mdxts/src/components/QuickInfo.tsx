@@ -64,6 +64,7 @@ export function QuickInfo({
           borderRadius: 3,
           border: `1px solid ${theme.colors['editorHoverWidget.border']}`,
           backgroundColor: theme.colors['editorHoverWidget.background'],
+          overflow: 'auto',
         }}
       >
         <div
