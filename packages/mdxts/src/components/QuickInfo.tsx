@@ -65,6 +65,7 @@ export function QuickInfo({
           border: `1px solid ${theme.colors['editorHoverWidget.border']}`,
           backgroundColor: theme.colors['editorHoverWidget.background'],
           overflow: 'auto',
+          overscrollBehavior: 'contain',
         }}
       >
         <div
