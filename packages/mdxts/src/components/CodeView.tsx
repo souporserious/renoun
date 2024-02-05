@@ -5,6 +5,7 @@ import { Node, SyntaxKind } from 'ts-morph'
 import type { Theme, getHighlighter } from './highlighter'
 import { Symbol } from './Symbol'
 import { QuickInfo } from './QuickInfo'
+import { QuickInfoProvider } from './QuickInfoProvider'
 import { RegisterSourceFile } from './RegisterSourceFile'
 import { Pre } from './Pre'
 import { CodeToolbar } from './CodeToolbar'
@@ -106,7 +107,7 @@ export function CodeView({
   const shouldRenderToolbar = toolbar
     ? shouldRenderFilename || allowCopy
     : false
-  const editorForeground = theme.colors['editor.foreground'].toLowerCase()
+  const editorForegroundColor = theme.colors['editor.foreground'].toLowerCase()
   const symbolBounds = sourceFile
     ? getSymbolBounds(sourceFile, isJsxOnly, lineHeight)
     : []
@@ -210,112 +211,96 @@ export function CodeView({
         className={className}
         style={{ gridRow: filename ? 2 : 1 }}
       >
-        {diagnostics
-          ? diagnostics.map((diagnostic) => {
-              const start = diagnostic.getStart()
-              const length = diagnostic.getLength()
+        <QuickInfoProvider>
+          <Element
+            style={{
+              display: inline ? 'inline-block' : 'block',
+              paddingTop: paddingVertical,
+              paddingBottom: paddingVertical,
+              paddingLeft: paddingHorizontal,
+              paddingRight: paddingHorizontal,
+              overflow: 'auto',
+            }}
+          >
+            {tokens.map((line, lineIndex) => (
+              <Fragment key={lineIndex}>
+                {line.map((token, tokenIndex) => {
+                  const isForegroundColor = token.color
+                    ? token.color.toLowerCase() === editorForegroundColor
+                    : false
+                  const isWhitespace = token.content.trim() === ''
 
-              if (!start || !length || !sourceFile) {
-                return null
-              }
+                  if (!inline) {
+                    const bounds = symbolBounds.find(
+                      (bounds) =>
+                        bounds.start === token.start &&
+                        bounds.width === token.end - token.start
+                    )
+                    if (bounds && filename && language) {
+                      const tokenDiagnostics = diagnostics.filter(
+                        (diagnostic) => {
+                          const start = diagnostic.getStart()
+                          const length = diagnostic.getLength()
+                          if (!start || !length) {
+                            return false
+                          }
+                          const end = start + length
+                          return start <= token.start && token.end <= end
+                        }
+                      )
+                      const diagnosticStyle = {
+                        backgroundImage: `url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%206%203'%20enable-background%3D'new%200%200%206%203'%20height%3D'3'%20width%3D'6'%3E%3Cg%20fill%3D'%23f14c4c'%3E%3Cpolygon%20points%3D'5.5%2C0%202.5%2C3%201.1%2C3%204.1%2C0'%2F%3E%3Cpolygon%20points%3D'4%2C0%206%2C2%206%2C0.6%205.4%2C0'%2F%3E%3Cpolygon%20points%3D'0%2C2%201%2C3%202.4%2C3%200%2C0.6'%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E")`,
+                        backgroundRepeat: 'repeat-x',
+                        backgroundPosition: 'bottom left',
+                      }
 
-              const end = start + length
-              const { line, column } = sourceFile.getLineAndColumnAtPos(start)
-              const yOffset = isJsxOnly ? 2 : 1
-              const top = line - yOffset
-              const width = end - start
-              return (
-                <div
-                  key={start}
-                  style={{
-                    position: 'absolute',
-                    top: `calc(${top} * ${lineHeight} + ${paddingVertical})`,
-                    left: `calc(${column - 1} * 1ch + ${paddingHorizontal})`,
-                    width: `calc(${width} * 1ch)`,
-                    height: lineHeight,
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%206%203'%20enable-background%3D'new%200%200%206%203'%20height%3D'3'%20width%3D'6'%3E%3Cg%20fill%3D'%23f14c4c'%3E%3Cpolygon%20points%3D'5.5%2C0%202.5%2C3%201.1%2C3%204.1%2C0'%2F%3E%3Cpolygon%20points%3D'4%2C0%206%2C2%206%2C0.6%205.4%2C0'%2F%3E%3Cpolygon%20points%3D'0%2C2%201%2C3%202.4%2C3%200%2C0.6'%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E")`,
-                    backgroundRepeat: 'repeat-x',
-                    backgroundPosition: 'bottom left',
-                    pointerEvents: 'none',
-                  }}
-                />
-              )
-            })
-          : null}
+                      return (
+                        <span
+                          key={tokenIndex}
+                          style={{
+                            ...token.fontStyle,
+                            ...(tokenDiagnostics.length && diagnosticStyle),
+                            position: 'relative',
+                            color: isForegroundColor ? undefined : token.color,
+                          }}
+                        >
+                          {token.content}
+                          <Symbol>
+                            <QuickInfo
+                              position={token.start}
+                              filename={filename}
+                              highlighter={highlighter}
+                              language={language}
+                              theme={theme}
+                              diagnostics={tokenDiagnostics}
+                              edit={edit}
+                              rootDirectory={rootDirectory}
+                              baseDirectory={baseDirectory}
+                            />
+                          </Symbol>
+                        </span>
+                      )
+                    }
+                  }
 
-        {!inline &&
-          filename &&
-          language &&
-          symbolBounds.map((bounds, index) => {
-            const filteredDiagnostics = diagnostics.filter((diagnostic) => {
-              const start = diagnostic.getStart()
-              const length = diagnostic.getLength()
-              if (!start || !length) {
-                return false
-              }
-              const end = start + length
-              return start <= bounds.start && bounds.start <= end
-            })
-            const isQuickInfoOpen = showErrors && filteredDiagnostics.length > 0
-            return (
-              <Symbol
-                key={index}
-                style={{
-                  top: `calc(${bounds.top} * ${lineHeight} + ${paddingVertical})`,
-                  left: `calc(${bounds.left} * 1ch + ${paddingHorizontal})`,
-                  width: `calc(${bounds.width} * 1ch)`,
-                  height: bounds.height,
-                }}
-              >
-                <QuickInfo
-                  bounds={bounds}
-                  filename={filename}
-                  highlighter={highlighter}
-                  language={language}
-                  theme={theme}
-                  diagnostics={filteredDiagnostics}
-                  edit={edit}
-                  isQuickInfoOpen={isQuickInfoOpen}
-                  rootDirectory={rootDirectory}
-                  baseDirectory={baseDirectory}
-                />
-              </Symbol>
-            )
-          })}
+                  if (isForegroundColor || isWhitespace) {
+                    return token.content
+                  }
 
-        <Element
-          style={{
-            display: inline ? 'inline-block' : 'block',
-            paddingTop: paddingVertical,
-            paddingBottom: paddingVertical,
-            paddingLeft: paddingHorizontal,
-            paddingRight: paddingHorizontal,
-            overflow: 'auto',
-          }}
-        >
-          {tokens.map((line, lineIndex) => (
-            <Fragment key={lineIndex}>
-              {line.map((token, tokenIndex) => {
-                if (
-                  token.color?.toLowerCase() === editorForeground ||
-                  token.content.trim() === ''
-                ) {
-                  return token.content
-                }
-
-                return (
-                  <span
-                    key={tokenIndex}
-                    style={{ ...token.fontStyle, color: token.color }}
-                  >
-                    {token.content}
-                  </span>
-                )
-              })}
-              {lineIndex === tokens.length - 1 ? null : '\n'}
-            </Fragment>
-          ))}
-        </Element>
+                  return (
+                    <span
+                      key={tokenIndex}
+                      style={{ ...token.fontStyle, color: token.color }}
+                    >
+                      {token.content}
+                    </span>
+                  )
+                })}
+                {lineIndex === tokens.length - 1 ? null : '\n'}
+              </Fragment>
+            ))}
+          </Element>
+        </QuickInfoProvider>
 
         {highlight
           ? highlight
