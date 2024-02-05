@@ -3,14 +3,12 @@ import type { MDXComponents } from 'mdx/types'
 import { Code, getClassNameMetadata } from 'mdxts/components/Code'
 import { Editor } from 'mdxts/components/Editor'
 import { Preview } from 'mdxts/components/Preview'
-import { PackageExports } from 'mdxts/components/PackageExports'
 import { PackageInstall } from 'mdxts/components/PackageInstall'
 import { GeistMono } from 'geist/font/mono'
 
 export function useMDXComponents() {
   return {
     Preview,
-    PackageExports,
     PackageInstall,
     Code: (props) => <Code {...props} />,
     Example: (props) => <div {...props} />,
