@@ -11,7 +11,13 @@ const packageManagers = {
 }
 
 /** * Renders install commands with a picker for each package manager. */
-export async function PackageInstall({ packages }: { packages: string[] }) {
+export async function PackageInstall({
+  packages,
+  style,
+}: {
+  packages: string[]
+  style?: React.CSSProperties
+}) {
   const allHighlightedCommands = Object.fromEntries(
     Object.entries(packageManagers).map(([command, install]) => [
       command,
@@ -24,6 +30,9 @@ export async function PackageInstall({ packages }: { packages: string[] }) {
   )
 
   return (
-    <PackageInstallClient allHighlightedCommands={allHighlightedCommands} />
+    <PackageInstallClient
+      allHighlightedCommands={allHighlightedCommands}
+      style={style}
+    />
   )
 }

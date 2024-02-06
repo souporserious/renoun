@@ -49,11 +49,13 @@ function useLocalStorageState(key: string, defaultValue?: string) {
 /** The client-side component for the PackageInstall component. */
 export function PackageInstallClient({
   allHighlightedCommands,
+  style,
 }: {
   allHighlightedCommands: Record<
     string,
     React.ReactElement<{ value: string; language: string }>
   >
+  style?: React.CSSProperties
 }) {
   const stateKey = 'package-manager'
   const defaultPackageManager = 'npm'
@@ -64,7 +66,12 @@ export function PackageInstallClient({
 
   return (
     <div
-      style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        position: 'relative',
+        ...style,
+      }}
     >
       <style>{packageStyles}</style>
       <div
