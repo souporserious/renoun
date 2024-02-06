@@ -7,8 +7,8 @@ import React, {
   useState,
 } from 'react'
 import type { Diagnostic, SourceFile, ts } from 'ts-morph'
+import { getDiagnosticMessageText } from '@tsxmod/utils'
 
-import { getDiagnosticMessageText } from './diagnostics'
 import type { Highlighter, Theme, Tokens } from './highlighter'
 import { getHighlighter } from './highlighter'
 import { project, languageService } from './project'

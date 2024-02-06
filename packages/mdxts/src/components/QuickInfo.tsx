@@ -1,9 +1,9 @@
 import React, { Fragment } from 'react'
 import { type ts, type Diagnostic } from 'ts-morph'
+import { getDiagnosticMessageText } from '@tsxmod/utils'
 
 import { type getHighlighter } from './highlighter'
 import { languageService } from './project'
-import { getDiagnosticMessageText } from './diagnostics'
 import { MDX } from './MDX'
 import { QuickInfoPopover } from './QuickInfoPopover'
 
