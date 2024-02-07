@@ -133,6 +133,8 @@ export function QuickInfo({
                         lineHeight: 'inherit',
                         padding: '0.25rem 0.5rem',
                         margin: 0,
+                        // @ts-expect-error
+                        textWrap: 'pretty',
                       }}
                     >
                       {children}
