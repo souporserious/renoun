@@ -28,7 +28,6 @@ export function useMDXComponents() {
     Error: (props) => <div {...props} />,
     Outline: (props) => <div {...props} />,
     References: (props) => <div {...props} />,
-    Summary: (props) => <div {...props} />,
     Note: ({ children, ...props }) => (
       <div
         style={{
@@ -37,7 +36,7 @@ export function useMDXComponents() {
           display: 'grid',
           gridTemplateColumns: 'auto 1fr',
           padding: '1em',
-          margin: '1rem -1rem',
+          margin: '0 -1rem',
           gap: '0.75rem',
           border: '1px solid var(--color-separator)',
           borderRadius: '0.5rem',
@@ -138,7 +137,10 @@ export function useMDXComponents() {
           value={value}
           showErrors={showErrors}
           className={GeistMono.className}
-          style={{ width: 'calc(100% + 2rem)', margin: '0 -1rem 1.6rem' }}
+          style={{
+            width: 'calc(100% + 2rem)',
+            margin: '0 -1rem',
+          }}
           // @ts-expect-error - private props
           sourcePath={sourcePath}
           sourcePathLine={sourcePathLine}

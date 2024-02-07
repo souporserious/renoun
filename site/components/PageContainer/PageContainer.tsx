@@ -15,14 +15,14 @@ export function PageContainer({
 }) {
   return (
     <div className={styles.container}>
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.6rem' }}>
         {children}
         <div
           style={{
             display: 'flex',
             flexDirection: 'column',
             flex: 1,
-            marginTop: '8rem',
+            marginTop: '6rem',
           }}
         >
           <SiblingLinks previous={dataSource.previous} next={dataSource.next} />

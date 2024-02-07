@@ -35,7 +35,7 @@
     --font-size-title: 0.65rem;
     --line-height-heading-1: 3rem;
     --line-height-heading-2: 2.4rem;
-    --line-height-heading-3: 1.8rem;
+    --line-height-heading-3: 2rem;
     --line-height-body-1: 1.8rem;
     --line-height-body-2: 1.35rem;
   }
@@ -94,12 +94,18 @@ a:hover :not(.title) {
   font-size: var(--font-size-heading-2);
   line-height: var(--line-height-heading-2);
   font-weight: var(--font-weight-heading);
+  margin-block-start: 1.6rem;
+}
+
+.prose h2 + h3 {
+  margin-block-start: 0;
 }
 
 .prose h3 {
   font-size: var(--font-size-heading-3);
   line-height: var(--line-height-heading-3);
   font-weight: var(--font-weight-heading);
+  margin-block-start: 1.6rem;
 }
 
 .prose p {
@@ -109,8 +115,10 @@ a:hover :not(.title) {
   text-wrap: pretty;
 }
 
-.prose :where(h1, h2, h3, pre, ul, p) {
-  margin: 0 0 1.4rem;
+.prose p:first-of-type {
+  font-size: var(--font-size-heading-3);
+  line-height: var(--line-height-heading-3);
+  text-wrap: pretty;
 }
 
 main {

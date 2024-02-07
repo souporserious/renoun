@@ -50,7 +50,6 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
         style={{
           display: 'flex',
           alignItems: 'center',
-          marginBottom: '1.4rem',
           gap: '1rem',
         }}
       >
@@ -110,7 +109,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
                     flexDirection: 'column',
                     position: 'relative',
                     padding: '0.5rem',
-                    gap: '0.5rem',
+                    gap: '0.8rem',
                     border: '1px solid var(--color-separator)',
                     borderRadius: '0.25rem',
                     backgroundColor: 'var(--color-surface-2)',
@@ -160,9 +159,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
               flexDirection: 'column',
             }}
           >
-            <h2 id="api-reference" style={{ margin: 0 }}>
-              API Reference
-            </h2>
+            <h2 id="api-reference">API Reference</h2>
             {exportedTypes.map((type, index) => {
               const isActive = singlePackage.pathname === type.pathname
               return (
@@ -171,7 +168,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
                   style={{
                     display: 'flex',
                     flexDirection: 'column',
-                    padding: '3rem 0 2rem',
+                    padding: isActive ? '3.2rem 0' : '1.6rem 0',
                     borderTop:
                       index === 0
                         ? undefined
@@ -182,7 +179,8 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
                     style={{
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: '0.5rem',
+                      gap: '0.8rem',
+                      marginBottom: '1rem',
                     }}
                   >
                     <div
@@ -373,7 +371,7 @@ function Props({
           display: 'flex',
           flexDirection: 'column',
           padding: '1.5rem 0',
-          gap: '0.5rem',
+          gap: '0.8rem',
           borderTop: index === 0 ? 'none' : '1px solid var(--color-separator)',
         }}
       >
@@ -405,7 +403,7 @@ function Props({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '0.5rem',
+              gap: '0.8rem',
             }}
           >
             <Code

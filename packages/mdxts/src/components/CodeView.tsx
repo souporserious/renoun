@@ -130,11 +130,10 @@ export function CodeView({
     : (props: Record<string, unknown>) => (
         <Element
           style={{
+            position: 'relative',
             display: inline ? 'inline-grid' : 'grid',
             gridTemplateColumns: 'auto minmax(0, 1fr)',
             gridTemplateRows: shouldRenderToolbar ? 'auto 1fr' : '0 1fr',
-            position: 'relative',
-            margin: inline ? undefined : '0 0 1.6rem',
             borderRadius: 5,
             boxShadow: `0 0 0 1px ${theme.colors['contrastBorder']}`,
             backgroundColor: theme.colors['editor.background'],
