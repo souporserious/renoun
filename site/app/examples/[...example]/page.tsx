@@ -59,8 +59,8 @@ export default async function Page({
           alignItems: 'center',
           gap: '0.25rem',
           position: 'absolute',
-          top: '1rem',
-          left: '1rem',
+          top: '0.8rem',
+          left: '0.6rem',
         }}
       >
         <svg
@@ -79,7 +79,7 @@ export default async function Page({
       </a>
       <ViewSource
         href={example.sourcePath}
-        style={{ position: 'absolute', top: '1rem', right: '1rem' }}
+        style={{ position: 'absolute', top: '0.8rem', right: '0.6rem' }}
       />
       <div className={styles.container}>
         <Code
