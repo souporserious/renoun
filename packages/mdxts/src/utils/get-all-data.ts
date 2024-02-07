@@ -1,5 +1,5 @@
 import parseTitle from 'title'
-import { dirname, join, resolve, sep } from 'node:path'
+import { dirname, join, sep } from 'node:path'
 import { readPackageUpSync } from 'read-package-up'
 import type { Project } from 'ts-morph'
 import { Directory, SourceFile } from 'ts-morph'
