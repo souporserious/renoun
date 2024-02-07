@@ -25,7 +25,6 @@ export type Module = Compute<
     codeBlocks: CodeBlocks
     frontMatter?: Record<string, any>
     headings: Headings
-    summary: string
     metadata?: { title: string; description: string }
   } & Omit<ModuleData, 'mdxPath' | 'tsPath' | 'examples'>
 >
@@ -230,12 +229,18 @@ export function createSource<Type>(
       let {
         default: Content,
         headings = [],
+        description,
         metadata,
         frontMatter,
         ...moduleExports
       } = data.mdxPath
         ? await allModules[data.mdxPath]
-        : { default: undefined, metadata: undefined, frontMatter: undefined }
+        : {
+            default: undefined,
+            description: undefined,
+            metadata: undefined,
+            frontMatter: undefined,
+          }
 
       /** Append example links to headings data. */
       const examples = (await data.examples).map((example) => ({
@@ -285,7 +290,7 @@ export function createSource<Type>(
         isMainExport: data.isMainExport,
         title: data.title,
         label: data.label,
-        description: data.description,
+        description: data.description ?? description,
         order: data.order,
         depth: data.depth,
         exportedTypes: data.exportedTypes,

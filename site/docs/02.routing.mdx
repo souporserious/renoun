@@ -1,6 +1,6 @@
 # Routing
 
-Define file glob patterns using `createSource`, for example:
+Define file glob patterns using `createSource`:
 
 - `**/\*.mdx` matches all MDX files in all directories.
 
@@ -11,21 +11,21 @@ Define file glob patterns using `createSource`, for example:
 MDX files primarily serve as the content layer in your documentation. The content can be rendered using the `Content` component exported from the data source:
 
 ```tsx filename="blog/[slug]/page.tsx"
-import { createSource } from "mdxts";
-import { notFound } from "next/navigation";
+import { createSource } from 'mdxts'
+import { notFound } from 'next/navigation'
 
-const allDocs = createSource("docs/**/*.mdx");
+const allDocs = createSource('docs/**/*.mdx')
 
-type Props = { params: { slug: string } };
+type Props = { params: { slug: string } }
 
 export default async function Page({ params }: Props) {
-  const doc = await allDocs.get(params.slug);
+  const doc = await allDocs.get(params.slug)
 
-  if (doc === undefined) return notFound();
+  if (doc === undefined) return notFound()
 
-  const { Content } = doc;
+  const { Content } = doc
 
-  return <Content />;
+  return <Content />
 }
 ```
 

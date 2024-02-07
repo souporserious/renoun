@@ -1,19 +1,23 @@
 import type { Root, Paragraph } from 'mdast'
 
-/** Eexports a `summary` constant based on the first paragraph. */
-export function addSummary() {
+/**
+ * Exports a `description` constant based on a stringified version of the first paragraph.
+ * Replaces newlines with spaces and colons at the end with periods.
+ */
+export function addDescription() {
   return async function (tree: Root) {
     const { valueToEstree } = await import('estree-util-value-to-estree')
     const { visit, EXIT } = await import('unist-util-visit')
     const { toString } = await import('mdast-util-to-string')
-    let summary: string | null = null
+    let description: string | null = null
 
     visit(tree, 'paragraph', (node: Paragraph) => {
-      if (summary) return EXIT
-      summary = node.children
+      if (description) return EXIT
+      description = node.children
         .map((child) => toString(child))
         .join('')
-        .replace(/\n/g, '')
+        .replace(/\n/g, ' ') // Replace newlines with spaces
+        .replace(/:$/, '.') // Replace a colon at the end with a period
     })
 
     tree.children.unshift({
@@ -34,9 +38,9 @@ export function addSummary() {
                     type: 'VariableDeclarator',
                     id: {
                       type: 'Identifier',
-                      name: 'summary',
+                      name: 'description',
                     },
-                    init: valueToEstree(summary),
+                    init: valueToEstree(description),
                   },
                 ],
                 kind: 'const',
