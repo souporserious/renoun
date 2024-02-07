@@ -9,16 +9,26 @@ import type { Headings } from './remark/add-headings'
 import type { AllModules, ModuleData } from './utils/get-all-data'
 import { getAllData } from './utils/get-all-data'
 
-export type Module = {
-  Content?: ComponentType
-  examples: (Awaited<ModuleData['examples']>[number] & { pathname: string })[]
-  pathname: string
-  codeBlocks: CodeBlocks
-  frontMatter?: Record<string, any>
-  headings: Headings
-  summary: string
-  metadata?: { title: string; description: string }
-} & Omit<ModuleData, 'mdxPath' | 'tsPath' | 'examples'>
+type Compute<Type> = Type extends object
+  ? {
+      [Key in keyof Type]: Type[Key] extends object
+        ? Compute<Type[Key]>
+        : Type[Key]
+    } & {}
+  : Type
+
+export type Module = Compute<
+  {
+    Content?: ComponentType
+    examples: (Awaited<ModuleData['examples']>[number] & { pathname: string })[]
+    pathname: string
+    codeBlocks: CodeBlocks
+    frontMatter?: Record<string, any>
+    headings: Headings
+    summary: string
+    metadata?: { title: string; description: string }
+  } & Omit<ModuleData, 'mdxPath' | 'tsPath' | 'examples'>
+>
 
 export type SourceTreeItem = {
   segment: string
