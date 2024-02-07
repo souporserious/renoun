@@ -9,6 +9,7 @@
   display: grid;
   place-items: center;
   padding: 4rem;
+  gap: 2rem;
 }
 
 @media screen and (min-width: 60rem) {
