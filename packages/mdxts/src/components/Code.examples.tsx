@@ -14,3 +14,12 @@ export function Inline() {
     </p>
   )
 }
+
+export function Ordered() {
+  return (
+    <>
+      <Code filename="01.example.ts" value="const a = 1;" />
+      <Code filename="02.example.ts" value="const a = 1; const b = 2;" />
+    </>
+  )
+}

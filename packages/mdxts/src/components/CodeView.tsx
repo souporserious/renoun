@@ -70,6 +70,7 @@ export function CodeView({
   sourceFile,
   sourcePath,
   filename,
+  filenameLabel,
   highlight,
   highlighter,
   language,
@@ -92,6 +93,7 @@ export function CodeView({
   toolbar,
   style,
 }: CodeProps & {
+  filenameLabel?: string
   row?: number[] | null
   tokens: ReturnType<Awaited<ReturnType<typeof getHighlighter>>>
   sourceFile?: SourceFile
@@ -156,7 +158,7 @@ export function CodeView({
 
       {shouldRenderToolbar ? (
         <CodeToolbar
-          filename={shouldRenderFilename ? filename : undefined}
+          filename={shouldRenderFilename ? filenameLabel : undefined}
           value={value}
           sourcePath={sourcePath}
           theme={theme}

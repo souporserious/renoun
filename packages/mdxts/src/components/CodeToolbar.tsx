@@ -50,7 +50,7 @@ export function CodeToolbar({
             padding: '0.5rem 1rem',
           }}
         >
-          {props.filename!.replace('mdxts/', '')}
+          {props.filename}
         </div>
       ) : 'children' in props ? (
         props.children

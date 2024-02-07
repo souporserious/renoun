@@ -211,6 +211,7 @@ export async function Code({
   const tokens = highlighter(finalValue, finalLanguage, sourceFile, jsxOnly)
   const rootDirectory = (await findRoot(process.cwd())).rootDir
   const baseDirectory = process.cwd().replace(rootDirectory, '')
+  const filenameLabel = filename.replace('mdxts/', '').replace(/^\d+\./, '')
 
   return (
     <CodeView
@@ -224,6 +225,7 @@ export async function Code({
           : undefined
       }
       filename={filename}
+      filenameLabel={filenameLabel}
       shouldRenderFilename={Boolean(filenameProp)}
       highlighter={highlighter}
       highlight={highlight}
