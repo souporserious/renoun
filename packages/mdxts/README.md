@@ -1,16 +1,14 @@
-# mdxts
+<img src="/site/public/logo.png" alt="MDXTS" width="200"/>
 
-![MDXTS - Exceptional Content & Docs](/site/app/opengraph-image.png)
-
-Generate a knowledge graph of your MDX and TypeScript files.
+## Exceptional Content & Docs
 
 https://mdxts.dev/
 
-- Easily importable MDX content
-- Type doc generation
-- Type-checked code blocks
 - File-based routing
-- Templating with Server Components
+- Type documentation generation
+- Code examples
+- Accurate syntax highlighting
+- Type-checked code blocks
 
 ## License
 
