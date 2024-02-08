@@ -20,6 +20,8 @@ export function getSiteMetadata({
       title,
       description,
       url,
+      siteName: 'MDXTS',
+      locale: 'en_US',
       type: 'website',
     },
     twitter: {
