@@ -230,7 +230,7 @@ export function createSource<Type>(
         default: Content,
         headings = [],
         description,
-        metadata,
+        metadata = {},
         frontMatter,
         ...moduleExports
       } = data.mdxPath
