@@ -2,7 +2,7 @@ import { defineConfig } from 'tsup'
 
 export default defineConfig({
   entry: ['src/**/index.ts'],
-  target: 'es2018',
+  target: 'esnext',
   external: ['webpack'],
   format: ['cjs'],
   outDir: 'dist/cjs',
