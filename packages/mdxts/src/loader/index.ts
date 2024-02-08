@@ -94,13 +94,13 @@ export default async function loader(
         if (Node.isStringLiteral(firstArgument)) {
           const globPattern = firstArgument.getLiteralText()
           const baseGlobPattern = dirname(globPattern)
-          const isMdxPattern = globPattern.split('/').at(-1)?.includes('mdx')
+          const isMdxPattern = globPattern.split(sep).at(-1)?.includes('mdx')
           let filePaths = await glob(
             isMdxPattern
               ? globPattern
               : [
-                  `${baseGlobPattern}/*.examples.(ts|tsx)`,
-                  `${baseGlobPattern}/examples/*.(ts|tsx)`,
+                  join(baseGlobPattern, sep, '*.examples.{ts,tsx}'),
+                  join(baseGlobPattern, sep, 'examples', sep, '*.{ts,tsx}'),
                 ],
             { cwd: workingDirectory }
           )
@@ -168,8 +168,12 @@ export default async function loader(
               })
           }
 
+          filePaths = filePaths.map((filePath) =>
+            resolve(workingDirectory, filePath)
+          )
+
           filePaths.forEach((filePath) => {
-            this.addDependency(join(dirname(this.resourcePath), filePath))
+            this.addDependency(filePath)
           })
 
           const objectLiteralText = `{${filePaths
@@ -197,7 +201,7 @@ export default async function loader(
 /** Returns true if the provided file path is a Next.js entry layout file. */
 function isNextJsEntryLayout(filePath: string) {
   const topLevelPath = join(
-    dirname(filePath).replace(`${process.cwd()}/`, ''),
+    dirname(filePath).replace(join(process.cwd(), sep), ''),
     basename(filePath)
   )
   return [
