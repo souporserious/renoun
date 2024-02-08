@@ -1,5 +1,5 @@
 import React from 'react'
-import { join, isAbsolute } from 'node:path'
+import { join, sep, isAbsolute } from 'node:path'
 import { readFile, writeFile } from 'node:fs/promises'
 import type { SourceFile } from 'ts-morph'
 import { findRoot } from '@manypkg/find-root'
@@ -194,7 +194,7 @@ export async function Code({
 
   // Scope code block source files since they can conflict with other files on disk.
   if ('value' in props) {
-    filename = `mdxts/${filename}`
+    filename = join('mdxts', filename)
   }
 
   if (isJavaScriptLanguage) {
@@ -211,7 +211,9 @@ export async function Code({
   const tokens = highlighter(finalValue, finalLanguage, sourceFile, jsxOnly)
   const rootDirectory = (await findRoot(process.cwd())).rootDir
   const baseDirectory = process.cwd().replace(rootDirectory, '')
-  const filenameLabel = filename.replace('mdxts/', '').replace(/^\d+\./, '')
+  const filenameLabel = filename
+    .replace(join('mdxts', sep), '')
+    .replace(/^\d+\./, '')
 
   return (
     <CodeView
