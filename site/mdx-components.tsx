@@ -1,7 +1,7 @@
 import * as React from 'react'
 import type { MDXComponents } from 'mdx/types'
-import { Code, getClassNameMetadata } from 'mdxts/components/Code'
-import { Editor } from 'mdxts/components/Editor'
+import { mdxComponents } from 'mdxts/components'
+import { Code } from 'mdxts/components/Code'
 import { Preview } from 'mdxts/components/Preview'
 import { PackageInstall } from 'mdxts/components/PackageInstall'
 import { GeistMono } from 'geist/font/mono'
@@ -73,95 +73,18 @@ export function useMDXComponents() {
         {...props}
       />
     ),
-    pre: (props) => {
-      const {
-        filename,
-        editable,
-        lineNumbers,
-        showErrors,
-        highlight,
-        sourcePath,
-        sourcePathLine,
-        sourcePathColumn,
-        allowErrors,
-        children,
-      } = props as {
-        filename?: string
-        editable?: boolean
-        lineNumbers?: boolean
-        showErrors?: boolean
-        highlight?: string
-        sourcePath?: string
-        sourcePathLine?: number
-        sourcePathColumn?: number
-        allowErrors?: boolean
-        children: React.ReactElement
-      }
-      const value = children.props.children.trimStart()
-      const metadata = getClassNameMetadata(children.props.className || '')
-
-      if (editable && allowErrors) {
-        throw new Error(
-          `mdxts: The [editable] and [allowErrors] props cannot be used together ${
-            filename ? `for ${filename}.` : '.'
-          }.`
-        )
-      }
-
-      return editable ? (
-        <Editor
-          defaultValue={value}
-          filename={filename}
-          language={metadata?.language}
-          lineNumbers={lineNumbers}
-          highlight={highlight}
-          className={GeistMono.className}
-        >
-          <Code
-            value={value}
-            filename={filename}
-            language={metadata?.language}
-            lineNumbers={lineNumbers}
-            highlight={highlight}
-            // @ts-expect-error - private prop
-            isNestedInEditor
-          />
-        </Editor>
-      ) : (
-        <Code
-          allowErrors={allowErrors}
-          filename={filename}
-          language={metadata?.language}
-          lineNumbers={lineNumbers}
-          highlight={highlight}
-          value={value}
-          showErrors={showErrors}
-          className={GeistMono.className}
-          style={{
-            width: 'calc(100% + 2rem)',
-            margin: '0 -1rem',
-          }}
-          // @ts-expect-error - private props
-          sourcePath={sourcePath}
-          sourcePathLine={sourcePathLine}
-          sourcePathColumn={sourcePathColumn}
-        />
-      )
-    },
-    code: (props) => {
-      if (typeof props.children !== 'string') {
-        return <code {...props} />
-      }
-
-      return (
-        <Code
-          inline
-          paddingHorizontal="0.25rem"
-          paddingVertical="0.1rem"
-          value={props.children}
-          className={GeistMono.className}
-        />
-      )
-    },
+    code: (props) => (
+      <mdxComponents.code className={GeistMono.className} {...props} />
+    ),
+    pre: (props) => (
+      <mdxComponents.pre
+        className={GeistMono.className}
+        style={{
+          width: 'calc(100% + 2rem)',
+          margin: '0 -1rem',
+        }}
+        {...props}
+      />
+    ),
   } satisfies MDXComponents
 }

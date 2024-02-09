@@ -95,6 +95,11 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
       await writeFile(typesFilePath, JSON.stringify(typesContents))
 
       nextConfig.webpack = (config, options) => {
+        // add default mdx components
+        config.resolve.alias['next-mdx-import-source-file'].push(
+          resolve(__dirname, '../../src/components/mdx-components.js')
+        )
+
         config.plugins.push(
           // silence ts-morph warnings
           new webpack.ContextReplacementPlugin(
