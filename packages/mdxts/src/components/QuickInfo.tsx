@@ -118,6 +118,7 @@ export function QuickInfo({
               <hr
                 style={{
                   height: 1,
+                  margin: 0,
                   border: 'none',
                   backgroundColor: theme.colors['editorHoverWidget.border'],
                   opacity: 0.5,
