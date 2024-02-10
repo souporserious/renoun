@@ -1,5 +1,11 @@
 'use client'
-import React, { createContext, useMemo, useRef, useState } from 'react'
+import React, {
+  createContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { createPortal } from 'react-dom'
 
 type QuickInfo = {
@@ -9,9 +15,9 @@ type QuickInfo = {
 
 export const QuickInfoContext = createContext<{
   quickInfo: QuickInfo
-  setQuickInfo: React.Dispatch<React.SetStateAction<QuickInfo>>
+  setQuickInfo: (info: QuickInfo) => void
   resetQuickInfo: () => void
-  clearTimeout: () => void
+  clearTimeouts: () => void
 } | null>(null)
 
 export function useQuickInfoContext() {
@@ -22,30 +28,75 @@ export function useQuickInfoContext() {
   return context
 }
 
-export function QuickInfoProvider({ children }: { children: React.ReactNode }) {
+let closeTimeoutId: ReturnType<typeof setTimeout> | null = null
+
+export function QuickInfoProvider({
+  children,
+  openDelay = 800,
+  closeDelay = 180,
+}: {
+  children: React.ReactNode
+  openDelay?: number
+  closeDelay?: number
+}) {
   const [quickInfo, setQuickInfo] = useState<QuickInfo>(null)
-  const timeoutId = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const openTimeoutId = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const clearTimeouts = () => {
+    if (openTimeoutId.current) {
+      clearTimeout(openTimeoutId.current)
+      openTimeoutId.current = null
+    }
+    if (closeTimeoutId) {
+      clearTimeout(closeTimeoutId)
+      closeTimeoutId = null
+    }
+  }
   const value = useMemo(
     () => ({
+      clearTimeouts,
       quickInfo,
-      setQuickInfo,
-      resetQuickInfo: () => {
-        if (timeoutId.current) {
-          clearTimeout(timeoutId.current)
+      setQuickInfo: (info: QuickInfo) => {
+        if (quickInfo === null) {
+          openTimeoutId.current = setTimeout(() => {
+            setQuickInfo(info)
+            openTimeoutId.current = null
+          }, openDelay)
+        } else {
+          if (closeTimeoutId) {
+            clearTimeout(closeTimeoutId)
+          }
+          setQuickInfo(info)
         }
-        timeoutId.current = setTimeout(() => {
-          setQuickInfo(null)
-        }, 180)
       },
-      clearTimeout: () => {
-        if (timeoutId.current) {
-          clearTimeout(timeoutId.current)
-          timeoutId.current = null
+      resetQuickInfo: () => {
+        if (openTimeoutId.current) {
+          clearTimeout(openTimeoutId.current)
+        } else {
+          if (closeTimeoutId) {
+            clearTimeout(closeTimeoutId)
+          }
+          closeTimeoutId = setTimeout(() => {
+            setQuickInfo(null)
+            closeTimeoutId = null
+          }, closeDelay)
         }
       },
     }),
     [quickInfo]
   )
+
+  useEffect(() => {
+    const openId = openTimeoutId.current
+    return () => {
+      if (openId) {
+        clearTimeout(openId)
+      }
+      if (closeTimeoutId) {
+        clearTimeout(closeTimeoutId)
+      }
+    }
+  }, [])
+
   return (
     <QuickInfoContext.Provider value={value}>
       {children}
