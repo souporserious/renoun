@@ -90,9 +90,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
               gap: '1.6rem',
             }}
           >
-            <h2 id="examples" style={{ margin: 0 }}>
-              Examples
-            </h2>
+            <h2 id="examples">Examples</h2>
             <div
               style={{
                 display: 'grid',
