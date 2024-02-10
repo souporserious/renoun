@@ -132,6 +132,7 @@ export function CodeView({
     : (props: Record<string, unknown>) => (
         <Element
           style={{
+            fontFamily: 'monospace',
             position: 'relative',
             display: inline ? 'inline-grid' : 'grid',
             gridTemplateColumns: 'auto minmax(0, 1fr)',
