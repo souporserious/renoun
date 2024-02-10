@@ -60,6 +60,39 @@ importers:
         specifier: ^5.3.3
         version: 5.3.3
 
+  examples/blog:
+    dependencies:
+      '@types/mdx':
+        specifier: ^2.0.11
+        version: 2.0.11
+      '@types/react':
+        specifier: ^18.2.54
+        version: 18.2.54
+      '@types/react-dom':
+        specifier: ^18.2.18
+        version: 18.2.18
+      mdxts:
+        specifier: workspace:*
+        version: link:../../packages/mdxts
+      next:
+        specifier: 14.0.4
+        version: 14.0.4(@babel/core@7.23.0)(react-dom@18.2.0)(react@18.2.0)
+      prettier:
+        specifier: ^3.2.5
+        version: 3.2.5
+      react:
+        specifier: ^18.2.0
+        version: 18.2.0
+      react-dom:
+        specifier: ^18.2.0
+        version: 18.2.0(react@18.2.0)
+      shiki:
+        specifier: ^0.14.6
+        version: 0.14.6
+      typescript:
+        specifier: ^5.3.3
+        version: 5.3.3
+
   packages/create-mdxts:
     dependencies:
       '@antfu/install-pkg':

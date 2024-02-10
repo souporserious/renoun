@@ -1,0 +1,112 @@
+---
+title: Build a Dialog Component in React
+date: 2020-01-08
+summary: Almost all user interfaces incorporate a dialog at some point. In this post we will look at how we can use React to create an accessible Modal component using the HTML5 dialog element.
+tags:
+  - react
+  - dialog
+  - accessibilty
+  - tutorial
+---
+
+If you haven't heard of the [`dialog`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/dialog) element yet, it came on the scene in [HTML 5.2](https://www.w3.org/TR/html52/interactive-elements.html#the-dialog-element) and is steadily gaining [browser support](https://caniuse.com/#search=dialog). However, it is still not a popular solution for most libraries.
+
+I recently watched [HTML isn't done](https://www.youtube.com/watch?v=ZFvPLrKZywA), which discussed how we, as web developers, aren't using native elements and instead opt for third-party libraries or our own solutions. We usually do this because of specific customizations and thus end up inheriting the burden of shipping and maintaining more code. Not to mention, we also take on the responsibility of making it accessible. Thankfully for us, the dialog element is accessible, customizable, and meets most of our needs out of the box!
+
+First, we start with a simple React component that returns a `dialog` element and sets up a `ref` so we can interact with our dialog programatically:
+
+```tsx
+import React from 'react'
+
+function Modal({ children }) {
+  const dialogRef = React.useRef(null)
+  return <dialog ref={dialogRef}>{children}</dialog>
+}
+```
+
+Next, we need a way to control the open and closed state of the `dialog`. We can call either the [`show`](https://developer.mozilla.org/en-US/docs/Web/API/HTMLDialogElement/show) or [`showModal`](https://developer.mozilla.org/en-US/docs/Web/API/HTMLDialogElement/showModal) methods depending on how we want our dialog to behave. For today, we will only be needing `showModal` since this adds a backdrop and traps focus for us:
+
+```tsx highlight="6-13"
+import React from 'react'
+
+function Modal({ children, open }) {
+  const dialogRef = React.useRef(null)
+
+  React.useEffect(() => {
+    const dialogNode = dialogRef.current
+    if (open) {
+      dialogNode.showModal()
+    } else {
+      dialogNode.close()
+    }
+  }, [open])
+
+  return <dialog ref={dialogRef}>{children}</dialog>
+}
+```
+
+This covers opening and closing our `Modal` component using a prop, but there are other ways of closing a `dialog` -- like pressing the `Escape` key. We can listen to the [`cancel`](https://developer.mozilla.org/en-US/docs/Web/API/HTMLDialogElement/cancel_event) event to catch this and provide users of our component a way to update the `open` prop:
+
+```tsx highlight="15-25"
+import React from 'react'
+
+function Modal({ children, open, onRequestClose }) {
+  const dialogRef = React.useRef(null)
+
+  React.useEffect(() => {
+    const dialogNode = dialogRef.current
+    if (open) {
+      dialogNode.showModal()
+    } else {
+      dialogNode.close()
+    }
+  }, [open])
+
+  React.useEffect(() => {
+    const dialogNode = dialogRef.current
+    const handleCancel = (event) => {
+      event.preventDefault()
+      onRequestClose()
+    }
+    dialogNode.addEventListener('cancel', handleCancel)
+    return () => {
+      dialogNode.removeEventListener('cancel', handleCancel)
+    }
+  }, [onRequestClose])
+
+  return <dialog ref={dialogRef}>{children}</dialog>
+}
+```
+
+One last thing we should add is returning focus to the element that opened our `Modal` when it is closed. This functionality is suggested from [WAI-ARIA](https://www.w3.org/TR/wai-aria-practices-1.1/#keyboard-interaction-7). However, it is not part of the dialog spec so we need to implement it ourselves:
+
+```tsx highlight="5,10,14"
+import React from 'react'
+
+function Modal({ children, open, onRequestClose }) {
+  const dialogRef = React.useRef(null)
+  const lastActiveElement = React.useRef(null)
+
+  React.useEffect(() => {
+    const dialogNode = dialogRef.current
+    if (open) {
+      lastActiveElement.current = document.activeElement
+      dialogNode.showModal()
+    } else {
+      dialogNode.close()
+      lastActiveElement.current.focus()
+    }
+  }, [open])
+  //  ...
+}
+```
+
+Easy enough!
+
+## Summary
+
+In this post, we looked at how we can wrap up HTML elements and their imperative APIs in an easy-to-use declarative component. Even if a native HTML solution doesn't suffice right now, I encourage you to assess building a component with a simplified interface that can eventually be swapped with native functionality as it becomes available. The best part of a component model is we can change the underlying implementation without affecting the top-level API, and as a result, reduce breaking changes. Josh Comeau said this best in his React Rally talk on [Explorable Explanations](https://www.youtube.com/watch?v=XjFR9Jc-ras&feature=youtu.be&t=1196).
+
+To keep this post concise, we didn't have time to cover styling, clicking outside to close, or other features like loading a [polyfill](https://github.com/GoogleChrome/dialog-polyfill) for unsupported browsers. Lucky for you, I put together an example on [Codesandbox](https://codesandbox.io/s/build-a-dialog-component-in-react-rj888?fontsize=14&hidenavigation=1&theme=dark) so you can get an idea of how all of these features work together.
+
+[![Edit Build a dialog component in React](https://codesandbox.io/static/img/play-codesandbox.svg)](https://codesandbox.io/s/build-a-dialog-component-in-react-rj888?fontsize=14&hidenavigation=1&theme=dark)

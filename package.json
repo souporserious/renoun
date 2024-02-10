@@ -4,6 +4,8 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
+    "dev:site": "pnpm dev --filter=mdxts --filter=site",
+    "dev:examples": "pnpm dev --filter=mdxts --filter=@examples/*",
     "test": "turbo run test",
     "format": "prettier --write '**/**/*.{js,ts,tsx,json,css}'",
     "ci:version": "pnpm changeset version && pnpm install --no-frozen-lockfile && git add .",
