@@ -27,7 +27,7 @@ export type ExportedType = {
 /** Gets all exported types from a source file. */
 export function getExportedTypes(sourceFile: SourceFile): ExportedType[] {
   return Array.from(sourceFile.getExportedDeclarations())
-    .map(([name, [declaration]]) => {
+    .flatMap(([name, [declaration]]) => {
       const isIndex = sourceFile.getBaseNameWithoutExtension() === 'index'
 
       if (isIndex) {

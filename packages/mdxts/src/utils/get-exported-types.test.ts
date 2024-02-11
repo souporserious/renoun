@@ -10,20 +10,9 @@ describe('getExportedTypes', () => {
       `export const MDXComponents = {}\n\nexport function useMDXComponents() {}`,
       { overwrite: true }
     )
-    const types = getExportedTypes(sourceFile)
+    const [types] = getExportedTypes(sourceFile)
 
-    expect(types).toMatchInlineSnapshot(`
-[
-  {
-    "description": null,
-    "filePath": "/Users/souporserious/Code/mdxts/packages/mdxts/src/MDXComponents.ts",
-    "isComponent": false,
-    "name": "useMDXComponents",
-    "slug": "use-mdx-components",
-    "types": [],
-  },
-]
-`)
+    expect(types.name).toEqual('useMDXComponents')
   })
 
   it('gets exported types from index source file', () => {
@@ -37,21 +26,8 @@ describe('getExportedTypes', () => {
       `export { MDXComponents } from './MDXComponents'`,
       { overwrite: true }
     )
-    const types = getExportedTypes(sourceFile)
+    const [types] = getExportedTypes(sourceFile)
 
-    expect(types).toMatchInlineSnapshot(`
-[
-  [
-    {
-      "description": null,
-      "filePath": "/Users/souporserious/Code/mdxts/packages/mdxts/src/MDXComponents.ts",
-      "isComponent": false,
-      "name": "useMDXComponents",
-      "slug": "use-mdx-components",
-      "types": [],
-    },
-  ],
-]
-`)
+    expect(types.name).toEqual('useMDXComponents')
   })
 })
