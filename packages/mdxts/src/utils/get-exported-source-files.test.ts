@@ -26,4 +26,20 @@ describe('getExportedSourceFiles', () => {
       `${process.cwd()}/src/components/Menu.tsx`
     )
   })
+
+  it('accounts for internal JSDoc tag', () => {
+    project.createSourceFile(
+      `src/components/Menu.tsx`,
+      `/** @internal */\nexport function Menu() {}`,
+      { overwrite: true }
+    )
+    const sourceFile = project.createSourceFile(
+      'src/index.ts',
+      `export * from './components/Menu'`,
+      { overwrite: true }
+    )
+    const exportedSourceFiles = getExportedSourceFiles([sourceFile])
+
+    expect(exportedSourceFiles).toHaveLength(0)
+  })
 })
