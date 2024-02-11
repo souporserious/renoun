@@ -23,7 +23,7 @@ describe('getExportedTypes', () => {
     )
     const sourceFile = project.createSourceFile(
       'src/index.ts',
-      `export { MDXComponents } from './MDXComponents'`,
+      `export { useMDXComponents } from './MDXComponents'`,
       { overwrite: true }
     )
     const [types] = getExportedTypes(sourceFile)
