@@ -13,39 +13,59 @@ import {
   getSymbolDescription,
   isJsxComponent,
 } from '@tsxmod/utils'
+import { getExportedSourceFiles } from './get-exported-source-files'
+
+export type ExportedType = {
+  name: string
+  description: string | null
+  types: ReturnType<typeof getTypeDocumentation>
+  isComponent: boolean
+  slug: string
+  filePath: string
+}
 
 /** Gets all exported types from a source file. */
-export function getExportedTypes(sourceFile: SourceFile) {
+export function getExportedTypes(sourceFile: SourceFile): ExportedType[] {
   return Array.from(sourceFile.getExportedDeclarations())
     .map(([name, [declaration]]) => {
-      if (
-        Node.isFunctionDeclaration(declaration) ||
-        Node.isVariableDeclaration(declaration)
-      ) {
-        const declarationOrExpression = Node.isVariableDeclaration(declaration)
-          ? declaration.getInitializerOrThrow()
-          : declaration
+      const isIndex = sourceFile.getBaseNameWithoutExtension() === 'index'
 
-        if (!isDeclarationOrExpression(declarationOrExpression)) {
-          return null
-        }
+      if (isIndex) {
+        return getExportedSourceFiles([sourceFile]).flatMap((sourceFile) =>
+          getExportedTypes(sourceFile)
+        )
+      } else {
+        if (
+          Node.isFunctionDeclaration(declaration) ||
+          Node.isVariableDeclaration(declaration)
+        ) {
+          const declarationOrExpression = Node.isVariableDeclaration(
+            declaration
+          )
+            ? declaration.getInitializerOrThrow()
+            : declaration
 
-        const filePath = declaration.getSourceFile().getFilePath()
-        const symbol = declaration.getSymbol()
+          if (!isDeclarationOrExpression(declarationOrExpression)) {
+            return null
+          }
 
-        return {
-          name,
-          description: symbol ? getSymbolDescription(symbol) : null,
-          types: getTypeDocumentation(declarationOrExpression) || [],
-          isComponent: isJsxComponent(declaration),
-          slug: kebabCase(name),
-          filePath: filePath as string,
+          const filePath = declaration.getSourceFile().getFilePath()
+          const symbol = declaration.getSymbol()
+
+          return {
+            name,
+            description: symbol ? getSymbolDescription(symbol) : null,
+            types: getTypeDocumentation(declarationOrExpression) || [],
+            isComponent: isJsxComponent(declaration),
+            slug: kebabCase(name),
+            filePath: filePath as string,
+          } satisfies ExportedType
         }
       }
 
       return null
     })
-    .filter((node): node is NonNullable<typeof node> => Boolean(node))
+    .filter(Boolean) as ExportedType[]
 }
 
 function isDeclarationOrExpression(
