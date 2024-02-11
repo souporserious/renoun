@@ -1,10 +1,10 @@
 import * as React from 'react'
-import type { MDXComponents } from 'mdx/types'
+import type { MDXComponents as MDXComponentsType } from 'mdx/types'
 
-import { Code, getClassNameMetadata } from '../components/Code'
+import { Code, getClassNameMetadata } from './Code'
 
 /** Pre-configured MDXTS components for `pre` and `code` elements. */
-export const mdxComponents = {
+export const MDXComponents = {
   pre: (props) => {
     const {
       filename,
@@ -68,8 +68,10 @@ export const mdxComponents = {
       />
     )
   },
-} satisfies MDXComponents
+} satisfies MDXComponentsType
 
-export function useMDXComponents(): MDXComponents {
-  return mdxComponents
+export type MDXComponents = MDXComponentsType
+
+export function useMDXComponents(): MDXComponentsType {
+  return MDXComponents
 }

@@ -1,7 +1,5 @@
 import * as React from 'react'
-import type { MDXComponents } from 'mdx/types'
-import { mdxComponents } from 'mdxts/components'
-import { Code } from 'mdxts/components/Code'
+import { Code, MDXComponents } from 'mdxts/components'
 import { Preview } from 'mdxts/components/Preview'
 import { PackageInstall } from 'mdxts/components/PackageInstall'
 import { GeistMono } from 'geist/font/mono'
@@ -74,10 +72,10 @@ export function useMDXComponents() {
       />
     ),
     code: (props) => (
-      <mdxComponents.code className={GeistMono.className} {...props} />
+      <MDXComponents.code className={GeistMono.className} {...props} />
     ),
     pre: (props) => (
-      <mdxComponents.pre
+      <MDXComponents.pre
         className={GeistMono.className}
         style={{
           width: 'calc(100% + 2rem)',

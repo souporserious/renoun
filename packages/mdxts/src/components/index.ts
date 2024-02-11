@@ -1,5 +1,4 @@
 export { Code, type CodeProps } from './Code'
-export { MDX } from './MDX'
+export { MDXContent } from './MDXContent'
+export { MDXComponents } from './MDXComponents'
 export { Navigation } from './Navigation'
-
-export { mdxComponents } from './mdx-components'

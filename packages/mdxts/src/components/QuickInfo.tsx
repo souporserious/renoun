@@ -4,7 +4,7 @@ import { getDiagnosticMessageText } from '@tsxmod/utils'
 
 import { type getHighlighter } from './highlighter'
 import { languageService } from './project'
-import { MDX } from './MDX'
+import { MDXContent } from './MDXContent'
 import { QuickInfoPopover } from './QuickInfoPopover'
 
 export function QuickInfo({
@@ -124,7 +124,7 @@ export function QuickInfo({
                   opacity: 0.5,
                 }}
               />
-              <MDX
+              <MDXContent
                 components={{
                   p: ({ children }) => (
                     <p

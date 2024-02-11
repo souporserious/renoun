@@ -4,13 +4,13 @@ import * as jsxDevRuntime from 'react/jsx-dev-runtime'
 import type { MDXComponents } from 'mdx/types'
 import { compile } from '@mdx-js/mdx'
 
-/** Compiles and renders MDX source code. */
-export async function MDX({
+/** Compiles and renders MDX content. */
+export async function MDXContent({
   value,
   components,
   dependencies,
 }: {
-  /** The MDX source code to render. */
+  /** The MDX content to render. */
   value: string
 
   /** Additional components to use or a function that creates them. */

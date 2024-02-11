@@ -1,6 +1,7 @@
 import { Fragment } from 'react'
 import { notFound } from 'next/navigation'
-import { Code, MDX } from 'mdxts/components'
+import type { MDXComponents } from 'mdxts/components'
+import { Code, MDXContent } from 'mdxts/components'
 import { PageContainer } from 'components/PageContainer'
 import { ViewSource } from 'components/ViewSource'
 import { allData, allPackages } from 'data'
@@ -14,7 +15,7 @@ const mdxComponents = {
     }
     return <code {...props} />
   },
-} satisfies React.ComponentProps<typeof MDX>['components']
+} satisfies MDXComponents
 
 export const dynamic = 'force-static'
 
@@ -70,7 +71,10 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
       </div>
 
       {description ? (
-        <MDX value={description} components={{ code: mdxComponents.code }} />
+        <MDXContent
+          value={description}
+          components={{ code: mdxComponents.code }}
+        />
       ) : null}
 
       {Content ? <Content /> : null}
