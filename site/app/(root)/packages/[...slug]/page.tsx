@@ -215,7 +215,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
                       )}
                     </div>
                     {type.description ? (
-                      <MDX
+                      <MDXContent
                         value={type.description}
                         components={mdxComponents}
                       />
@@ -270,7 +270,10 @@ function Props({
             {propType.text}
           </h4>
           {propType.description && (
-            <MDX value={propType.description} components={mdxComponents} />
+            <MDXContent
+              value={propType.description}
+              components={mdxComponents}
+            />
           )}
           <div
             style={{
@@ -428,7 +431,7 @@ function Props({
           </div>
         </div>
         {propType.description && (
-          <MDX value={propType.description} components={mdxComponents} />
+          <MDXContent value={propType.description} components={mdxComponents} />
         )}
 
         {propType.properties && propType.properties.length > 0 ? (
