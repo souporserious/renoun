@@ -30,4 +30,36 @@ describe('getExportedTypes', () => {
 
     expect(types.name).toEqual('useMDXComponents')
   })
+
+  it('accounts for internal JSDoc tag', () => {
+    project.createSourceFile(
+      'src/MDXComponents.ts',
+      `/** @internal */\nexport function useMDXComponents() {}`,
+      { overwrite: true }
+    )
+    const sourceFile = project.createSourceFile(
+      'src/index.ts',
+      `export { useMDXComponents } from './MDXComponents'`,
+      { overwrite: true }
+    )
+    const exportedTypes = getExportedTypes(sourceFile)
+
+    expect(exportedTypes).toHaveLength(0)
+  })
+
+  it('uses index exports to determine implicit internal exports', () => {
+    project.createSourceFile(
+      'src/MDXComponents.ts',
+      `export const MDXComponents = {}\n\nexport function useMDXComponents() {}`,
+      { overwrite: true }
+    )
+    const sourceFile = project.createSourceFile(
+      'src/index.ts',
+      `export { MDXComponents } from './MDXComponents'`,
+      { overwrite: true }
+    )
+    const exportedTypes = getExportedTypes(sourceFile)
+
+    expect(exportedTypes).toHaveLength(0)
+  })
 })

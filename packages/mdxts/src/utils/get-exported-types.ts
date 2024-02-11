@@ -13,6 +13,7 @@ import {
   getSymbolDescription,
   isJsxComponent,
 } from '@tsxmod/utils'
+import { hasInternalJsDocTag } from './has-internal-js-doc-tag'
 
 export type ExportedType = {
   name: string
@@ -26,6 +27,9 @@ export type ExportedType = {
 /** Gets all exported types from a source file. */
 export function getExportedTypes(sourceFile: SourceFile): ExportedType[] {
   return Array.from(sourceFile.getExportedDeclarations())
+    .filter(([, allDeclarations]) =>
+      allDeclarations.every((declaration) => !hasInternalJsDocTag(declaration))
+    )
     .map(([name, [declaration]]) => {
       if (
         Node.isFunctionDeclaration(declaration) ||
