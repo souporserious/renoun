@@ -18,7 +18,7 @@ import { getExportedSourceFiles } from './get-exported-source-files'
 export type ExportedType = {
   name: string
   description: string | null
-  types: ReturnType<typeof getTypeDocumentation>
+  types: NonNullable<ReturnType<typeof getTypeDocumentation>>
   isComponent: boolean
   slug: string
   filePath: string
