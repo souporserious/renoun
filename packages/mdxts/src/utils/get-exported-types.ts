@@ -37,38 +37,42 @@ export function getExportedTypes(
     .filter(([, allDeclarations]) =>
       allDeclarations.every((declaration) => !hasInternalJsDocTag(declaration))
     )
-    .map(([name, [declaration]]) => {
-      if (publicDeclarations && !publicDeclarations.includes(declaration)) {
-        return null
-      }
-
-      if (
-        Node.isFunctionDeclaration(declaration) ||
-        Node.isVariableDeclaration(declaration)
-      ) {
-        const declarationOrExpression = Node.isVariableDeclaration(declaration)
-          ? declaration.getInitializerOrThrow()
-          : declaration
-
-        if (!isDeclarationOrExpression(declarationOrExpression)) {
+    .flatMap(([name, allDeclarations]) =>
+      allDeclarations.flatMap((declaration) => {
+        if (publicDeclarations && !publicDeclarations.includes(declaration)) {
           return null
         }
 
-        const filePath = declaration.getSourceFile().getFilePath()
-        const symbol = declaration.getSymbol()
+        if (
+          Node.isFunctionDeclaration(declaration) ||
+          Node.isVariableDeclaration(declaration)
+        ) {
+          const declarationOrExpression = Node.isVariableDeclaration(
+            declaration
+          )
+            ? declaration.getInitializerOrThrow()
+            : declaration
 
-        return {
-          name,
-          description: symbol ? getSymbolDescription(symbol) : null,
-          types: getTypeDocumentation(declarationOrExpression) || [],
-          isComponent: isJsxComponent(declaration),
-          slug: kebabCase(name),
-          filePath: filePath as string,
-        } satisfies ExportedType
-      }
+          if (!isDeclarationOrExpression(declarationOrExpression)) {
+            return null
+          }
 
-      return null
-    })
+          const filePath = declaration.getSourceFile().getFilePath()
+          const symbol = declaration.getSymbol()
+
+          return {
+            name,
+            description: symbol ? getSymbolDescription(symbol) : null,
+            types: getTypeDocumentation(declarationOrExpression) || [],
+            isComponent: isJsxComponent(declaration),
+            slug: kebabCase(name),
+            filePath: filePath as string,
+          } satisfies ExportedType
+        }
+
+        return null
+      })
+    )
     .filter(Boolean) as ExportedType[]
 }
 
