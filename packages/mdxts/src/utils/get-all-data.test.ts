@@ -133,7 +133,7 @@ describe('getAllData', () => {
     expect(allData['/docs/examples/rendering'].next).toBeUndefined()
   })
 
-  it('includes only public files based on package exports', () => {
+  it('includes only public files based on package.json exports', () => {
     const fileSystem = new InMemoryFileSystemHost()
     const files = [
       {
@@ -194,6 +194,41 @@ describe('getAllData', () => {
     expect(allData['/components/button']).toBeDefined()
     expect(allData['/components/card']).toBeDefined()
     expect(allData['/components/private-component']).toBeUndefined()
+  })
+
+  it('includes only public declarations based on index file exports', () => {
+    const fileSystem = new InMemoryFileSystemHost()
+    const files = [
+      {
+        path: 'components/Button.tsx',
+        content: `export const Button = () => {};\n\nexport const PrivateComponent = () => {};`,
+      },
+      {
+        path: 'components/index.ts',
+        content: `export { Button } from './Button';`,
+      },
+    ]
+
+    files.forEach((file) => {
+      fileSystem.writeFileSync(
+        `${workingDirectory}/src/${file.path}`,
+        file.content
+      )
+    })
+
+    const project = new Project({ fileSystem })
+
+    const allData = getAllData({
+      project,
+      allModules: {},
+      globPattern: `${workingDirectory}/src/**/*.{ts,tsx}`,
+      baseDirectory: `src`,
+    })
+    const exportedTypes = allData['/components/button'].exportedTypes
+
+    expect(
+      exportedTypes.find((type) => type.name === 'PrivateComponent')
+    ).toBeUndefined()
   })
 })
 

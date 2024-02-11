@@ -1,5 +1,6 @@
 import { kebabCase } from 'case-anything'
 import type {
+  ExportedDeclarations,
   FunctionDeclaration,
   FunctionExpression,
   ArrowFunction,
@@ -25,12 +26,22 @@ export type ExportedType = {
 }
 
 /** Gets all exported types from a source file. */
-export function getExportedTypes(sourceFile: SourceFile): ExportedType[] {
+export function getExportedTypes(
+  /** The source file to get exported types from. */
+  sourceFile: SourceFile,
+
+  /** Public declarations to filter by. */
+  publicDeclarations?: ExportedDeclarations[]
+): ExportedType[] {
   return Array.from(sourceFile.getExportedDeclarations())
     .filter(([, allDeclarations]) =>
       allDeclarations.every((declaration) => !hasInternalJsDocTag(declaration))
     )
     .map(([name, [declaration]]) => {
+      if (publicDeclarations && !publicDeclarations.includes(declaration)) {
+        return null
+      }
+
       if (
         Node.isFunctionDeclaration(declaration) ||
         Node.isVariableDeclaration(declaration)

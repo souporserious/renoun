@@ -1,7 +1,7 @@
 import parseTitle from 'title'
 import { dirname, join, sep } from 'node:path'
 import { readPackageUpSync } from 'read-package-up'
-import type { Project } from 'ts-morph'
+import type { ExportedDeclarations, Project } from 'ts-morph'
 import { Directory, SourceFile } from 'ts-morph'
 import { getSymbolDescription, resolveExpression } from '@tsxmod/utils'
 
@@ -111,6 +111,8 @@ export function getAllData({
     .concat(Object.keys(allModules))
     .filter((path) => !path.includes('.examples.tsx'))
   const allData: Record<Pathname, ModuleData> = {}
+  const allPublicDeclarations: WeakMap<SourceFile, ExportedDeclarations[]> =
+    new WeakMap()
 
   allPublicPaths.forEach((path) => {
     const type =
@@ -154,23 +156,47 @@ export function getAllData({
 
     /** Handle TypeScript source files */
     if (type === 'ts') {
-      const exportedTypes = getExportedTypes(sourceFile).map(
-        ({ filePath, ...fileExport }) => {
-          const isPublic = allPublicPaths.includes(filePath)
-          const pathname = filePathToPathname(
-            isPublic ? filePath : sourceFile.getFilePath(),
-            baseDirectory,
-            basePathname,
-            packageName
-          )
-          return {
-            ...fileExport,
-            pathname,
-            sourcePath: getSourcePath(filePath),
-            isMainExport: filePath === path,
+      const isIndex = sourceFile.getBaseNameWithoutExtension() === 'index'
+
+      /** Cache all public declarations for later use when processing re-exported source files below */
+      if (isIndex) {
+        Array.from(sourceFile.getExportedDeclarations()).forEach(
+          ([, declarations]) => {
+            declarations.forEach((declaration) => {
+              const publicDeclarations = allPublicDeclarations.get(
+                declaration.getSourceFile()
+              )
+
+              if (publicDeclarations) {
+                publicDeclarations.push(declaration)
+              } else {
+                allPublicDeclarations.set(declaration.getSourceFile(), [
+                  declaration,
+                ])
+              }
+            })
           }
+        )
+      }
+
+      const exportedTypes = getExportedTypes(
+        sourceFile,
+        allPublicDeclarations.get(sourceFile)
+      ).map(({ filePath, ...fileExport }) => {
+        const isPublic = allPublicPaths.includes(filePath)
+        const pathname = filePathToPathname(
+          isPublic ? filePath : sourceFile.getFilePath(),
+          baseDirectory,
+          basePathname,
+          packageName
+        )
+        return {
+          ...fileExport,
+          pathname,
+          sourcePath: getSourcePath(filePath),
+          isMainExport: filePath === path,
         }
-      )
+      })
       const examples = getExamplesFromSourceFile(sourceFile, allModules)
       const isMainExport = packageName
         ? basePathname

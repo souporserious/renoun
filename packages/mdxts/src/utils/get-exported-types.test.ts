@@ -48,17 +48,23 @@ describe('getExportedTypes', () => {
   })
 
   it('uses index exports to determine implicit internal exports', () => {
-    project.createSourceFile(
+    const sourceFile = project.createSourceFile(
       'src/MDXComponents.ts',
       `export const MDXComponents = {}\n\nexport function useMDXComponents() {}`,
       { overwrite: true }
     )
-    const sourceFile = project.createSourceFile(
+    const indexSourceFile = project.createSourceFile(
       'src/index.ts',
       `export { MDXComponents } from './MDXComponents'`,
       { overwrite: true }
     )
-    const exportedTypes = getExportedTypes(sourceFile)
+    const indexExportedDeclarations = Array.from(
+      indexSourceFile.getExportedDeclarations()
+    ).flatMap(([, allDeclarations]) => allDeclarations)
+    const exportedTypes = getExportedTypes(
+      sourceFile,
+      indexExportedDeclarations
+    )
 
     expect(exportedTypes).toHaveLength(0)
   })
