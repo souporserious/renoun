@@ -6,7 +6,6 @@ import type { Theme, getHighlighter } from './highlighter'
 import { Symbol } from './Symbol'
 import { QuickInfo } from './QuickInfo'
 import { QuickInfoProvider } from './QuickInfoProvider'
-import { RegisterSourceFile } from './RegisterSourceFile'
 import { Pre } from './Pre'
 import { CodeToolbar } from './CodeToolbar'
 
@@ -145,13 +144,6 @@ export function CodeView({
 
   return (
     <Container>
-      {filename ? (
-        <RegisterSourceFile
-          filename={filename}
-          source={sourceFile?.getFullText()}
-        />
-      ) : null}
-
       {shouldRenderToolbar ? (
         <CodeToolbar
           filename={shouldRenderFilename ? filenameLabel : undefined}
