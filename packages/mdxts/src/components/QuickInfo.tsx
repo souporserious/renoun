@@ -36,21 +36,19 @@ export function QuickInfo({
     return null
   }
 
-  const formatDisplayParts = (parts: ts.SymbolDisplayPart[]) =>
-    parts
-      .map((part) => part.text)
-      .join('')
-      // First, replace root directory to handle root node_modules
-      .replace(rootDirectory, '.')
-      // Next, replace base directory for on disk paths
-      .replace(baseDirectory, '')
-      // Finally, replace the in-memory mdxts directory
-      .replace('/mdxts', '')
   const displayParts = quickInfo.displayParts || []
-  const displayText = formatDisplayParts(displayParts)
+  const displayText = displayParts
+    .map((part) => part.text)
+    .join('')
+    // First, replace root directory to handle root node_modules
+    .replaceAll(rootDirectory, '.')
+    // Next, replace base directory for on disk paths
+    .replaceAll(baseDirectory, '')
+    // Finally, replace the in-memory mdxts directory
+    .replaceAll('/mdxts', '')
   const displayTextTokens = highlighter(displayText, language)
   const documentation = quickInfo.documentation || []
-  const documentationText = formatDisplayParts(documentation)
+  const documentationText = formatDocumentationText(documentation)
 
   return (
     <QuickInfoPopover>
@@ -175,4 +173,29 @@ export function QuickInfo({
       </div>
     </QuickInfoPopover>
   )
+}
+
+/** Convert documentation entries to markdown-friendly links. */
+function formatDocumentationText(documentation: ts.SymbolDisplayPart[]) {
+  let markdownText = ''
+  let currentLinkText = ''
+  let currentLinkUrl = ''
+
+  documentation.forEach((part) => {
+    if (part.kind === 'text') {
+      markdownText += part.text
+    } else if (part.kind === 'linkText') {
+      const [url, ...descriptionParts] = part.text.split(' ')
+      currentLinkUrl = url
+      currentLinkText = descriptionParts.join(' ') || url
+    } else if (part.kind === 'link') {
+      if (currentLinkUrl) {
+        markdownText += `[${currentLinkText}](${currentLinkUrl})`
+        currentLinkText = ''
+        currentLinkUrl = ''
+      }
+    }
+  })
+
+  return markdownText
 }
