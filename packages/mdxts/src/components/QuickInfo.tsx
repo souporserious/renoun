@@ -132,6 +132,7 @@ export function QuickInfo({
                         lineHeight: 'inherit',
                         padding: '0.25rem 0.5rem',
                         margin: 0,
+                        color: theme.colors['foreground'],
                         // @ts-expect-error
                         textWrap: 'pretty',
                       }}
