@@ -58,16 +58,22 @@ export async function getExamplesFromSourceFile(
   sourceFile: SourceFile,
   allModules: Record<string, Promise<Record<string, any>>>
 ) {
+  const directoryExampleSourceFiles = getExamplesFromDirectory(
+    sourceFile.getDirectory()
+  )
   const extensionExampleSourceFile = getExamplesFromExtension(sourceFile)
+  const allExampleSourceFiles = directoryExampleSourceFiles.concat(
+    extensionExampleSourceFile ? [extensionExampleSourceFile] : []
+  )
   const allExamples: ExampleItem[] = []
 
-  if (extensionExampleSourceFile) {
-    const sourceFilePath = extensionExampleSourceFile.getFilePath()
+  for (const exampleSourceFile of allExampleSourceFiles) {
+    const sourceFilePath = exampleSourceFile.getFilePath()
 
     if (sourceFilePath in allModules) {
       allExamples.push(
         ...parseExamplesFromModule(
-          extensionExampleSourceFile,
+          exampleSourceFile,
           await allModules[sourceFilePath]
         )
       )
@@ -75,9 +81,6 @@ export async function getExamplesFromSourceFile(
       throw new Error(`Module not found for ${sourceFilePath}`)
     }
   }
-
-  // TODO: Add support for examples directory.
-  // const directoryExamples = getExamplesFromDirectory(sourceFile.getDirectory())
 
   return allExamples
 }
