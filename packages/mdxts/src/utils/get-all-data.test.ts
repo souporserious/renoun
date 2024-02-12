@@ -65,13 +65,25 @@ describe('getAllData', () => {
   it('orders based on files and directories', () => {
     const project = new Project({ useInMemoryFileSystem: true })
 
-    project.createSourceFile('package/components/Button.tsx', ``)
+    project.createSourceFile(
+      'package/components/Button.tsx',
+      `export function Button() {}`
+    )
 
-    project.createSourceFile('package/components/Card.tsx', ``)
+    project.createSourceFile(
+      'package/components/Card.tsx',
+      `export function Card() {}`
+    )
 
-    project.createSourceFile('package/hooks/usePressable.ts', ``)
+    project.createSourceFile(
+      'package/hooks/usePressable.ts',
+      `export function usePressable() {}`
+    )
 
-    project.createSourceFile('package/hooks/useFocus.ts', ``)
+    project.createSourceFile(
+      'package/hooks/useFocus.ts',
+      `export function useFocus() {}`
+    )
 
     const allData = getAllData({
       project,
