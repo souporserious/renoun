@@ -47,9 +47,6 @@ export type CodeProps = {
   /** Vertical padding to apply to the code block. */
   paddingVertical?: string
 
-  /** Whether or not the code is presented inline or as a block-level element. */
-  inline?: boolean
-
   /** Whether or not to show the toolbar. */
   toolbar?: boolean
 
@@ -84,8 +81,7 @@ export function CodeView({
   baseDirectory,
   edit,
   value,
-  inline,
-  padding = inline ? '0.25rem' : '1rem',
+  padding = '1rem',
   paddingHorizontal = padding,
   paddingVertical = padding,
   allowErrors,
@@ -119,14 +115,14 @@ export function CodeView({
       ? allowErrors.split(',').map((code) => parseInt(code))
       : []
   const diagnostics =
-    (allowedErrorCodes.length === 0 && allowErrors) || inline
+    allowedErrorCodes.length === 0 && allowErrors
       ? []
       : sourceFile
         ? getDiagnostics(sourceFile).filter(
             (diagnostic) => !allowedErrorCodes.includes(diagnostic.getCode())
           )
         : []
-  const Element = inline ? 'span' : 'div'
+  const Element = 'div'
   const Container = isNestedInEditor
     ? React.Fragment
     : (props: Record<string, unknown>) => (
@@ -134,14 +130,13 @@ export function CodeView({
           style={{
             fontFamily: 'monospace',
             position: 'relative',
-            display: inline ? 'inline-grid' : 'grid',
+            display: 'grid',
             gridTemplateColumns: 'auto minmax(0, 1fr)',
             gridTemplateRows: shouldRenderToolbar ? 'auto 1fr' : '0 1fr',
             borderRadius: 5,
             boxShadow: `0 0 0 1px ${theme.colors['contrastBorder']}`,
             backgroundColor: theme.colors['editor.background'],
             color: theme.colors['editor.foreground'],
-            verticalAlign: inline ? 'middle' : undefined,
             ...style,
           }}
           {...props}
@@ -166,7 +161,7 @@ export function CodeView({
         />
       ) : null}
 
-      {!inline && lineNumbers ? (
+      {lineNumbers ? (
         <div
           className={className}
           style={{
@@ -208,7 +203,6 @@ export function CodeView({
       ) : null}
 
       <Pre
-        inline={inline}
         isNestedInEditor={isNestedInEditor}
         className={className}
         style={{ gridRow: filename ? 2 : 1 }}
@@ -216,7 +210,7 @@ export function CodeView({
         <QuickInfoProvider>
           <Element
             style={{
-              display: inline ? 'inline-block' : 'block',
+              display: 'block',
               paddingTop: paddingVertical,
               paddingBottom: paddingVertical,
               paddingLeft: paddingHorizontal,
@@ -231,58 +225,55 @@ export function CodeView({
                     ? token.color.toLowerCase() === editorForegroundColor
                     : false
                   const isWhitespace = token.content.trim() === ''
-
-                  if (!inline) {
-                    const bounds = symbolBounds.find(
-                      (bounds) =>
-                        bounds.start === token.start &&
-                        bounds.width === token.end - token.start
-                    )
-                    if (bounds && filename && language) {
-                      const tokenDiagnostics = diagnostics.filter(
-                        (diagnostic) => {
-                          const start = diagnostic.getStart()
-                          const length = diagnostic.getLength()
-                          if (!start || !length) {
-                            return false
-                          }
-                          const end = start + length
-                          return start <= token.start && token.end <= end
+                  const bounds = symbolBounds.find(
+                    (bounds) =>
+                      bounds.start === token.start &&
+                      bounds.width === token.end - token.start
+                  )
+                  if (bounds && filename && language) {
+                    const tokenDiagnostics = diagnostics.filter(
+                      (diagnostic) => {
+                        const start = diagnostic.getStart()
+                        const length = diagnostic.getLength()
+                        if (!start || !length) {
+                          return false
                         }
-                      )
-                      const diagnosticStyle = {
-                        backgroundImage: `url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%206%203'%20enable-background%3D'new%200%200%206%203'%20height%3D'3'%20width%3D'6'%3E%3Cg%20fill%3D'%23f14c4c'%3E%3Cpolygon%20points%3D'5.5%2C0%202.5%2C3%201.1%2C3%204.1%2C0'%2F%3E%3Cpolygon%20points%3D'4%2C0%206%2C2%206%2C0.6%205.4%2C0'%2F%3E%3Cpolygon%20points%3D'0%2C2%201%2C3%202.4%2C3%200%2C0.6'%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E")`,
-                        backgroundRepeat: 'repeat-x',
-                        backgroundPosition: 'bottom left',
+                        const end = start + length
+                        return start <= token.start && token.end <= end
                       }
-
-                      return (
-                        <span
-                          key={tokenIndex}
-                          style={{
-                            ...token.fontStyle,
-                            ...(tokenDiagnostics.length && diagnosticStyle),
-                            position: 'relative',
-                            color: isForegroundColor ? undefined : token.color,
-                          }}
-                        >
-                          {token.content}
-                          <Symbol>
-                            <QuickInfo
-                              position={token.start}
-                              filename={filename}
-                              highlighter={highlighter}
-                              language={language}
-                              theme={theme}
-                              diagnostics={tokenDiagnostics}
-                              edit={edit}
-                              rootDirectory={rootDirectory}
-                              baseDirectory={baseDirectory}
-                            />
-                          </Symbol>
-                        </span>
-                      )
+                    )
+                    const diagnosticStyle = {
+                      backgroundImage: `url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%206%203'%20enable-background%3D'new%200%200%206%203'%20height%3D'3'%20width%3D'6'%3E%3Cg%20fill%3D'%23f14c4c'%3E%3Cpolygon%20points%3D'5.5%2C0%202.5%2C3%201.1%2C3%204.1%2C0'%2F%3E%3Cpolygon%20points%3D'4%2C0%206%2C2%206%2C0.6%205.4%2C0'%2F%3E%3Cpolygon%20points%3D'0%2C2%201%2C3%202.4%2C3%200%2C0.6'%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E")`,
+                      backgroundRepeat: 'repeat-x',
+                      backgroundPosition: 'bottom left',
                     }
+
+                    return (
+                      <span
+                        key={tokenIndex}
+                        style={{
+                          ...token.fontStyle,
+                          ...(tokenDiagnostics.length && diagnosticStyle),
+                          position: 'relative',
+                          color: isForegroundColor ? undefined : token.color,
+                        }}
+                      >
+                        {token.content}
+                        <Symbol>
+                          <QuickInfo
+                            position={token.start}
+                            filename={filename}
+                            highlighter={highlighter}
+                            language={language}
+                            theme={theme}
+                            diagnostics={tokenDiagnostics}
+                            edit={edit}
+                            rootDirectory={rootDirectory}
+                            baseDirectory={baseDirectory}
+                          />
+                        </Symbol>
+                      </span>
+                    )
                   }
 
                   if (isForegroundColor || isWhitespace) {

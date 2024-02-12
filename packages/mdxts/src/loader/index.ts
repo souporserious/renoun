@@ -44,10 +44,14 @@ export default async function loader(
     }
 
     if (isExample) {
-      source =
-        `import theme from '${relativeThemePath}';\n${source}`.replaceAll(
-          '<Code',
-          `<Code theme={theme} workingDirectory="${workingDirectory}"`
+      source = `import theme from '${relativeThemePath}';\n${source}`
+        .replaceAll(
+          '<CodeBlock',
+          `<CodeBlock theme={theme} workingDirectory="${workingDirectory}"`
+        )
+        .replaceAll(
+          '<CodeInline',
+          `<CodeInline theme={theme} workingDirectory="${workingDirectory}"`
         )
     } else {
       source = `import { setTheme } from 'mdxts';\nimport theme from '${relativeThemePath}';\nsetTheme(theme);\n${source}`

@@ -1,8 +1,8 @@
 import type { Node } from 'mdast'
 import type { VFile } from 'vfile'
 
-/** Adds file meta data to all code blocks and `Code` components. */
-export function addFileMetaToCode() {
+/** Adds file meta data to all code blocks and `CodeBlock` components. */
+export function addFileMetaToCodeBlock() {
   return async function (tree: Node, file: VFile) {
     const { visit } = await import('unist-util-visit')
 
@@ -17,7 +17,7 @@ export function addFileMetaToCode() {
     })
 
     visit(tree, 'mdxJsxFlowElement', (node: any) => {
-      if (node.name === 'Code') {
+      if (node.name === 'CodeBlock') {
         node.attributes = [
           {
             type: 'mdxJsxAttribute',

@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation'
-import { Code } from 'mdxts/components'
+import { CodeBlock } from 'mdxts/components'
 import { allPackages } from 'data'
 import { ViewSource } from 'components/ViewSource'
 import { getSiteMetadata } from 'utils/get-site-metadata'
@@ -82,7 +82,7 @@ export default async function Page({
         style={{ position: 'absolute', top: '0.8rem', right: '0.6rem' }}
       />
       <div className={styles.container}>
-        <Code
+        <CodeBlock
           allowErrors
           lineNumbers
           value={example.sourceText}

@@ -1,6 +1,6 @@
 import React from 'react'
 
-import { Code } from './Code'
+import { CodeBlock } from './CodeBlock'
 import { PackageInstallClient } from './PackageInstallClient'
 
 const packageManagers = {
@@ -21,10 +21,10 @@ export async function PackageInstall({
   const allHighlightedCommands = Object.fromEntries(
     Object.entries(packageManagers).map(([command, install]) => [
       command,
-      <Code
+      <CodeBlock
         allowCopy
         value={`${install} ${packages.join(' ')}`}
-        language="shell"
+        language="shellscript"
       />,
     ])
   )

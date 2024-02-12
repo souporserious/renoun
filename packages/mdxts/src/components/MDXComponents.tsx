@@ -1,7 +1,9 @@
 import * as React from 'react'
 import type { MDXComponents as MDXComponentsType } from 'mdx/types'
 
-import { Code, getClassNameMetadata } from './Code'
+import { getClassNameMetadata } from '../utils/get-class-name-metadata'
+import { CodeBlock } from './CodeBlock'
+import { CodeInline } from './CodeInline'
 
 /** Pre-configured MDXTS components for `pre` and `code` elements. */
 export const MDXComponents = {
@@ -35,7 +37,7 @@ export const MDXComponents = {
     const metadata = getClassNameMetadata(children.props.className || '')
 
     return (
-      <Code
+      <CodeBlock
         allowErrors={allowErrors}
         filename={filename}
         language={metadata?.language}
@@ -58,8 +60,7 @@ export const MDXComponents = {
     }
 
     return (
-      <Code
-        inline
+      <CodeInline
         paddingHorizontal="0.25rem"
         paddingVertical="0.1rem"
         value={children}

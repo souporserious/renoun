@@ -1,0 +1,43 @@
+The `CodeBlock` component highlights a string of source code when provided a `language`.
+
+<Note>
+  This component is automatically set up to override the `pre` element through
+  the [Next.js plugin](/packages/next).
+</Note>
+
+Use the `source` prop to render a code block from a source file. For example, the following MDX:
+
+```mdx filename="useCounter.mdx"
+<CodeBlock source="./counter/useCounter.ts" />
+```
+
+Will produce a code block with the contents of `./counter/useCounter.ts`:
+
+<CodeBlock source="./counter/useCounter.ts" />
+
+## Manual Setup
+
+You can define custom MDX components and overrides in a top-level `mdx-components.tsx` file in your project:
+
+```tsx filename="mdx-components.tsx"
+import { MDXComponents } from 'mdxts/components'
+import { GeistMono } from 'geist/font/mono'
+
+export function useMDXComponents() {
+  return {
+    code: (props) => (
+      <MDXComponents.code className={GeistMono.className} {...props} />
+    ),
+    pre: (props) => (
+      <MDXComponents.pre
+        className={GeistMono.className}
+        style={{
+          width: 'calc(100% + 2rem)',
+          margin: '0 -1rem',
+        }}
+        {...props}
+      />
+    ),
+  } satisfies MDXComponents
+}
+```

@@ -48,7 +48,6 @@ export type EditorProps = {
 }
 
 export const languageMap: Record<string, any> = {
-  shell: 'shellscript',
   mjs: 'javascript',
 }
 
@@ -67,7 +66,7 @@ export function Editor({
 }: EditorProps & { children?: React.ReactNode }) {
   if (!theme) {
     throw new Error(
-      'The [theme] prop was not provided to the [Code] component. Pass an explicit theme or make sure the mdxts/loader package is configured correctly.'
+      'The [theme] prop was not provided to the [Editor] component. Pass an explicit theme or make sure the mdxts/loader package is configured correctly.'
     )
   }
 

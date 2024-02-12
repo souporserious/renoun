@@ -16,11 +16,9 @@ export function usePreContext() {
 export function Pre({
   children,
   style,
-  inline,
   isNestedInEditor,
   ...props
 }: {
-  inline?: boolean
   isNestedInEditor: boolean
 } & React.HTMLProps<HTMLPreElement>) {
   const [pointerDown, setPointerDown] = useState(false)
@@ -29,7 +27,6 @@ export function Pre({
     // allow enough time for text selection
     timeoutRef.current = setTimeout(() => setPointerDown(false), 200)
   }
-  const Element = inline ? 'span' : 'pre'
 
   useEffect(() => {
     return () => {
@@ -38,13 +35,13 @@ export function Pre({
   }, [])
 
   return (
-    <Element
+    <pre
       {...props}
       onPointerDown={() => setPointerDown(true)}
       onPointerUp={cancelPointerDown}
       onPointerCancel={cancelPointerDown}
       style={{
-        display: inline ? 'inline-flex' : 'flex',
+        display: 'flex',
         gridColumn: 2,
         gridRow: 1,
         whiteSpace: 'pre',
@@ -62,6 +59,6 @@ export function Pre({
       }}
     >
       <PreContext.Provider value={pointerDown}>{children}</PreContext.Provider>
-    </Element>
+    </pre>
   )
 }

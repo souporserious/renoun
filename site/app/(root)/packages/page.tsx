@@ -1,4 +1,4 @@
-import { Code } from 'mdxts/components'
+import { CodeInline } from 'mdxts/components'
 import { allPackages } from 'data'
 
 export default async function Page() {
@@ -7,7 +7,7 @@ export default async function Page() {
     <>
       <h1>Packages</h1>
       <p>
-        All packages exported from the <Code inline value="mdxts" /> library.
+        All packages exported from the <CodeInline value="mdxts" /> library.
         This includes the core library for gathering data from local source
         files, components for code blocks and navigation, and framework
         integrations.

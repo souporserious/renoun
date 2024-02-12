@@ -1,5 +1,4 @@
 const languageMap: Record<string, any> = {
-  shell: 'shellscript',
   mjs: 'javascript',
 }
 

@@ -1,7 +1,7 @@
 import { Fragment } from 'react'
 import { notFound } from 'next/navigation'
 import type { MDXComponents } from 'mdxts/components'
-import { Code, MDXContent } from 'mdxts/components'
+import { CodeInline, MDXContent } from 'mdxts/components'
 import { PageContainer } from 'components/PageContainer'
 import { ViewSource } from 'components/ViewSource'
 import { allData, allPackages } from 'data'
@@ -11,7 +11,7 @@ const mdxComponents = {
   p: (props) => <p {...props} style={{ margin: 0 }} />,
   code: (props) => {
     if (typeof props.children == 'string') {
-      return <Code inline value={props.children} language="typescript" />
+      return <CodeInline value={props.children} language="typescript" />
     }
     return <code {...props} />
   },
@@ -364,7 +364,7 @@ function Props({
       ) : (
         <div key={index}>
           {isComponent ? 'Props' : 'Types'}{' '}
-          <Code inline value={propType.text} language="typescript" />
+          <CodeInline value={propType.text} language="typescript" />
         </div>
       )
     }
@@ -411,8 +411,7 @@ function Props({
               gap: '0.8rem',
             }}
           >
-            <Code
-              inline
+            <CodeInline
               value={propType.text}
               language="typescript"
               paddingHorizontal="0.5rem"
@@ -421,8 +420,7 @@ function Props({
             {propType.defaultValue ? (
               <span style={{ fontSize: '0.8rem', flexShrink: 0 }}>
                 ={' '}
-                <Code
-                  inline
+                <CodeInline
                   value={propType.defaultValue}
                   language="typescript"
                 />

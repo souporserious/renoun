@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { basename } from 'node:path'
 import { GeistMono } from 'geist/font/mono'
 import { getTheme } from 'mdxts'
-import { Code, type CodeProps } from 'mdxts/components'
+import { CodeBlock, type CodeBlockProps } from 'mdxts/components'
 import { allDocs } from 'data'
 
 const docsPageSource = `
@@ -53,7 +53,7 @@ const codeProps = {
     margin: 0,
     borderRadius: '0.5rem',
   },
-} satisfies Partial<CodeProps>
+} satisfies Partial<CodeBlockProps>
 
 export function HeroExample() {
   const entries = Object.values(allDocs.all()).filter((doc) => doc.depth === 1)
@@ -110,7 +110,7 @@ export function HeroExample() {
       </Card>
 
       <Card title="data.ts" column="11/19" row="2/7">
-        <Code
+        <CodeBlock
           value={`import { createSource } from 'mdxts'\n\nexport const allDocs = createSource('docs/*.mdx')`}
           filename="data.ts"
           {...codeProps}
@@ -118,11 +118,15 @@ export function HeroExample() {
       </Card>
 
       <Card title="Sidebar.tsx" column="2/10" row="12/35">
-        <Code value={sidebarSource} filename="Sidebar.tsx" {...codeProps} />
+        <CodeBlock
+          value={sidebarSource}
+          filename="Sidebar.tsx"
+          {...codeProps}
+        />
       </Card>
 
       <Card title="docs/[id]/page.tsx" column="12/20" row="12/20">
-        <Code
+        <CodeBlock
           value={docsPageSource}
           filename="docs/[id]/page.tsx"
           {...codeProps}

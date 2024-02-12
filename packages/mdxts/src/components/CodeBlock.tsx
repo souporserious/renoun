@@ -18,12 +18,11 @@ import { registerCodeComponent } from './state'
 export { getClassNameMetadata } from '../utils/get-class-name-metadata'
 
 const languageMap: Record<string, any> = {
-  shell: 'shellscript',
   mjs: 'javascript',
 }
 const languageKeys = Object.keys(languageMap)
 
-export type BaseCodeProps = {
+export type BaseCodeBlockProps = {
   /** Name of the file. */
   filename?: string
 
@@ -57,9 +56,6 @@ export type BaseCodeProps = {
   /** Vertical padding to apply to the code block. */
   paddingVertical?: string
 
-  /** Whether or not the code is presented inline or as a block-level element. */
-  inline?: boolean
-
   /** Whether or not to show the toolbar. */
   toolbar?: boolean
 
@@ -70,20 +66,20 @@ export type BaseCodeProps = {
   style?: React.CSSProperties
 }
 
-export type CodeProps =
+export type CodeBlockProps =
   | ({
       /** Code snippet to be highlighted. */
       value: string
-    } & BaseCodeProps)
+    } & BaseCodeBlockProps)
   | ({
       /** Source code to be highlighted. */
       source: string
 
       /** Specify the working directory for the `source`. */
       workingDirectory?: string
-    } & BaseCodeProps)
+    } & BaseCodeBlockProps)
 
-type PrivateCodeProps = Partial<{
+type PrivateCodeBlockProps = Partial<{
   /** Path to the source file on disk provided by the remark plugin. */
   sourcePath: string
   sourcePathLine: number
@@ -94,7 +90,7 @@ type PrivateCodeProps = Partial<{
 }>
 
 /** Renders a code block with syntax highlighting. */
-export async function Code({
+export async function CodeBlock({
   filename: filenameProp,
   language,
   lineNumbers,
@@ -107,18 +103,17 @@ export async function Code({
   padding,
   paddingHorizontal,
   paddingVertical,
-  inline,
   toolbar = true,
   style,
   ...props
-}: CodeProps) {
+}: CodeBlockProps) {
   const { isNestedInEditor, sourcePath, sourcePathLine, sourcePathColumn } =
-    props as PrivateCodeProps
+    props as PrivateCodeBlockProps
   const theme = themeProp ?? getTheme()
 
   if (!theme) {
     throw new Error(
-      'The [theme] prop was not provided to the [Code] component. Pass an explicit theme or make sure the mdxts/loader package is configured correctly.'
+      'The [theme] prop was not provided to the [CodeBlock] component. Pass an explicit theme or make sure the mdxts/loader package is configured correctly.'
     )
   }
 
@@ -142,7 +137,7 @@ export async function Code({
 
     if (isRelative && !props.workingDirectory) {
       throw new Error(
-        'The [workingDirectory] prop was not provided to the [Code] component while using a relative path. Pass a valid [workingDirectory] or make sure the mdxts/remark plugin and mdxts/loader are configured correctly if this is being renderend in an MDX file.'
+        'The [workingDirectory] prop was not provided to the [CodeBlock] component while using a relative path. Pass a valid [workingDirectory] or make sure the mdxts/remark plugin and mdxts/loader are configured correctly if this is being renderend in an MDX file.'
       )
     }
 
@@ -157,8 +152,7 @@ export async function Code({
   const isJavaScriptLanguage = ['js', 'jsx', 'ts', 'tsx'].includes(
     finalLanguage
   )
-  const jsxOnly =
-    !inline && isJavaScriptLanguage ? isJsxOnly(finalValue) : false
+  const jsxOnly = isJavaScriptLanguage ? isJsxOnly(finalValue) : false
   let filename = 'source' in props ? props.source : filenameProp
   let sourceFile: SourceFile | undefined
 
@@ -185,11 +179,6 @@ export async function Code({
         finalValue = finalValue.slice(1)
       }
     }
-  }
-
-  // Trim extra whitespace from inline code blocks since it's difficult to read.
-  if (inline) {
-    finalValue = finalValue.replace(/\s+/g, ' ')
   }
 
   // Scope code block source files since they can conflict with other files on disk.
@@ -235,7 +224,6 @@ export async function Code({
       padding={padding}
       paddingHorizontal={paddingHorizontal}
       paddingVertical={paddingVertical}
-      inline={inline}
       theme={theme}
       isJsxOnly={jsxOnly}
       isNestedInEditor={isNestedInEditor}
@@ -253,7 +241,7 @@ export async function Code({
               'use server'
               if (!sourcePath || !sourcePathLine) {
                 throw new Error(
-                  'The [sourcePath] prop was not provided to the [Code] component. Make sure the mdxts/remark plugin is configured correctly.'
+                  'The [sourcePath] prop was not provided to the [CodeBlock] component. Make sure the mdxts/remark plugin is configured correctly.'
                 )
               }
               const contents = await readFile(sourcePath, 'utf-8')

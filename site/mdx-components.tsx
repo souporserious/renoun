@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Code, MDXComponents } from 'mdxts/components'
+import { CodeBlock, MDXComponents } from 'mdxts/components'
 import { Preview } from 'mdxts/components/Preview'
 import { PackageInstall } from 'mdxts/components/PackageInstall'
 import { GeistMono } from 'geist/font/mono'
@@ -8,12 +8,21 @@ export function useMDXComponents() {
   return {
     Preview,
     PackageInstall,
-    Code,
+    CodeBlock: (props) => (
+      <CodeBlock
+        className={GeistMono.className}
+        style={{
+          width: 'calc(100% + 2rem)',
+          margin: '0 -1rem',
+        }}
+        {...props}
+      />
+    ),
     Example: (props) => <div {...props} />,
     Playground: ({ codeBlock, ...props }) => {
       return (
         <div style={{ display: 'flex' }}>
-          <Code
+          <CodeBlock
             className={GeistMono.className}
             language="tsx"
             value={codeBlock}
