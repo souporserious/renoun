@@ -286,34 +286,36 @@ export function getAllData({
     }
   })
 
-  const sortedData = Object.entries(allData).sort((a, b) => {
-    // Give the main export the highest priority
-    if (a[1].isMainExport) {
-      return -1
-    }
-    if (b[1].isMainExport) {
-      return 1
-    }
+  const sortedAndFilteredData = Object.entries(allData)
+    .sort((a, b) => {
+      // Give the main export the highest priority
+      if (a[1].isMainExport) {
+        return -1
+      }
+      if (b[1].isMainExport) {
+        return 1
+      }
 
-    // Sort by order if available
-    if (a[1].order && b[1].order) {
-      return a[1].order - b[1].order
-    }
-    if (a[1].order) {
-      return -1
-    }
-    if (b[1].order) {
-      return 1
-    }
+      // Sort by order if available
+      if (a[1].order && b[1].order) {
+        return a[1].order - b[1].order
+      }
+      if (a[1].order) {
+        return -1
+      }
+      if (b[1].order) {
+        return 1
+      }
 
-    // Fallback to alphabetical order
-    return a[0].localeCompare(b[0])
-  })
+      // Fallback to alphabetical order
+      return a[0].localeCompare(b[0])
+    })
+    .filter(([, data]) => data.mdxPath || data.exportedTypes.length > 0)
 
   // Add previous/next data to each module
-  sortedData.forEach(([, data], index) => {
-    const previousData = sortedData[index - 1]
-    const nextData = sortedData[index + 1]
+  sortedAndFilteredData.forEach(([, data], index) => {
+    const previousData = sortedAndFilteredData[index - 1]
+    const nextData = sortedAndFilteredData[index + 1]
     if (previousData) {
       data.previous = {
         label: previousData[1].label,
@@ -328,7 +330,7 @@ export function getAllData({
     }
   })
 
-  return Object.fromEntries(sortedData)
+  return Object.fromEntries(sortedAndFilteredData)
 }
 
 /** Returns the title of a source file based on its filename. */
