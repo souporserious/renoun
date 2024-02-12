@@ -4,7 +4,7 @@ export const metadata = {
 
 # Authoring Examples
 
-Examples can be exported alongside source code to provide documentation of how components, hooks, utilities, and other modules are used.
+Examples are exported alongside source code to provide visual and interactive documentation of how components, hooks, and utilities can be used.
 
 ## Extension
 
@@ -27,6 +27,18 @@ export function DifferentSizes() {
     <Button label="Say hello" size={size} />
   ))
 }
+```
+
+## Directory
+
+Examples can be grouped into into a directory:
+
+```
+Button/
+├── index.tsx
+├── examples/
+│ ├── 01.Basic.tsx
+│ ├── 02.Advanced.tsx
 ```
 
 ## Templating

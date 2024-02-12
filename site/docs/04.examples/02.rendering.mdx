@@ -4,7 +4,7 @@ export const metadata = {
 
 # Rendering Examples
 
-Examples can be rendered in MDX using the [[Example]] and [[Preview]] components. These components take a `source` prop, which is the name of the example file or code block in any of the [locations examples can exist](./01.writing.mdx).
+Examples can be rendered in MDX using the `Example` and `Preview` components. These components take a `source` prop, which is the name of the example file or code block in any of the [locations examples can exist](./01.writing.mdx).
 
 As an illustration of how this works, let's say we have the following file structure:
 
@@ -16,7 +16,7 @@ As an illustration of how this works, let's say we have the following file struc
 └── Button.tsx
 ```
 
-We can now render the `Basic.tsx` example in the README like so:
+We can now render the `Basic.tsx` example in the `README.mdx` like so:
 
 ```mdx
 # Button Examples
@@ -26,10 +26,10 @@ We can now render the `Basic.tsx` example in the README like so:
 
 ## Code Block Examples
 
-When declaring a code block in MDX, you can target the filename prop to render the example:
+When declaring a code block in MDX, you can target the `filename` prop to render the code block as an example:
 
 ````mdx
-```Basic.tsx
+```tsx filename="Basic.tsx"
 export const Basic = () => <div>Basic</div>
 ```
 
@@ -38,54 +38,36 @@ export const Basic = () => <div>Basic</div>
 
 ## Templating
 
-The `Example` component is ideal for blogs or individual situations. However, it is less effective for handling a multitude of examples as found in libraries and applications.
+The `Example` component is ideal for blogs and one-off situations. However, it is less effective for handling a multitude of examples as found in libraries and applications.
 
 For this, you can lean on your specific framework to handle templating and querying the metadata collected from `createSource`. Using Next.js as an example framework, we can create a custom page that will render the example based on the name of the example file:
 
 {/* TODO: Use real example from site here <CodeBlock source="../../app/(examples)/components/[component]/examples/[example]/page.tsx" baseDirectory="../../app/(examples)" /> */}
 
 ```tsx filename="components/[component]/examples/[example]/page.tsx"
-import * as React from 'react'
 import { notFound } from 'next/navigation'
-import type { Metadata } from 'next'
-import { createSource } from 'mdxts'
+import { allPackages } from 'data'
 
-const allComponents = createSource('./components/*.tsx')
+export const dynamic = 'force-static'
 
 export async function generateStaticParams() {
-  const sourceFiles = await allComponents.all()
-
-  return Object.entries(sourceFiles)
-    .filter(([, component]) => component.examples?.length > 0)
-    .flatMap(([pathname, component]) => {
-      return component.examples.map((example) => ({
-        component: pathname,
-        example: example.slug,
-      }))
-    })
+  return (await allPackages.examplePaths()).map((pathname) => ({
+    example: pathname,
+  }))
 }
 
 export default async function Page({
   params,
 }: {
-  params: { component: string; example: string }
+  params: { example: string[] }
 }) {
-  const component = await allComponents.get(params.component)
+  const singlePackage = await allPackages.get(params.example.slice(0, -1))
+  const example = await allPackages.getExample(params.example)
 
-  if (component === undefined) {
+  if (singlePackage === undefined || example === undefined) {
     return notFound()
   }
 
-  const example = component.examples?.find(
-    (example) => example.slug === params.example
-  )
-
-  if (example === undefined) {
-    return notFound()
-  }
-
-  const { default: Component } = await example.module
-
-  return <Component />
+  return <example.moduleExport />
 }
 ```
