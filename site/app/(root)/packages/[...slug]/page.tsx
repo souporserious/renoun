@@ -129,7 +129,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
                   >
                     <div
                       style={{
-                        [String('--scale')]: 0.4,
+                        '--scale': 0.4,
                         display: 'flex',
                         transformOrigin: 'top left',
                         scale: 'var(--scale)',

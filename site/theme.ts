@@ -11,13 +11,13 @@ export const mediaQuery = {
 } as const
 
 export const cssVariables = {
-  [String('--heading1')]: '5rem',
-  [String('--heading2')]: '4rem',
-  [String('--heading3')]: '3rem',
-  [String('--body1')]: '2rem',
-  [String('--body2')]: '1rem',
-  [String('--header-icon-size')]: '3rem',
-  [String(mediaQuery.medium)]: {
+  '--heading1': '5rem',
+  '--heading2': '4rem',
+  '--heading3': '3rem',
+  '--body1': '2rem',
+  '--body2': '1rem',
+  '--header-icon-size': '3rem',
+  [mediaQuery.medium]: {
     '--header-icon-size': '2rem',
   },
 } as const
