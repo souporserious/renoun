@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { stdin, stdout } from 'node:process'
 import { createInterface } from 'node:readline/promises'
 import { Project } from 'ts-morph'
@@ -21,15 +21,22 @@ async function askQuestion(question: string) {
   return answer
 }
 
-async function askYesNo(question: string, defaultYes = true) {
+async function askYesNo(
+  question: string,
+  {
+    defaultYes = true,
+    description,
+  }: {
+    defaultYes?: boolean
+    description?: string
+  } = {}
+) {
   const answer = await askQuestion(
-    `${question} [${defaultYes ? 'Y/n' : 'y/N'}] `
+    `${question} [${defaultYes ? 'Y/n' : 'y/N'}] ${
+      description ? chalk.dim(description) : ''
+    }`
   )
   return answer === '' ? defaultYes : answer.toLowerCase().startsWith('y')
-}
-
-function clearConsole() {
-  process.stdout.write('\x1Bc')
 }
 
 class Log {
@@ -61,6 +68,7 @@ const states = {
   INSTALL_MDXTS: 'installMdxts',
   CHECK_NEXT_CONFIG_EXISTS: 'checkNextConfigExists',
   CONFIGURE_MDXTS_NEXT: 'configureMdxtsNext',
+  CREATE_SOURCE: 'createSource',
   SUCCESS_STATE: 'successState',
   ERROR_STATE: 'errorState',
 }
@@ -110,16 +118,26 @@ export async function start() {
             break
           }
           const confirmConfig = await askYesNo(
-            `Do you want to configure the ${chalk.bold(
-              'mdxts/next'
-            )} plugin now?`
+            `Configure the ${chalk.bold('mdxts/next')} plugin?`,
+            { description: 'This will add the plugin to your Next.js config.' }
           )
           if (confirmConfig) {
             await configureNextPlugin(context.nextJsConfigExists)
           } else {
             Log.info('Configuration skipped.')
-            currentState = states.SUCCESS_STATE
           }
+          currentState = states.CREATE_SOURCE
+          break
+        case states.CREATE_SOURCE:
+          const confirmCreateSource = await askYesNo(
+            `Do you want to create a data source and render a page to display it?`
+          )
+          if (confirmCreateSource) {
+            await createSource()
+          } else {
+            Log.info('Create data source skipped.')
+          }
+          currentState = states.SUCCESS_STATE
           break
         default:
           throw new Error(`State "${currentState}" does not exist`)
@@ -130,7 +148,6 @@ export async function start() {
       }
       currentState = states.ERROR_STATE
     }
-    clearConsole()
   }
 
   if (currentState === states.SUCCESS_STATE) {
@@ -154,7 +171,7 @@ export async function checkNextJsProject() {
   if (!packageJson.devDependencies?.next && !packageJson.dependencies?.next) {
     throw new Error(
       `Next.js is required. Please add Next.js to the current project or use ${chalk.inverse(
-        'npm create next-app@latest'
+        'npm create next-app@latest --typescript'
       )} and run ${chalk.inverse('npm create mdxts')} again.`
     )
   }
@@ -245,4 +262,122 @@ export async function installMdxts() {
       throw new Error(`Installing mdxts failed: ${error.message}`)
     }
   }
+}
+
+export async function createSource() {
+  let sourcePathInput = await askQuestion(
+    'Enter a file glob pattern or directory path to use as a data source: '
+  )
+  const sourcePath = join(process.cwd(), sourcePathInput)
+  const project = new Project({ skipAddingFilesFromTsConfig: true })
+  let sourceFiles
+
+  try {
+    const directory = project.addDirectoryAtPath(sourcePath)
+    sourceFiles = directory.addSourceFilesAtPaths(['**/*.{md,mdx,ts,tsx}'])
+  } catch (error) {
+    sourceFiles = project.addSourceFilesAtPaths([sourcePath])
+  }
+
+  if (sourceFiles.length === 0) {
+    Log.warning(
+      `No source files found at ${chalk.bold(
+        sourcePathInput
+      )}. Please check that the file pattern or directory path is correct and try again. If this is expected, make sure to add at least one MDX or TypeScript file to the targeted directories.`
+    )
+  }
+
+  const dataIdentifier = sourcePathInput.split(sep).pop()!
+  let singularDataIdentifier = dataIdentifier.replace(/s$/, '')
+
+  if (singularDataIdentifier === dataIdentifier) {
+    singularDataIdentifier = `${dataIdentifier}Item`
+  }
+
+  const allDataIdentifier = `all${
+    dataIdentifier.charAt(0).toUpperCase() + dataIdentifier.slice(1)
+  }`
+  const dataFile = project.addSourceFileAtPathIfExists('data.ts')
+  const shouldOverwriteDataFile = dataFile
+    ? await askYesNo(`Overwrite existing ${chalk.bold('data.ts')} file?`, {
+        defaultYes: false,
+      })
+    : true
+
+  if (!shouldOverwriteDataFile) {
+    Log.warning('Create data source cancelled.')
+    return
+  }
+
+  project.createSourceFile(
+    'data.ts',
+    `
+import { createSource } from 'mdxts'
+  
+export const ${allDataIdentifier} = createSource('${sourcePathInput}')
+  `.trim(),
+    { overwrite: true }
+  )
+
+  const hasSourceDirectory = project.getDirectory('src')
+
+  // create a Next.js app router page
+  const pagePath = join(
+    process.cwd(),
+    hasSourceDirectory
+      ? `app/src/[${dataIdentifier}]/page.tsx`
+      : `app/[${dataIdentifier}]/page.tsx`
+  )
+  const relativePagePath = pagePath.replace(process.cwd() + sep, '')
+  const exampleSourcePage = `
+export default async function Page({ params }: { params: { slug: string } }) {
+  const ${singularDataIdentifier} = await ${allDataIdentifier}.get(params.slug)
+
+  if (${singularDataIdentifier} === undefined) {
+    return notFound()
+  }
+
+  const { Content, metadata } = ${singularDataIdentifier}
+
+  return (
+    <>
+      {metadata ? (
+        <div>
+          <h1>{metadata.title}</h1>
+          <p>{metadata.description}</p>
+        </div>
+      ) : null}
+      {Content ? <Content /> : null}
+    </>
+  )
+}
+
+`.trim()
+
+  const pageFile = project.addSourceFileAtPathIfExists(pagePath)
+  const shouldOverwritePageFile = pageFile
+    ? await askYesNo(
+        `Overwrite existing ${chalk.bold(relativePagePath)} file?`,
+        { defaultYes: false }
+      )
+    : true
+
+  if (!shouldOverwritePageFile) {
+    Log.warning(
+      `Create data source cancelled. Only ${chalk.bold(
+        'data.ts'
+      )} file was created.`
+    )
+    return
+  }
+
+  project.createSourceFile(
+    pagePath,
+    hasSourceDirectory
+      ? `import { notFound } from 'next/navigation'\nimport { ${allDataIdentifier} } from '../../../data'\n\n${exampleSourcePage}`
+      : `import { notFound } from 'next/navigation'\nimport { ${allDataIdentifier} } from '../../data'\n\n${exampleSourcePage}`,
+    { overwrite: true }
+  )
+
+  project.saveSync()
 }
