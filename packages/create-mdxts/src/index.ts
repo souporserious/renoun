@@ -46,6 +46,13 @@ class Log {
   static success(message: string) {
     console.log(chalk.rgb(0, 204, 102).bold('mdxts: ') + message)
   }
+
+  static warning(message: string) {
+    console.warn(
+      chalk.rgb(255, 153, 51).bold('mdxts: ') +
+        chalk.rgb(225, 200, 190)(message)
+    )
+  }
 }
 
 const states = {
