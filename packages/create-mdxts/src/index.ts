@@ -51,9 +51,9 @@ class Log {
 const states = {
   INITIAL_STATE: 'initialState',
   CHECK_MDXTS_INSTALLED: 'checkMdxtsInstalled',
-  CHECK_NEXT_CONFIG_EXISTS: 'checkNextConfigExists',
-  CONFIGURE_NEXT_PLUGIN: 'configureNextPlugin',
   INSTALL_MDXTS: 'installMdxts',
+  CHECK_NEXT_CONFIG_EXISTS: 'checkNextConfigExists',
+  CONFIGURE_MDXTS_NEXT: 'configureMdxtsNext',
   SUCCESS_STATE: 'successState',
   ERROR_STATE: 'errorState',
 }
@@ -86,26 +86,29 @@ export async function start() {
           )
           if (confirmInstall) {
             await installMdxts()
-            currentState = states.CONFIGURE_NEXT_PLUGIN
+            currentState = states.CONFIGURE_MDXTS_NEXT
           } else {
             currentState = states.ERROR_STATE
             errorMessage = 'mdxts installation cancelled.'
           }
-          currentState = states.CONFIGURE_NEXT_PLUGIN
+          currentState = states.CONFIGURE_MDXTS_NEXT
           break
         case states.CHECK_NEXT_CONFIG_EXISTS:
-          currentState = states.CONFIGURE_NEXT_PLUGIN
-          context.configExists = checkNextJsConfigExists()
+          context.nextJsConfigExists = checkNextJsConfigExists()
+          currentState = states.CONFIGURE_MDXTS_NEXT
           break
-        case states.CONFIGURE_NEXT_PLUGIN:
+        case states.CONFIGURE_MDXTS_NEXT:
+          if (checkMdxtsNextConfigured()) {
+            currentState = states.CREATE_SOURCE
+            break
+          }
           const confirmConfig = await askYesNo(
             `Do you want to configure the ${chalk.bold(
               'mdxts/next'
             )} plugin now?`
           )
           if (confirmConfig) {
-            await configureNextPlugin(context.configExists)
-            currentState = states.SUCCESS_STATE
+            await configureNextPlugin(context.nextJsConfigExists)
           } else {
             Log.info('Configuration skipped.')
             currentState = states.SUCCESS_STATE
@@ -163,6 +166,22 @@ export function checkNextJsConfigExists() {
     return false
   }
   return true
+}
+
+export function checkMdxtsNextConfigured() {
+  const nextConfigJsPath = join(process.cwd(), 'next.config.js')
+  const nextConfigMjsPath = join(process.cwd(), 'next.config.mjs')
+  if (!existsSync(nextConfigJsPath) && !existsSync(nextConfigMjsPath)) {
+    return false
+  }
+  const nextConfigContents = readFileSync(
+    existsSync(nextConfigJsPath) ? nextConfigJsPath : nextConfigMjsPath,
+    'utf-8'
+  )
+  return (
+    nextConfigContents.includes('createMdxtsPlugin') &&
+    nextConfigContents.includes('mdxts/next')
+  )
 }
 
 const nextConfigContent = `
