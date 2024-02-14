@@ -184,7 +184,7 @@ export function checkMdxtsNextConfigured() {
   )
 }
 
-const nextConfigContent = `
+const defaultNextConfigContent = `
 import { createMdxtsPlugin } from 'mdxts/next'
 
 const withMdxts = createMdxtsPlugin({ theme: 'nord' })
@@ -200,19 +200,25 @@ export async function configureNextPlugin(configExists: boolean) {
       const nextConfigPath = existsSync(join(process.cwd(), 'next.config.js'))
         ? join(process.cwd(), 'next.config.js')
         : nextConfigMjsPath
-      const project = new Project({ useInMemoryFileSystem: true })
-      const sourceFile = project.createSourceFile(
-        'index.ts',
-        readFileSync(nextConfigPath, 'utf-8')
-      )
-      if (nextConfigPath.endsWith('.js')) {
-        codemodNextJsConfig(sourceFile)
+      const nextConfigContent = readFileSync(nextConfigPath, 'utf-8')
+
+      if (nextConfigContent.length === 0) {
+        writeFileSync(nextConfigPath, defaultNextConfigContent)
       } else {
-        codemodNextMjsConfig(sourceFile)
+        const project = new Project({ useInMemoryFileSystem: true })
+        const sourceFile = project.createSourceFile(
+          'index.ts',
+          nextConfigContent
+        )
+        if (nextConfigPath.endsWith('.js')) {
+          codemodNextJsConfig(sourceFile)
+        } else {
+          codemodNextMjsConfig(sourceFile)
+        }
+        writeFileSync(nextConfigPath, sourceFile.getFullText())
       }
-      writeFileSync(nextConfigPath, sourceFile.getFullText())
     } else {
-      writeFileSync(nextConfigMjsPath, nextConfigContent)
+      writeFileSync(nextConfigMjsPath, defaultNextConfigContent)
     }
   } catch (error) {
     if (error instanceof Error) {
