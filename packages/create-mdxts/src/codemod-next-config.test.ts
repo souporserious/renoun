@@ -5,7 +5,7 @@ import {
 } from './codemod-next-config'
 
 describe('codemodNextConfig', () => {
-  it('should correctly modify the next.config.js file', () => {
+  it('correctly modifies js object literal config', () => {
     const project = new Project({ useInMemoryFileSystem: true })
     const sourceFile = project.createSourceFile(
       'next.config.js',
@@ -23,7 +23,22 @@ describe('codemodNextConfig', () => {
     )
   })
 
-  it('should correctly modify the next.config.mjs file', () => {
+  it('correctly modifies js function config', () => {
+    const project = new Project({ useInMemoryFileSystem: true })
+    const sourceFile = project.createSourceFile(
+      'next.config.js',
+      `module.exports = function() {\nreturn { reactStrictMode: true, pageExtensions: ['mdx', 'tsx'] }\n}`
+    )
+
+    codemodNextJsConfig(sourceFile)
+
+    const modifiedContent = sourceFile.getFullText()
+    expect(modifiedContent).toContain(
+      `withMdxts({ reactStrictMode: true, pageExtensions: ['mdx', 'tsx'] });`
+    )
+  })
+
+  it('correctly modifies mjs object literal config', () => {
     const project = new Project({
       useInMemoryFileSystem: true,
       compilerOptions: { allowJs: true },
@@ -41,6 +56,24 @@ describe('codemodNextConfig', () => {
     )
     expect(modifiedContent).toContain(
       "export default withMdxts({ reactStrictMode: true, pageExtensions: ['mdx', 'tsx'] })"
+    )
+  })
+
+  it('correctly modifies mjs function config', () => {
+    const project = new Project({
+      useInMemoryFileSystem: true,
+      compilerOptions: { allowJs: true },
+    })
+    const sourceFile = project.createSourceFile(
+      'next.config.mjs',
+      `export default function() {\nreturn { reactStrictMode: true, pageExtensions: ['mdx', 'tsx'] }\n}`
+    )
+
+    codemodNextMjsConfig(sourceFile)
+
+    const modifiedContent = sourceFile.getFullText()
+    expect(modifiedContent).toContain(
+      `return withMdxts({ reactStrictMode: true, pageExtensions: ['mdx', 'tsx'] });`
     )
   })
 })
