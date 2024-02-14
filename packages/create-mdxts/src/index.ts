@@ -12,14 +12,19 @@ import {
   codemodNextMjsConfig,
 } from './codemod-next-config'
 
-async function askYesNo(question: string, defaultYes = true) {
+async function askQuestion(question: string) {
   const readline = createInterface({ input: stdin, output: stdout })
   const answer = await readline.question(
-    `${chalk.rgb(205, 237, 255).bold('mdxts: ')}${question} [${
-      defaultYes ? 'Y/n' : 'y/N'
-    }] `
+    `${chalk.rgb(205, 237, 255).bold('mdxts: ')}${question}`
   )
   readline.close()
+  return answer
+}
+
+async function askYesNo(question: string, defaultYes = true) {
+  const answer = await askQuestion(
+    `${question} [${defaultYes ? 'Y/n' : 'y/N'}] `
+  )
   return answer === '' ? defaultYes : answer.toLowerCase().startsWith('y')
 }
 
