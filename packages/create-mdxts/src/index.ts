@@ -76,17 +76,20 @@ const states = {
 let errorMessage = ''
 
 export async function start() {
-  const packageJson = JSON.parse(readFileSync('package.json', 'utf-8'))
-  const notifier = (await import('update-notifier')).default({
-    pkg: packageJson,
-  })
+  const packageJson = JSON.parse(
+    readFileSync(resolve(__dirname, '../package.json'), 'utf-8')
+  )
+  const packageVersion = await fetch(
+    'https://registry.npmjs.org/-/package/create-mdxts/dist-tags'
+  ).then((res) => res.json())
 
-  if (notifier.update) {
-    const mdxtsBadge = chalk.rgb(205, 237, 255).bold('mdxts:')
+  if (packageJson.version !== packageVersion.latest) {
     const installCommand = chalk.bold('npm create mdxts@latest')
-    notifier.notify({
-      message: `${mdxtsBadge} You're using an outdated version of mdxts.\nPlease run ${installCommand} to use the latest version`,
-    })
+    Log.warning(
+      `A new version of ${chalk.bold(
+        'create-mdxts'
+      )} is available. Please use the latest version by running ${installCommand}.`
+    )
   }
 
   const context: Record<string, any> = {}
