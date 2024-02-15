@@ -1,14 +1,14 @@
 <img src="/site/public/logo.png" alt="MDXTS" width="200"/>
 
-## Exceptional Content & Docs
+## The Content & Documentation SDK for React
 
 https://mdxts.dev/
 
+- Type-checked content
+- Generated type documentation
+- Source code previews
 - File-based routing
-- Type documentation generation
-- Code examples
 - Accurate syntax highlighting
-- Type-checked code blocks
 
 ## License
 

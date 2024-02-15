@@ -1,7 +1,7 @@
 {
   "name": "mdxts",
   "version": "0.5.0",
-  "description": "Generate a knowledge graph of your MDX and TypeScript files.",
+  "description": "The Content & Documentation SDK for React",
   "author": "Travis Arnold",
   "license": "MIT",
   "repository": {
@@ -20,7 +20,9 @@
     "tsx",
     "documentation",
     "docgen",
-    "react"
+    "react",
+    "design",
+    "systems"
   ],
   "files": [
     "dist/*"

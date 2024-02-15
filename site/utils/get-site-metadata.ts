@@ -3,9 +3,9 @@ import type { Metadata } from 'next'
 const url = 'https://mdxts.dev/'
 
 export function getSiteMetadata({
-  title = 'MDXTS - Exceptional content and documentation',
-  description = `Build interactive, type-safe content and documentation in MDX, TypeScript, and React.`,
-  keywords = 'react, mdx, typescript, content, documentation, components',
+  title = 'MDXTS - The Content & Documentation SDK for React',
+  description = `Build type-safe content and generate documentation using MDX, TypeScript, and React.`,
+  keywords = 'react, mdx, typescript, content, documentation, components, design, systems',
 }: {
   title?: string
   description?: string

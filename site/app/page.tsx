@@ -59,9 +59,9 @@ export default function Home() {
                 zIndex: 1,
               }}
             >
-              Exceptional Content & Docs
+              The Content & Documentation SDK for React
             </h1>
-            <p
+            <ul
               style={{
                 // @ts-expect-error - missing types
                 textWrap: 'balance',
@@ -73,9 +73,11 @@ export default function Home() {
                 zIndex: 1,
               }}
             >
-              Build interactive, type-safe content and documentation in MDX,
-              TypeScript, and React.
-            </p>
+              <li>Write type-safe content</li>
+              <li>Generate type documentation</li>
+              <li>Preview source code</li>
+              <li>And so much more</li>
+            </ul>
           </div>
           <div
             style={{
