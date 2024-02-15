@@ -142,7 +142,10 @@ export async function start() {
           break
         case states.CREATE_SOURCE:
           const confirmCreateSource = await askYesNo(
-            `Do you want to create a data source and render a page to display it?`
+            `Do you want to create a data source and render a page to display it?`,
+            {
+              description: `This should be a collection of MDX and TypeScript files.`,
+            }
           )
           if (confirmCreateSource) {
             await createSource()
