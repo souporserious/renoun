@@ -1,9 +1,7 @@
 #!/usr/bin/env node
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { join, sep } from 'node:path'
-import { stdin, stdout } from 'node:process'
-import { createInterface } from 'node:readline/promises'
+import { join, resolve, sep } from 'node:path'
 import { Project } from 'ts-morph'
 import chalk from 'chalk'
 
@@ -11,56 +9,8 @@ import {
   codemodNextJsConfig,
   codemodNextMjsConfig,
 } from './codemod-next-config'
-
-async function askQuestion(question: string) {
-  const readline = createInterface({ input: stdin, output: stdout })
-  const answer = await readline.question(
-    `${chalk.rgb(205, 237, 255).bold('mdxts: ')}${question}`
-  )
-  readline.close()
-  return answer
-}
-
-async function askYesNo(
-  question: string,
-  {
-    defaultYes = true,
-    description,
-  }: {
-    defaultYes?: boolean
-    description?: string
-  } = {}
-) {
-  const answer = await askQuestion(
-    `${question} [${defaultYes ? 'Y/n' : 'y/N'}] ${
-      description ? chalk.dim(description) : ''
-    }`
-  )
-  return answer === '' ? defaultYes : answer.toLowerCase().startsWith('y')
-}
-
-class Log {
-  static info(message: string) {
-    console.log(chalk.rgb(205, 237, 255).bold('mdxts: ') + message)
-  }
-
-  static error(message: string) {
-    console.error(
-      chalk.rgb(237, 35, 0).bold('mdxts: ') + chalk.rgb(225, 205, 205)(message)
-    )
-  }
-
-  static success(message: string) {
-    console.log(chalk.rgb(0, 204, 102).bold('mdxts: ') + message)
-  }
-
-  static warning(message: string) {
-    console.warn(
-      chalk.rgb(255, 153, 51).bold('mdxts: ') +
-        chalk.rgb(225, 200, 190)(message)
-    )
-  }
-}
+import { fetchExample } from './fetch-example'
+import { Log, askQuestion, askYesNo } from './utils'
 
 const states = {
   INITIAL_STATE: 'initialState',
@@ -76,6 +26,12 @@ const states = {
 let errorMessage = ''
 
 export async function start() {
+  if (process.argv.includes('--example')) {
+    const exampleSlug = process.argv[process.argv.indexOf('--example') + 1]
+    await fetchExample(exampleSlug)
+    return
+  }
+
   const packageJson = JSON.parse(
     readFileSync(resolve(__dirname, '../package.json'), 'utf-8')
   )
