@@ -76,6 +76,19 @@ const states = {
 let errorMessage = ''
 
 export async function start() {
+  const packageJson = JSON.parse(readFileSync('package.json', 'utf-8'))
+  const notifier = (await import('update-notifier')).default({
+    pkg: packageJson,
+  })
+
+  if (notifier.update) {
+    const mdxtsBadge = chalk.rgb(205, 237, 255).bold('mdxts:')
+    const installCommand = chalk.bold('npm create mdxts@latest')
+    notifier.notify({
+      message: `${mdxtsBadge} You're using an outdated version of mdxts.\nPlease run ${installCommand} to use the latest version`,
+    })
+  }
+
   const context: Record<string, any> = {}
   let currentState = states.INITIAL_STATE
 
