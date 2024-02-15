@@ -64,6 +64,7 @@ class Log {
 
 const states = {
   INITIAL_STATE: 'initialState',
+  CHECK_TYPESCRIPT_INSTALLED: 'checkTypescriptInstalled',
   CHECK_MDXTS_INSTALLED: 'checkMdxtsInstalled',
   INSTALL_MDXTS: 'installMdxts',
   CHECK_NEXT_CONFIG_EXISTS: 'checkNextConfigExists',
@@ -86,7 +87,18 @@ export async function start() {
       switch (currentState) {
         case states.INITIAL_STATE:
           await checkNextJsProject()
-          currentState = states.CHECK_MDXTS_INSTALLED
+          currentState = states.CHECK_TYPESCRIPT_INSTALLED
+          break
+        case states.CHECK_TYPESCRIPT_INSTALLED:
+          if (await checkTypeScriptInstalled()) {
+            currentState = states.CHECK_MDXTS_INSTALLED
+          } else {
+            throw new Error(
+              `TypeScript is required. Please add TypeScript to the current project and run ${chalk.bold(
+                'npm create mdxts'
+              )} again.`
+            )
+          }
           break
         case states.CHECK_MDXTS_INSTALLED:
           if (await checkMdxtsInstalled()) {
@@ -170,17 +182,30 @@ export async function checkNextJsProject() {
   const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
   if (!packageJson.devDependencies?.next && !packageJson.dependencies?.next) {
     throw new Error(
-      `Next.js is required. Please add Next.js to the current project or use ${chalk.inverse(
+      `Next.js is required. Please add Next.js to the current project or use ${chalk.bold(
         'npm create next-app@latest --typescript'
-      )} and run ${chalk.inverse('npm create mdxts')} again.`
+      )} and run ${chalk.bold('npm create mdxts')} again.`
     )
   }
+}
+
+export async function checkTypeScriptInstalled() {
+  const tsconfigPath = join(process.cwd(), 'tsconfig.json')
+  const packageJsonPath = join(process.cwd(), 'package.json')
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
+  return Boolean(
+    existsSync(tsconfigPath) ||
+      packageJson.devDependencies?.typescript ||
+      packageJson.dependencies?.typescript
+  )
 }
 
 export async function checkMdxtsInstalled() {
   const packageJsonPath = join(process.cwd(), 'package.json')
   const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
-  return Boolean(packageJson.dependencies?.mdxts)
+  return Boolean(
+    packageJson.devDependencies?.mdxts || packageJson.dependencies?.mdxts
+  )
 }
 
 export function checkNextJsConfigExists() {
