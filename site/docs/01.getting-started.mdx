@@ -21,14 +21,14 @@ npm create mdxts
 
 ## Manual Setup
 
-Alternatively, you can follow the manual setup guide to configure the plugin and define a data source in your Next.js project.
+Alternatively, follow the manual setup guide below to learn how to configure the Next.js plugin and define and render a data source.
 
 ### Install
 
-To get started, run the following command to install the required dependencies:
+In your Next.js project, run the following command to install the required dependencies:
 
 <PackageInstall
-  packages={['mdxts', 'next', 'react', 'react-dom', 'shiki', 'prettier']}
+  packages={['mdxts', 'shiki', 'prettier']}
   style={{
     width: 'calc(100% + 2rem)',
     margin: '0 -1rem',
@@ -37,19 +37,22 @@ To get started, run the following command to install the required dependencies:
 
 ### Configuring the Next.js Plugin
 
-Once the `mdxts` package is installed, you can configure the Next.js plugin to use a custom theme and git source:
+The Next.js plugin sets up everything needed for authoring MDX files and collecting type documentation. This includes default remark plugins, MDX components, and a loader for gathering collections of modules.
 
 ```ts filename="next.config.ts"
 import { createMdxtsPlugin } from 'mdxts/next'
 
 const withMdxts = createMdxtsPlugin({
   theme: 'nord',
+  gitSource: 'https://github.com/souporserious/mdxts',
 })
 
 export default withMdxts({
-  // Next.js config options...
+  // Next.js config options here...
 })
 ```
+
+The `theme` option is used for syntax highlighting code blocks and is powered by [Shiki](https://shiki.matsu.io/). The `theme` value should correspond to either a built-in theme or a source path to a custom theme that adheres to the [VS Code theme specification](https://code.visualstudio.com/api/extension-guides/color-theme).
 
 ### Defining a Data Source
 
@@ -67,11 +70,11 @@ Visit the [routing](/routing) section for more information on how to use `paths`
 
 ### Rendering Content
 
-Use the `get` method from the data source to retrieve the metadata for a specific source file and render it:
+Use the `get` method from the `allDocs` source we created above to retrieve the metadata for a specific document and render its content:
 
-```tsx filename="blog/[slug]/page.tsx"
+```tsx filename="app/blog/[slug]/page.tsx"
 import { notFound } from 'next/navigation'
-import { allDocs } from '../../data'
+import { allDocs } from '../../../data'
 
 type Props = { params: { slug: string } }
 
@@ -88,7 +91,7 @@ export default async function Page({ params }: Props) {
 }
 ```
 
-If the targeted source file is a TypeScript file, its types will also be analyzed and included along with other metadata:
+If the targeted source file is a TypeScript file, the exported types will also be analyzed and included along with other metadata like MDX content and examples:
 
 ```tsx filename="components/[slug]/page.tsx"
 import { createSource } from 'mdxts'
@@ -151,18 +154,18 @@ import { Button } from './Button'
 export const Basic = () => <Button>Click Me</Button>
 ```
 
-Read more about [examples](/examples/authoring) to learn how to use them to generate interactive documentation.
+Read more about [examples](/examples/authoring) to learn how to generate interactive documentation.
 
 ### Type Checking
 
-All code blocks will automatically be type-checked using the TypeScript compiler. Notice the following will throw a type error:
+All code blocks will automatically be type-checked using the TypeScript compiler. Notice the following will throw a type error because `b` is not defined:
 
 ```tsx
 const a = 1
 a + b
 ```
 
-Pass `allowErrors` to disable type checking:
+We can pass `allowErrors` to disable type checking in this case:
 
 ````mdx
 ```tsx allowErrors
@@ -175,6 +178,8 @@ a + b
 const a = 1
 a + b
 ```
+
+This is useful for showing incomplete or incorrect code examples in documentation.
 
 ## Next Steps
 
