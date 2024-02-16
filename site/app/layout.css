@@ -105,7 +105,6 @@ a:hover :not(.title) {
   font-size: var(--font-size-heading-3);
   line-height: var(--line-height-heading-3);
   font-weight: var(--font-weight-heading);
-  margin-block-start: 1.6rem;
 }
 
 .prose p {
