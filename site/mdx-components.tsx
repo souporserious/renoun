@@ -53,14 +53,14 @@ export function useMDXComponents() {
       >
         <svg
           fill="none"
-          stroke="currentColor"
+          stroke="var(--color-foreground-secondary)"
           strokeLinecap="round"
           strokeLinejoin="round"
           strokeWidth="1.5"
           width="1rem"
           height="1rem"
           viewBox="0 0 24 24"
-          style={{ marginTop: '0.25rem', opacity: 0.6 }}
+          style={{ marginTop: '0.25rem' }}
         >
           <path d="M7.06883 21.6H16.219C18.7973 21.6 20.8879 19.5093 20.8879 16.9312V5.86885C20.8879 3.29074 18.7973 1.20001 16.219 1.20001H7.06883C4.49072 1.20001 2.39999 3.29074 2.39999 5.86885V16.9312C2.39999 19.5093 4.49072 21.6 7.06883 21.6Z" />
           <path d="M15.3946 15.842H7.89178M15.3946 11.245H7.89178M10.755 6.6586H7.89232" />
