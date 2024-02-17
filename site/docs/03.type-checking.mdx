@@ -29,3 +29,7 @@ const a: string = 1
 ````
 
 This is useful for educational purposes when you want to show the error message to the user. Note, the error number can be found in the error message.
+
+## Type Inference
+
+When targeting TypeScript source files, the type checker is used to infer the types of all exports from `index.(ts|tsx)` files. If `package.json` exports are defined for the package, they will be used to narrow the set of exports that are analyzed when generating type documentation.
