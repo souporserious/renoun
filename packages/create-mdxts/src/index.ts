@@ -114,7 +114,7 @@ export async function start() {
           break
         case states.CREATE_SOURCE:
           const confirmCreateSource = await askYesNo(
-            `Do you want to create a data source and render a page to display it?`,
+            `Do you want to create a source and render a page to display it?`,
             {
               description: `This should be a collection of MDX and TypeScript files.`,
             }
@@ -122,7 +122,7 @@ export async function start() {
           if (confirmCreateSource) {
             await createSource()
           } else {
-            Log.info('Create data source skipped.')
+            Log.info('Create source skipped.')
           }
           currentState = states.SUCCESS_STATE
           break
@@ -266,7 +266,7 @@ export async function installMdxts() {
 
 export async function createSource() {
   let sourcePathInput = await askQuestion(
-    'Enter a file glob pattern or directory path to use as a data source: '
+    'Enter a file glob pattern or directory path to use as a source: '
   )
   const sourcePath = join(process.cwd(), sourcePathInput)
   const project = new Project({ skipAddingFilesFromTsConfig: true })
@@ -305,7 +305,7 @@ export async function createSource() {
     : true
 
   if (!shouldOverwriteDataFile) {
-    Log.warning('Create data source cancelled.')
+    Log.warning('Create source cancelled.')
     return
   }
 
@@ -364,9 +364,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
 
   if (!shouldOverwritePageFile) {
     Log.warning(
-      `Create data source cancelled. Only ${chalk.bold(
-        'data.ts'
-      )} file was created.`
+      `Create source cancelled. Only ${chalk.bold('data.ts')} file was created.`
     )
     return
   }

@@ -49,7 +49,7 @@ export function createSource<Type>(
   /** A glob pattern to match source files. */
   pattern: string,
 
-  /** Options for configuring the data source. */
+  /** Options for configuring the source. */
   options: {
     /**
      * The base directory to use for calculating source paths. This is useful in monorepos where
@@ -326,7 +326,7 @@ export function createSource<Type>(
   }
 }
 
-/** Merges multiple data sources into a single data source. */
+/** Merges multiple sources into a single source. */
 export function mergeSources(...sources: ReturnType<typeof createSource>[]) {
   function all() {
     const combinedEntries = sources.flatMap((dataSource) =>

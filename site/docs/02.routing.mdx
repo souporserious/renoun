@@ -10,7 +10,7 @@ For `index.ts` or `index.tsx`, the accompanying file can be `index.md`, `index.m
 
 ## Rendering Content
 
-MDX content can be rendered using the `Content` component exported from a data source item in an App Router page:
+MDX content can be rendered using the `Content` component exported from a source item in an App Router page:
 
 ```tsx filename="app/blog/[slug]/01.page.tsx" highlight="7"
 import { createSource } from 'mdxts'
@@ -25,7 +25,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
 
 ## Generating Static Routes
 
-Use the `paths` method for a data collection to generate static routes:
+Use the `paths` method for a source to generate static routes:
 
 ```tsx filename="app/blog/[slug]/02.page.tsx" highlight="5-7"
 import { createSource } from 'mdxts'
