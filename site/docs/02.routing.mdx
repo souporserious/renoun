@@ -1,46 +1,68 @@
 # Routing
 
-The `createSource` utility collects metadata about source files which can be used to generate routes. The task of handling routing is delegated to the respective frameworks. The following examples demonstrate how to set up routing using `createSource` in Next.js.
+Routing is delegated to each respective framework using helpers from the `createSource` utilitiy. This gives you full control for how to render content and documentation. The following examples demonstrate how to set up routing using the `paths` helper from `createSource` in Next.js.
+
+## Naming Conventions
+
+Source files named `<Component>.tsx` can have an accompanying `<Component>.mdx`. This is the same for other files like hooks or utilities. For example, `useHook.ts` and `useHook.mdx`.
+
+For `index.ts` or `index.tsx`, the accompanying file can be `index.md`, `index.mdx`, `README.md`, or `README.mdx`.
 
 ## Rendering Content
 
-MDX files primarily serve as the content layer in your documentation. The content can be rendered using the `Content` component exported from the data source:
+MDX content can be rendered using the `Content` component exported from a data source item in an App Router page:
 
-```tsx filename="app/blog/[slug]/page.tsx"
+```tsx filename="app/blog/[slug]/01.page.tsx" highlight="7"
 import { createSource } from 'mdxts'
-import { notFound } from 'next/navigation'
 
 const allDocs = createSource('docs/**/*.mdx')
 
-type Props = { params: { slug: string } }
-
-export default async function Page({ params }: Props) {
-  const doc = await allDocs.get(params.slug)
-
-  if (doc === undefined) return notFound()
-
-  const { Content } = doc
-
-  return <Content />
+export default async function Page({ params }: { params: { slug: string } }) {
+  const { Content } = await allDocs.get(params.slug)
+  return Content ? <Content /> : null
 }
 ```
 
 ## Generating Static Routes
 
-Use the `paths` method to generate static routes for your documentation:
+Use the `paths` method for a data collection to generate static routes:
 
-```tsx allowErrors
+```tsx filename="app/blog/[slug]/02.page.tsx" highlight="5-7"
+import { createSource } from 'mdxts'
+
+const allDocs = createSource('docs/**/*.mdx')
+
 export function generateStaticParams() {
-  return posts.paths().map((pathname) => ({ slug: pathname }))
+  return allDocs.paths().map((pathname) => ({ slug: pathname }))
+}
+
+export default async function Page({ params }: { params: { slug: string } }) {
+  const { Content } = await allDocs.get(params.slug)
+  return Content ? <Content /> : null
 }
 ```
 
-## Type Inference
+## Rendering Examples
 
-When targeting TypeScript source files, the type checker is used to infer the types of all exports from `index.(ts|tsx)` files. If `package.json` exports are defined for the package, they will be used to narrow the set of exports to analyze when generating type documentation.
+[Examples](examples/authoring) collected from `.examples.tsx` files and `examples` directories can be rendered using the `moduleExport` property:
 
-## Naming Conventions
+```tsx filename="app/examples/[...example]/page.tsx"
+import { createSource } from 'mdxts'
 
-Source files named `Component.tsx` can have an accompanying `Component.mdx`. This is the same for hooks or utilities like `useHook.ts` and `useHook.mdx`.
+const allComponents = createSource('components/**/*.tsx')
 
-For `index.ts` or `index.tsx`, the accompanying file can be `index.md`, `index.mdx`, `README.md`, or `README.mdx`.
+export async function generateStaticParams() {
+  return (await allComponents.examplePaths()).map((pathname) => ({
+    example: pathname,
+  }))
+}
+
+export default async function Page({
+  params,
+}: {
+  params: { example: string[] }
+}) {
+  const example = await allComponents.getExample(params.example)
+  return <example.moduleExport />
+}
+```
