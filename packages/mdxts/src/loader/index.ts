@@ -28,6 +28,7 @@ export default async function loader(
   /** Add theme to Next.js entry layout files and examples. */
   const isExample = this.resourcePath.endsWith('.examples.tsx')
   if (
+    !source.includes('import theme') &&
     (isNextJsEntryLayout(this.resourcePath) || isExample) &&
     options.themePath
   ) {
@@ -52,6 +53,10 @@ export default async function loader(
         .replaceAll(
           '<CodeInline',
           `<CodeInline theme={theme} workingDirectory="${workingDirectory}"`
+        )
+        .replaceAll(
+          '<APIReference',
+          `<APIReference theme={theme} workingDirectory="${workingDirectory}"`
         )
     } else {
       source = `import { setTheme } from 'mdxts';\nimport theme from '${relativeThemePath}';\nsetTheme(theme);\n${source}`

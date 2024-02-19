@@ -8,8 +8,10 @@ import { BUNDLED_LANGUAGES } from 'shiki'
 import 'server-only'
 
 import { getTheme } from '../index'
+import { getContext } from '../utils/context'
 import { getSourcePath } from '../utils/get-source-path'
 import { isJsxOnly } from '../utils/is-jsx-only'
+import { Context } from './Context'
 import { getHighlighter, type Theme } from './highlighter'
 import { project } from './project'
 import { CodeView } from './CodeView'
@@ -107,9 +109,10 @@ export async function CodeBlock({
   style,
   ...props
 }: CodeBlockProps) {
+  const contextValue = getContext(Context)
   const { isNestedInEditor, sourcePath, sourcePathLine, sourcePathColumn } =
     props as PrivateCodeBlockProps
-  const theme = themeProp ?? getTheme()
+  const theme = themeProp ?? contextValue.theme ?? getTheme()
 
   if (!theme) {
     throw new Error(
@@ -134,15 +137,17 @@ export async function CodeBlock({
     finalValue = props.value
   } else if ('source' in props) {
     const isRelative = !isAbsolute(props.source)
+    const workingDirectory =
+      contextValue?.workingDirectory ?? props.workingDirectory
 
-    if (isRelative && !props.workingDirectory) {
+    if (isRelative && !workingDirectory) {
       throw new Error(
         'The [workingDirectory] prop was not provided to the [CodeBlock] component while using a relative path. Pass a valid [workingDirectory] or make sure the mdxts/remark plugin and mdxts/loader are configured correctly if this is being renderend in an MDX file.'
       )
     }
 
     const sourcePropPath = isRelative
-      ? join(props.workingDirectory!, props.source)
+      ? join(workingDirectory!, props.source)
       : props.source
 
     finalValue = await readFile(sourcePropPath, 'utf-8')
