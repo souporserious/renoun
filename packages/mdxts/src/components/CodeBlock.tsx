@@ -202,7 +202,7 @@ export async function CodeBlock({
   const baseDirectory = process.cwd().replace(rootDirectory, '')
   const filenameLabel = filename
     .replace(join('mdxts', sep), '')
-    .replace(/\/\d+\./, '/')
+    .replace(/\d+\./, '')
 
   return (
     <CodeView
