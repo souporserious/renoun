@@ -6,8 +6,9 @@
 
 .preview {
   grid-row: 1;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  place-content: center;
   padding: 4rem;
 }
 
