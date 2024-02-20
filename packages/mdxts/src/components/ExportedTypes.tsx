@@ -298,10 +298,10 @@ export function ExportedTypes(props: ExportedTypesProps) {
         workingDirectory: privateProps.workingDirectory,
       }}
     >
-      {exportedTypes.map((type, index) => {
+      {exportedTypes.map((declaration, index) => {
         return (
           <div
-            key={type.name}
+            key={declaration.name}
             style={{
               display: 'flex',
               flexDirection: 'column',
@@ -327,20 +327,26 @@ export function ExportedTypes(props: ExportedTypesProps) {
                   gap: '1rem',
                 }}
               >
-                <h3 id={type.slug} style={{ fontWeight: 500, margin: 0 }}>
-                  {type.name}
+                <h3
+                  id={declaration.slug}
+                  style={{ fontWeight: 500, margin: 0 }}
+                >
+                  {declaration.name}
                 </h3>
               </div>
-              {type.description ? (
+              {declaration.description ? (
                 <MDXContent
-                  value={type.description}
+                  value={declaration.description}
                   components={mdxComponents}
                 />
               ) : null}
             </div>
 
-            {type.types.length > 0 ? (
-              <Types properties={type.types} isComponent={type.isComponent} />
+            {declaration.types.length > 0 ? (
+              <Types
+                properties={declaration.types}
+                isComponent={declaration.isComponent}
+              />
             ) : null}
           </div>
         )

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { Fragment } from 'react'
 
 import { ExportedTypes } from './ExportedTypes'
 
@@ -31,17 +31,31 @@ export function Basic() {
 
 export function Custom() {
   return (
-    <ExportedTypes source="./ExportedTypes.tsx">
-      {(types) => {
-        return types.map((type) => {
-          return (
-            <div key={type.name}>
-              <h2>{type.name}</h2>
-              <p>{type.description}</p>
-            </div>
-          )
-        })
-      }}
+    <ExportedTypes source="./MDXContent.tsx">
+      {(declarations) =>
+        declarations.map((declaration) => (
+          <div
+            key={declaration.name}
+            style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}
+          >
+            <h2>{declaration.name}</h2>
+            <p>{declaration.description}</p>
+            <ul>
+              {declaration.types.map((type) => (
+                <Fragment key={type.text}>
+                  {type.properties?.length
+                    ? type.properties.map((property) => (
+                        <li key={property.name}>
+                          {property.name}: {property.text}
+                        </li>
+                      ))
+                    : null}
+                </Fragment>
+              ))}
+            </ul>
+          </div>
+        ))
+      }
     </ExportedTypes>
   )
 }
