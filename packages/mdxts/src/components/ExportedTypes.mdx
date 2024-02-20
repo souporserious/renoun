@@ -1,0 +1,38 @@
+The `ExportedTypes` component displays the all exported types from a specific `filename` or source code `value`.
+
+```mdx
+import { ExportedTypes } from 'mdxts/components'
+
+<ExportedTypes />
+```
+
+This will use the default template for rendering type documentation for the file it is used in. You can also specify a `filename` or `value` to display the exported types from a specific file or source code.
+
+```mdx
+<ExportedTypes filename="./components/Button.tsx" />
+```
+
+If you need to customize the output of the `ExportedTypes` component, you can use the exported components `Name`, `Description`, `Types`, and `UnionTypes` to render the type documentation however you like:
+
+```mdx
+<ExportedTypes source="./MDXContent.tsx">
+  {(declarations) =>
+    declarations.map((declaration) => (
+      <div key={declaration.name}>
+        <h2>{declaration.name}</h2>
+        <p>{declaration.description}</p>
+        {declaration.types.length ? (
+          <ul>
+            {declaration.types.map((type) => (
+              <li key={type.name}>
+                <h3>{type.name}</h3>
+                <p>{type.description}</p>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+    ))
+  }
+</ExportedTypes>
+```

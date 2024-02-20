@@ -3,6 +3,8 @@ import { BUNDLED_LANGUAGES } from 'shiki'
 import 'server-only'
 
 import { getTheme } from '../index'
+import { getContext } from '../utils/context'
+import { Context } from './Context'
 import { getHighlighter, type Theme } from './highlighter'
 
 const languageMap: Record<string, any> = {
@@ -47,7 +49,8 @@ export async function CodeInline({
   style,
   ...props
 }: CodeInlineProps) {
-  const theme = themeProp ?? getTheme()
+  const contextValue = getContext(Context)
+  const theme = themeProp ?? contextValue.theme ?? getTheme()
 
   if (!theme) {
     throw new Error(
