@@ -19,22 +19,18 @@ const mdxComponents = {
 } as MDXComponents
 
 function Types({
-  props,
+  properties,
   isComponent,
 }: {
-  props: any[] | null
+  properties: any[] | null
   isComponent: boolean
 }) {
-  return props?.map((propType, index) => {
-    if (propType === null) {
+  return properties?.map((propertyType, index) => {
+    if (propertyType === null) {
       return null
     }
 
-    if (
-      isComponent &&
-      propType.unionProperties &&
-      propType.unionProperties.length > 0
-    ) {
+    if (isComponent && propertyType.unionProperties?.length) {
       return (
         <div
           key={index}
@@ -51,14 +47,16 @@ function Types({
               color: 'var(--color-foreground-secondary)',
             }}
           >
-            {propType.text}
+            {propertyType.text}
           </h4>
-          {propType.description && (
+
+          {propertyType.description ? (
             <MDXContent
-              value={propType.description}
+              value={propertyType.description}
               components={mdxComponents}
             />
-          )}
+          ) : null}
+
           <div
             style={{
               padding: '0 1.5rem',
@@ -83,7 +81,7 @@ function Types({
             >
               Union
             </span>
-            {propType.unionProperties.map((props: any, index: number) => (
+            {propertyType.unionProperties.map((props: any, index: number) => (
               <Fragment key={index}>
                 {index > 0 ? (
                   <div
@@ -124,17 +122,20 @@ function Types({
                     />
                   </div>
                 ) : null}
-                <Types props={props} isComponent={isComponent} />
+                <Types properties={props} isComponent={isComponent} />
               </Fragment>
             ))}
           </div>
-          <Types props={propType.properties} isComponent={isComponent} />
+          <Types
+            properties={propertyType.properties}
+            isComponent={isComponent}
+          />
         </div>
       )
     }
 
-    if (propType.name === null) {
-      return propType.properties ? (
+    if (propertyType.name === null) {
+      return propertyType.properties ? (
         <div
           key={index}
           style={{
@@ -143,18 +144,21 @@ function Types({
             gap: '1rem',
           }}
         >
-          <Types props={propType.properties} isComponent={isComponent} />
+          <Types
+            properties={propertyType.properties}
+            isComponent={isComponent}
+          />
         </div>
       ) : (
         <div key={index}>
-          & <CodeInline value={propType.text} language="typescript" />
+          & <CodeInline value={propertyType.text} language="typescript" />
         </div>
       )
     }
 
     return (
       <div
-        key={propType.name}
+        key={propertyType.name}
         style={{
           display: 'flex',
           flexDirection: 'column',
@@ -180,12 +184,12 @@ function Types({
               color: 'var(--color-foreground-secondary)',
             }}
           >
-            {propType.name}{' '}
-            {propType.required && (
+            {propertyType.name}{' '}
+            {propertyType.required ? (
               <span style={{ color: 'oklch(0.8 0.15 36.71)' }} title="required">
                 *
               </span>
-            )}
+            ) : null}
           </h4>
           <div
             style={{
@@ -195,29 +199,36 @@ function Types({
             }}
           >
             <CodeInline
-              value={propType.text}
+              value={propertyType.text}
               language="typescript"
               paddingHorizontal="0.5rem"
               paddingVertical="0.2rem"
             />
-            {propType.defaultValue ? (
+            {propertyType.defaultValue ? (
               <span style={{ fontSize: '0.8rem', flexShrink: 0 }}>
                 ={' '}
                 <CodeInline
-                  value={propType.defaultValue}
+                  value={propertyType.defaultValue}
                   language="typescript"
                 />
               </span>
             ) : null}
           </div>
         </div>
-        {propType.description && (
-          <MDXContent value={propType.description} components={mdxComponents} />
-        )}
 
-        {propType.properties && propType.properties.length > 0 ? (
+        {propertyType.description ? (
+          <MDXContent
+            value={propertyType.description}
+            components={mdxComponents}
+          />
+        ) : null}
+
+        {propertyType.properties?.length ? (
           <div style={{ paddingLeft: '2rem' }}>
-            <Types props={propType.properties} isComponent={isComponent} />
+            <Types
+              properties={propertyType.properties}
+              isComponent={isComponent}
+            />
           </div>
         ) : null}
       </div>
@@ -225,16 +236,16 @@ function Types({
   })
 }
 
-type BaseAPIReferenceProps = {
-  theme?: any
-  workingDirectory?: string
-}
-
-type APIReferenceProps = BaseAPIReferenceProps &
-  ({ source: string } | { filename: string; value: string })
+type ExportedTypesProps =
+  | { source: string }
+  | { filename: string; value: string }
 
 /** Display type documentation for all exported types from a module or source code value. */
-export function ExportedTypes(props: APIReferenceProps) {
+export function ExportedTypes(props: ExportedTypesProps) {
+  const privateProps = props as {
+    theme?: any
+    workingDirectory?: string
+  }
   const sourceFile =
     'source' in props
       ? project.getSourceFileOrThrow(props.source)
@@ -258,8 +269,8 @@ export function ExportedTypes(props: APIReferenceProps) {
   return (
     <Context
       value={{
-        theme: props.theme,
-        workingDirectory: props.workingDirectory,
+        theme: privateProps.theme,
+        workingDirectory: privateProps.workingDirectory,
       }}
     >
       {exportedTypes.map((type, index) => {
@@ -304,7 +315,7 @@ export function ExportedTypes(props: APIReferenceProps) {
             </div>
 
             {type.types.length > 0 ? (
-              <Types props={type.types} isComponent={type.isComponent} />
+              <Types properties={type.types} isComponent={type.isComponent} />
             ) : null}
           </div>
         )
