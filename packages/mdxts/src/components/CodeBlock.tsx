@@ -1,4 +1,5 @@
 import React from 'react'
+import crypto from 'node:crypto'
 import { join, sep, isAbsolute } from 'node:path'
 import { readFile, writeFile } from 'node:fs/promises'
 import type { SourceFile } from 'ts-morph'
@@ -15,7 +16,6 @@ import { Context } from './Context'
 import { getHighlighter, type Theme } from './highlighter'
 import { project } from './project'
 import { CodeView } from './CodeView'
-import { registerCodeComponent } from './state'
 
 export { getClassNameMetadata } from '../utils/get-class-name-metadata'
 
@@ -120,11 +120,14 @@ export async function CodeBlock({
     )
   }
 
-  const id =
-    'source' in props
-      ? props.source
-      : filenameProp ?? Buffer.from(props.value).toString('base64')
-  const unregisterCodeComponent = registerCodeComponent(id)
+  let id = 'source' in props ? props.source : filenameProp
+
+  if ('value' in props && id === undefined) {
+    const hex = crypto.createHash('sha256').update(props.value).digest('hex')
+    if (hex) {
+      id = hex
+    }
+  }
 
   let finalValue: string = ''
   let finalLanguage =
@@ -198,8 +201,6 @@ export async function CodeBlock({
 
     sourceFile.fixMissingImports()
   }
-
-  unregisterCodeComponent()
 
   const highlighter = await getHighlighter({ theme })
   const tokens = highlighter(finalValue, finalLanguage, sourceFile, jsxOnly)
