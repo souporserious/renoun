@@ -7,7 +7,6 @@ import { Context } from './Context'
 import type { MDXComponents } from './MDXComponents'
 import { MDXContent } from './MDXContent'
 import { project } from './project'
-import { getDiagnosticMessageText } from '@tsxmod/utils'
 
 const mdxComponents = {
   p: (props) => <p {...props} style={{ margin: 0 }} />,
@@ -237,9 +236,16 @@ function Types({
   })
 }
 
+type BaseExportedTypesProps = {
+  /** Controls how types are rendered. */
+  children?: (
+    exportedTypes: ReturnType<typeof getExportedTypes>
+  ) => React.ReactNode
+}
+
 type ExportedTypesProps =
-  | { source: string }
-  | { filename: string; value: string }
+  | ({ source: string } & BaseExportedTypesProps)
+  | ({ filename: string; value: string } & BaseExportedTypesProps)
 
 /** Display type documentation for all exported types from a module or source code value. */
 export function ExportedTypes(props: ExportedTypesProps) {
@@ -272,15 +278,18 @@ export function ExportedTypes(props: ExportedTypesProps) {
         })
   const exportedTypes = getExportedTypes(sourceFile)
 
-  if (diagnostics.length > 0) {
-    throw new Error(
-      diagnostics
-        .map((diagnostic) => getDiagnosticMessageText(diagnostic))
-        .join('\n')
+  if (typeof props.children === 'function') {
+    return (
+      <Context
+        value={{
+          theme: privateProps.theme,
+          workingDirectory: privateProps.workingDirectory,
+        }}
+      >
+        {props.children(exportedTypes)}
+      </Context>
     )
   }
-
-  const exportedTypes = getExportedTypes(sourceFile)
 
   return (
     <Context

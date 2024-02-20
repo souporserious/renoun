@@ -28,3 +28,20 @@ export function usePress({ onPress }: PressProps) {
 export function Basic() {
   return <ExportedTypes filename="Button.tsx" value={sourceFileText} />
 }
+
+export function Custom() {
+  return (
+    <ExportedTypes source="./ExportedTypes.tsx">
+      {(types) => {
+        return types.map((type) => {
+          return (
+            <div key={type.name}>
+              <h2>{type.name}</h2>
+              <p>{type.description}</p>
+            </div>
+          )
+        })
+      }}
+    </ExportedTypes>
+  )
+}
