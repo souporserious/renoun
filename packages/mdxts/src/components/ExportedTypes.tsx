@@ -1,4 +1,5 @@
 import React, { Fragment } from 'react'
+import { isAbsolute, join } from 'node:path'
 
 import { getExportedTypes } from '../utils/get-exported-types'
 import { CodeInline } from './CodeInline'
@@ -246,15 +247,30 @@ export function ExportedTypes(props: ExportedTypesProps) {
     theme?: any
     workingDirectory?: string
   }
+  let sourcePropPath
+
+  if ('source' in props) {
+    const isRelative = !isAbsolute(props.source)
+    const workingDirectory = privateProps.workingDirectory
+
+    if (isRelative && !workingDirectory) {
+      throw new Error(
+        'The [workingDirectory] prop was not provided to the [ExportedTypes] component while using a relative path. Pass a valid [workingDirectory] or make sure the mdxts/remark plugin and mdxts/loader are configured correctly if this is being renderend in an MDX file.'
+      )
+    }
+
+    sourcePropPath = isRelative
+      ? join(workingDirectory!, props.source)
+      : props.source
+  }
+
   const sourceFile =
     'source' in props
-      ? project.getSourceFileOrThrow(props.source)
+      ? project.addSourceFileAtPath(sourcePropPath!) // TODO: there's currently diagnostic errors when this is outside the current project since not all files are loaded. Need to handle multiple projects.
       : project.createSourceFile(props.filename, props.value, {
           overwrite: true,
         })
-  const diagnostics = sourceFile
-    .getPreEmitDiagnostics()
-    .map((diagnostic) => diagnostic.getMessageText())
+  const exportedTypes = getExportedTypes(sourceFile)
 
   if (diagnostics.length > 0) {
     throw new Error(
