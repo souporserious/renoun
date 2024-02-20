@@ -55,8 +55,8 @@ export default async function loader(
           `<CodeInline theme={theme} workingDirectory="${workingDirectory}"`
         )
         .replaceAll(
-          '<APIReference',
-          `<APIReference theme={theme} workingDirectory="${workingDirectory}"`
+          '<ExportedTypes',
+          `<ExportedTypes theme={theme} workingDirectory="${workingDirectory}"`
         )
     } else {
       source = `import { setTheme } from 'mdxts';\nimport theme from '${relativeThemePath}';\nsetTheme(theme);\n${source}`

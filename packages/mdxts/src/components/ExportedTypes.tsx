@@ -18,7 +18,7 @@ const mdxComponents = {
   },
 } as MDXComponents
 
-function Props({
+function Types({
   props,
   isComponent,
 }: {
@@ -124,11 +124,11 @@ function Props({
                     />
                   </div>
                 ) : null}
-                <Props props={props} isComponent={isComponent} />
+                <Types props={props} isComponent={isComponent} />
               </Fragment>
             ))}
           </div>
-          <Props props={propType.properties} isComponent={isComponent} />
+          <Types props={propType.properties} isComponent={isComponent} />
         </div>
       )
     }
@@ -143,12 +143,11 @@ function Props({
             gap: '1rem',
           }}
         >
-          <Props props={propType.properties} isComponent={isComponent} />
+          <Types props={propType.properties} isComponent={isComponent} />
         </div>
       ) : (
         <div key={index}>
-          {isComponent ? 'Props' : 'Types'}{' '}
-          <CodeInline value={propType.text} language="typescript" />
+          & <CodeInline value={propType.text} language="typescript" />
         </div>
       )
     }
@@ -218,7 +217,7 @@ function Props({
 
         {propType.properties && propType.properties.length > 0 ? (
           <div style={{ paddingLeft: '2rem' }}>
-            <Props props={propType.properties} isComponent={isComponent} />
+            <Types props={propType.properties} isComponent={isComponent} />
           </div>
         ) : null}
       </div>
@@ -234,8 +233,8 @@ type BaseAPIReferenceProps = {
 type APIReferenceProps = BaseAPIReferenceProps &
   ({ source: string } | { filename: string; value: string })
 
-/** Display type documentation for all exported types from a module. */
-export function APIReference(props: APIReferenceProps) {
+/** Display type documentation for all exported types from a module or source code value. */
+export function ExportedTypes(props: APIReferenceProps) {
   const sourceFile =
     'source' in props
       ? project.getSourceFileOrThrow(props.source)
@@ -305,7 +304,7 @@ export function APIReference(props: APIReferenceProps) {
             </div>
 
             {type.types.length > 0 ? (
-              <Props props={type.types} isComponent={type.isComponent} />
+              <Types props={type.types} isComponent={type.isComponent} />
             ) : null}
           </div>
         )
