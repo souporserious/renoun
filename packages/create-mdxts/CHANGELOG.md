@@ -1,5 +1,11 @@
 # create-mdxts
 
+## 0.2.1
+
+### Patch Changes
+
+- 75ce1e5: Add codemod for next-compose-plugins in CLI onboarding.
+
 ## 0.2.0
 
 ### Minor Changes
