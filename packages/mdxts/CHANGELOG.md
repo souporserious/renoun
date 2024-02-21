@@ -1,5 +1,12 @@
 # mdxts
 
+## 0.6.2
+
+### Patch Changes
+
+- 71f9cc2: Remove `@typescript/ata` since it isn't currently being used and causes package version issues with newer TypeScript versions.
+- 9a0ed54: Move `prettier` and `shiki` to peer dependencies.
+
 ## 0.6.1
 
 ### Patch Changes
