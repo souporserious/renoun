@@ -7,32 +7,51 @@ export function codemodNextJsConfig(sourceFile: SourceFile) {
 
   sourceFile.insertText(0, `${mdxtsRequire}${withMdxtsSetup}`)
 
-  sourceFile.forEachDescendant((node) => {
-    if (Node.isExpressionStatement(node)) {
-      const expression = node.getExpression()
-      const returnStatements = expression?.getDescendantsOfKind(
-        SyntaxKind.ReturnStatement
-      )
+  let hasComposePlugins = false
 
-      if (returnStatements.length) {
-        returnStatements.forEach((returnStatement) => {
-          const originalReturnText = returnStatement.getExpression()?.getText()
-
-          if (originalReturnText) {
-            returnStatement.replaceWithText(
-              `return withMdxts(${originalReturnText});`
-            )
-          }
-        })
-      } else if (
-        Node.isBinaryExpression(expression) &&
-        expression.getLeft().getText() === 'module.exports'
-      ) {
-        const right = expression.getRight().getText()
-        expression.replaceWithText(`module.exports = withMdxts(${right});`)
+  sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression).forEach((node) => {
+    if (
+      Node.isCallExpression(node) &&
+      node.getExpression().getText() === 'withPlugins'
+    ) {
+      const [firstArg] = node.getArguments()
+      if (Node.isArrayLiteralExpression(firstArg)) {
+        firstArg.addElement('withMdxts')
       }
+      hasComposePlugins = true
     }
   })
+
+  if (!hasComposePlugins) {
+    sourceFile.forEachDescendant((node) => {
+      if (Node.isExpressionStatement(node)) {
+        const expression = node.getExpression()
+        const returnStatements = expression?.getDescendantsOfKind(
+          SyntaxKind.ReturnStatement
+        )
+
+        if (returnStatements.length) {
+          returnStatements.forEach((returnStatement) => {
+            const originalReturnText = returnStatement
+              .getExpression()
+              ?.getText()
+
+            if (originalReturnText) {
+              returnStatement.replaceWithText(
+                `return withMdxts(${originalReturnText});`
+              )
+            }
+          })
+        } else if (
+          Node.isBinaryExpression(expression) &&
+          expression.getLeft().getText() === 'module.exports'
+        ) {
+          const right = expression.getRight().getText()
+          expression.replaceWithText(`module.exports = withMdxts(${right});`)
+        }
+      }
+    })
+  }
 
   sourceFile.formatText()
 }
@@ -53,23 +72,40 @@ export function codemodNextMjsConfig(sourceFile: SourceFile) {
   const mdxtsImport = `import { createMdxtsPlugin } from 'mdxts/next';\n`
   const exportDeclaration = defaultExport.getDeclarations().at(0)
 
-  if (
-    Node.isFunctionDeclaration(exportDeclaration) ||
-    Node.isFunctionExpression(exportDeclaration) ||
-    Node.isArrowFunction(exportDeclaration)
-  ) {
-    exportDeclaration
-      .getDescendantsOfKind(SyntaxKind.ReturnStatement)
-      .forEach((node) => {
-        const originalReturnText = node.getExpression()?.getText()
+  let hasComposePlugins = false
 
-        if (originalReturnText) {
-          node.replaceWithText(`return withMdxts(${originalReturnText});`)
-        }
-      })
-  } else if (Node.isExportAssignment(exportDeclaration)) {
-    const originalText = exportDeclaration.getExpression().getText()
-    exportDeclaration.setExpression(`withMdxts(${originalText})`)
+  sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression).forEach((node) => {
+    if (
+      Node.isCallExpression(node) &&
+      node.getExpression().getText() === 'withPlugins'
+    ) {
+      const [firstArg] = node.getArguments()
+      if (Node.isArrayLiteralExpression(firstArg)) {
+        firstArg.addElement('withMdxts')
+      }
+      hasComposePlugins = true
+    }
+  })
+
+  if (!hasComposePlugins) {
+    if (
+      Node.isFunctionDeclaration(exportDeclaration) ||
+      Node.isFunctionExpression(exportDeclaration) ||
+      Node.isArrowFunction(exportDeclaration)
+    ) {
+      exportDeclaration
+        .getDescendantsOfKind(SyntaxKind.ReturnStatement)
+        .forEach((node) => {
+          const originalReturnText = node.getExpression()?.getText()
+
+          if (originalReturnText) {
+            node.replaceWithText(`return withMdxts(${originalReturnText});`)
+          }
+        })
+    } else if (Node.isExportAssignment(exportDeclaration)) {
+      const originalText = exportDeclaration.getExpression().getText()
+      exportDeclaration.setExpression(`withMdxts(${originalText})`)
+    }
   }
 
   sourceFile

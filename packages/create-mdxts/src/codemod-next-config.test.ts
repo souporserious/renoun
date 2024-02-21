@@ -5,7 +5,7 @@ import {
 } from './codemod-next-config'
 
 describe('codemodNextConfig', () => {
-  it('correctly modifies js object literal config', () => {
+  it('modifies js object literal config', () => {
     const project = new Project({ useInMemoryFileSystem: true })
     const sourceFile = project.createSourceFile(
       'next.config.js',
@@ -23,7 +23,7 @@ describe('codemodNextConfig', () => {
     )
   })
 
-  it('correctly modifies js function config', () => {
+  it('modifies js function config', () => {
     const project = new Project({ useInMemoryFileSystem: true })
     const sourceFile = project.createSourceFile(
       'next.config.js',
@@ -38,7 +38,25 @@ describe('codemodNextConfig', () => {
     )
   })
 
-  it('correctly modifies mjs object literal config', () => {
+  it('adds mdxts plugin to next-compose-plugins in js config', () => {
+    const project = new Project({ useInMemoryFileSystem: true })
+    const sourceFile = project.createSourceFile(
+      'next.config.js',
+      `const withPlugins = require('next-compose-plugins');\nconst withCSS = require('@zeit/next-css');\nmodule.exports = withPlugins([withCSS], { reactStrictMode: true });`
+    )
+
+    codemodNextJsConfig(sourceFile)
+
+    const modifiedContent = sourceFile.getFullText()
+    expect(modifiedContent).toContain(
+      "const { createMdxtsPlugin } = require('mdxts/next');"
+    )
+    expect(modifiedContent).toContain(
+      'module.exports = withPlugins([withCSS, withMdxts], { reactStrictMode: true });'
+    )
+  })
+
+  it('modifies mjs object literal config', () => {
     const project = new Project({
       useInMemoryFileSystem: true,
       compilerOptions: { allowJs: true },
@@ -59,7 +77,7 @@ describe('codemodNextConfig', () => {
     )
   })
 
-  it('correctly modifies mjs function config', () => {
+  it('modifies mjs function config', () => {
     const project = new Project({
       useInMemoryFileSystem: true,
       compilerOptions: { allowJs: true },
@@ -74,6 +92,28 @@ describe('codemodNextConfig', () => {
     const modifiedContent = sourceFile.getFullText()
     expect(modifiedContent).toContain(
       `return withMdxts({ reactStrictMode: true, pageExtensions: ['mdx', 'tsx'] });`
+    )
+  })
+
+  it('correctly adds mdxts plugin to next-compose-plugins in mjs config', () => {
+    const project = new Project({
+      useInMemoryFileSystem: true,
+      compilerOptions: { allowJs: true },
+    })
+    const sourceFile = project.createSourceFile(
+      'next.config.mjs',
+      `import withPlugins from 'next-compose-plugins';\nimport withCSS from '@zeit/next-css';\nexport default withPlugins([withCSS], { reactStrictMode: true });`
+    )
+
+    codemodNextMjsConfig(sourceFile)
+
+    const modifiedContent = sourceFile.getFullText()
+
+    expect(modifiedContent).toContain(
+      "import { createMdxtsPlugin } from 'mdxts/next';"
+    )
+    expect(modifiedContent).toContain(
+      'export default withPlugins([withCSS, withMdxts], { reactStrictMode: true });'
     )
   })
 })
