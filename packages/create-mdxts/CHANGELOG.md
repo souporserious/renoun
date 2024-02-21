@@ -1,5 +1,11 @@
 # create-mdxts
 
+## 0.2.2
+
+### Patch Changes
+
+- 40790ea: Add list of all dependencies installed by CLI.
+
 ## 0.2.1
 
 ### Patch Changes
