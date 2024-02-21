@@ -202,7 +202,7 @@ export async function CodeBlock({
     sourceFile.fixMissingImports()
   }
 
-  const highlighter = await getHighlighter({ theme })
+  const highlighter = await getHighlighter()
   const tokens = highlighter(finalValue, finalLanguage, sourceFile, jsxOnly)
   const rootDirectory = (await findRoot(process.cwd())).rootDir
   const baseDirectory = process.cwd().replace(rootDirectory, '')

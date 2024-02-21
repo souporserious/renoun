@@ -1,6 +1,11 @@
+import { cache } from 'react'
 import { getHighlighter as shikiGetHighlighter } from 'shiki'
 import type { SourceFile } from 'ts-morph'
 import { Node, SyntaxKind } from 'ts-morph'
+
+import { getContext } from '../utils/context'
+import { getTheme } from '../index'
+import { Context } from './Context'
 
 type Color = string
 
@@ -65,9 +70,21 @@ function getFontStyle(fontStyle: number): any {
   return style
 }
 
+let highlighter: Awaited<ReturnType<typeof shikiGetHighlighter>> | null = null
+
 /** Returns a function that converts code to an array of highlighted tokens */
-export async function getHighlighter(options: any): Promise<Highlighter> {
-  const highlighter = await shikiGetHighlighter(options)
+export const getHighlighter = cache(async function getHighlighter(
+  options?: any
+): Promise<Highlighter> {
+  if (highlighter === null) {
+    if (!options) {
+      const contextValue = getContext(Context)
+      const theme = contextValue.theme ?? getTheme()
+      options = { theme }
+    }
+
+    highlighter = await shikiGetHighlighter(options)
+  }
 
   return function (
     value: string,
@@ -89,7 +106,7 @@ export async function getHighlighter(options: any): Promise<Highlighter> {
     }
 
     const code = sourceFile ? sourceFile.getFullText() : value
-    const tokens = highlighter
+    const tokens = highlighter!
       .codeToThemedTokens(code, language, undefined, {
         includeExplanation: false,
       })
@@ -208,4 +225,4 @@ export async function getHighlighter(options: any): Promise<Highlighter> {
 
     return parsedTokens
   }
-}
+})
