@@ -1,10 +1,7 @@
 import webpack from 'webpack'
 import { NextConfig } from 'next'
-import { resolve, join } from 'node:path'
-import { tmpdir } from 'node:os'
+import { resolve } from 'node:path'
 import { execSync } from 'node:child_process'
-import { writeFile } from 'node:fs/promises'
-import CopyPlugin from 'copy-webpack-plugin'
 import NodePolyfillPlugin from 'node-polyfill-webpack-plugin'
 import remarkTypography from 'remark-typography'
 import createMdxPlugin from '@next/mdx'
@@ -13,7 +10,6 @@ import { BUNDLED_THEMES } from 'shiki'
 import { remarkPlugin } from '../remark'
 import { rehypePlugin } from '../rehype'
 import { renumberFilenames } from '../utils/renumber'
-import { getTypeDeclarations } from '../utils/get-type-declarations'
 import { addGitSourceToMdxtsConfig } from './add-git-source'
 
 type PluginOptions = {
@@ -25,14 +21,11 @@ type PluginOptions = {
 
   /** The branch to use for linking to the repository and source files. */
   gitBranch?: string
-
-  /** The type declarations to bundle for the Code and Editor components. */
-  types?: string[]
 }
 
 /** Starts the MDXTS server and bundles all entry points defined in the plugin options. */
 export function createMdxtsPlugin(pluginOptions: PluginOptions) {
-  let { gitSource, gitBranch = 'main', theme, types = [] } = pluginOptions
+  let { gitSource, gitBranch = 'main', theme } = pluginOptions
   const themePath = resolve(process.cwd(), theme)
 
   /** Attempt to resolve the git source from the git remote URL and add it to the next config file. */
@@ -87,12 +80,6 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
           rehypePlugins: [rehypePlugin],
         },
       })
-      const typesContents = (
-        await Promise.all(types.flatMap(getTypeDeclarations))
-      ).flat()
-      const typesFilePath = join(tmpdir(), 'types.json')
-
-      await writeFile(typesFilePath, JSON.stringify(typesContents))
 
       nextConfig.webpack = (config, options) => {
         // add default mdx components
@@ -140,55 +127,7 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
         })
 
         if (options.isServer === false) {
-          config.plugins.push(
-            new CopyPlugin({
-              patterns: [
-                {
-                  from: require.resolve(
-                    'shiki/languages/javascript.tmLanguage.json'
-                  ),
-                  to: 'static/mdxts',
-                },
-                {
-                  from: require.resolve(
-                    'shiki/languages/typescript.tmLanguage.json'
-                  ),
-                  to: 'static/mdxts',
-                },
-                {
-                  from: require.resolve('shiki/languages/jsx.tmLanguage.json'),
-                  to: 'static/mdxts',
-                },
-                {
-                  from: require.resolve('shiki/languages/tsx.tmLanguage.json'),
-                  to: 'static/mdxts',
-                },
-                {
-                  from: require.resolve('shiki/languages/css.tmLanguage.json'),
-                  to: 'static/mdxts',
-                },
-                {
-                  from: require.resolve('shiki/languages/json.tmLanguage.json'),
-                  to: 'static/mdxts',
-                },
-                {
-                  from: require.resolve(
-                    'shiki/languages/shellscript.tmLanguage.json'
-                  ),
-                  to: 'static/mdxts',
-                },
-                {
-                  from: require.resolve('vscode-oniguruma/release/onig.wasm'),
-                  to: 'static/mdxts',
-                },
-                {
-                  from: typesFilePath,
-                  to: 'static/mdxts',
-                },
-              ],
-            }),
-            new NodePolyfillPlugin()
-          )
+          config.plugins.push(new NodePolyfillPlugin())
         }
 
         if (typeof getWebpackConfig === 'function') {
@@ -214,10 +153,7 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
         serverComponentsExternalPackages: [
           ...(nextConfig.experimental?.serverComponentsExternalPackages ?? []),
           'esbuild',
-          'shiki',
-          'vscode-oniguruma',
           'ts-morph',
-          'typescript',
         ],
       }
 
