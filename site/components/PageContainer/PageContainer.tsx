@@ -15,7 +15,10 @@ export function PageContainer({
 }) {
   return (
     <div className={styles.container}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.6rem' }}>
+      <div
+        className="prose"
+        style={{ display: 'flex', flexDirection: 'column', gap: '1.6rem' }}
+      >
         {children}
         <div
           style={{

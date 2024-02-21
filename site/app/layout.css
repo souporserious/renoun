@@ -114,7 +114,7 @@ a:hover :not(.title) {
   text-wrap: pretty;
 }
 
-.prose p:first-of-type {
+.prose > p:first-of-type {
   font-size: var(--font-size-heading-3);
   line-height: var(--line-height-heading-3);
   text-wrap: pretty;

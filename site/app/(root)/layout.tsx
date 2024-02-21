@@ -5,7 +5,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className={styles.container}>
       <Sidebar />
-      <main className="prose">{children}</main>
+      <main>{children}</main>
     </div>
   )
 }
