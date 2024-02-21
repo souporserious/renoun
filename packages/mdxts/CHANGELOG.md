@@ -1,5 +1,43 @@
 # mdxts
 
+## 0.6.0
+
+### Minor Changes
+
+- dfea828: Use stable generated filename based on Code value.
+- 47c8ee1: Replaces `summary` export from remark plugin with `description` which is now used to calculate data `description` field.
+- b2d9324: Account for standard `@internal` JSDoc tag instead of `@private` in `getExportedSourceFiles`.
+- d7ac97a: Pass processed entry declarations to determine implicit internal exports in `getAllData`.
+- e89116e: Reduces the number of times the shiki highlighter is initialized to prevent `memory access out of bounds` errors.
+- 4303ce5: Add support for `examples` directory.
+- 3fff302: Add default MDX components to `next` plugin for `code` and `pre` elements.
+- f66aaa2: Adds `ExportedTypes` component for gathering types from a file or source code.
+- 3a6fe9b: Add support for following index file exports when gathering exported types.
+- 8671ff8: Add global timer to `QuickInfo` for better hover interactions.
+- 66edade: Add support for ordered `Code` blocks using a numbered filename prefix.
+- 57d8a29: Rename `MDX` to `MDXContent` and `mdxComponents` to `MDXComponents`.
+- f66aaa2: Use smaller generated `filename` for `CodeBlock`. Using `Buffer.from(props.value).toString('base64')` was causing an `ENAMETOOLONG` error.
+- e5fe316: Fixes `QuickInfo` tooltip by keeping it in view and accounting for scroll offset.
+- 97c0861: Introduces preconfigured examples starting with a blog example.
+- 3109b2d: Remove `PackageExports` component, this information is accessible from the data returned in `createSource`.
+- b948305: Split up `Code` component into `CodeBlock` and `CodeInline` components.
+- cc3b831: Add `style` prop to `PackageInstall`.
+- 5c0c635: Account for `@internal` JSDoc tag in `getExportedTypes`.
+- 8c13479: Always split highlighter tokens by identifier.
+
+### Patch Changes
+
+- 1f3875d: Fix `Symbol` highlighted state when hovering `QuickInfo`.
+- 3dd1cf3: Fix `QuickInfo` paragraph color.
+- 0465092: Fix relative `createSource` paths by using absolute paths for imports and adding webpack file dependencies.
+- 204bba5: Use cross-platform file path separator in `Code`.
+- 1f45a78: Fix `QuickInfo` erroring when parsing documentation by handling links properly.
+- a272add: Fix `CodeBlock` filename label when complex filename. The regex was only accounting for strings that begin with numbers.
+- daf9550: Handle all exported declarations in `getExportedTypes`.
+- eac632c: Add text-wrap pretty to `QuickInfo` paragraphs.
+- f9d8e48: Compute `Module` type so quick info is cleaner.
+- 1fd91d3: Fix metadata erroring when front matter is available.
+
 ## 0.5.0
 
 ### Minor Changes
