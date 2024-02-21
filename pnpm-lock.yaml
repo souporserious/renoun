@@ -204,7 +204,7 @@ importers:
         specifier: ^3.0.0
         version: 3.0.0(webpack@5.90.1)
       prettier:
-        specifier: ^3.2.5
+        specifier: '>=3.0.0'
         version: 3.2.5
       read-package-up:
         specifier: ^11.0.0
@@ -246,7 +246,7 @@ importers:
         specifier: 0.0.1
         version: 0.0.1
       shiki:
-        specifier: ^0.14.6
+        specifier: ^0.14.0
         version: 0.14.6
       title:
         specifier: ^3.5.3
