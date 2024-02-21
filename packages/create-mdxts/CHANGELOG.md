@@ -1,5 +1,20 @@
 # create-mdxts
 
+## 0.2.0
+
+### Minor Changes
+
+- 0f24dfa: Use default config when file contents is empty. This is unlikely to happen, but improves the experience by avoiding erroring.
+- 4dda95e: Implement example CLI flag.
+- 8af7ab4: Add create source and app page CLI step.
+- 1c329b6: Revamps the CLI to add better colors and present steps as questions.
+- 8d59ffd: Handle Next functional configs in CLI codemod.
+- ed57144: Make sure TypeScript is installed before proceeding in CLI.
+
+### Patch Changes
+
+- 8a02067: Check if mdxts/next plugin is already configured before prompting.
+
 ## 0.1.1
 
 ### Patch Changes
