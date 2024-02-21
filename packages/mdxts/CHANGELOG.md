@@ -1,5 +1,11 @@
 # mdxts
 
+## 0.6.1
+
+### Patch Changes
+
+- 577d4b7: Remove public files in `mdxts/next` for now. These are generated for syntax highlighting and type checking on the client for the unreleased `Editor` component.
+
 ## 0.6.0
 
 ### Minor Changes
