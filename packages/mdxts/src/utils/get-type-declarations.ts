@@ -3,43 +3,6 @@ import path from 'node:path'
 import { builtinModules } from 'node:module'
 import { rollup } from 'rollup'
 import dts from 'rollup-plugin-dts'
-import ts from 'typescript'
-
-async function fetchTypes(
-  name: string
-): Promise<{ code: string; path: string }[]> {
-  const { setupTypeAcquisition } = await import('@typescript/ata')
-  let types: { code: string; path: string }[] = []
-
-  return new Promise((resolve) => {
-    const ata = setupTypeAcquisition({
-      projectName: 'mdxts',
-      typescript: ts,
-      logger: console,
-      fetcher: async (url) => {
-        return fetch(url).catch((error) => {
-          throw new Error(
-            `mdxts(createMdxtsPlugin > types): Could not fetch types for "${name}", make sure the package is either defined in the package.json and is available to the current workspace or is published to NPM.`,
-            { cause: error }
-          )
-        })
-      },
-      delegate: {
-        receivedFile: (code: string, path: string) => {
-          types.push({ code, path: path.replace('@types/', '') })
-        },
-        errorMessage(userFacingMessage, error) {
-          throw new Error(userFacingMessage, { cause: error })
-        },
-        finished: () => {
-          resolve(types)
-        },
-      },
-    })
-
-    ata(`import "${name}"`)
-  })
-}
 
 async function getPackageJson(
   packagePath: string
@@ -180,41 +143,31 @@ export async function getTypeDeclarations(packageName: string) {
   const packageJson = await getPackageJson(packageJsonPath)
   const typesPath = await findTypesPath(packageJson, packageName)
 
-  // Use ATA when failing to find path or dealing with @types since rollup is not reliable
-  if (
-    typesPath === null ||
-    typesPath.includes('@types/') ||
-    packageName.includes('@types/')
-  ) {
-    const packageTypes = await fetchTypes(packageName)
-    return packageTypes
+  if (typesPath === null) {
+    throw new Error(
+      `mdxts(createMdxtsPlugin > types): Could not find types for "${packageName}", make sure the package is either defined in the package.json and is available to the current workspace or is published to NPM.`
+    )
   }
 
   const allDependencies = getAllDependencies(packageJson)
 
-  try {
-    const bundle = await rollup({
-      input: path.resolve('./node_modules/', packageName, typesPath),
-      plugins: [dts({ respectExternal: true })],
-      external: (id) =>
-        allDependencies
-          .concat(
-            builtinModules,
-            builtinModules.map((moduleName) => `node:${moduleName}`)
-          )
-          .includes(id),
-    })
-    const result = await bundle.generate({})
+  const bundle = await rollup({
+    input: path.resolve('./node_modules/', packageName, typesPath),
+    plugins: [dts({ respectExternal: true })],
+    external: (id) =>
+      allDependencies
+        .concat(
+          builtinModules,
+          builtinModules.map((moduleName) => `node:${moduleName}`)
+        )
+        .includes(id),
+  })
+  const result = await bundle.generate({})
 
-    return [
-      {
-        code: result.output[0].code,
-        path: `/node_modules/${packageName}/index.d.ts`,
-      },
-    ]
-  } catch {
-    // Fallback to ATA if Rollup fails for any reason
-    const packageTypes = await fetchTypes(packageName)
-    return packageTypes
-  }
+  return [
+    {
+      code: result.output[0].code,
+      path: `/node_modules/${packageName}/index.d.ts`,
+    },
+  ]
 }

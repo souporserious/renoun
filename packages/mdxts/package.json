@@ -116,8 +116,6 @@
     "@types/react-dom": "^18.2.18",
     "@types/title": "^3.4.3",
     "@types/webpack-env": "1.18.4",
-    "@typescript/ata": "^0.9.4",
-    "@typescript/vfs": "^1.5.0",
     "case-anything": "^2.1.13",
     "chokidar": "^3.5.3",
     "color": "^4.2.3",

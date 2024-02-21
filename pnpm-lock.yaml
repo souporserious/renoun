@@ -155,12 +155,6 @@ importers:
       '@types/webpack-env':
         specifier: 1.18.4
         version: 1.18.4
-      '@typescript/ata':
-        specifier: ^0.9.4
-        version: 0.9.4(typescript@5.3.3)
-      '@typescript/vfs':
-        specifier: ^1.5.0
-        version: 1.5.0
       case-anything:
         specifier: ^2.1.13
         version: 2.1.13
@@ -2417,22 +2411,6 @@ packages:
     dependencies:
       '@types/yargs-parser': 21.0.1
     dev: true
-
-  /@typescript/ata@0.9.4(typescript@5.3.3):
-    resolution: {integrity: sha512-PaJ16WouPV/SaA+c0tnOKIqYq24+m93ipl/e0Dkxuianer+ibc5b0/6ZgfCFF8J7QEp57dySMSP9nWOFaCfJnw==}
-    peerDependencies:
-      typescript: ^4.4.4
-    dependencies:
-      typescript: 5.3.3
-    dev: false
-
-  /@typescript/vfs@1.5.0:
-    resolution: {integrity: sha512-AJS307bPgbsZZ9ggCT3wwpg3VbTKMFNHfaY/uF0ahSkYYrPF2dSSKDNIDIQAHm9qJqbLvCsSJH7yN4Vs/CsMMg==}
-    dependencies:
-      debug: 4.3.4
-    transitivePeerDependencies:
-      - supports-color
-    dev: false
 
   /@ungap/structured-clone@1.2.0:
     resolution: {integrity: sha512-zuVdFrMJiuCDQUMCzQaD6KL28MjnqqN8XnAqiEq9PNm/hCPTSGfrXCOfwj1ow4LFb/tNymJPwsNbVePc1xFqrQ==}
