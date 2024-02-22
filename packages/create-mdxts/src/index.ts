@@ -63,7 +63,7 @@ export async function start() {
           break
         case states.CHECK_TYPESCRIPT_INSTALLED:
           if (await checkTypeScriptInstalled()) {
-            currentState = states.CHECK_MDXTS_INSTALLED
+            currentState = states.CHECK_NEXT_CONFIG_EXISTS
           } else {
             throw new Error(
               `TypeScript is required. Please add TypeScript to the current project and run ${chalk.bold(
@@ -72,9 +72,13 @@ export async function start() {
             )
           }
           break
+        case states.CHECK_NEXT_CONFIG_EXISTS:
+          context.nextJsConfigExists = checkNextJsConfigExists()
+          currentState = states.CHECK_MDXTS_INSTALLED
+          break
         case states.CHECK_MDXTS_INSTALLED:
           if (await checkMdxtsInstalled()) {
-            currentState = states.CHECK_NEXT_CONFIG_EXISTS
+            currentState = states.CONFIGURE_MDXTS_NEXT
           } else {
             currentState = states.INSTALL_MDXTS
           }
@@ -90,10 +94,6 @@ export async function start() {
             currentState = states.ERROR_STATE
             errorMessage = 'mdxts installation cancelled.'
           }
-          currentState = states.CONFIGURE_MDXTS_NEXT
-          break
-        case states.CHECK_NEXT_CONFIG_EXISTS:
-          context.nextJsConfigExists = checkNextJsConfigExists()
           currentState = states.CONFIGURE_MDXTS_NEXT
           break
         case states.CONFIGURE_MDXTS_NEXT:
