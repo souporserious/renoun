@@ -310,10 +310,14 @@ export async function createSource() {
     return
   }
 
-  const filePattern =
+  let filePattern =
     extname(sourcePathInput) === ''
-      ? `${sourcePathInput}/**/*.{ts,tsx,mdx}`
+      ? join(sourcePathInput, '**', '*.{ts,tsx,mdx}')
       : sourcePathInput
+
+  if (filePattern.startsWith(sep)) {
+    filePattern = `.${filePattern}`
+  }
 
   project.createSourceFile(
     'data.ts',
