@@ -265,6 +265,7 @@ export async function installMdxts() {
 }
 
 export async function createSource() {
+  const createdSourceFiles = []
   let sourcePathInput = await askQuestion(
     'Enter a file glob pattern or directory path to use as a source: '
   )
@@ -318,6 +319,7 @@ export const ${allDataIdentifier} = createSource('${sourcePathInput}')
   `.trim(),
     { overwrite: true }
   )
+  createdSourceFiles.push('data.ts')
 
   const hasSourceDirectory = project.getDirectory('src')
 
@@ -376,6 +378,11 @@ export default async function Page({ params }: { params: { slug: string } }) {
       : `import { notFound } from 'next/navigation'\nimport { ${allDataIdentifier} } from '../../data'\n\n${exampleSourcePage}`,
     { overwrite: true }
   )
+  createdSourceFiles.push(relativePagePath)
 
   project.saveSync()
+
+  Log.success(
+    `The following files were created successfully: ${createdSourceFiles.join(', ')}`
+  )
 }
