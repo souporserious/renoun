@@ -327,13 +327,13 @@ export const ${allDataIdentifier} = createSource('${sourcePathInput}')
   const pagePath = join(
     process.cwd(),
     hasSourceDirectory
-      ? `app/src/[${dataIdentifier}]/page.tsx`
-      : `app/[${dataIdentifier}]/page.tsx`
+      ? `app/src/[...${dataIdentifier}]/page.tsx`
+      : `app/[...${dataIdentifier}]/page.tsx`
   )
   const relativePagePath = pagePath.replace(process.cwd() + sep, '')
   const exampleSourcePage = `
-export default async function Page({ params }: { params: { slug: string } }) {
-  const ${singularDataIdentifier} = await ${allDataIdentifier}.get(params.slug)
+export default async function Page({ params }: { params: { ${dataIdentifier}: string[] } }) {
+  const ${singularDataIdentifier} = await ${allDataIdentifier}.get(params.${dataIdentifier})
 
   if (${singularDataIdentifier} === undefined) {
     return notFound()
