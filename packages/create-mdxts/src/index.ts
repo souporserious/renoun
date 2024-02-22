@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { join, resolve, sep } from 'node:path'
+import { extname, join, resolve, sep } from 'node:path'
 import { Project } from 'ts-morph'
 import chalk from 'chalk'
 
@@ -310,12 +310,17 @@ export async function createSource() {
     return
   }
 
+  const filePattern =
+    extname(sourcePathInput) === ''
+      ? `${sourcePathInput}/**/*.{ts,tsx,mdx}`
+      : sourcePathInput
+
   project.createSourceFile(
     'data.ts',
     `
 import { createSource } from 'mdxts'
   
-export const ${allDataIdentifier} = createSource('${sourcePathInput}')
+export const ${allDataIdentifier} = createSource('${filePattern}')
   `.trim(),
     { overwrite: true }
   )
