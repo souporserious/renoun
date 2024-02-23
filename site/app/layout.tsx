@@ -29,6 +29,7 @@ export default function RootLayout({
               : '/favicon.svg'
           }
         />
+        <link rel="icon" href="/favicon.png" type="image/png" />
       </head>
       <body className={GeistSans.className}>
         <AppProvider>{children}</AppProvider>
