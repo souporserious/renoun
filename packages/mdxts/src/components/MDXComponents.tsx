@@ -9,6 +9,8 @@ import { CodeInline } from './CodeInline'
 export const MDXComponents = {
   pre: (props) => {
     const {
+      allowCopy,
+      allowErrors,
       filename,
       lineNumbers,
       showErrors,
@@ -16,11 +18,13 @@ export const MDXComponents = {
       sourcePath,
       sourcePathLine,
       sourcePathColumn,
-      allowErrors,
+      toolbar,
       children,
       className,
       style,
     } = props as {
+      allowCopy?: boolean
+      allowErrors?: boolean
       filename?: string
       lineNumbers?: boolean
       showErrors?: boolean
@@ -28,7 +32,7 @@ export const MDXComponents = {
       sourcePath?: string
       sourcePathLine?: number
       sourcePathColumn?: number
-      allowErrors?: boolean
+      toolbar?: boolean
       children: React.ReactElement
       className: string
       style: React.CSSProperties
@@ -38,13 +42,15 @@ export const MDXComponents = {
 
     return (
       <CodeBlock
+        allowCopy={allowCopy}
         allowErrors={allowErrors}
         filename={filename}
         language={metadata?.language}
         lineNumbers={lineNumbers}
         highlight={highlight}
-        value={value}
         showErrors={showErrors}
+        toolbar={toolbar}
+        value={value}
         className={className}
         style={style}
         // @ts-expect-error - private props
