@@ -1,7 +1,17 @@
 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M11.9994 7L20.3327 22L3.66601 22L11.9994 7Z" fill="white" fill-opacity="0.8"/>
-<g filter="url(#filter0_d_520_288)">
-<path d="M11.9994 17L3.66602 2L20.3327 2L11.9994 17Z" fill="white" fill-opacity="0.9" shape-rendering="crispEdges"/>
+<style>
+path {
+  fill: #ACBDD1;
+}
+@media (prefers-color-scheme: dark) {
+  path {
+    fill: #FFFFFF;
+  }
+}
+</style>
+<path d="M12.3334 7L20.6667 22H4L12.3334 7Z" fill-opacity="0.8"/>
+<g filter="url(#filter0_d_2339_292)">
+<path d="M11.9994 17L3.66602 2H20.3327L11.9994 17Z" fill-opacity="0.9"/>
 </g>
 <defs>
 <filter id="filter0_d_520_288" x="0.332681" y="0.333333" width="23.3337" height="21.6667" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
