@@ -341,6 +341,10 @@ export const ${allDataIdentifier} = createSource('${filePattern}')
   )
   const relativePagePath = pagePath.replace(process.cwd() + sep, '')
   const exampleSourcePage = `
+export function generateStaticParams() {
+  return ${allDataIdentifier}.paths().map((${dataIdentifier}) => ({ ${dataIdentifier}: pathname }))
+}
+
 export default async function Page({ params }: { params: { ${dataIdentifier}: string[] } }) {
   const ${singularDataIdentifier} = await ${allDataIdentifier}.get(params.${dataIdentifier})
 
