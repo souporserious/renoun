@@ -68,6 +68,7 @@ export default function Home() {
                 fontSize: 'var(--font-size-heading-2)',
                 lineHeight: 1.3,
                 maxWidth: '24ch',
+                paddingLeft: '1.5rem',
                 color: 'var(--color-foreground-secondary)',
                 position: 'relative',
                 zIndex: 1,
