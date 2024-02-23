@@ -252,7 +252,15 @@ export async function configureNextPlugin(configExists: boolean) {
     const remoteOriginUrl = await gitRemoteOriginUrl()
     if (remoteOriginUrl) {
       const httpUrl = gitRemoteUrlToHttp(remoteOriginUrl)
-      addGitSourceToMdxtsConfig(httpUrl)
+      const shouldAddGitSource = await askYesNo(
+        `Configure ${chalk.bold(httpUrl)} as the git source for the mdxts plugin?`,
+        {
+          description: 'This will be the url used to link back to source code.',
+        }
+      )
+      if (shouldAddGitSource) {
+        addGitSourceToMdxtsConfig(httpUrl)
+      }
     }
   } catch (error) {
     if (error instanceof Error) {
