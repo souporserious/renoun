@@ -1,6 +1,7 @@
 import { stdin, stdout } from 'node:process'
 import { createInterface } from 'node:readline/promises'
 import chalk from 'chalk'
+import { sep } from 'node:path'
 
 export class Log {
   static info(message: string) {
@@ -50,4 +51,20 @@ export async function askYesNo(
     }`
   )
   return answer === '' ? defaultYes : answer.toLowerCase().startsWith('y')
+}
+
+export function getFilePatternBaseName(filePattern: string) {
+  const parts = filePattern.split(sep)
+
+  for (let index = 0; index < parts.length - 1; index++) {
+    const nextPart = parts.at(index + 1)
+    if (!nextPart?.includes('*')) {
+      continue
+    }
+    // Return the current part as soon as we find a part that directly precedes a '*'
+    return parts.at(index)!
+  }
+
+  const lastPart = parts.at(-1)
+  return lastPart?.includes('*') ? null : lastPart!
 }

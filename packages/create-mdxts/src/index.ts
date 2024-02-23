@@ -13,7 +13,7 @@ import {
 } from './codemod-next-config'
 import { fetchExample } from './fetch-example'
 import { gitRemoteUrlToHttp } from './git-remote-url-to-http'
-import { Log, askQuestion, askYesNo } from './utils'
+import { Log, askQuestion, askYesNo, getFilePatternBaseName } from './utils'
 
 const states = {
   INITIAL_STATE: 'initialState',
@@ -306,7 +306,7 @@ export async function createSource() {
     )
   }
 
-  const dataIdentifier = sourcePathInput.split(sep).pop()!
+  const dataIdentifier = getFilePatternBaseName(sourcePathInput) ?? 'dataSource'
   let singularDataIdentifier = dataIdentifier.replace(/s$/, '')
 
   if (singularDataIdentifier === dataIdentifier) {
