@@ -1,7 +1,6 @@
-import { Project, Node } from 'ts-morph'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { format, resolveConfig } from 'prettier'
+import { Project, Node } from 'ts-morph'
 
 export async function addGitSourceToMdxtsConfig(gitSource: string) {
   const project = new Project({ skipAddingFilesFromTsConfig: true })
@@ -28,14 +27,6 @@ export async function addGitSourceToMdxtsConfig(gitSource: string) {
     }
   })
 
-  const prettierConfig = await resolveConfig(nextConfigPath)
-  const formatted = await format(sourceFile.getFullText(), {
-    ...prettierConfig,
-    filepath: nextConfigPath,
-  })
-
-  sourceFile.replaceWithText(formatted)
+  sourceFile.formatText()
   sourceFile.saveSync()
-
-  console.log(`mdxts: added gitSource to ${configFileName}`)
 }

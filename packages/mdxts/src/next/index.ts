@@ -1,7 +1,6 @@
 import webpack from 'webpack'
 import { NextConfig } from 'next'
 import { resolve } from 'node:path'
-import { execSync } from 'node:child_process'
 import NodePolyfillPlugin from 'node-polyfill-webpack-plugin'
 import remarkTypography from 'remark-typography'
 import createMdxPlugin from '@next/mdx'
@@ -10,7 +9,6 @@ import { BUNDLED_THEMES } from 'shiki'
 import { remarkPlugin } from '../remark'
 import { rehypePlugin } from '../rehype'
 import { renumberFilenames } from '../utils/renumber'
-import { addGitSourceToMdxtsConfig } from './add-git-source'
 
 type PluginOptions = {
   /** Path to the VS Code compatible theme used for syntax highlighting the Code and Editor components. */
@@ -27,23 +25,6 @@ type PluginOptions = {
 export function createMdxtsPlugin(pluginOptions: PluginOptions) {
   let { gitSource, gitBranch = 'main', theme } = pluginOptions
   const themePath = resolve(process.cwd(), theme)
-
-  /** Attempt to resolve the git source from the git remote URL and add it to the next config file. */
-  if (gitSource === undefined) {
-    try {
-      const stdout = execSync('git remote get-url origin')
-      gitSource = stdout
-        .toString()
-        .trim()
-        .replace(/\.git$/, '')
-      addGitSourceToMdxtsConfig(gitSource)
-    } catch (error) {
-      throw new Error(
-        'Could not infer git source from git remote URL. Please provide a git source in the mdxts/next plugin options.',
-        { cause: error }
-      )
-    }
-  }
 
   return function withMdxts(nextConfig: NextConfig = {}) {
     const getWebpackConfig = nextConfig.webpack

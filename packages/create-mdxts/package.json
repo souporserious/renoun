@@ -25,6 +25,7 @@
   "dependencies": {
     "@antfu/install-pkg": "^0.3.1",
     "chalk": "^4.1.2",
+    "git-remote-origin-url": "^4.0.0",
     "ts-morph": "^21.0.1"
   }
 }
