@@ -82,8 +82,10 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
       })
 
       nextConfig.webpack = (config, options) => {
-        // add default mdx components
-        config.resolve.alias['next-mdx-import-source-file'].push(
+        // add default mdx components before @mdx-js/react
+        config.resolve.alias['next-mdx-import-source-file'].splice(
+          -1,
+          0,
           resolve(__dirname, '../../src/components/MDXComponents.js')
         )
 
