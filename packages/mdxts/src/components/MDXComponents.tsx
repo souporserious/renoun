@@ -79,6 +79,11 @@ export const MDXComponents = {
 
 export type MDXComponents = MDXComponentsType
 
-export function useMDXComponents(): MDXComponentsType {
-  return MDXComponents
+export function useMDXComponents(
+  components: MDXComponentsType
+): MDXComponentsType {
+  return {
+    ...components,
+    ...MDXComponents,
+  }
 }
