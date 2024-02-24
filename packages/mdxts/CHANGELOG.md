@@ -1,5 +1,16 @@
 # mdxts
 
+## 0.7.0
+
+### Minor Changes
+
+- 19d82bd: Move `gitSource` url codemod to the CLI and add support for other git providers.
+
+### Patch Changes
+
+- ba56adc: Add try/catch around CodeBlock `createSourceFile` as temporary fix when virtual files cannot be created.
+- 2b1628c: Fixes load order for MDX components to load before the `@mdx-js/react` package.`
+
 ## 0.6.2
 
 ### Patch Changes
