@@ -4,7 +4,6 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { extname, join, resolve, sep } from 'node:path'
 import { Project } from 'ts-morph'
 import chalk from 'chalk'
-import gitRemoteOriginUrl from 'git-remote-origin-url'
 
 import { addGitSourceToMdxtsConfig } from './add-git-source-to-mdxts-config'
 import {
@@ -269,6 +268,7 @@ export async function configureNextPlugin(configExists: boolean) {
     }
 
     /** Attempt to resolve the git source from the git remote URL and add it to the next config file. */
+    const gitRemoteOriginUrl = (await import('git-remote-origin-url')).default
     const remoteOriginUrl = await gitRemoteOriginUrl()
     if (remoteOriginUrl) {
       const httpUrl = gitRemoteUrlToHttp(remoteOriginUrl)
