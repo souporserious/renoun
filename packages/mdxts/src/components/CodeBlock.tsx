@@ -199,11 +199,24 @@ export async function CodeBlock({
   }
 
   if (isJavaScriptLanguage) {
-    sourceFile = project.createSourceFile(filename, finalValue, {
-      overwrite: true,
-    })
+    try {
+      sourceFile = project.createSourceFile(filename, finalValue, {
+        overwrite: true,
+      })
 
-    sourceFile.fixMissingImports()
+      sourceFile.fixMissingImports()
+    } catch (error) {
+      if (error instanceof Error) {
+        const workingDirectory =
+          contextValue?.workingDirectory ??
+          // @ts-expect-error
+          props.workingDirectory ??
+          process.cwd()
+        console.error(
+          `mdxts: Error trying to create CodeBlock source file at working directory "${workingDirectory}": ${error.message}`
+        )
+      }
+    }
   }
 
   const highlighter = await getHighlighter()
