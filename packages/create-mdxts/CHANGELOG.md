@@ -1,5 +1,13 @@
 # create-mdxts
 
+## 0.3.1
+
+### Patch Changes
+
+- 190b10a: Fix bad codemod in `generateStaticParams` when creating data source through CLI.
+- 82392e2: Fix ESM in CJS error in CLI.
+- fa557c5: Only log warning when git remote origin cannot be found.
+
 ## 0.3.0
 
 ### Minor Changes
