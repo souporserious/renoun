@@ -61,11 +61,11 @@ export async function start() {
     try {
       switch (currentState) {
         case states.INITIAL_STATE:
-          await checkNextJsProject()
+          checkNextJsProject()
           currentState = states.CHECK_TYPESCRIPT_INSTALLED
           break
         case states.CHECK_TYPESCRIPT_INSTALLED:
-          if (await checkTypeScriptInstalled()) {
+          if (checkTypeScriptInstalled()) {
             currentState = states.CHECK_NEXT_CONFIG_EXISTS
           } else {
             throw new Error(
@@ -80,7 +80,7 @@ export async function start() {
           currentState = states.CHECK_MDXTS_INSTALLED
           break
         case states.CHECK_MDXTS_INSTALLED:
-          if (await checkMdxtsInstalled()) {
+          if (checkMdxtsInstalled()) {
             currentState = states.CONFIGURE_MDXTS_NEXT
           } else {
             currentState = states.INSTALL_MDXTS
@@ -150,7 +150,7 @@ export async function start() {
 
 start()
 
-export async function checkNextJsProject() {
+export function checkNextJsProject() {
   const packageJsonPath = join(process.cwd(), 'package.json')
   if (!existsSync(packageJsonPath)) {
     throw new Error(
@@ -167,7 +167,7 @@ export async function checkNextJsProject() {
   }
 }
 
-export async function checkTypeScriptInstalled() {
+export function checkTypeScriptInstalled() {
   const tsconfigPath = join(process.cwd(), 'tsconfig.json')
   const packageJsonPath = join(process.cwd(), 'package.json')
   const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
@@ -178,7 +178,12 @@ export async function checkTypeScriptInstalled() {
   )
 }
 
-export async function checkMdxtsInstalled() {
+export function checkNextMdxInstalled() {
+  const nextConfig = readFileSync(getNextConfigPath()!, 'utf-8')
+  return nextConfig.includes('@next/mdx')
+}
+
+export function checkMdxtsInstalled() {
   const packageJsonPath = join(process.cwd(), 'package.json')
   const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
   return Boolean(
@@ -186,13 +191,22 @@ export async function checkMdxtsInstalled() {
   )
 }
 
-export function checkNextJsConfigExists() {
+let nextConfigPath: string | null = null
+
+export function getNextConfigPath() {
   const nextConfigJsPath = join(process.cwd(), 'next.config.js')
-  const nextConfigMjsPath = join(process.cwd(), 'next.config.mjs')
-  if (!existsSync(nextConfigJsPath) && !existsSync(nextConfigMjsPath)) {
-    return false
+  if (existsSync(nextConfigJsPath)) {
+    nextConfigPath = nextConfigJsPath
   }
-  return true
+  const nextConfigMjsPath = join(process.cwd(), 'next.config.mjs')
+  if (existsSync(nextConfigMjsPath)) {
+    nextConfigPath = nextConfigMjsPath
+  }
+  return nextConfigPath
+}
+
+export function checkNextJsConfigExists() {
+  return Boolean(getNextConfigPath())
 }
 
 export function checkMdxtsNextConfigured() {
@@ -224,6 +238,12 @@ export async function configureNextPlugin(configExists: boolean) {
 
   try {
     if (configExists) {
+      if (checkNextMdxInstalled()) {
+        throw new Error(
+          'The @next/mdx package is handled by mdxts/next. Please remove @next/mdx from your next config before running this command again.'
+        )
+      }
+
       const nextConfigPath = existsSync(join(process.cwd(), 'next.config.js'))
         ? join(process.cwd(), 'next.config.js')
         : nextConfigMjsPath
