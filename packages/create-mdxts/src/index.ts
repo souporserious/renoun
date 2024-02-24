@@ -443,6 +443,6 @@ export default async function Page({ params }: { params: { ${dataIdentifier}: st
   project.saveSync()
 
   Log.success(
-    `The following files were created successfully: ${createdSourceFiles.join(', ')}`
+    `The following files were created successfully: ${chalk.bold(createdSourceFiles.join(', '))}`
   )
 }
