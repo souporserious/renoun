@@ -269,7 +269,16 @@ export async function configureNextPlugin(configExists: boolean) {
 
     /** Attempt to resolve the git source from the git remote URL and add it to the next config file. */
     const gitRemoteOriginUrl = (await import('git-remote-origin-url')).default
-    const remoteOriginUrl = await gitRemoteOriginUrl()
+    let remoteOriginUrl
+
+    try {
+      remoteOriginUrl = await gitRemoteOriginUrl()
+    } catch (error) {
+      Log.warning(
+        `Unable to resolve a git remote URL for the ${chalk.bold('gitSource')} mdxts/next plugin option: ${error}`
+      )
+    }
+
     if (remoteOriginUrl) {
       const httpUrl = gitRemoteUrlToHttp(remoteOriginUrl)
       const shouldAddGitSource = await askYesNo(
