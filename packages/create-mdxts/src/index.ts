@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { extname, join, resolve, sep } from 'node:path'
+import { extname, join, sep } from 'node:path'
 import { Project } from 'ts-morph'
 import chalk from 'chalk'
 
@@ -12,6 +12,7 @@ import {
 } from './codemod-next-config'
 import { fetchExample } from './fetch-example'
 import { gitRemoteUrlToHttp } from './git-remote-url-to-http'
+import { isPackageOutdated } from './is-package-outdated'
 import { Log, askQuestion, askYesNo, getFilePatternBaseName } from './utils'
 
 const states = {
@@ -34,14 +35,7 @@ export async function start() {
     return
   }
 
-  const packageJson = JSON.parse(
-    readFileSync(resolve(__dirname, '../package.json'), 'utf-8')
-  )
-  const packageVersion = await fetch(
-    'https://registry.npmjs.org/-/package/create-mdxts/dist-tags'
-  ).then((res) => res.json())
-
-  if (packageJson.version !== packageVersion.latest) {
+  if (await isPackageOutdated()) {
     const installCommand = chalk.bold('npm create mdxts@latest')
     Log.warning(
       `A new version of ${chalk.bold(
