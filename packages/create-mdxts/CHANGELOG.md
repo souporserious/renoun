@@ -1,5 +1,11 @@
 # create-mdxts
 
+## 0.3.2
+
+### Patch Changes
+
+- bd8a219: Use cached package version check to reduce chance of network timeouts.
+
 ## 0.3.1
 
 ### Patch Changes
