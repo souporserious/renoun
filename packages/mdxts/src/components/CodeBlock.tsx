@@ -24,12 +24,16 @@ const languageMap: Record<string, any> = {
 }
 const languageKeys = Object.keys(languageMap)
 
+type SHIKI_LANGUAGE =
+  | (typeof BUNDLED_LANGUAGES)[number]
+  | (typeof languageKeys)[number]
+
 export type BaseCodeBlockProps = {
   /** Name of the file. */
   filename?: string
 
   /** Language of the code snippet. */
-  language?: (typeof BUNDLED_LANGUAGES)[number] | (typeof languageKeys)[number]
+  language?: SHIKI_LANGUAGE
 
   /** Show or hide line numbers. */
   lineNumbers?: boolean
