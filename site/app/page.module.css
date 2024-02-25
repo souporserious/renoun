@@ -2,7 +2,7 @@
   grid-area: 1 / 1;
   display: flex;
   flex-direction: column;
-  padding: 1rem 4rem 4rem;
+  padding: 1rem 0 4rem;
   gap: 4rem;
 }
 
