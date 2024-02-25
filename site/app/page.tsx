@@ -80,15 +80,7 @@ export default function Home() {
               <li>And so much more</li>
             </ul>
           </div>
-          <div
-            style={{
-              alignSelf: 'start',
-              display: 'flex',
-              alignItems: 'center',
-              marginTop: '2rem',
-              gap: '1rem',
-            }}
-          >
+          <div className={styles.buttons}>
             <Link
               href="/docs/getting-started"
               style={{
@@ -107,6 +99,7 @@ export default function Home() {
               style={{
                 display: 'flex',
                 alignItems: 'center',
+                justifyContent: 'space-between',
                 padding: '0.5rem 1rem',
                 gap: '0.5rem',
                 backgroundColor: '#2A4655',

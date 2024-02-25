@@ -6,12 +6,26 @@
   gap: 4rem;
 }
 
+.buttons {
+  display: flex;
+  flex-direction: column;
+  margin-top: 2rem;
+  gap: 1rem;
+  text-align: center;
+}
+
 @media screen and (min-width: 60rem) {
   .section {
     display: grid;
     grid-template-columns: 1fr 1fr;
     padding: 2rem 8rem 8rem;
     gap: 2rem;
+  }
+
+  .buttons {
+    align-self: start;
+    flex-direction: row;
+    align-items: center;
   }
 
   .heroExample {
