@@ -12,14 +12,21 @@ if (!existsSync(cacheDirectory)) {
 }
 
 async function fetchPackageVersion() {
+  const controller = new AbortController()
+  const signal = controller.signal
+  const timeoutId = setTimeout(() => controller.abort(), 1000)
+
   try {
     const response = await fetch(
-      'https://registry.npmjs.org/-/package/create-mdxts/dist-tags'
+      'https://registry.npmjs.org/-/package/create-mdxts/dist-tags',
+      { signal }
     )
     const data = await response.json()
+    clearTimeout(timeoutId)
     return data.latest
   } catch (error) {
     console.error('Error fetching package version: ', error)
+    clearTimeout(timeoutId)
     return packageJson.version
   }
 }
