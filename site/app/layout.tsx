@@ -19,6 +19,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        <meta content="width=device-width, initial-scale=1" name="viewport" />
         <link rel="canonical" href="https://www.mdxts.dev" />
         <link
           rel="icon"
