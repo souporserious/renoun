@@ -20,9 +20,7 @@ export function Sidebar() {
         }}
       >
         <a href="/" style={{ display: 'block' }}>
-          <h1 style={{ lineHeight: 0 }}>
-            <Logo />
-          </h1>
+          <Logo />
         </a>
 
         <NavigationToggle />
