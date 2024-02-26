@@ -1,5 +1,13 @@
 # create-mdxts
 
+## 0.3.3
+
+### Patch Changes
+
+- 2bfcb8c: Add better CLI create source template that also renders a collection page to display all source item links.
+- 882ea4f: Cancel version check fetch request if it takes longer than a second.
+- c17cd1e: Display a link to the collection page upon successful create source onboarding in CLI.
+
 ## 0.3.2
 
 ### Patch Changes
