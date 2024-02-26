@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { homedir } from 'node:os'
+import { Log } from './utils'
 
 const packageJsonPath = resolve(__dirname, '../package.json')
 const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
@@ -25,7 +26,9 @@ async function fetchPackageVersion() {
     clearTimeout(timeoutId)
     return data.latest
   } catch (error) {
-    console.error('Error fetching package version: ', error)
+    if (error instanceof Error) {
+      Log.error(`Error fetching package version: ${error}`)
+    }
     clearTimeout(timeoutId)
     return packageJson.version
   }
