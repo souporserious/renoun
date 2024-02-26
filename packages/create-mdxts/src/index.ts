@@ -394,7 +394,7 @@ export default function Page() {
       source={${allDataIdentifier}}
       renderList={(props) => <ul>{props.children}</ul>}
       renderItem={(props) => (
-        <li>
+        <li key={props.pathname}>
           <Link href={props.pathname}>{props.label}</Link>
           {props.children}
         </li>
