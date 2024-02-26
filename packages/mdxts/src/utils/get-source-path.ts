@@ -13,7 +13,10 @@ export function getSourcePath(path: string, line?: number, column?: number) {
   if (process.env.NODE_ENV === 'development') {
     return getEditorPath({ path, line, column })
   }
-  if (process.env.NODE_ENV === 'production') {
+  if (
+    process.env.NODE_ENV === 'production' &&
+    process.env.MDXTS_GIT_SOURCE !== ''
+  ) {
     if (rootDirectory === null) {
       rootDirectory = findRootSync(process.cwd()).rootDir
     }

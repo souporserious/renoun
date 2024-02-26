@@ -124,7 +124,7 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
         nextConfig.env = {}
       }
 
-      nextConfig.env.MDXTS_GIT_SOURCE = gitSource!.replace(/\.git$/, '')
+      nextConfig.env.MDXTS_GIT_SOURCE = gitSource ?? ''
       nextConfig.env.MDXTS_GIT_BRANCH = gitBranch
 
       if (nextConfig.pageExtensions === undefined) {
