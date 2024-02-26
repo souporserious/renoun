@@ -1,4 +1,4 @@
-import type { Root, Heading, Parent } from 'mdast'
+import type { Root, Heading } from 'mdast'
 
 let slugify: ReturnType<
   typeof import('@sindresorhus/slugify').slugifyWithCounter
@@ -22,7 +22,6 @@ export function addHeadings() {
     slugify.reset()
 
     const { visit } = await import('unist-util-visit')
-    const { visitParents } = await import('unist-util-visit-parents')
     const { toString } = await import('mdast-util-to-string')
 
     visit(tree, 'heading', (node: Heading) => {
@@ -42,15 +41,6 @@ export function addHeadings() {
         node.data.hProperties = {}
       }
       node.data.hProperties.id = heading.id
-    })
-
-    /** Remove h1 since it will be captured in title field. */
-    visitParents(tree, 'heading', (node: Heading, ancestors: Parent[]) => {
-      if (node.depth === 1) {
-        const parent = ancestors[ancestors.length - 1]
-        const index = parent.children.indexOf(node)
-        parent.children.splice(index, 1)
-      }
     })
 
     tree.children.unshift({
