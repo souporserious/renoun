@@ -112,7 +112,7 @@ export async function start() {
           const confirmCreateSource = await askYesNo(
             `Do you want to create a source and render a page to display it?`,
             {
-              description: `This should be a collection of MDX and TypeScript files.`,
+              description: `This should be a collection of MDX and/or TypeScript files.`,
             }
           )
           if (confirmCreateSource) {
@@ -374,20 +374,69 @@ export const ${allDataIdentifier} = createSource('${filePattern}')
   const hasSourceDirectory = project.getDirectory('src')
 
   // create a Next.js app router page
-  const pagePath = join(
+  const baseSourcePath = join(
     process.cwd(),
-    hasSourceDirectory
-      ? `app/src/[...${dataIdentifier}]/page.tsx`
-      : `app/[...${dataIdentifier}]/page.tsx`
+    'app',
+    hasSourceDirectory ? join('src', dataIdentifier) : dataIdentifier
   )
-  const relativePagePath = pagePath.replace(process.cwd() + sep, '')
-  const exampleSourcePage = `
-export function generateStaticParams() {
-  return ${allDataIdentifier}.paths().map((pathname) => ({ ${dataIdentifier}: pathname }))
+  const collectionPagePath = join(baseSourcePath, 'page.tsx')
+  const collectionPage = `
+import { Navigation } from 'mdxts/components'
+import Link from 'next/link'
+import { ${allDataIdentifier} } from '${hasSourceDirectory ? '../' : ''}../../data'
+
+// The \`Navigation\` component renders a nested list of links to all ${dataIdentifier}.
+
+export default function Page() {
+  return (
+    <Navigation
+      source={${allDataIdentifier}}
+      renderList={(props) => <ul>{props.children}</ul>}
+      renderItem={(props) => (
+        <li>
+          <Link href={props.pathname}>{props.label}</Link>
+          {props.children}
+        </li>
+      )}
+    />
+  )
 }
 
-export default async function Page({ params }: { params: { ${dataIdentifier}: string[] } }) {
-  const ${singularDataIdentifier} = await ${allDataIdentifier}.get(params.${dataIdentifier})
+// Alternatively, render the navigation links yourself with the \`tree\` method:
+
+// function renderLinks(items: ReturnType<typeof ${allDataIdentifier}.tree>) {
+//   return items.map((item) => (
+//     <li key={item.pathname}>
+//       <Link href={item.pathname}>{item.label}</Link>
+//       {item.children.length ? <ul>{renderLinks(item.children)}</ul> : null}
+//     </li>
+//   ))
+// }
+
+// export default function Page() {
+//   return <ul>{renderLinks(${allDataIdentifier}.tree())}</ul>
+// }
+`.trim()
+
+  project.createSourceFile(collectionPagePath, collectionPage)
+
+  const sourcePagePath = join(baseSourcePath, '[slug]', 'page.tsx')
+  const relativePagePath = sourcePagePath.replace(process.cwd() + sep, '')
+  const sourcePage = `
+import { notFound } from 'next/navigation'
+import { ${allDataIdentifier} } from '${hasSourceDirectory ? '../' : ''}../../../data'
+
+export function generateStaticParams() {
+  return (
+    ${allDataIdentifier}.paths().map((pathname) => ({
+      // Use last part of pathname as the slug. Pass \`baseDirectory\` as an option to \`createSource\` to remove the source directory from the slug.
+      slug: pathname.slice(-1).at(0)
+    }))
+  )
+}
+
+export default async function Page({ params }: { params: { slug: string } }) {
+  const ${singularDataIdentifier} = await ${allDataIdentifier}.get(\`${dataIdentifier}/\${params.slug\}\`)
 
   if (${singularDataIdentifier} === undefined) {
     return notFound()
@@ -410,7 +459,7 @@ export default async function Page({ params }: { params: { ${dataIdentifier}: st
 
 `.trim()
 
-  const pageFile = project.addSourceFileAtPathIfExists(pagePath)
+  const pageFile = project.addSourceFileAtPathIfExists(sourcePagePath)
   const shouldOverwritePageFile = pageFile
     ? await askYesNo(
         `Overwrite existing ${chalk.bold(relativePagePath)} file?`,
@@ -425,13 +474,9 @@ export default async function Page({ params }: { params: { ${dataIdentifier}: st
     return
   }
 
-  project.createSourceFile(
-    pagePath,
-    hasSourceDirectory
-      ? `import { notFound } from 'next/navigation'\nimport { ${allDataIdentifier} } from '../../../data'\n\n${exampleSourcePage}`
-      : `import { notFound } from 'next/navigation'\nimport { ${allDataIdentifier} } from '../../data'\n\n${exampleSourcePage}`,
-    { overwrite: true }
-  )
+  project.createSourceFile(sourcePagePath, sourcePage, {
+    overwrite: true,
+  })
   createdSourceFiles.push(relativePagePath)
 
   project.saveSync()
