@@ -74,11 +74,13 @@ export function CodeToolbar({
             style={{ display: 'flex', padding: '0.35rem' }}
           >
             <svg
-              width="var(--font-size-body-3)"
-              height="var(--font-size-body-3)"
               viewBox="0 0 24 24"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
+              style={{
+                width: 'var(--font-size-body-3)',
+                height: 'var(--font-size-body-3)',
+              }}
             >
               <path
                 d="M18 8L22.5011 11.1556C23.1663 11.622 23.1663 12.378 22.5011 12.8444L18 16"
