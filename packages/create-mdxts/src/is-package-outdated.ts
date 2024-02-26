@@ -14,7 +14,7 @@ if (!existsSync(cacheDirectory)) {
 async function fetchPackageVersion() {
   const controller = new AbortController()
   const signal = controller.signal
-  const timeoutId = setTimeout(() => controller.abort(), 1000)
+  const timeoutId = setTimeout(() => controller.abort(), 2500)
 
   try {
     const response = await fetch(
