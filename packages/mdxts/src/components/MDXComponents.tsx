@@ -83,7 +83,7 @@ export function useMDXComponents(
   components: MDXComponentsType
 ): MDXComponentsType {
   return {
-    ...components,
     ...MDXComponents,
+    ...components,
   }
 }
