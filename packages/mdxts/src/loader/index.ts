@@ -45,7 +45,7 @@ export default async function loader(
     }
 
     if (isExample) {
-      source = `import theme from '${relativeThemePath}';\n${source}`
+      source = `${source}\nimport theme from '${relativeThemePath}';`
         .replaceAll(
           '<CodeBlock',
           `<CodeBlock theme={theme} workingDirectory="${workingDirectory}"`
@@ -59,7 +59,7 @@ export default async function loader(
           `<ExportedTypes theme={theme} workingDirectory="${workingDirectory}"`
         )
     } else {
-      source = `import { setTheme } from 'mdxts';\nimport theme from '${relativeThemePath}';\nsetTheme(theme);\n${source}`
+      source = `${source}\nimport { setTheme } from 'mdxts';\nimport theme from '${relativeThemePath}';\nsetTheme(theme);`
     }
   }
 
