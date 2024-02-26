@@ -11,6 +11,7 @@ import {
   codemodNextMjsConfig,
 } from './codemod-next-config'
 import { fetchExample } from './fetch-example'
+import { getNextJsDevPort } from './get-next-js-dev-port'
 import { gitRemoteUrlToHttp } from './git-remote-url-to-http'
 import { isPackageOutdated } from './is-package-outdated'
 import { Log, askQuestion, askYesNo, getFilePatternBaseName } from './utils'
@@ -481,7 +482,10 @@ export default async function Page({ params }: { params: { slug: string } }) {
 
   project.saveSync()
 
+  const port = getNextJsDevPort()
+  const portMessage = chalk.bold(`http://localhost:${port}/${dataIdentifier}`)
+
   Log.success(
-    `The following files were created successfully: ${chalk.bold(createdSourceFiles.join(', '))}`
+    `The following files were created successfully: \n${chalk.bold(createdSourceFiles.join(',\n'))}\n\nAfter starting the Next.js development server you can now visit ${portMessage} to view the rendered source collection and item pages.`
   )
 }
