@@ -4,24 +4,29 @@ import chalk from 'chalk'
 import { sep } from 'node:path'
 
 export class Log {
+  static base = 'mdxts: '
+
+  static offset = Log.base.replace(/./g, ' ')
+
   static info(message: string) {
-    console.log(chalk.rgb(205, 237, 255).bold('mdxts: ') + message)
+    const finalMessage = chalk.rgb(205, 237, 255).bold(Log.base) + message
+    console.log(finalMessage.replace(/\n/g, `\n${Log.offset}`))
   }
 
   static error(message: string) {
-    console.error(
-      chalk.rgb(237, 35, 0).bold('mdxts: ') + chalk.rgb(225, 205, 205)(message)
-    )
+    const finalMessage =
+      chalk.rgb(237, 35, 0).bold(Log.base) + chalk.rgb(225, 205, 205)(message)
+    console.error(finalMessage.replace(/\n/g, `\n${Log.offset}`))
   }
 
   static success(message: string) {
-    console.log(chalk.rgb(0, 204, 102).bold('mdxts: ') + message)
+    const finalMessage = chalk.rgb(0, 204, 102).bold(Log.base) + message
+    console.log(finalMessage.replace(/\n/g, `\n${Log.offset}`))
   }
 
   static warning(message: string) {
     console.warn(
-      chalk.rgb(255, 153, 51).bold('mdxts: ') +
-        chalk.rgb(225, 200, 190)(message)
+      chalk.rgb(255, 153, 51).bold(Log.base) + chalk.rgb(225, 200, 190)(message)
     )
   }
 }
@@ -29,7 +34,7 @@ export class Log {
 export async function askQuestion(question: string) {
   const readline = createInterface({ input: stdin, output: stdout })
   const answer = await readline.question(
-    `${chalk.rgb(205, 237, 255).bold('mdxts: ')}${question}`
+    `${chalk.rgb(205, 237, 255).bold(Log.base)}${question}`
   )
   readline.close()
   return answer

@@ -420,6 +420,7 @@ export default function Page() {
 `.trim()
 
   project.createSourceFile(collectionPagePath, collectionPage)
+  createdSourceFiles.push(collectionPagePath.replace(process.cwd() + sep, ''))
 
   const sourcePagePath = join(baseSourcePath, '[slug]', 'page.tsx')
   const relativePagePath = sourcePagePath.replace(process.cwd() + sep, '')
@@ -483,9 +484,10 @@ export default async function Page({ params }: { params: { slug: string } }) {
   project.saveSync()
 
   const port = getNextJsDevPort()
-  const portMessage = chalk.bold(`http://localhost:${port}/${dataIdentifier}`)
+  const portUrl = chalk.bold(`http://localhost:${port}/${dataIdentifier}`)
+  const portMessage = `After starting the Next.js development server you can now visit ${portUrl} to view the rendered source collection and item pages.`
 
   Log.success(
-    `The following files were created successfully: \n${chalk.bold(createdSourceFiles.join(',\n'))}\n\nAfter starting the Next.js development server you can now visit ${portMessage} to view the rendered source collection and item pages.`
+    `The following files were created successfully: \n${chalk.bold(createdSourceFiles.map((file) => `- ${file}`).join('\n'))}\n\n${portMessage}`
   )
 }
