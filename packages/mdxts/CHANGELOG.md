@@ -1,5 +1,15 @@
 # mdxts
 
+## 0.8.0
+
+### Minor Changes
+
+- 69e8dc8: Don't remove level one heading from content.
+
+### Patch Changes
+
+- 9379847: Gracefully handle undefined `gitSource` option.
+
 ## 0.7.0
 
 ### Minor Changes
