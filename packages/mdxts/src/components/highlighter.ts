@@ -106,18 +106,9 @@ export const getHighlighter = cache(async function getHighlighter(
     }
 
     const code = sourceFile ? sourceFile.getFullText() : value
-    const tokens = highlighter!
-      .codeToThemedTokens(code, language, undefined, {
-        includeExplanation: false,
-      })
-      .filter((line) => {
-        // filter out imports when jsx only source file
-        if (isJsxOnly) {
-          return !line.some((token) => token.content === 'import')
-        }
-
-        return true
-      })
+    const tokens = highlighter!.codeToThemedTokens(code, language, undefined, {
+      includeExplanation: false,
+    })
     const importSpecifiers =
       sourceFile && !isJsxOnly
         ? sourceFile
@@ -144,7 +135,7 @@ export const getHighlighter = cache(async function getHighlighter(
         end: node.getEnd(),
       }))
     let position = 0
-    const parsedTokens = tokens.map((line) => {
+    let parsedTokens = tokens.map((line) => {
       // increment position for line breaks
       if (line.length === 0) {
         position += 1
@@ -218,9 +209,12 @@ export const getHighlighter = cache(async function getHighlighter(
       })
     })
 
-    // remove first line if this is jsx only since it's leftover whitespace from import statements
+    // Remove leading imports and whitespace for jsx only code blocks
     if (isJsxOnly) {
-      parsedTokens.shift()
+      const firstJsxLineIndex = parsedTokens.findIndex((line) =>
+        line.find((token) => token.content === '<')
+      )
+      parsedTokens = parsedTokens.slice(firstJsxLineIndex)
     }
 
     return parsedTokens
