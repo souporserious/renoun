@@ -3,7 +3,9 @@
  * and checking if the remaining code starts and ends with a JSX tag.
  */
 export function isJsxOnly(code: string) {
-  const jsxContent = code.replace(/^import.*;$/gm, '').trim()
-  const isJsxOnly = /^<.*(?:>;$|>$)/.test(jsxContent)
-  return isJsxOnly
+  const jsxContent = code
+    .replace(/^import.*;$/gm, '') // Remove all imports
+    .replace(';', '') // Remove any trailing semicolons
+    .trim()
+  return jsxContent.startsWith('<') && jsxContent.endsWith('>')
 }
