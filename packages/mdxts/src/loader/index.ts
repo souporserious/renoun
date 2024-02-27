@@ -25,44 +25,6 @@ export default async function loader(
   const sourceString = source.toString()
   const workingDirectory = dirname(this.resourcePath)
 
-  /** Add theme to Next.js entry layout files and examples. */
-  const isExample = this.resourcePath.endsWith('.examples.tsx')
-  if (
-    !source.includes('import theme') &&
-    (isNextJsEntryLayout(this.resourcePath) || isExample) &&
-    options.themePath
-  ) {
-    let relativeThemePath = relative(workingDirectory, options.themePath)
-
-    if (options.themePath.endsWith('.json') && !existsSync(options.themePath)) {
-      throw new Error(
-        `mdxts: Could not find theme at ${options.themePath} or ${relativeThemePath}. Please provide a valid theme path.`
-      )
-    }
-
-    if (!options.themePath.endsWith('.json')) {
-      relativeThemePath = `shiki/themes/${options.themePath}.json`
-    }
-
-    if (isExample) {
-      source = `${source}\nimport theme from '${relativeThemePath}';`
-        .replaceAll(
-          '<CodeBlock',
-          `<CodeBlock theme={theme} workingDirectory="${workingDirectory}"`
-        )
-        .replaceAll(
-          '<CodeInline',
-          `<CodeInline theme={theme} workingDirectory="${workingDirectory}"`
-        )
-        .replaceAll(
-          '<ExportedTypes',
-          `<ExportedTypes theme={theme} workingDirectory="${workingDirectory}"`
-        )
-    } else {
-      source = `${source}\nimport { setTheme } from 'mdxts';\nimport theme from '${relativeThemePath}';\nsetTheme(theme);`
-    }
-  }
-
   /** Export front matter from MDX files. */
   if (this.resourcePath.endsWith('.mdx')) {
     try {
@@ -83,12 +45,66 @@ export default async function loader(
     return
   }
 
-  /** Augment `createSource` calls with MDX/TypeScript file paths. */
+  /** Add theme to Next.js entry layout files and examples. */
+  const isExample = this.resourcePath.endsWith('.examples.tsx')
   if (
+    !source.includes('import theme') &&
+    (isNextJsEntryLayout(this.resourcePath) || isExample) &&
+    options.themePath
+  ) {
+    let relativeThemePath = relative(workingDirectory, options.themePath)
+
+    if (options.themePath.endsWith('.json') && !existsSync(options.themePath)) {
+      throw new Error(
+        `mdxts: Could not find theme at ${options.themePath} or ${relativeThemePath}. Please provide a valid theme path.`
+      )
+    }
+
+    if (!options.themePath.endsWith('.json')) {
+      relativeThemePath = `shiki/themes/${options.themePath}.json`
+    }
+
+    if (isExample) {
+      /** Examples don't inherit `setTheme` below so we explicitly import the theme and pass it to the components. */
+      source = `${source}\nimport theme from '${relativeThemePath}';`
+        .replaceAll('<CodeBlock', `<CodeBlock theme={theme}`)
+        .replaceAll('<CodeInline', `<CodeInline theme={theme}`)
+        .replaceAll('<ExportedTypes', `<ExportedTypes theme={theme}`)
+    } else {
+      source = `${source}\nimport { setTheme } from 'mdxts';\nimport theme from '${relativeThemePath}';\nsetTheme(theme);`
+    }
+  }
+
+  /** Augment CodeBlock, CodeInline, and ExportedTypes components to add the working directory. */
+  const isMDXComponentImported =
+    /import\s+{\s*([^}]*\b(CodeBlock|CodeInline|ExportedTypes)\b[^}]*)\s*}\s*from\s+['"]mdxts\/components.*['"]/g.test(
+      sourceString
+    )
+
+  if (isMDXComponentImported) {
+    source = source
+      .toString()
+      .replaceAll(
+        '<CodeBlock',
+        `<CodeBlock workingDirectory="${workingDirectory}"`
+      )
+      .replaceAll(
+        '<CodeInline',
+        `<CodeInline workingDirectory="${workingDirectory}"`
+      )
+      .replaceAll(
+        '<ExportedTypes',
+        `<ExportedTypes workingDirectory="${workingDirectory}"`
+      )
+  }
+
+  /** Augment `createSource` calls with MDX/TypeScript file paths. */
+  const isCreateSourceImported =
     /.*import\s\{[^}]*createSource[^}]*\}\sfrom\s['"]mdxts['"].*/.test(
       sourceString
     )
-  ) {
+
+  if (isCreateSourceImported) {
     const sourceFile = new Project({
       useInMemoryFileSystem: true,
     }).createSourceFile('index.ts', sourceString)
