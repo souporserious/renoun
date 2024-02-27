@@ -62,6 +62,7 @@ export function QuickInfo({
           borderRadius: 3,
           border: `1px solid ${theme.colors['editorHoverWidget.border']}`,
           backgroundColor: theme.colors['editorHoverWidget.background'],
+          color: theme.colors['foreground'],
           overflow: 'auto',
           overscrollBehavior: 'contain',
         }}
@@ -74,12 +75,7 @@ export function QuickInfo({
         >
           {diagnostics.length ? (
             <>
-              <div
-                style={{
-                  padding: '0.25rem 0.5rem',
-                  color: theme.colors['editorHoverWidget.foreground'],
-                }}
-              >
+              <div style={{ padding: '0.25rem 0.5rem' }}>
                 {diagnostics.map((diagnostic, index) => (
                   <div key={index} style={{ display: 'flex', gap: '0.5rem' }}>
                     {getDiagnosticMessageText(diagnostic.getMessageText())}
@@ -99,7 +95,13 @@ export function QuickInfo({
               />
             </>
           ) : null}
-          <div style={{ whiteSpace: 'pre-wrap', padding: '0.25rem 0.5rem' }}>
+          <div
+            style={{
+              fontFamily: 'monospace',
+              whiteSpace: 'pre-wrap',
+              padding: '0.25rem 0.5rem',
+            }}
+          >
             {displayTextTokens.map((line, index) => (
               <Fragment key={index}>
                 {index === 0 ? null : '\n'}
