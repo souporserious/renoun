@@ -1,7 +1,6 @@
 import webpack from 'webpack'
 import { NextConfig } from 'next'
 import { resolve } from 'node:path'
-import NodePolyfillPlugin from 'node-polyfill-webpack-plugin'
 import remarkTypography from 'remark-typography'
 import createMdxPlugin from '@next/mdx'
 import { BUNDLED_THEMES } from 'shiki'
@@ -108,10 +107,6 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
           test: /onig\.wasm$/,
           type: 'asset/resource',
         })
-
-        if (options.isServer === false) {
-          config.plugins.push(new NodePolyfillPlugin())
-        }
 
         if (typeof getWebpackConfig === 'function') {
           return getWebpackConfig(config, options)
