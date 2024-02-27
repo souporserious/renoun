@@ -19,14 +19,13 @@ export function Sidebar() {
           gap: '2rem',
         }}
       >
-        <a href="/" style={{ display: 'block' }}>
+        <a href="/" style={{ display: 'flex' }}>
           <Logo />
         </a>
-
         <NavigationToggle />
         <a
           href="https://github.com/souporserious/mdxts/"
-          style={{ display: 'flex', height: 20 }}
+          style={{ display: 'flex' }}
         >
           <svg
             viewBox="0 0 16 16"
