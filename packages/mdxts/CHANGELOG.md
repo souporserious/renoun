@@ -1,5 +1,16 @@
 # mdxts
 
+## 0.8.1
+
+### Patch Changes
+
+- 57f1e39: Fix `QuickInfo` font-family and foreground color styles.
+- d34d877: Fix multline jsx only code blocks.
+- a761181: Fix devtools server action from erroring when using static export.
+- c261e18: Allow default MDX components to be overridden at the component level.
+- 3a86f90: Move theme configuration to the end of the source in the webpack loader to avoid overwriting `use client` directives.
+- 1963ce6: Fix incorrect jsx-only code block token start/end positions.
+
 ## 0.8.0
 
 ### Minor Changes

@@ -1,5 +1,11 @@
 # create-mdxts
 
+## 0.3.4
+
+### Patch Changes
+
+- 7ce1fdf: Fix key warning in generated collection page.
+
 ## 0.3.3
 
 ### Patch Changes
