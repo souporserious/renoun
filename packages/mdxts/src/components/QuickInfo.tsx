@@ -60,8 +60,8 @@ export function QuickInfo({
           width: 'max-content',
           maxWidth: 540,
           borderRadius: 3,
-          border: `1px solid ${theme.colors['editorHoverWidget.border']}`,
-          backgroundColor: theme.colors['editorHoverWidget.background'],
+          border: `1px solid ${theme.colors['panel.border']}`,
+          backgroundColor: theme.colors['panel.background'],
           color: theme.colors['foreground'],
           overflow: 'auto',
           overscrollBehavior: 'contain',
@@ -89,7 +89,7 @@ export function QuickInfo({
                 style={{
                   height: 1,
                   border: 'none',
-                  backgroundColor: theme.colors['editorHoverWidget.border'],
+                  backgroundColor: theme.colors['panel.border'],
                   opacity: 0.5,
                 }}
               />
@@ -120,7 +120,7 @@ export function QuickInfo({
                   height: 1,
                   margin: 0,
                   border: 'none',
-                  backgroundColor: theme.colors['editorHoverWidget.border'],
+                  backgroundColor: theme.colors['panel.border'],
                   opacity: 0.5,
                 }}
               />

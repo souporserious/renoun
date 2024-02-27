@@ -40,7 +40,7 @@ export function CodeToolbar({
         gridTemplateColumns: '1fr auto',
         alignItems: 'center',
         height: '3rem',
-        boxShadow: `inset 0 -1px 0 0 ${theme.colors['contrastBorder']}`,
+        boxShadow: `inset 0 -1px 0 0 ${theme.colors['panel.border']}70`,
       }}
     >
       {'filename' in props ? (

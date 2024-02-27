@@ -133,7 +133,7 @@ export function CodeView({
             gridTemplateColumns: 'auto minmax(0, 1fr)',
             gridTemplateRows: shouldRenderToolbar ? 'auto 1fr' : '0 1fr',
             borderRadius: 5,
-            boxShadow: `0 0 0 1px ${theme.colors['contrastBorder']}`,
+            boxShadow: `0 0 0 1px ${theme.colors['panel.border']}70`,
             backgroundColor: theme.colors['editor.background'],
             color: theme.colors['editor.foreground'],
             ...style,
@@ -251,7 +251,11 @@ export function CodeView({
                         }}
                       >
                         {token.content}
-                        <Symbol>
+                        <Symbol
+                          highlightColor={
+                            theme.colors['editor.hoverHighlightBackground']
+                          }
+                        >
                           <QuickInfo
                             position={token.start}
                             filename={filename}

@@ -4,11 +4,12 @@ import { useQuickInfoContext } from './QuickInfoProvider'
 
 export function Symbol({
   children,
+  highlightColor = '#87add73d',
   style,
 }: {
   children: React.ReactNode
+  highlightColor?: string
   style?: React.CSSProperties
-  isQuickInfoOpen?: boolean
 }) {
   const anchorId = useId()
   const { quickInfo, setQuickInfo, resetQuickInfo } = useQuickInfoContext()
@@ -29,7 +30,7 @@ export function Symbol({
       style={{
         position: 'absolute',
         inset: 0,
-        backgroundColor: isHighlighted ? '#87add73d' : undefined,
+        backgroundColor: isHighlighted ? highlightColor : undefined,
         ...style,
       }}
     />
