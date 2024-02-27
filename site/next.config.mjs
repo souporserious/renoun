@@ -9,4 +9,5 @@ export default withMdxts({
   compiler: {
     styledComponents: true,
   },
+  output: 'export',
 })

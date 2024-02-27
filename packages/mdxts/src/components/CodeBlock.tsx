@@ -1,7 +1,7 @@
 import React from 'react'
 import crypto from 'node:crypto'
 import { join, sep, isAbsolute } from 'node:path'
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import type { SourceFile } from 'ts-morph'
 import { findRoot } from '@manypkg/find-root'
 import { format, resolveConfig } from 'prettier'
@@ -226,64 +226,41 @@ export async function CodeBlock({
   const filenameLabel = filename
     .replace(join('mdxts', sep), '')
     .replace(/\d+\./, '')
+  const codeProps: React.ComponentProps<typeof CodeView> = {
+    value: finalValue,
+    language: finalLanguage,
+    isJsxOnly: jsxOnly,
+    sourcePath: sourcePath
+      ? getSourcePath(sourcePath, sourcePathLine, sourcePathColumn)
+      : undefined,
+    shouldRenderFilename: Boolean(filenameProp),
+    tokens,
+    lineNumbers,
+    sourceFile,
+    filename,
+    filenameLabel,
+    highlighter,
+    highlight,
+    padding,
+    paddingHorizontal,
+    paddingVertical,
+    theme,
+    isNestedInEditor,
+    showErrors,
+    allowErrors,
+    allowCopy,
+    className,
+    rootDirectory,
+    baseDirectory,
+    toolbar,
+    style,
+  }
 
-  return (
-    <CodeView
-      tokens={tokens}
-      lineNumbers={lineNumbers}
-      value={finalValue}
-      sourceFile={sourceFile}
-      sourcePath={
-        sourcePath
-          ? getSourcePath(sourcePath, sourcePathLine, sourcePathColumn)
-          : undefined
-      }
-      filename={filename}
-      filenameLabel={filenameLabel}
-      shouldRenderFilename={Boolean(filenameProp)}
-      highlighter={highlighter}
-      highlight={highlight}
-      language={finalLanguage}
-      padding={padding}
-      paddingHorizontal={paddingHorizontal}
-      paddingVertical={paddingVertical}
-      theme={theme}
-      isJsxOnly={jsxOnly}
-      isNestedInEditor={isNestedInEditor}
-      showErrors={showErrors}
-      allowErrors={allowErrors}
-      allowCopy={allowCopy}
-      className={className}
-      rootDirectory={rootDirectory}
-      baseDirectory={baseDirectory}
-      toolbar={toolbar}
-      style={style}
-      edit={
-        process.env.NODE_ENV === 'development'
-          ? async function () {
-              'use server'
-              if (!sourcePath || !sourcePathLine) {
-                throw new Error(
-                  'The [sourcePath] prop was not provided to the [CodeBlock] component. Make sure the mdxts/remark plugin is configured correctly.'
-                )
-              }
-              const contents = await readFile(sourcePath, 'utf-8')
-              const modifiedContents = contents
-                .split('\n')
-                .map((_line, index) => {
-                  if (index === sourcePathLine - 1) {
-                    return _line.includes('showErrors')
-                      ? _line.replace('showErrors', '')
-                      : `${_line.trimEnd()} showErrors`
-                  }
-                  return _line
-                })
-                .join('\n')
+  if (process.env.NODE_ENV === 'development') {
+    codeProps.edit = await import('./actions').then(
+      (module) => module.showErrors
+    )
+  }
 
-              writeFile(sourcePath, modifiedContents)
-            }
-          : undefined
-      }
-    />
-  )
+  return <CodeView {...codeProps} />
 }
