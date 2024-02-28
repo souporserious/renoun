@@ -77,6 +77,10 @@ export async function CodeInline({
         paddingBottom: paddingVertical,
         paddingLeft: paddingHorizontal,
         paddingRight: paddingHorizontal,
+        borderRadius: 5,
+        boxShadow: `0 0 0 1px ${theme.colors['panel.border']}70`,
+        backgroundColor: theme.colors['editor.background'],
+        color: theme.colors['editor.foreground'],
         ...style,
       }}
     >
