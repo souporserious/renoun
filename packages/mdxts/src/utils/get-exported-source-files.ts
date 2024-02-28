@@ -1,5 +1,5 @@
 import { SourceFile } from 'ts-morph'
-import { hasInternalJsDocTag } from './has-internal-js-doc-tag'
+import { hasJsDocTag } from '@tsxmod/utils'
 
 /** Gets all source files exported from a set of source files excluding internal declarations. */
 export function getExportedSourceFiles(sourceFiles: SourceFile[]) {
@@ -9,7 +9,7 @@ export function getExportedSourceFiles(sourceFiles: SourceFile[]) {
         Array.from(sourceFile.getExportedDeclarations()).flatMap(
           ([, allDeclarations]) =>
             allDeclarations
-              .filter((declaration) => !hasInternalJsDocTag(declaration))
+              .filter((declaration) => !hasJsDocTag(declaration, 'internal'))
               .map((declaration) => declaration.getSourceFile())
         )
       )

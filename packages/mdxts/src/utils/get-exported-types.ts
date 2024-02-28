@@ -12,9 +12,9 @@ import { Node } from 'ts-morph'
 import {
   getTypeDocumentation,
   getSymbolDescription,
+  hasJsDocTag,
   isJsxComponent,
 } from '@tsxmod/utils'
-import { hasInternalJsDocTag } from './has-internal-js-doc-tag'
 
 export type ExportedType = {
   name: string
@@ -35,7 +35,9 @@ export function getExportedTypes(
 ): ExportedType[] {
   return Array.from(sourceFile.getExportedDeclarations())
     .filter(([, allDeclarations]) =>
-      allDeclarations.every((declaration) => !hasInternalJsDocTag(declaration))
+      allDeclarations.every(
+        (declaration) => !hasJsDocTag(declaration, 'internal')
+      )
     )
     .flatMap(([name, allDeclarations]) =>
       allDeclarations.flatMap((declaration) => {
