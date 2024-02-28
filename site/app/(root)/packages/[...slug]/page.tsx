@@ -408,7 +408,7 @@ function Props({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '0.8rem',
+              gap: '0.25rem',
             }}
           >
             <CodeInline
@@ -418,7 +418,14 @@ function Props({
               paddingVertical="0.2rem"
             />
             {propType.defaultValue ? (
-              <span style={{ fontSize: '0.8rem', flexShrink: 0 }}>
+              <span
+                style={{
+                  flexShrink: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.25rem',
+                }}
+              >
                 ={' '}
                 <CodeInline
                   value={propType.defaultValue}
