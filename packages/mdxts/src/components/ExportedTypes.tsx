@@ -195,7 +195,7 @@ function Types({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '0.8rem',
+              gap: '0.25rem',
             }}
           >
             <CodeInline
@@ -205,7 +205,14 @@ function Types({
               paddingVertical="0.2rem"
             />
             {propertyType.defaultValue ? (
-              <span style={{ fontSize: '0.8rem', flexShrink: 0 }}>
+              <span
+                style={{
+                  flexShrink: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.25rem',
+                }}
+              >
                 ={' '}
                 <CodeInline
                   value={propertyType.defaultValue}
