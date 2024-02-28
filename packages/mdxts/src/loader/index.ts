@@ -67,9 +67,18 @@ export default async function loader(
     if (isExample) {
       /** Examples don't inherit `setTheme` below so we explicitly import the theme and pass it to the components. */
       source = `${source}\nimport theme from '${relativeThemePath}';`
-        .replaceAll('<CodeBlock', `<CodeBlock theme={theme}`)
-        .replaceAll('<CodeInline', `<CodeInline theme={theme}`)
-        .replaceAll('<ExportedTypes', `<ExportedTypes theme={theme}`)
+        .replaceAll(
+          '<CodeBlock',
+          `<CodeBlock theme={theme} workingDirectory="${workingDirectory}"`
+        )
+        .replaceAll(
+          '<CodeInline',
+          `<CodeInline theme={theme} workingDirectory="${workingDirectory}"`
+        )
+        .replaceAll(
+          '<ExportedTypes',
+          `<ExportedTypes theme={theme} workingDirectory="${workingDirectory}"`
+        )
     } else {
       source = `${source}\nimport { setTheme } from 'mdxts';\nimport theme from '${relativeThemePath}';\nsetTheme(theme);`
     }
