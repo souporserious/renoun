@@ -1,5 +1,15 @@
 # mdxts
 
+## 0.8.2
+
+### Patch Changes
+
+- 5fd018d: Use better theme variables that work across various themes for `CodeBlock` component.
+- 50e47bc: Fix `@internal` JSDoc tag analysis for variable declarations.
+- 23e6ab9: Add `workingDirectory` prop through loader if `CodeBlock`, `CodeInline`, or `ExportedTypes` are imported.
+- 8efe0e0: Clean up `ExportedTypes` declaration type default value.
+- 4a5aa29: Add theme container styles to `CodeInline`.
+
 ## 0.8.1
 
 ### Patch Changes
