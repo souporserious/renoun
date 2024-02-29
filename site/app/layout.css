@@ -70,7 +70,6 @@ body {
 }
 
 a {
-  display: inline-block;
   color: var(--color-foreground-interactive);
   text-decoration: none;
 }
