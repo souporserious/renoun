@@ -84,10 +84,24 @@ a:hover :not(.title) {
   text-wrap: balance;
 }
 
+.prose :where(h1, h2, h3)::before,
+.prose :where(h1, h2, h3)::after {
+  content: '';
+  display: table;
+}
+
 .prose h1 {
   font-size: var(--font-size-heading-1);
   line-height: var(--line-height-heading-1);
   font-weight: var(--font-weight-heading);
+}
+
+.prose h1::before {
+  margin-bottom: -0.08em;
+}
+
+.prose h1::after {
+  margin-top: -0.0825em;
 }
 
 .prose h2 {
@@ -97,8 +111,21 @@ a:hover :not(.title) {
   margin-block-start: 1.6rem;
 }
 
+.prose h2::before,
+.prose h2::after {
+  margin-top: -0.3em;
+}
+
 .prose h2 + h3 {
   margin-block-start: 0;
+}
+
+.prose h3::before {
+  margin-bottom: -0.25em;
+}
+
+.prose h3::after {
+  margin-top: -0.29em;
 }
 
 .prose h3 {
