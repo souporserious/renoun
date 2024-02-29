@@ -188,7 +188,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
                     <div
                       style={{
                         display: 'flex',
-                        alignItems: 'baseline',
+                        alignItems: 'center',
                         gap: '1rem',
                       }}
                     >
