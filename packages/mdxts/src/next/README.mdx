@@ -1,22 +1,25 @@
 # mdxts/next
 
-Next.js plugin to enable MDXTS.
+A Next.js plugin to enable MDXTS `rehype` and `remark` markdown plugins as well as the [Webpack loader](/packages/loader).
 
 ## Usage
 
-First, create a plugin using `createMdxtsPlugin` and export it along with any other configuration you need:
+First, create the plugin using `createMdxtsPlugin` and export it along with any other configuration you need:
 
 ```next.config.mjs
 import { createMdxtsPlugin } from 'mdxts/next'
 
-const withMdxts = createMdxtsPlugin()
+const withMdxts = createMdxtsPlugin({
+  theme: 'nord',
+  gitSource: 'https://github.com/souporserious/mdxts',
+})
 
 export default withMdxts({
-  compiler: { styledComponents: true },
+  // Next.js config options here...
 })
 ```
 
-Then, add the plugin to your Next.js configuration:
+Now you can render individual MDX page routes (e.g. `about/page.mdx`) or a collection of MDX pages using the `createSource` function:
 
 ```tsx filename="blog/[slug]/page.tsx"
 import { createSource } from 'mdxts'
@@ -41,3 +44,36 @@ export default async function Page({ params }: Props) {
   Files can be included from anywhere. This is especially useful in monorepos
   for including files that are outside of your Next.js project.
 </Note>
+
+## MDX Components
+
+### Automated Setup
+
+By default a `mdx-components.tsx` file is automatically loaded from `mdxts/components` that overrides `pre` and `code` components to use the `CodeBlock` and `CodeInline` components respectively.
+
+### Manual Setup
+
+You can define custom MDX components and overrides in a top-level `mdx-components.tsx` file in your project. Either spread the default `MDXComponents` or import them individually from `mdxts/components` and override the components as you need:
+
+```tsx filename="mdx-components.tsx"
+import { MDXComponents } from 'mdxts/components'
+import { GeistMono } from 'geist/font/mono'
+
+export function useMDXComponents() {
+  return {
+    code: (props) => (
+      <MDXComponents.code className={GeistMono.className} {...props} />
+    ),
+    pre: (props) => (
+      <MDXComponents.pre
+        className={GeistMono.className}
+        style={{
+          width: 'calc(100% + 2rem)',
+          margin: '0 -1rem',
+        }}
+        {...props}
+      />
+    ),
+  } satisfies MDXComponents
+}
+```

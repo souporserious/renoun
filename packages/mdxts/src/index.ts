@@ -424,12 +424,18 @@ export function mergeSources(...sources: ReturnType<typeof createSource>[]) {
 
 let theme: any = null
 
-/** Sets the current theme. */
+/**
+ * Sets the current theme.
+ * @internal
+ */
 export function setTheme(newTheme: any) {
   theme = newTheme
 }
 
-/** Returns the current theme. */
+/**
+ * Returns the current theme.
+ * @internal
+ */
 export function getTheme() {
   return theme
 }

@@ -95,7 +95,7 @@ type PrivateCodeBlockProps = Partial<{
   isNestedInEditor: boolean
 }>
 
-/** Renders a code block with syntax highlighting. */
+/** Renders a `pre` element with syntax highlighting, type information, and an optional toolbar. */
 export async function CodeBlock({
   filename: filenameProp,
   language,

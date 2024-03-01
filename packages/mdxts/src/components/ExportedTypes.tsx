@@ -254,7 +254,7 @@ type ExportedTypesProps =
   | ({ source: string } & BaseExportedTypesProps)
   | ({ filename: string; value: string } & BaseExportedTypesProps)
 
-/** Display type documentation for all exported types from a module or source code value. */
+/** Displays type documentation for all exported types from a module or source code value. */
 export function ExportedTypes(props: ExportedTypesProps) {
   const privateProps = props as {
     theme?: any
