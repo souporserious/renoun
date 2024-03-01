@@ -19,7 +19,7 @@ type Compute<Type> = Type extends object
 
 export type Module = Compute<
   {
-    Content?: ComponentType
+    Content?: ComponentType<{ renderTitle?: boolean }>
     examples: (Awaited<ModuleData['examples']>[number] & { pathname: string })[]
     pathname: string
     codeBlocks: CodeBlocks

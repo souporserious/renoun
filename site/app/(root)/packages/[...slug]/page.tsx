@@ -1,6 +1,6 @@
 import { Fragment } from 'react'
 import { notFound } from 'next/navigation'
-import type { MDXComponents } from 'mdxts/components'
+import { MDXComponents } from 'mdxts/components'
 import { CodeInline, MDXContent } from 'mdxts/components'
 import { PageContainer } from 'components/PageContainer'
 import { ViewSource } from 'components/ViewSource'
@@ -9,12 +9,7 @@ import { getSiteMetadata } from 'utils/get-site-metadata'
 
 const mdxComponents = {
   p: (props) => <p {...props} style={{ margin: 0 }} />,
-  code: (props) => {
-    if (typeof props.children == 'string') {
-      return <CodeInline value={props.children} language="typescript" />
-    }
-    return <code {...props} />
-  },
+  code: MDXComponents.code,
 } satisfies MDXComponents
 
 export const dynamic = 'force-static'
@@ -42,7 +37,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
     return notFound()
   }
 
-  const { Content, title, description, examples, exportedTypes, isServerOnly } =
+  const { Content, title, examples, exportedTypes, isServerOnly } =
     singlePackage
 
   return (
@@ -70,14 +65,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
         ) : null}
       </div>
 
-      {description ? (
-        <MDXContent
-          value={description}
-          components={{ code: mdxComponents.code }}
-        />
-      ) : null}
-
-      {Content ? <Content /> : null}
+      {Content ? <Content renderTitle={false} /> : null}
 
       <div
         style={{
