@@ -222,7 +222,7 @@ export function getAllData({
         }
       }
 
-      if (mainExportDeclarationSymbol) {
+      if (!description && mainExportDeclarationSymbol) {
         const symbolDescription = getSymbolDescription(
           mainExportDeclarationSymbol
         )

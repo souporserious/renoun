@@ -285,12 +285,17 @@ export function createSource<Type>(
         Object.assign(metadata, frontMatter)
       }
 
+      /** Merge description into metadata if nothing was found. */
+      if (!metadata.description) {
+        metadata.description = description
+      }
+
       return {
         isServerOnly: data.isServerOnly,
         isMainExport: data.isMainExport,
         title: data.title,
         label: data.label,
-        description: data.description ?? description,
+        description: data.description,
         order: data.order,
         depth: data.depth,
         exportedTypes: data.exportedTypes,
