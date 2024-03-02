@@ -178,7 +178,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
                       display: 'flex',
                       flexDirection: 'column',
                       gap: '0.8rem',
-                      marginBottom: '1rem',
+                      marginBottom: isActive ? '1rem' : undefined,
                     }}
                   >
                     <div
