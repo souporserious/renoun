@@ -7,14 +7,7 @@ import styles from './page.module.css'
 
 export default function Home() {
   return (
-    <main
-      style={{
-        display: 'grid',
-        width: '100dvw',
-        perspective: '5000px',
-        overflow: 'hidden',
-      }}
-    >
+    <main className={styles.main}>
       <section className={styles.section}>
         <div
           style={{
