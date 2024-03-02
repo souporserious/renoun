@@ -13,6 +13,7 @@ export default function Home() {
           style={{
             display: 'flex',
             flexDirection: 'column',
+            zIndex: 1,
           }}
         >
           <div
@@ -83,7 +84,6 @@ export default function Home() {
                 textDecoration: 'none',
                 color: 'white',
                 position: 'relative',
-                zIndex: 1,
               }}
             >
               Get Started
@@ -99,7 +99,6 @@ export default function Home() {
                 borderRadius: '0.25rem',
                 fontSize: 'var(--font-size-body-1)',
                 position: 'relative',
-                zIndex: 1,
               }}
             >
               <span

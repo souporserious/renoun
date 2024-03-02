@@ -5,6 +5,8 @@ import { getTheme } from 'mdxts'
 import { CodeBlock, type CodeBlockProps } from 'mdxts/components'
 import { allDocs } from 'data'
 
+import styles from './HeroExample.module.css'
+
 const docsPageSource = `
 import { allDocs } from '../../data'
 
@@ -59,15 +61,7 @@ export function HeroExample() {
   const entries = Object.values(allDocs.all()).filter((doc) => doc.depth === 1)
   const lastEntriesIndex = entries.length - 1
   return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(20, 1fr)',
-        gridAutoRows: '1.4rem',
-        minHeight: '100dvh',
-        transform: 'rotateX(45deg) rotateZ(-45deg)',
-      }}
-    >
+    <div className={styles.container}>
       <Card title="docs" column="6/10" row="2/9">
         <div
           style={{
