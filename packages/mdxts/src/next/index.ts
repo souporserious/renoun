@@ -20,7 +20,7 @@ type PluginOptions = {
   gitBranch?: string
 }
 
-/** A Next.js plugin to enable MDXTS `rehype` and `remark` markdown plugins as well as the [Webpack loader](mdxts.dev/packages/loader). */
+/** A Next.js plugin to configure MDXTS theming, `rehype` and `remark` markdown plugins, and the [Webpack loader](mdxts.dev/packages/loader). */
 export function createMdxtsPlugin(pluginOptions: PluginOptions) {
   let { gitSource, gitBranch = 'main', theme } = pluginOptions
   const themePath = resolve(process.cwd(), theme)

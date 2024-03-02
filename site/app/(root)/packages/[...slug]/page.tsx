@@ -37,7 +37,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
     return notFound()
   }
 
-  const { Content, title, examples, exportedTypes, isServerOnly } =
+  const { Content, title, description, examples, exportedTypes, isServerOnly } =
     singlePackage
 
   return (
@@ -64,6 +64,13 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
           </span>
         ) : null}
       </div>
+
+      {description ? (
+        <MDXContent
+          value={description}
+          components={{ code: MDXComponents.code }}
+        />
+      ) : null}
 
       {Content ? <Content renderTitle={false} /> : null}
 

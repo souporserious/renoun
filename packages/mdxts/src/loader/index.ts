@@ -10,7 +10,7 @@ import { getExportedSourceFiles } from '../utils/get-exported-source-files'
 import { findCommonRootPath } from '../utils/find-common-root-path'
 
 /**
- * Exports front matter data for MDX files and augments `createSource` call sites to add an additional
+ * A Webpack loader that exports front matter data for MDX files and augments `createSource` call sites to add an additional
  * argument of all dynamic imports based on the provided file pattern.
  *
  * When a TypeScript file pattern is provided, the closest `README.mdx` or MDX file with the same name
