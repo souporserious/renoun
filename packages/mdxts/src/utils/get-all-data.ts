@@ -179,6 +179,9 @@ export function getAllData({
         )
       }
 
+      const mainExportDeclaration = getMainExportDeclaration(sourceFile)
+      const mainExportDeclarationSymbol = mainExportDeclaration?.getSymbol()
+      const mainExportDeclarationName = mainExportDeclarationSymbol?.getName()
       const exportedTypes = getExportedTypes(
         sourceFile,
         allPublicDeclarations.get(sourceFile)
@@ -194,7 +197,9 @@ export function getAllData({
           ...fileExport,
           pathname,
           sourcePath: getSourcePath(filePath),
-          isMainExport: filePath === path,
+          isMainExport: mainExportDeclarationName
+            ? mainExportDeclarationName === fileExport.name
+            : false,
         }
       })
       const examples = getExamplesFromSourceFile(sourceFile, allModules)
@@ -209,8 +214,6 @@ export function getAllData({
           const moduleSpecifier = importDeclaration.getModuleSpecifierValue()
           return moduleSpecifier === 'server-only'
         })
-      const mainExportDeclaration = getMainExportDeclaration(sourceFile)
-      const mainExportDeclarationSymbol = mainExportDeclaration?.getSymbol()
 
       if (mainExportDeclaration) {
         const declarationName = getNameFromDeclaration(mainExportDeclaration)

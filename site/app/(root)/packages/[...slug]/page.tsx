@@ -142,6 +142,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
             </div>
           </div>
         )}
+
         {exportedTypes.length > 0 && (
           <div
             style={{
@@ -202,7 +203,8 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
                         <ViewSource href={type.sourcePath} />
                       )}
                     </div>
-                    {type.description ? (
+
+                    {!type.isMainExport && type.description ? (
                       <MDXContent
                         value={type.description}
                         components={mdxComponents}
