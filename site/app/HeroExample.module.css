@@ -1,6 +1,6 @@
 .container {
   display: grid;
-  grid-template-columns: repeat(20, 4.2rem);
+  grid-template-columns: repeat(60, 1.4rem);
   grid-auto-rows: 1.4rem;
   min-height: 100vh;
   transform: rotateX(45deg) rotateZ(-45deg);
@@ -8,7 +8,7 @@
 
 .container::before {
   --grid-line-color: #27232f;
-  --grid-size: 5.6rem;
+  --grid-size: 2.8rem;
 
   content: '';
   position: absolute;
@@ -27,4 +27,5 @@
       transparent var(--grid-size)
     );
   background-size: var(--grid-size) var(--grid-size);
+  background-position: calc(3rem - 1px) calc(1.55rem + 1px);
 }
