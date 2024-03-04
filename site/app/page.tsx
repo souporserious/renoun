@@ -2,12 +2,13 @@ import Link from 'next/link'
 import { CopyButton } from 'mdxts/components/CopyButton'
 import { Logo } from 'components/Logo'
 import { HeroExample } from './HeroExample'
+import { PageContainer } from './PageContainer'
 
 import styles from './page.module.css'
 
 export default function Home() {
   return (
-    <main className={styles.main}>
+    <PageContainer className={styles.main}>
       <section className={styles.section}>
         <div
           style={{
@@ -115,6 +116,6 @@ export default function Home() {
       <div className={styles.heroExample}>
         <HeroExample />
       </div>
-    </main>
+    </PageContainer>
   )
 }

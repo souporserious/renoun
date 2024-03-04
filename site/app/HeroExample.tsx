@@ -173,7 +173,7 @@ export function HeroExample() {
           translate: '-100% -1px',
         }}
       />
-      <VerticalLine row="20 / span 20" column="45" />
+      <VerticalLine row="20 / span 32" column="45" />
     </div>
   )
 }

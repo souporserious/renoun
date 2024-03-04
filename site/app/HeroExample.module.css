@@ -4,6 +4,11 @@
   grid-auto-rows: 1.4rem;
   min-height: 100vh;
   transform: rotateX(45deg) rotateZ(-45deg);
+  transition: transform 420ms cubic-bezier(0.19, 0.96, 0.84, 0.98);
+}
+
+[data-active='true'] .container {
+  transform: translate(-44%, 9%);
 }
 
 .container::before {

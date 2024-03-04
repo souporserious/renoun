@@ -11,6 +11,15 @@
   flex-direction: column;
   padding: 1rem 0 4rem;
   gap: 4rem;
+  opacity: 1;
+  translate: 0;
+  transition: all 340ms cubic-bezier(0.19, 0.96, 0.84, 0.98);
+  z-index: 1;
+}
+
+[data-active='true'] .section {
+  opacity: 0;
+  translate: -8%;
 }
 
 .buttons {
