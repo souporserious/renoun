@@ -62,11 +62,12 @@ export function HeroExample() {
   const lastEntriesIndex = entries.length - 1
   return (
     <div className={styles.container}>
-      <Card title="docs" column="16 / span 12" row="2 / 9">
+      <Card title="docs" column="17 / span 12" row="4 / span 7">
         <div
           style={{
-            display: 'flex',
-            flexDirection: 'column',
+            flex: 1,
+            display: 'grid',
+            gridAutoRows: '1fr',
             boxShadow: `0 0 0 1px ${theme.colors['panel.border']}70`,
             borderRadius: '0.5rem',
           }}
@@ -82,9 +83,11 @@ export function HeroExample() {
                   href={doc.pathname}
                   className={GeistMono.className}
                   style={{
+                    display: 'flex',
+                    alignItems: 'center',
                     fontSize: '1rem',
                     lineHeight: '1.4rem',
-                    padding: '0.7rem',
+                    padding: '0 0.7rem',
                     backgroundColor: theme.colors['editor.background'],
                     boxShadow: firstIndex
                       ? undefined
@@ -103,7 +106,7 @@ export function HeroExample() {
         </div>
       </Card>
 
-      <Card title="data.ts" column="32 / span 22" row="2 / 7">
+      <Card title="data.ts" column="33 / span 22" row="4 / span 5">
         <CodeBlock
           value={`import { createSource } from 'mdxts'\n\nexport const allDocs = createSource('docs/*.mdx')`}
           filename="data.ts"
@@ -111,7 +114,7 @@ export function HeroExample() {
         />
       </Card>
 
-      <Card title="Sidebar.tsx" column="4 / span 24" row="14 / span 23">
+      <Card title="Sidebar.tsx" column="5 / span 24" row="16 / span 23">
         <CodeBlock
           value={sidebarSource}
           filename="Sidebar.tsx"
@@ -119,18 +122,22 @@ export function HeroExample() {
         />
       </Card>
 
-      <Card title="docs/[id]/page.tsx" column="34 / span 24" row="14 / span 8">
+      <Card
+        title="docs/[slug]/page.tsx"
+        column="33 / span 24"
+        row="16 / span 8"
+      >
         <CodeBlock
           value={docsPageSource}
-          filename="docs/[id]/page.tsx"
+          filename="docs/[slug]/page.tsx"
           {...codeProps}
         />
       </Card>
 
       <div
         style={{
-          gridColumn: '20 / span 36',
-          gridRow: '6 / 11',
+          gridColumn: '21 / span 36',
+          gridRow: '8 / span 5',
           border: `1px solid ${LINE_COLOR}`,
           borderLeft: 'none',
           borderTopRightRadius: '0.5rem',
@@ -139,8 +146,8 @@ export function HeroExample() {
       />
       <div
         style={{
-          gridColumn: '32 / span 2',
-          gridRow: '11 / span 5',
+          gridColumn: '31 / span 2',
+          gridRow: '13 / span 5',
           border: `1px solid ${LINE_COLOR}`,
           borderRight: 'none',
           translate: '0 -1px',
@@ -149,8 +156,8 @@ export function HeroExample() {
       />
       <div
         style={{
-          gridColumn: '2 / span 18',
-          gridRow: '11 / span 7',
+          gridColumn: '3 / span 18',
+          gridRow: '13 / span 7',
           border: `1px solid ${LINE_COLOR}`,
           borderRight: 'none',
           translate: '0 -1px',
@@ -158,22 +165,22 @@ export function HeroExample() {
         }}
       />
       <VerticalLine
-        row="1 / 3"
-        column="22"
+        row="3 / span 2"
+        column="23"
         style={{
-          height: '48rem',
+          height: '60rem',
           translate: '0 -90%',
         }}
       />
       <HorizontalLine
-        row="11"
-        column="2 / 20"
+        row="13"
+        column="3 / span 18"
         style={{
           width: '60rem',
           translate: '-100% -1px',
         }}
       />
-      <VerticalLine row="20 / span 32" column="45" />
+      <VerticalLine row="22 / span 36" column="45" />
     </div>
   )
 }

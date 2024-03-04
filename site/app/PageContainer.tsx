@@ -2,6 +2,8 @@
 import { useState } from 'react'
 import { Box } from './Box'
 
+import styles from './PageContainer.module.css'
+
 export function PageContainer({
   className,
   children,
@@ -11,24 +13,17 @@ export function PageContainer({
 }) {
   const [active, setActive] = useState(false)
   return (
-    <main className={className} data-active={active}>
-      {children}
+    <div data-active={active} className={styles.container}>
+      <main className={className}>{children}</main>
       <button
         title={`Toggle perspective ${active ? 'on' : 'off'}`}
+        className={styles.toggle}
         onClick={() => {
           setActive(!active)
-        }}
-        style={{
-          position: 'absolute',
-          bottom: '4rem',
-          right: '3.5rem',
-          zIndex: 1,
-          border: 'none',
-          background: 'transparent',
         }}
       >
         <Box />
       </button>
-    </main>
+    </div>
   )
 }
