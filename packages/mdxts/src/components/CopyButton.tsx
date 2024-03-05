@@ -13,6 +13,7 @@ export function CopyButton({
   const [state, setState] = React.useState<'idle' | 'not-allowed' | 'copied'>(
     'idle'
   )
+  const { width, height, ...restStyle } = style || {}
   return (
     <button
       title="Copy code to clipboard"
@@ -36,30 +37,34 @@ export function CopyButton({
         padding: '0.35rem',
         border: 0,
         cursor: 'pointer',
-        width: 'var(--font-size-body-3)',
-        height: 'var(--font-size-body-3)',
-        ...style,
+        ...restStyle,
       }}
     >
       <svg
-        width="100%"
-        height="100%"
         viewBox="0 0 24 24"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
+        style={{
+          width: width || 'var(--font-size-body-3)',
+          height: height || 'var(--font-size-body-3)',
+        }}
       >
-        <path
-          d="M7.23913 16L4.56402 16C3.70023 16 3 15.2998 3 14.436V4.56402C3 3.70023 3.70023 3 4.56402 3L14.436 3C15.2998 3 16 3.70023 16 4.56402V7.52174"
-          stroke="var(--color-foreground-interactive)"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-        <path
-          d="M8 9.56402V19.436C8 20.2998 8.70023 21 9.56402 21L19.436 21C20.2998 21 21 20.2998 21 19.436V9.56402C21 8.70023 20.2998 8 19.436 8H9.56402C8.70023 8 8 8.70023 8 9.56402Z"
-          stroke="var(--color-foreground-interactive)"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
+        {state === 'idle' || state === 'not-allowed' ? (
+          <path
+            d="M8 9.56402V19.436C8 20.2998 8.70023 21 9.56402 21L19.436 21C20.2998 21 21 20.2998 21 19.436V9.56402C21 8.70023 20.2998 8 19.436 8H9.56402C8.70023 8 8 8.70023 8 9.56402Z"
+            stroke="var(--color-foreground-interactive)"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        ) : null}
+        {state === 'idle' ? (
+          <path
+            d="M7.23913 16L4.56402 16C3.70023 16 3 15.2998 3 14.436V4.56402C3 3.70023 3.70023 3 4.56402 3L14.436 3C15.2998 3 16 3.70023 16 4.56402V7.52174"
+            stroke="var(--color-foreground-interactive)"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        ) : null}
         {state === 'not-allowed' ? (
           <>
             <ellipse
@@ -81,7 +86,7 @@ export function CopyButton({
         ) : null}
         {state === 'copied' ? (
           <path
-            d="M11.7754 14.1599L13.0231 15.6046C13.1335 15.7324 13.3255 15.7495 13.4567 15.6432L17.3556 12.4858"
+            d="M5 12.2001L8.41362 16.1526C8.53012 16.2874 8.73562 16.2979 8.86517 16.1755L19 6.6001"
             stroke="#3FC47C"
             strokeWidth="2"
             strokeLinecap="round"

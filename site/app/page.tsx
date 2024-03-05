@@ -95,7 +95,14 @@ export default function Home() {
               position: 'relative',
             }}
           >
-            <span style={{ fontSize: '1rem', color: '#B6D8ED', top: '0.1rem' }}>
+            <span
+              style={{
+                fontSize: 'var(--font-size-body-1)',
+                color: '#B6D8ED',
+                top: '0.1rem',
+                userSelect: 'none',
+              }}
+            >
               $
             </span>
             <span>npm create mdxts</span>
@@ -103,8 +110,8 @@ export default function Home() {
               value="npm create mdxts"
               style={{
                 padding: 0,
-                width: '1rem',
-                height: '1rem',
+                width: 'var(--font-size-body-1)',
+                height: 'var(--font-size-body-1)',
               }}
             />
           </div>
