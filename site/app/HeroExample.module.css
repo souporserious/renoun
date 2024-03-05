@@ -1,3 +1,21 @@
+.maskContainer {
+  grid-area: 1 / 1;
+  mask-image: radial-gradient(
+    ellipse at center,
+    rgba(0, 0, 0, 1) 50%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  transition: mask-image 420ms cubic-bezier(0.19, 0.96, 0.84, 0.98);
+}
+
+[data-active='true'] .maskContainer {
+  mask-image: radial-gradient(
+    ellipse at center,
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 1) 100%
+  );
+}
+
 .container {
   display: none;
 }
@@ -8,7 +26,6 @@
     --grid-line-color: #27232f;
 
     position: absolute;
-    grid-area: 1 / 1;
     display: grid;
     grid-template-columns: repeat(60, var(--grid-size));
     grid-auto-rows: 1.4rem;

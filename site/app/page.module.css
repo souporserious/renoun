@@ -14,21 +14,29 @@
   opacity: 1;
   translate: 0;
   visibility: visible;
+  mask-image: linear-gradient(
+    to left,
+    transparent -100%,
+    rgba(0, 0, 0, 1) 100%
+  );
+  mask-size: 200% 100%;
+  mask-position: 0% 0%;
+  mask-repeat: no-repeat;
   transition:
-    opacity 340ms cubic-bezier(0.19, 0.96, 0.84, 0.98),
-    translate 340ms cubic-bezier(0.19, 0.96, 0.84, 0.98),
+    mask-image 600ms ease-out,
+    mask-position 600ms ease-out,
     visibility 0ms 0ms;
   z-index: 5;
 }
 
 [data-active='true'] .section {
-  opacity: 0;
-  translate: -8%;
+  mask-image: linear-gradient(to left, transparent 50%, rgba(0, 0, 0, 1) 100%);
+  mask-position: 100% 0%;
   visibility: hidden;
   transition:
-    opacity 340ms cubic-bezier(0.19, 0.96, 0.84, 0.98),
-    translate 340ms cubic-bezier(0.19, 0.96, 0.84, 0.98),
-    visibility 0ms 340ms;
+    mask-image 600ms ease-out,
+    mask-position 600ms ease-out,
+    visibility 0ms 600ms;
 }
 
 .buttons {
