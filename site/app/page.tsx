@@ -99,7 +99,14 @@ export default function Home() {
               $
             </span>
             <span>npm create mdxts</span>
-            <CopyButton value="npm create mdxts" />
+            <CopyButton
+              value="npm create mdxts"
+              style={{
+                padding: 0,
+                width: '1rem',
+                height: '1rem',
+              }}
+            />
           </div>
         </div>
       </section>
