@@ -18,9 +18,27 @@ export function Sidebar() {
           gap: '2rem',
         }}
       >
-        <a href="/" style={{ display: 'flex' }}>
-          <Logo />
-        </a>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <a href="/" style={{ display: 'flex' }}>
+            <Logo />
+          </a>
+          <span
+            style={{
+              position: 'relative',
+              top: '-0.1rem',
+              display: 'flex',
+              alignItems: 'center',
+              fontSize: 'var(--font-size-body-3)',
+              height: 'calc(var(--font-size-body-1) + 0.2rem)',
+              padding: '0 0.5rem',
+              border: '1px solid #3F687E',
+              borderRadius: '1rem',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Beta
+          </span>
+        </div>
         <NavigationToggle />
       </div>
 
