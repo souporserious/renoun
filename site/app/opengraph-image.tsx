@@ -48,7 +48,7 @@ export default async function Image() {
               color: '#78a6ce',
             }}
           >
-            The Content and Documentation SDK for React
+            The Content & Docs SDK for React
           </h1>
           <span
             style={{
