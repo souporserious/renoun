@@ -41,7 +41,7 @@ In your Next.js project, run the following command to install the required depen
 
 The Next.js plugin sets up everything needed for authoring MDX files and collecting type documentation. This includes default remark plugins, MDX components, and a loader for gathering collections of modules.
 
-```ts filename="next.config.ts"
+```js filename="next.config.mjs"
 import { createMdxtsPlugin } from 'mdxts/next'
 
 const withMdxts = createMdxtsPlugin({
