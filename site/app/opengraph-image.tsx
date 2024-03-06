@@ -28,7 +28,7 @@ export default async function Image() {
         <img
           // @ts-expect-error
           src={logoSource}
-          style={{ height: 120 }}
+          style={{ height: 96 }}
         />
         <div
           style={{
@@ -48,7 +48,7 @@ export default async function Image() {
               color: '#78a6ce',
             }}
           >
-            Exceptional Content & Docs
+            The Content and Documentation SDK for React
           </h1>
           <span
             style={{
@@ -59,7 +59,7 @@ export default async function Image() {
               fontFamily: 'Geist-Regular',
             }}
           >
-            Preview
+            Beta
           </span>
         </div>
       </div>
