@@ -1,12 +1,10 @@
 import * as React from 'react'
 import { CodeBlock, MDXComponents } from 'mdxts/components'
-import { Preview } from 'mdxts/components/Preview'
 import { PackageInstall } from 'mdxts/components/PackageInstall'
 import { GeistMono } from 'geist/font/mono'
 
 export function useMDXComponents() {
   return {
-    Preview,
     PackageInstall,
     CodeBlock: (props) => (
       <CodeBlock
