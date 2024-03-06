@@ -40,6 +40,7 @@ export function Sidebar() {
             }}
           >
             <a
+              aria-label="GitHub"
               href="https://github.com/souporserious/mdxts/"
               rel="noopener"
               target="_blank"
@@ -61,6 +62,7 @@ export function Sidebar() {
             </a>
 
             <a
+              aria-label="X formerly known as Twitter"
               href="https://twitter.com/souporserious"
               rel="noopener"
               target="_blank"
