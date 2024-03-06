@@ -34,7 +34,7 @@ export default function Home() {
                 whiteSpace: 'nowrap',
               }}
             >
-              Preview
+              Beta
             </span>
           </header>
           <h1
