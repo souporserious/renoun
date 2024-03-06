@@ -1,7 +1,9 @@
 .container {
   grid-area: 1 / 1;
+  display: flex;
   flex-direction: column;
   margin-top: calc(var(--font-size-heading-1) + 1rem);
+  gap: 4rem;
 }
 
 .container[data-open='false'] {
