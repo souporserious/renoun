@@ -50,11 +50,7 @@ const LINE_COLOR = theme.colors['panel.border']
 const codeProps = {
   padding: '0.7rem',
   toolbar: false,
-  style: {
-    height: '100%',
-    margin: 0,
-    borderRadius: '0.5rem',
-  },
+  className: `${GeistMono.className} ${styles.code}`,
 } satisfies Partial<CodeBlockProps>
 
 export function HeroExample() {
@@ -82,13 +78,9 @@ export function HeroExample() {
                   <Link
                     key={doc.pathname}
                     href={doc.pathname}
-                    className={GeistMono.className}
+                    className={`${GeistMono.className} ${styles.link}`}
                     style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      fontSize: '1rem',
-                      lineHeight: '1.4rem',
-                      padding: '0 0.7rem',
+                      color: theme.colors['editor.foreground'],
                       backgroundColor: theme.colors['editor.background'],
                       boxShadow: firstIndex
                         ? undefined
@@ -97,7 +89,6 @@ export function HeroExample() {
                       borderTopRightRadius: firstIndex ? '0.5rem' : undefined,
                       borderBottomLeftRadius: lastIndex ? '0.5rem' : undefined,
                       borderBottomRightRadius: lastIndex ? '0.5rem' : undefined,
-                      color: 'white',
                     }}
                   >
                     {basename(doc.mdxPath!)}

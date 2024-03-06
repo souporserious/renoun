@@ -14,7 +14,6 @@ export function Sidebar() {
         style={{
           gridArea: '1 / 1',
           display: 'flex',
-          alignItems: 'center',
           justifyContent: 'space-between',
           gap: '2rem',
         }}

@@ -49,20 +49,8 @@ export default function Home() {
           >
             The Content & Documentation SDK for React
           </h1>
-          <ul
-            style={{
-              // @ts-expect-error - missing types
-              textWrap: 'balance',
-              fontSize: 'var(--font-size-heading-2)',
-              lineHeight: 1.3,
-              maxWidth: '24ch',
-              paddingLeft: '1.5rem',
-              color: 'var(--color-foreground-secondary)',
-              position: 'relative',
-              zIndex: 1,
-            }}
-          >
-            <li>Write type-safe content</li>
+          <ul className={styles.features}>
+            <li>Author type-safe content</li>
             <li>Generate type documentation</li>
             <li>Preview source code</li>
             <li>And so much more</li>
@@ -72,29 +60,18 @@ export default function Home() {
           <Link
             href="/docs/getting-started"
             style={{
-              padding: '0.5rem 1rem',
-              border: '1px solid #3F687E',
-              borderRadius: '0.25rem',
-              textDecoration: 'none',
-              color: 'white',
               position: 'relative',
+              padding: '0.5rem 1rem',
+              borderRadius: '0.25rem',
+              border: '1px solid #3F687E',
+              backgroundColor: '#080e1794',
+              color: 'white',
+              textDecoration: 'none',
             }}
           >
             Get Started
           </Link>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '0.5rem 1rem',
-              gap: '0.5rem',
-              backgroundColor: '#2A4655',
-              borderRadius: '0.25rem',
-              fontSize: 'var(--font-size-body-1)',
-              position: 'relative',
-            }}
-          >
+          <div className={styles.command}>
             <span
               style={{
                 fontSize: 'var(--font-size-body-1)',
