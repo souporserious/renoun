@@ -6,6 +6,12 @@
   overflow: hidden;
 }
 
+@property --mask-gradient-transparency {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 1;
+}
+
 .section {
   grid-area: 1 / 1;
   display: flex;
@@ -16,27 +22,27 @@
   visibility: visible;
   mask-image: linear-gradient(
     to left,
-    transparent -100%,
+    rgba(0, 0, 0, var(--mask-gradient-transparency)) 70%,
     rgba(0, 0, 0, 1) 100%
   );
-  mask-size: 200% 100%;
+  mask-size: 420% 100%;
   mask-position: 0% 0%;
   mask-repeat: no-repeat;
   transition:
-    mask-image 600ms ease-out,
-    mask-position 600ms ease-out,
+    --mask-gradient-transparency 180ms ease-out,
+    mask-position 800ms cubic-bezier(0.05, 0.34, 0, 0.49),
     visibility 0ms 0ms;
   z-index: 5;
 }
 
 [data-active='true'] .section {
-  mask-image: linear-gradient(to left, transparent 50%, rgba(0, 0, 0, 1) 100%);
-  mask-position: 100% 0%;
+  --mask-gradient-transparency: 0;
+  mask-position: 40% 0%;
   visibility: hidden;
   transition:
-    mask-image 600ms ease-out,
-    mask-position 600ms ease-out,
-    visibility 0ms 600ms;
+    --mask-gradient-transparency 180ms ease-out,
+    mask-position 800ms cubic-bezier(0.12, 0.33, 0.36, 0.64),
+    visibility 0ms 800ms;
 }
 
 .buttons {
