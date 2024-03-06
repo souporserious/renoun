@@ -6,6 +6,10 @@ const posts = createSource<{
   baseDirectory: 'app/blog',
 })
 
+export function generateStaticParams() {
+  return posts.paths().map((pathname) => ({ slug: pathname.at(0) }))
+}
+
 export default async function Page({ params }: { params: { slug: string } }) {
   const { Content, metadata } = await posts.get(params.slug)
   const formattedDate = new Intl.DateTimeFormat('en-US', {

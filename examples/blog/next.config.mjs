@@ -5,4 +5,6 @@ const withMdxts = createMdxtsPlugin({
   gitSource: 'https://github.com/souporserious/mdxts',
 })
 
-export default withMdxts()
+export default withMdxts({
+  output: 'export',
+})
