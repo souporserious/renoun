@@ -31,10 +31,15 @@ export default async function loader(
   /** Export front matter and title wrapper component from MDX files. */
   if (this.resourcePath.endsWith('.mdx')) {
     // Replaces the first line of the file with the title helper for controlling the rendering of the title of the page.
-    if (sourceString.startsWith('#')) {
-      const sourceLines = sourceString.split('\n')
-      const wrappedTitle = `import { ShouldRenderTitle } from 'mdxts/components/ShouldRenderTitle';\n\n<ShouldRenderTitle renderTitle={props.renderTitle}>${sourceLines.at(0)}</ShouldRenderTitle>`
-      source = `${wrappedTitle}\n${sourceLines.slice(1).join('\n')}`
+    const sourceLines = sourceString.split('\n')
+    const headingLevelOneLineIndex = sourceLines.findIndex((line) =>
+      line.startsWith('# ')
+    )
+
+    if (headingLevelOneLineIndex !== -1) {
+      const wrappedTitle = `import { ShouldRenderTitle } from 'mdxts/components/ShouldRenderTitle';\n\n<ShouldRenderTitle renderTitle={props.renderTitle}>${sourceLines.at(headingLevelOneLineIndex)}</ShouldRenderTitle>`
+      sourceLines[headingLevelOneLineIndex] = wrappedTitle
+      source = sourceLines.join('\n')
     }
 
     try {
