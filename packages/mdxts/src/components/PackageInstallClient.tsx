@@ -1,10 +1,12 @@
 'use client'
 import React from 'react'
 
-import { useLocalStorageState } from '../hooks/use-local-storage-state'
+import { localStorageSignal } from '../signals/local-storage-signal'
+import { useSignalValue } from '../hooks/use-signal-value'
 
 const stateKey = 'package-manager'
 const defaultPackageManager = 'npm'
+const packageManager = localStorageSignal(stateKey, defaultPackageManager)
 
 const packageStyles = `
 .PackageInstallButton {
@@ -45,10 +47,7 @@ export function PackageInstallClient({
   >
   style?: React.CSSProperties
 }) {
-  const [activePackageManager, setActivePackageManager] = useLocalStorageState(
-    stateKey,
-    defaultPackageManager
-  )
+  const packageManagerValue = useSignalValue(packageManager)
 
   return (
     <div
@@ -69,13 +68,13 @@ export function PackageInstallClient({
           zIndex: 1,
         }}
       >
-        {Object.keys(allHighlightedCommands).map((packageManager) => {
-          const isActive = activePackageManager === packageManager
+        {Object.keys(allHighlightedCommands).map((key) => {
+          const isActive = packageManagerValue === key
           return (
             <button
-              key={packageManager}
-              data-storage-id={`package-manager-${packageManager}`}
-              onClick={() => setActivePackageManager(packageManager)}
+              key={key}
+              data-storage-id={`package-manager-${key}`}
+              onClick={() => (packageManager.value = key)}
               className={
                 isActive
                   ? 'PackageInstallButton active'
@@ -88,7 +87,7 @@ export function PackageInstallClient({
               }}
               suppressHydrationWarning
             >
-              {packageManager}
+              {key}
             </button>
           )
         })}
@@ -98,7 +97,7 @@ export function PackageInstallClient({
           key={key}
           data-storage-id={`package-manager-${key}-command`}
           className={
-            activePackageManager === key
+            packageManagerValue === key
               ? 'PackageInstallCommand active'
               : 'PackageInstallCommand'
           }
