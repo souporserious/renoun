@@ -1,6 +1,7 @@
 import React from 'react'
 import { GeistSans } from 'geist/font/sans'
 import { Analytics } from '@vercel/analytics/react'
+import { PackageStylesAndScript } from 'mdxts/components/PackageInstallClient'
 
 import { getSiteMetadata } from 'utils/get-site-metadata'
 import { AppProvider } from './app-provider'
@@ -35,6 +36,7 @@ export default function RootLayout({
       <body className={GeistSans.className}>
         <AppProvider>{children}</AppProvider>
         <Analytics />
+        <PackageStylesAndScript />
       </body>
     </html>
   )

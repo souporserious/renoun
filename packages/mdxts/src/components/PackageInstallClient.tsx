@@ -1,9 +1,12 @@
 'use client'
 import React, { useRef, useState, useEffect } from 'react'
 
+const stateKey = 'package-manager'
+const defaultPackageManager = 'npm'
+
 const packageStyles = `
 .PackageInstallButton {
-  font-size: 1rem;
+  font-size: var(--font-size-body-3);
   border: none;
   border-bottom: 1px solid transparent;
   color: #fff;
@@ -12,17 +15,26 @@ const packageStyles = `
   font-weight: 600;
   border-bottom: 1px solid #fff;
 }
-.Command {
+.PackageInstallCommand {
   display: none;
 }
-.Command.active {
+.PackageInstallCommand.active {
   display: contents;
+}
+`.trim()
+
+const packageScript = `
+const value = localStorage.getItem('${stateKey}');
+if (value) {
+  document.querySelectorAll('[data-storage-id^="package-manager-"]').forEach(element => element.classList.remove('active'));
+  document.querySelectorAll(\`[data-storage-id="package-manager-\${value}"]\`).forEach(element => element.classList.add('active'));
+  document.querySelectorAll(\`[data-storage-id="package-manager-\${value}-command"]\`).forEach(element => element.classList.add('active'));
 }
 `.trim()
 
 function useLocalStorageState(key: string, defaultValue?: string) {
   const [state, setState] = useState(defaultValue)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isHydrating, setIsHydrating] = useState(true)
   const initialRender = useRef(true)
 
   useEffect(() => {
@@ -35,7 +47,7 @@ function useLocalStorageState(key: string, defaultValue?: string) {
       if (saved) {
         setState(saved)
       }
-      setIsLoading(false)
+      setIsHydrating(false)
     } else if (state) {
       localStorage.setItem(key, state)
     }
@@ -43,7 +55,7 @@ function useLocalStorageState(key: string, defaultValue?: string) {
     initialRender.current = false
   }, [state])
 
-  return [state, setState, isLoading] as const
+  return [state, setState, isHydrating] as const
 }
 
 /** The client-side component for the PackageInstall component. */
@@ -57,8 +69,6 @@ export function PackageInstallClient({
   >
   style?: React.CSSProperties
 }) {
-  const stateKey = 'package-manager'
-  const defaultPackageManager = 'npm'
   const [activePackageManager, setActivePackageManager] = useLocalStorageState(
     stateKey,
     defaultPackageManager
@@ -73,7 +83,6 @@ export function PackageInstallClient({
         ...style,
       }}
     >
-      <style>{packageStyles}</style>
       <div
         style={{
           display: 'flex',
@@ -89,7 +98,7 @@ export function PackageInstallClient({
           return (
             <button
               key={packageManager}
-              id={`package-manager-${packageManager}`}
+              data-storage-id={`package-manager-${packageManager}`}
               onClick={() => setActivePackageManager(packageManager)}
               className={
                 isActive
@@ -111,19 +120,26 @@ export function PackageInstallClient({
       {Object.entries(allHighlightedCommands).map(([key, command]) => (
         <div
           key={key}
-          id={`package-manager-${key}-command`}
+          data-storage-id={`package-manager-${key}-command`}
           className={
-            activePackageManager === key ? 'Command active' : 'Command'
+            activePackageManager === key
+              ? 'PackageInstallCommand active'
+              : 'PackageInstallCommand'
           }
+          suppressHydrationWarning
         >
           {command}
         </div>
       ))}
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `localStorage.getItem('${stateKey}') && document.getElementById('package-manager-${defaultPackageManager}').classList.remove('active'); document.getElementById(\`package-manager-$\{localStorage.getItem('${stateKey}')\}\`).classList.add('active'); localStorage.getItem('${stateKey}') && document.getElementById('package-manager-${defaultPackageManager}-command').classList.remove('active'); document.getElementById(\`package-manager-$\{localStorage.getItem('${stateKey}')\}-command\`).classList.add('active')`,
-        }}
-      />
     </div>
+  )
+}
+
+export function PackageStylesAndScript() {
+  return (
+    <>
+      <style>{packageStyles}</style>
+      <script dangerouslySetInnerHTML={{ __html: packageScript }} />
+    </>
   )
 }
