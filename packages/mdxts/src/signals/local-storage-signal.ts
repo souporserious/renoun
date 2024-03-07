@@ -2,6 +2,11 @@ import { signal, effect } from '@preact/signals-core'
 
 export function localStorageSignal(key: string, defaultValue?: string) {
   const state = signal(defaultValue)
+
+  if (typeof window === 'undefined') {
+    return state
+  }
+
   const savedState = localStorage.getItem(key)
 
   if (savedState) {
