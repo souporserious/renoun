@@ -15,10 +15,14 @@ export function usePreContext() {
 
 export function Pre({
   children,
+  fontSize,
+  lineHeight,
   style,
   isNestedInEditor,
   ...props
 }: {
+  fontSize: string
+  lineHeight: string
   isNestedInEditor: boolean
 } & React.HTMLProps<HTMLPreElement>) {
   const [pointerDown, setPointerDown] = useState(false)
@@ -46,8 +50,8 @@ export function Pre({
         gridRow: 1,
         whiteSpace: 'pre',
         wordWrap: 'break-word',
-        fontSize: 'var(--font-size-body-2)',
-        lineHeight: 'var(--line-height-body-2)',
+        fontSize,
+        lineHeight,
         letterSpacing: '0px',
         tabSize: 4,
         padding: 0,

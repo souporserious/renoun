@@ -16,7 +16,7 @@ const mdxComponents = {
     }
     return <code {...props} />
   },
-} as MDXComponents
+} satisfies MDXComponents
 
 function Types({
   properties,

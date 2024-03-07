@@ -37,6 +37,12 @@ export type CodeProps = {
   /** Show or hide errors. */
   showErrors?: boolean
 
+  /** The font size to apply to the code block. */
+  fontSize?: string
+
+  /** The line height to apply to the code block. */
+  lineHeight?: string
+
   /** Padding to apply to the code block. */
   padding?: string
 
@@ -55,8 +61,6 @@ export type CodeProps = {
   /** Style to apply to the code block. */
   style?: React.CSSProperties
 }
-
-const lineHeight = 'var(--line-height-body-2, 1.4rem)'
 
 /** Renders a code block with syntax highlighting. */
 export function CodeView({
@@ -80,6 +84,8 @@ export function CodeView({
   baseDirectory,
   edit,
   value,
+  fontSize = '1rem',
+  lineHeight = '1.4rem',
   padding = '1rem',
   paddingHorizontal = padding,
   paddingVertical = padding,
@@ -162,7 +168,7 @@ export function CodeView({
             width: '6ch',
             paddingTop: paddingVertical,
             paddingBottom: paddingVertical,
-            fontSize: 'var(--font-size-body-2, 1rem)',
+            fontSize,
             lineHeight,
             paddingRight: '2ch',
             textAlign: 'right',
@@ -196,6 +202,8 @@ export function CodeView({
 
       <Pre
         isNestedInEditor={isNestedInEditor}
+        fontSize={fontSize}
+        lineHeight={lineHeight}
         className={className}
         style={{ gridRow: filename ? 2 : 1 }}
       >

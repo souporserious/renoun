@@ -5,6 +5,31 @@ import { getClassNameMetadata } from '../utils/get-class-name-metadata'
 import { CodeBlock } from './CodeBlock'
 import { CodeInline } from './CodeInline'
 
+type PrivateCodeBlockProps = {
+  /** Path to the source file on disk provided by the remark plugin. */
+  sourcePath: string
+  sourcePathLine: number
+  sourcePathColumn: number
+}
+
+type MDXTSComponentsType = Omit<MDXComponentsType, 'pre'> & {
+  pre?: (
+    props: React.HTMLProps<HTMLPreElement> & {
+      allowCopy?: boolean
+      allowErrors?: boolean
+      filename?: string
+      lineNumbers?: boolean
+      showErrors?: boolean
+      highlight?: string
+      toolbar?: boolean
+      fontSize?: string
+      lineHeight?: string
+    } & PrivateCodeBlockProps
+  ) => React.ReactElement
+}
+
+export type MDXComponents = MDXTSComponentsType
+
 /** Pre-configured MDXTS components for `pre` and `code` elements. */
 export const MDXComponents = {
   pre: (props) => {
@@ -15,28 +40,22 @@ export const MDXComponents = {
       lineNumbers,
       showErrors,
       highlight,
-      sourcePath,
-      sourcePathLine,
-      sourcePathColumn,
       toolbar,
-      children,
+      fontSize,
+      lineHeight,
       className,
       style,
-    } = props as {
-      allowCopy?: boolean
-      allowErrors?: boolean
-      filename?: string
-      lineNumbers?: boolean
-      showErrors?: boolean
-      highlight?: string
-      sourcePath?: string
-      sourcePathLine?: number
-      sourcePathColumn?: number
-      toolbar?: boolean
-      children: React.ReactElement
-      className: string
-      style: React.CSSProperties
+      children,
+    } = props
+    const { sourcePath, sourcePathLine, sourcePathColumn } =
+      props as unknown as PrivateCodeBlockProps
+
+    if (!React.isValidElement(children)) {
+      throw new Error(
+        'mdxts: Expected children to be defined for MDX `pre` element.'
+      )
     }
+
     const value = children.props.children.trimStart()
     const metadata = getClassNameMetadata(children.props.className || '')
 
@@ -51,6 +70,8 @@ export const MDXComponents = {
         showErrors={showErrors}
         toolbar={toolbar}
         value={value}
+        fontSize={fontSize}
+        lineHeight={lineHeight}
         className={className}
         style={style}
         // @ts-expect-error - private props
@@ -62,7 +83,9 @@ export const MDXComponents = {
   },
   code: ({ children, className, style }) => {
     if (typeof children !== 'string') {
-      return <code className={className} style={style} children={children} />
+      throw new Error(
+        'mdxts: Expected children to be a string for MDX `code` element.'
+      )
     }
 
     return (
@@ -75,13 +98,11 @@ export const MDXComponents = {
       />
     )
   },
-} satisfies MDXComponentsType
-
-export type MDXComponents = MDXComponentsType
+} satisfies MDXTSComponentsType
 
 export function useMDXComponents(
-  components: MDXComponentsType
-): MDXComponentsType {
+  components: MDXTSComponentsType
+): MDXTSComponentsType {
   return {
     ...MDXComponents,
     ...components,

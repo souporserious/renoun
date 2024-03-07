@@ -53,6 +53,12 @@ export type BaseCodeBlockProps = {
   /** Show or hide errors. */
   showErrors?: boolean
 
+  /** The font size to apply to the code block. */
+  fontSize?: string
+
+  /** The line height to apply to the code block. */
+  lineHeight?: string
+
   /** Padding to apply to the code block. */
   padding?: string
 
@@ -106,6 +112,8 @@ export async function CodeBlock({
   showErrors,
   allowErrors,
   allowCopy,
+  fontSize,
+  lineHeight,
   padding,
   paddingHorizontal,
   paddingVertical,
@@ -241,6 +249,8 @@ export async function CodeBlock({
     filenameLabel,
     highlighter,
     highlight,
+    fontSize,
+    lineHeight,
     padding,
     paddingHorizontal,
     paddingVertical,
