@@ -4,7 +4,7 @@ import { useQuickInfoContext } from './QuickInfoProvider'
 
 export function Symbol({
   children,
-  highlightColor = '#87add73d',
+  highlightColor = '#87add7',
   style,
 }: {
   children: React.ReactNode
@@ -30,7 +30,7 @@ export function Symbol({
       style={{
         position: 'absolute',
         inset: 0,
-        backgroundColor: isHighlighted ? highlightColor : undefined,
+        backgroundColor: isHighlighted ? `${highlightColor}3d` : undefined,
         ...style,
       }}
     />
