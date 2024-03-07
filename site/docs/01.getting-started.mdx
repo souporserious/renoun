@@ -56,7 +56,7 @@ export default withMdxts({
 
 The `theme` option is used for syntax highlighting code blocks and is powered by [Shiki](https://shiki.matsu.io/). The `theme` value should correspond to either a built-in theme or a source path to a custom theme that adheres to the [VS Code theme specification](https://code.visualstudio.com/api/extension-guides/color-theme).
 
-### Defining a Data Source
+### Defining a Data Source (Optional)
 
 Use the `createSource` utility to generate metadata and helpers for MDX and TypeScript source files that can be used to build routes for content and documentation:
 
@@ -142,25 +142,9 @@ export default async function Page({ params }: Props) {
 }
 ```
 
-### Examples
-
-To associate examples with a source file, create a sibling file with the same name and a `.examples.tsx` extension:
-
-```tsx filename="components/Button.tsx"
-export const Button = ({ children }) => <button>{children}</button>
-```
-
-```tsx filename="components/Button.examples.tsx"
-import { Button } from './Button'
-
-export const Basic = () => <Button>Click Me</Button>
-```
-
-Read more about [examples](/examples/authoring) to learn how to generate interactive documentation.
-
 ### Type Checking
 
-All code blocks will automatically be type-checked using the TypeScript compiler. Notice the following will throw a type error because `b` is not defined:
+All code blocks will automatically be type-checked using the TypeScript compiler to ensure code works as expected. Notice the following will throw a type error because `b` is not defined:
 
 ```tsx
 const a = 1
@@ -181,7 +165,23 @@ const a = 1
 a + b
 ```
 
-This is useful for showing incomplete or incorrect code examples in documentation.
+This is useful for showing incomplete or incorrect code examples in documentation for educational purposes. Read more about [type checking](/type-checking) to learn how the TypeScript compiler is used for providing type information for code blocks.
+
+### Examples
+
+To associate examples with a source file, create a sibling file with the same name and a `.examples.tsx` extension:
+
+```tsx filename="components/Button.tsx"
+export const Button = ({ children }) => <button>{children}</button>
+```
+
+```tsx filename="components/Button.examples.tsx"
+import { Button } from './Button'
+
+export const Basic = () => <Button>Click Me</Button>
+```
+
+When collecting information about a TypeScript source file (`Button.tsx` in this case), the examples will be included in the metadata. Read more about [examples](/examples/authoring) to learn how to generate interactive documentation and render them to a route.
 
 ## Next Steps
 
