@@ -32,8 +32,8 @@ export type ModuleData = {
   previous?: { label: string; pathname: string }
   next?: { label: string; pathname: string }
   sourcePath: string
+  executionEnvironment?: 'server' | 'client' | 'isomorphic'
   isMainExport?: boolean
-  isServerOnly?: boolean
   exportedTypes: (Omit<
     ReturnType<typeof getExportedTypes>[number],
     'filePath'
@@ -208,12 +208,20 @@ export function getAllData({
           ? pathname === join(sep, basePathname, packageName)
           : pathname === join(sep, packageName)
         : false
-      const isServerOnly = sourceFile
-        .getImportDeclarations()
-        .some((importDeclaration) => {
-          const moduleSpecifier = importDeclaration.getModuleSpecifierValue()
-          return moduleSpecifier === 'server-only'
-        })
+      const importDeclarations = sourceFile.getImportDeclarations()
+      const isServerOnly = importDeclarations.some((importDeclaration) => {
+        const moduleSpecifier = importDeclaration.getModuleSpecifierValue()
+        return moduleSpecifier === 'server-only'
+      })
+      const isClientOnly = importDeclarations.some((importDeclaration) => {
+        const moduleSpecifier = importDeclaration.getModuleSpecifierValue()
+        return moduleSpecifier === 'client-only'
+      })
+      const executionEnvironment = isServerOnly
+        ? 'server'
+        : isClientOnly
+          ? 'client'
+          : 'isomorphic'
 
       if (mainExportDeclaration) {
         const declarationName = getNameFromDeclaration(mainExportDeclaration)
@@ -240,8 +248,8 @@ export function getAllData({
         label,
         description,
         depth,
+        executionEnvironment,
         isMainExport,
-        isServerOnly,
         pathname: pathname,
         sourcePath,
       }

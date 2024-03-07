@@ -37,8 +37,14 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
     return notFound()
   }
 
-  const { Content, title, description, examples, exportedTypes, isServerOnly } =
-    singlePackage
+  const {
+    Content,
+    title,
+    description,
+    examples,
+    exportedTypes,
+    executionEnvironment,
+  } = singlePackage
 
   return (
     <PageContainer dataSource={singlePackage}>
@@ -50,7 +56,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
         }}
       >
         {title ? <h1 style={{ margin: 0 }}>{title}</h1> : null}
-        {isServerOnly ? (
+        {executionEnvironment === 'server' ? (
           <span
             style={{
               fontSize: 'var(--font-size-body-2)',

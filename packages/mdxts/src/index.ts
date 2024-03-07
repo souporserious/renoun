@@ -291,18 +291,18 @@ export function createSource<Type>(
       }
 
       return {
-        isServerOnly: data.isServerOnly,
-        isMainExport: data.isMainExport,
         title: data.title,
         label: data.label,
         description: data.description,
         order: data.order,
         depth: data.depth,
         exportedTypes: data.exportedTypes,
+        executionEnvironment: data.executionEnvironment,
         pathname: data.pathname,
         sourcePath: data.sourcePath,
         previous: data.previous,
         next: data.next,
+        isMainExport: data.isMainExport,
         Content,
         examples,
         frontMatter,
