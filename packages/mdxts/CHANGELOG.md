@@ -1,5 +1,25 @@
 # mdxts
 
+## 0.9.0
+
+### Minor Changes
+
+- 16031d0: Adds a `renderTitle` prop to the `Content` component returned from `createSource` to allow overriding the default title for an MDX file.
+- 5707439: Add `className` and `style` to `CopyButton`.
+- c673a16: Add `fontSize` and `lineHeight` props to `CodeBlock`.
+- 849dd1c: Replace `isServerOnly` field with `executionEnvironment` that can be either `server`, `client`, or `isomorphic`.
+- 87026e9: Only use inferred description from MDX for metadata.
+- 78fbfbb: Add separate `PackageStylesAndScript` component for `PackageInstallClient` styles and local storage hydration.
+- 758ab24: Sync package manager state across other component instances and windows.
+
+### Patch Changes
+
+- c753d53: Fix headings below level one getting wrapped with `ShouldRenderTitle`.
+- ddf8870: Add `name` support for type aliases, interfaces, and enum declarations.
+- 000acf3: Fix default `Symbol` highlight color to be a transparent version of the theme `hoverHighlightBackground`.
+- 71f5545: Fix `isMainExport` field for `exportedTypes` to correctly interpret which export declaration is the main export based on a matching name.
+- 65824b9: Fix JavaScript code blocks erroring with `cannot read undefined reading flags, escapedName` by setting ts-morph project config to `allowJs`.
+
 ## 0.8.2
 
 ### Patch Changes
