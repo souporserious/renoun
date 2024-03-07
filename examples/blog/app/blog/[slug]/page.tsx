@@ -1,17 +1,11 @@
-import { createSource } from 'mdxts'
-
-const posts = createSource<{
-  metadata: { date: string }
-}>('../*.mdx', {
-  baseDirectory: 'app/blog',
-})
+import { posts } from '../data'
 
 export function generateStaticParams() {
-  return posts.paths().map((pathname) => ({ slug: pathname.at(0) }))
+  return posts.paths().map((pathname) => ({ slug: pathname.at(-1) }))
 }
 
 export default async function Page({ params }: { params: { slug: string } }) {
-  const { Content, metadata } = await posts.get(params.slug)
+  const { Content, metadata } = await posts.get(`blog/${params.slug}`)
   const formattedDate = new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: '2-digit',
