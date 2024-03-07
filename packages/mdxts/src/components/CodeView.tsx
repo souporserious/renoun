@@ -56,7 +56,7 @@ export type CodeProps = {
   style?: React.CSSProperties
 }
 
-const lineHeight = '1.4rem'
+const lineHeight = 'var(--line-height-body-2, 1.4rem)'
 
 /** Renders a code block with syntax highlighting. */
 export function CodeView({
