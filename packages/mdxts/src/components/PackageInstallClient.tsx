@@ -1,5 +1,7 @@
 'use client'
-import React, { useRef, useState, useEffect } from 'react'
+import React from 'react'
+
+import { useLocalStorageState } from '../hooks/use-local-storage-state'
 
 const stateKey = 'package-manager'
 const defaultPackageManager = 'npm'
@@ -31,32 +33,6 @@ if (value) {
   document.querySelectorAll(\`[data-storage-id="package-manager-\${value}-command"]\`).forEach(element => element.classList.add('active'));
 }
 `.trim()
-
-function useLocalStorageState(key: string, defaultValue?: string) {
-  const [state, setState] = useState(defaultValue)
-  const [isHydrating, setIsHydrating] = useState(true)
-  const initialRender = useRef(true)
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return
-    }
-
-    if (initialRender.current) {
-      const saved = localStorage.getItem(key)
-      if (saved) {
-        setState(saved)
-      }
-      setIsHydrating(false)
-    } else if (state) {
-      localStorage.setItem(key, state)
-    }
-
-    initialRender.current = false
-  }, [state])
-
-  return [state, setState, isHydrating] as const
-}
 
 /** The client-side component for the PackageInstall component. */
 export function PackageInstallClient({
