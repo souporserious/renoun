@@ -1,31 +1,24 @@
-import type { Node } from 'ts-morph'
-import { SyntaxKind } from 'ts-morph'
+import { Node } from 'ts-morph'
 
-/** Returns the name of a function, variable, or class declaration. */
+/** Returns the name of a function, variable, class, or type alias declaration if applicable. */
 export function getNameFromDeclaration(declaration: Node): string | null {
-  switch (declaration.getKind()) {
-    case SyntaxKind.FunctionDeclaration:
-      return (
-        declaration.asKind(SyntaxKind.FunctionDeclaration)?.getName() ?? null
-      )
-    case SyntaxKind.VariableDeclaration:
-      const initializer = declaration
-        .asKind(SyntaxKind.VariableDeclaration)
-        ?.getInitializer()
-      if (
-        initializer?.getKind() === SyntaxKind.ArrowFunction ||
-        initializer?.getKind() === SyntaxKind.FunctionExpression
-      ) {
-        return (
-          declaration.asKind(SyntaxKind.VariableDeclaration)?.getName() ?? null
-        )
-      }
-      return null
-    case SyntaxKind.ClassDeclaration:
-      return declaration.asKind(SyntaxKind.ClassDeclaration)?.getName() ?? null
-    default:
-      throw new Error(
-        `Unsupported declaration kind: ${declaration.getKindName()}`
-      )
+  if (Node.isVariableDeclaration(declaration)) {
+    const initializer = declaration.getInitializer()
+    return Node.isArrowFunction(initializer) ||
+      Node.isFunctionExpression(initializer)
+      ? declaration.getName()
+      : null
+  } else if (
+    Node.isFunctionDeclaration(declaration) ||
+    Node.isClassDeclaration(declaration) ||
+    Node.isTypeAliasDeclaration(declaration) ||
+    Node.isInterfaceDeclaration(declaration) ||
+    Node.isEnumDeclaration(declaration)
+  ) {
+    return declaration.getName() || null
   }
+
+  throw new Error(
+    `mdxts: Unsupported declaration kind: ${declaration.getKindName()}`
+  )
 }
