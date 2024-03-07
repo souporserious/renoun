@@ -162,7 +162,7 @@ export function CodeView({
             width: '6ch',
             paddingTop: paddingVertical,
             paddingBottom: paddingVertical,
-            fontSize: '1rem',
+            fontSize: 'var(--font-size-body-2, 1rem)',
             lineHeight,
             paddingRight: '2ch',
             textAlign: 'right',
