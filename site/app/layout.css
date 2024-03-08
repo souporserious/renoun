@@ -53,7 +53,7 @@ html {
 
 @media (min-width: 60rem) {
   html {
-    font-size: 1.2vw;
+    font-size: min(18px, 1.2vw);
   }
 }
 
