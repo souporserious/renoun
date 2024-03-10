@@ -18,7 +18,7 @@ MDXTS (Beta) is a collection of components and utilities for rendering content, 
 
 ## Getting Started
 
-[Next.js](https://nextjs.org/) is currently the best framework and easiest way to use MDXTS and has first-class support through a [plugin](https://www.mdxts.dev/packages/next). Use the CLI in a Next.js project to get started:
+[Next.js](https://nextjs.org/) is currently the easiest way to use MDXTS and has first-class support through a [plugin](https://www.mdxts.dev/packages/next). Use the CLI in a Next.js project to get started:
 
 ```bash
 npm create mdxts
