@@ -31,32 +31,31 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
 
     return async () => {
       const [
-        remarkGemoji,
         remarkGfm,
         remarkGitHub,
         remarkStripBadges,
         remarkSqueezeParagraphs,
         remarkUnwrapImages,
       ] = await Promise.all([
-        import('remark-gemoji'),
-        import('remark-gfm'),
-        import('remark-github'),
-        import('remark-strip-badges'),
-        import('remark-squeeze-paragraphs'),
-        import('remark-unwrap-images'),
+        import('remark-gfm').then((mod) => mod.default),
+        import('remark-github').then((mod) => mod.default),
+        import('remark-strip-badges').then((mod) => mod.default),
+        import('remark-squeeze-paragraphs').then((mod) => mod.default),
+        import('remark-unwrap-images').then((mod) => mod.default),
       ])
       const withMdx = createMdxPlugin({
         options: {
           remarkPlugins: [
-            remarkGemoji,
             remarkGfm,
-            remarkGitHub,
+            gitSource?.includes('github')
+              ? [remarkGitHub, { repository: gitSource }]
+              : undefined,
             remarkStripBadges,
             remarkSqueezeParagraphs,
             remarkUnwrapImages,
             remarkTypography,
             remarkPlugin,
-          ] as any,
+          ].filter(Boolean) as any,
           rehypePlugins: [rehypePlugin],
         },
       })
