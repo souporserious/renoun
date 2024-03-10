@@ -1,5 +1,13 @@
 # mdxts
 
+## 0.9.1
+
+### Patch Changes
+
+- 29a923d: Fixes heading level one not being rendered as markdown.
+- 16eabd2: Fix remark plugins not being initialized correctly.
+- 05106f3: Merge data title into metadata if not explicitly defined.
+
 ## 0.9.0
 
 ### Minor Changes
