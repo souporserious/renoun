@@ -285,7 +285,11 @@ export function createSource<Type>(
         Object.assign(metadata, frontMatter)
       }
 
-      /** Merge description into metadata if nothing was found. */
+      /** Merge title and description into metadata if nothing was found. */
+      if (!metadata.title) {
+        metadata.title = data.title
+      }
+
       if (!metadata.description) {
         metadata.description = description
       }
