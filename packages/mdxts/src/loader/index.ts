@@ -37,7 +37,7 @@ export default async function loader(
     )
 
     if (headingLevelOneLineIndex !== -1) {
-      const wrappedTitle = `import { ShouldRenderTitle } from 'mdxts/components/ShouldRenderTitle';\n\n<ShouldRenderTitle renderTitle={props.renderTitle}>${sourceLines.at(headingLevelOneLineIndex)}</ShouldRenderTitle>`
+      const wrappedTitle = `import { ShouldRenderTitle } from 'mdxts/components/ShouldRenderTitle';\n\n<ShouldRenderTitle renderTitle={props.renderTitle}>\n${sourceLines.at(headingLevelOneLineIndex)}\n</ShouldRenderTitle>`
       sourceLines[headingLevelOneLineIndex] = wrappedTitle
       source = sourceLines.join('\n')
     }
