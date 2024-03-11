@@ -1,6 +1,7 @@
 import type { Directory, SourceFile } from 'ts-morph'
 import { kebabCase } from 'case-anything'
 import { extractExportByIdentifier } from '@tsxmod/utils'
+import parseTitle from 'title'
 
 import { getSourcePath } from './get-source-path'
 
@@ -98,7 +99,7 @@ function parseExamplesFromModule(
       const line = exportedDeclaration.getStartLineNumber()
       const column = exportedDeclaration.getStartLinePos()
       examples.push({
-        name,
+        name: parseTitle(kebabCase(name).split('-').join(' ')),
         moduleExport,
         slug: kebabCase(name),
         sourcePath: getSourcePath(sourceFile.getFilePath(), line, column),

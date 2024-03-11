@@ -12,7 +12,7 @@ exports[`get examples from source file 1`] = `
 [
   {
     "moduleExport": [Function],
-    "name": "BasicUsage",
+    "name": "Basic Usage",
     "slug": "basic-usage",
     "sourcePath": "",
     "sourceText": "import { Button } from '../Button'
@@ -23,7 +23,7 @@ export function BasicUsage() {
   },
   {
     "moduleExport": [Function],
-    "name": "AlternateUsage",
+    "name": "Alternate Usage",
     "slug": "alternate-usage",
     "sourcePath": "",
     "sourceText": "import { Button } from '../Button'
