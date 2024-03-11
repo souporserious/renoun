@@ -5,8 +5,8 @@ import { compile } from '@mdx-js/mdx'
 import 'server-only'
 
 import { getMdxPlugins } from '../plugins'
-import type { MDXComponents } from './MDXComponents'
 import { Context } from './Context'
+import { MDXComponents } from './MDXComponents'
 
 /** Compiles and renders MDX content. */
 export async function MDXContent({
@@ -25,6 +25,10 @@ export async function MDXContent({
 }) {
   const { theme } = arguments[0]
   const plugins = await getMdxPlugins()
+  const allComponents = {
+    ...MDXComponents,
+    ...components,
+  }
   const allDependencies = {
     jsx: process.env.NODE_ENV === 'development' ? jsxDevRuntime : jsxRuntime,
     ...dependencies,
@@ -46,10 +50,10 @@ export async function MDXContent({
   if (theme) {
     return (
       <Context value={{ theme }}>
-        <Component components={components} />
+        <Component components={allComponents} />
       </Context>
     )
   }
 
-  return <Component components={components} />
+  return <Component components={allComponents} />
 }
