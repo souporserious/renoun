@@ -1,5 +1,11 @@
 # mdxts
 
+## 0.10.1
+
+### Patch Changes
+
+- d16f84d: Reverts 06e5c20 which merged default `MDXComponents` into `MDXContent` components as it causes an infinite loop.
+
 ## 0.10.0
 
 ### Minor Changes
