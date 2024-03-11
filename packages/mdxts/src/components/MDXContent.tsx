@@ -4,6 +4,7 @@ import * as jsxDevRuntime from 'react/jsx-dev-runtime'
 import { compile } from '@mdx-js/mdx'
 import 'server-only'
 
+import { getMdxPlugins } from '../plugins'
 import type { MDXComponents } from './MDXComponents'
 import { Context } from './Context'
 
@@ -23,11 +24,15 @@ export async function MDXContent({
   dependencies?: Record<string, any>
 }) {
   const { theme } = arguments[0]
+  const plugins = await getMdxPlugins()
   const allDependencies = {
     jsx: process.env.NODE_ENV === 'development' ? jsxDevRuntime : jsxRuntime,
     ...dependencies,
   } as Record<string, any>
-  const code = await compile(value, { outputFormat: 'function-body' })
+  const code = await compile(value, {
+    ...plugins,
+    outputFormat: 'function-body',
+  })
   const result = new Function(
     ...Object.keys(allDependencies),
     code.value.toString()

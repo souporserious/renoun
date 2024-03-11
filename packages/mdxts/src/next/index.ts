@@ -1,12 +1,10 @@
 import webpack from 'webpack'
 import { NextConfig } from 'next'
 import { resolve } from 'node:path'
-import remarkTypography from 'remark-typography'
 import createMdxPlugin from '@next/mdx'
 import { BUNDLED_THEMES } from 'shiki'
 
-import { remarkPlugin } from '../remark'
-import { rehypePlugin } from '../rehype'
+import { getMdxPlugins } from '../plugins'
 import { renumberFilenames } from '../utils/renumber'
 
 type PluginOptions = {
@@ -30,34 +28,9 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
     let startedWatcher = false
 
     return async () => {
-      const [
-        remarkGfm,
-        remarkGitHub,
-        remarkStripBadges,
-        remarkSqueezeParagraphs,
-        remarkUnwrapImages,
-      ] = await Promise.all([
-        import('remark-gfm').then((mod) => mod.default),
-        import('remark-github').then((mod) => mod.default),
-        import('remark-strip-badges').then((mod) => mod.default),
-        import('remark-squeeze-paragraphs').then((mod) => mod.default),
-        import('remark-unwrap-images').then((mod) => mod.default),
-      ])
+      const plugins = await getMdxPlugins({ gitSource })
       const withMdx = createMdxPlugin({
-        options: {
-          remarkPlugins: [
-            remarkGfm,
-            gitSource?.includes('github')
-              ? [remarkGitHub, { repository: gitSource }]
-              : undefined,
-            remarkStripBadges,
-            remarkSqueezeParagraphs,
-            remarkUnwrapImages,
-            remarkTypography,
-            remarkPlugin,
-          ].filter(Boolean) as any,
-          rehypePlugins: [rehypePlugin],
-        },
+        options: plugins,
       })
 
       nextConfig.webpack = (config, options) => {
