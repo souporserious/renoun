@@ -118,7 +118,16 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
                     backgroundColor: 'var(--color-surface-2)',
                   }}
                 >
-                  <h3 style={{ flexShrink: 0, margin: 0 }}>{example.name}</h3>
+                  <h3
+                    style={{
+                      fontSize: 'var(--font-size-body-2)',
+                      color: 'var(--color-foreground-interactive)',
+                      flexShrink: 0,
+                      margin: 0,
+                    }}
+                  >
+                    {example.name}
+                  </h3>
                   <div
                     style={{
                       height: '10rem',
