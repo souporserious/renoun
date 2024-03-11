@@ -81,7 +81,7 @@ export const MDXComponents = {
       />
     )
   },
-  code: ({ children, className, style }) => {
+  code: ({ language, children, className, style }) => {
     if (typeof children !== 'string') {
       throw new Error(
         'mdxts: Expected children to be a string for MDX `code` element.'
@@ -92,6 +92,7 @@ export const MDXComponents = {
       <CodeInline
         paddingHorizontal="0.25rem"
         paddingVertical="0.1rem"
+        language={language}
         value={children}
         className={className}
         style={style}

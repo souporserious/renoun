@@ -1,4 +1,15 @@
 import type { Element, Node } from 'hast'
+import { BUNDLED_LANGUAGES } from 'shiki'
+
+const languageMap: Record<string, any> = {
+  mjs: 'javascript',
+  js: 'javascript',
+  jsx: 'javascript',
+  ts: 'typescript',
+  tsx: 'typescript',
+}
+
+const ADDITIONAL_LANGUAGES = Object.keys(languageMap)
 
 /** Adds code meta props to the code element. */
 export function addCodeMetaProps() {
@@ -31,6 +42,33 @@ export function addCodeMetaProps() {
         ) {
           const codeString = toString(codeNode)
           element.properties.code = codeString
+        }
+      } else if (element.tagName === 'code') {
+        const codeString = toString(element)
+        const firstSpaceIndex = codeString.indexOf(' ')
+
+        if (firstSpaceIndex > -1) {
+          const possibleLanguage = codeString.substring(0, firstSpaceIndex)
+          const isValidLanguage = BUNDLED_LANGUAGES.map(
+            (language) => language.id
+          )
+            .concat(ADDITIONAL_LANGUAGES)
+            .includes(possibleLanguage)
+
+          if (isValidLanguage) {
+            const language = languageMap[possibleLanguage] || possibleLanguage
+
+            // Add the language as a prop for syntax highlighting
+            element.properties.language = language
+
+            // Replace the element's content with just the code
+            element.children = [
+              {
+                type: 'text',
+                value: codeString.substring(firstSpaceIndex + 1),
+              },
+            ]
+          }
         }
       }
     })
