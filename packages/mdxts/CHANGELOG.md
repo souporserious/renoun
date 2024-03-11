@@ -1,5 +1,19 @@
 # mdxts
 
+## 0.10.0
+
+### Minor Changes
+
+- 2b60fa0: Add same `remark` and `rehype` plugins used in `mdxts/next` to `MDXContent` component.
+- 06e5c20: Merge default `MDXComponents` into `MDXContent` components.
+- 2bf8b02: Allow passing a language to inline code in MDX like `js const a = '1'`.
+
+### Patch Changes
+
+- ae3d6a3: Fix metadata analysis to account for MDX syntax.
+- 1b2b057: Fix example names not being parsed as a title.
+- 4b9314c: Fix missing theme for `MDXContent` in examples.
+
 ## 0.9.1
 
 ### Patch Changes
