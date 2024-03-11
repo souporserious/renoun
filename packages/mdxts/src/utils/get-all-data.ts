@@ -379,8 +379,23 @@ function findFirstHeading(sourceFileText: string) {
 function getMetadata(sourceFile: SourceFile) {
   const metadataExport = sourceFile.getVariableDeclaration('metadata')
   if (metadataExport) {
-    const metadata = resolveExpression(metadataExport.getInitializer()!)
-    return metadata as Record<string, any>
+    if (sourceFile.getExtension() === '.mdx') {
+      // since we're working with MDX and not a TypeScript file we need to trim the export to remove any trailing MDX that might be present
+      const trailingCurlyBraceIndex = metadataExport.getText().lastIndexOf('}')
+
+      if (trailingCurlyBraceIndex > -1) {
+        const originalText = metadataExport.getText()
+        metadataExport.replaceWithText(
+          metadataExport.getText().slice(0, trailingCurlyBraceIndex + 1)
+        )
+        const metadata = resolveExpression(metadataExport.getInitializer()!)
+        metadataExport.replaceWithText(originalText)
+        return metadata as Record<string, any>
+      }
+    } else {
+      const metadata = resolveExpression(metadataExport.getInitializer()!)
+      return metadata as Record<string, any>
+    }
   }
   return null
 }
