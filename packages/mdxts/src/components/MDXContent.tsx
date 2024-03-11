@@ -5,6 +5,7 @@ import { compile } from '@mdx-js/mdx'
 import 'server-only'
 
 import type { MDXComponents } from './MDXComponents'
+import { Context } from './Context'
 
 /** Compiles and renders MDX content. */
 export async function MDXContent({
@@ -21,6 +22,7 @@ export async function MDXContent({
   /** An object of external dependencies that will be available to the MDX source code. */
   dependencies?: Record<string, any>
 }) {
+  const { theme } = arguments[0]
   const allDependencies = {
     jsx: process.env.NODE_ENV === 'development' ? jsxDevRuntime : jsxRuntime,
     ...dependencies,
@@ -34,6 +36,14 @@ export async function MDXContent({
 
   if (Component === null) {
     return null
+  }
+
+  if (theme) {
+    return (
+      <Context value={{ theme }}>
+        <Component components={components} />
+      </Context>
+    )
   }
 
   return <Component components={components} />

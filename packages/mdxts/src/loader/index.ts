@@ -95,6 +95,7 @@ export default async function loader(
           '<ExportedTypes',
           `<ExportedTypes theme={theme} workingDirectory="${workingDirectory}"`
         )
+        .replaceAll('<MDXContent', `<MDXContent theme={theme}`)
     } else {
       source = `${source}\nimport { setTheme } from 'mdxts';\nimport theme from '${relativeThemePath}';\nsetTheme(theme);`
     }
