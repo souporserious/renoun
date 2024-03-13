@@ -31,6 +31,7 @@ export async function MDXContent({
   } as Record<string, any>
   const code = await compile(value, {
     ...plugins,
+    useDynamicImport: true,
     outputFormat: 'function-body',
   })
   const result = new Function(
