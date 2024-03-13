@@ -1,11 +1,13 @@
 import webpack from 'webpack'
 import { NextConfig } from 'next'
+import { PHASE_DEVELOPMENT_SERVER } from 'next/constants'
 import { resolve } from 'node:path'
 import createMdxPlugin from '@next/mdx'
 import { BUNDLED_THEMES } from 'shiki'
 
 import { getMdxPlugins } from '../plugins'
 import { renumberFilenames } from '../utils/renumber'
+import { createRefreshServer } from './create-refresh-server'
 
 type PluginOptions = {
   /** Path to the VS Code compatible theme used for syntax highlighting the Code and Editor components. */
@@ -20,6 +22,7 @@ type PluginOptions = {
 
 /** A Next.js plugin to configure MDXTS theming, `rehype` and `remark` markdown plugins, and the [Webpack loader](mdxts.dev/packages/loader). */
 export function createMdxtsPlugin(pluginOptions: PluginOptions) {
+  let refreshServerPort: string | null = null
   let { gitSource, gitBranch = 'main', theme } = pluginOptions
   const themePath = resolve(process.cwd(), theme)
 
@@ -27,7 +30,7 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
     const getWebpackConfig = nextConfig.webpack
     let startedWatcher = false
 
-    return async () => {
+    return async (phase: typeof PHASE_DEVELOPMENT_SERVER) => {
       const plugins = await getMdxPlugins({ gitSource })
       const withMdx = createMdxPlugin({
         options: plugins,
@@ -93,6 +96,18 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
 
       nextConfig.env.MDXTS_GIT_SOURCE = gitSource ?? ''
       nextConfig.env.MDXTS_GIT_BRANCH = gitBranch
+
+      if (phase === PHASE_DEVELOPMENT_SERVER) {
+        if (refreshServerPort === null) {
+          const server = await createRefreshServer()
+          const address = server.address()
+          if (address === null || typeof address === 'string') {
+            throw new Error('Expected server to be listening')
+          }
+          refreshServerPort = String(address.port)
+        }
+        nextConfig.env.MDXTS_REFRESH_PORT = refreshServerPort
+      }
 
       if (nextConfig.pageExtensions === undefined) {
         nextConfig.pageExtensions = ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx']

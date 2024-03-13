@@ -1,4 +1,5 @@
 import parseTitle from 'title'
+import * as React from 'react'
 import type { ComponentType } from 'react'
 import { basename, dirname, extname, join, resolve, sep } from 'node:path'
 import 'server-only'
@@ -307,7 +308,26 @@ export function createSource<Type>(
         previous: data.previous,
         next: data.next,
         isMainExport: data.isMainExport,
-        Content,
+        Content: async (props) => {
+          if (Content === undefined) {
+            return null
+          }
+          if (process.env.NODE_ENV === 'development') {
+            const { ContentRefresh } = await import(
+              './components/ContentRefresh'
+            )
+            return React.createElement(
+              React.Fragment,
+              null,
+              React.createElement(ContentRefresh, {
+                mdxPath: data.mdxPath,
+                tsPath: data.tsPath,
+              }),
+              React.createElement(Content, props)
+            )
+          }
+          return React.createElement(Content, props)
+        },
         examples,
         frontMatter,
         headings,

@@ -152,9 +152,6 @@ importers:
       '@types/title':
         specifier: ^3.4.3
         version: 3.4.3
-      '@types/webpack-env':
-        specifier: 1.18.4
-        version: 1.18.4
       case-anything:
         specifier: ^2.1.13
         version: 2.1.13
@@ -248,10 +245,19 @@ importers:
       vscode-textmate:
         specifier: ^8.0.0
         version: 8.0.0
+      ws:
+        specifier: ^8.16.0
+        version: 8.16.0
     devDependencies:
       '@swc/cli':
         specifier: ^0.3.10
         version: 0.3.10(@swc/core@1.4.4)(chokidar@3.6.0)
+      '@types/webpack-env':
+        specifier: 1.18.4
+        version: 1.18.4
+      '@types/ws':
+        specifier: ^8.5.10
+        version: 8.5.10
       next:
         specifier: 14.1.2
         version: 14.1.2(@babel/core@7.23.0)(react-dom@18.2.0)(react@18.2.0)
@@ -2386,7 +2392,12 @@ packages:
 
   /@types/webpack-env@1.18.4:
     resolution: {integrity: sha512-I6e+9+HtWADAWeeJWDFQtdk4EVSAbj6Rtz4q8fJ7mSr1M0jzlFcs8/HZ+Xb5SHzVm1dxH7aUiI+A8kA8Gcrm0A==}
-    dev: false
+
+  /@types/ws@8.5.10:
+    resolution: {integrity: sha512-vmQSUcfalpIq0R9q7uTo2lXs6eGIpt9wtnLdMv9LVpIjCA/+ufZRozlVoVelIYixx1ugCBKDhn89vnsEGOCx9A==}
+    dependencies:
+      '@types/node': 20.11.24
+    dev: true
 
   /@types/yargs-parser@21.0.1:
     resolution: {integrity: sha512-axdPBuLuEJt0c4yI5OZssC19K2Mq1uKdrfZBzuxLvaztgqUtFYZUNw7lETExPYJR9jdEoIg4mb7RQKRQzOkeGQ==}
@@ -5393,7 +5404,7 @@ packages:
       whatwg-encoding: 2.0.0
       whatwg-mimetype: 3.0.0
       whatwg-url: 11.0.0
-      ws: 8.14.2
+      ws: 8.16.0
       xml-name-validator: 4.0.0
     transitivePeerDependencies:
       - bufferutil
@@ -8748,8 +8759,8 @@ packages:
       signal-exit: 3.0.7
     dev: true
 
-  /ws@8.14.2:
-    resolution: {integrity: sha512-wEBG1ftX4jcglPxgFCMJmZ2PLtSbJ2Peg6TmpJFTbe9GZYOQCDPdMYu/Tm0/bGZkw8paZnJY45J4K2PZrLYq8g==}
+  /ws@8.16.0:
+    resolution: {integrity: sha512-HS0c//TP7Ina87TfiPUz1rQzMhHrl/SG2guqRcTOIUYD2q8uhUdNHZYJUaQ8aTGPzCh+c6oawMKW35nFl1dxyQ==}
     engines: {node: '>=10.0.0'}
     peerDependencies:
       bufferutil: ^4.0.1
@@ -8759,7 +8770,6 @@ packages:
         optional: true
       utf-8-validate:
         optional: true
-    dev: true
 
   /xml-name-validator@4.0.0:
     resolution: {integrity: sha512-ICP2e+jsHvAj2E2lIHxa5tjXRlKDJo4IdvPvCXbXQGdzSfmSpNVyIKMvoZHjDY9DP0zV17iI85o90vRFXNccRw==}

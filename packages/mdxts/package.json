@@ -91,6 +91,8 @@
   },
   "devDependencies": {
     "@swc/cli": "^0.3.10",
+    "@types/webpack-env": "1.18.4",
+    "@types/ws": "^8.5.10",
     "next": "14.1.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -115,7 +117,6 @@
     "@types/react": "^18.2.54",
     "@types/react-dom": "^18.2.18",
     "@types/title": "^3.4.3",
-    "@types/webpack-env": "1.18.4",
     "case-anything": "^2.1.13",
     "chokidar": "^3.6.0",
     "color": "^4.2.3",
@@ -144,6 +145,7 @@
     "unist-util-visit-parents": "^6.0.1",
     "vfile": "^6.0.1",
     "vscode-oniguruma": "^1.7.0",
-    "vscode-textmate": "^8.0.0"
+    "vscode-textmate": "^8.0.0",
+    "ws": "^8.16.0"
   }
 }
