@@ -1,3 +1,6 @@
+import remarkEmbedder from '@remark-embedder/core'
+import CodeSandboxTransformer from '@remark-embedder/transformer-codesandbox'
+
 import { remarkPlugin } from '../remark'
 import { rehypePlugin } from '../rehype'
 
@@ -34,6 +37,7 @@ export async function getMdxPlugins({
       remarkSqueezeParagraphs,
       remarkUnwrapImages,
       remarkPlugin,
+      [remarkEmbedder, { transformers: [CodeSandboxTransformer] }],
     ].filter(Boolean),
     rehypePlugins: [rehypePlugin],
   }
