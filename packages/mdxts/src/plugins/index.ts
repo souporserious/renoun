@@ -1,5 +1,3 @@
-import remarkTypography from 'remark-typography'
-
 import { remarkPlugin } from '../remark'
 import { rehypePlugin } from '../rehype'
 
@@ -9,29 +7,32 @@ export async function getMdxPlugins({
 }: {
   gitSource?: string
 } = {}): Promise<{ remarkPlugins: any[]; rehypePlugins: any[] }> {
+  const allPlugins = await Promise.all([
+    import('remark-gfm'),
+    import('remark-github'),
+    import('remark-smartypants'),
+    import('remark-strip-badges'),
+    import('remark-squeeze-paragraphs'),
+    import('remark-unwrap-images'),
+  ])
   const [
     remarkGfm,
     remarkGitHub,
+    remarkSmartyPants,
     remarkStripBadges,
     remarkSqueezeParagraphs,
     remarkUnwrapImages,
-  ] = await Promise.all([
-    import('remark-gfm').then((mod) => mod.default),
-    import('remark-github').then((mod) => mod.default),
-    import('remark-strip-badges').then((mod) => mod.default),
-    import('remark-squeeze-paragraphs').then((mod) => mod.default),
-    import('remark-unwrap-images').then((mod) => mod.default),
-  ])
+  ] = allPlugins.map((plugin) => plugin.default)
   return {
     remarkPlugins: [
       remarkGfm,
       gitSource?.includes('github')
         ? [remarkGitHub, { repository: gitSource }]
         : undefined,
+      remarkSmartyPants,
       remarkStripBadges,
       remarkSqueezeParagraphs,
       remarkUnwrapImages,
-      remarkTypography,
       remarkPlugin,
     ].filter(Boolean),
     rehypePlugins: [rehypePlugin],
