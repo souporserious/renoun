@@ -4,7 +4,6 @@ import { Analytics } from '@vercel/analytics/react'
 import { PackageStylesAndScript } from 'mdxts/components/PackageInstallClient'
 
 import { getSiteMetadata } from 'utils/get-site-metadata'
-import { AppProvider } from './app-provider'
 
 import './layout.css'
 
@@ -34,7 +33,7 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.png" type="image/png" />
       </head>
       <body className={GeistSans.className}>
-        <AppProvider>{children}</AppProvider>
+        {children}
         <Analytics />
         <PackageStylesAndScript />
       </body>

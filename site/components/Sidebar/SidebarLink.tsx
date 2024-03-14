@@ -1,7 +1,6 @@
 'use client'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { Text } from 'components/Text'
 
 export function SidebarLink({
   pathname,
