@@ -10,7 +10,7 @@ export function getSiteMetadata({
   title?: string
   description?: string
   keywords?: string
-} = {}): Metadata {
+} = {}) {
   return {
     metadataBase: new URL(url),
     title,
@@ -28,5 +28,5 @@ export function getSiteMetadata({
       card: 'summary_large_image',
       site: '@souporserious',
     },
-  }
+  } satisfies Metadata
 }

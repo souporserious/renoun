@@ -2,6 +2,7 @@ import parseTitle from 'title'
 import * as React from 'react'
 import type { ComponentType } from 'react'
 import { basename, dirname, extname, join, resolve, sep } from 'node:path'
+import { Feed } from 'feed'
 import 'server-only'
 
 import { project } from './components/project'
@@ -9,6 +10,11 @@ import type { CodeBlocks } from './remark/add-code-blocks'
 import type { Headings } from './remark/add-headings'
 import type { AllModules, ModuleData } from './utils/get-all-data'
 import { getAllData } from './utils/get-all-data'
+
+type FeedOptions = Omit<
+  ConstructorParameters<typeof Feed>[0],
+  'generator' | 'link' | 'id'
+>
 
 type Compute<Type> = Type extends object
   ? {
@@ -367,6 +373,45 @@ export function createSource<Type>(
       const exampleSlug = slug.slice(-1).at(0)!
       return dataItem.examples.find((example) => example.slug === exampleSlug)
     },
+
+    /** Returns an RSS feed based on all module metadata. */
+    async rss(options: FeedOptions) {
+      if (process.env.MDXTS_SITE_URL === undefined) {
+        throw new Error(
+          '[mdxts] The `siteUrl` option in the `mdxts/next` plugin is required to generate an RSS feed.'
+        )
+      }
+
+      const feed = new Feed({
+        language: 'en',
+        generator: 'MDXTS',
+        link: process.env.MDXTS_SITE_URL,
+        id: process.env.MDXTS_SITE_URL,
+        ...options,
+      })
+      const allData = this.all()
+
+      for (const pathname in allData) {
+        const data = allData[pathname]
+        const url = `${process.env.MDXTS_SITE_URL}${data.pathname}`
+        const lastModifiedDate =
+          data.mdxLastModifiedDate && data.tsLastModifiedDate
+            ? Math.max(data.mdxLastModifiedDate, data.tsLastModifiedDate)
+            : data.mdxLastModifiedDate ?? data.tsLastModifiedDate
+
+        if (lastModifiedDate) {
+          feed.addItem({
+            title: data.title,
+            description: data.description,
+            date: new Date(lastModifiedDate),
+            id: url,
+            link: url,
+          })
+        }
+      }
+
+      return feed.rss2()
+    },
   }
 }
 
@@ -456,6 +501,44 @@ export function mergeSources(...sources: ReturnType<typeof createSource>[]) {
     }
   }
 
+  async function rss(options: FeedOptions) {
+    if (process.env.MDXTS_SITE_URL === undefined) {
+      throw new Error(
+        '[mdxts] The `siteUrl` option in the `mdxts/next` plugin is required to generate an RSS feed.'
+      )
+    }
+
+    const feed = new Feed({
+      language: 'en',
+      generator: 'MDXTS',
+      link: process.env.MDXTS_SITE_URL,
+      id: process.env.MDXTS_SITE_URL,
+      ...options,
+    })
+    const allData = all()
+
+    for (const pathname in allData) {
+      const data = allData[pathname]
+      const url = `${process.env.MDXTS_SITE_URL}${data.pathname}`
+      const lastModifiedDate =
+        data.mdxLastModifiedDate && data.tsLastModifiedDate
+          ? Math.max(data.mdxLastModifiedDate, data.tsLastModifiedDate)
+          : data.mdxLastModifiedDate ?? data.tsLastModifiedDate
+
+      if (lastModifiedDate) {
+        feed.addItem({
+          title: data.title,
+          description: data.description,
+          date: new Date(lastModifiedDate),
+          link: url,
+          id: url,
+        })
+      }
+    }
+
+    return feed.rss2()
+  }
+
   return {
     all,
     tree,
@@ -463,6 +546,7 @@ export function mergeSources(...sources: ReturnType<typeof createSource>[]) {
     examplePaths,
     get,
     getExample,
+    rss,
   }
 }
 

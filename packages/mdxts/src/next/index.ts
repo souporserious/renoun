@@ -13,6 +13,9 @@ type PluginOptions = {
   /** Path to the VS Code compatible theme used for syntax highlighting the Code and Editor components. */
   theme: (typeof BUNDLED_THEMES)[number] | (string & {})
 
+  /** The URL of the production site. This is used for generating sitemap and RSS feed URLs. */
+  siteUrl?: string
+
   /** The git source to use for linking to the repository and source files. This is automatically inferred from the git remote URL if not provided. */
   gitSource?: string
 
@@ -23,7 +26,7 @@ type PluginOptions = {
 /** A Next.js plugin to configure MDXTS theming, `rehype` and `remark` markdown plugins, and the [Webpack loader](mdxts.dev/packages/loader). */
 export function createMdxtsPlugin(pluginOptions: PluginOptions) {
   let refreshServerPort: string | null = null
-  let { gitSource, gitBranch = 'main', theme } = pluginOptions
+  let { gitSource, gitBranch = 'main', siteUrl, theme } = pluginOptions
   const themePath = resolve(process.cwd(), theme)
 
   return function withMdxts(nextConfig: NextConfig = {}) {
@@ -96,6 +99,7 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
 
       nextConfig.env.MDXTS_GIT_SOURCE = gitSource ?? ''
       nextConfig.env.MDXTS_GIT_BRANCH = gitBranch
+      nextConfig.env.MDXTS_SITE_URL = siteUrl
 
       if (phase === PHASE_DEVELOPMENT_SERVER) {
         if (refreshServerPort === null) {
