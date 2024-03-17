@@ -9,11 +9,15 @@ Adds RSS feed helper for `createSource` and `mergeSources`:
 import { allData } from 'data'
 
 export async function GET() {
-  const feed = await allData.rss({
+  const feed = allData.rss({
     title: 'MDXTS - The Content & Documentation SDK for React',
-    description: `Type-safe content and documentation.`,
+    description: 'Type-safe content and documentation.',
     copyright: `©${new Date().getFullYear()} @souporserious`,
   })
-  return new Response(feed)
+  return new Response(feed, {
+    headers: {
+      'Content-Type': 'application/rss+xml',
+    },
+  })
 }
 ```
