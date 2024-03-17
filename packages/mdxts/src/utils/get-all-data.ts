@@ -5,6 +5,7 @@ import type { ExportedDeclarations, Project } from 'ts-morph'
 import { Directory, SourceFile } from 'ts-morph'
 import { getSymbolDescription, resolveExpression } from '@tsxmod/utils'
 
+import { getFileLastModifiedDate } from './get-file-last-modified-date'
 import { getSourcePath } from './get-source-path'
 import { findCommonRootPath } from './find-common-root-path'
 import { filePathToPathname } from './file-path-to-pathname'
@@ -27,7 +28,9 @@ export type ModuleData = {
   order: number
   depth: number
   mdxPath?: string
+  mdxLastModifiedDate?: number
   tsPath?: string
+  tsLastModifiedDate?: number
   pathname: string
   previous?: { label: string; pathname: string }
   next?: { label: string; pathname: string }
@@ -133,6 +136,7 @@ export function getAllData({
     const sourcePath = getSourcePath(path)
     const metadata = getMetadata(sourceFile)
     const depth = pathname.split(sep).length - 2
+    const lastModifiedDate = getFileLastModifiedDate(path)
     let title =
       type === 'md'
         ? findFirstHeading(sourceFile.getText()) || sourceFileTitle
@@ -242,6 +246,7 @@ export function getAllData({
       allData[pathname] = {
         ...previouseData,
         tsPath: path,
+        tsLastModifiedDate: lastModifiedDate,
         exportedTypes,
         examples,
         title,
@@ -260,6 +265,7 @@ export function getAllData({
       allData[pathname] = {
         ...previouseData,
         mdxPath: path,
+        mdxLastModifiedDate: lastModifiedDate,
         exportedTypes: previouseData?.exportedTypes || [],
         examples: previouseData?.examples || [],
         description: previouseData?.description || description,

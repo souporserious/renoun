@@ -8,6 +8,7 @@ exports[`getAllData should initialize correctly with basic input 1`] = `
     "examples": [],
     "exportedTypes": [],
     "label": "Button",
+    "mdxLastModifiedDate": undefined,
     "mdxPath": "/components/Button.mdx",
     "order": 1,
     "pathname": "/button",

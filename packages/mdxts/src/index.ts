@@ -26,8 +26,16 @@ export type Module = Compute<
     codeBlocks: CodeBlocks
     frontMatter?: Record<string, any>
     headings: Headings
+    lastModifiedDate?: Date
     metadata?: { title: string; description: string }
-  } & Omit<ModuleData, 'mdxPath' | 'tsPath' | 'examples'>
+  } & Omit<
+    ModuleData,
+    | 'mdxPath'
+    | 'mdxLastModifiedDate'
+    | 'tsPath'
+    | 'tsLastModifiedDate'
+    | 'examples'
+  >
 >
 
 export type SourceTreeItem = {
@@ -290,10 +298,14 @@ export function createSource<Type>(
       if (!metadata.title) {
         metadata.title = data.title
       }
-
       if (!metadata.description) {
         metadata.description = description
       }
+
+      const lastModifiedDate =
+        data.mdxLastModifiedDate && data.tsLastModifiedDate
+          ? Math.max(data.mdxLastModifiedDate, data.tsLastModifiedDate)
+          : data.mdxLastModifiedDate ?? data.tsLastModifiedDate
 
       return {
         title: data.title,
@@ -328,6 +340,9 @@ export function createSource<Type>(
           }
           return React.createElement(Content, props)
         },
+        lastModifiedDate: lastModifiedDate
+          ? new Date(lastModifiedDate)
+          : undefined,
         examples,
         frontMatter,
         headings,
