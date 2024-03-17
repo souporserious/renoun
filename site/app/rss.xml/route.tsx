@@ -3,7 +3,7 @@ import { getSiteMetadata } from '../../utils/get-site-metadata'
 
 export async function GET() {
   const metadata = getSiteMetadata()
-  const feed = await allData.rss({
+  const feed = allData.rss({
     title: metadata.title,
     description: metadata.description,
     copyright: `©${new Date().getFullYear()} @souporserious`,

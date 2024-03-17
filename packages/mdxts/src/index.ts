@@ -375,42 +375,8 @@ export function createSource<Type>(
     },
 
     /** Returns an RSS feed based on all module metadata. */
-    async rss(options: FeedOptions) {
-      if (process.env.MDXTS_SITE_URL === undefined) {
-        throw new Error(
-          '[mdxts] The `siteUrl` option in the `mdxts/next` plugin is required to generate an RSS feed.'
-        )
-      }
-
-      const feed = new Feed({
-        language: 'en',
-        generator: 'MDXTS',
-        link: process.env.MDXTS_SITE_URL,
-        id: process.env.MDXTS_SITE_URL,
-        ...options,
-      })
-      const allData = this.all()
-
-      for (const pathname in allData) {
-        const data = allData[pathname]
-        const url = `${process.env.MDXTS_SITE_URL}${data.pathname}`
-        const lastModifiedDate =
-          data.mdxLastModifiedDate && data.tsLastModifiedDate
-            ? Math.max(data.mdxLastModifiedDate, data.tsLastModifiedDate)
-            : data.mdxLastModifiedDate ?? data.tsLastModifiedDate
-
-        if (lastModifiedDate) {
-          feed.addItem({
-            title: data.title,
-            description: data.description,
-            date: new Date(lastModifiedDate),
-            id: url,
-            link: url,
-          })
-        }
-      }
-
-      return feed.rss2()
+    rss(options: FeedOptions) {
+      return generateRssFeed(this.all(), options)
     },
   }
 }
@@ -501,42 +467,8 @@ export function mergeSources(...sources: ReturnType<typeof createSource>[]) {
     }
   }
 
-  async function rss(options: FeedOptions) {
-    if (process.env.MDXTS_SITE_URL === undefined) {
-      throw new Error(
-        '[mdxts] The `siteUrl` option in the `mdxts/next` plugin is required to generate an RSS feed.'
-      )
-    }
-
-    const feed = new Feed({
-      language: 'en',
-      generator: 'MDXTS',
-      link: process.env.MDXTS_SITE_URL,
-      id: process.env.MDXTS_SITE_URL,
-      ...options,
-    })
-    const allData = all()
-
-    for (const pathname in allData) {
-      const data = allData[pathname]
-      const url = `${process.env.MDXTS_SITE_URL}${data.pathname}`
-      const lastModifiedDate =
-        data.mdxLastModifiedDate && data.tsLastModifiedDate
-          ? Math.max(data.mdxLastModifiedDate, data.tsLastModifiedDate)
-          : data.mdxLastModifiedDate ?? data.tsLastModifiedDate
-
-      if (lastModifiedDate) {
-        feed.addItem({
-          title: data.title,
-          description: data.description,
-          date: new Date(lastModifiedDate),
-          link: url,
-          id: url,
-        })
-      }
-    }
-
-    return feed.rss2()
+  function rss(options: FeedOptions) {
+    return generateRssFeed(all(), options)
   }
 
   return {
@@ -548,6 +480,51 @@ export function mergeSources(...sources: ReturnType<typeof createSource>[]) {
     getExample,
     rss,
   }
+}
+
+/** Generate an RSS feed based on `createSource` or `mergeSources` data. */
+function generateRssFeed(
+  allData: Record<string, ModuleData>,
+  options: FeedOptions
+) {
+  if (process.env.MDXTS_SITE_URL === undefined) {
+    throw new Error(
+      '[mdxts] The `siteUrl` option in the `mdxts/next` plugin is required to generate an RSS feed.'
+    )
+  }
+
+  const feed = new Feed({
+    language: 'en',
+    generator: 'MDXTS',
+    link: process.env.MDXTS_SITE_URL,
+    id: process.env.MDXTS_SITE_URL,
+    ...options,
+    feedLinks: {
+      rss: join(process.env.MDXTS_SITE_URL, 'rss.xml'),
+      ...options.feedLinks,
+    },
+  })
+
+  for (const pathname in allData) {
+    const data = allData[pathname]
+    const url = `${process.env.MDXTS_SITE_URL}${data.pathname}`
+    const lastModifiedDate =
+      data.mdxLastModifiedDate && data.tsLastModifiedDate
+        ? Math.max(data.mdxLastModifiedDate, data.tsLastModifiedDate)
+        : data.mdxLastModifiedDate ?? data.tsLastModifiedDate
+
+    if (lastModifiedDate) {
+      feed.addItem({
+        title: data.title,
+        description: data.description,
+        date: new Date(lastModifiedDate),
+        link: url,
+        id: url,
+      })
+    }
+  }
+
+  return feed.rss2()
 }
 
 let theme: any = null
