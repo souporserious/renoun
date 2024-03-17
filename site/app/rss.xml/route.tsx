@@ -8,5 +8,9 @@ export async function GET() {
     description: metadata.description,
     copyright: `©${new Date().getFullYear()} @souporserious`,
   })
-  return new Response(feed)
+  return new Response(feed, {
+    headers: {
+      'Content-Type': 'application/rss+xml',
+    },
+  })
 }
