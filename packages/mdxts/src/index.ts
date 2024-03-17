@@ -500,14 +500,14 @@ function generateRssFeed(
     id: process.env.MDXTS_SITE_URL,
     ...options,
     feedLinks: {
-      rss: join(process.env.MDXTS_SITE_URL, 'rss.xml'),
+      rss: new URL('/rss.xml', process.env.MDXTS_SITE_URL).href,
       ...options.feedLinks,
     },
   })
 
   for (const pathname in allData) {
     const data = allData[pathname]
-    const url = `${process.env.MDXTS_SITE_URL}${data.pathname}`
+    const url = new URL(pathname, process.env.MDXTS_SITE_URL).href
     const lastModifiedDate =
       data.mdxLastModifiedDate && data.tsLastModifiedDate
         ? Math.max(data.mdxLastModifiedDate, data.tsLastModifiedDate)
