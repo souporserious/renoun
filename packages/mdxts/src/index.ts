@@ -33,9 +33,17 @@ export type Module = Compute<
     headings: Headings
     frontMatter?: Record<string, any>
     readingTime?: {
+      /** Minimum reading time in minutes and seconds. */
       minimum: { minutes: number; seconds: number }
+
+      /** Maximum reading time in minutes and seconds. */
       maximum: { minutes: number; seconds: number }
+
+      /** Average reading time in minutes and seconds. */
       average: { minutes: number; seconds: number }
+
+      /** ISO 8601 duration for average reading time. */
+      duration: string
     }
     lastModifiedDate?: Date
     metadata?: { title: string; description: string }
@@ -497,6 +505,24 @@ function formatReadingTime(value: number) {
   return { minutes, seconds }
 }
 
+/** Converts reading time into ISO 8601 duration. */
+function readingTimeToDuration({
+  minutes,
+  seconds,
+}: {
+  minutes: number
+  seconds: number
+}) {
+  let duration = 'PT'
+  if (minutes > 0) {
+    duration += `${minutes}M`
+  }
+  if (seconds > 0) {
+    duration += `${seconds}S`
+  }
+  return duration
+}
+
 /** Parses reading time into minutes and seconds. */
 function parseReadingTime(readingTime: [number, number]) {
   const [minimum, maximum] = readingTime
@@ -505,10 +531,13 @@ function parseReadingTime(readingTime: [number, number]) {
     return
   }
 
+  const averageReadingTime = formatReadingTime((minimum + maximum) / 2)
+
   return {
     minimum: formatReadingTime(minimum),
     maximum: formatReadingTime(maximum),
-    average: formatReadingTime((minimum + maximum) / 2),
+    average: averageReadingTime,
+    duration: readingTimeToDuration(averageReadingTime),
   }
 }
 
