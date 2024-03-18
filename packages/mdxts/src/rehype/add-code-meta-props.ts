@@ -1,4 +1,4 @@
-import type { Element, Node } from 'hast'
+import type { Element, Root } from 'hast'
 import { BUNDLED_LANGUAGES } from 'shiki'
 
 const languageMap: Record<string, any> = {
@@ -13,7 +13,7 @@ const ADDITIONAL_LANGUAGES = Object.keys(languageMap)
 
 /** Adds code meta props to the code element. */
 export function addCodeMetaProps() {
-  return async (tree: Node) => {
+  return async (tree: Root) => {
     const { visit } = await import('unist-util-visit')
     const { toString } = await import('hast-util-to-string')
 

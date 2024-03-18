@@ -17,6 +17,7 @@ export async function getMdxPlugins({
     import('remark-strip-badges'),
     import('remark-squeeze-paragraphs'),
     import('remark-unwrap-images'),
+    import('rehype-infer-reading-time-meta'),
   ])
   const [
     remarkGfm,
@@ -25,6 +26,7 @@ export async function getMdxPlugins({
     remarkStripBadges,
     remarkSqueezeParagraphs,
     remarkUnwrapImages,
+    rehypeInferReadingTimeMeta,
   ] = allPlugins.map((plugin) => plugin.default)
   return {
     remarkPlugins: [
@@ -39,6 +41,6 @@ export async function getMdxPlugins({
       remarkPlugin,
       [remarkEmbedder, { transformers: [CodeSandboxTransformer] }],
     ].filter(Boolean),
-    rehypePlugins: [rehypePlugin],
+    rehypePlugins: [rehypeInferReadingTimeMeta, rehypePlugin],
   }
 }

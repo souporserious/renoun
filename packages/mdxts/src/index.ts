@@ -30,8 +30,13 @@ export type Module = Compute<
     examples: (Awaited<ModuleData['examples']>[number] & { pathname: string })[]
     pathname: string
     codeBlocks: CodeBlocks
-    frontMatter?: Record<string, any>
     headings: Headings
+    frontMatter?: Record<string, any>
+    readingTime?: {
+      minimum: { minutes: number; seconds: number }
+      maximum: { minutes: number; seconds: number }
+      average: { minutes: number; seconds: number }
+    }
     lastModifiedDate?: Date
     metadata?: { title: string; description: string }
   } & Omit<
@@ -247,6 +252,7 @@ export function createSource<Type>(
         description,
         metadata = {},
         frontMatter,
+        readingTime,
         ...moduleExports
       } = data.mdxPath
         ? await allModules[data.mdxPath]
@@ -255,6 +261,7 @@ export function createSource<Type>(
             description: undefined,
             metadata: undefined,
             frontMatter: undefined,
+            readingTime: undefined,
           }
 
       /** Append example links to headings data. */
@@ -346,6 +353,7 @@ export function createSource<Type>(
           }
           return React.createElement(Content, props)
         },
+        readingTime: readingTime ? parseReadingTime(readingTime) : undefined,
         lastModifiedDate: lastModifiedDate
           ? new Date(lastModifiedDate)
           : undefined,
@@ -479,6 +487,28 @@ export function mergeSources(...sources: ReturnType<typeof createSource>[]) {
     get,
     getExample,
     rss,
+  }
+}
+
+/** Formats reading time into a human-readable string. */
+function formatReadingTime(value: number) {
+  const minutes = Math.floor(value)
+  const seconds = Math.round((value - minutes) * 60)
+  return { minutes, seconds }
+}
+
+/** Parses reading time into minutes and seconds. */
+function parseReadingTime(readingTime: [number, number]) {
+  const [minimum, maximum] = readingTime
+
+  if (minimum === 0 && maximum === 0) {
+    return
+  }
+
+  return {
+    minimum: formatReadingTime(minimum),
+    maximum: formatReadingTime(maximum),
+    average: formatReadingTime((minimum + maximum) / 2),
   }
 }
 
