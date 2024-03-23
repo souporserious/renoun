@@ -21,6 +21,14 @@ jest.mock('read-package-up', () => ({
   },
 }))
 
+jest.mock('./get-git-metadata', () => ({
+  getGitMetadata: jest.fn().mockReturnValue({
+    authors: [],
+    createdAt: undefined,
+    updatedAt: undefined,
+  }),
+}))
+
 describe('getAllData', () => {
   beforeAll(() => {
     process.env.MDXTS_GIT_SOURCE = 'https://github.com/souporserious/mdxts'

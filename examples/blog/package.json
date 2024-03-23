@@ -7,7 +7,6 @@
     "start": "next start"
   },
   "dependencies": {
-    "@napi-rs/simple-git": "0.1.16",
     "@types/mdx": "^2.0.11",
     "@types/react": "^18.2.54",
     "@types/react-dom": "^18.2.18",

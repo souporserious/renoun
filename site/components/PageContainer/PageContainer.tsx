@@ -22,12 +22,35 @@ export function PageContainer({
         {children}
         <div
           style={{
+            flex: 1,
             display: 'flex',
             flexDirection: 'column',
-            flex: 1,
+            gap: '2rem',
             marginTop: '6rem',
           }}
         >
+          {dataSource.updatedAt ? (
+            <div
+              style={{
+                fontSize: 'var(--font-size-body-3)',
+                color: 'var(--color-foreground-secondary)',
+                textAlign: 'end',
+              }}
+            >
+              Last updated{' '}
+              <time
+                dateTime={dataSource.updatedAt}
+                itemProp="dateModified"
+                style={{ fontWeight: 600 }}
+              >
+                {new Date(dataSource.updatedAt).toLocaleString('en', {
+                  year: '2-digit',
+                  month: '2-digit',
+                  day: '2-digit',
+                })}
+              </time>
+            </div>
+          ) : null}
           <SiblingLinks previous={dataSource.previous} next={dataSource.next} />
         </div>
       </div>

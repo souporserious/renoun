@@ -106,7 +106,6 @@
     "@manypkg/find-root": "^2.2.1",
     "@mdx-js/loader": "^2.3.0",
     "@mdx-js/mdx": "^2.3.0",
-    "@napi-rs/simple-git": "0.1.16",
     "@next/mdx": "14.1.2",
     "@preact/signals-core": "^1.5.1",
     "@remark-embedder/core": "^3.0.2",

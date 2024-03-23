@@ -2,4 +2,4 @@
 'mdxts': minor
 ---
 
-Adds `lastModifiedDate` field to `createSource` item. This implementation is heavily inspired by [Nextra](https://github.com/shuding/nextra).
+Adds `createdAt`, `updatedAt`, and `authors` fields to `createSource` item. This implementation is inspired by [unified-infer-git-meta](https://github.com/unifiedjs/unified-infer-git-meta).

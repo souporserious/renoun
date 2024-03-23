@@ -42,19 +42,17 @@ export type Module = Compute<
       /** Average reading time in minutes and seconds. */
       average: { minutes: number; seconds: number }
 
-      /** ISO 8601 duration for average reading time. */
+      /** The ISO duration for the average reading time. */
       duration: string
     }
-    lastModifiedDate?: Date
+    /** The ISO timestamp when the module was first created. */
+    createdAt?: string
+    /** The ISO timestamp when the module was last updated. */
+    updatedAt?: string
+    /** The authors that contributed to the module. */
+    authors?: string[]
     metadata?: { title: string; description: string }
-  } & Omit<
-    ModuleData,
-    | 'mdxPath'
-    | 'mdxLastModifiedDate'
-    | 'tsPath'
-    | 'tsLastModifiedDate'
-    | 'examples'
-  >
+  } & Omit<ModuleData, 'mdxPath' | 'tsPath' | 'gitMeta' | 'examples'>
 >
 
 export type SourceTreeItem = {
@@ -323,11 +321,6 @@ export function createSource<Type>(
         metadata.description = description
       }
 
-      const lastModifiedDate =
-        data.mdxLastModifiedDate && data.tsLastModifiedDate
-          ? Math.max(data.mdxLastModifiedDate, data.tsLastModifiedDate)
-          : data.mdxLastModifiedDate ?? data.tsLastModifiedDate
-
       return {
         title: data.title,
         label: data.label,
@@ -341,6 +334,10 @@ export function createSource<Type>(
         previous: data.previous,
         next: data.next,
         isMainExport: data.isMainExport,
+        updatedAt: data.gitMetadata.updatedAt,
+        createdAt: data.gitMetadata.createdAt,
+        authors: data.gitMetadata.authors,
+        readingTime: readingTime ? parseReadingTime(readingTime) : undefined,
         Content: async (props) => {
           if (Content === undefined) {
             return null
@@ -361,10 +358,6 @@ export function createSource<Type>(
           }
           return React.createElement(Content, props)
         },
-        readingTime: readingTime ? parseReadingTime(readingTime) : undefined,
-        lastModifiedDate: lastModifiedDate
-          ? new Date(lastModifiedDate)
-          : undefined,
         examples,
         frontMatter,
         headings,
@@ -567,16 +560,15 @@ function generateRssFeed(
   for (const pathname in allData) {
     const data = allData[pathname]
     const url = new URL(pathname, process.env.MDXTS_SITE_URL).href
-    const lastModifiedDate =
-      data.mdxLastModifiedDate && data.tsLastModifiedDate
-        ? Math.max(data.mdxLastModifiedDate, data.tsLastModifiedDate)
-        : data.mdxLastModifiedDate ?? data.tsLastModifiedDate
+    const lastUpdatedDate = data.gitMetadata
+      ? data.gitMetadata.updatedAt || data.gitMetadata.createdAt
+      : undefined
 
-    if (lastModifiedDate) {
+    if (lastUpdatedDate) {
       feed.addItem({
         title: data.title,
         description: data.description,
-        date: new Date(lastModifiedDate),
+        date: new Date(lastUpdatedDate),
         link: url,
         id: url,
       })

@@ -121,7 +121,6 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
         ...nextConfig.experimental,
         serverComponentsExternalPackages: [
           ...(nextConfig.experimental?.serverComponentsExternalPackages ?? []),
-          '@napi-rs/simple-git',
           'esbuild',
           'ts-morph',
         ],
