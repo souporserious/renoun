@@ -2,7 +2,7 @@ export const metadata = {
   title: 'Routing',
 }
 
-Routing is delegated to each respective framework using helpers from the `createSource` utilitiy. This gives you full control for how to render content and documentation. The following examples demonstrate how to set up routing using the `paths` helper from `createSource` in Next.js.
+Routing is delegated to each respective framework using helpers from the `createSource` utilitiy. This gives you full control for how to render content and documentation. The following demonstrates how to set up routing using the `paths` helper from `createSource` in Next.js.
 
 ## Naming Conventions
 
@@ -14,16 +14,63 @@ For `index.ts` or `index.tsx`, the accompanying file can be `index.md`, `index.m
 
 MDX content can be rendered using the `Content` component exported from a source item in an App Router page:
 
-```tsx filename="app/blog/[slug]/01.page.tsx" highlight="7"
+```tsx filename="app/blog/[slug]/01.page.tsx"
 import { createSource } from 'mdxts'
 
 const allDocs = createSource('docs/**/*.mdx')
 
 export default async function Page({ params }: { params: { slug: string } }) {
   const { Content } = await allDocs.get(params.slug)
-  return Content ? <Content /> : null
+  return <Content />
 }
 ```
+
+## Rendering Type Documentation
+
+Type documentation can be rendered using the `exportedTypes` metadata from a source item. Any associated MDX content can be rendered using the `Content` component if present:
+
+```tsx filename="app/components/[slug]/page.tsx"
+import { createSource } from 'mdxts'
+
+const allComponents = createSource('components/**/*.tsx')
+
+export default async function Page({ params }: { params: { slug: string } }) {
+  const { Content, exportedTypes } = await allComponents.get(params.slug)
+  return (
+    <>
+      {Content ? <Content /> : null}
+      <ul>
+        {exportedTypes.map((type) => (
+          <li key={type.name}>
+            <h4>{type.name}</h4>
+            <p>{type.description}</p>
+            {type.types.map((type) =>
+              type.properties ? (
+                <ul>
+                  {type.properties.map((property) => (
+                    <li key={property.name}>
+                      <h5>{property.name}</h5>
+                      <p>{property.description}</p>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                type.text
+              )
+            )}
+          </li>
+        ))}
+      </ul>
+    </>
+  )
+}
+```
+
+When targeting JavaScript or TypeScript files, a few heuristics are used to infer public metadata:
+
+- First, package exports will be used if present.
+- Otherwise, the presence of an `index` file will be used to infer public exports.
+- Finally, if both fail to find public entry source files, the entire directory will be analyzed.
 
 ## Generating Static Routes
 

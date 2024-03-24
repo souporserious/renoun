@@ -5,7 +5,6 @@ import type { ExportedDeclarations, Project } from 'ts-morph'
 import { Directory, SourceFile } from 'ts-morph'
 import { getSymbolDescription, resolveExpression } from '@tsxmod/utils'
 
-import { getSourcePath } from './get-source-path'
 import { findCommonRootPath } from './find-common-root-path'
 import { filePathToPathname } from './file-path-to-pathname'
 import { getExamplesFromSourceFile } from './get-examples'
@@ -14,6 +13,7 @@ import { getExportedTypes } from './get-exported-types'
 import { getGitMetadata } from './get-git-metadata'
 import { getMainExportDeclaration } from './get-main-export-declaration'
 import { getNameFromDeclaration } from './get-name-from-declaration'
+import { getSourcePath } from './get-source-path'
 
 export type Pathname = string
 
@@ -97,15 +97,28 @@ export function getAllData({
       : false
     : false
   const packageName = hasMainExport ? packageJson!.name : undefined
-  const entrySourceFiles = project.addSourceFilesAtPaths(
+  let entrySourceFiles = project.addSourceFilesAtPaths(
     packageJson?.exports
       ? /** If package.json exports found use that for calculating public paths. */
         Object.keys(packageJson.exports).map((key) =>
-          join(dirname(packageJsonPath), sourceDirectory, key, 'index.{ts,tsx}')
+          join(
+            dirname(packageJsonPath),
+            sourceDirectory,
+            key,
+            'index.{js,jsx,ts,tsx}'
+          )
         )
       : /** Otherwise default to a common root index file. */
-        join(commonRootPath, 'index.{ts,tsx}')
+        join(commonRootPath, 'index.{js,jsx,ts,tsx}')
   )
+
+  /** If no root index files exist, assume the top-level directory files are public exports. */
+  if (!packageJson?.exports && entrySourceFiles.length === 0) {
+    entrySourceFiles = project.addSourceFilesAtPaths(
+      join(commonRootPath, '*.{js,jsx,ts,tsx}')
+    )
+  }
+
   const exportedSourceFiles = getExportedSourceFiles(entrySourceFiles)
   const allPublicPaths = entrySourceFiles
     .concat(exportedSourceFiles)

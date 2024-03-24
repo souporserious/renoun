@@ -93,9 +93,11 @@ export default async function Page({ params }: Props) {
 }
 ```
 
-If the targeted source file is a TypeScript file, the exported types will also be analyzed and included along with other metadata like MDX content and examples:
+### Rendering Type Documentation
 
-```tsx filename="components/[slug]/page.tsx"
+If the targeted source files are TypeScript files, the exported types will also be analyzed and included along with other metadata like associated MDX content and examples:
+
+```tsx filename="app/components/[slug]/page.tsx"
 import { createSource } from 'mdxts'
 import { notFound } from 'next/navigation'
 
@@ -114,7 +116,7 @@ export default async function Page({ params }: Props) {
 
   return (
     <>
-      <Content />
+      {Content ? <Content /> : null}
       <ul>
         {exportedTypes.map((type) => (
           <li key={type.name}>
@@ -141,6 +143,13 @@ export default async function Page({ params }: Props) {
   )
 }
 ```
+
+<Note>
+  When targeting JavaScript or TypeScript files, heuristics are used to infer
+  public metadata. First, package exports will be used if present, otherwise,
+  the presence of an `index` file will be used to infer public exports. If these
+  both fail, the entire directory will be analyzed.
+</Note>
 
 ### Type Checking
 

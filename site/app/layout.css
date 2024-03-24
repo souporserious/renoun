@@ -146,6 +146,10 @@ a:hover :not(.title) {
   text-wrap: pretty;
 }
 
+.prose li {
+  text-wrap: pretty;
+}
+
 main {
   padding: 2rem;
 }
