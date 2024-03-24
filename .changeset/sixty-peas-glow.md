@@ -1,5 +1,5 @@
 ---
-"mdxts": minor
+'mdxts': minor
 ---
 
-Add support for Codesandbox embeds in MDX.
+Adds support for Codesandbox embeds in MDX.

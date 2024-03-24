@@ -1,5 +1,5 @@
 ---
-"mdxts": patch
+'mdxts': patch
 ---
 
-Add default `feedLinks.rss` option when creating rss feeds.
+Adds default `feedLinks.rss` option when creating rss feeds.
