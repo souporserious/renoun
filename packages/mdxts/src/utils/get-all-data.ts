@@ -113,7 +113,11 @@ export function getAllData({
   )
 
   /** If no root index files exist, assume the top-level directory files are public exports. */
-  if (!packageJson?.exports && entrySourceFiles.length === 0) {
+  if (
+    typeScriptSourceFiles &&
+    !packageJson?.exports &&
+    entrySourceFiles.length === 0
+  ) {
     entrySourceFiles = project.addSourceFilesAtPaths(
       join(commonRootPath, '*.{js,jsx,ts,tsx}')
     )
