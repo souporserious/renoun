@@ -1,5 +1,41 @@
 # mdxts
 
+## 0.11.0
+
+### Minor Changes
+
+- 90863ba: Adds RSS feed helper for `createSource` and `mergeSources`:
+
+  ```js
+  // app/rss.xml/route.js
+  import { allData } from "data";
+
+  export async function GET() {
+    const feed = allData.rss({
+      title: "MDXTS - The Content & Documentation SDK for React",
+      description: "Type-safe content and documentation.",
+      copyright: `©${new Date().getFullYear()} @souporserious`,
+    });
+    return new Response(feed, {
+      headers: {
+        "Content-Type": "application/rss+xml",
+      },
+    });
+  }
+  ```
+
+- 4121eb9: Replaces `remark-typography` with the more popular `remark-smartypants` package.
+- 7367b1d: Adds ISO 8601 duration to `readingTime` metadata for easier use with `time` HTML element.
+- e04f4f6: Adds `createdAt`, `updatedAt`, and `authors` fields to `createSource` item. This implementation is inspired by [unified-infer-git-meta](https://github.com/unifiedjs/unified-infer-git-meta).
+- 9c6d65a: Adds `readingTime` field to `createSource` item using [rehype-infer-reading-time-meta](https://github.com/rehypejs/rehype-infer-reading-time-meta).
+- fb0299d: Adds support for Codesandbox embeds in MDX.
+
+### Patch Changes
+
+- 6e68e11: Fixes an issue where saving content did not trigger a fast refresh locally. This adds a web socket server component to the Content component to ensure a refresh is always triggered.
+- fafdcc6: Adds default `feedLinks.rss` option when creating rss feeds.
+- df41a98: Fixes empty `createSource` when targeting JavaScript/TypeScript without an `index` file.
+
 ## 0.10.1
 
 ### Patch Changes
