@@ -30,6 +30,7 @@ export type ModuleData = {
   mdxPath?: string
   tsPath?: string
   pathname: string
+  url: string
   previous?: { label: string; pathname: string }
   next?: { label: string; pathname: string }
   sourcePath: string
@@ -364,7 +365,22 @@ export function getAllData({
     const gitMetadata = getGitMetadata(
       [data.tsPath, data.mdxPath].filter(Boolean) as string[]
     )
-    return [pathname, { ...data, ...gitMetadata }]
+    return [
+      pathname,
+      {
+        ...data,
+        ...gitMetadata,
+        get url() {
+          const siteUrl = process.env.MDXTS_SITE_URL
+          if (!siteUrl) {
+            throw new Error(
+              '[mdxts] The `siteUrl` option in the `mdxts/next` plugin is required to generate the `url` field.'
+            )
+          }
+          return `${siteUrl}${pathname}`
+        },
+      },
+    ]
   })
 
   return Object.fromEntries(parsedData) as Record<Pathname, ModuleData>

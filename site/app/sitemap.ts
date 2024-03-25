@@ -3,7 +3,7 @@ import { allData } from 'data'
 
 export default function sitemap(): MetadataRoute.Sitemap {
   return allData.all().map((data) => ({
-    url: `https://mdxts.dev/${data.pathname}`,
+    url: data.url,
     lastModified: data.updatedAt,
   }))
 }

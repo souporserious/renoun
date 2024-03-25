@@ -15,6 +15,7 @@ describe('getAllData', () => {
   beforeAll(() => {
     process.env.MDXTS_GIT_SOURCE = 'https://github.com/souporserious/mdxts'
     process.env.MDXTS_GIT_BRANCH = 'main'
+    process.env.MDXTS_SITE_URL = 'https://mdxts.dev'
   })
 
   beforeEach(() => {

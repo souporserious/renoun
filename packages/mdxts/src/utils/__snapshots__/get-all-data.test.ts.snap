@@ -16,6 +16,7 @@ exports[`getAllData should initialize correctly with basic input 1`] = `
     "sourcePath": "",
     "title": "Button",
     "updatedAt": undefined,
+    "url": "https://mdxts.dev/button",
   },
 }
 `;
