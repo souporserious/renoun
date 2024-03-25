@@ -12,6 +12,9 @@ type BaseCodeToolbarProps = {
 
   /** The theme to use for highlighting. */
   theme: Theme
+
+  /** Whether or not to allow copying the code block. */
+  allowCopy?: boolean
 }
 
 type CodeToolbarProps =
@@ -29,6 +32,7 @@ export function CodeToolbar({
   value,
   sourcePath,
   theme,
+  allowCopy,
   ...props
 }: CodeToolbarProps) {
   return (
@@ -109,7 +113,7 @@ export function CodeToolbar({
             </svg>
           </a>
         ) : null}
-        <CopyButton value={value} />
+        {allowCopy ? <CopyButton value={value} /> : null}
       </div>
     </div>
   )
