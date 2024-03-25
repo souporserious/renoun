@@ -334,9 +334,9 @@ export function createSource<Type>(
         previous: data.previous,
         next: data.next,
         isMainExport: data.isMainExport,
-        updatedAt: data.gitMetadata.updatedAt,
-        createdAt: data.gitMetadata.createdAt,
-        authors: data.gitMetadata.authors,
+        updatedAt: data.updatedAt,
+        createdAt: data.createdAt,
+        authors: data.authors,
         readingTime: readingTime ? parseReadingTime(readingTime) : undefined,
         Content: async (props) => {
           if (Content === undefined) {
@@ -560,9 +560,7 @@ function generateRssFeed(
   for (const pathname in allData) {
     const data = allData[pathname]
     const url = new URL(pathname, process.env.MDXTS_SITE_URL).href
-    const lastUpdatedDate = data.gitMetadata
-      ? data.gitMetadata.updatedAt || data.gitMetadata.createdAt
-      : undefined
+    const lastUpdatedDate = data.updatedAt || data.createdAt
 
     if (lastUpdatedDate) {
       feed.addItem({

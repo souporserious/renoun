@@ -44,8 +44,7 @@ export type ModuleData = {
     isMainExport: boolean
   })[]
   examples: ReturnType<typeof getExamplesFromSourceFile>
-  gitMetadata: ReturnType<typeof getGitMetadata>
-}
+} & ReturnType<typeof getGitMetadata>
 
 export function getAllData({
   allModules,
@@ -365,7 +364,7 @@ export function getAllData({
     const gitMetadata = getGitMetadata(
       [data.tsPath, data.mdxPath].filter(Boolean) as string[]
     )
-    return [pathname, { ...data, gitMetadata }]
+    return [pathname, { ...data, ...gitMetadata }]
   })
 
   return Object.fromEntries(parsedData) as Record<Pathname, ModuleData>
