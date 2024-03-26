@@ -1,5 +1,46 @@
 # mdxts
 
+## 0.12.0
+
+### Minor Changes
+
+- a7bae02: Reformat `createSource.all` method to return an array instead of an object.
+
+  ```diff
+  const allDocs = createSource('docs/*.mdx')
+  ---Object.values(allDocs.all()).map((doc) => ...)
+  +++allDocs.all().map((doc) => ...)
+  ```
+
+- 7942259: Move source item `gitMetadata` to top-level fields.
+
+  ```diff
+  import { MetadataRoute } from 'next'
+  import { allData } from 'data'
+
+  export default function sitemap(): MetadataRoute.Sitemap {
+    return Object.values(allData.all()).map((data) => ({
+      url: `https://mdxts.dev/${data.pathname}`,
+  ---    lastModified: data.gitMetadata.updatedAt,
+  +++    lastModified: data.updatedAt,
+    }))
+  }
+  ```
+
+- 305d1a4: Throw error if attempting to use git metadata and repo is shallowly cloned.
+- ba37a05: Adds `url` field to source item that concatenates `siteUrl` with `pathname`.
+- e487e1f: Adds a remark plugin to transform relative ordered links:
+
+  ```diff
+  --- [./02.rendering.mdx]
+  +++ [./rendering]
+  ```
+
+### Patch Changes
+
+- fc74fb9: Fixes `CodeBlock` `allowCopy` prop still showing copy button when set to `false`.
+- b7da458: Fixes code blocks being transformed when wrapping headings in `ShouldRenderTitle`.
+
 ## 0.11.0
 
 ### Minor Changes
