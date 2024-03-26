@@ -1,4 +1,5 @@
 import type { Node, Link } from 'mdast'
+import { sep } from 'node:path'
 
 /** Reformat all relative links that use ordered numbers and extensions. */
 export function transformRelativeLinks() {
@@ -6,14 +7,15 @@ export function transformRelativeLinks() {
     const { visit } = await import('unist-util-visit')
 
     visit(tree, 'link', (node: Link) => {
-      // Check if URL is relative and contains a numbered filename
-      if (/^(\/|\.\/)\d+/.test(node.url)) {
-        // Replace the prefixed number and extension in the URL
-        node.url = node.url.replace(
-          /^((\/|\.\/)?\d+\.(.*?))(\.mdx?|\.md)?$/,
-          (_match, _p1, p2, p3) => `${p2 || ''}${p3}`
-        )
+      if (!/\d+.*\.(md|mdx)$/.test(node.url)) {
+        return
       }
+
+      const segments = node.url.split(sep)
+      for (let index = 0; index < segments.length; index++) {
+        segments[index] = segments[index].replace(/^\d+\./, '')
+      }
+      node.url = segments.join(sep).replace(/\.mdx?$/, '')
     })
   }
 }
