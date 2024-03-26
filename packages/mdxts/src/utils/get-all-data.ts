@@ -362,14 +362,31 @@ export function getAllData({
 
   // Calculate aggregate git metadata for MDX and TypeScript modules
   const parsedData = sortedAndFilteredData.map(([pathname, data]) => {
-    const gitMetadata = getGitMetadata(
-      [data.tsPath, data.mdxPath].filter(Boolean) as string[]
-    )
+    let gitMetadata: ReturnType<typeof getGitMetadata> | null = null
+
+    // Only calculate git metadata if it's requested
+    const lazyGitMetadata = () => {
+      if (gitMetadata === null) {
+        gitMetadata = getGitMetadata(
+          [data.tsPath, data.mdxPath].filter(Boolean) as string[]
+        )
+      }
+      return gitMetadata
+    }
+
     return [
       pathname,
       {
         ...data,
-        ...gitMetadata,
+        get createdAt() {
+          return lazyGitMetadata().createdAt
+        },
+        get updatedAt() {
+          return lazyGitMetadata().updatedAt
+        },
+        get authors() {
+          return lazyGitMetadata().authors
+        },
         get url() {
           const siteUrl = process.env.MDXTS_SITE_URL
           if (!siteUrl) {

@@ -1,29 +1,29 @@
 import { execSync } from 'node:child_process'
 
-let hasWarnedIfShallow = false
+let hasCheckedIfShallow = false
 
 /** Returns aggregated metadata about multiple files from git history. */
 export function getGitMetadata(filePaths: string[]) {
-  if (!hasWarnedIfShallow) {
+  if (!hasCheckedIfShallow) {
     const isShallow = execSync('git rev-parse --is-shallow-repository')
       .toString()
       .trim()
 
     if (isShallow === 'true') {
-      const message = `[mdxts] This repository is shallow cloned so the createdAt and updatedAt dates will not be calculated correctly.`
+      const message = `[mdxts] This repository is shallow cloned so the createdAt and updatedAt dates cannot be calculated correctly.`
       if (process.env.VERCEL) {
-        console.warn(
+        throw new Error(
           `${message} Set the VERCEL_DEEP_CLONE=true environment variable to enable deep cloning.`
         )
       } else if (process.env.GITHUB_ACTION) {
-        console.warn(
-          `${message} See https://github.com/actions/checkout#fetch-all-history-for-all-tags-and-branches to fetch all the history.`
+        throw new Error(
+          `${message} See https://github.com/actions/checkout#fetch-all-history-for-all-tags-and-branches to fetch the entire git history.`
         )
-      } else {
-        console.warn(message)
       }
+      throw new Error(message)
     }
-    hasWarnedIfShallow = true
+
+    hasCheckedIfShallow = true
   }
 
   const authorContributions = new Map<
