@@ -5,6 +5,7 @@ import { addHeadings } from './add-headings'
 import { addDescription } from './add-description'
 import { addFileMetaToCodeBlock } from './add-file-meta-to-code-block'
 import { removeParagraphs } from './remove-paragraph'
+import { transformRelativeLinks } from './transform-relative-links'
 import { transformSymbolicLinks } from './transform-symbolic-links'
 
 export function remarkPlugin() {
@@ -14,6 +15,7 @@ export function remarkPlugin() {
     await addDescription()(tree)
     await addFileMetaToCodeBlock()(tree, file)
     await removeParagraphs()(tree)
+    await transformRelativeLinks()(tree)
     await transformSymbolicLinks()(tree)
   }
 }
