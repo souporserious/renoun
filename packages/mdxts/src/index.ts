@@ -439,28 +439,28 @@ export function mergeSources(...sources: ReturnType<typeof createSource>[]) {
       return
     }
 
-    const allEntries = Object.entries(all())
+    const allData = all()
     const stringPathname = join(
       sep,
       Array.isArray(pathname) ? pathname.join(sep) : pathname
     )
-    const currentIndex = allEntries.findIndex(
-      ([path]) => path === stringPathname
+    const currentIndex = allData.findIndex(
+      (data) => data.pathname === stringPathname
     )
-    const previousEntry = allEntries[currentIndex - 1]
-    const nextEntry = allEntries[currentIndex + 1]
+    const previousEntry = allData[currentIndex - 1]
+    const nextEntry = allData[currentIndex + 1]
 
     if (previousEntry) {
       result.previous = {
-        label: previousEntry[1].label,
-        pathname: previousEntry[1].pathname,
+        label: previousEntry.label,
+        pathname: previousEntry.pathname,
       }
     }
 
     if (nextEntry) {
       result.next = {
-        label: nextEntry[1].label,
-        pathname: nextEntry[1].pathname,
+        label: nextEntry.label,
+        pathname: nextEntry.pathname,
       }
     }
 
