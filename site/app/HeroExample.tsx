@@ -54,7 +54,7 @@ const codeProps = {
 } satisfies Partial<CodeBlockProps>
 
 export function HeroExample() {
-  const entries = Object.values(allDocs.all()).filter((doc) => doc.depth === 1)
+  const entries = allDocs.all().filter((doc) => doc.depth === 1)
   const lastEntriesIndex = entries.length - 1
   return (
     <div className={styles.maskContainer}>

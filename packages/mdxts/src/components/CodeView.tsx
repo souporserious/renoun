@@ -152,6 +152,7 @@ export function CodeView({
     <Container>
       {shouldRenderToolbar ? (
         <CodeToolbar
+          allowCopy={allowCopy}
           filename={shouldRenderFilename ? filenameLabel : undefined}
           value={value}
           sourcePath={sourcePath}

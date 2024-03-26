@@ -131,18 +131,18 @@ export function createSource<Type>(
     }
     return true
   })
+  const allFilteredData = Object.fromEntries(
+    filteredDataKeys.map((pathname) => [pathname, allData[pathname]])
+  )
 
   return {
     /** Returns all modules. */
     all() {
-      return Object.fromEntries(
-        filteredDataKeys.map((pathname) => [pathname, allData[pathname]])
-      )
+      return Object.values(allFilteredData)
     },
 
     /** Returns a tree of all module metadata related to navigation. */
     tree() {
-      const allData = this.all()
       const tree: SourceTreeItem[] = []
 
       for (
@@ -167,7 +167,7 @@ export function createSource<Type>(
           let node = nodes.find((node) => node.segment === segment)
 
           if (!node) {
-            const sourceFileData = allData[pathname]
+            const sourceFileData = allFilteredData[pathname]
             const hasData = sourceFileData !== undefined
 
             node = {
@@ -189,7 +189,7 @@ export function createSource<Type>(
                 const nextPathname = filteredDataKeys[index]
                 if (
                   nextPathname.startsWith(pathname) &&
-                  allData[nextPathname] !== undefined
+                  allFilteredData[nextPathname] !== undefined
                 ) {
                   node.pathname = join(sep, nextPathname)
                   break
@@ -223,7 +223,7 @@ export function createSource<Type>(
       const allData = this.all()
       const allPaths = this.paths()
       const allExamples = await Promise.all(
-        Object.values(allData).map((data) => data.examples)
+        allData.map((data) => data.examples)
       )
       return allExamples.flatMap((examples, index) =>
         examples.map((example) => [...allPaths[index], example.slug])
@@ -232,8 +232,6 @@ export function createSource<Type>(
 
     /** Returns a module by pathname including metadata, examples, and previous/next modules. Defaults to `basePathname` if `pathname` is `undefined`. */
     async get(pathname: string | string[] | undefined) {
-      const allData = this.all()
-
       if (pathname === undefined) {
         pathname = basePathname
       }
@@ -246,7 +244,7 @@ export function createSource<Type>(
         sep,
         Array.isArray(pathname) ? pathname.join(sep) : pathname
       )
-      const data = allData[stringPathname]
+      const data = allFilteredData[stringPathname]
 
       if (data === undefined) {
         return
@@ -334,9 +332,9 @@ export function createSource<Type>(
         previous: data.previous,
         next: data.next,
         isMainExport: data.isMainExport,
-        updatedAt: data.gitMetadata.updatedAt,
-        createdAt: data.gitMetadata.createdAt,
-        authors: data.gitMetadata.authors,
+        updatedAt: data.updatedAt,
+        createdAt: data.createdAt,
+        authors: data.authors,
         readingTime: readingTime ? parseReadingTime(readingTime) : undefined,
         Content: async (props) => {
           if (Content === undefined) {
@@ -393,26 +391,26 @@ export function createSource<Type>(
 /** Merges multiple sources into a single source. */
 export function mergeSources(...sources: ReturnType<typeof createSource>[]) {
   function all() {
-    const combinedEntries = sources.flatMap((dataSource) =>
-      Object.entries(dataSource.all())
-    )
-    combinedEntries.forEach(([, data], index) => {
-      const previousData = combinedEntries[index - 1]
-      const nextData = combinedEntries[index + 1]
+    const combinedData = sources.flatMap((dataSource) => dataSource.all())
+
+    combinedData.forEach((data, index) => {
+      const previousData = combinedData[index - 1]
+      const nextData = combinedData[index + 1]
       if (previousData) {
         data.previous = {
-          label: previousData[1].label,
-          pathname: previousData[1].pathname,
+          label: previousData.label,
+          pathname: previousData.pathname,
         }
       }
       if (nextData) {
         data.next = {
-          label: nextData[1].label,
-          pathname: nextData[1].pathname,
+          label: nextData.label,
+          pathname: nextData.pathname,
         }
       }
     })
-    return Object.fromEntries(combinedEntries)
+
+    return combinedData
   }
 
   function tree() {
@@ -441,28 +439,28 @@ export function mergeSources(...sources: ReturnType<typeof createSource>[]) {
       return
     }
 
-    const allEntries = Object.entries(all())
+    const allData = all()
     const stringPathname = join(
       sep,
       Array.isArray(pathname) ? pathname.join(sep) : pathname
     )
-    const currentIndex = allEntries.findIndex(
-      ([path]) => path === stringPathname
+    const currentIndex = allData.findIndex(
+      (data) => data.pathname === stringPathname
     )
-    const previousEntry = allEntries[currentIndex - 1]
-    const nextEntry = allEntries[currentIndex + 1]
+    const previousEntry = allData[currentIndex - 1]
+    const nextEntry = allData[currentIndex + 1]
 
     if (previousEntry) {
       result.previous = {
-        label: previousEntry[1].label,
-        pathname: previousEntry[1].pathname,
+        label: previousEntry.label,
+        pathname: previousEntry.pathname,
       }
     }
 
     if (nextEntry) {
       result.next = {
-        label: nextEntry[1].label,
-        pathname: nextEntry[1].pathname,
+        label: nextEntry.label,
+        pathname: nextEntry.pathname,
       }
     }
 
@@ -535,10 +533,7 @@ function parseReadingTime(readingTime: [number, number]) {
 }
 
 /** Generate an RSS feed based on `createSource` or `mergeSources` data. */
-function generateRssFeed(
-  allData: Record<string, ModuleData>,
-  options: FeedOptions
-) {
+function generateRssFeed(allData: ModuleData[], options: FeedOptions) {
   if (process.env.MDXTS_SITE_URL === undefined) {
     throw new Error(
       '[mdxts] The `siteUrl` option in the `mdxts/next` plugin is required to generate an RSS feed.'
@@ -557,12 +552,9 @@ function generateRssFeed(
     },
   })
 
-  for (const pathname in allData) {
-    const data = allData[pathname]
-    const url = new URL(pathname, process.env.MDXTS_SITE_URL).href
-    const lastUpdatedDate = data.gitMetadata
-      ? data.gitMetadata.updatedAt || data.gitMetadata.createdAt
-      : undefined
+  allData.forEach((data) => {
+    const url = new URL(data.pathname, process.env.MDXTS_SITE_URL).href
+    const lastUpdatedDate = data.updatedAt || data.createdAt
 
     if (lastUpdatedDate) {
       feed.addItem({
@@ -573,7 +565,7 @@ function generateRssFeed(
         id: url,
       })
     }
-  }
+  })
 
   return feed.rss2()
 }

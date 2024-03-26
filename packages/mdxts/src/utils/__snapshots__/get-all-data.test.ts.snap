@@ -3,21 +3,20 @@
 exports[`getAllData should initialize correctly with basic input 1`] = `
 {
   "/button": {
+    "authors": [],
+    "createdAt": undefined,
     "depth": 0,
     "description": undefined,
     "examples": [],
     "exportedTypes": [],
-    "gitMetadata": {
-      "authors": [],
-      "createdAt": undefined,
-      "updatedAt": undefined,
-    },
     "label": "Button",
     "mdxPath": "/components/Button.mdx",
     "order": 1,
     "pathname": "/button",
     "sourcePath": "",
     "title": "Button",
+    "updatedAt": undefined,
+    "url": "https://mdxts.dev/button",
   },
 }
 `;
