@@ -5,25 +5,33 @@ let hasCheckedIfShallow = false
 /** Returns aggregated metadata about multiple files from git history. */
 export function getGitMetadata(filePaths: string[]) {
   if (!hasCheckedIfShallow) {
-    const isShallow = execSync('git rev-parse --is-shallow-repository')
-      .toString()
-      .trim()
+    try {
+      const isShallow = execSync('git rev-parse --is-shallow-repository')
+        .toString()
+        .trim()
 
-    if (isShallow === 'true') {
-      const message = `[mdxts] This repository is shallow cloned so the createdAt and updatedAt dates cannot be calculated correctly.`
-      if (process.env.VERCEL) {
-        throw new Error(
-          `${message} Set the VERCEL_DEEP_CLONE=true environment variable to enable deep cloning.`
-        )
-      } else if (process.env.GITHUB_ACTION) {
-        throw new Error(
-          `${message} See https://github.com/actions/checkout#fetch-all-history-for-all-tags-and-branches to fetch the entire git history.`
-        )
+      if (isShallow === 'true') {
+        const message = `[mdxts] This repository is shallow cloned so the createdAt and updatedAt dates cannot be calculated correctly.`
+        if (process.env.VERCEL) {
+          throw new Error(
+            `${message} Set the VERCEL_DEEP_CLONE=true environment variable to enable deep cloning.`
+          )
+        } else if (process.env.GITHUB_ACTION) {
+          throw new Error(
+            `${message} See https://github.com/actions/checkout#fetch-all-history-for-all-tags-and-branches to fetch the entire git history.`
+          )
+        }
+        throw new Error(message)
       }
-      throw new Error(message)
-    }
 
-    hasCheckedIfShallow = true
+      hasCheckedIfShallow = true
+    } catch {
+      return {
+        authors: [],
+        createdAt: undefined,
+        updatedAt: undefined,
+      }
+    }
   }
 
   const authorContributions = new Map<
