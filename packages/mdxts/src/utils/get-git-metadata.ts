@@ -50,7 +50,7 @@ export function getGitMetadata(filePaths: string[]) {
     const stdout = execSync(
       `git log --all --follow --format="%aN|%aE|%cD" -- "${filePath}"`
     )
-    const lines = stdout.toString().trim().split('\n')
+    const lines = stdout.toString().trim().split('\n').filter(Boolean)
 
     for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
       const line = lines[lineIndex]
