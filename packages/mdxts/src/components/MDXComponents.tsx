@@ -50,7 +50,7 @@ export const MDXComponents = {
     const { sourcePath, sourcePathLine, sourcePathColumn } =
       props as unknown as PrivateCodeBlockProps
 
-    if (!React.isValidElement(children)) {
+    if (!React.isValidElement(children) || !children.props.children) {
       throw new Error(
         'mdxts: Expected children to be defined for MDX `pre` element.'
       )
