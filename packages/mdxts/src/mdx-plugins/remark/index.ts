@@ -12,12 +12,14 @@ import { transformSymbolicLinks } from './transform-symbolic-links'
 export function remarkPlugin() {
   return async (tree: Root, file: VFile) => {
     removeFrontMatter()(tree)
-    await addCodeBlocks()(tree, file)
-    await addHeadings()(tree)
-    await addDescription()(tree)
-    await addFileMetaToCodeBlock()(tree, file)
-    await removeParagraphs()(tree)
-    await transformRelativeLinks()(tree)
-    await transformSymbolicLinks()(tree)
+    await Promise.all([
+      addCodeBlocks()(tree, file),
+      addHeadings()(tree),
+      addDescription()(tree),
+      addFileMetaToCodeBlock()(tree, file),
+      removeParagraphs()(tree),
+      transformRelativeLinks()(tree),
+      transformSymbolicLinks()(tree),
+    ])
   }
 }

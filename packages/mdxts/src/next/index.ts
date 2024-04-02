@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 import createMdxPlugin from '@next/mdx'
 import { BUNDLED_THEMES } from 'shiki'
 
-import { getMdxPlugins } from '../plugins'
+import { getMdxPlugins } from '../mdx-plugins'
 import { renumberFilenames } from '../utils/renumber'
 import { createRefreshServer } from './create-refresh-server'
 

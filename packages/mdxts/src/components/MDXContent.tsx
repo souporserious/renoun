@@ -4,7 +4,7 @@ import * as jsxDevRuntime from 'react/jsx-dev-runtime'
 import { compile } from '@mdx-js/mdx'
 import 'server-only'
 
-import { getMdxPlugins } from '../plugins'
+import { getMdxPlugins } from '../mdx-plugins'
 import { Context } from './Context'
 import type { MDXComponents } from './MDXComponents'
 

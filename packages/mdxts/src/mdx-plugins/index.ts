@@ -1,8 +1,8 @@
 import remarkEmbedder from '@remark-embedder/core'
 import CodeSandboxTransformer from '@remark-embedder/transformer-codesandbox'
 
-import { remarkPlugin } from '../remark'
-import { rehypePlugin } from '../rehype'
+import { remarkPlugin } from './remark'
+import { rehypePlugin } from './rehype'
 
 /** MDXTS specific plugins for `rehype` and `remark`. */
 export async function getMdxPlugins({

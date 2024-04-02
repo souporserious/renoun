@@ -6,8 +6,8 @@ import { Feed } from 'feed'
 import 'server-only'
 
 import { project } from './components/project'
-import type { CodeBlocks } from './remark/add-code-blocks'
-import type { Headings } from './remark/add-headings'
+import type { CodeBlocks } from './mdx-plugins/remark/add-code-blocks'
+import type { Headings } from './mdx-plugins/remark/add-headings'
 import type { AllModules, ModuleData } from './utils/get-all-data'
 import { getAllData } from './utils/get-all-data'
 

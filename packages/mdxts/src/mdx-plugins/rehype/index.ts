@@ -6,7 +6,6 @@ import { addReadingTime } from './add-reading-time'
 
 export function rehypePlugin() {
   return async function (tree: Root, file: VFile) {
-    await addCodeMetaProps()(tree)
-    await addReadingTime()(tree, file)
+    await Promise.all([addCodeMetaProps()(tree), addReadingTime()(tree, file)])
   }
 }
