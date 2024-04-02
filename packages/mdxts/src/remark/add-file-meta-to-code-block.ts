@@ -1,12 +1,16 @@
-import type { Node } from 'mdast'
+import type { Root } from 'mdast'
 import type { VFile } from 'vfile'
 
 /** Adds file meta data to all code blocks and `CodeBlock` components. */
 export function addFileMetaToCodeBlock() {
-  return async function (tree: Node, file: VFile) {
+  return async function (tree: Root, file: VFile) {
     const { visit } = await import('unist-util-visit')
 
-    visit(tree, 'code', (node: any) => {
+    visit(tree, 'code', (node) => {
+      if (!node.position) {
+        return
+      }
+
       const sourcePathMeta = [
         `sourcePath="${file.path}"`,
         `sourcePathLine="${node.position.start.line - 2}"`,

@@ -1,8 +1,8 @@
-import type { Node, Parent, Text } from 'mdast'
+import type { Root, Parent, Text } from 'mdast'
 
 /** Replace all symbolic links `[[link]]` with markdown links `[link](/link)`. */
 export function transformSymbolicLinks() {
-  return async (tree: Node) => {
+  return async (tree: Root) => {
     const { visitParents } = await import('unist-util-visit-parents')
 
     visitParents(tree, 'text', (node: Text, ancestors: Parent[]) => {

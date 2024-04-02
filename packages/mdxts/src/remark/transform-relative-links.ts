@@ -1,9 +1,9 @@
-import type { Node, Link } from 'mdast'
+import type { Root, Link } from 'mdast'
 import { sep } from 'node:path'
 
 /** Reformat all relative links that use ordered numbers and extensions. */
 export function transformRelativeLinks() {
-  return async (tree: Node) => {
+  return async (tree: Root) => {
     const { visit } = await import('unist-util-visit')
 
     visit(tree, 'link', (node: Link) => {
