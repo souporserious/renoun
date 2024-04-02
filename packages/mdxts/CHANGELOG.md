@@ -1,5 +1,14 @@
 # mdxts
 
+## 0.12.1
+
+### Patch Changes
+
+- f35df99: Fixes the `getGitMetadata` utility erroring when running MDXTS in a project that does not have git instantiated.
+- fa4d329: Fixes the Webpack loader not updating dynamic imports when the `createSource` file pattern directory changes.
+- d651cd0: Filter empty lines from git log to avoid `getGitMetadata` erroring related to #81.
+- d3fc5ac: Throw more helpful error if MDX code block is empty.
+
 ## 0.12.0
 
 ### Minor Changes
