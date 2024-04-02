@@ -255,7 +255,6 @@ export function createSource<Type>(
         headings = [],
         description,
         metadata = {},
-        frontMatter,
         readingTime,
         ...moduleExports
       } = data.mdxPath
@@ -264,7 +263,6 @@ export function createSource<Type>(
             default: undefined,
             description: undefined,
             metadata: undefined,
-            frontMatter: undefined,
             readingTime: undefined,
           }
 
@@ -306,11 +304,6 @@ export function createSource<Type>(
         ]
       }
 
-      /** Merge front matter data into metadata. */
-      if (frontMatter) {
-        Object.assign(metadata, frontMatter)
-      }
-
       /** Merge title and description into metadata if nothing was found. */
       if (!metadata.title) {
         metadata.title = data.title
@@ -335,6 +328,7 @@ export function createSource<Type>(
         updatedAt: data.updatedAt,
         createdAt: data.createdAt,
         authors: data.authors,
+        frontMatter: data.frontMatter,
         readingTime: readingTime ? parseReadingTime(readingTime) : undefined,
         Content: async (props) => {
           if (Content === undefined) {
@@ -357,7 +351,6 @@ export function createSource<Type>(
           return React.createElement(Content, props)
         },
         examples,
-        frontMatter,
         headings,
         metadata,
         ...moduleExports,

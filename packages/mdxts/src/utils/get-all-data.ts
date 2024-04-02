@@ -4,6 +4,7 @@ import { readPackageUpSync } from 'read-package-up'
 import type { ExportedDeclarations, Project } from 'ts-morph'
 import { Directory, SourceFile } from 'ts-morph'
 import { getSymbolDescription, resolveExpression } from '@tsxmod/utils'
+import matter from 'gray-matter'
 
 import { findCommonRootPath } from './find-common-root-path'
 import { filePathToPathname } from './file-path-to-pathname'
@@ -29,6 +30,7 @@ export type ModuleData = {
   depth: number
   mdxPath?: string
   tsPath?: string
+  frontMatter?: Record<string, any>
   pathname: string
   url: string
   previous?: { label: string; pathname: string }
@@ -269,23 +271,26 @@ export function getAllData({
         depth,
         executionEnvironment,
         isMainExport,
-        pathname: pathname,
+        pathname,
         sourcePath,
       }
     }
 
     /** Handle MDX content */
     if (type === 'md') {
+      const { data } = matter(sourceFile.getText())
+
       allData[pathname] = {
         ...previouseData,
         mdxPath: path,
         exportedTypes: previouseData?.exportedTypes || [],
         examples: previouseData?.examples || [],
         description: previouseData?.description || description,
+        frontMatter: data,
         title,
         label,
         depth,
-        pathname: pathname,
+        pathname,
         sourcePath,
       }
     }

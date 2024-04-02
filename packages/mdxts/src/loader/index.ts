@@ -4,7 +4,6 @@ import { existsSync } from 'node:fs'
 import { glob } from 'fast-glob'
 import globParent from 'glob-parent'
 import { Node, Project, SyntaxKind } from 'ts-morph'
-import matter from 'gray-matter'
 
 import { project } from '../components/project'
 import { getExportedSourceFiles } from '../utils/get-exported-source-files'
@@ -53,21 +52,7 @@ export default async function loader(
 
     source = modifiedSourceLines.join('\n')
 
-    try {
-      const { data, content } = matter(source)
-      const hasData = Object.keys(data).length > 0
-      const stringifiedData = hasData ? JSON.stringify(data) : 'null'
-      callback(
-        null,
-        `export const frontMatter = ${stringifiedData}\n\n${content}`
-      )
-    } catch (error) {
-      if (error instanceof Error) {
-        callback(error)
-      } else {
-        throw error
-      }
-    }
+    callback(null, source)
 
     return
   }

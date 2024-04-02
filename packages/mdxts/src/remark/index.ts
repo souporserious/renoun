@@ -4,12 +4,14 @@ import { addCodeBlocks } from './add-code-blocks'
 import { addHeadings } from './add-headings'
 import { addDescription } from './add-description'
 import { addFileMetaToCodeBlock } from './add-file-meta-to-code-block'
+import { removeFrontMatter } from './remove-front-matter'
 import { removeParagraphs } from './remove-paragraph'
 import { transformRelativeLinks } from './transform-relative-links'
 import { transformSymbolicLinks } from './transform-symbolic-links'
 
 export function remarkPlugin() {
   return async (tree: Root, file: VFile) => {
+    removeFrontMatter()(tree)
     await addCodeBlocks()(tree, file)
     await addHeadings()(tree)
     await addDescription()(tree)
