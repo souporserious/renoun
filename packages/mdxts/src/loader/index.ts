@@ -2,6 +2,7 @@ import * as webpack from 'webpack'
 import { dirname, basename, join, relative, resolve, sep } from 'node:path'
 import { existsSync } from 'node:fs'
 import { glob } from 'fast-glob'
+import globParent from 'glob-parent'
 import { Node, Project, SyntaxKind } from 'ts-morph'
 import matter from 'gray-matter'
 
@@ -22,7 +23,6 @@ export default async function loader(
   }>,
   source: string | Buffer
 ) {
-  this.cacheable(true)
   const callback = this.async()
   const options = this.getOptions()
   const sourceString = source.toString()
@@ -141,6 +141,9 @@ export default async function loader(
       sourceString
     )
 
+  /** Only cache the loader if `createSource` is not imported. */
+  this.cacheable(!isCreateSourceImported)
+
   if (isCreateSourceImported) {
     const sourceFile = new Project({
       useInMemoryFileSystem: true,
@@ -155,6 +158,7 @@ export default async function loader(
 
         if (Node.isStringLiteral(firstArgument)) {
           const globPattern = firstArgument.getLiteralText()
+          const globDirectory = globParent(globPattern)
           const baseGlobPattern = dirname(globPattern)
           const isMdxPattern = globPattern.split(sep).at(-1)?.includes('mdx')
           let filePaths = await glob(
@@ -166,6 +170,9 @@ export default async function loader(
                 ],
             { cwd: workingDirectory }
           )
+
+          /** Add context dependency for glob parent directory to watch for changes. */
+          this.addContextDependency(globDirectory)
 
           /** Search for MDX files named the same as the source files (e.g. `Button.mdx` for `Button.tsx`) */
           if (!isMdxPattern) {
