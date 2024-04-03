@@ -6,16 +6,8 @@ This example shows how to build a blog with MDXTS and Next.js.
 
 ## How to use
 
-Use [`create-mdxts`](https://github.com/souporserious/mdxts/tree/main/packages/create-mdxts) with [npm](https://docs.npmjs.com/cli/init), [Yarn](https://yarnpkg.com/lang/en/docs/cli/create/), or [pnpm](https://pnpm.io) to copy this example to your machine:
+Use the [`create-mdxts`](https://github.com/souporserious/mdxts/tree/main/packages/create-mdxts) CLI with [npx](https://docs.npmjs.com/cli/v10/commands/npx) to copy this example to your machine:
 
 ```bash
-npm create-mdxts --example=blog
-```
-
-```bash
-yarn create mdxts --example=blog
-```
-
-```bash
-pnpm create mdxts --example=blog
+npx create-mdxts --example blog
 ```

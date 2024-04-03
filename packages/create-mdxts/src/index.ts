@@ -18,6 +18,7 @@ import { Log, askQuestion, askYesNo, getFilePatternBaseName } from './utils'
 
 const states = {
   INITIAL_STATE: 'initialState',
+  CHECK_NEXT_INSTALLED: 'checkNextInstalled',
   CHECK_TYPESCRIPT_INSTALLED: 'checkTypescriptInstalled',
   CHECK_MDXTS_INSTALLED: 'checkMdxtsInstalled',
   INSTALL_MDXTS: 'installMdxts',
@@ -55,6 +56,15 @@ export async function start() {
     try {
       switch (currentState) {
         case states.INITIAL_STATE:
+          const packageJsonPath = join(process.cwd(), 'package.json')
+          if (existsSync(packageJsonPath)) {
+            currentState = states.CHECK_NEXT_INSTALLED
+          } else {
+            await fetchExample('blog', 'No project was found. ')
+            currentState = states.SUCCESS_STATE
+          }
+          break
+        case states.CHECK_NEXT_INSTALLED:
           checkNextJsProject()
           currentState = states.CHECK_TYPESCRIPT_INSTALLED
           break
@@ -146,11 +156,6 @@ start()
 
 export function checkNextJsProject() {
   const packageJsonPath = join(process.cwd(), 'package.json')
-  if (!existsSync(packageJsonPath)) {
-    throw new Error(
-      'No package.json found. Please run this command in a Next.js project directory.'
-    )
-  }
   const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
   if (!packageJson.devDependencies?.next && !packageJson.dependencies?.next) {
     throw new Error(

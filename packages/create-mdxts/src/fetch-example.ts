@@ -1,18 +1,28 @@
 import path from 'node:path'
-import { createWriteStream, mkdirSync } from 'node:fs'
+import {
+  createWriteStream,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import chalk from 'chalk'
 
+import { getCurrentVersion } from './is-package-outdated'
 import { Log, askQuestion } from './utils'
 
 /** Fetches the contents of an MDXTS example from the GitHub repository and downloads them to the local file system. */
-export async function fetchExample(exampleSlug: string) {
+export async function fetchExample(
+  exampleSlug: string,
+  prependMessage?: string
+) {
   await fetchGitHubDirectory({
     owner: 'souporserious',
     repo: 'mdxts',
     branch: 'main',
     directoryPath: `examples/${exampleSlug}`,
+    prependMessage,
   })
 }
 
@@ -23,12 +33,14 @@ async function fetchGitHubDirectory({
   branch,
   directoryPath,
   basePath = '.',
+  prependMessage,
 }: {
   owner: string
   repo: string
   branch: string
   directoryPath: string
   basePath?: string
+  prependMessage?: string
 }) {
   const isRoot = basePath === '.'
   const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${directoryPath}?ref=${branch}`
@@ -48,7 +60,7 @@ async function fetchGitHubDirectory({
 
   if (isRoot) {
     const userBasePath = await askQuestion(
-      `Download the ${directoryName} example to ${chalk.bold(
+      `${prependMessage}Download the ${directoryName} example to ${chalk.bold(
         workingDirectory
       )}? Press enter to proceed or specify a different directory: `
     )
@@ -87,17 +99,19 @@ async function fetchGitHubDirectory({
 
   if (isRoot) {
     const { detectPackageManager } = await import('@antfu/install-pkg')
-    const packageManager = await detectPackageManager()
+    const packageManager = await detectPackageManager(process.cwd())
     const introInstallInstructions =
       basePath === '.'
         ? `Run`
         : `Change to the ${chalk.bold(directoryName)} directory and run`
 
+    await reformatPackageJson(workingDirectory, basePath)
+
     Log.success(
       `Example ${chalk.bold(
         directoryName
       )} fetched and configured successfully! ${introInstallInstructions} ${chalk.bold(
-        `${packageManager} install`
+        `${packageManager ?? 'npm'} install`
       )} to install the dependencies and get started.`
     )
   }
@@ -128,4 +142,23 @@ const downloadFile = async (url: string, filePath: string) => {
   const fileStream = createWriteStream(filePath)
 
   await pipeline(stream, fileStream)
+}
+
+/** Re-format package.json file to remove monorepo dependencies and use the latest MDXTS version. */
+async function reformatPackageJson(workingDirectory: string, basePath: string) {
+  const packageJsonPath = path.join(workingDirectory, basePath, 'package.json')
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
+
+  // Remove "@example/" prefix from package name
+  packageJson.name = packageJson.name.replace('@example/', '')
+
+  // Replace mdxts "workspace:*" with the latest version of the package
+  packageJson.dependencies['mdxts'] = await getCurrentVersion()
+
+  // Remove shiki and prettier dependencies since they are only required for the monorepo
+  delete packageJson.dependencies['prettier']
+  delete packageJson.dependencies['shiki']
+
+  // Write the updated package.json file
+  writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2), 'utf-8')
 }
