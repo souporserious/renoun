@@ -1,5 +1,11 @@
 # create-mdxts
 
+## 0.3.6
+
+### Patch Changes
+
+- 77c4c10: Improves CLI onboarding by prompting to copy the blog example if not run in a project.
+
 ## 0.3.5
 
 ### Patch Changes
