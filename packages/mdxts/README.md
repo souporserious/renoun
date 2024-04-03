@@ -4,7 +4,7 @@
   </a>
   <h2>The Content & Documentation SDK for React</h2>
   <p>
-MDXTS (Beta) is a collection of components and utilities for rendering content, type documentation, and code examples using React Server Components.
+MDXTS (Beta) is a collection of components and utilities for rendering [MDX](https://mdxjs.com/) content, type documentation, and code examples in React.
   </p>
 </div>
 
