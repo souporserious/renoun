@@ -82,7 +82,7 @@ export async function start() {
           break
         case states.INSTALL_MDXTS:
           const confirmInstall = await askYesNo(
-            `Install ${chalk.bold('mdxts')} package and required dependencies (prettier, shiki)?`
+            `Install ${chalk.bold('mdxts')} package?`
           )
           if (confirmInstall) {
             await installMdxts()
@@ -295,10 +295,10 @@ export async function configureNextPlugin(configExists: boolean) {
 
 export async function installMdxts() {
   const { installPackage } = await import('@antfu/install-pkg')
-  Log.info(`Installing ${chalk.bold('mdxts')} and required dependencies...`)
+  Log.info(`Installing ${chalk.bold('mdxts')}...`)
   try {
-    await installPackage(['mdxts', 'prettier', 'shiki'])
-    Log.success('mdxts, prettier, and shiki packages installed successfully!')
+    await installPackage(['mdxts'])
+    Log.success('mdxts package installed successfully!')
   } catch (error) {
     if (error instanceof Error) {
       throw new Error(`Installing mdxts failed: ${error.message}`)
