@@ -10,11 +10,13 @@ MDXTS (Beta) is a collection of components and utilities for rendering content, 
 
 ## Features
 
-- ✅ Type-checked content
-- 📄 Generated type documentation
-- 🔍 Source code previews
-- 📁 File-based routing
-- 🎨 Accurate syntax highlighting
+- 📝 Quickly start authoring MDX
+- ✅ Type-check content
+- 📘 Generate type documentation
+- 📊 Gather module metadata
+- 🖼️ Preview source code examples
+- 📁 Generate file-based routes
+- 🌈 Accurately highlight code blocks
 
 ## Getting Started
 
