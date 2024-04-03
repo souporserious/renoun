@@ -1,18 +1,21 @@
 import * as React from 'react'
 import * as jsxRuntime from 'react/jsx-runtime'
 import * as jsxDevRuntime from 'react/jsx-dev-runtime'
-import { compile } from '@mdx-js/mdx'
+import { compile, run } from '@mdx-js/mdx'
+import type { PluggableList } from '@mdx-js/mdx/lib/core'
 import 'server-only'
 
-import { getMdxPlugins } from '../mdx-plugins'
-import { Context } from './Context'
 import type { MDXComponents } from './MDXComponents'
+import { Context } from './Context'
 
-/** Compiles and renders MDX content. */
+/** Compiles and renders a string of MDX content. */
 export async function MDXContent({
   value,
   components,
   dependencies,
+  remarkPlugins,
+  rehypePlugins,
+  baseUrl,
 }: {
   /** The MDX content to render. */
   value: string
@@ -22,35 +25,36 @@ export async function MDXContent({
 
   /** An object of external dependencies that will be available to the MDX source code. */
   dependencies?: Record<string, any>
+
+  /** Remark plugins to use. See [PluggableList](https://github.com/unifiedjs/unified?tab=readme-ov-file#pluggablelist) for more info. */
+  remarkPlugins?: PluggableList
+
+  /** Rehype plugins to use. See [PluggableList](https://github.com/unifiedjs/unified?tab=readme-ov-file#pluggablelist) for more info. */
+  rehypePlugins?: PluggableList
+
+  /** Base URL to resolve imports and named exports from (e.g. `import.meta.url`) */
+  baseUrl?: string
 }) {
   const { theme } = arguments[0] // Private props
-  const plugins = await getMdxPlugins()
-  const allDependencies = {
-    jsx: process.env.NODE_ENV === 'development' ? jsxDevRuntime : jsxRuntime,
-    ...dependencies,
-  } as Record<string, any>
   const code = await compile(value, {
-    ...plugins,
+    baseUrl,
+    rehypePlugins,
+    remarkPlugins,
     useDynamicImport: true,
     outputFormat: 'function-body',
   })
-  const result = new Function(
-    ...Object.keys(allDependencies),
-    code.value.toString()
-  )
-  const { default: Component } = result(...Object.values(allDependencies))
-
-  if (Component === null) {
-    return null
-  }
+  const { default: Content } = await run(code.value, {
+    ...(process.env.NODE_ENV === 'development' ? jsxDevRuntime : jsxRuntime),
+    ...dependencies,
+  })
 
   if (theme) {
     return (
       <Context value={{ theme }}>
-        <Component components={components} />
+        <Content components={components} />
       </Context>
     )
   }
 
-  return <Component components={components} />
+  return <Content components={components} />
 }
