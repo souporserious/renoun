@@ -5,17 +5,17 @@ export function generateStaticParams() {
 }
 
 export default async function Page({ params }: { params: { slug: string } }) {
-  const { Content, metadata } = await posts.get(`blog/${params.slug}`)
+  const { Content, frontMatter } = await posts.get(`blog/${params.slug}`)
   const formattedDate = new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
     timeZone: 'UTC',
-  }).format(new Date(metadata.date))
+  }).format(new Date(frontMatter.date))
 
   return (
     <>
-      <h1>{metadata.title}</h1>
+      <h1>{frontMatter.title}</h1>
       <time>{formattedDate}</time>
       <Content />
     </>
