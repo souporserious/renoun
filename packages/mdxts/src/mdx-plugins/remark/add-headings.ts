@@ -1,13 +1,5 @@
 import type { Root, Heading } from 'mdast'
 
-let slugify: ReturnType<
-  typeof import('@sindresorhus/slugify').slugifyWithCounter
->
-
-import('@sindresorhus/slugify').then(({ slugifyWithCounter }) => {
-  slugify = slugifyWithCounter()
-})
-
 export type Headings = {
   id: any
   text: string
@@ -18,8 +10,9 @@ export type Headings = {
 export function addHeadings() {
   return async function (tree: Root) {
     const { valueToEstree } = await import('estree-util-value-to-estree')
+    const { slugifyWithCounter } = await import('@sindresorhus/slugify')
+    const slugify = slugifyWithCounter()
     const headings: Headings = []
-    slugify.reset()
 
     const { visit } = await import('unist-util-visit')
     const { toString } = await import('mdast-util-to-string')
