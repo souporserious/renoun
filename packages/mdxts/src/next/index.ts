@@ -28,6 +28,12 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
   let refreshServerPort: string | null = null
   let { gitSource, gitBranch = 'main', siteUrl, theme } = pluginOptions
   const themePath = resolve(process.cwd(), theme)
+  const mdxtsLoader = {
+    loader: 'mdxts/loader',
+    options: {
+      themePath: theme.endsWith('.json') ? themePath : theme,
+    },
+  }
 
   return function withMdxts(nextConfig: NextConfig = {}) {
     const getWebpackConfig = nextConfig.webpack
@@ -35,9 +41,7 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
 
     return async (phase: typeof PHASE_DEVELOPMENT_SERVER) => {
       const plugins = await getMdxPlugins({ gitSource })
-      const withMdx = createMdxPlugin({
-        options: plugins,
-      })
+      const withMdx = createMdxPlugin({ options: plugins })
 
       nextConfig.webpack = (config, options) => {
         // add default mdx components before @mdx-js/react
@@ -71,19 +75,7 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
         config.module.rules.push({
           test: /\.(?:jsx?|tsx?)$/,
           exclude: /node_modules/,
-          use: [
-            {
-              loader: 'mdxts/loader',
-              options: {
-                themePath: theme.endsWith('.json') ? themePath : theme,
-              },
-            },
-          ],
-        })
-
-        config.module.rules.push({
-          test: /onig\.wasm$/,
-          type: 'asset/resource',
+          use: [mdxtsLoader],
         })
 
         if (typeof getWebpackConfig === 'function') {
@@ -119,6 +111,12 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
 
       nextConfig.experimental = {
         ...nextConfig.experimental,
+        turbo: {
+          rules: {
+            '*.ts': { as: '*.ts', loaders: [mdxtsLoader] },
+            '*.tsx': { as: '*.tsx', loaders: [mdxtsLoader] },
+          },
+        },
         serverComponentsExternalPackages: [
           ...(nextConfig.experimental?.serverComponentsExternalPackages ?? []),
           'esbuild',

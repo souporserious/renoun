@@ -201,7 +201,13 @@ export default async function loader(
           })
 
           const objectLiteralText = `{${filePaths
-            .map((filePath) => `"${filePath}": import('${filePath}')`)
+            .map((filePath) => {
+              const relativeFilePath = relative(workingDirectory, filePath)
+              const normalizedRelativePath = relativeFilePath.startsWith('.')
+                ? relativeFilePath
+                : `.${sep}${relativeFilePath}`
+              return `'${filePath}': import('${normalizedRelativePath}')`
+            })
             .join(', ')}}`
 
           call.insertArguments(0, [objectLiteralText])
