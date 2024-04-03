@@ -60,7 +60,7 @@ function shouldRefreshCache() {
   return now - cacheContent.cachedAt > DAY_IN_MILLISECONDS
 }
 
-async function getCurrentVersion() {
+export async function getCurrentVersion() {
   if (shouldRefreshCache()) {
     const version = await fetchPackageVersion()
     saveVersionToCache(version)
