@@ -1,5 +1,5 @@
 'use client'
-import type { Headings } from 'mdxts/dist/src/remark/add-headings'
+import type { Headings } from 'mdxts/dist/src/mdx-plugins/remark/add-headings'
 import { useSectionObserver } from 'hooks/useSectionObserver'
 import { ViewSource } from '../ViewSource'
 import styles from './TableOfContents.module.css'
