@@ -3,6 +3,8 @@
   "private": true,
   "scripts": {
     "build": "turbo run build",
+    "build:site": "pnpm build --filter=site",
+    "build:examples": "pnpm build --filter=@examples/*",
     "dev": "turbo run dev",
     "dev:site": "pnpm dev --filter=mdxts --filter=site",
     "dev:examples": "pnpm dev --filter=mdxts --filter=@examples/*",
