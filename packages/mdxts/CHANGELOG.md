@@ -1,5 +1,17 @@
 # mdxts
 
+## 0.13.0
+
+### Minor Changes
+
+- 88b9e10: Simplify `MDXContent` to not include plugins by default and instead expose new `remarkPlugins`, `rehypePlugins`, and `baseUrl` props.
+- ad09ddb: Moves `frontMatter` from Webpack loader to static `getAllData` utility so front matter metadata is available when using the `createSource.all` method.
+- b42a275: Removes `ShouldRenderTitle` transformation from Webpack loader and now adds it through a remark plugin.
+
+### Patch Changes
+
+- e76e18e: Fixes headings getting incremented ids when duplicates do not exist.
+
 ## 0.12.1
 
 ### Patch Changes

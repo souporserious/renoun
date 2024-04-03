@@ -1,5 +1,11 @@
 # create-mdxts
 
+## 0.3.5
+
+### Patch Changes
+
+- 332af8f: Only install `mdxts` dependency when onboarding.
+
 ## 0.3.4
 
 ### Patch Changes
