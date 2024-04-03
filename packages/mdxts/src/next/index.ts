@@ -69,7 +69,7 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
         }
 
         config.module.rules.push({
-          test: /\.(?:jsx?|tsx?|mdx?)$/,
+          test: /\.(?:jsx?|tsx?)$/,
           exclude: /node_modules/,
           use: [
             {
