@@ -27,36 +27,6 @@ export default async function loader(
   const sourceString = source.toString()
   const workingDirectory = dirname(this.resourcePath)
 
-  /** Export front matter and title wrapper component from MDX files. */
-  if (this.resourcePath.endsWith('.mdx')) {
-    const sourceLines = sourceString.split('\n')
-    let inCodeBlock = false
-
-    const modifiedSourceLines = sourceLines.map((line) => {
-      if (line.trim().startsWith('```')) {
-        inCodeBlock = !inCodeBlock
-        return line
-      }
-
-      if (inCodeBlock) {
-        return line
-      }
-
-      if (line.startsWith('# ')) {
-        const wrappedTitle = `import { ShouldRenderTitle } from 'mdxts/components/ShouldRenderTitle';\n\n<ShouldRenderTitle renderTitle={props.renderTitle}>\n${line}\n</ShouldRenderTitle>`
-        return wrappedTitle
-      }
-
-      return line
-    })
-
-    source = modifiedSourceLines.join('\n')
-
-    callback(null, source)
-
-    return
-  }
-
   /** Add theme to Next.js entry layout files and examples. */
   const isExample = this.resourcePath.endsWith('.examples.tsx')
   if (
