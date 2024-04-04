@@ -13,16 +13,13 @@ import { fetchPackageVersion } from './get-package-version'
 import { Log, askQuestion } from './utils'
 
 /** Fetches the contents of an MDXTS example from the GitHub repository and downloads them to the local file system. */
-export async function fetchExample(
-  exampleSlug: string,
-  prependMessage?: string
-) {
+export async function fetchExample(exampleSlug: string, message?: string) {
   await fetchGitHubDirectory({
     owner: 'souporserious',
     repo: 'mdxts',
     branch: 'main',
     directoryPath: `examples/${exampleSlug}`,
-    prependMessage,
+    message,
   })
 }
 
@@ -33,14 +30,14 @@ async function fetchGitHubDirectory({
   branch,
   directoryPath,
   basePath = '.',
-  prependMessage = '',
+  message = '',
 }: {
   owner: string
   repo: string
   branch: string
   directoryPath: string
   basePath?: string
-  prependMessage?: string
+  message?: string
 }) {
   const isRoot = basePath === '.'
   const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${directoryPath}?ref=${branch}`
@@ -59,10 +56,13 @@ async function fetchGitHubDirectory({
   const items = await response.json()
 
   if (isRoot) {
+    const postMessage = ` Press enter to proceed or specify a different directory: `
     const userBasePath = await askQuestion(
-      `${prependMessage}Download the ${directoryName} example to ${chalk.bold(
-        workingDirectory
-      )}? Press enter to proceed or specify a different directory: `
+      message
+        ? `${message}${postMessage}`
+        : `Download the ${chalk.bold(directoryName)} example to ${chalk.bold(
+            workingDirectory
+          )}?${postMessage}`
     )
 
     if (userBasePath !== '') {
@@ -144,7 +144,7 @@ const downloadFile = async (url: string, filePath: string) => {
   await pipeline(stream, fileStream)
 }
 
-/** Re-format package.json file to remove monorepo dependencies and use the latest MDXTS version. */
+/** Reformat package.json file to remove monorepo dependencies and use the latest MDXTS version. */
 async function reformatPackageJson(workingDirectory: string, basePath: string) {
   const packageJsonPath = path.join(workingDirectory, basePath, 'package.json')
   const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))

@@ -60,7 +60,17 @@ export async function start() {
           if (existsSync(packageJsonPath)) {
             currentState = states.CHECK_NEXT_INSTALLED
           } else {
-            await fetchExample('blog', 'No project was found. ')
+            const terminalLink = (await import('terminal-link')).default
+            const blogLink = terminalLink(
+              'blog',
+              'https://github.com/souporserious/mdxts/tree/main/examples/blog'
+            )
+            await fetchExample(
+              'blog',
+              `No project was found. Download the ${blogLink} example to ${chalk.bold(
+                process.cwd()
+              )}?`
+            )
             currentState = states.SUCCESS_STATE
           }
           break
