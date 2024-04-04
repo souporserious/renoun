@@ -1,5 +1,11 @@
 # create-mdxts
 
+## 0.3.8
+
+### Patch Changes
+
+- 300587c: Fixes ESM chalk error by downgrading to previous version.
+
 ## 0.3.7
 
 ### Patch Changes
