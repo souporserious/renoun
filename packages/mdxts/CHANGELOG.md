@@ -1,5 +1,16 @@
 # mdxts
 
+## 0.14.0
+
+### Minor Changes
+
+- 32c9686: Removes private `Editor` and `Preview` components and related dependencies to reduce bundle size.
+- 6fcd390: Adds initial support for Next.js [Turbopack](https://nextjs.org/docs/app/api-reference/next-config-js/turbo) locally.
+
+### Patch Changes
+
+- 9feac19: Removes processing MDX files with Webpack loader since it is now handled through remark and `getAllData`.
+
 ## 0.13.0
 
 ### Minor Changes
