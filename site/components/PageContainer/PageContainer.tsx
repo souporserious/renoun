@@ -20,13 +20,12 @@ export function PageContainer({
         style={{ display: 'flex', flexDirection: 'column', gap: '1.6rem' }}
       >
         {children}
+        <div style={{ flex: '1 1 6rem' }} />
         <div
           style={{
-            flex: 1,
             display: 'flex',
             flexDirection: 'column',
             gap: '2rem',
-            marginTop: '6rem',
           }}
         >
           {dataSource.updatedAt ? (

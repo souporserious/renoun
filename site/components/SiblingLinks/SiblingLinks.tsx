@@ -13,8 +13,6 @@ export function SiblingLinks({
         padding: '2rem 0',
         marginTop: 'auto',
         borderTop: '1px solid var(--color-separator)',
-        position: 'sticky',
-        bottom: 0,
       }}
     >
       <SiblingLink module={previous} direction="previous" />
