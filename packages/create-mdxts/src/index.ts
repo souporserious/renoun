@@ -37,7 +37,7 @@ export async function start() {
     return
   }
 
-  if (await isPackageOutdated()) {
+  if (await isPackageOutdated('create-mdxts')) {
     const installCommand = chalk.bold('npm create mdxts@latest')
     Log.warning(
       `A new version of ${chalk.bold(

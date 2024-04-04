@@ -9,7 +9,7 @@ import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import chalk from 'chalk'
 
-import { getCurrentVersion } from './is-package-outdated'
+import { fetchPackageVersion } from './get-package-version'
 import { Log, askQuestion } from './utils'
 
 /** Fetches the contents of an MDXTS example from the GitHub repository and downloads them to the local file system. */
@@ -149,11 +149,11 @@ async function reformatPackageJson(workingDirectory: string, basePath: string) {
   const packageJsonPath = path.join(workingDirectory, basePath, 'package.json')
   const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
 
-  // Remove "@example/" prefix from package name
-  packageJson.name = packageJson.name.replace('@example/', '')
+  // Remove "@examples/" prefix from package name
+  packageJson.name = packageJson.name.replace('@examples/', '')
 
   // Replace mdxts "workspace:*" with the latest version of the package
-  packageJson.dependencies['mdxts'] = await getCurrentVersion()
+  packageJson.dependencies['mdxts'] = await fetchPackageVersion('mdxts')
 
   // Remove shiki and prettier dependencies since they are only required for the monorepo
   delete packageJson.dependencies['prettier']
