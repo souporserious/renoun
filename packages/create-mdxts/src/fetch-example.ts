@@ -33,7 +33,7 @@ async function fetchGitHubDirectory({
   branch,
   directoryPath,
   basePath = '.',
-  prependMessage,
+  prependMessage = '',
 }: {
   owner: string
   repo: string
