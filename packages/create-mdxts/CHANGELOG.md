@@ -1,5 +1,14 @@
 # create-mdxts
 
+## 0.3.7
+
+### Patch Changes
+
+- 24f9a9b: Fixes fetching the wrong version when reformatting the mdxts package version downloaded from examples.
+- acfc425: Fixes `undefined` in message when using example option in CLI.
+- 9a69392: Adds link to blog example when first onboarding through the CLI.
+- 96e401b: Fixes incorrect CLI outdated version comparison.
+
 ## 0.3.6
 
 ### Patch Changes
