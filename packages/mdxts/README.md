@@ -1,6 +1,9 @@
 <div align="center">
   <a href="https://mdxts.dev">
-    <img src="/site/public/logo.png" alt="MDXTS" width="164"/>
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="/packages/mdxts/images/logo-dark.png">
+      <img src="/packages/mdxts/images/logo-light.png" alt="MDXTS" width="164"/>
+    </picture>
   </a>
   <h2>The Content & Documentation SDK for React</h2>
   <p>
