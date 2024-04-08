@@ -33,6 +33,7 @@ export function SignupForm() {
         setMessage(`Sorry, your subscription could not be processed.`)
       }
       setState('success')
+      setEmail('')
       timeoutId.current = setTimeout(() => {
         setMessage(null)
         setState('idle')
