@@ -69,6 +69,60 @@
   display: none;
 }
 
+@property --mask-container-gradient-stop {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 50%;
+}
+
+@property --mask-container-gradient-transparency {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
+
+.maskContainer {
+  --curve: cubic-bezier(0.19, 0.96, 0.84, 0.98);
+  display: contents;
+  mask-image: radial-gradient(
+    ellipse at center,
+    rgba(0, 0, 0, 1) var(--mask-container-gradient-stop),
+    rgba(0, 0, 0, var(--mask-container-gradient-transparency)) 100%
+  );
+  transition:
+    --mask-container-gradient-transparency 1200ms var(--curve),
+    --mask-container-gradient-stop 1200ms var(--curve);
+}
+
+[data-active='true'] .maskContainer {
+  --mask-container-gradient-transparency: 1;
+  --mask-container-gradient-stop: 0%;
+}
+
+.formSection {
+  display: flex;
+  justify-content: center;
+  padding: 6rem 1rem;
+  z-index: 100;
+}
+
+.formContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 3rem;
+  gap: 2rem;
+  box-shadow: 0 0 0 1px #415062;
+  border-radius: 3rem;
+  background-color: #0b121acc;
+}
+
+.formList {
+  font-size: var(--font-size-body-2);
+  line-height: var(--line-height-body-2);
+  color: var(--color-foreground-secondary);
+}
+
 @media screen and (min-width: 60rem) {
   [data-active='true'] .main {
     max-height: calc(100vw / 60 * 42);
@@ -100,5 +154,19 @@
     border-radius: 0.25rem;
     font-size: var(--font-size-body-1);
     position: relative;
+  }
+
+  .formSection {
+    padding: 8rem 4rem;
+  }
+
+  .formContainer {
+    padding: 3rem 10rem;
+    background-color: #0b121a99;
+  }
+
+  .formList {
+    font-size: var(--font-size-body-1);
+    line-height: var(--line-height-body-1);
   }
 }

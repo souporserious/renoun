@@ -8,6 +8,7 @@
   --color-separator: hsl(206deg, 56%, 16%);
   --color-separator-secondary: hsl(210deg 48% 24%);
   --font-size-heading-1: 4rem;
+  --font-size-heading-2-marketing: 3.4rem;
   --font-size-heading-2: 3rem;
   --font-size-heading-3: 2rem;
   --font-size-body-1: 2rem;
@@ -28,6 +29,7 @@
   :root {
     --font-size-heading-1: 3.4rem;
     --font-size-heading-2: 1.8rem;
+    --font-size-heading-2-marketing: 3rem;
     --font-size-heading-3: 1.5rem;
     --font-size-body-1: 1.2rem;
     --font-size-body-2: 1rem;

@@ -3,6 +3,7 @@ import { CopyButton } from 'mdxts/components/CopyButton'
 import { Logo } from 'components/Logo'
 import { HeroExample } from './HeroExample'
 import { PageContainer } from './PageContainer'
+import { SignupForm } from './SignupForm'
 
 import styles from './page.module.css'
 
@@ -60,6 +61,7 @@ export default function Home() {
           <Link
             href="/docs/getting-started"
             style={{
+              fontWeight: 500,
               position: 'relative',
               padding: '0.5rem 1rem',
               borderRadius: '0.25rem',
@@ -82,7 +84,7 @@ export default function Home() {
             >
               $
             </span>
-            <span>npm create mdxts</span>
+            <span style={{ fontWeight: 500 }}>npm create mdxts</span>
             <CopyButton
               value="npm create mdxts"
               style={{
@@ -94,7 +96,36 @@ export default function Home() {
           </div>
         </div>
       </section>
-      <HeroExample />
+      <div className={styles.maskContainer}>
+        <HeroExample />
+        <div className={styles.formSection}>
+          <div className={styles.formContainer}>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '3rem',
+                position: 'relative',
+              }}
+            >
+              <h2
+                style={{
+                  fontSize: 'var(--font-size-heading-2-marketing)',
+                  textAlign: 'center',
+                }}
+              >
+                Stay Updated
+              </h2>
+              <SignupForm />
+            </div>
+            <ul className={styles.formList}>
+              <li>Find out about new features first</li>
+              <li>Stay updated on upcoming releases</li>
+              <li>Quality content, unsubscribe anytime</li>
+            </ul>
+          </div>
+        </div>
+      </div>
     </PageContainer>
   )
 }

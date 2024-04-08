@@ -57,123 +57,121 @@ export function HeroExample() {
   const entries = allDocs.all().filter((doc) => doc.depth === 1)
   const lastEntriesIndex = entries.length - 1
   return (
-    <div className={styles.maskContainer}>
-      <div className={styles.container}>
-        <Card title="docs" column="17 / span 12" row="4 / span 7">
-          <div
-            style={{
-              flex: 1,
-              display: 'grid',
-              gridAutoRows: '1fr',
-              boxShadow: `0 0 0 1px ${theme.colors['panel.border']}70`,
-              borderRadius: '0.5rem',
-            }}
-          >
-            {entries
-              .filter((doc) => doc.depth === 1)
-              .map((doc, index) => {
-                const firstIndex = index === 0
-                const lastIndex = index === lastEntriesIndex
-                return (
-                  <Link
-                    key={doc.pathname}
-                    href={doc.pathname}
-                    className={`${GeistMono.className} ${styles.link}`}
-                    style={{
-                      color: theme.colors['editor.foreground'],
-                      backgroundColor: theme.colors['editor.background'],
-                      boxShadow: firstIndex
-                        ? undefined
-                        : `inset 0 1px 0 0 ${theme.colors['panel.border']}70`,
-                      borderTopLeftRadius: firstIndex ? '0.5rem' : undefined,
-                      borderTopRightRadius: firstIndex ? '0.5rem' : undefined,
-                      borderBottomLeftRadius: lastIndex ? '0.5rem' : undefined,
-                      borderBottomRightRadius: lastIndex ? '0.5rem' : undefined,
-                    }}
-                  >
-                    {basename(doc.mdxPath!)}
-                  </Link>
-                )
-              })}
-          </div>
-        </Card>
-
-        <Card title="data.ts" column="33 / span 22" row="4 / span 5">
-          <CodeBlock
-            value={`import { createSource } from 'mdxts'\n\nexport const allDocs = createSource('docs/*.mdx')`}
-            filename="data.ts"
-            {...codeProps}
-          />
-        </Card>
-
-        <Card title="Sidebar.tsx" column="5 / span 24" row="16 / span 23">
-          <CodeBlock
-            value={sidebarSource}
-            filename="Sidebar.tsx"
-            {...codeProps}
-          />
-        </Card>
-
-        <Card
-          title="docs/[slug]/page.tsx"
-          column="33 / span 24"
-          row="16 / span 8"
+    <div className={styles.container}>
+      <Card title="docs" column="17 / span 12" row="4 / span 7">
+        <div
+          style={{
+            flex: 1,
+            display: 'grid',
+            gridAutoRows: '1fr',
+            boxShadow: `0 0 0 1px ${theme.colors['panel.border']}70`,
+            borderRadius: '0.5rem',
+          }}
         >
-          <CodeBlock
-            value={docsPageSource}
-            filename="docs/[slug]/page.tsx"
-            {...codeProps}
-          />
-        </Card>
+          {entries
+            .filter((doc) => doc.depth === 1)
+            .map((doc, index) => {
+              const firstIndex = index === 0
+              const lastIndex = index === lastEntriesIndex
+              return (
+                <Link
+                  key={doc.pathname}
+                  href={doc.pathname}
+                  className={`${GeistMono.className} ${styles.link}`}
+                  style={{
+                    color: theme.colors['editor.foreground'],
+                    backgroundColor: theme.colors['editor.background'],
+                    boxShadow: firstIndex
+                      ? undefined
+                      : `inset 0 1px 0 0 ${theme.colors['panel.border']}70`,
+                    borderTopLeftRadius: firstIndex ? '0.5rem' : undefined,
+                    borderTopRightRadius: firstIndex ? '0.5rem' : undefined,
+                    borderBottomLeftRadius: lastIndex ? '0.5rem' : undefined,
+                    borderBottomRightRadius: lastIndex ? '0.5rem' : undefined,
+                  }}
+                >
+                  {basename(doc.mdxPath!)}
+                </Link>
+              )
+            })}
+        </div>
+      </Card>
 
-        <div
-          style={{
-            gridColumn: '21 / span 36',
-            gridRow: '8 / span 5',
-            border: `1px solid ${LINE_COLOR}`,
-            borderLeft: 'none',
-            borderTopRightRadius: '0.5rem',
-            borderBottomRightRadius: '0.5rem',
-          }}
+      <Card title="data.ts" column="33 / span 22" row="4 / span 5">
+        <CodeBlock
+          value={`import { createSource } from 'mdxts'\n\nexport const allDocs = createSource('docs/*.mdx')`}
+          filename="data.ts"
+          {...codeProps}
         />
-        <div
-          style={{
-            gridColumn: '31 / span 2',
-            gridRow: '13 / span 5',
-            border: `1px solid ${LINE_COLOR}`,
-            borderRight: 'none',
-            translate: '0 -1px',
-            borderBottomLeftRadius: '0.5rem',
-          }}
+      </Card>
+
+      <Card title="Sidebar.tsx" column="5 / span 24" row="16 / span 23">
+        <CodeBlock
+          value={sidebarSource}
+          filename="Sidebar.tsx"
+          {...codeProps}
         />
-        <div
-          style={{
-            gridColumn: '3 / span 18',
-            gridRow: '13 / span 7',
-            border: `1px solid ${LINE_COLOR}`,
-            borderRight: 'none',
-            translate: '0 -1px',
-            borderBottomLeftRadius: '0.5rem',
-          }}
+      </Card>
+
+      <Card
+        title="docs/[slug]/page.tsx"
+        column="33 / span 24"
+        row="16 / span 8"
+      >
+        <CodeBlock
+          value={docsPageSource}
+          filename="docs/[slug]/page.tsx"
+          {...codeProps}
         />
-        <VerticalLine
-          row="3 / span 2"
-          column="23"
-          style={{
-            height: '60rem',
-            translate: '0 -90%',
-          }}
-        />
-        <HorizontalLine
-          row="13"
-          column="3 / span 18"
-          style={{
-            width: '60rem',
-            translate: '-100% -1px',
-          }}
-        />
-        <VerticalLine row="22 / span 36" column="45" />
-      </div>
+      </Card>
+
+      <div
+        style={{
+          gridColumn: '21 / span 36',
+          gridRow: '8 / span 5',
+          border: `1px solid ${LINE_COLOR}`,
+          borderLeft: 'none',
+          borderTopRightRadius: '0.5rem',
+          borderBottomRightRadius: '0.5rem',
+        }}
+      />
+      <div
+        style={{
+          gridColumn: '31 / span 2',
+          gridRow: '13 / span 5',
+          border: `1px solid ${LINE_COLOR}`,
+          borderRight: 'none',
+          translate: '0 -1px',
+          borderBottomLeftRadius: '0.5rem',
+        }}
+      />
+      <div
+        style={{
+          gridColumn: '3 / span 18',
+          gridRow: '13 / span 7',
+          border: `1px solid ${LINE_COLOR}`,
+          borderRight: 'none',
+          translate: '0 -1px',
+          borderBottomLeftRadius: '0.5rem',
+        }}
+      />
+      <VerticalLine
+        row="3 / span 2"
+        column="23"
+        style={{
+          height: '60rem',
+          translate: '0 -90%',
+        }}
+      />
+      <HorizontalLine
+        row="13"
+        column="3 / span 18"
+        style={{
+          width: '60rem',
+          translate: '-100% -1px',
+        }}
+      />
+      <VerticalLine row="22 / span 36" column="45" />
     </div>
   )
 }

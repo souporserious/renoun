@@ -1,36 +1,7 @@
-@property --mask-container-gradient-stop {
-  syntax: '<percentage>';
-  inherits: false;
-  initial-value: 50%;
-}
-
-@property --mask-container-gradient-transparency {
-  syntax: '<number>';
-  inherits: false;
-  initial-value: 0;
-}
-
-.maskContainer {
-  --curve: cubic-bezier(0.19, 0.96, 0.84, 0.98);
-  grid-area: 1 / 1;
-  mask-image: radial-gradient(
-    ellipse at center,
-    rgba(0, 0, 0, 1) var(--mask-container-gradient-stop),
-    rgba(0, 0, 0, var(--mask-container-gradient-transparency)) 100%
-  );
-  transition:
-    --mask-container-gradient-transparency 1200ms var(--curve),
-    --mask-container-gradient-stop 1200ms var(--curve);
-}
-
-[data-active='true'] .maskContainer {
-  --mask-container-gradient-transparency: 1;
-  --mask-container-gradient-stop: 0%;
-}
-
 .container {
   --grid-size: calc(200vw / 60);
   --grid-line-color: #27232f;
+  grid-area: 1 / 1;
   position: absolute;
   display: grid;
   grid-template-columns: repeat(60, var(--grid-size));
