@@ -28,7 +28,9 @@ export function SignupForm() {
       )
 
       if (response.ok) {
-        setMessage(`You have been subscribed successfully!`)
+        setMessage(
+          `A confirmation email has been sent, please check your inbox.`
+        )
       } else {
         setMessage(`Sorry, your subscription could not be processed.`)
       }
