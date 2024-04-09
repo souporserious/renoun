@@ -72,8 +72,7 @@
 }
 
 .arrowIcon {
-  position: relative;
-  top: -0.1rem;
+  display: none;
 }
 
 .message {
@@ -95,5 +94,11 @@
 @media screen and (min-width: 60rem) {
   .inputContainer {
     min-width: 32rem;
+  }
+
+  .arrowIcon {
+    display: block;
+    position: relative;
+    top: -0.1rem;
   }
 }
