@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { ImageResponse } from 'next/og'
 
-export const dynamic = 'force-static'
+export const runtime = 'edge'
 
 export function generateStaticParams() {
   return [{ slug: ['docs', 'getting-started'] }, { slug: ['docs', 'routing'] }]
@@ -11,6 +11,10 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: { slug: string[] } }
 ) {
+  const logoSource = await fetch(
+    new URL('../../../public/logo.png', import.meta.url)
+  ).then((response) => response.arrayBuffer())
+
   return new ImageResponse(
     (
       <div
@@ -25,6 +29,10 @@ export async function GET(
           gap: '1rem',
         }}
       >
+        <img
+          src={`data:image/png;base64,${Buffer.from(logoSource).toString('base64')}`}
+          height="100"
+        />
         <span
           style={{
             fontSize: '4rem',
