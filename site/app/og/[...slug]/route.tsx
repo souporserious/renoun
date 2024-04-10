@@ -4,7 +4,7 @@ import { ImageResponse } from 'next/og'
 export const dynamic = 'force-static'
 
 export function generateStaticParams() {
-  return [{ slug: ['docs', 'getting-started'] }]
+  return [{ slug: ['docs', 'getting-started'] }, { slug: ['docs', 'routing'] }]
 }
 
 export async function GET(
