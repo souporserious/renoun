@@ -12,7 +12,7 @@ export function generateStaticParams() {
 const baseUrl =
   process.env.NODE_ENV === 'development'
     ? 'http://localhost:4000'
-    : 'https://mdxts.dev'
+    : `https://${process.env.VERCEL_URL}`
 
 export async function generateMetadata({
   params,
