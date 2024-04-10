@@ -7,5 +7,5 @@ const withMdxts = createMdxtsPlugin({
 })
 
 export default withMdxts({
-  // output: 'export',
+  output: 'export',
 })

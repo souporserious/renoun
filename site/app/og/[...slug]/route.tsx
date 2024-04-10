@@ -1,17 +1,30 @@
 import type { NextRequest } from 'next/server'
 import { ImageResponse } from 'next/og'
 import { readFile } from 'node:fs/promises'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { allData } from 'data'
+
+const currentDirectory = dirname(fileURLToPath(import.meta.url))
 
 export function generateStaticParams() {
-  return [{ slug: ['docs', 'getting-started'] }, { slug: ['docs', 'routing'] }]
+  return allData.paths().map((pathname) => ({ slug: pathname }))
+}
+
+async function getImageSource(path: string) {
+  const data = await readFile(resolve(currentDirectory, path))
+  return `data:image/png;base64,${data.toString('base64')}`
 }
 
 export async function GET(
-  _request: NextRequest,
+  _: NextRequest,
   { params }: { params: { slug: string[] } }
 ) {
-  const logoData = await readFile('public/logo.png')
-  const logoSource = `data:image/png;base64,${logoData.toString('base64')}`
+  const data = (await allData.get(params.slug))!
+  const logoSource = await getImageSource('../../../public/logo.png')
+  const chevronSource = await getImageSource('images/chevron.png')
+  const backgroundSource = await getImageSource('images/background.png')
+  const category = data.pathname.includes('packages') ? 'Packages' : 'Docs'
 
   return new ImageResponse(
     (
@@ -21,21 +34,24 @@ export async function GET(
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: 'black',
           width: '100%',
           height: '100%',
-          gap: '1rem',
+          gap: 54,
+          backgroundImage: `url(${backgroundSource})`,
         }}
       >
-        <img src={logoSource} height="100" />
-        <span
+        <img src={logoSource} height="80" />
+        <div
           style={{
-            fontSize: '4rem',
-            color: 'white',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '1rem',
           }}
         >
-          {params.slug.join('/')}
-        </span>
+          <span style={{ fontSize: 60, color: '#78A6CE' }}>{category}</span>
+          <img src={chevronSource} height="64" style={{ top: 6 }} />
+          <span style={{ fontSize: 60, color: 'white' }}>{data.title}</span>
+        </div>
       </div>
     ),
     {
