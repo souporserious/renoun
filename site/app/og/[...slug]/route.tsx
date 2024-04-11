@@ -7,23 +7,38 @@ import { allData } from 'data'
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url))
 
-export function generateStaticParams() {
-  return allData.paths().map((pathname) => ({ slug: pathname }))
-}
-
 async function getImageSource(path: string) {
   const data = await readFile(resolve(currentDirectory, path))
   return `data:image/png;base64,${data.toString('base64')}`
+}
+
+export function generateStaticParams() {
+  return allData.paths().map((pathname) => ({
+    slug: [...pathname.slice(0, -1), `${pathname.slice(-1).at(0)!}.png`],
+  }))
 }
 
 export async function GET(
   _: NextRequest,
   { params }: { params: { slug: string[] } }
 ) {
-  const data = (await allData.get(params.slug))!
-  const logoSource = await getImageSource('../../../public/logo.png')
-  const chevronSource = await getImageSource('images/chevron.png')
-  const backgroundSource = await getImageSource('images/background.png')
+  const slug = [
+    ...params.slug.slice(0, -1),
+    params.slug.slice(-1).at(0)!.replace('.png', ''),
+  ]
+  const [data, logoSource, chevronSource, backgroundSource] = await Promise.all(
+    [
+      allData.get(slug),
+      getImageSource('../../../public/logo.png'),
+      getImageSource('images/chevron.png'),
+      getImageSource('images/background.png'),
+    ]
+  )
+
+  if (!data) {
+    return new Response('Not found', { status: 404 })
+  }
+
   const category = data.pathname.includes('packages') ? 'Packages' : 'Docs'
 
   return new ImageResponse(

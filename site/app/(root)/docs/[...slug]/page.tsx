@@ -22,9 +22,10 @@ export async function generateMetadata({
     openGraph: {
       images: [
         {
-          url: `${BASE_URL}/og/${['docs', ...params.slug].join('/')}`,
+          url: `${BASE_URL}/og/${['docs', ...params.slug].join('/')}.png`,
           width: 1200,
           height: 630,
+          type: 'image/png',
         },
       ],
     },
