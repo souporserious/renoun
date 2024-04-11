@@ -13,16 +13,10 @@ function getImageSource(path: string) {
 }
 
 const GeistRegular = readFileSync(
-  resolve(
-    currentDirectory,
-    '../../../node_modules/geist/dist/fonts/geist-sans/Geist-Regular.ttf'
-  )
+  resolve(currentDirectory, 'fonts/Geist-Regular.ttf')
 )
 const GeistSemibold = readFileSync(
-  resolve(
-    currentDirectory,
-    '../../../node_modules/geist/dist/fonts/geist-sans/Geist-Semibold.ttf'
-  )
+  resolve(currentDirectory, 'fonts/Geist-SemiBold.ttf')
 )
 const logoSource = getImageSource('../../../public/logo.png')
 const chevronSource = getImageSource('images/chevron.png')
