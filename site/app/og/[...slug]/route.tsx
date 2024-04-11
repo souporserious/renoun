@@ -98,7 +98,7 @@ export async function GET(
             display: 'flex',
             alignItems: 'center',
             gap: 8,
-            padding: '4px 16px',
+            padding: '4px 16px 12px',
             borderRadius: 8,
             backgroundColor: 'rgba(255, 255, 255, 0.1)',
           }}
