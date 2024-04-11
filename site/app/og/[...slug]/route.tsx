@@ -21,45 +21,83 @@ const GeistSemibold = readFileSync(
 const logoSource = getImageSource('../../../public/logo.png')
 const chevronSource = getImageSource('images/chevron.png')
 const backgroundSource = getImageSource('images/background.png')
+const options = {
+  width: 1200,
+  height: 630,
+  fonts: [
+    { name: 'GeistRegular', data: GeistRegular },
+    { name: 'GeistSemiBold', data: GeistSemibold },
+  ],
+}
+
+function Container({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        width: '100%',
+        height: '100%',
+        paddingTop: 200,
+        gap: 54,
+        backgroundImage: `url(${backgroundSource})`,
+      }}
+    >
+      <img src={logoSource} height="80" />
+      {children}
+    </div>
+  )
+}
 
 export function generateStaticParams() {
-  return allData.paths().map((pathname) => ({
-    slug: [...pathname.slice(0, -1), `${pathname.slice(-1).at(0)!}.png`],
-  }))
+  return allData
+    .paths()
+    .map((pathname) => ({
+      slug: [...pathname.slice(0, -1), `${pathname.slice(-1).at(0)!}.png`],
+    }))
+    .concat({ slug: ['default.png'] })
 }
 
 export async function GET(
   _: NextRequest,
   { params }: { params: { slug: string[] } }
 ) {
-  const slug = [
-    ...params.slug.slice(0, -1),
-    params.slug.slice(-1).at(0)!.replace('.png', ''),
-  ]
+  const baseSlug = params.slug.slice(-1).at(0)!.replace('.png', '')
+
+  if (baseSlug === 'default') {
+    return new ImageResponse(
+      (
+        <Container>
+          <span
+            style={{
+              fontSize: 60,
+              fontFamily: 'GeistSemiBold',
+              textAlign: 'center',
+              color: '#79a6cf',
+              maxWidth: 800,
+            }}
+          >
+            The Content & Documentation SDK
+          </span>
+        </Container>
+      ),
+      options
+    )
+  }
+
+  const slug = [...params.slug.slice(0, -1), baseSlug]
   const data = (await allData.get(slug))!
   const category = data.pathname.includes('packages') ? 'Packages' : 'Docs'
 
   return new ImageResponse(
     (
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: '100%',
-          height: '100%',
-          gap: 54,
-          backgroundImage: `url(${backgroundSource})`,
-        }}
-      >
-        <img src={logoSource} height="80" />
+      <Container>
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: '1rem',
-            marginBottom: 30,
           }}
         >
           <span
@@ -82,15 +120,8 @@ export async function GET(
             {data.title}
           </span>
         </div>
-      </div>
+      </Container>
     ),
-    {
-      width: 1200,
-      height: 630,
-      fonts: [
-        { name: 'GeistRegular', data: GeistRegular },
-        { name: 'GeistSemiBold', data: GeistSemibold },
-      ],
-    }
+    options
   )
 }

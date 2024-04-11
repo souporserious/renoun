@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { BASE_URL } from './constants'
 
 const url = 'https://mdxts.dev/'
 
@@ -24,6 +25,14 @@ export function getSiteMetadata({
       siteName: 'MDXTS',
       locale: 'en_US',
       type: 'website',
+      images: [
+        {
+          url: `${BASE_URL}/og/default.png`,
+          width: 1200,
+          height: 630,
+          type: 'image/png',
+        },
+      ],
       ...rest.openGraph,
     },
     twitter: {
