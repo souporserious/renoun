@@ -6,6 +6,7 @@ import { PageContainer } from 'components/PageContainer'
 import { ViewSource } from 'components/ViewSource'
 import { allData, allPackages } from 'data'
 import { getSiteMetadata } from 'utils/get-site-metadata'
+import { BASE_URL } from 'utils/constants'
 
 const mdxComponents = {
   p: (props) => <p {...props} style={{ margin: 0 }} />,
@@ -27,6 +28,16 @@ export async function generateMetadata({
   return getSiteMetadata({
     title: `${data?.title} - MDXTS`,
     description: data?.description,
+    openGraph: {
+      images: [
+        {
+          url: `${BASE_URL}/og/${['packages', ...params.slug].join('/')}.png`,
+          width: 1200,
+          height: 630,
+          type: 'image/png',
+        },
+      ],
+    },
   })
 }
 
