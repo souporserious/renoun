@@ -5,12 +5,25 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { allData } from 'data'
 
+const currentDirectory = dirname(fileURLToPath(import.meta.url))
+
 function getImageSource(path: string) {
-  const currentDirectory = dirname(fileURLToPath(import.meta.url))
   const data = readFileSync(resolve(currentDirectory, path))
   return `data:image/png;base64,${data.toString('base64')}`
 }
 
+const GeistRegular = readFileSync(
+  resolve(
+    currentDirectory,
+    '../../../node_modules/geist/dist/fonts/geist-sans/Geist-Regular.ttf'
+  )
+)
+const GeistSemibold = readFileSync(
+  resolve(
+    currentDirectory,
+    '../../../node_modules/geist/dist/fonts/geist-sans/Geist-Semibold.ttf'
+  )
+)
 const logoSource = getImageSource('../../../public/logo.png')
 const chevronSource = getImageSource('images/chevron.png')
 const backgroundSource = getImageSource('images/background.png')
@@ -29,12 +42,7 @@ export async function GET(
     ...params.slug.slice(0, -1),
     params.slug.slice(-1).at(0)!.replace('.png', ''),
   ]
-  const data = await allData.get(slug)
-
-  if (!data) {
-    return new Response('Not found', { status: 404 })
-  }
-
+  const data = (await allData.get(slug))!
   const category = data.pathname.includes('packages') ? 'Packages' : 'Docs'
 
   return new ImageResponse(
@@ -57,17 +65,38 @@ export async function GET(
             display: 'flex',
             alignItems: 'center',
             gap: '1rem',
+            marginBottom: 30,
           }}
         >
-          <span style={{ fontSize: 60, color: '#78A6CE' }}>{category}</span>
+          <span
+            style={{
+              fontSize: 60,
+              fontFamily: 'GeistRegular',
+              color: '#78A6CE',
+            }}
+          >
+            {category}
+          </span>
           <img src={chevronSource} height="64" style={{ top: 6 }} />
-          <span style={{ fontSize: 60, color: 'white' }}>{data.title}</span>
+          <span
+            style={{
+              fontSize: 60,
+              fontFamily: 'GeistSemiBold',
+              color: 'white',
+            }}
+          >
+            {data.title}
+          </span>
         </div>
       </div>
     ),
     {
       width: 1200,
       height: 630,
+      fonts: [
+        { name: 'GeistRegular', data: GeistRegular },
+        { name: 'GeistSemiBold', data: GeistSemibold },
+      ],
     }
   )
 }
