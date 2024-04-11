@@ -40,7 +40,7 @@ function Container({ children }: { children: React.ReactNode }) {
         width: '100%',
         height: '100%',
         paddingTop: 200,
-        gap: 54,
+        gap: 60,
         backgroundImage: `url(${backgroundSource})`,
       }}
     >
@@ -74,7 +74,7 @@ export async function GET(
               fontSize: 60,
               fontFamily: 'GeistSemiBold',
               textAlign: 'center',
-              color: '#79a6cf',
+              color: '#B3C9DD',
               maxWidth: 800,
             }}
           >
@@ -97,7 +97,10 @@ export async function GET(
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '1rem',
+            gap: 8,
+            padding: '4px 16px',
+            borderRadius: 8,
+            backgroundColor: 'rgba(255, 255, 255, 0.1)',
           }}
         >
           <span
@@ -114,7 +117,7 @@ export async function GET(
             style={{
               fontSize: 60,
               fontFamily: 'GeistSemiBold',
-              color: 'white',
+              color: '#B3C9DD',
             }}
           >
             {data.title}
