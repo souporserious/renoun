@@ -22,7 +22,7 @@ export type ModuleImport = Promise<Record<string, any>>
 
 export type AllModules = Record<Pathname, ModuleImport>
 
-export type ModuleData = {
+export type ModuleData<Type extends { frontMatter: Record<string, any> }> = {
   title: string
   label: string
   description?: string
@@ -30,7 +30,6 @@ export type ModuleData = {
   depth: number
   mdxPath?: string
   tsPath?: string
-  frontMatter?: Record<string, any>
   pathname: string
   url: string
   previous?: { label: string; pathname: string }
@@ -47,9 +46,12 @@ export type ModuleData = {
     isMainExport: boolean
   })[]
   examples: ReturnType<typeof getExamplesFromSourceFile>
-} & ReturnType<typeof getGitMetadata>
+} & ReturnType<typeof getGitMetadata> &
+  ('frontMatter' extends keyof Type
+    ? Type
+    : { frontMatter: Record<string, any> })
 
-export function getAllData({
+export function getAllData<Type extends { frontMatter: Record<string, any> }>({
   allModules,
   globPattern,
   project,
@@ -131,7 +133,7 @@ export function getAllData({
     .map((sourceFile) => sourceFile.getFilePath() as string)
     .concat(Object.keys(allModules))
     .filter((path) => !path.includes('.examples.tsx'))
-  const allData: Record<Pathname, ModuleData> = {}
+  const allData: Record<Pathname, ModuleData<Type>> = {}
   const allPublicDeclarations: WeakMap<SourceFile, ExportedDeclarations[]> =
     new WeakMap()
 
@@ -405,7 +407,7 @@ export function getAllData({
     ]
   })
 
-  return Object.fromEntries(parsedData) as Record<Pathname, ModuleData>
+  return Object.fromEntries(parsedData) as Record<Pathname, ModuleData<Type>>
 }
 
 /** Returns the title of a source file based on its filename. */

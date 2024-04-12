@@ -24,10 +24,12 @@ type Compute<Type> = Type extends object
     } & {}
   : Type
 
-export type Module = Compute<
+export type Module<Type extends { frontMatter: Record<string, any> }> = Compute<
   {
     Content?: ComponentType<{ renderTitle?: boolean }>
-    examples: (Awaited<ModuleData['examples']>[number] & { pathname: string })[]
+    examples: (Awaited<ModuleData<Type>['examples']>[number] & {
+      pathname: string
+    })[]
     pathname: string
     codeBlocks: CodeBlocks
     headings: Headings
@@ -52,7 +54,7 @@ export type Module = Compute<
     /** The authors that contributed to the module. */
     authors?: string[]
     metadata?: { title: string; description: string }
-  } & Omit<ModuleData, 'mdxPath' | 'tsPath' | 'gitMeta' | 'examples'>
+  } & Omit<ModuleData<Type>, 'mdxPath' | 'tsPath' | 'gitMeta' | 'examples'>
 >
 
 export type SourceTreeItem = {
@@ -71,7 +73,7 @@ export type SourceTreeItem = {
  * export const allDocs = createSource('./docs/*.mdx', { baseDirectory: 'docs' })
  * export const allComponents = createSource('./components/**\/index.ts')
  */
-export function createSource<Type>(
+export function createSource<Type extends { frontMatter: Record<string, any> }>(
   /** A glob pattern to match source files. */
   pattern: string,
 
@@ -112,7 +114,7 @@ export function createSource<Type>(
     baseDirectory: string
     basePathname: string
   }
-  const allData = getAllData({
+  const allData = getAllData<Type>({
     allModules,
     globPattern,
     project,
@@ -330,7 +332,7 @@ export function createSource<Type>(
         authors: data.authors,
         frontMatter: data.frontMatter,
         readingTime: readingTime ? parseReadingTime(readingTime) : undefined,
-        Content: async (props) => {
+        Content: async (props: { renderTitle?: boolean }) => {
           if (Content === undefined) {
             return null
           }
@@ -354,7 +356,7 @@ export function createSource<Type>(
         headings,
         metadata,
         ...moduleExports,
-      } as Module & Type
+      }
     },
 
     /**
@@ -376,7 +378,7 @@ export function createSource<Type>(
 
     /** Returns an RSS feed based on all module metadata. */
     rss(options: FeedOptions) {
-      return generateRssFeed(this.all(), options)
+      return generateRssFeed<Type>(this.all(), options)
     },
   }
 }
@@ -526,7 +528,10 @@ function parseReadingTime(readingTime: [number, number]) {
 }
 
 /** Generate an RSS feed based on `createSource` or `mergeSources` data. */
-function generateRssFeed(allData: ModuleData[], options: FeedOptions) {
+function generateRssFeed<Type extends { frontMatter: Record<string, any> }>(
+  allData: ModuleData<Type>[],
+  options: FeedOptions
+) {
   if (process.env.MDXTS_SITE_URL === undefined) {
     throw new Error(
       '[mdxts] The `siteUrl` option in the `mdxts/next` plugin is required to generate an RSS feed.'
