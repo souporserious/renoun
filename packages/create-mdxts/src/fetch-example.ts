@@ -107,6 +107,8 @@ async function fetchGitHubDirectory({
 
     await reformatPackageJson(workingDirectory, basePath)
 
+    writeFileSync('.gitignore', '.next\nnode_modules\nout', 'utf-8')
+
     Log.success(
       `Example ${chalk.bold(
         directoryName
