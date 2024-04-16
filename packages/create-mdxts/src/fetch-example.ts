@@ -57,7 +57,7 @@ async function fetchGitHubDirectory({
 
   if (isRoot) {
     const postMessage = ` Press enter to proceed or specify a different directory: `
-    const userBasePath = await askQuestion(
+    const userBaseDirectory = await askQuestion(
       message
         ? `${message}${postMessage}`
         : `Download the ${chalk.bold(directoryName)} example to ${chalk.bold(
@@ -65,11 +65,9 @@ async function fetchGitHubDirectory({
           )}?${postMessage}`
     )
 
-    if (userBasePath !== '') {
-      mkdirSync(userBasePath, { recursive: true })
-
-      basePath = userBasePath
-      workingDirectory = path.join(workingDirectory, userBasePath)
+    if (userBaseDirectory) {
+      mkdirSync(userBaseDirectory, { recursive: true })
+      workingDirectory = path.join(workingDirectory, userBaseDirectory)
     }
 
     Log.info(
