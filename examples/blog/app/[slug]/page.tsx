@@ -1,17 +1,17 @@
-import { posts } from '../data'
+import { allPosts } from '@/data'
 
 export function generateStaticParams() {
-  return posts.paths().map((pathname) => ({ slug: pathname.at(-1) }))
+  return allPosts.paths().map((pathname) => ({ slug: pathname.at(-1) }))
 }
 
 export default async function Page({ params }: { params: { slug: string } }) {
-  const { Content, frontMatter } = await posts.get(`blog/${params.slug}`)
+  const { Content, frontMatter } = await allPosts.get(params.slug)
   const formattedDate = new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
     timeZone: 'UTC',
-  }).format(new Date(frontMatter.date))
+  }).format(frontMatter.date)
 
   return (
     <>
