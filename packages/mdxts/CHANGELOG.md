@@ -1,5 +1,66 @@
 # mdxts
 
+## 0.15.0
+
+### Minor Changes
+
+- 435c5e8: Allow overriding `frontMatter` type through `createSource` generic.
+
+  ```ts
+  import { createSource } from "mdxts";
+
+  export const allDocs = createSource<{
+    frontMatter: {
+      title: string;
+      description: string;
+      date: string;
+      tags?: string[];
+    };
+  }>("docs/*.mdx");
+  ```
+
+- fac626b: Adds front matter type validation using the generic passed to `createSource`:
+
+  ```ts
+  import { createSource } from "mdxts";
+
+  export const allPosts = createSource<{
+    frontMatter: {
+      title: string;
+      date: Date;
+      summary: string;
+      tags?: string[];
+    };
+  }>("posts/**/*.mdx", { baseDirectory: "posts" });
+  ```
+
+  ```posts/markdown-guide.mdx
+  ---
+  title: Hello World
+  date: 2021-01-01
+  ---
+
+  # Hello World
+
+  This is a post.
+  ```
+
+  Results in the following type error:
+
+  ```
+  Error: Front matter data is incorrect or missing
+  [/posts/markdown-guide.mdx] Type '{}' does not satisfy the expected type 'frontMatter'.
+  Type '{}' is missing the following properties from type 'frontMatter': summary
+  ```
+
+### Patch Changes
+
+- 7327000: Fixes WebSocket error during local development when first loading the page:
+
+  ```
+  InvalidStateError: Failed to execute 'send' on 'WebSocket': Still in CONNECTING state.
+  ```
+
 ## 0.14.0
 
 ### Minor Changes
