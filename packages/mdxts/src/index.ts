@@ -358,7 +358,7 @@ export function createSource<Type extends { frontMatter: Record<string, any> }>(
         updatedAt: data.updatedAt,
         createdAt: data.createdAt,
         authors: data.authors,
-        frontMatter: data.frontMatter,
+        frontMatter: data.frontMatter as Type['frontMatter'],
         readingTime: readingTime ? parseReadingTime(readingTime) : undefined,
         Content: async (props: { renderTitle?: boolean }) => {
           if (Content === undefined) {
