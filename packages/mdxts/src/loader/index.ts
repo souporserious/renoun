@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs'
 import { glob } from 'fast-glob'
 import globParent from 'glob-parent'
 import { Node, Project, SyntaxKind } from 'ts-morph'
+import { addComputedTypes } from '@tsxmod/utils'
 
 import { project } from '../components/project'
 import { getExportedSourceFiles } from '../utils/get-exported-source-files'
@@ -107,9 +108,14 @@ export default async function loader(
       .getDescendantsOfKind(SyntaxKind.CallExpression)
       .filter((call) => call.getExpression().getText() === 'createSource')
 
-    for (const call of createSourceCalls) {
+    // Add computed types to the source file to calculate flattened front matter types
+    if (createSourceCalls.length > 0) {
+      addComputedTypes(sourceFile)
+    }
+
+    for (const createSourceCall of createSourceCalls) {
       try {
-        const [firstArgument] = call.getArguments()
+        const [firstArgument] = createSourceCall.getArguments()
 
         if (Node.isStringLiteral(firstArgument)) {
           const globPattern = firstArgument.getLiteralText()
@@ -210,7 +216,42 @@ export default async function loader(
             })
             .join(', ')}}`
 
-          call.insertArguments(0, [objectLiteralText])
+          const argumentCount = createSourceCall.getArguments().length
+          const createSourceCallArguments = []
+
+          /** Insert empty options object if not provided. */
+          if (argumentCount === 1) {
+            createSourceCallArguments.push('{}')
+          }
+
+          /** Insert dynamic imports argument. */
+          createSourceCallArguments.push(objectLiteralText)
+
+          /** Insert resolved front matter type argument for type checking front matter properties. */
+          const [typeArgument] = createSourceCall.getTypeArguments()
+
+          if (typeArgument) {
+            const typeProperties = typeArgument
+              .getType()
+              .getApparentProperties()
+            const frontMatterProperty = typeProperties.find(
+              (property) => property.getName() === 'frontMatter'
+            )!
+
+            if (frontMatterProperty) {
+              const frontMatterType = frontMatterProperty
+                .getValueDeclarationOrThrow()
+                .getType()
+                .getText()
+
+              createSourceCallArguments.push(`"${frontMatterType}"`)
+            }
+          }
+
+          createSourceCall.insertArguments(
+            argumentCount,
+            createSourceCallArguments
+          )
         }
       } catch (error) {
         if (error instanceof Error) {

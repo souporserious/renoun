@@ -3,6 +3,8 @@ import * as React from 'react'
 import type { ComponentType } from 'react'
 import { basename, dirname, extname, join, resolve, sep } from 'node:path'
 import { Feed } from 'feed'
+import { Project } from 'ts-morph'
+import { getDiagnosticMessageText } from '@tsxmod/utils'
 import 'server-only'
 
 import { project } from './components/project'
@@ -75,7 +77,7 @@ export type SourceTreeItem = {
  */
 export function createSource<Type extends { frontMatter: Record<string, any> }>(
   /** A glob pattern to match source files. */
-  pattern: string,
+  globPattern: string,
 
   /** Options for configuring the source. */
   options: {
@@ -92,9 +94,9 @@ export function createSource<Type extends { frontMatter: Record<string, any> }>(
     basePathname?: string
   } = {}
 ) {
-  let allModules = pattern as unknown as AllModules
+  let allModules = arguments[2] as AllModules
 
-  if (typeof allModules === 'string') {
+  if (allModules === undefined) {
     throw new Error(
       'mdxts: createSource requires that the mdxts/loader package is configured as a Webpack loader.'
     )
@@ -108,12 +110,7 @@ export function createSource<Type extends { frontMatter: Record<string, any> }>(
     ])
   )
 
-  const globPattern = options as unknown as string
-  const { baseDirectory = '', basePathname = '' } = (arguments[2] ||
-    {}) as unknown as {
-    baseDirectory: string
-    basePathname: string
-  }
+  const { baseDirectory = '', basePathname = '' } = options || {}
   const allData = getAllData<Type>({
     allModules,
     globPattern,
@@ -136,6 +133,51 @@ export function createSource<Type extends { frontMatter: Record<string, any> }>(
   const allFilteredData = Object.fromEntries(
     filteredDataKeys.map((pathname) => [pathname, allData[pathname]])
   )
+
+  /** Validate front matter types. */
+  const frontMatterType = arguments[3] as string
+
+  if (frontMatterType) {
+    const allModuleData = Object.values(allFilteredData)
+    const dateKeys = (frontMatterType.match(/(\w+): Date/g) || []).map(
+      (match) => match.replace(/: Date/g, '')
+    )
+    let contents = `type frontMatter = ${frontMatterType};\n`
+
+    allModuleData.forEach((post) => {
+      const entries = Object.entries(post.frontMatter).map(([key, value]) => {
+        if (dateKeys.includes(key)) {
+          const dateValue = new Date(value)
+          if (dateValue.toString() !== 'Invalid Date') {
+            return `${key}: new Date('${value}')`
+          }
+        } else if (typeof value === 'string') {
+          return `${key}: "${value.replace(/"/g, '\\"')}"`
+        } else if (Array.isArray(value)) {
+          return `${key}: [${value.map((item) => `"${item}"`).join(', ')}]`
+        }
+        return `${key}: ${value}`
+      })
+
+      contents += `({${entries.join(', ')}}) satisfies frontMatter;\n`
+    })
+
+    const frontMatterDiagnostics = new Project({ useInMemoryFileSystem: true })
+      .createSourceFile('frontMatter.ts', contents)
+      .getPreEmitDiagnostics()
+      .map((diagnostic) => {
+        const index = diagnostic.getLineNumber()! - 2
+        const data = allModuleData[index]
+        const message = getDiagnosticMessageText(diagnostic.getMessageText())
+        return `[${data.mdxPath?.replace(process.cwd(), '')}] ${message}`
+      })
+
+    if (frontMatterDiagnostics.length > 0) {
+      throw new Error(
+        `Front matter data is incorrect or missing\n${frontMatterDiagnostics.join('\n')}`
+      )
+    }
+  }
 
   return {
     /** Returns all modules. */
