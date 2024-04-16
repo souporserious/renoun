@@ -1,6 +1,7 @@
 import { execSync } from 'node:child_process'
 
 let hasCheckedIfShallow = false
+let hadGitError = false
 
 /** Returns aggregated metadata about multiple files from git history. */
 export function getGitMetadata(filePaths: string[]) {
@@ -26,11 +27,16 @@ export function getGitMetadata(filePaths: string[]) {
 
       hasCheckedIfShallow = true
     } catch {
-      return {
-        authors: [],
-        createdAt: undefined,
-        updatedAt: undefined,
-      }
+      hadGitError = true
+    }
+  }
+
+  /** Bail early if the repository is shallow cloned or there was a git error (e.g. not a git repository). */
+  if (hadGitError) {
+    return {
+      authors: [],
+      createdAt: undefined,
+      updatedAt: undefined,
     }
   }
 
