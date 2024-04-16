@@ -76,19 +76,19 @@ export type SourceTreeItem = {
  * export const allComponents = createSource('./components/**\/index.ts')
  */
 export function createSource<Type extends { frontMatter: Record<string, any> }>(
-  /** A glob pattern to match source files. */
+  /** A file glob pattern to match source files. Supports [micromatch patterns](https://github.com/micromatch/micromatch#matching-features). */
   globPattern: string,
 
   /** Options for configuring the source. */
   options: {
     /**
-     * The base directory to use for calculating source paths. This is useful in monorepos where
+     * The base directory used when calculating source paths. This is useful in monorepos where
      * source files can be located outside of the workspace.
      */
     baseDirectory?: string
 
     /**
-     * The base pathname to use for calculating navigation paths. This includes everything after
+     * The base pathname used when calculating navigation paths. This includes everything after
      * the hostname (e.g. `/docs` in `https://mdxts.com/docs`).
      */
     basePathname?: string
