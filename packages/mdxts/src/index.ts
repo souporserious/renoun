@@ -139,37 +139,12 @@ export function createSource<Type extends { frontMatter: Record<string, any> }>(
 
   if (frontMatterType) {
     const allModuleData = Object.values(allFilteredData)
-    const dateKeys = new Project({ useInMemoryFileSystem: true })
-      .createSourceFile(
-        'frontMatter.ts',
-        `type frontMatter = ${frontMatterType};`
-      )
-      .getTypeAliasOrThrow('frontMatter')
-      .getType()
-      .getProperties()
-      .filter((property) => {
-        return (
-          property.getValueDeclarationOrThrow().getType().getText() === 'Date'
-        )
-      })
-      .map((property) => property.getName())
     let contents = `type frontMatter = ${frontMatterType};\n`
 
     allModuleData.forEach((post) => {
       const entries = Object.entries(post.frontMatter).map(([key, value]) => {
-        if (dateKeys.includes(key)) {
-          const dateValue = new Date(value)
-          if (dateValue.toString() !== 'Invalid Date') {
-            return `${key}: new Date('${value}')`
-          }
-        } else if (typeof value === 'string') {
-          return `${key}: "${value}"`
-        } else if (Array.isArray(value)) {
-          return `${key}: [${value.map((item) => `"${item}"`).join(', ')}]`
-        }
-        return `${key}: ${value}`
+        return `${key}: ${formatFrontMatterValue(value)}`
       })
-
       contents += `({${entries.join(', ')}}) satisfies frontMatter;\n`
     })
 
@@ -535,6 +510,24 @@ export function mergeSources(...sources: ReturnType<typeof createSource>[]) {
     getExample,
     rss,
   }
+}
+
+/** Formats a value for front matter. */
+function formatFrontMatterValue(value: any): string {
+  if (value instanceof Date) {
+    return `new Date('${value}')`
+  } else if (typeof value === 'boolean' || typeof value === 'number') {
+    return `${value}`
+  } else if (Array.isArray(value)) {
+    return `[${value.map((item) => formatFrontMatterValue(item)).join(', ')}]`
+  } else if (typeof value === 'object') {
+    return `{${Object.entries(value)
+      .map(([subKey, subValue]) => {
+        return `${subKey}: ${formatFrontMatterValue(subValue)}`
+      })
+      .join(', ')}}`
+  }
+  return `"${value}"`
 }
 
 /** Formats reading time into a human-readable string. */
