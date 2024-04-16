@@ -52,9 +52,9 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
         )
 
         config.plugins.push(
-          // silence ts-morph warnings
+          // silence ts-morph and jju warnings
           new webpack.ContextReplacementPlugin(
-            /\/@ts-morph\/common\//,
+            /\/(@ts-morph\/common|jju)\//,
             (data: { dependencies: Array<{ critical?: boolean }> }) => {
               for (const dependency of data.dependencies) {
                 delete dependency.critical
