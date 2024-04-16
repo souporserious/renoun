@@ -1,7 +1,12 @@
 import { createSource } from 'mdxts'
 
 export const posts = createSource<{
-  metadata: { date: string }
+  frontMatter: {
+    title: string
+    date: Date
+    summary: string
+    tags?: string[]
+  }
 }>('./*.mdx', {
   baseDirectory: 'app',
 })
