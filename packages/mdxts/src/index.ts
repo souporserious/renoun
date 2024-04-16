@@ -139,9 +139,20 @@ export function createSource<Type extends { frontMatter: Record<string, any> }>(
 
   if (frontMatterType) {
     const allModuleData = Object.values(allFilteredData)
-    const dateKeys = (frontMatterType.match(/(\w+): Date/g) || []).map(
-      (match) => match.replace(/: Date/g, '')
-    )
+    const dateKeys = new Project({ useInMemoryFileSystem: true })
+      .createSourceFile(
+        'frontMatter.ts',
+        `type frontMatter = ${frontMatterType};`
+      )
+      .getTypeAliasOrThrow('frontMatter')
+      .getType()
+      .getProperties()
+      .filter((property) => {
+        return (
+          property.getValueDeclarationOrThrow().getType().getText() === 'Date'
+        )
+      })
+      .map((property) => property.getName())
     let contents = `type frontMatter = ${frontMatterType};\n`
 
     allModuleData.forEach((post) => {
@@ -152,7 +163,7 @@ export function createSource<Type extends { frontMatter: Record<string, any> }>(
             return `${key}: new Date('${value}')`
           }
         } else if (typeof value === 'string') {
-          return `${key}: "${value.replace(/"/g, '\\"')}"`
+          return `${key}: "${value}"`
         } else if (Array.isArray(value)) {
           return `${key}: [${value.map((item) => `"${item}"`).join(', ')}]`
         }

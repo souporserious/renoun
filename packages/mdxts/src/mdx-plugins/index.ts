@@ -11,6 +11,7 @@ export async function getMdxPlugins({
   gitSource?: string
 } = {}): Promise<{ remarkPlugins: any[]; rehypePlugins: any[] }> {
   const allPlugins = await Promise.all([
+    import('remark-frontmatter'),
     import('remark-gfm'),
     import('remark-github'),
     import('remark-smartypants'),
@@ -20,6 +21,7 @@ export async function getMdxPlugins({
     import('rehype-infer-reading-time-meta'),
   ])
   const [
+    remarkFrontMatter,
     remarkGfm,
     remarkGitHub,
     remarkSmartyPants,
@@ -30,6 +32,7 @@ export async function getMdxPlugins({
   ] = allPlugins.map((plugin) => plugin.default)
   return {
     remarkPlugins: [
+      remarkFrontMatter,
       remarkGfm,
       gitSource?.includes('github')
         ? [remarkGitHub, { repository: gitSource }]
