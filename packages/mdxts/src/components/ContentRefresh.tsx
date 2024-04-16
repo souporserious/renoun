@@ -14,21 +14,24 @@ export function ContentRefresh({
   const router = useRouter()
 
   useEffect(() => {
-    const listener = (event: MessageEvent) => {
+    function sendPaths() {
+      ws.send(JSON.stringify({ mdxPath, tsPath }))
+    }
+
+    ws.addEventListener('open', sendPaths)
+
+    function listener(event: MessageEvent) {
       const message = JSON.parse(event.data)
       if (message.type === 'refresh' && 'fastRefresh' in router) {
-        // @ts-expect-error - private Next API
+        // @ts-expect-error - private Next.js API
         router.fastRefresh()
       }
     }
 
-    // Send the MDX and TS paths to the server so it knows which files to watch.
-    ws.send(JSON.stringify({ mdxPath, tsPath }))
-
-    // Listen for refresh messages from the server.
     ws.addEventListener('message', listener)
 
     return () => {
+      ws.removeEventListener('open', sendPaths)
       ws.removeEventListener('message', listener)
     }
   }, [])
