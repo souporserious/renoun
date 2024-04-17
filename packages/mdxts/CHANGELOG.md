@@ -1,5 +1,14 @@
 # mdxts
 
+## 0.15.1
+
+### Patch Changes
+
+- bf65891: Fixes inferred front matter for `createSource.get` method.
+- 94fd7fe: Silence `jju` warnings used by `@manypkg/find-root`.
+- a79d453: Handles nested fields when type checking front matter.
+- 635de6c: Bail early if not a git repository to avoid printing git errors when not initialized yet.
+
 ## 0.15.0
 
 ### Minor Changes
