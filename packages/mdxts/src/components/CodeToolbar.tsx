@@ -1,6 +1,5 @@
-'use client'
 import React from 'react'
-// import { getTheme } from '../utils/get-theme'
+import { getTheme } from '../utils/get-theme'
 import { CopyButton } from './CopyButton'
 
 type BaseCodeToolbarProps = {
@@ -31,7 +30,7 @@ export function CodeToolbar({
   allowCopy,
   ...props
 }: CodeToolbarProps) {
-  // const theme = getTheme()
+  const theme = getTheme()
   return (
     <div
       style={{
@@ -41,7 +40,7 @@ export function CodeToolbar({
         gridTemplateColumns: '1fr auto',
         alignItems: 'center',
         height: '3rem',
-        // boxShadow: `inset 0 -1px 0 0 ${theme.colors['panel.border']}70`,
+        boxShadow: `inset 0 -1px 0 0 ${theme.colors['panel.border']}70`,
       }}
     >
       {'filename' in props ? (
