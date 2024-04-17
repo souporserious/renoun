@@ -1,5 +1,12 @@
 # create-mdxts
 
+## 0.3.9
+
+### Patch Changes
+
+- 1468536: Add .gitignore file when cloning example.
+- dcf722b: Fixes specifying a custom directory to copy examples to.
+
 ## 0.3.8
 
 ### Patch Changes
