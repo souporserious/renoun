@@ -6,7 +6,6 @@ import type { PluggableList } from '@mdx-js/mdx/lib/core'
 import 'server-only'
 
 import type { MDXComponents } from './MDXComponents'
-import { Context } from './Context'
 
 /** Compiles and renders a string of MDX content. */
 export async function MDXContent({
@@ -35,7 +34,6 @@ export async function MDXContent({
   /** Base URL to resolve imports and named exports from (e.g. `import.meta.url`) */
   baseUrl?: string
 }) {
-  const { theme } = arguments[0] // Private props
   const code = await compile(value, {
     baseUrl,
     rehypePlugins,
@@ -47,14 +45,6 @@ export async function MDXContent({
     ...(process.env.NODE_ENV === 'development' ? jsxDevRuntime : jsxRuntime),
     ...dependencies,
   })
-
-  if (theme) {
-    return (
-      <Context value={{ theme }}>
-        <Content components={components} />
-      </Context>
-    )
-  }
 
   return <Content components={components} />
 }

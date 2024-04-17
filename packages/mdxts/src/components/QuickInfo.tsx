@@ -2,6 +2,7 @@ import React, { Fragment } from 'react'
 import { type ts, type Diagnostic } from 'ts-morph'
 import { getDiagnosticMessageText } from '@tsxmod/utils'
 
+import { getTheme } from '../utils/get-theme'
 import { type getHighlighter } from './highlighter'
 import { languageService } from './project'
 import { MDXContent } from './MDXContent'
@@ -12,7 +13,6 @@ export function QuickInfo({
   filename,
   highlighter,
   language,
-  theme,
   diagnostics,
   edit,
   isQuickInfoOpen,
@@ -23,13 +23,13 @@ export function QuickInfo({
   filename: string
   highlighter: Awaited<ReturnType<typeof getHighlighter>>
   language: string
-  theme: any
   diagnostics: Diagnostic[]
   edit: any
   isQuickInfoOpen?: boolean
   rootDirectory?: string
   baseDirectory?: string
 }) {
+  const theme = getTheme()
   const quickInfo = languageService.getQuickInfoAtPosition(filename, position)
 
   if (!quickInfo) {

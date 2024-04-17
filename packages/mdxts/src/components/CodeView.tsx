@@ -2,7 +2,8 @@ import React, { Fragment } from 'react'
 import type { SourceFile } from 'ts-morph'
 import { Node, SyntaxKind } from 'ts-morph'
 
-import type { Theme, getHighlighter } from './highlighter'
+import { getTheme } from '../utils/get-theme'
+import type { getHighlighter } from './highlighter'
 import { Symbol } from './Symbol'
 import { QuickInfo } from './QuickInfo'
 import { QuickInfoProvider } from './QuickInfoProvider'
@@ -24,9 +25,6 @@ export type CodeProps = {
 
   /** Lines to highlight. */
   highlight?: string
-
-  /** VS Code-based theme for highlighting. */
-  theme: Theme
 
   /** Show or hide the copy button. */
   allowCopy?: boolean
@@ -74,7 +72,6 @@ export function CodeView({
   highlight,
   highlighter,
   language,
-  theme,
   showErrors,
   className,
   isJsxOnly = false,
@@ -107,6 +104,7 @@ export function CodeView({
   baseDirectory?: string
   edit?: any
 }) {
+  const theme = getTheme()
   const shouldRenderToolbar = toolbar
     ? shouldRenderFilename || allowCopy
     : false
@@ -156,7 +154,6 @@ export function CodeView({
           filename={shouldRenderFilename ? filenameLabel : undefined}
           value={value}
           sourcePath={sourcePath}
-          theme={theme}
         />
       ) : null}
 
@@ -270,7 +267,6 @@ export function CodeView({
                             filename={filename}
                             highlighter={highlighter}
                             language={language}
-                            theme={theme}
                             diagnostics={tokenDiagnostics}
                             edit={edit}
                             rootDirectory={rootDirectory}

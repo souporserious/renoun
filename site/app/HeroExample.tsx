@@ -45,8 +45,6 @@ export function Sidebar() {
 }
 `.trim()
 
-const theme = getTheme()
-const LINE_COLOR = theme.colors['panel.border']
 const codeProps = {
   padding: '0.7rem',
   toolbar: false,
@@ -54,6 +52,8 @@ const codeProps = {
 } satisfies Partial<CodeBlockProps>
 
 export function HeroExample() {
+  const theme = getTheme()
+  const lineColor = theme.colors['panel.border']
   const entries = allDocs.all().filter((doc) => doc.depth === 1)
   const lastEntriesIndex = entries.length - 1
   return (
@@ -129,7 +129,7 @@ export function HeroExample() {
         style={{
           gridColumn: '21 / span 36',
           gridRow: '8 / span 5',
-          border: `1px solid ${LINE_COLOR}`,
+          border: `1px solid ${lineColor}`,
           borderLeft: 'none',
           borderTopRightRadius: '0.5rem',
           borderBottomRightRadius: '0.5rem',
@@ -139,7 +139,7 @@ export function HeroExample() {
         style={{
           gridColumn: '31 / span 2',
           gridRow: '13 / span 5',
-          border: `1px solid ${LINE_COLOR}`,
+          border: `1px solid ${lineColor}`,
           borderRight: 'none',
           translate: '0 -1px',
           borderBottomLeftRadius: '0.5rem',
@@ -149,7 +149,7 @@ export function HeroExample() {
         style={{
           gridColumn: '3 / span 18',
           gridRow: '13 / span 7',
-          border: `1px solid ${LINE_COLOR}`,
+          border: `1px solid ${lineColor}`,
           borderRight: 'none',
           translate: '0 -1px',
           borderBottomLeftRadius: '0.5rem',
@@ -187,6 +187,7 @@ function Card({
   row: string
   children: React.ReactNode
 }) {
+  const theme = getTheme()
   return (
     <div
       style={{
@@ -230,6 +231,7 @@ function HorizontalLine({
   align?: 'start' | 'center' | 'end'
   style?: React.CSSProperties
 }) {
+  const theme = getTheme()
   return (
     <div
       style={{
@@ -237,7 +239,7 @@ function HorizontalLine({
         gridColumn: column,
         gridRow: row,
         height: 1,
-        backgroundColor: LINE_COLOR,
+        backgroundColor: theme.colors['panel.border'],
         ...style,
       }}
     />
@@ -255,6 +257,7 @@ function VerticalLine({
   align?: 'start' | 'center' | 'end'
   style?: React.CSSProperties
 }) {
+  const theme = getTheme()
   return (
     <div
       style={{
@@ -262,7 +265,7 @@ function VerticalLine({
         gridColumn: column,
         gridRow: row,
         width: 1,
-        backgroundColor: LINE_COLOR,
+        backgroundColor: theme.colors['panel.border'],
         ...style,
       }}
     />

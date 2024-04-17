@@ -3,8 +3,8 @@ import { getHighlighter as shikiGetHighlighter } from 'shiki'
 import type { SourceFile } from 'ts-morph'
 import { Node, SyntaxKind } from 'ts-morph'
 
+import { getTheme } from '../utils/get-theme'
 import { getContext } from '../utils/context'
-import { getTheme } from '../index'
 import { Context } from './Context'
 
 type Color = string
@@ -78,9 +78,7 @@ export const getHighlighter = cache(async function getHighlighter(
 ): Promise<Highlighter> {
   if (highlighter === null) {
     if (!options) {
-      const contextValue = getContext(Context)
-      const theme = contextValue.theme ?? getTheme()
-      options = { theme }
+      options = { theme: getTheme() }
     }
 
     highlighter = await shikiGetHighlighter(options)

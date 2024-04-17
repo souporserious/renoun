@@ -1,7 +1,7 @@
 'use client'
 import React from 'react'
+// import { getTheme } from '../utils/get-theme'
 import { CopyButton } from './CopyButton'
-import type { Theme } from './highlighter'
 
 type BaseCodeToolbarProps = {
   /** The value of the code block. */
@@ -9,9 +9,6 @@ type BaseCodeToolbarProps = {
 
   /** The path to the source file on disk in development and the git provider source in production. */
   sourcePath?: string
-
-  /** The theme to use for highlighting. */
-  theme: Theme
 
   /** Whether or not to allow copying the code block. */
   allowCopy?: boolean
@@ -31,10 +28,10 @@ type CodeToolbarProps =
 export function CodeToolbar({
   value,
   sourcePath,
-  theme,
   allowCopy,
   ...props
 }: CodeToolbarProps) {
+  // const theme = getTheme()
   return (
     <div
       style={{
@@ -44,7 +41,7 @@ export function CodeToolbar({
         gridTemplateColumns: '1fr auto',
         alignItems: 'center',
         height: '3rem',
-        boxShadow: `inset 0 -1px 0 0 ${theme.colors['panel.border']}70`,
+        // boxShadow: `inset 0 -1px 0 0 ${theme.colors['panel.border']}70`,
       }}
     >
       {'filename' in props ? (

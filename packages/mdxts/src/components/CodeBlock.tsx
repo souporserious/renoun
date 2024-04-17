@@ -8,7 +8,7 @@ import { format, resolveConfig } from 'prettier'
 import { BUNDLED_LANGUAGES } from 'shiki'
 import 'server-only'
 
-import { getTheme } from '../index'
+import { getTheme } from '../utils/get-theme'
 import { getContext } from '../utils/context'
 import { getSourcePath } from '../utils/get-source-path'
 import { isJsxOnly } from '../utils/is-jsx-only'
@@ -40,9 +40,6 @@ export type BaseCodeBlockProps = {
 
   /** Lines to highlight. */
   highlight?: string
-
-  /** VS Code-based theme for highlighting. */
-  theme?: Theme
 
   /** Show or hide the copy button. */
   allowCopy?: boolean
@@ -107,7 +104,6 @@ export async function CodeBlock({
   language,
   lineNumbers,
   highlight,
-  theme: themeProp,
   className,
   showErrors,
   allowErrors,
@@ -124,14 +120,7 @@ export async function CodeBlock({
   const contextValue = getContext(Context)
   const { isNestedInEditor, sourcePath, sourcePathLine, sourcePathColumn } =
     props as PrivateCodeBlockProps
-  const theme = themeProp ?? contextValue.theme ?? getTheme()
-
-  if (!theme) {
-    throw new Error(
-      'The [theme] prop was not provided to the [CodeBlock] component. Pass an explicit theme or make sure the mdxts/loader package is configured correctly.'
-    )
-  }
-
+  const theme = getTheme()
   let id = 'source' in props ? props.source : filenameProp
 
   if ('value' in props && id === undefined) {
@@ -254,7 +243,6 @@ export async function CodeBlock({
     padding,
     paddingHorizontal,
     paddingVertical,
-    theme,
     isNestedInEditor,
     showErrors,
     allowErrors,
