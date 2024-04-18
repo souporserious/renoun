@@ -1,5 +1,11 @@
 # mdxts
 
+## 0.15.2
+
+### Patch Changes
+
+- d3520da: Prevent fatal git error in console by checking for `.git` directory in `getGitMetadata`.
+
 ## 0.15.1
 
 ### Patch Changes

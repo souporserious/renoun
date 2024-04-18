@@ -1,5 +1,12 @@
 # create-mdxts
 
+## 0.3.10
+
+### Patch Changes
+
+- 4be36bc: Save version check to local cache.
+- 29c8865: Uses the correct working directory when creating example files.
+
 ## 0.3.9
 
 ### Patch Changes
