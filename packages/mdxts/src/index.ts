@@ -13,6 +13,8 @@ import type { Headings } from './mdx-plugins/remark/add-headings'
 import type { AllModules, ModuleData } from './utils/get-all-data'
 import { getAllData } from './utils/get-all-data'
 
+export { getTheme } from './utils/get-theme'
+
 type FeedOptions = Omit<
   ConstructorParameters<typeof Feed>[0],
   'generator' | 'link' | 'id'
@@ -612,22 +614,4 @@ function generateRssFeed<Type extends { frontMatter: Record<string, any> }>(
   })
 
   return feed.rss2()
-}
-
-let theme: any = null
-
-/**
- * Sets the current theme.
- * @internal
- */
-export function setTheme(newTheme: any) {
-  theme = newTheme
-}
-
-/**
- * Returns the current theme.
- * @internal
- */
-export function getTheme() {
-  return theme
 }

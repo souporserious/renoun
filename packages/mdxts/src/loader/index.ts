@@ -1,6 +1,5 @@
 import * as webpack from 'webpack'
-import { dirname, basename, join, relative, resolve, sep } from 'node:path'
-import { existsSync } from 'node:fs'
+import { dirname, join, relative, resolve, sep } from 'node:path'
 import { glob } from 'fast-glob'
 import globParent from 'glob-parent'
 import { Node, Project, SyntaxKind } from 'ts-morph'
@@ -18,65 +17,21 @@ import { findCommonRootPath } from '../utils/find-common-root-path'
  * will be used (e.g. `Button.tsx` and `Button.mdx`).
  */
 export default async function loader(
-  this: webpack.LoaderContext<{
-    themePath?: string
-  }>,
+  this: webpack.LoaderContext<{}>,
   source: string | Buffer
 ) {
   const callback = this.async()
-  const options = this.getOptions()
   const sourceString = source.toString()
   const workingDirectory = dirname(this.resourcePath)
 
-  /** Add theme to Next.js entry layout files and examples. */
-  const isExample = this.resourcePath.endsWith('.examples.tsx')
-  if (
-    !source.includes('import theme') &&
-    (isNextJsEntryLayout(this.resourcePath) || isExample) &&
-    options.themePath
-  ) {
-    let relativeThemePath = relative(workingDirectory, options.themePath)
-
-    if (options.themePath.endsWith('.json') && !existsSync(options.themePath)) {
-      throw new Error(
-        `mdxts: Could not find theme at ${options.themePath} or ${relativeThemePath}. Please provide a valid theme path.`
-      )
-    }
-
-    if (!options.themePath.endsWith('.json')) {
-      relativeThemePath = `shiki/themes/${options.themePath}.json`
-    }
-
-    if (isExample) {
-      /** Examples don't inherit `setTheme` below so we explicitly import the theme and pass it to the components. */
-      source = `${source}\nimport theme from '${relativeThemePath}';`
-        .replaceAll(
-          '<CodeBlock',
-          `<CodeBlock theme={theme} workingDirectory="${workingDirectory}"`
-        )
-        .replaceAll(
-          '<CodeInline',
-          `<CodeInline theme={theme} workingDirectory="${workingDirectory}"`
-        )
-        .replaceAll(
-          '<ExportedTypes',
-          `<ExportedTypes theme={theme} workingDirectory="${workingDirectory}"`
-        )
-        .replaceAll('<MDXContent', `<MDXContent theme={theme}`)
-    } else {
-      source = `${source}\nimport { setTheme } from 'mdxts';\nimport theme from '${relativeThemePath}';\nsetTheme(theme);`
-    }
-  }
-
   /** Augment CodeBlock, CodeInline, and ExportedTypes components to add the working directory. */
   const isMDXComponentImported =
-    /import\s+{\s*([^}]*\b(CodeBlock|CodeInline|ExportedTypes)\b[^}]*)\s*}\s*from\s+['"]mdxts\/components.*['"]/g.test(
+    /import\s+{\s*([^}]*\b(CodeBlock|CodeInline|ExportedTypes)\b[^}]*)\s*}/g.test(
       sourceString
     )
 
   if (isMDXComponentImported) {
-    source = source
-      .toString()
+    source = sourceString
       .replaceAll(
         '<CodeBlock',
         `<CodeBlock workingDirectory="${workingDirectory}"`
@@ -267,20 +222,4 @@ export default async function loader(
   } else {
     callback(null, source)
   }
-}
-
-/** Returns true if the provided file path is a Next.js entry layout file. */
-function isNextJsEntryLayout(filePath: string) {
-  const topLevelPath = join(
-    dirname(filePath).replace(join(process.cwd(), sep), ''),
-    basename(filePath)
-  )
-  return [
-    'app/layout.js',
-    'src/app/layout.js',
-    'app/layout.jsx',
-    'src/app/layout.jsx',
-    'app/layout.tsx',
-    'src/app/layout.tsx',
-  ].includes(topLevelPath)
 }

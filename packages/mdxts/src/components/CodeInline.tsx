@@ -2,10 +2,8 @@ import React, { Fragment } from 'react'
 import { BUNDLED_LANGUAGES } from 'shiki'
 import 'server-only'
 
-import { getTheme } from '../index'
-import { getContext } from '../utils/context'
-import { Context } from './Context'
-import { getHighlighter, type Theme } from './highlighter'
+import { getTheme } from '../utils/get-theme'
+import { getHighlighter } from './highlighter'
 
 const languageMap: Record<string, any> = {
   mjs: 'javascript',
@@ -18,9 +16,6 @@ export type CodeInlineProps = {
 
   /** Language of the code snippet. */
   language?: (typeof BUNDLED_LANGUAGES)[number] | (typeof languageKeys)[number]
-
-  /** VS Code-based theme for highlighting. */
-  theme?: Theme
 
   /** Padding to apply to the wrapping element. */
   padding?: string
@@ -41,7 +36,6 @@ export type CodeInlineProps = {
 /** Renders a `code` element with syntax highlighting. */
 export async function CodeInline({
   language,
-  theme: themeProp,
   className,
   padding = '0.25rem',
   paddingHorizontal = padding,
@@ -49,14 +43,7 @@ export async function CodeInline({
   style,
   ...props
 }: CodeInlineProps) {
-  const contextValue = getContext(Context)
-  const theme = themeProp ?? contextValue.theme ?? getTheme()
-
-  if (!theme) {
-    throw new Error(
-      'The [theme] prop was not provided to the [CodeInline] component. Pass an explicit theme or make sure the mdxts/loader package is configured correctly.'
-    )
-  }
+  const theme = getTheme()
 
   let finalValue: string = props.value
     // Trim extra whitespace from inline code blocks since it's difficult to read.

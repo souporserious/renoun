@@ -1,7 +1,7 @@
 import webpack from 'webpack'
 import { NextConfig } from 'next'
 import { PHASE_DEVELOPMENT_SERVER } from 'next/constants'
-import { resolve } from 'node:path'
+import { dirname, resolve, join } from 'node:path'
 import createMdxPlugin from '@next/mdx'
 import { BUNDLED_THEMES } from 'shiki'
 
@@ -27,13 +27,7 @@ type PluginOptions = {
 export function createMdxtsPlugin(pluginOptions: PluginOptions) {
   let refreshServerPort: string | null = null
   let { gitSource, gitBranch = 'main', siteUrl, theme } = pluginOptions
-  const themePath = resolve(process.cwd(), theme)
-  const mdxtsLoader = {
-    loader: 'mdxts/loader',
-    options: {
-      themePath: theme.endsWith('.json') ? themePath : theme,
-    },
-  }
+  let themePath = resolve(process.cwd(), theme)
 
   return function withMdxts(nextConfig: NextConfig = {}) {
     const getWebpackConfig = nextConfig.webpack
@@ -75,7 +69,7 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
         config.module.rules.push({
           test: /\.(?:jsx?|tsx?)$/,
           exclude: /node_modules/,
-          use: [mdxtsLoader],
+          use: [{ loader: 'mdxts/loader' }],
         })
 
         if (typeof getWebpackConfig === 'function') {
@@ -92,6 +86,20 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
       nextConfig.env.MDXTS_GIT_SOURCE = gitSource ?? ''
       nextConfig.env.MDXTS_GIT_BRANCH = gitBranch
       nextConfig.env.MDXTS_SITE_URL = siteUrl
+
+      if (!theme.endsWith('.json')) {
+        const { readPackageUp } = await import('read-package-up')
+        const shikiPackageJson = await readPackageUp({
+          cwd: dirname(require.resolve('shiki')),
+        })
+        themePath = join(
+          dirname(shikiPackageJson!.path),
+          'themes',
+          `${theme}.json`
+        )
+      }
+
+      nextConfig.env.MDXTS_THEME_PATH = themePath
 
       if (phase === PHASE_DEVELOPMENT_SERVER) {
         if (refreshServerPort === null) {
@@ -113,13 +121,18 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
         ...nextConfig.experimental,
         turbo: {
           rules: {
-            '*.ts': { as: '*.ts', loaders: [mdxtsLoader] },
-            '*.tsx': { as: '*.tsx', loaders: [mdxtsLoader] },
+            '*.ts': {
+              as: '*.ts',
+              loaders: [{ loader: 'mdxts/loader', options: {} }],
+            },
+            '*.tsx': {
+              as: '*.tsx',
+              loaders: [{ loader: 'mdxts/loader', options: {} }],
+            },
           },
         },
         serverComponentsExternalPackages: [
           ...(nextConfig.experimental?.serverComponentsExternalPackages ?? []),
-          'esbuild',
           'ts-morph',
         ],
       }

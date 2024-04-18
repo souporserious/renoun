@@ -287,24 +287,14 @@ export function ExportedTypes(props: ExportedTypesProps) {
 
   if (typeof props.children === 'function') {
     return (
-      <Context
-        value={{
-          theme: privateProps.theme,
-          workingDirectory: privateProps.workingDirectory,
-        }}
-      >
+      <Context value={{ workingDirectory: privateProps.workingDirectory }}>
         {props.children(exportedTypes)}
       </Context>
     )
   }
 
   return (
-    <Context
-      value={{
-        theme: privateProps.theme,
-        workingDirectory: privateProps.workingDirectory,
-      }}
-    >
+    <Context value={{ workingDirectory: privateProps.workingDirectory }}>
       {exportedTypes.map((declaration, index) => {
         return (
           <div
