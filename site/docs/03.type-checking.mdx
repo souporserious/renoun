@@ -2,9 +2,51 @@ export const metadata = {
   title: 'Type Checking',
 }
 
-To help identify and prevent errors, all code blocks are type-checked. This is done using the TypeScript compiler based on the `tsconfig.json` file local to the project that MDXTS is running in.
+To help identify and prevent errors, front matter and all code blocks are type-checked. This is done using the TypeScript compiler based on the `tsconfig.json` file local to the project that MDXTS is running in.
 
-## Allowing errors
+## Front Matter
+
+Validate front matter fields by passing a generic type to `createSource`:
+
+```ts filename="data.ts"
+import { createSource } from 'mdxts'
+
+type FrontMatter = {
+  title: string
+  date: Date
+  summary: string
+  tags?: string[]
+}
+
+export const allPosts = createSource<{
+  frontMatter: FrontMatter
+}>('posts/**/*.mdx', { baseDirectory: 'posts' })
+```
+
+This will ensure that all front matter fields are present and have the correct type. For example, the following front matter:
+
+```mdx filename="posts/hello-world.mdx"
+---
+title: Hello World
+date: 2024-01-01
+---
+
+# Hello World
+
+This is my first post.
+```
+
+Results in the following type error:
+
+```
+Error: Front matter data is incorrect or missing
+[/posts/hello-world.mdx] Type '{}' does not satisfy the expected type 'frontMatter'.
+Type '{}' is missing the following properties from type 'frontMatter': summary
+```
+
+## Code Blocks
+
+### Allowing errors
 
 If you want to allow errors for a specific code block, you can add an `allowErrors` prop to the code block meta field:
 
