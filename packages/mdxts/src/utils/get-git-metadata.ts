@@ -1,11 +1,17 @@
 import { execSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
 
+let isGitRepository: null | boolean = null
 let hasCheckedIfShallow = false
 let hadGitError = false
 
 /** Returns aggregated metadata about multiple files from git history. */
 export function getGitMetadata(filePaths: string[]) {
-  if (!hasCheckedIfShallow) {
+  if (isGitRepository === null) {
+    isGitRepository = existsSync('.git')
+  }
+
+  if (isGitRepository && !hasCheckedIfShallow) {
     try {
       const isShallow = execSync('git rev-parse --is-shallow-repository')
         .toString()
@@ -31,8 +37,7 @@ export function getGitMetadata(filePaths: string[]) {
     }
   }
 
-  /** Bail early if the repository is shallow cloned or there was a git error (e.g. not a git repository). */
-  if (hadGitError) {
+  if (!isGitRepository || hadGitError) {
     return {
       authors: [],
       createdAt: undefined,
