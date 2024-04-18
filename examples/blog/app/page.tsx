@@ -6,11 +6,18 @@ export default function Page() {
     <>
       <h1>Blog</h1>
       <ul>
-        {allPosts.all().map((post) => (
-          <li key={post.pathname}>
-            <Link href={post.pathname}>{post.label}</Link>
-          </li>
-        ))}
+        {allPosts
+          .all()
+          .sort((a, b) => {
+            return b.frontMatter.date.getTime() - a.frontMatter.date.getTime()
+          })
+          .map((post) => {
+            return (
+              <li key={post.pathname}>
+                <Link href={post.pathname}>{post.label}</Link>
+              </li>
+            )
+          })}
       </ul>
     </>
   )
