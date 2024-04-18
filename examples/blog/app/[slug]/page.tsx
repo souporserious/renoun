@@ -5,7 +5,7 @@ export function generateStaticParams() {
 }
 
 export default async function Page({ params }: { params: { slug: string } }) {
-  const { Content, frontMatter } = await allPosts.get(params.slug)
+  const { Content, frontMatter } = (await allPosts.get(params.slug))!
   const formattedDate = new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: '2-digit',
