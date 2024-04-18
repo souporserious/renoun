@@ -14,7 +14,9 @@ if (!existsSync(cacheDirectory)) {
 }
 
 /** Fetches the latest version of a package from the NPM registry. */
-export async function fetchPackageVersion(packageName: string) {
+export async function fetchPackageVersion(
+  packageName: string
+): Promise<string> {
   const controller = new AbortController()
   const signal = controller.signal
   const timeoutId = setTimeout(() => controller.abort(), 2500)
@@ -45,11 +47,8 @@ function saveVersionToCache(version: string) {
 }
 
 function getVersionFromCache() {
-  if (existsSync(cacheFilePath)) {
-    const cacheContent = JSON.parse(readFileSync(cacheFilePath, 'utf-8'))
-    return cacheContent
-  }
-  return null
+  const cacheContent = JSON.parse(readFileSync(cacheFilePath, 'utf-8'))
+  return cacheContent as { version: string; cachedAt: number }
 }
 
 function shouldRefreshCache() {
@@ -57,15 +56,16 @@ function shouldRefreshCache() {
   if (!cacheContent) {
     return true
   }
-  const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000
   const now = Date.now()
-  return now - cacheContent.cachedAt > DAY_IN_MILLISECONDS
+  const FIVE_MINUTES = 5 * 60 * 1000
+  return now - cacheContent.cachedAt > FIVE_MINUTES
 }
 
 /** Fetches the latest version of a package from the NPM registry and caches it. */
 export async function getPackageVersion(packageName: string) {
   if (shouldRefreshCache()) {
     const version = await fetchPackageVersion(packageName)
+    saveVersionToCache(version)
     return version
   } else {
     const cacheContent = getVersionFromCache()
