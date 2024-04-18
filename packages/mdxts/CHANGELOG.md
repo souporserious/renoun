@@ -1,5 +1,11 @@
 # mdxts
 
+## 0.15.3
+
+### Patch Changes
+
+- 31c1dbc: Handle monorepos when checking if git repository in `getGitMetadata`.
+
 ## 0.15.2
 
 ### Patch Changes
