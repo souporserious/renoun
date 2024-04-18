@@ -1,5 +1,7 @@
 import { execSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { join } from 'node:path'
+import { findRootSync } from '@manypkg/find-root'
 
 let isGitRepository: null | boolean = null
 let hasCheckedIfShallow = false
@@ -8,7 +10,8 @@ let hadGitError = false
 /** Returns aggregated metadata about multiple files from git history. */
 export function getGitMetadata(filePaths: string[]) {
   if (isGitRepository === null) {
-    isGitRepository = existsSync('.git')
+    const rootDirectory = findRootSync(process.cwd()).rootDir
+    isGitRepository = existsSync(join(rootDirectory, '.git'))
   }
 
   if (isGitRepository && !hasCheckedIfShallow) {
