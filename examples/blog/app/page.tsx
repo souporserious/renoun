@@ -14,7 +14,7 @@ export default function Page() {
           .map((post) => {
             return (
               <li key={post.pathname}>
-                <Link href={post.pathname}>{post.label}</Link>
+                <Link href={post.pathname}>{post.frontMatter.title}</Link>
               </li>
             )
           })}
