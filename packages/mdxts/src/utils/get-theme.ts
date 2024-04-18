@@ -2,7 +2,10 @@ import { readFileSync } from 'node:fs'
 
 let theme: Record<string, any> | null = null
 
-/** Returns the configured code syntax highlighting theme. */
+/**
+ * Returns the configured code syntax highlighting theme.
+ * @internal
+ */
 export function getTheme() {
   const themePath = process.env.MDXTS_THEME_PATH
 
