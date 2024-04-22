@@ -14,7 +14,7 @@ export type TokenProps = {
 export type TokensProps =
   | RenderedTokensProps
   | ({
+      filename: string
       value: string
       language: string
-      theme: string
     } & Omit<RenderedTokensProps, 'tokens'>)

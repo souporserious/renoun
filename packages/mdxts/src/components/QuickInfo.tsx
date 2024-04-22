@@ -3,7 +3,6 @@ import { type ts, type Diagnostic } from 'ts-morph'
 import { getDiagnosticMessageText } from '@tsxmod/utils'
 
 import { getTheme } from '../utils/get-theme'
-import { type getHighlighter } from './Tokens/get-tokens'
 import { languageService } from './project'
 import { MDXContent } from './MDXContent'
 import { QuickInfoPopover } from './QuickInfoPopover'
@@ -11,7 +10,6 @@ import { QuickInfoPopover } from './QuickInfoPopover'
 export function QuickInfo({
   position,
   filename,
-  highlighter,
   language,
   diagnostics,
   edit,
@@ -21,7 +19,6 @@ export function QuickInfo({
 }: {
   position: number
   filename: string
-  highlighter: Awaited<ReturnType<typeof getHighlighter>>
   language: string
   diagnostics: Diagnostic[]
   edit: any

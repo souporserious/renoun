@@ -202,7 +202,6 @@ export function CodeView({
                           <QuickInfo
                             position={token.start}
                             filename={filename}
-                            highlighter={highlighter}
                             language={language}
                             diagnostics={tokenDiagnostics}
                             edit={edit}
