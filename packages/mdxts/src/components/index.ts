@@ -1,4 +1,4 @@
-export { CodeBlock, type CodeBlockProps } from './CodeBlock'
+export { CodeBlock, type CodeBlockProps } from './CodeBlock/CodeBlock'
 export { CodeInline, type CodeInlineProps } from './CodeInline'
 export { ExportedTypes } from './ExportedTypes'
 export { MDXContent } from './MDXContent'

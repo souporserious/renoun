@@ -2,7 +2,7 @@ import * as React from 'react'
 import type { MDXComponents as MDXComponentsType } from 'mdx/types'
 
 import { getClassNameMetadata } from '../utils/get-class-name-metadata'
-import { CodeBlock } from './CodeBlock'
+import { CodeBlock } from './CodeBlock/CodeBlock'
 import { CodeInline } from './CodeInline'
 
 type PrivateCodeBlockProps = {
@@ -74,7 +74,6 @@ export const MDXComponents = {
         lineHeight={lineHeight}
         className={className}
         style={style}
-        // @ts-expect-error - private props
         sourcePath={sourcePath}
         sourcePathLine={sourcePathLine}
         sourcePathColumn={sourcePathColumn}

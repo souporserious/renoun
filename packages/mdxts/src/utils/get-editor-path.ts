@@ -35,6 +35,9 @@ export function getEditorPath({
     // https://code.visualstudio.com/docs/editor/command-line#_opening-vs-code-with-urls
     case 'vscode-insiders':
     case 'vscode':
+      if (path.startsWith('file://')) {
+        path = path.replace('file://', '')
+      }
       return `${editor}://file/${path}:${line}:${column}`
     default:
       throw new Error(`Unsupported editor: ${editor}`)

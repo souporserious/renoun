@@ -11,8 +11,10 @@ export type TokenProps = {
   textDecoration: string
 }
 
-export type TokensProps = {
-  value: string
-  language: string
-  theme: string
-} & Omit<RenderedTokensProps, 'tokens'>
+export type TokensProps =
+  | RenderedTokensProps
+  | ({
+      value: string
+      language: string
+      theme: string
+    } & Omit<RenderedTokensProps, 'tokens'>)

@@ -1,6 +1,6 @@
 import React from 'react'
 
-import { CodeBlock } from './CodeBlock'
+import { CodeBlock } from './CodeBlock/CodeBlock'
 import { PackageInstallClient } from './PackageInstallClient'
 
 const packageManagers = {

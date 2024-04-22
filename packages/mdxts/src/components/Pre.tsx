@@ -18,12 +18,10 @@ export function Pre({
   fontSize,
   lineHeight,
   style,
-  isNestedInEditor,
   ...props
 }: {
   fontSize: string
   lineHeight: string
-  isNestedInEditor: boolean
 } & React.HTMLProps<HTMLPreElement>) {
   const [pointerDown, setPointerDown] = useState(false)
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>()
@@ -57,7 +55,6 @@ export function Pre({
         padding: 0,
         margin: 0,
         borderRadius: 4,
-        pointerEvents: isNestedInEditor ? 'none' : undefined,
         position: 'relative',
         ...style,
       }}

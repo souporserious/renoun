@@ -82,13 +82,3 @@ export async function getTokens(props: {
     maxLineLength,
   }
 }
-
-export function getDiagnostics({
-  filename,
-  value,
-}: {
-  filename: string
-  value: string
-}) {
-  return null
-}

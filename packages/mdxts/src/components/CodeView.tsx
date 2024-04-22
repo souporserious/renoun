@@ -1,6 +1,5 @@
 import React, { Fragment } from 'react'
 import type { SourceFile } from 'ts-morph'
-import { Node, SyntaxKind } from 'ts-morph'
 
 import { getTheme } from '../utils/get-theme'
 import type { getHighlighter } from './highlighter'
@@ -8,7 +7,8 @@ import { Symbol } from './Symbol'
 import { QuickInfo } from './QuickInfo'
 import { QuickInfoProvider } from './QuickInfoProvider'
 import { Pre } from './Pre'
-import { CodeToolbar } from './CodeToolbar'
+import { Toolbar } from './CodeBlock/Toolbar'
+import { getSymbolBounds } from './CodeBlock/get-symbol-bounds'
 
 export type CodeProps = {
   /** Code snippet to be highlighted. */
@@ -75,7 +75,6 @@ export function CodeView({
   showErrors,
   className,
   isJsxOnly = false,
-  isNestedInEditor = false,
   shouldRenderFilename,
   rootDirectory,
   baseDirectory,
@@ -93,12 +92,12 @@ export function CodeView({
 }: CodeProps & {
   filenameLabel?: string
   row?: number[] | null
-  tokens: ReturnType<Awaited<ReturnType<typeof getHighlighter>>>
+  // tokens: ReturnType<Awaited<ReturnType<typeof getHighlighter>>>
+  tokens: any[][]
   sourceFile?: SourceFile
   sourcePath?: string
   highlighter: any
   isJsxOnly?: boolean
-  isNestedInEditor?: boolean
   shouldRenderFilename?: boolean
   rootDirectory?: string
   baseDirectory?: string
@@ -109,10 +108,7 @@ export function CodeView({
     ? shouldRenderFilename || allowCopy
     : false
   const editorForegroundColor = theme.colors['editor.foreground'].toLowerCase()
-  const symbolBounds = sourceFile
-    ? getSymbolBounds(sourceFile, isJsxOnly, lineHeight)
-    : []
-  const shouldHighlightLine = calculateLinesToHighlight(highlight)
+  const symbolBounds = sourceFile ? getSymbolBounds(sourceFile, isJsxOnly) : []
   const allowedErrorCodes =
     typeof allowErrors === 'string'
       ? allowErrors.split(',').map((code) => parseInt(code))
@@ -126,30 +122,28 @@ export function CodeView({
           )
         : []
   const Element = 'div'
-  const Container = isNestedInEditor
-    ? React.Fragment
-    : (props: Record<string, unknown>) => (
-        <Element
-          style={{
-            fontFamily: 'monospace',
-            position: 'relative',
-            display: 'grid',
-            gridTemplateColumns: 'auto minmax(0, 1fr)',
-            gridTemplateRows: shouldRenderToolbar ? 'auto 1fr' : '0 1fr',
-            borderRadius: 5,
-            boxShadow: `0 0 0 1px ${theme.colors['panel.border']}70`,
-            backgroundColor: theme.colors['editor.background'],
-            color: theme.colors['editor.foreground'],
-            ...style,
-          }}
-          {...props}
-        />
-      )
+  const Container = (props: Record<string, unknown>) => (
+    <Element
+      style={{
+        fontFamily: 'monospace',
+        position: 'relative',
+        display: 'grid',
+        gridTemplateColumns: 'auto minmax(0, 1fr)',
+        gridTemplateRows: shouldRenderToolbar ? 'auto 1fr' : '0 1fr',
+        borderRadius: 5,
+        boxShadow: `0 0 0 1px ${theme.colors['panel.border']}70`,
+        backgroundColor: theme.colors['editor.background'],
+        color: theme.colors['editor.foreground'],
+        ...style,
+      }}
+      {...props}
+    />
+  )
 
   return (
     <Container>
       {shouldRenderToolbar ? (
-        <CodeToolbar
+        <Toolbar
           allowCopy={allowCopy}
           filename={shouldRenderFilename ? filenameLabel : undefined}
           value={value}
@@ -157,49 +151,7 @@ export function CodeView({
         />
       ) : null}
 
-      {lineNumbers ? (
-        <div
-          className={className}
-          style={{
-            gridColumn: 1,
-            gridRow: filename ? 2 : 1,
-            width: '6ch',
-            paddingTop: paddingVertical,
-            paddingBottom: paddingVertical,
-            fontSize,
-            lineHeight,
-            paddingRight: '2ch',
-            textAlign: 'right',
-            userSelect: 'none',
-            whiteSpace: 'pre',
-            color: theme.colors['editorLineNumber.foreground'],
-          }}
-        >
-          {tokens.map((_: any, lineIndex: number) => {
-            const shouldHighlight = shouldHighlightLine(lineIndex)
-            const isActive = row && row[0] <= lineIndex && lineIndex <= row[1]
-            const Wrapper = ({ children }: { children: React.ReactNode }) =>
-              shouldHighlight || isActive ? (
-                <div
-                  style={{
-                    color: theme.colors['editorLineNumber.activeForeground'],
-                  }}
-                >
-                  {children}
-                </div>
-              ) : (
-                <Fragment>
-                  {children}
-                  {'\n'}
-                </Fragment>
-              )
-            return <Wrapper key={lineIndex}>{lineIndex + 1}</Wrapper>
-          })}
-        </div>
-      ) : null}
-
       <Pre
-        isNestedInEditor={isNestedInEditor}
         fontSize={fontSize}
         lineHeight={lineHeight}
         className={className}
@@ -295,61 +247,9 @@ export function CodeView({
             ))}
           </Element>
         </QuickInfoProvider>
-
-        {highlight
-          ? highlight
-              .split(',')
-              .map((range) => {
-                const [start, end] = range.split('-')
-                const parsedStart = parseInt(start, 10)
-                const parsedEnd = end ? parseInt(end, 10) : parsedStart
-                return {
-                  start: parsedStart,
-                  end: parsedEnd,
-                }
-              })
-              .map((range, index) => {
-                const start = range.start - 1
-                const end = range.end ? range.end - 1 : start
-                const height = end - start + 1
-
-                return (
-                  <div
-                    key={index}
-                    style={{
-                      position: 'absolute',
-                      top: `calc(${start} * ${lineHeight} + ${paddingVertical})`,
-                      left: 0,
-                      width: '100%',
-                      height: `calc(${height} * ${lineHeight})`,
-                      backgroundColor: '#87add726',
-                      pointerEvents: 'none',
-                    }}
-                  />
-                )
-              })
-          : null}
       </Pre>
     </Container>
   )
-}
-
-/** Calculate which lines to highlight based on the range meta string added by the rehype plugin. */
-function calculateLinesToHighlight(meta: string | undefined) {
-  if (meta === '' || meta === undefined) {
-    return () => false
-  }
-  const lineNumbers = meta
-    .split(',')
-    .map((value: string) => value.split('-').map((y) => parseInt(y, 10)))
-
-  return (index: number) => {
-    const lineNumber = index + 1
-    const inRange = lineNumbers.some(([start, end]: number[]) =>
-      end ? lineNumber >= start && lineNumber <= end : lineNumber === start
-    )
-    return inRange
-  }
 }
 
 /** Get the diagnostics for a source file. */
@@ -370,45 +270,4 @@ function getDiagnostics(sourceFile: SourceFile) {
   }
 
   return diagnostics
-}
-
-/* Get the bounding rectangle of all module import specifiers and identifiers in a source file. */
-function getSymbolBounds(
-  sourceFile: SourceFile,
-  isJsxOnly: boolean,
-  lineHeight: string
-) {
-  const importSpecifiers = isJsxOnly
-    ? []
-    : sourceFile
-        .getImportDeclarations()
-        .map((importDeclaration) => importDeclaration.getModuleSpecifier())
-  const identifiers = sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)
-  const importCount = sourceFile.getImportDeclarations().length
-  const allNodes = [...importSpecifiers, ...identifiers]
-  const bounds = allNodes
-    .filter((node) => {
-      const parent = node.getParent()
-      const isJsxOnlyImport = isJsxOnly
-        ? parent?.getKind() === SyntaxKind.ImportSpecifier ||
-          parent?.getKind() === SyntaxKind.ImportClause
-        : false
-      return (
-        !Node.isJSDocTag(parent) && !Node.isJSDoc(parent) && !isJsxOnlyImport
-      )
-    })
-    .map((node) => {
-      const start = node.getStart()
-      const { line, column } = sourceFile.getLineAndColumnAtPos(start)
-      const yOffset = isJsxOnly ? importCount + 2 : 1
-      return {
-        start,
-        top: line - yOffset,
-        left: column - 1,
-        width: node.getWidth(),
-        height: lineHeight,
-      }
-    })
-
-  return bounds
 }
