@@ -21,21 +21,31 @@ export async function RenderedTokens({
 
   return tokens.map((line, lineIndex) => {
     const lineContent = line.map((token) => {
-      const defaultTokenElement = (
+      if (renderToken) {
+        return renderToken(token)
+      }
+
+      const hasTextStyles = Boolean(
+        token.fontStyle || token.fontWeight || token.textDecoration
+      )
+
+      if ((!hasTextStyles && token.isBaseColor) || token.isWhitespace) {
+        return token.value
+      }
+
+      return (
         <span
           key={token.start}
           style={{
             fontStyle: token.fontStyle,
             fontWeight: token.fontWeight,
             textDecoration: token.textDecoration,
-            color: token.color,
+            color: token.isBaseColor ? undefined : token.color,
           }}
         >
           {token.value}
         </span>
       )
-
-      return renderToken ? renderToken(token) : defaultTokenElement
     })
     const isLastLine = lineIndex === lastLineIndex
     let lineToRender = renderLine

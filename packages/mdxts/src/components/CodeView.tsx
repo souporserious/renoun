@@ -6,7 +6,7 @@ import { Symbol } from './Symbol'
 import { QuickInfo } from './QuickInfo'
 import { QuickInfoProvider } from './QuickInfoProvider'
 import { Pre } from './Pre'
-import { getSymbolBounds } from './CodeBlock/get-symbol-bounds'
+import { getSymbolBounds } from './Tokens/get-symbol-bounds'
 
 export type CodeProps = {
   /** Code snippet to be highlighted. */

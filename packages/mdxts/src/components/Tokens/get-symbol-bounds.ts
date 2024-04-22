@@ -1,7 +1,7 @@
 import type { SourceFile } from 'ts-morph'
 import { Node, SyntaxKind } from 'ts-morph'
 
-/* Get the bounding rectangle of all module import specifiers and identifiers in a source file. */
+/** Get the bounding rectangle of all module import specifiers and identifiers in a source file. */
 export function getSymbolBounds(sourceFile: SourceFile, isJsxOnly: boolean) {
   const importSpecifiers = isJsxOnly
     ? []
@@ -11,7 +11,8 @@ export function getSymbolBounds(sourceFile: SourceFile, isJsxOnly: boolean) {
   const identifiers = sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)
   const importCount = sourceFile.getImportDeclarations().length
   const allNodes = [...importSpecifiers, ...identifiers]
-  const bounds = allNodes
+
+  return allNodes
     .filter((node) => {
       const parent = node.getParent()
       const isJsxOnlyImport = isJsxOnly
@@ -35,6 +36,4 @@ export function getSymbolBounds(sourceFile: SourceFile, isJsxOnly: boolean) {
         width: node.getWidth(),
       }
     })
-
-  return bounds
 }

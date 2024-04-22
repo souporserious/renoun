@@ -4,6 +4,7 @@ import { Node, SyntaxKind } from 'ts-morph'
 
 import { isJsxOnly } from '../../utils/is-jsx-only'
 import { project } from '../project'
+import { getTheme } from './utils'
 import type { TokenProps } from './types'
 
 const grammarMap = {
@@ -43,6 +44,8 @@ export type Token = {
   fontStyle?: string
   fontWeight?: string
   textDecoration?: string
+  isBaseColor: boolean
+  isWhitespace: boolean
 }
 
 export type Tokens = Token[]
@@ -84,7 +87,9 @@ export const getTokens: GetTokens = cache(async function getTokens(
           value,
           start: 0,
           end: value.length,
-        },
+          isBaseColor: true,
+          isWhitespace: false,
+        } satisfies Token,
       ],
     ]
   }
@@ -92,6 +97,7 @@ export const getTokens: GetTokens = cache(async function getTokens(
   const isJavaScriptLikeLanguage = ['js', 'jsx', 'ts', 'tsx'].includes(language)
   const jsxOnly = isJavaScriptLikeLanguage ? isJsxOnly(value) : false
   const sourceFile = project.getSourceFile(filename)
+  const theme = await getTheme('night-owl')
   const tokens = (await new Promise(async (resolve) => {
     await highlighter!.highlightToAbstract(
       {
@@ -148,6 +154,10 @@ export const getTokens: GetTokens = cache(async function getTokens(
         fontStyle: token.fontStyle,
         fontWeight: token.fontWeight,
         textDecoration: token.textDecoration,
+        isBaseColor: token.color
+          ? token.color.toLowerCase() === theme.foreground.toLowerCase()
+          : false,
+        isWhitespace: token.value.trim() === '',
       }
       let processedTokens: Tokens = []
 
