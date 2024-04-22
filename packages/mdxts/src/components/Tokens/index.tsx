@@ -4,7 +4,8 @@ import { ClientTokens } from './ClientTokens'
 import { RenderedTokens } from './RenderedTokens'
 import type { TokensProps } from './types'
 
-export { getTokens, getTheme } from './utils'
+export { getTokens } from './get-tokens'
+export { getTheme } from './utils'
 export type { TokenProps, TokensProps } from './types'
 
 export function Tokens(props: TokensProps) {

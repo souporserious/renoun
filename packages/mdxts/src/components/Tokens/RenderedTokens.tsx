@@ -1,9 +1,10 @@
 import React, { Fragment } from 'react'
-import { type TokenProps } from './types'
+
+import type { GetTokens, Token } from './get-tokens'
 
 export type RenderedTokensProps = {
-  tokens: TokenProps[][]
-  renderToken?: (token: TokenProps) => React.ReactNode
+  tokens: Awaited<ReturnType<GetTokens>>
+  renderToken?: (token: Token) => React.ReactNode
   renderLine?: (
     line: React.ReactNode,
     lineIndex: number,
@@ -22,10 +23,10 @@ export async function RenderedTokens({
     const lineContent = line.map((token) => {
       const defaultTokenElement = (
         <span
-          key={token.startIndex}
+          key={token.start}
           style={{
-            fontWeight: token.fontWeight,
             fontStyle: token.fontStyle,
+            fontWeight: token.fontWeight,
             textDecoration: token.textDecoration,
             color: token.color,
           }}

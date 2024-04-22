@@ -1,5 +1,5 @@
 import React, { Fragment } from 'react'
-import { getTheme, type TokenProps } from '../Tokens'
+import { getTheme, getTokens } from '../Tokens'
 
 export async function LineNumbers({
   tokens,
@@ -9,7 +9,7 @@ export async function LineNumbers({
   theme: themeProp,
 }: {
   /** Tokens to render from `getTokens`. */
-  tokens: TokenProps[][]
+  tokens: Awaited<ReturnType<typeof getTokens>>
 
   /** Theme to use. */
   theme: string

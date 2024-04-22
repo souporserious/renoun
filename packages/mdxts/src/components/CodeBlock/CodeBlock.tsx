@@ -91,11 +91,11 @@ export async function CodeBlock({
     ...options,
   })
   const theme = await getTheme(themeKey)
-  const { tokens, background, foreground, maxLineLength } = await getTokens({
-    value: metadata.value,
-    language: metadata.language,
-    theme: themeKey,
-  })
+  const tokens = await getTokens(
+    metadata.filename,
+    metadata.value,
+    metadata.language
+  )
   const shouldRenderFilename = Boolean(filename)
   const shouldRenderToolbar = toolbar
     ? shouldRenderFilename || allowCopy
@@ -104,8 +104,8 @@ export async function CodeBlock({
   const containerProps = shouldRenderToolbar
     ? {
         style: {
-          backgroundColor: background,
-          color: foreground,
+          backgroundColor: theme.background,
+          color: theme.foreground,
           borderRadius: 5,
           boxShadow: `0 0 0 1px ${theme.colors['panel.border']}70`,
         },
@@ -138,8 +138,8 @@ export async function CodeBlock({
           wordWrap: 'break-word',
           overflow: 'auto',
           position: 'relative',
-          backgroundColor: shouldRenderToolbar ? undefined : background,
-          color: shouldRenderToolbar ? undefined : foreground,
+          backgroundColor: shouldRenderToolbar ? undefined : theme.background,
+          color: shouldRenderToolbar ? undefined : theme.foreground,
           borderRadius: shouldRenderToolbar ? undefined : 5,
           boxShadow: shouldRenderToolbar
             ? undefined
@@ -162,7 +162,7 @@ export async function CodeBlock({
               <LineHighlights
                 highlightRanges={highlight}
                 theme={themeKey}
-                style={{ minWidth: `calc(4ch + ${maxLineLength} * 1ch)` }}
+                // style={{ minWidth: `calc(4ch + ${maxLineLength} * 1ch)` }}
               />
             ) : null}
           </div>
@@ -173,7 +173,7 @@ export async function CodeBlock({
           <LineHighlights
             highlightRanges={highlight}
             theme={themeKey}
-            style={{ minWidth: `calc(4ch + ${maxLineLength} * 1ch)` }}
+            // style={{ minWidth: `calc(4ch + ${maxLineLength} * 1ch)` }}
           />
         ) : null}
       </pre>

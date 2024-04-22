@@ -3,7 +3,7 @@ import { type ts, type Diagnostic } from 'ts-morph'
 import { getDiagnosticMessageText } from '@tsxmod/utils'
 
 import { getTheme } from '../utils/get-theme'
-import { type getHighlighter } from './highlighter'
+import { type getHighlighter } from './Tokens/get-tokens'
 import { languageService } from './project'
 import { MDXContent } from './MDXContent'
 import { QuickInfoPopover } from './QuickInfoPopover'

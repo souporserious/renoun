@@ -2,12 +2,10 @@ import React, { Fragment } from 'react'
 import type { SourceFile } from 'ts-morph'
 
 import { getTheme } from '../utils/get-theme'
-import type { getHighlighter } from './highlighter'
 import { Symbol } from './Symbol'
 import { QuickInfo } from './QuickInfo'
 import { QuickInfoProvider } from './QuickInfoProvider'
 import { Pre } from './Pre'
-import { Toolbar } from './CodeBlock/Toolbar'
 import { getSymbolBounds } from './CodeBlock/get-symbol-bounds'
 
 export type CodeProps = {
@@ -104,9 +102,6 @@ export function CodeView({
   edit?: any
 }) {
   const theme = getTheme()
-  const shouldRenderToolbar = toolbar
-    ? shouldRenderFilename || allowCopy
-    : false
   const editorForegroundColor = theme.colors['editor.foreground'].toLowerCase()
   const symbolBounds = sourceFile ? getSymbolBounds(sourceFile, isJsxOnly) : []
   const allowedErrorCodes =
@@ -129,7 +124,6 @@ export function CodeView({
         position: 'relative',
         display: 'grid',
         gridTemplateColumns: 'auto minmax(0, 1fr)',
-        gridTemplateRows: shouldRenderToolbar ? 'auto 1fr' : '0 1fr',
         borderRadius: 5,
         boxShadow: `0 0 0 1px ${theme.colors['panel.border']}70`,
         backgroundColor: theme.colors['editor.background'],
@@ -142,15 +136,6 @@ export function CodeView({
 
   return (
     <Container>
-      {shouldRenderToolbar ? (
-        <Toolbar
-          allowCopy={allowCopy}
-          filename={shouldRenderFilename ? filenameLabel : undefined}
-          value={value}
-          sourcePath={sourcePath}
-        />
-      ) : null}
-
       <Pre
         fontSize={fontSize}
         lineHeight={lineHeight}
