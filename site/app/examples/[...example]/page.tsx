@@ -45,9 +45,8 @@ export default async function Page({
     <div
       style={{
         display: 'grid',
-        height: '100dvh',
+        minHeight: '100dvh',
         padding: '3rem 2rem',
-        overflow: 'auto',
         position: 'relative',
       }}
     >
