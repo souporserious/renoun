@@ -70,10 +70,9 @@ export const MDXComponents = {
         showErrors={showErrors}
         toolbar={toolbar}
         value={value}
-        fontSize={fontSize}
-        lineHeight={lineHeight}
         className={className}
         style={style}
+        // @ts-expect-error - private props
         sourcePath={sourcePath}
         sourcePathLine={sourcePathLine}
         sourcePathColumn={sourcePathColumn}

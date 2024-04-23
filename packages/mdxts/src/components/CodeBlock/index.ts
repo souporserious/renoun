@@ -1,1 +1,5 @@
-export { CodeBlock, type CodeBlockProps } from './CodeBlock'
+export {
+  CodeBlock,
+  type BaseCodeBlockProps,
+  type CodeBlockProps,
+} from './CodeBlock'

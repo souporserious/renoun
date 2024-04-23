@@ -8,10 +8,10 @@ export function useMDXComponents() {
     PackageInstall,
     CodeBlock: (props) => (
       <CodeBlock
-        fontSize="var(--font-size-body-2)"
-        lineHeight="var(--line-height-body-2)"
         className={GeistMono.className}
         style={{
+          fontSize: 'var(--font-size-body-2)',
+          lineHeight: 'var(--line-height-body-2)',
           width: 'calc(100% + 2rem)',
           margin: '0 -1rem',
         }}
@@ -23,9 +23,11 @@ export function useMDXComponents() {
       return (
         <div style={{ display: 'flex' }}>
           <CodeBlock
-            fontSize="var(--font-size-body-2)"
-            lineHeight="var(--line-height-body-2)"
             className={GeistMono.className}
+            style={{
+              fontSize: 'var(--font-size-body-2)',
+              lineHeight: 'var(--line-height-body-2)',
+            }}
             language="tsx"
             value={codeBlock}
           />
@@ -87,10 +89,10 @@ export function useMDXComponents() {
     ),
     pre: (props) => (
       <MDXComponents.pre
-        fontSize="var(--font-size-body-2)"
-        lineHeight="var(--line-height-body-2)"
         className={GeistMono.className}
         style={{
+          fontSize: 'var(--font-size-body-2)',
+          lineHeight: 'var(--line-height-body-2)',
           width: 'calc(100% + 2rem)',
           margin: '0 -1rem',
         }}

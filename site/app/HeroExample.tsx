@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { basename } from 'node:path'
 import { GeistMono } from 'geist/font/mono'
 import { getTheme } from 'mdxts'
-import { CodeBlock, type CodeBlockProps } from 'mdxts/components'
+import { CodeBlock, type BaseCodeBlockProps } from 'mdxts/components'
 import { allDocs } from 'data'
 
 import styles from './HeroExample.module.css'
@@ -49,7 +49,7 @@ const codeProps = {
   toolbar: false,
   className: `${GeistMono.className} ${styles.code}`,
   style: { padding: '0.7rem' },
-} satisfies Partial<CodeBlockProps>
+} satisfies Partial<BaseCodeBlockProps>
 
 export function HeroExample() {
   const theme = getTheme()
