@@ -181,17 +181,27 @@ export const getTokens: GetTokens = memoize(async function getTokens(
     .filter((node) => {
       const parent = node.getParent()
       const isJsxOnlyImport = jsxOnly
-        ? parent?.getKind() === SyntaxKind.ImportSpecifier ||
-          parent?.getKind() === SyntaxKind.ImportClause
+        ? Node.isImportSpecifier(parent) || Node.isImportClause(parent)
         : false
       return (
         !isJsxOnlyImport && !Node.isJSDocTag(parent) && !Node.isJSDoc(parent)
       )
     })
-    .map((node) => ({
-      start: node.getStart(),
-      end: node.getEnd(),
-    }))
+    .map((node) => {
+      // Offset module specifiers since they contain quotes which are tokenized separately
+      // e.g. import React from 'react' -> ["'", "react", "'"]
+      if (Node.isStringLiteral(node)) {
+        return {
+          start: node.getStart() + 1,
+          end: node.getEnd() - 1,
+        }
+      }
+
+      return {
+        start: node.getStart(),
+        end: node.getEnd(),
+      }
+    })
   const rootDirectory = (await findRoot(process.cwd())).rootDir
   const baseDirectory = process.cwd().replace(rootDirectory, '')
   let previousTokenStart = 0
