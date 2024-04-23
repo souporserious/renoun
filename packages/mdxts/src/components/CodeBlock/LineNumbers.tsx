@@ -1,18 +1,16 @@
 import React, { Fragment } from 'react'
-import { getTheme, getTokens } from '../Tokens'
+
+import { getTheme } from '../Tokens/get-theme'
+import { getTokens } from '../Tokens/get-tokens'
 
 export async function LineNumbers({
   tokens,
   highlightRanges,
   className,
   style,
-  theme: themeProp,
 }: {
   /** Tokens to render from `getTokens`. */
   tokens: Awaited<ReturnType<typeof getTokens>>
-
-  /** Theme to use. */
-  theme: string
 
   /** A string of comma separated lines and ranges to highlight. */
   highlightRanges?: string
@@ -23,7 +21,7 @@ export async function LineNumbers({
   /** Style to apply to the line numbers container. */
   style?: React.CSSProperties
 }) {
-  const theme = await getTheme(themeProp)
+  const theme = await getTheme()
   const shouldHighlightLine = calculateLinesToHighlight(highlightRanges)
 
   return (

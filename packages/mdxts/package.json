@@ -142,6 +142,8 @@
     "remark-unwrap-images": "^4.0.0",
     "server-only": "0.0.1",
     "textmate-highlighter": "^1.0.0",
+    "tm-grammars": "^1.6.9",
+    "tm-themes": "^1.4.0",
     "title": "^3.5.3",
     "ts-morph": "^21.0.1",
     "unified": "^11.0.4",

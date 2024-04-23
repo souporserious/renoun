@@ -1,5 +1,5 @@
 import React from 'react'
-import { getTheme } from '../Tokens'
+import { getTheme } from '../Tokens/get-theme'
 
 export function getHighlights(ranges: string) {
   return ranges.split(',').map((range) => {
@@ -17,14 +17,12 @@ export function getHighlights(ranges: string) {
 
 export async function LineHighlights({
   highlightRanges,
-  theme: themeProp,
   style,
 }: {
   highlightRanges: string
-  theme: string
   style?: React.CSSProperties
 }) {
-  const theme = await getTheme(themeProp)
+  const theme = await getTheme()
 
   return getHighlights(highlightRanges).map((highlight, index) => {
     return (

@@ -24,7 +24,7 @@ export async function PackageInstall({
       <CodeBlock
         allowCopy
         value={`${install} ${packages.join(' ')}`}
-        language="shellscript"
+        language="sh"
       />,
     ])
   )

@@ -1,7 +1,9 @@
 import React, { Fragment } from 'react'
 
 import { getSourcePath } from '../../utils/get-source-path'
-import { Tokens, getTheme, getTokens } from '../Tokens'
+import { Tokens } from '../Tokens'
+import { getTokens } from '../Tokens/get-tokens'
+import { getTheme } from '../Tokens/get-theme'
 import { Toolbar } from './Toolbar'
 import { LineHighlights } from './LineHighlights'
 import { LineNumbers } from './LineNumbers'
@@ -59,8 +61,6 @@ type PrivateCodeBlockProps = Partial<{
   sourcePathColumn: number
 }>
 
-const themeKey = 'night-owl'
-
 export async function CodeBlock({
   filename,
   language,
@@ -90,11 +90,11 @@ export async function CodeBlock({
     language,
     ...options,
   })
-  const theme = await getTheme(themeKey)
+  const theme = await getTheme()
   const tokens = await getTokens(
-    metadata.filename,
     metadata.value,
-    metadata.language
+    metadata.language,
+    metadata.filename
   )
   const shouldRenderFilename = Boolean(filename)
   const shouldRenderToolbar = toolbar
@@ -151,7 +151,6 @@ export async function CodeBlock({
           <LineNumbers
             tokens={tokens}
             highlightRanges={highlight}
-            theme={themeKey}
             style={{ width: '4ch', padding }}
           />
         ) : null}
@@ -161,7 +160,6 @@ export async function CodeBlock({
             {highlight ? (
               <LineHighlights
                 highlightRanges={highlight}
-                theme={themeKey}
                 // style={{ minWidth: `calc(4ch + ${maxLineLength} * 1ch)` }}
               />
             ) : null}
@@ -172,7 +170,6 @@ export async function CodeBlock({
         {!lineNumbers && highlight ? (
           <LineHighlights
             highlightRanges={highlight}
-            theme={themeKey}
             // style={{ minWidth: `calc(4ch + ${maxLineLength} * 1ch)` }}
           />
         ) : null}

@@ -12,7 +12,7 @@ export function ClientTokens({
 }: TokensProps) {
   const tokens =
     'value' in props
-      ? use(getTokens(props.filename, props.value, props.language))
+      ? use(getTokens(props.value, props.language, props.filename))
       : props.tokens
   return (
     <RenderedTokens

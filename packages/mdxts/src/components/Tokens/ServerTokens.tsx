@@ -12,7 +12,7 @@ export async function ServerTokens({
 }: TokensProps) {
   const tokens =
     'filename' in props
-      ? await getTokens(props.filename, props.value, props.language)
+      ? await getTokens(props.value, props.language, props.filename)
       : props.tokens
   return (
     <RenderedTokens

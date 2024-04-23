@@ -233,6 +233,12 @@ importers:
       title:
         specifier: ^3.5.3
         version: 3.5.3
+      tm-grammars:
+        specifier: ^1.6.9
+        version: 1.6.9
+      tm-themes:
+        specifier: ^1.4.0
+        version: 1.4.0
       ts-morph:
         specifier: ^21.0.1
         version: 21.0.1
@@ -4327,6 +4333,12 @@ packages:
   titleize@1.0.0:
     resolution: {integrity: sha512-TARUb7z1pGvlLxgPk++7wJ6aycXF3GJ0sNSBTAsTuJrQG5QuZlkUQP+zl+nbjAh4gMX9yDw9ZYklMd7vAfJKEw==}
     engines: {node: '>=0.10.0'}
+
+  tm-grammars@1.6.9:
+    resolution: {integrity: sha512-C8BwVseaQYWo8C8LqLuG9P4rtIVPeF04WaQASWlWPO7ZaSB2iQy8Ajvpwujcscbr96i+QqyCl036O4HqGjgrmw==}
+
+  tm-themes@1.4.0:
+    resolution: {integrity: sha512-mn9Soc9hSiSitxoZcIXc2xhKVubbEZueDuStu9lCODjR4IC6qRaq/DR+s8v0POAPFlXX9Gn+puUEq5+gVzs9pA==}
 
   tmp@0.0.33:
     resolution: {integrity: sha512-jRCJlojKnZ3addtTOjdIqoRuPEKBvNXcGYqzO6zWZX8KfKEpnGY5jfggJQ3EjKuu8D4bJRr0y+cYJFmYbImXGw==}
@@ -10035,6 +10047,10 @@ snapshots:
       titleize: 1.0.0
 
   titleize@1.0.0: {}
+
+  tm-grammars@1.6.9: {}
+
+  tm-themes@1.4.0: {}
 
   tmp@0.0.33:
     dependencies:

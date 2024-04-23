@@ -1,16 +1,33 @@
-import { cache } from 'react'
 import TextmateHighlighter from 'textmate-highlighter'
+import type { SourceFile, Diagnostic, ts } from 'ts-morph'
 import { Node, SyntaxKind } from 'ts-morph'
+import type { IRawGrammar } from 'vscode-textmate'
+import jsGrammar from 'tm-grammars/grammars/javascript.json'
+import jsxGrammar from 'tm-grammars/grammars/jsx.json'
+import tsGrammar from 'tm-grammars/grammars/typescript.json'
+import tsxGrammar from 'tm-grammars/grammars/tsx.json'
+import shGrammar from 'tm-grammars/grammars/shellscript.json'
+import nightOwlTheme from 'tm-themes/themes/night-owl.json'
 
 import { isJsxOnly } from '../../utils/is-jsx-only'
 import { project } from '../project'
-import { getTheme } from './utils'
+import { getTheme } from './get-theme'
+import { memoize } from './utils'
 import type { TokenProps } from './types'
+import { TextMateThemeRaw } from 'textmate-highlighter/dist/types'
+
+const languageMap = {
+  mjs: 'js',
+  javascript: 'js',
+  typescript: 'ts',
+  shellscript: 'sh',
+}
 
 const grammarMap = {
   mjs: 'javascript',
   js: 'javascript',
   ts: 'typescript',
+  sh: 'shellscript',
 }
 
 type GrammarMapKey = keyof typeof grammarMap
@@ -46,33 +63,58 @@ export type Token = {
   textDecoration?: string
   isBaseColor: boolean
   isWhitespace: boolean
+  quickInfo?: { displayText: string; documentationText: string }
+  diagnostics?: Diagnostic[]
 }
 
 export type Tokens = Token[]
 
 export type GetTokens = (
-  filename: string,
   value: string,
-  language: string
+  language: string,
+  filename?: string,
+  allowErrors?: string | boolean
 ) => Promise<Tokens[]>
 
 let highlighter: TextmateHighlighter | null = null
 
 /** Converts a string of code to an array of highlighted tokens. */
-export const getTokens: GetTokens = cache(async function getTokens(
-  filename: string,
+export const getTokens: GetTokens = memoize(async function getTokens(
   value: string,
-  language: string
+  language: string,
+  filename?: string,
+  allowErrors?: string | boolean
 ) {
   if (highlighter === null) {
     highlighter = new TextmateHighlighter({
       getGrammar: (grammar: string) => {
         const language = grammar.split('.').pop()
         const finalGrammar = grammarMap[language as GrammarMapKey] || language
-        return `https://unpkg.com/tm-grammars@1.6.8/grammars/${finalGrammar}.json`
+
+        if (grammar === 'source.js') {
+          return jsGrammar as unknown as IRawGrammar
+        }
+
+        if (grammar === 'source.jsx') {
+          return jsxGrammar as unknown as IRawGrammar
+        }
+
+        if (grammar === 'source.ts') {
+          return tsGrammar as unknown as IRawGrammar
+        }
+
+        if (grammar === 'source.tsx') {
+          return tsxGrammar as unknown as IRawGrammar
+        }
+
+        if (grammar === 'source.sh') {
+          return shGrammar as unknown as IRawGrammar
+        }
+
+        throw new Error(`[mdxts] "${finalGrammar}" grammar was not loaded`)
       },
       getTheme: (theme: string) => {
-        return `https://unpkg.com/tm-themes@1.4.0/themes/${theme}.json`
+        return nightOwlTheme as unknown as TextMateThemeRaw
       },
       getOniguruma: () => {
         return `https://unpkg.com/vscode-oniguruma@2.0.1/release/onig.wasm`
@@ -80,7 +122,12 @@ export const getTokens: GetTokens = cache(async function getTokens(
     })
   }
 
-  if (language === 'plaintext') {
+  // TODO: figure out how to optimize markdown since it requires all grammars even if they are not used
+  if (
+    language === 'plaintext' ||
+    language === 'markdown' ||
+    language === 'mdx'
+  ) {
     return [
       [
         {
@@ -96,13 +143,25 @@ export const getTokens: GetTokens = cache(async function getTokens(
 
   const isJavaScriptLikeLanguage = ['js', 'jsx', 'ts', 'tsx'].includes(language)
   const jsxOnly = isJavaScriptLikeLanguage ? isJsxOnly(value) : false
-  const sourceFile = project.getSourceFile(filename)
-  const theme = await getTheme('night-owl')
+  const sourceFile = filename ? project.getSourceFile(filename) : undefined
+  const allowedErrorCodes =
+    typeof allowErrors === 'string'
+      ? allowErrors.split(',').map((code) => parseInt(code))
+      : []
+  const sourceFileDiagnostics =
+    allowedErrorCodes.length === 0 && allowErrors
+      ? []
+      : sourceFile
+        ? getDiagnostics(sourceFile).filter(
+            (diagnostic) => !allowedErrorCodes.includes(diagnostic.getCode())
+          )
+        : []
+  const theme = await getTheme()
   const tokens = (await new Promise(async (resolve) => {
     await highlighter!.highlightToAbstract(
       {
         code: sourceFile ? sourceFile.getFullText() : value,
-        grammar: `source.${language}`,
+        grammar: `source.${languageMap[language as keyof typeof languageMap] || language}`,
         theme: 'night-owl',
       },
       resolve
@@ -146,6 +205,19 @@ export const getTokens: GetTokens = cache(async function getTokens(
       // account for newlines
       previousTokenStart = lastToken ? tokenEnd + 1 : tokenEnd
 
+      const tokenQuickInfo =
+        sourceFile && filename
+          ? getQuickInfo(sourceFile, filename, tokenStart)
+          : undefined
+      const tokenDiagnostics = sourceFileDiagnostics.filter((diagnostic) => {
+        const start = diagnostic.getStart()
+        const length = diagnostic.getLength()
+        if (!start || !length) {
+          return false
+        }
+        const end = start + length
+        return start <= tokenStart && tokenEnd <= end
+      })
       const initialToken = {
         value: token.value,
         start: tokenStart,
@@ -154,6 +226,8 @@ export const getTokens: GetTokens = cache(async function getTokens(
         fontStyle: token.fontStyle,
         fontWeight: token.fontWeight,
         textDecoration: token.textDecoration,
+        quickInfo: tokenQuickInfo,
+        diagnostics: tokenDiagnostics.length ? tokenDiagnostics : undefined,
         isBaseColor: token.color
           ? token.color.toLowerCase() === theme.foreground.toLowerCase()
           : false,
@@ -215,3 +289,82 @@ export const getTokens: GetTokens = cache(async function getTokens(
 
   return parsedTokens
 })
+
+/** Convert documentation entries to markdown-friendly links. */
+function formatDocumentationText(documentation: ts.SymbolDisplayPart[]) {
+  let markdownText = ''
+  let currentLinkText = ''
+  let currentLinkUrl = ''
+
+  documentation.forEach((part) => {
+    if (part.kind === 'text') {
+      markdownText += part.text
+    } else if (part.kind === 'linkText') {
+      const [url, ...descriptionParts] = part.text.split(' ')
+      currentLinkUrl = url
+      currentLinkText = descriptionParts.join(' ') || url
+    } else if (part.kind === 'link') {
+      if (currentLinkUrl) {
+        markdownText += `[${currentLinkText}](${currentLinkUrl})`
+        currentLinkText = ''
+        currentLinkUrl = ''
+      }
+    }
+  })
+
+  return markdownText
+}
+
+/** Get the quick info a token */
+function getQuickInfo(
+  sourceFile: SourceFile,
+  filename: string,
+  tokenStart: number
+) {
+  const quickInfo = sourceFile
+    .getProject()
+    .getLanguageService()
+    .compilerObject.getQuickInfoAtPosition(filename, tokenStart)
+
+  if (!quickInfo) {
+    return
+  }
+
+  const displayParts = quickInfo.displayParts || []
+  const displayText = displayParts
+    .map((part) => part.text)
+    .join('')
+    // // First, replace root directory to handle root node_modules
+    // .replaceAll(rootDirectory, '.')
+    // // Next, replace base directory for on disk paths
+    // .replaceAll(baseDirectory, '')
+    // Finally, replace the in-memory mdxts directory
+    .replaceAll('/mdxts', '')
+  const documentation = quickInfo.documentation || []
+  const documentationText = formatDocumentationText(documentation)
+
+  return {
+    displayText,
+    documentationText,
+  }
+}
+
+/** Get the diagnostics for a source file, coerced into a module if necessary. */
+function getDiagnostics(sourceFile: SourceFile) {
+  // if no imports/exports are found, add an empty export to ensure the file is a module
+  const hasImports = sourceFile.getImportDeclarations().length > 0
+  const hasExports = sourceFile.getExportDeclarations().length > 0
+
+  if (!hasImports && !hasExports) {
+    sourceFile.addExportDeclaration({})
+  }
+
+  const diagnostics = sourceFile.getPreEmitDiagnostics()
+
+  // remove the empty export
+  if (!hasImports && !hasExports) {
+    sourceFile.getExportDeclarations().at(0)!.remove()
+  }
+
+  return diagnostics
+}

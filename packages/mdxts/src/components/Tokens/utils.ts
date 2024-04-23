@@ -1,18 +1,34 @@
-import { cache } from 'react'
+/** Memoizes a function based on all arguments */
+export function memoize<Args extends unknown[], Return>(
+  fn: (...args: Args) => Return
+): (...args: Args) => Return {
+  const cache = new Map()
 
-export const getTheme = cache(async (theme: string) => {
-  const response = await fetch(
-    `https://unpkg.com/tm-themes@1.4.0/themes/${theme}.json`
-  )
-  const json = await response.json()
-  const background =
-    json?.colors?.['editor.background'] ||
-    json?.colors?.['background'] ||
-    '#000000'
-  const foreground =
-    json?.colors?.['editor.foreground'] ||
-    json?.colors?.['foreground'] ||
-    '#ffffff'
+  return (...args: Args): Return => {
+    const id = args[0]
+    const resultCached = cache.get(id)
 
-  return Object.assign(json, { background, foreground })
-})
+    if (resultCached !== undefined || cache.has(id)) return resultCached
+
+    const result = fn.apply(undefined, args)
+
+    cache.set(id, result)
+
+    return result
+  }
+}
+
+/** Calls a function once, always returning the original result.  */
+export function once<Type>(fn: () => Type): () => Type {
+  let called = false
+  let result: Type
+
+  return (): Type => {
+    if (!called) {
+      called = true
+      result = fn()
+    }
+
+    return result
+  }
+}
