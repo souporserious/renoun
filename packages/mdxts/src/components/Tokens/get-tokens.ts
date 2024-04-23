@@ -208,6 +208,15 @@ export const getTokens: GetTokens = memoize(async function getTokens(
       // account for newlines
       previousTokenStart = lastToken ? tokenEnd + 1 : tokenEnd
 
+      const tokenDiagnostics = sourceFileDiagnostics.filter((diagnostic) => {
+        const start = diagnostic.getStart()
+        const length = diagnostic.getLength()
+        if (!start || !length) {
+          return false
+        }
+        const end = start + length
+        return start <= tokenStart && tokenEnd <= end
+      })
       const initialToken: Token = {
         value: token.value,
         start: tokenStart,
@@ -220,58 +229,67 @@ export const getTokens: GetTokens = memoize(async function getTokens(
           ? token.color.toLowerCase() === theme.foreground.toLowerCase()
           : false,
         isWhitespace: token.value.trim() === '',
+        diagnostics: tokenDiagnostics.length ? tokenDiagnostics : undefined,
       }
       let processedTokens: Tokens = []
 
       // split tokens by symbol ranges
-      if (symbolRanges) {
-        const tokenRange = symbolRanges.find((range) => {
+      if (symbolRanges.length) {
+        const symbolRange = symbolRanges.find((range) => {
           return range.start >= tokenStart && range.end <= tokenEnd
         })
-        const inFullRange = tokenRange
-          ? tokenRange.start === tokenStart && tokenRange.end === tokenEnd
+        const inFullRange = symbolRange
+          ? symbolRange.start === tokenStart && symbolRange.end === tokenEnd
           : false
 
         // split the token to isolate the symbol
-        if (tokenRange && !inFullRange) {
-          const symbolStart = tokenRange.start - tokenStart
-          const symbolEnd = tokenRange.end - tokenStart
+        if (symbolRange && !inFullRange) {
           const symbolToken: Token = {
             ...initialToken,
-            value: token.value.slice(symbolStart, symbolEnd),
-            start: tokenStart + symbolStart,
-            end: tokenStart + symbolEnd,
-          }
-          const beforeSymbolToken: Token = {
-            ...initialToken,
-            value: token.value.slice(0, symbolStart),
-            start: tokenStart,
-            end: tokenStart + symbolStart,
-          }
-          const afterSymbolToken: Token = {
-            ...initialToken,
-            value: token.value.slice(symbolEnd),
-            start: tokenStart + symbolEnd,
-            end: tokenEnd,
+            value: token.value.slice(
+              symbolRange.start - tokenStart,
+              symbolRange.end - tokenStart
+            ),
+            start: symbolRange.start,
+            end: symbolRange.end,
           }
 
           if (sourceFile && filename) {
-            symbolToken.quickInfo = getQuickInfo(
+            const quickInfo = getQuickInfo(
               sourceFile,
               filename,
-              symbolToken.start,
+              symbolRange.start,
               rootDirectory,
               baseDirectory
             )
+            symbolToken.quickInfo = quickInfo
           }
 
-          processedTokens = [beforeSymbolToken, symbolToken, afterSymbolToken]
+          const beforeSymbolToken: Token = {
+            ...initialToken,
+            value: token.value.slice(0, symbolRange.start - tokenStart),
+            start: tokenStart,
+            end: symbolRange.start,
+          }
+          const tokenValueEnd = tokenStart + token.value.length
+
+          if (tokenValueEnd > symbolRange.end) {
+            const afterSymbolToken: Token = {
+              ...initialToken,
+              value: token.value.slice(symbolRange.end - tokenStart),
+              start: symbolRange.end,
+              end: tokenEnd,
+            }
+            processedTokens = [beforeSymbolToken, symbolToken, afterSymbolToken]
+          } else {
+            processedTokens = [beforeSymbolToken, symbolToken]
+          }
         } else {
-          if (tokenRange && sourceFile && filename) {
+          if (symbolRange && sourceFile && filename) {
             initialToken.quickInfo = getQuickInfo(
               sourceFile,
               filename,
-              initialToken.start,
+              symbolRange.start,
               rootDirectory,
               baseDirectory
             )
@@ -283,21 +301,7 @@ export const getTokens: GetTokens = memoize(async function getTokens(
         processedTokens.push(initialToken)
       }
 
-      return processedTokens.map((token) => {
-        const tokenDiagnostics = sourceFileDiagnostics.filter((diagnostic) => {
-          const start = diagnostic.getStart()
-          const length = diagnostic.getLength()
-          if (!start || !length) {
-            return false
-          }
-          const end = start + length
-          return start <= token.start && token.end <= end
-        })
-        return {
-          ...token,
-          diagnostics: tokenDiagnostics.length ? tokenDiagnostics : undefined,
-        }
-      })
+      return processedTokens
     })
   })
 

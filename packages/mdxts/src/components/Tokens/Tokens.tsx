@@ -35,8 +35,13 @@ export async function Tokens({
           const hasTextStyles = Boolean(
             token.fontStyle || token.fontWeight || token.textDecoration
           )
+          const hasSymbolMeta = token.diagnostics || token.quickInfo
 
-          if ((!hasTextStyles && token.isBaseColor) || token.isWhitespace) {
+          if (
+            !hasTextStyles &&
+            !hasSymbolMeta &&
+            (token.isBaseColor || token.isWhitespace)
+          ) {
             return token.value
           }
 

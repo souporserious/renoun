@@ -86,7 +86,7 @@ export async function QuickInfo({
             </>
           ) : null}
 
-          {quickInfo?.documentationText ? (
+          {quickInfo?.documentationText.length ? (
             <>
               <hr
                 style={{
