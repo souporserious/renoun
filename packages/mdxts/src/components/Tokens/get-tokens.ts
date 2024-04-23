@@ -1,21 +1,12 @@
-import TextmateHighlighter from 'textmate-highlighter'
-import type { TextMateThemeRaw } from 'textmate-highlighter/dist/types'
+import { codeToTokens } from 'shiki'
 import type { SourceFile, Diagnostic, ts } from 'ts-morph'
 import { Node, SyntaxKind } from 'ts-morph'
 import { findRoot } from '@manypkg/find-root'
-import type { IRawGrammar } from 'vscode-textmate'
-import jsGrammar from 'tm-grammars/grammars/javascript.json'
-import jsxGrammar from 'tm-grammars/grammars/jsx.json'
-import tsGrammar from 'tm-grammars/grammars/typescript.json'
-import tsxGrammar from 'tm-grammars/grammars/tsx.json'
-import shGrammar from 'tm-grammars/grammars/shellscript.json'
-import nightOwlTheme from 'tm-themes/themes/night-owl.json'
 
 import { isJsxOnly } from '../../utils/is-jsx-only'
 import { project } from '../project'
 import { getTheme } from './get-theme'
 import { memoize } from './utils'
-import type { TokenProps } from './types'
 
 const languageMap = {
   mjs: 'js',
@@ -78,8 +69,6 @@ export type GetTokens = (
   allowErrors?: string | boolean
 ) => Promise<Tokens[]>
 
-let highlighter: TextmateHighlighter | null = null
-
 /** Converts a string of code to an array of highlighted tokens. */
 export const getTokens: GetTokens = memoize(async function getTokens(
   value: string,
@@ -87,43 +76,6 @@ export const getTokens: GetTokens = memoize(async function getTokens(
   filename?: string,
   allowErrors?: string | boolean
 ) {
-  if (highlighter === null) {
-    highlighter = new TextmateHighlighter({
-      getGrammar: (grammar: string) => {
-        const language = grammar.split('.').pop()
-        const finalGrammar = grammarMap[language as GrammarMapKey] || language
-
-        if (grammar === 'source.js') {
-          return jsGrammar as unknown as IRawGrammar
-        }
-
-        if (grammar === 'source.jsx') {
-          return jsxGrammar as unknown as IRawGrammar
-        }
-
-        if (grammar === 'source.ts') {
-          return tsGrammar as unknown as IRawGrammar
-        }
-
-        if (grammar === 'source.tsx') {
-          return tsxGrammar as unknown as IRawGrammar
-        }
-
-        if (grammar === 'source.sh') {
-          return shGrammar as unknown as IRawGrammar
-        }
-
-        throw new Error(`[mdxts] "${finalGrammar}" grammar was not loaded`)
-      },
-      getTheme: (theme: string) => {
-        return nightOwlTheme as unknown as TextMateThemeRaw
-      },
-      getOniguruma: () => {
-        return `https://unpkg.com/vscode-oniguruma@2.0.1/release/onig.wasm`
-      },
-    })
-  }
-
   // TODO: figure out how to optimize markdown since it requires all grammars even if they are not used
   if (
     language === 'plaintext' ||
@@ -159,16 +111,15 @@ export const getTokens: GetTokens = memoize(async function getTokens(
           )
         : []
   const theme = await getTheme()
-  const tokens = (await new Promise(async (resolve) => {
-    await highlighter!.highlightToAbstract(
-      {
-        code: sourceFile ? sourceFile.getFullText() : value,
-        grammar: `source.${languageMap[language as keyof typeof languageMap] || language}`,
-        theme: 'night-owl',
-      },
-      resolve
-    )
-  })) as TokenProps[][]
+  const finalLanguage =
+    languageMap[language as keyof typeof languageMap] || language
+  const { tokens } = await codeToTokens(
+    sourceFile ? sourceFile.getFullText() : value,
+    {
+      theme: 'night-owl',
+      lang: finalLanguage as any,
+    }
+  )
   const importSpecifiers =
     sourceFile && !jsxOnly
       ? sourceFile
@@ -213,7 +164,7 @@ export const getTokens: GetTokens = memoize(async function getTokens(
     }
     return line.flatMap((token, tokenIndex) => {
       const tokenStart = previousTokenStart
-      const tokenEnd = tokenStart + token.value.length
+      const tokenEnd = tokenStart + token.content.length
       const lastToken = tokenIndex === line.length - 1
 
       // account for newlines
@@ -228,19 +179,19 @@ export const getTokens: GetTokens = memoize(async function getTokens(
         const end = start + length
         return start <= tokenStart && tokenEnd <= end
       })
+
+      const fontStyle = token.fontStyle ? getFontStyle(token.fontStyle) : {}
       const initialToken: Token = {
-        value: token.value,
+        value: token.content,
         start: tokenStart,
         end: tokenEnd,
         color: token.color,
-        fontStyle: token.fontStyle,
-        fontWeight: token.fontWeight,
-        textDecoration: token.textDecoration,
         isBaseColor: token.color
           ? token.color.toLowerCase() === theme.foreground.toLowerCase()
           : false,
-        isWhitespace: token.value.trim() === '',
+        isWhitespace: token.content.trim() === '',
         diagnostics: tokenDiagnostics.length ? tokenDiagnostics : undefined,
+        ...fontStyle,
       }
       let processedTokens: Tokens = []
 
@@ -257,7 +208,7 @@ export const getTokens: GetTokens = memoize(async function getTokens(
         if (symbolRange && !inFullRange) {
           const symbolToken: Token = {
             ...initialToken,
-            value: token.value.slice(
+            value: token.content.slice(
               symbolRange.start - tokenStart,
               symbolRange.end - tokenStart
             ),
@@ -278,16 +229,16 @@ export const getTokens: GetTokens = memoize(async function getTokens(
 
           const beforeSymbolToken: Token = {
             ...initialToken,
-            value: token.value.slice(0, symbolRange.start - tokenStart),
+            value: token.content.slice(0, symbolRange.start - tokenStart),
             start: tokenStart,
             end: symbolRange.start,
           }
-          const tokenValueEnd = tokenStart + token.value.length
+          const tokenValueEnd = tokenStart + token.content.length
 
           if (tokenValueEnd > symbolRange.end) {
             const afterSymbolToken: Token = {
               ...initialToken,
-              value: token.value.slice(symbolRange.end - tokenStart),
+              value: token.content.slice(symbolRange.end - tokenStart),
               start: symbolRange.end,
               end: tokenEnd,
             }
@@ -406,4 +357,36 @@ function getDiagnostics(sourceFile: SourceFile) {
   }
 
   return diagnostics
+}
+
+const FontStyle = {
+  Italic: 1,
+  Bold: 2,
+  Underline: 4,
+  Strikethrough: 8,
+}
+
+function getFontStyle(fontStyle: number) {
+  const style: {
+    fontStyle?: 'italic'
+    fontWeight?: 'bold'
+    textDecoration?: 'underline' | 'line-through'
+  } = {
+    fontStyle: undefined,
+    fontWeight: undefined,
+    textDecoration: undefined,
+  }
+  if (fontStyle === FontStyle.Italic) {
+    style['fontStyle'] = 'italic'
+  }
+  if (fontStyle === FontStyle.Bold) {
+    style['fontWeight'] = 'bold'
+  }
+  if (fontStyle === FontStyle.Underline) {
+    style['textDecoration'] = 'underline'
+  }
+  if (fontStyle === FontStyle.Strikethrough) {
+    style['textDecoration'] = 'line-through'
+  }
+  return style
 }
