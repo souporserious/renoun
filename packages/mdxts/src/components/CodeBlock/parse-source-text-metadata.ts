@@ -66,7 +66,7 @@ export async function parseSourceTextMetadata({
 
     finalValue = await readFile(sourcePropPath, 'utf-8')
 
-    if (finalLanguage === 'plaintext') {
+    if (!language) {
       finalLanguage = sourcePropPath.split('.').pop()!
     }
   }
