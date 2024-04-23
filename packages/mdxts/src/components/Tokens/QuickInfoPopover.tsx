@@ -1,7 +1,8 @@
 'use client'
 import React from 'react'
+
+import { keepElementInView } from './utils'
 import { useQuickInfoContext } from './QuickInfoProvider'
-import { keepElementInView } from '../utils'
 
 export function QuickInfoPopover({ children }: { children: React.ReactNode }) {
   const ref = React.useRef<HTMLDivElement>(null)

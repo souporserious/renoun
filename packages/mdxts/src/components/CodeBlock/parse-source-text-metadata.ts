@@ -19,7 +19,7 @@ type BaseParseMetadataOptions = {
   language: string
 }
 
-type ParseMetadataOptions = BaseParseMetadataOptions &
+export type ParseMetadataOptions = BaseParseMetadataOptions &
   (
     | { value: string }
     | {

@@ -1,5 +1,6 @@
 'use client'
 import React, { useId } from 'react'
+
 import { useQuickInfoContext } from './QuickInfoProvider'
 
 export function Symbol({
