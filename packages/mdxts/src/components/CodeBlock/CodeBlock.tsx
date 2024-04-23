@@ -129,7 +129,7 @@ export async function CodeBlock({
       <pre
         className={className}
         style={{
-          display: shouldRenderToolbar ? undefined : 'flex',
+          display: lineNumbers ? 'flex' : undefined,
           padding: shouldRenderToolbar ? padding : 0,
           lineHeight: 1.4,
           whiteSpace: 'pre',
