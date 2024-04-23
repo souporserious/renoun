@@ -22,6 +22,7 @@ const languageMap = {
   javascript: 'js',
   typescript: 'ts',
   shellscript: 'sh',
+  yml: 'yaml',
 }
 
 const grammarMap = {
