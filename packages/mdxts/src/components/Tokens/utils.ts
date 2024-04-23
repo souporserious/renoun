@@ -1,4 +1,4 @@
-/** Memoizes a function based on all arguments */
+/** Memoizes a function based on all arguments. */
 export function memoize<Args extends unknown[], Return>(
   fn: (...args: Args) => Return
 ): (...args: Args) => Return {

@@ -30,6 +30,7 @@ export async function LineNumbers({
       style={{
         position: 'sticky',
         left: 0,
+        zIndex: 1,
         textAlign: 'right',
         userSelect: 'none',
         whiteSpace: 'pre',

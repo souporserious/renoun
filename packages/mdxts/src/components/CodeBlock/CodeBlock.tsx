@@ -1,7 +1,7 @@
 import React, { Fragment } from 'react'
 
 import { getSourcePath } from '../../utils/get-source-path'
-import { Tokens } from '../Tokens'
+import { Tokens } from '../Tokens/Tokens'
 import { getTokens } from '../Tokens/get-tokens'
 import { getTheme } from '../Tokens/get-theme'
 import { Toolbar } from './Toolbar'

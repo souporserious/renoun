@@ -1,4 +1,4 @@
-import { type RenderedTokensProps } from './RenderedTokens'
+import { type RenderedTokensProps } from './Tokens'
 
 export type TokenProps = {
   value: string

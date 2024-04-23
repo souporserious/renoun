@@ -16,7 +16,7 @@ export type RenderedTokensProps = {
   ) => React.ReactNode
 }
 
-export async function RenderedTokens({
+export async function Tokens({
   tokens,
   renderLine,
   renderToken,

@@ -1,4 +1,5 @@
 import TextmateHighlighter from 'textmate-highlighter'
+import type { TextMateThemeRaw } from 'textmate-highlighter/dist/types'
 import type { SourceFile, Diagnostic, ts } from 'ts-morph'
 import { Node, SyntaxKind } from 'ts-morph'
 import type { IRawGrammar } from 'vscode-textmate'
@@ -14,7 +15,6 @@ import { project } from '../project'
 import { getTheme } from './get-theme'
 import { memoize } from './utils'
 import type { TokenProps } from './types'
-import { TextMateThemeRaw } from 'textmate-highlighter/dist/types'
 
 const languageMap = {
   mjs: 'js',
