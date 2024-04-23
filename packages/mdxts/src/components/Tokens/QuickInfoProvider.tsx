@@ -16,7 +16,7 @@ type QuickInfo = {
 export const QuickInfoContext = createContext<{
   quickInfo: QuickInfo
   setQuickInfo: (info: QuickInfo) => void
-  resetQuickInfo: () => void
+  resetQuickInfo: (immediate?: boolean) => void
   clearTimeouts: () => void
 } | null>(null)
 
@@ -68,9 +68,11 @@ export function QuickInfoProvider({
           setQuickInfo(info)
         }
       },
-      resetQuickInfo: () => {
+      resetQuickInfo: (immediate?: boolean) => {
         if (openTimeoutId.current) {
           clearTimeout(openTimeoutId.current)
+        } else if (immediate) {
+          setQuickInfo(null)
         } else {
           if (closeTimeoutId) {
             clearTimeout(closeTimeoutId)

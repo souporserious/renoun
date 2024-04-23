@@ -1,5 +1,5 @@
 /** Get the closest scrollable viewport of a node. */
-function getClosestViewport(node: HTMLElement) {
+export function getClosestViewport(node: HTMLElement) {
   let scrollableNode: ParentNode | null = node.parentNode
 
   while (scrollableNode) {
