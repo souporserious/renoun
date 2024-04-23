@@ -205,7 +205,7 @@ export const getTokens: GetTokens = memoize(async function getTokens(
       // account for newlines
       previousTokenStart = lastToken ? tokenEnd + 1 : tokenEnd
 
-      const initialToken = {
+      const initialToken: Token = {
         value: token.value,
         start: tokenStart,
         end: tokenEnd,
@@ -233,39 +233,50 @@ export const getTokens: GetTokens = memoize(async function getTokens(
         if (tokenRange && !inFullRange) {
           const symbolStart = tokenRange.start - tokenStart
           const symbolEnd = tokenRange.end - tokenStart
-          const symbolToken = {
+          const symbolToken: Token = {
             ...initialToken,
             value: token.value.slice(symbolStart, symbolEnd),
             start: tokenStart + symbolStart,
             end: tokenStart + symbolEnd,
-          } satisfies Token
-          const beforeSymbolToken = {
+          }
+          const beforeSymbolToken: Token = {
             ...initialToken,
             value: token.value.slice(0, symbolStart),
             start: tokenStart,
             end: tokenStart + symbolStart,
-          } satisfies Token
-          const afterSymbolToken = {
+          }
+          const afterSymbolToken: Token = {
             ...initialToken,
             value: token.value.slice(symbolEnd),
             start: tokenStart + symbolEnd,
             end: tokenEnd,
-          } satisfies Token
+          }
+
+          if (sourceFile && filename) {
+            symbolToken.quickInfo = getQuickInfo(
+              sourceFile,
+              filename,
+              symbolToken.start
+            )
+          }
 
           processedTokens = [beforeSymbolToken, symbolToken, afterSymbolToken]
         } else {
+          if (tokenRange && sourceFile && filename) {
+            initialToken.quickInfo = getQuickInfo(
+              sourceFile,
+              filename,
+              initialToken.start
+            )
+          }
+
           processedTokens.push(initialToken)
         }
       } else {
         processedTokens.push(initialToken)
       }
 
-      // Now that all tokens are split the diagnostics and quick info can be attached
       return processedTokens.map((token) => {
-        const tokenQuickInfo =
-          sourceFile && filename
-            ? getQuickInfo(sourceFile, filename, token.start)
-            : undefined
         const tokenDiagnostics = sourceFileDiagnostics.filter((diagnostic) => {
           const start = diagnostic.getStart()
           const length = diagnostic.getLength()
@@ -277,7 +288,6 @@ export const getTokens: GetTokens = memoize(async function getTokens(
         })
         return {
           ...token,
-          quickInfo: tokenQuickInfo,
           diagnostics: tokenDiagnostics.length ? tokenDiagnostics : undefined,
         }
       })
