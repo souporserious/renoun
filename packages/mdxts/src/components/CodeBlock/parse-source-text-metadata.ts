@@ -6,13 +6,8 @@ import { format, resolveConfig } from 'prettier'
 import 'server-only'
 
 import { isJsxOnly } from '../../utils/is-jsx-only'
+import { languageMap } from '../Tokens/get-tokens'
 import { project } from '../project'
-
-const languageMap = {
-  mjs: 'javascript',
-  js: 'javascript',
-  ts: 'typescript',
-}
 
 type BaseParseMetadataOptions = {
   filename?: string
@@ -35,10 +30,7 @@ export async function parseSourceTextMetadata({
   ...props
 }: ParseMetadataOptions) {
   let finalValue: string = ''
-  let finalLanguage =
-    typeof language === 'string' && language in languageMap
-      ? languageMap[language as keyof typeof languageMap]
-      : language
+  let finalLanguage = language
   let id = 'source' in props ? props.source : filenameProp
 
   if ('value' in props) {
@@ -73,6 +65,10 @@ export async function parseSourceTextMetadata({
 
   if (!finalLanguage) {
     finalLanguage = filenameProp?.split('.').pop() || 'plaintext'
+  }
+
+  if (typeof finalLanguage === 'string' && finalLanguage in languageMap) {
+    finalLanguage = languageMap[language as keyof typeof languageMap]
   }
 
   const isJavaScriptLikeLanguage = ['js', 'jsx', 'ts', 'tsx'].includes(

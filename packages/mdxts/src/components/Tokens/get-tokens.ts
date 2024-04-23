@@ -9,7 +9,7 @@ import { project } from '../project'
 import { getTheme } from './get-theme'
 import { memoize } from './utils'
 
-const languageMap = {
+export const languageMap = {
   mjs: 'js',
   javascript: 'js',
   typescript: 'ts',
