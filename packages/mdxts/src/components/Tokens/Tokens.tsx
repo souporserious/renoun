@@ -1,8 +1,8 @@
 import React, { Fragment } from 'react'
 
-import { QuickInfo } from '../QuickInfo'
-import { QuickInfoProvider } from '../QuickInfoProvider'
-import { Symbol } from '../Symbol'
+import { QuickInfo } from './QuickInfo'
+import { QuickInfoProvider } from './QuickInfoProvider'
+import { Symbol } from './Symbol'
 import type { GetTokens, Token } from './get-tokens'
 import { getTheme } from './get-theme'
 

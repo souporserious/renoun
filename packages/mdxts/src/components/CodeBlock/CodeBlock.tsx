@@ -64,8 +64,6 @@ type PrivateCodeBlockProps = Partial<{
 export async function CodeBlock({
   filename,
   language,
-  source,
-  value,
   highlight,
   lineNumbers,
   allowCopy,
@@ -73,15 +71,15 @@ export async function CodeBlock({
   className,
   style,
   ...props
-}: any) {
+}: CodeBlockProps) {
   const { sourcePath, sourcePathLine, sourcePathColumn } =
     props as PrivateCodeBlockProps
   const options: any = {}
 
-  if (value) {
-    options.value = value
-  } else if (source) {
-    options.source = source
+  if ('value' in props) {
+    options.value = props.value
+  } else if ('source' in props) {
+    options.source = props.source
     options.workingDirectory = props.workingDirectory
   }
 
