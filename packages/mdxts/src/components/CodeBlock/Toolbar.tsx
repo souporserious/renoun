@@ -2,7 +2,7 @@ import React from 'react'
 import { getTheme } from '../../utils/get-theme'
 import { CopyButton } from '../CopyButton'
 
-type BaseCodeToolbarProps = {
+type ToolbarProps = {
   /** The value of the code block. */
   value: string
 
@@ -17,17 +17,10 @@ type BaseCodeToolbarProps = {
 
   /** Style to apply to the toolbar. */
   style?: React.CSSProperties
-}
 
-type CodeToolbarProps =
-  | (BaseCodeToolbarProps & {
-      /** The children of the toolbar. */
-      children?: React.ReactNode
-    })
-  | (BaseCodeToolbarProps & {
-      /** The filename of the code block. */
-      filename?: string
-    })
+  /** The children of the toolbar. */
+  children?: React.ReactNode
+}
 
 /** A toolbar for code blocks that displays the filename and a copy button. */
 export function Toolbar({
@@ -36,8 +29,8 @@ export function Toolbar({
   allowCopy,
   className,
   style,
-  ...props
-}: CodeToolbarProps) {
+  children,
+}: ToolbarProps) {
   const theme = getTheme()
 
   return (
@@ -51,11 +44,7 @@ export function Toolbar({
         ...style,
       }}
     >
-      {'filename' in props
-        ? props.filename
-        : 'children' in props
-          ? props.children
-          : null}
+      {children}
       {sourcePath ? (
         <a
           href={sourcePath}
@@ -94,7 +83,12 @@ export function Toolbar({
           </svg>
         </a>
       ) : null}
-      {allowCopy ? <CopyButton value={value} /> : null}
+      {allowCopy ? (
+        <CopyButton
+          value={value}
+          style={{ marginLeft: sourcePath ? undefined : 'auto' }}
+        />
+      ) : null}
     </div>
   )
 }

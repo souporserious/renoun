@@ -119,7 +119,6 @@ export async function CodeBlock({
       {shouldRenderToolbar ? (
         <Toolbar
           allowCopy={allowCopy}
-          filename={shouldRenderFilename ? metadata.filenameLabel : undefined}
           value={metadata.value}
           sourcePath={
             sourcePath
@@ -127,7 +126,9 @@ export async function CodeBlock({
               : undefined
           }
           style={{ padding }}
-        />
+        >
+          {shouldRenderFilename ? metadata.filenameLabel : undefined}
+        </Toolbar>
       ) : null}
       <pre
         className={className}
