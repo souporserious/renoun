@@ -1,3 +1,4 @@
+import type { bundledLanguages, bundledThemes } from 'shiki'
 import { codeToTokens } from 'shiki'
 import type { SourceFile, Diagnostic, ts } from 'ts-morph'
 import { Node, SyntaxKind } from 'ts-morph'
@@ -14,16 +15,11 @@ const languageMap = {
   typescript: 'ts',
   shellscript: 'sh',
   yml: 'yaml',
-}
+} as const
 
-const grammarMap = {
-  mjs: 'javascript',
-  js: 'javascript',
-  ts: 'typescript',
-  sh: 'shellscript',
-}
+export type Languages = keyof typeof bundledLanguages | keyof typeof languageMap
 
-type GrammarMapKey = keyof typeof grammarMap
+export type Themes = keyof typeof bundledThemes
 
 type Color = string
 
@@ -64,7 +60,7 @@ export type Tokens = Token[]
 
 export type GetTokens = (
   value: string,
-  language: string,
+  language?: string,
   filename?: string,
   allowErrors?: string | boolean
 ) => Promise<Tokens[]>
@@ -72,16 +68,11 @@ export type GetTokens = (
 /** Converts a string of code to an array of highlighted tokens. */
 export const getTokens: GetTokens = memoize(async function getTokens(
   value: string,
-  language: string,
+  language: string = 'plaintext',
   filename?: string,
   allowErrors?: string | boolean
 ) {
-  // TODO: figure out how to optimize markdown since it requires all grammars even if they are not used
-  if (
-    language === 'plaintext' ||
-    language === 'markdown' ||
-    language === 'mdx'
-  ) {
+  if (language === 'plaintext') {
     return [
       [
         {

@@ -2,6 +2,7 @@ import React, { Fragment } from 'react'
 
 import { getSourcePath } from '../../utils/get-source-path'
 import { Tokens } from '../Tokens/Tokens'
+import type { Languages } from '../Tokens/get-tokens'
 import { getTokens } from '../Tokens/get-tokens'
 import { getTheme } from '../Tokens/get-theme'
 import { Toolbar } from './Toolbar'
@@ -14,7 +15,7 @@ export type BaseCodeBlockProps = {
   filename?: string
 
   /** Language of the source text. */
-  language?: string
+  language?: Languages
 
   /** A string of comma separated lines and ranges to highlight. */
   highlight?: string
@@ -129,8 +130,8 @@ export async function CodeBlock({
       <pre
         className={className}
         style={{
+          padding,
           display: lineNumbers ? 'flex' : undefined,
-          padding: shouldRenderToolbar ? padding : 0,
           lineHeight: 1.4,
           whiteSpace: 'pre',
           wordWrap: 'break-word',
