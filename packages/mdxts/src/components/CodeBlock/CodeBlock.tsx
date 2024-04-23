@@ -14,7 +14,7 @@ export type BaseCodeBlockProps = {
   filename?: string
 
   /** Language of the source text. */
-  language: string
+  language?: string
 
   /** A string of comma separated lines and ranges to highlight. */
   highlight?: string
