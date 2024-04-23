@@ -2,6 +2,7 @@ import TextmateHighlighter from 'textmate-highlighter'
 import type { TextMateThemeRaw } from 'textmate-highlighter/dist/types'
 import type { SourceFile, Diagnostic, ts } from 'ts-morph'
 import { Node, SyntaxKind } from 'ts-morph'
+import { findRoot } from '@manypkg/find-root'
 import type { IRawGrammar } from 'vscode-textmate'
 import jsGrammar from 'tm-grammars/grammars/javascript.json'
 import jsxGrammar from 'tm-grammars/grammars/jsx.json'
@@ -191,6 +192,8 @@ export const getTokens: GetTokens = memoize(async function getTokens(
       start: node.getStart(),
       end: node.getEnd(),
     }))
+  const rootDirectory = (await findRoot(process.cwd())).rootDir
+  const baseDirectory = process.cwd().replace(rootDirectory, '')
   let previousTokenStart = 0
   let parsedTokens = tokens.map((line) => {
     // increment position for line breaks
@@ -256,7 +259,9 @@ export const getTokens: GetTokens = memoize(async function getTokens(
             symbolToken.quickInfo = getQuickInfo(
               sourceFile,
               filename,
-              symbolToken.start
+              symbolToken.start,
+              rootDirectory,
+              baseDirectory
             )
           }
 
@@ -266,7 +271,9 @@ export const getTokens: GetTokens = memoize(async function getTokens(
             initialToken.quickInfo = getQuickInfo(
               sourceFile,
               filename,
-              initialToken.start
+              initialToken.start,
+              rootDirectory,
+              baseDirectory
             )
           }
 
@@ -334,7 +341,9 @@ function formatDocumentationText(documentation: ts.SymbolDisplayPart[]) {
 function getQuickInfo(
   sourceFile: SourceFile,
   filename: string,
-  tokenStart: number
+  tokenStart: number,
+  rootDirectory: string,
+  baseDirectory: string
 ) {
   const quickInfo = sourceFile
     .getProject()
@@ -349,10 +358,10 @@ function getQuickInfo(
   const displayText = displayParts
     .map((part) => part.text)
     .join('')
-    // // First, replace root directory to handle root node_modules
-    // .replaceAll(rootDirectory, '.')
-    // // Next, replace base directory for on disk paths
-    // .replaceAll(baseDirectory, '')
+    // First, replace root directory to handle root node_modules
+    .replaceAll(rootDirectory, '.')
+    // Next, replace base directory for on disk paths
+    .replaceAll(baseDirectory, '')
     // Finally, replace the in-memory mdxts directory
     .replaceAll('/mdxts', '')
   const documentation = quickInfo.documentation || []

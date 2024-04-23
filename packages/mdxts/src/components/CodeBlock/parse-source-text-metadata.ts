@@ -2,7 +2,6 @@ import crypto from 'node:crypto'
 import { join, sep, isAbsolute } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import type { SourceFile } from 'ts-morph'
-import { findRoot } from '@manypkg/find-root'
 import { format, resolveConfig } from 'prettier'
 import 'server-only'
 
@@ -132,8 +131,6 @@ export async function parseSourceTextMetadata({
     }
   }
 
-  const rootDirectory = (await findRoot(process.cwd())).rootDir
-  const baseDirectory = process.cwd().replace(rootDirectory, '')
   const filenameLabel = filename
     .replace(join('mdxts', sep), '') // Remove mdxts/ prefix
     .replace(/\d+\./, '') // Remove ordered number prefix
@@ -145,6 +142,5 @@ export async function parseSourceTextMetadata({
     sourceFile,
     filename,
     filenameLabel,
-    baseDirectory,
   }
 }
