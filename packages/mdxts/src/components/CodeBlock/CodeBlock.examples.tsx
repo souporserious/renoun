@@ -13,3 +13,13 @@ export function Ordered() {
     </div>
   )
 }
+
+export function HighlightLines() {
+  return (
+    <CodeBlock
+      filename="line-highlights.ts"
+      value={`const a = 1;\nconst b = 2;\n\nconst add = a + b\nconst subtract = a - b`}
+      highlight="1-2, 4"
+    />
+  )
+}

@@ -38,6 +38,7 @@ export async function CodeInline({
     <code
       className={className}
       style={{
+        padding: '0.1em 0.25em',
         borderRadius: 5,
         boxShadow: `0 0 0 1px ${theme.colors['panel.border']}70`,
         backgroundColor: theme.colors['editor.background'],

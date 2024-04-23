@@ -107,10 +107,12 @@ export async function CodeBlock({
           color: theme.foreground,
           borderRadius: 5,
           boxShadow: `0 0 0 1px ${theme.colors['panel.border']}70`,
+          ...style,
+          padding: 0,
         },
       }
     : {}
-  const padding = '1ch'
+  const padding = style?.padding ?? '1ch'
 
   return (
     <Container {...containerProps}>
@@ -143,7 +145,7 @@ export async function CodeBlock({
           boxShadow: shouldRenderToolbar
             ? undefined
             : `0 0 0 1px ${theme.colors['panel.border']}70`,
-          ...style,
+          ...(shouldRenderToolbar ? {} : style),
         }}
       >
         {lineNumbers ? (
@@ -156,21 +158,13 @@ export async function CodeBlock({
         {lineNumbers ? (
           <div style={{ flex: 1, padding }}>
             <Tokens tokens={tokens} />
-            {highlight ? (
-              <LineHighlights
-                highlightRanges={highlight}
-                // style={{ minWidth: `calc(4ch + ${maxLineLength} * 1ch)` }}
-              />
-            ) : null}
+            {highlight ? <LineHighlights highlightRanges={highlight} /> : null}
           </div>
         ) : (
           <Tokens tokens={tokens} />
         )}
         {!lineNumbers && highlight ? (
-          <LineHighlights
-            highlightRanges={highlight}
-            // style={{ minWidth: `calc(4ch + ${maxLineLength} * 1ch)` }}
-          />
+          <LineHighlights highlightRanges={highlight} offsetTop={padding} />
         ) : null}
       </pre>
     </Container>

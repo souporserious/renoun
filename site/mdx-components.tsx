@@ -91,6 +91,7 @@ export function useMDXComponents() {
       <MDXComponents.pre
         className={GeistMono.className}
         style={{
+          padding: '1rem',
           fontSize: 'var(--font-size-body-2)',
           lineHeight: 'var(--line-height-body-2)',
           width: 'calc(100% + 2rem)',

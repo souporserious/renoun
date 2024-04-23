@@ -2,6 +2,7 @@ import * as React from 'react'
 import type { MDXComponents as MDXComponentsType } from 'mdx/types'
 
 import { getClassNameMetadata } from '../utils/get-class-name-metadata'
+import type { BaseCodeBlockProps } from './CodeBlock/CodeBlock'
 import { CodeBlock } from './CodeBlock/CodeBlock'
 import { CodeInline } from './CodeInline'
 
@@ -14,17 +15,9 @@ type PrivateCodeBlockProps = {
 
 type MDXTSComponentsType = Omit<MDXComponentsType, 'pre'> & {
   pre?: (
-    props: React.HTMLProps<HTMLPreElement> & {
-      allowCopy?: boolean
-      allowErrors?: boolean
-      filename?: string
-      lineNumbers?: boolean
-      showErrors?: boolean
-      highlight?: string
-      toolbar?: boolean
-      fontSize?: string
-      lineHeight?: string
-    } & PrivateCodeBlockProps
+    props: React.HTMLProps<HTMLPreElement> &
+      BaseCodeBlockProps &
+      PrivateCodeBlockProps
   ) => React.ReactElement
 }
 
@@ -41,8 +34,6 @@ export const MDXComponents = {
       showErrors,
       highlight,
       toolbar,
-      fontSize,
-      lineHeight,
       className,
       style,
       children,
@@ -88,8 +79,6 @@ export const MDXComponents = {
 
     return (
       <CodeInline
-        paddingHorizontal="0.25rem"
-        paddingVertical="0.1rem"
         language={language}
         value={children}
         className={className}

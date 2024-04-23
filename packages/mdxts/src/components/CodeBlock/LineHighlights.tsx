@@ -17,9 +17,11 @@ export function getHighlights(ranges: string) {
 
 export async function LineHighlights({
   highlightRanges,
+  offsetTop = 0,
   style,
 }: {
   highlightRanges: string
+  offsetTop?: string | number
   style?: React.CSSProperties
 }) {
   const theme = await getTheme()
@@ -30,7 +32,7 @@ export async function LineHighlights({
         key={index}
         style={{
           position: 'absolute',
-          top: `calc(${highlight.start} * 1lh)`,
+          top: `calc(${highlight.start} * 1lh + ${offsetTop})`,
           left: 0,
           width: '100%',
           height: `calc(${highlight.height} * 1lh)`,
