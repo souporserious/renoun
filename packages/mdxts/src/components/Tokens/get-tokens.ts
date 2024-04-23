@@ -205,19 +205,6 @@ export const getTokens: GetTokens = memoize(async function getTokens(
       // account for newlines
       previousTokenStart = lastToken ? tokenEnd + 1 : tokenEnd
 
-      const tokenQuickInfo =
-        sourceFile && filename
-          ? getQuickInfo(sourceFile, filename, tokenStart)
-          : undefined
-      const tokenDiagnostics = sourceFileDiagnostics.filter((diagnostic) => {
-        const start = diagnostic.getStart()
-        const length = diagnostic.getLength()
-        if (!start || !length) {
-          return false
-        }
-        const end = start + length
-        return start <= tokenStart && tokenEnd <= end
-      })
       const initialToken = {
         value: token.value,
         start: tokenStart,
@@ -226,8 +213,6 @@ export const getTokens: GetTokens = memoize(async function getTokens(
         fontStyle: token.fontStyle,
         fontWeight: token.fontWeight,
         textDecoration: token.textDecoration,
-        quickInfo: tokenQuickInfo,
-        diagnostics: tokenDiagnostics.length ? tokenDiagnostics : undefined,
         isBaseColor: token.color
           ? token.color.toLowerCase() === theme.foreground.toLowerCase()
           : false,
@@ -275,7 +260,27 @@ export const getTokens: GetTokens = memoize(async function getTokens(
         processedTokens.push(initialToken)
       }
 
-      return processedTokens
+      // Now that all tokens are split the diagnostics and quick info can be attached
+      return processedTokens.map((token) => {
+        const tokenQuickInfo =
+          sourceFile && filename
+            ? getQuickInfo(sourceFile, filename, token.start)
+            : undefined
+        const tokenDiagnostics = sourceFileDiagnostics.filter((diagnostic) => {
+          const start = diagnostic.getStart()
+          const length = diagnostic.getLength()
+          if (!start || !length) {
+            return false
+          }
+          const end = start + length
+          return start <= token.start && token.end <= end
+        })
+        return {
+          ...token,
+          quickInfo: tokenQuickInfo,
+          diagnostics: tokenDiagnostics.length ? tokenDiagnostics : undefined,
+        }
+      })
     })
   })
 
