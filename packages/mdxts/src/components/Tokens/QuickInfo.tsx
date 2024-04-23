@@ -43,45 +43,49 @@ export async function QuickInfo({
           }}
         >
           {diagnostics ? (
+            <div style={{ padding: '0.25rem 0.5rem' }}>
+              {diagnostics.map((diagnostic, index) => (
+                <div key={index} style={{ display: 'flex', gap: '0.5rem' }}>
+                  {getDiagnosticMessageText(diagnostic.getMessageText())}
+                  <span style={{ opacity: 0.7 }}>({diagnostic.getCode()})</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {displayTextTokens.length ? (
             <>
-              <div style={{ padding: '0.25rem 0.5rem' }}>
-                {diagnostics.map((diagnostic, index) => (
-                  <div key={index} style={{ display: 'flex', gap: '0.5rem' }}>
-                    {getDiagnosticMessageText(diagnostic.getMessageText())}
-                    <span style={{ opacity: 0.7 }}>
-                      ({diagnostic.getCode()})
-                    </span>
-                  </div>
+              {diagnostics ? (
+                <hr
+                  style={{
+                    height: 1,
+                    border: 'none',
+                    backgroundColor: theme.colors['panel.border'],
+                    opacity: 0.5,
+                  }}
+                />
+              ) : null}
+              <div
+                style={{
+                  fontFamily: 'monospace',
+                  whiteSpace: 'pre-wrap',
+                  padding: '0.25rem 0.5rem',
+                }}
+              >
+                {displayTextTokens.map((line, index) => (
+                  <Fragment key={index}>
+                    {index === 0 ? null : '\n'}
+                    {line.map((token, index) => (
+                      <span key={index} style={{ color: token.color }}>
+                        {token.value}
+                      </span>
+                    ))}
+                  </Fragment>
                 ))}
               </div>
-              <hr
-                style={{
-                  height: 1,
-                  border: 'none',
-                  backgroundColor: theme.colors['panel.border'],
-                  opacity: 0.5,
-                }}
-              />
             </>
           ) : null}
-          <div
-            style={{
-              fontFamily: 'monospace',
-              whiteSpace: 'pre-wrap',
-              padding: '0.25rem 0.5rem',
-            }}
-          >
-            {displayTextTokens.map((line, index) => (
-              <Fragment key={index}>
-                {index === 0 ? null : '\n'}
-                {line.map((token, index) => (
-                  <span key={index} style={{ color: token.color }}>
-                    {token.value}
-                  </span>
-                ))}
-              </Fragment>
-            ))}
-          </div>
+
           {quickInfo?.documentationText ? (
             <>
               <hr
