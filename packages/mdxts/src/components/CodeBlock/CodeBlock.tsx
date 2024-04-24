@@ -20,7 +20,7 @@ export type BaseCodeBlockProps = {
   /** Show or hide errors. */
   showErrors?: boolean
 
-  /** Accepts `CodeBlock` specific components. */
+  /** Accepts `CodeBlock` components including valid React nodes. */
   children?: React.ReactNode
 }
 
