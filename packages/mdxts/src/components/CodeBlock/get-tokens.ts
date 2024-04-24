@@ -17,7 +17,20 @@ export const languageMap = {
   yml: 'yaml',
 } as const
 
-export type Languages = keyof typeof bundledLanguages | keyof typeof languageMap
+export type Languages =
+  | keyof typeof bundledLanguages
+  | keyof typeof languageMap
+  | 'plaintext'
+
+/** Normalizes language to a specific grammar language key. */
+export function getLanguage(
+  language: Languages
+): keyof typeof bundledLanguages {
+  if (language in languageMap) {
+    return languageMap[language as keyof typeof languageMap]
+  }
+  return language as keyof typeof bundledLanguages
+}
 
 export type Themes = keyof typeof bundledThemes
 
@@ -60,7 +73,7 @@ export type Tokens = Token[]
 
 export type GetTokens = (
   value: string,
-  language?: string,
+  language?: Languages,
   filename?: string,
   allowErrors?: string | boolean
 ) => Promise<Tokens[]>
@@ -68,7 +81,7 @@ export type GetTokens = (
 /** Converts a string of code to an array of highlighted tokens. */
 export const getTokens: GetTokens = memoize(async function getTokens(
   value: string,
-  language: string = 'plaintext',
+  language: Languages = 'plaintext',
   filename?: string,
   allowErrors?: string | boolean
 ) {
@@ -102,13 +115,12 @@ export const getTokens: GetTokens = memoize(async function getTokens(
           )
         : []
   const theme = getTheme()
-  const finalLanguage =
-    languageMap[language as keyof typeof languageMap] || language
+  const finalLanguage = getLanguage(language)
   const { tokens } = await codeToTokens(
     sourceFile ? sourceFile.getFullText() : value,
     {
       theme: 'night-owl',
-      lang: finalLanguage as any,
+      lang: finalLanguage,
     }
   )
   const importSpecifiers =

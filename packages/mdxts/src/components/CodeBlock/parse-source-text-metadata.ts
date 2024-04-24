@@ -6,12 +6,13 @@ import { format, resolveConfig } from 'prettier'
 import 'server-only'
 
 import { isJsxOnly } from '../../utils/is-jsx-only'
-import { languageMap } from './get-tokens'
+import type { Languages } from './get-tokens'
+import { getLanguage } from './get-tokens'
 import { project } from '../project'
 
 type BaseParseMetadataOptions = {
   filename?: string
-  language: string
+  language: Languages
 }
 
 export type ParseMetadataOptions = BaseParseMetadataOptions &
@@ -59,16 +60,16 @@ export async function parseSourceTextMetadata({
     finalValue = await readFile(sourcePropPath, 'utf-8')
 
     if (!language) {
-      finalLanguage = sourcePropPath.split('.').pop()!
+      finalLanguage = sourcePropPath.split('.').pop()! as Languages
     }
   }
 
   if (!finalLanguage) {
-    finalLanguage = filenameProp?.split('.').pop() || 'plaintext'
+    finalLanguage = (filenameProp?.split('.').pop() as Languages) || 'plaintext'
   }
 
-  if (typeof finalLanguage === 'string' && finalLanguage in languageMap) {
-    finalLanguage = languageMap[language as keyof typeof languageMap]
+  if (typeof finalLanguage === 'string') {
+    finalLanguage = getLanguage(finalLanguage)
   }
 
   const isJavaScriptLikeLanguage = ['js', 'jsx', 'ts', 'tsx'].includes(
