@@ -16,7 +16,17 @@ export function getTheme() {
   }
 
   if (theme === null) {
-    theme = JSON.parse(readFileSync(themePath, 'utf-8'))
+    const json = JSON.parse(readFileSync(themePath, 'utf-8'))
+    const background =
+      json?.colors?.['editor.background'] ||
+      json?.colors?.['background'] ||
+      '#000000'
+    const foreground =
+      json?.colors?.['editor.foreground'] ||
+      json?.colors?.['foreground'] ||
+      '#ffffff'
+
+    theme = Object.assign(json, { background, foreground })
   }
 
   return theme!

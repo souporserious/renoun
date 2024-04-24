@@ -1,33 +1,18 @@
-import React, { Fragment } from 'react'
+import React from 'react'
 
-import { getSourcePath } from '../../utils/get-source-path'
-import { Tokens } from '../Tokens/Tokens'
-import type { Languages } from '../Tokens/get-tokens'
-import { getTokens } from '../Tokens/get-tokens'
-import { getTheme } from '../Tokens/get-theme'
-import { Toolbar } from './Toolbar'
-import { LineHighlights } from './LineHighlights'
-import { LineNumbers } from './LineNumbers'
+import { Tokens } from './Tokens'
+import type { Languages } from './get-tokens'
+import { getTokens } from './get-tokens'
+import { Context } from './Context'
+import { Pre } from './Pre'
 import { parseSourceTextMetadata } from './parse-source-text-metadata'
 
 export type BaseCodeBlockProps = {
   /** Name of the file. */
   filename?: string
 
-  /** Language of the source text. */
+  /** Language of the source code. When using `source`, the file extension will be used by default. */
   language?: Languages
-
-  /** A string of comma separated lines and ranges to highlight. */
-  highlight?: string
-
-  /** Show or hide line numbers. */
-  lineNumbers?: boolean
-
-  /** Whether or not to render the toolbar with the filename and optional copy button. */
-  toolbar?: boolean
-
-  /** Show or hide the copy button in the toolbar. */
-  allowCopy?: boolean
 
   /** Whether or not to allow errors. Accepts a boolean or comma-separated list of allowed error codes. */
   allowErrors?: boolean | string
@@ -35,11 +20,8 @@ export type BaseCodeBlockProps = {
   /** Show or hide errors. */
   showErrors?: boolean
 
-  /** Class name to apply to the code block. */
-  className?: string
-
-  /** Style to apply to the code block. */
-  style?: React.CSSProperties
+  /** Accepts `CodeBlock` specific components. */
+  children?: React.ReactNode
 }
 
 export type CodeBlockProps =
@@ -65,16 +47,18 @@ type PrivateCodeBlockProps = Partial<{
 export async function CodeBlock({
   filename,
   language,
-  highlight,
-  lineNumbers,
-  allowCopy,
-  toolbar = true,
   className,
   style,
+  children,
   ...props
-}: CodeBlockProps) {
-  const { sourcePath, sourcePathLine, sourcePathColumn } =
-    props as PrivateCodeBlockProps
+}: CodeBlockProps & {
+  /** Class name to apply to the code block. */
+  className?: string
+
+  /** Style to apply to the code block. */
+  style?: React.CSSProperties
+}) {
+  const { sourcePath } = props as PrivateCodeBlockProps
   const options: any = {}
 
   if ('value' in props) {
@@ -89,85 +73,32 @@ export async function CodeBlock({
     language,
     ...options,
   })
-  const theme = await getTheme()
   const tokens = await getTokens(
     metadata.value,
     metadata.language,
     metadata.filename
   )
-  const shouldRenderFilename = Boolean(filename)
-  const shouldRenderToolbar = toolbar
-    ? shouldRenderFilename || allowCopy
-    : false
-  const Container = shouldRenderToolbar ? 'div' : Fragment
-  const containerProps = shouldRenderToolbar
-    ? {
-        style: {
-          backgroundColor: theme.background,
-          color: theme.foreground,
-          borderRadius: 5,
-          boxShadow: `0 0 0 1px ${theme.colors['panel.border']}70`,
-          ...style,
-          padding: 0,
-        },
-      }
-    : {}
   const padding = style?.padding ?? '1ch'
 
-  return (
-    <Container {...containerProps}>
-      {shouldRenderToolbar ? (
-        <Toolbar
-          allowCopy={allowCopy}
-          value={metadata.value}
-          sourcePath={
-            sourcePath
-              ? getSourcePath(sourcePath, sourcePathLine, sourcePathColumn)
-              : undefined
-          }
-          style={{ padding }}
-        >
-          {shouldRenderFilename ? metadata.filenameLabel : undefined}
-        </Toolbar>
-      ) : null}
-      <pre
-        className={className}
-        style={{
+  if (children) {
+    return (
+      <Context
+        value={{
+          value: metadata.value,
+          filenameLabel: metadata.filenameLabel,
+          sourcePath,
+          tokens,
           padding,
-          display: lineNumbers ? 'flex' : undefined,
-          lineHeight: 1.4,
-          whiteSpace: 'pre',
-          wordWrap: 'break-word',
-          overflow: 'auto',
-          position: 'relative',
-          backgroundColor: shouldRenderToolbar ? undefined : theme.background,
-          color: shouldRenderToolbar ? undefined : theme.foreground,
-          borderRadius: shouldRenderToolbar ? undefined : 5,
-          boxShadow: shouldRenderToolbar
-            ? undefined
-            : `0 0 0 1px ${theme.colors['panel.border']}70`,
-          ...(shouldRenderToolbar ? {} : style),
         }}
       >
-        {lineNumbers ? (
-          <LineNumbers
-            tokens={tokens}
-            highlightRanges={highlight}
-            style={{ width: '4ch', padding }}
-          />
-        ) : null}
-        {lineNumbers ? (
-          <div style={{ flex: 1, padding }}>
-            <Tokens tokens={tokens} />
-            {highlight ? <LineHighlights highlightRanges={highlight} /> : null}
-          </div>
-        ) : (
-          <Tokens tokens={tokens} />
-        )}
-        {!lineNumbers && highlight ? (
-          <LineHighlights highlightRanges={highlight} offsetTop={padding} />
-        ) : null}
-      </pre>
-    </Container>
+        {children}
+      </Context>
+    )
+  }
+
+  return (
+    <Pre className={className} style={{ padding, ...style }}>
+      <Tokens tokens={tokens} />
+    </Pre>
   )
 }

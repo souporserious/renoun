@@ -1,5 +1,7 @@
 import React, { Fragment } from 'react'
 
+import { getContext } from '../../utils/context'
+import { Context } from './Context'
 import { QuickInfo } from './QuickInfo'
 import { QuickInfoProvider } from './QuickInfoProvider'
 import { Symbol } from './Symbol'
@@ -7,7 +9,7 @@ import type { GetTokens, Token } from './get-tokens'
 import { getTheme } from './get-theme'
 
 export type RenderedTokensProps = {
-  tokens: Awaited<ReturnType<GetTokens>>
+  tokens?: Awaited<ReturnType<GetTokens>>
   renderToken?: (token: Token) => React.ReactNode
   renderLine?: (
     line: React.ReactNode,
@@ -17,11 +19,20 @@ export type RenderedTokensProps = {
 }
 
 export async function Tokens({
-  tokens,
+  tokens: tokensProp,
   renderLine,
   renderToken,
 }: RenderedTokensProps) {
-  const theme = await getTheme()
+  const context = getContext(Context)
+  const theme = getTheme()
+  const tokens = tokensProp || context?.tokens
+
+  if (!tokens) {
+    throw new Error(
+      '[mdxts] `LineNumbers` must be provided a `tokens` prop or used inside a `CodeBlock` component.'
+    )
+  }
+
   const lastLineIndex = tokens.length - 1
 
   return (

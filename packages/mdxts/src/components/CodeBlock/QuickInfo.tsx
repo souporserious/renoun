@@ -14,7 +14,7 @@ export async function QuickInfo({
   diagnostics?: Diagnostic[]
   quickInfo?: { displayText: string; documentationText: string }
 }) {
-  const theme = await getTheme()
+  const theme = getTheme()
   const displayTextTokens = quickInfo?.displayText
     ? await getTokens(quickInfo.displayText, 'ts')
     : []

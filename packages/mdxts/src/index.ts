@@ -13,7 +13,7 @@ import type { Headings } from './mdx-plugins/remark/add-headings'
 import type { AllModules, ModuleData } from './utils/get-all-data'
 import { getAllData } from './utils/get-all-data'
 
-export { getTheme } from './utils/get-theme'
+export { getTheme } from './components/CodeBlock/get-theme'
 
 type FeedOptions = Omit<
   ConstructorParameters<typeof Feed>[0],

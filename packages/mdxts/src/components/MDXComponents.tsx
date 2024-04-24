@@ -27,13 +27,13 @@ export type MDXComponents = MDXTSComponentsType
 export const MDXComponents = {
   pre: (props) => {
     const {
-      allowCopy,
+      // allowCopy,
+      // lineNumbers,
+      // highlight,
+      // toolbar,
       allowErrors,
       filename,
-      lineNumbers,
       showErrors,
-      highlight,
-      toolbar,
       className,
       style,
       children,
@@ -52,14 +52,14 @@ export const MDXComponents = {
 
     return (
       <CodeBlock
-        allowCopy={allowCopy}
+        // allowCopy={allowCopy}
+        // lineNumbers={lineNumbers}
+        // highlight={highlight}
+        // toolbar={toolbar}
         allowErrors={allowErrors}
         filename={filename}
         language={metadata?.language}
-        lineNumbers={lineNumbers}
-        highlight={highlight}
         showErrors={showErrors}
-        toolbar={toolbar}
         value={value}
         className={className}
         style={style}

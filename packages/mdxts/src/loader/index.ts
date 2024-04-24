@@ -33,8 +33,8 @@ export default async function loader(
   if (isMDXComponentImported) {
     source = sourceString
       .replaceAll(
-        '<CodeBlock',
-        `<CodeBlock workingDirectory="${workingDirectory}"`
+        /<CodeBlock(\.\w+)?/g,
+        `<CodeBlock$1 workingDirectory="${workingDirectory}" sourcePath="${this.resourcePath}"`
       )
       .replaceAll(
         '<CodeInline',

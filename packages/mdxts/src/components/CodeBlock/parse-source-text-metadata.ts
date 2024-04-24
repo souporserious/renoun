@@ -6,7 +6,7 @@ import { format, resolveConfig } from 'prettier'
 import 'server-only'
 
 import { isJsxOnly } from '../../utils/is-jsx-only'
-import { languageMap } from '../Tokens/get-tokens'
+import { languageMap } from './get-tokens'
 import { project } from '../project'
 
 type BaseParseMetadataOptions = {

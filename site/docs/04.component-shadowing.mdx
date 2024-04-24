@@ -1,0 +1,49 @@
+# Component Shadowing
+
+To override a component's default props you can implement component shadowing.
+
+```tsx filename="components/CodeBlock.tsx"
+import { CodeBlock } from 'mdxts/components/CodeBlock'
+
+export default function (props) {
+  return <CodeBlock style={{ padding: '1rem' }} {...props} />
+}
+```
+
+```tsx filename="components/Toolbar.tsx"
+import { Toolbar } from 'mdxts/components/Toolbar'
+
+export function Toolbar(props) {
+  return <Toolbar style={{ padding: '1rem' }} {...props} />
+}
+```
+
+```tsx filename="components/Toolbar.tsx"
+import * as MDXTS from 'mdxts/components/Toolbar'
+
+export function Toolbar(props) {
+  return <MDXTS.Toolbar style={{ padding: '1rem' }} {...props} />
+}
+```
+
+## Local Shadowing
+
+```tsx filename="components/CodeBlock.tsx"
+import { CodeBlock } from 'mdxts/components'
+
+export function useMDXComponents() {
+  return {
+    pre: (props) => (
+      <CodeBlock value={props.children.toString()}>
+        {props.toolbar ? (
+          <Toolbar filename={props.filename} style={{ padding: '1rem' }} />
+        ) : null}
+      </CodeBlock>
+    ),
+  }
+}
+```
+
+```tsx filename="theme.tsx"
+export { default } from 'mdxts/themes/night-owl'
+```

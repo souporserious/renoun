@@ -29,5 +29,5 @@ export function getContext<Value>(
 ) {
   const contextValue = contexts.get(Context)
   const localStorageValue = contextValue?.localStorage.getStore()
-  return localStorageValue || contextValue?.initialValue
+  return (localStorageValue || contextValue?.initialValue) as Value
 }

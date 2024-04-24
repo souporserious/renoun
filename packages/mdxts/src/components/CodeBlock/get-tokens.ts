@@ -101,7 +101,7 @@ export const getTokens: GetTokens = memoize(async function getTokens(
             (diagnostic) => !allowedErrorCodes.includes(diagnostic.getCode())
           )
         : []
-  const theme = await getTheme()
+  const theme = getTheme()
   const finalLanguage =
     languageMap[language as keyof typeof languageMap] || language
   const { tokens } = await codeToTokens(

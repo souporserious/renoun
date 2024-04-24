@@ -1,9 +1,9 @@
 import React, { Fragment } from 'react'
 import 'server-only'
 
-import { getTheme } from '../utils/get-theme'
-import type { Languages } from './Tokens/get-tokens'
-import { getTokens } from './Tokens/get-tokens'
+import { getTheme } from './CodeBlock/get-theme'
+import type { Languages } from './CodeBlock/get-tokens'
+import { getTokens } from './CodeBlock/get-tokens'
 
 export type CodeInlineProps = {
   /** Code snippet to be highlighted. */

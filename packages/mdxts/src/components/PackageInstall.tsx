@@ -21,11 +21,7 @@ export async function PackageInstall({
   const allHighlightedCommands = Object.fromEntries(
     Object.entries(packageManagers).map(([command, install]) => [
       command,
-      <CodeBlock
-        allowCopy
-        value={`${install} ${packages.join(' ')}`}
-        language="sh"
-      />,
+      <CodeBlock value={`${install} ${packages.join(' ')}`} language="sh" />,
     ])
   )
 

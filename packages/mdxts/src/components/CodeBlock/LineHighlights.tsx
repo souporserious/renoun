@@ -1,5 +1,8 @@
 import React from 'react'
-import { getTheme } from '../Tokens/get-theme'
+
+import { getContext } from '../../utils/context'
+import { getTheme } from './get-theme'
+import { Context } from './Context'
 
 export function getHighlights(ranges: string) {
   return ranges.split(',').map((range) => {
@@ -15,16 +18,25 @@ export function getHighlights(ranges: string) {
   })
 }
 
-export async function LineHighlights({
+export function LineHighlights({
   highlightRanges,
-  offsetTop = 0,
+  offsetTop,
   style,
 }: {
   highlightRanges: string
   offsetTop?: string | number
   style?: React.CSSProperties
 }) {
-  const theme = await getTheme()
+  const context = getContext(Context)
+  const theme = getTheme()
+
+  if (!offsetTop) {
+    offsetTop = context?.padding
+  }
+
+  if (typeof offsetTop === 'number') {
+    offsetTop = `${offsetTop}px`
+  }
 
   return getHighlights(highlightRanges).map((highlight, index) => {
     return (

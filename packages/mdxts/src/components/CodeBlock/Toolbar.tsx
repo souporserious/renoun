@@ -1,10 +1,12 @@
 import React from 'react'
-import { getTheme } from '../../utils/get-theme'
+import { getTheme } from './get-theme'
 import { CopyButton } from '../CopyButton'
+import { getContext } from '../../utils/context'
+import { Context } from './Context'
 
 type ToolbarProps = {
   /** The value of the code block. */
-  value: string
+  value?: string
 
   /** The path to the source file on disk in development and the git provider source in production. */
   sourcePath?: string
@@ -24,14 +26,17 @@ type ToolbarProps = {
 
 /** A toolbar for code blocks that displays the filename and a copy button. */
 export function Toolbar({
-  value,
-  sourcePath,
+  value: valueProp,
+  sourcePath: sourcePathProp,
   allowCopy,
   className,
   style,
   children,
 }: ToolbarProps) {
+  const context = getContext(Context)
   const theme = getTheme()
+  const value = valueProp ?? context?.value
+  const sourcePath = sourcePathProp ?? context?.sourcePath
 
   return (
     <div
@@ -44,7 +49,7 @@ export function Toolbar({
         ...style,
       }}
     >
-      {children}
+      {children || context?.filenameLabel}
       {sourcePath ? (
         <a
           href={sourcePath}
@@ -83,7 +88,7 @@ export function Toolbar({
           </svg>
         </a>
       ) : null}
-      {allowCopy ? (
+      {allowCopy && value ? (
         <CopyButton
           value={value}
           style={{ marginLeft: sourcePath ? undefined : 'auto' }}

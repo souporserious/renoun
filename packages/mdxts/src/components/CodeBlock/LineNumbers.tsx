@@ -1,16 +1,18 @@
 import React, { Fragment } from 'react'
 
-import { getTheme } from '../Tokens/get-theme'
-import { getTokens } from '../Tokens/get-tokens'
+import { getContext } from '../../utils/context'
+import { getTheme } from './get-theme'
+import { getTokens } from './get-tokens'
+import { Context } from './Context'
 
-export async function LineNumbers({
-  tokens,
+export function LineNumbers({
+  tokens: tokensProp,
   highlightRanges,
   className,
   style,
 }: {
   /** Tokens to render from `getTokens`. */
-  tokens: Awaited<ReturnType<typeof getTokens>>
+  tokens?: Awaited<ReturnType<typeof getTokens>>
 
   /** A string of comma separated lines and ranges to highlight. */
   highlightRanges?: string
@@ -21,7 +23,16 @@ export async function LineNumbers({
   /** Style to apply to the line numbers container. */
   style?: React.CSSProperties
 }) {
-  const theme = await getTheme()
+  const context = getContext(Context)
+  const tokens = tokensProp || context?.tokens
+
+  if (!tokens) {
+    throw new Error(
+      '[mdxts] `LineNumbers` must be provided a `tokens` prop or used inside a `CodeBlock` component.'
+    )
+  }
+
+  const theme = getTheme()
   const shouldHighlightLine = calculateLinesToHighlight(highlightRanges)
 
   return (
@@ -34,29 +45,27 @@ export async function LineNumbers({
         textAlign: 'right',
         userSelect: 'none',
         whiteSpace: 'pre',
-        backgroundColor: 'inherit',
         color: theme.colors['editorLineNumber.foreground'],
         ...style,
       }}
     >
       {tokens.map((_: any, lineIndex: number) => {
         const shouldHighlight = shouldHighlightLine(lineIndex)
-
-        if (shouldHighlight) {
-          return (
-            <span
-              style={{
-                color: theme.colors['editorLineNumber.activeForeground'],
-              }}
-            >
-              {lineIndex + 1}
-            </span>
-          )
-        }
+        const content = shouldHighlight ? (
+          <span
+            style={{
+              color: theme.colors['editorLineNumber.activeForeground'],
+            }}
+          >
+            {lineIndex + 1}
+          </span>
+        ) : (
+          lineIndex + 1
+        )
 
         return (
           <Fragment key={lineIndex}>
-            {lineIndex + 1}
+            {content}
             {'\n'}
           </Fragment>
         )
