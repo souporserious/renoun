@@ -82,8 +82,6 @@ export default async function Page({
       />
       <div className={styles.container}>
         <CodeBlock
-          allowErrors
-          lineNumbers
           value={example.sourceText}
           language="tsx"
           style={{ margin: 0 }}
