@@ -1,18 +1,17 @@
 import webpack from 'webpack'
 import { NextConfig } from 'next'
 import { PHASE_DEVELOPMENT_SERVER } from 'next/constants'
-import { dirname, resolve, join } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import createMdxPlugin from '@next/mdx'
-// import { BUNDLED_THEMES } from 'shiki'
+import type { bundledThemes } from 'shiki'
 
 import { getMdxPlugins } from '../mdx-plugins'
 import { renumberFilenames } from '../utils/renumber'
 import { createRefreshServer } from './create-refresh-server'
 
 type PluginOptions = {
-  /** Path to the VS Code compatible theme used for syntax highlighting the Code and Editor components. */
-  theme: any
-  // theme: (typeof BUNDLED_THEMES)[number] | (string & {})
+  /** Path to the VS Code compatible theme used for syntax highlighting the `CodeBlock`, `CodeInline`, and `Tokens` components. */
+  theme: keyof typeof bundledThemes | (string & {})
 
   /** The URL of the production site. This is used for generating sitemap and RSS feed URLs. */
   siteUrl?: string
@@ -88,17 +87,14 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
       nextConfig.env.MDXTS_GIT_BRANCH = gitBranch
       nextConfig.env.MDXTS_SITE_URL = siteUrl
 
-      // if (!theme.endsWith('.json')) {
-      //   const { readPackageUp } = await import('read-package-up')
-      //   const shikiPackageJson = await readPackageUp({
-      //     cwd: dirname(require.resolve('shiki')),
-      //   })
-      //   themePath = join(
-      //     dirname(shikiPackageJson!.path),
-      //     'themes',
-      //     `${theme}.json`
-      //   )
-      // }
+      if (!theme.endsWith('.json')) {
+        const { readPackageUp } = await import('read-package-up')
+        const mdxtsPackageJson = await readPackageUp({ cwd: __dirname })
+        themePath = resolve(
+          dirname(mdxtsPackageJson!.path),
+          `node_modules/tm-themes/themes/${theme}.json`
+        )
+      }
 
       nextConfig.env.MDXTS_THEME_PATH = themePath
 
