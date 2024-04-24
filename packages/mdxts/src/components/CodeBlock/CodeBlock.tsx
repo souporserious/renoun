@@ -20,6 +20,12 @@ export type BaseCodeBlockProps = {
   /** Show or hide errors. */
   showErrors?: boolean
 
+  /** Class name to apply to the code block. */
+  className?: string
+
+  /** Style to apply to the code block. */
+  style?: React.CSSProperties
+
   /** Accepts `CodeBlock` components including valid React nodes. */
   children?: React.ReactNode
 }
@@ -47,17 +53,8 @@ type PrivateCodeBlockProps = Partial<{
 export async function CodeBlock({
   filename,
   language,
-  className,
-  style,
-  children,
   ...props
-}: CodeBlockProps & {
-  /** Class name to apply to the code block. */
-  className?: string
-
-  /** Style to apply to the code block. */
-  style?: React.CSSProperties
-}) {
+}: CodeBlockProps) {
   const { sourcePath } = props as PrivateCodeBlockProps
   const options: any = {}
 
@@ -78,9 +75,9 @@ export async function CodeBlock({
     metadata.language,
     metadata.filename
   )
-  const padding = style?.padding ?? '1ch'
+  const padding = 'style' in props ? props.style?.padding ?? '1ch' : '1ch'
 
-  if (children) {
+  if ('children' in props) {
     return (
       <Context
         value={{
@@ -91,9 +88,14 @@ export async function CodeBlock({
           padding,
         }}
       >
-        {children}
+        {props.children}
       </Context>
     )
+  }
+
+  const { className, style } = props as {
+    className?: string
+    style: React.CSSProperties
   }
 
   return (
