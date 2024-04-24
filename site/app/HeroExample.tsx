@@ -46,7 +46,6 @@ export function Sidebar() {
 `.trim()
 
 const codeProps = {
-  toolbar: false,
   className: `${GeistMono.className} ${styles.code}`,
   style: { padding: '0.7rem' },
 } satisfies Partial<BaseCodeBlockProps>
