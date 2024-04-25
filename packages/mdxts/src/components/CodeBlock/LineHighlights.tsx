@@ -19,16 +19,23 @@ export function getHighlights(ranges: string) {
 }
 
 export function LineHighlights({
-  highlightRanges,
+  highlightRanges: highlightRangesProp,
   offsetTop,
   style,
 }: {
-  highlightRanges: string
+  highlightRanges?: string
   offsetTop?: string | number
   style?: React.CSSProperties
 }) {
   const context = getContext(Context)
   const theme = getTheme()
+  const highlightRanges = highlightRangesProp || context?.highlight
+
+  if (!highlightRanges) {
+    throw new Error(
+      '`LineHighlights` requires a `highlightRanges` prop or to be nested in a `CodeBlock` component.'
+    )
+  }
 
   if (!offsetTop) {
     offsetTop = context?.padding

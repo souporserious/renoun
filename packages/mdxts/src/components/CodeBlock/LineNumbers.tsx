@@ -7,7 +7,7 @@ import { Context } from './Context'
 
 export function LineNumbers({
   tokens: tokensProp,
-  highlightRanges,
+  highlightRanges: highlightRangesProp,
   className,
   style,
 }: {
@@ -33,6 +33,7 @@ export function LineNumbers({
   }
 
   const theme = getTheme()
+  const highlightRanges = highlightRangesProp || context?.highlight
   const shouldHighlightLine = calculateLinesToHighlight(highlightRanges)
 
   return (

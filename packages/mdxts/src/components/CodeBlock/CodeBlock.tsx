@@ -99,6 +99,7 @@ export async function CodeBlock({
     filenameLabel: metadata.filenameLabel,
     sourcePath,
     tokens,
+    highlight,
     padding,
   }
 
@@ -133,7 +134,7 @@ export async function CodeBlock({
         <pre
           className={props.className}
           style={{
-            padding,
+            padding: lineNumbers ? 0 : padding,
             display: lineNumbers ? 'flex' : undefined,
             lineHeight: 1.4,
             whiteSpace: 'pre',
@@ -150,23 +151,18 @@ export async function CodeBlock({
           }}
         >
           {lineNumbers ? (
-            <LineNumbers
-              highlightRanges={highlight}
-              style={{ width: '4ch', padding }}
-            />
+            <LineNumbers style={{ width: '4ch', padding }} />
           ) : null}
           {lineNumbers ? (
             <div style={{ flex: 1, padding }}>
               <Tokens />
-              {highlight ? (
-                <LineHighlights highlightRanges={highlight} />
-              ) : null}
+              {highlight ? <LineHighlights /> : null}
             </div>
           ) : (
             <Tokens />
           )}
           {!lineNumbers && highlight ? (
-            <LineHighlights highlightRanges={highlight} offsetTop={padding} />
+            <LineHighlights offsetTop={padding} />
           ) : null}
         </pre>
       </Container>
