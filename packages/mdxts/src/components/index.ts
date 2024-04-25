@@ -6,8 +6,6 @@ export {
   Toolbar,
   type BaseCodeBlockProps,
   type CodeBlockProps,
-  type TokenProps,
-  type TokensProps,
 } from './CodeBlock'
 export { CodeInline, type CodeInlineProps } from './CodeInline'
 export { ExportedTypes } from './ExportedTypes'

@@ -10,9 +10,11 @@ import { getTheme } from './get-theme'
 export async function QuickInfo({
   diagnostics,
   quickInfo,
+  style,
 }: {
   diagnostics?: Diagnostic[]
   quickInfo?: { displayText: string; documentationText: string }
+  style?: React.CSSProperties
 }) {
   const theme = getTheme()
   const displayTextTokens = quickInfo?.displayText
@@ -34,6 +36,7 @@ export async function QuickInfo({
           color: theme.colors['foreground'],
           overflow: 'auto',
           overscrollBehavior: 'contain',
+          ...style,
         }}
       >
         <div

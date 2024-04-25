@@ -8,7 +8,7 @@ import { Symbol } from './Symbol'
 import type { GetTokens, Token } from './get-tokens'
 import { getTheme } from './get-theme'
 
-export type RenderedTokensProps = {
+export type TokensProps = {
   tokens?: Awaited<ReturnType<GetTokens>>
   renderToken?: (token: Token) => React.ReactNode
   renderLine?: (
@@ -16,13 +16,18 @@ export type RenderedTokensProps = {
     lineIndex: number,
     isLastLine: boolean
   ) => React.ReactNode
+  style?: {
+    token?: React.CSSProperties
+    popover?: React.CSSProperties
+  }
 }
 
 export async function Tokens({
   tokens: tokensProp,
   renderLine,
   renderToken,
-}: RenderedTokensProps) {
+  style = {},
+}: TokensProps) {
   const context = getContext(Context)
   const theme = getTheme()
   const tokens = tokensProp || context?.tokens
@@ -61,9 +66,10 @@ export async function Tokens({
             fontWeight: token.fontWeight,
             textDecoration: token.textDecoration,
             color: token.isBaseColor ? undefined : token.color,
+            ...style.token,
           }
 
-          if (token.diagnostics || token.quickInfo) {
+          if (hasSymbolMeta) {
             const diagnosticStyles = {
               backgroundImage: `url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%206%203'%20enable-background%3D'new%200%200%206%203'%20height%3D'3'%20width%3D'6'%3E%3Cg%20fill%3D'%23f14c4c'%3E%3Cpolygon%20points%3D'5.5%2C0%202.5%2C3%201.1%2C3%204.1%2C0'%2F%3E%3Cpolygon%20points%3D'4%2C0%206%2C2%206%2C0.6%205.4%2C0'%2F%3E%3Cpolygon%20points%3D'0%2C2%201%2C3%202.4%2C3%200%2C0.6'%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E")`,
               backgroundRepeat: 'repeat-x',
@@ -77,6 +83,7 @@ export async function Tokens({
                   <QuickInfo
                     diagnostics={token.diagnostics}
                     quickInfo={token.quickInfo}
+                    style={style.popover}
                   />
                 }
                 style={{
