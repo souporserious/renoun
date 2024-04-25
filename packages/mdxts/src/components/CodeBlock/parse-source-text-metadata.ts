@@ -128,9 +128,13 @@ export async function parseSourceTextMetadata({
     }
   }
 
-  const filenameLabel = filename
-    .replace(join('mdxts', sep), '') // Remove mdxts/ prefix
-    .replace(/\d+\./, '') // Remove ordered number prefix
+  let filenameLabel = filenameProp
+
+  if (!filenameLabel) {
+    filenameLabel = filename
+      .replace(join('mdxts', sep), '') // Remove mdxts/ prefix
+      .replace(/\d+\./, '') // Remove ordered number prefix
+  }
 
   return {
     value: finalValue,
