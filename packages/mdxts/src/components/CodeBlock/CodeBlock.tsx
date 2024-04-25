@@ -3,8 +3,11 @@ import React from 'react'
 import { Tokens } from './Tokens'
 import type { Languages } from './get-tokens'
 import { getTokens } from './get-tokens'
+import { getTheme } from './get-theme'
 import { Context } from './Context'
-import { Pre } from './Pre'
+import { LineHighlights } from './LineHighlights'
+import { LineNumbers } from './LineNumbers'
+import { Toolbar } from './Toolbar'
 import { parseSourceTextMetadata } from './parse-source-text-metadata'
 
 export type BaseCodeBlockProps = {
@@ -13,6 +16,18 @@ export type BaseCodeBlockProps = {
 
   /** Language of the source code. When using `source`, the file extension will be used by default. */
   language?: Languages
+
+  /** Show or hide line numbers. */
+  lineNumbers?: boolean
+
+  /** A string of comma separated lines and ranges to highlight. */
+  highlight?: string
+
+  /** Whether or not to show the toolbar. */
+  toolbar?: boolean
+
+  /** Show or hide a button that copies the source code to the clipboard. */
+  allowCopy?: boolean
 
   /** Whether or not to allow errors. Accepts a boolean or comma-separated list of allowed error codes. */
   allowErrors?: boolean | string
@@ -50,6 +65,10 @@ type PrivateCodeBlockProps = Partial<{
 export async function CodeBlock({
   filename,
   language,
+  lineNumbers,
+  highlight,
+  toolbar,
+  allowCopy,
   allowErrors,
   ...props
 }: CodeBlockProps) {
@@ -75,31 +94,83 @@ export async function CodeBlock({
     allowErrors
   )
   const padding = 'style' in props ? props.style?.padding ?? '1ch' : '1ch'
+  const contextValue = {
+    value: metadata.value,
+    filenameLabel: metadata.filenameLabel,
+    sourcePath,
+    tokens,
+    padding,
+  }
 
   if ('children' in props) {
-    return (
-      <Context
-        value={{
-          value: metadata.value,
-          filenameLabel: metadata.filenameLabel,
-          sourcePath,
-          tokens,
-          padding,
-        }}
-      >
-        {props.children}
-      </Context>
-    )
+    return <Context value={contextValue}>{props.children}</Context>
   }
 
-  const { className, style } = props as {
-    className?: string
-    style: React.CSSProperties
-  }
+  const theme = getTheme()
+  const shouldRenderFilename = Boolean(filename)
+  const shouldRenderToolbar = toolbar
+    ? shouldRenderFilename || allowCopy
+    : false
+  const Container = shouldRenderToolbar ? 'div' : React.Fragment
+  const containerProps = shouldRenderToolbar
+    ? {
+        style: {
+          backgroundColor: theme.background,
+          color: theme.foreground,
+          borderRadius: 5,
+          boxShadow: `0 0 0 1px ${theme.colors['panel.border']}70`,
+          ...props.style,
+          padding: 0,
+        },
+      }
+    : {}
 
   return (
-    <Pre className={className} style={{ padding, ...style }}>
-      <Tokens tokens={tokens} />
-    </Pre>
+    <Context value={contextValue}>
+      <Container {...containerProps}>
+        {shouldRenderToolbar ? (
+          <Toolbar allowCopy={allowCopy} style={{ padding }} />
+        ) : null}
+        <pre
+          className={props.className}
+          style={{
+            padding,
+            display: lineNumbers ? 'flex' : undefined,
+            lineHeight: 1.4,
+            whiteSpace: 'pre',
+            wordWrap: 'break-word',
+            overflow: 'auto',
+            position: 'relative',
+            backgroundColor: shouldRenderToolbar ? undefined : theme.background,
+            color: shouldRenderToolbar ? undefined : theme.foreground,
+            borderRadius: shouldRenderToolbar ? undefined : 5,
+            boxShadow: shouldRenderToolbar
+              ? undefined
+              : `0 0 0 1px ${theme.colors['panel.border']}70`,
+            ...(shouldRenderToolbar ? {} : props.style),
+          }}
+        >
+          {lineNumbers ? (
+            <LineNumbers
+              highlightRanges={highlight}
+              style={{ width: '4ch', padding }}
+            />
+          ) : null}
+          {lineNumbers ? (
+            <div style={{ flex: 1, padding }}>
+              <Tokens />
+              {highlight ? (
+                <LineHighlights highlightRanges={highlight} />
+              ) : null}
+            </div>
+          ) : (
+            <Tokens />
+          )}
+          {!lineNumbers && highlight ? (
+            <LineHighlights highlightRanges={highlight} offsetTop={padding} />
+          ) : null}
+        </pre>
+      </Container>
+    </Context>
   )
 }
