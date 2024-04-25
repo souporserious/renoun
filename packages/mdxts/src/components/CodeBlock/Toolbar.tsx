@@ -1,7 +1,7 @@
 import React from 'react'
-import { getTheme } from './get-theme'
-import { CopyButton } from '../CopyButton'
+import { getTheme } from '../../index'
 import { getContext } from '../../utils/context'
+import { CopyButton } from '../CopyButton'
 import { Context } from './Context'
 
 type ToolbarProps = {

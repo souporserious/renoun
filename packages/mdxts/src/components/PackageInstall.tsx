@@ -1,9 +1,9 @@
 import React from 'react'
 
+import { getTheme } from '../index'
 import { CopyButton } from './CopyButton'
 import { CodeBlock } from './CodeBlock/CodeBlock'
 import { Tokens } from './CodeBlock/Tokens'
-import { getTheme } from './CodeBlock/get-theme'
 
 const stateKey = 'package-manager'
 const defaultPackageManager = 'npm'

@@ -2,10 +2,10 @@ import React, { Fragment } from 'react'
 import type { Diagnostic } from 'ts-morph'
 import { getDiagnosticMessageText } from '@tsxmod/utils'
 
+import { getTheme } from '../../index'
 import { MDXContent } from '../MDXContent'
 import { QuickInfoPopover } from './QuickInfoPopover'
 import { getTokens } from './get-tokens'
-import { getTheme } from './get-theme'
 
 export async function QuickInfo({
   diagnostics,

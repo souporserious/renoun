@@ -1,7 +1,7 @@
 import React from 'react'
 
+import { getTheme } from '../../index'
 import { getContext } from '../../utils/context'
-import { getTheme } from './get-theme'
 import { Context } from './Context'
 
 export function getHighlights(ranges: string) {

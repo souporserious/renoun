@@ -1,10 +1,10 @@
 import React from 'react'
 
+import { getTheme } from '../../index'
 import { getSourcePath } from '../../utils/get-source-path'
 import { Tokens } from './Tokens'
 import type { Languages } from './get-tokens'
 import { getTokens } from './get-tokens'
-import { getTheme } from './get-theme'
 import { Context } from './Context'
 import { LineHighlights } from './LineHighlights'
 import { LineNumbers } from './LineNumbers'

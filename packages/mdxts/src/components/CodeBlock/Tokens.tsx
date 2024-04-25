@@ -1,12 +1,12 @@
 import React, { Fragment } from 'react'
 
+import { getTheme } from '../../index'
 import { getContext } from '../../utils/context'
 import { Context } from './Context'
 import { QuickInfo } from './QuickInfo'
 import { QuickInfoProvider } from './QuickInfoProvider'
 import { Symbol } from './Symbol'
 import type { GetTokens } from './get-tokens'
-import { getTheme } from './get-theme'
 
 export type TokensProps = {
   tokens?: Awaited<ReturnType<GetTokens>>

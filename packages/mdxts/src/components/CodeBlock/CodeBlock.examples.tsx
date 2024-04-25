@@ -1,10 +1,10 @@
 import React from 'react'
+import { getTheme } from '../../index'
 import { CodeBlock } from './CodeBlock'
 import { LineHighlights } from './LineHighlights'
 import { LineNumbers } from './LineNumbers'
 import { Tokens } from './Tokens'
 import { Toolbar } from './Toolbar'
-import { getTheme } from './get-theme'
 
 export function Basic() {
   return <CodeBlock source="./counter/useCounter.ts" />

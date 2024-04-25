@@ -4,9 +4,9 @@ import type { SourceFile, Diagnostic, ts } from 'ts-morph'
 import { Node, SyntaxKind } from 'ts-morph'
 import { findRoot } from '@manypkg/find-root'
 
+import { getTheme } from '../../index'
 import { isJsxOnly } from '../../utils/is-jsx-only'
 import { project } from '../project'
-import { getTheme } from './get-theme'
 import { memoize } from './utils'
 
 export const languageMap = {

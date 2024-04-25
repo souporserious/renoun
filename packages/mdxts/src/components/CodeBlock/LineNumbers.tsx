@@ -1,7 +1,7 @@
 import React, { Fragment } from 'react'
 
+import { getTheme } from '../../index'
 import { getContext } from '../../utils/context'
-import { getTheme } from './get-theme'
 import { getTokens } from './get-tokens'
 import { Context } from './Context'
 

@@ -1,7 +1,7 @@
 import React, { Fragment } from 'react'
 import 'server-only'
 
-import { getTheme } from './CodeBlock/get-theme'
+import { getTheme } from '../index'
 import type { Languages } from './CodeBlock/get-tokens'
 import { getTokens } from './CodeBlock/get-tokens'
 
