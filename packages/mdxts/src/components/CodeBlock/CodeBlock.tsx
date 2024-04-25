@@ -17,9 +17,6 @@ export type BaseCodeBlockProps = {
   /** Whether or not to allow errors. Accepts a boolean or comma-separated list of allowed error codes. */
   allowErrors?: boolean | string
 
-  /** Show or hide errors. */
-  showErrors?: boolean
-
   /** Class name to apply to the code block. */
   className?: string
 
@@ -53,6 +50,7 @@ type PrivateCodeBlockProps = Partial<{
 export async function CodeBlock({
   filename,
   language,
+  allowErrors,
   ...props
 }: CodeBlockProps) {
   const { sourcePath } = props as PrivateCodeBlockProps
@@ -73,7 +71,8 @@ export async function CodeBlock({
   const tokens = await getTokens(
     metadata.value,
     metadata.language,
-    metadata.filename
+    metadata.filename,
+    allowErrors
   )
   const padding = 'style' in props ? props.style?.padding ?? '1ch' : '1ch'
 
