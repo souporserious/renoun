@@ -5,27 +5,25 @@ import { Context } from './Context'
 import { QuickInfo } from './QuickInfo'
 import { QuickInfoProvider } from './QuickInfoProvider'
 import { Symbol } from './Symbol'
-import type { GetTokens, Token } from './get-tokens'
+import type { GetTokens } from './get-tokens'
 import { getTheme } from './get-theme'
 
 export type TokensProps = {
   tokens?: Awaited<ReturnType<GetTokens>>
-  renderToken?: (token: Token) => React.ReactNode
-  renderLine?: (
-    line: React.ReactNode,
-    lineIndex: number,
-    isLastLine: boolean
-  ) => React.ReactNode
   style?: {
     token?: React.CSSProperties
     popover?: React.CSSProperties
   }
+  renderLine?: (line: {
+    children: React.ReactNode
+    index: number
+    isLast: boolean
+  }) => React.ReactNode
 }
 
 export async function Tokens({
   tokens: tokensProp,
   renderLine,
-  renderToken,
   style = {},
 }: TokensProps) {
   const context = getContext(Context)
@@ -43,11 +41,7 @@ export async function Tokens({
   return (
     <QuickInfoProvider>
       {tokens.map((line, lineIndex) => {
-        const lineContent = line.map((token) => {
-          if (renderToken) {
-            return renderToken(token)
-          }
-
+        const lineChildren = line.map((token) => {
           const hasTextStyles = Boolean(
             token.fontStyle || token.fontWeight || token.textDecoration
           )
@@ -104,8 +98,12 @@ export async function Tokens({
         })
         const isLastLine = lineIndex === lastLineIndex
         let lineToRender = renderLine
-          ? renderLine(lineContent, lineIndex, isLastLine)
-          : lineContent
+          ? renderLine({
+              children: lineChildren,
+              index: lineIndex,
+              isLast: isLastLine,
+            })
+          : lineChildren
 
         if (renderLine && lineToRender) {
           return lineToRender
@@ -113,7 +111,7 @@ export async function Tokens({
 
         return (
           <Fragment key={lineIndex}>
-            {lineContent}
+            {lineChildren}
             {isLastLine ? null : '\n'}
           </Fragment>
         )
