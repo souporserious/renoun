@@ -173,16 +173,6 @@ export const getTokens: GetTokens = memoize(async function getTokens(
       // account for newlines
       previousTokenStart = lastToken ? tokenEnd + 1 : tokenEnd
 
-      const tokenDiagnostics = sourceFileDiagnostics.filter((diagnostic) => {
-        const start = diagnostic.getStart()
-        const length = diagnostic.getLength()
-        if (!start || !length) {
-          return false
-        }
-        const end = start + length
-        return start <= tokenStart && tokenEnd <= end
-      })
-
       const fontStyle = token.fontStyle ? getFontStyle(token.fontStyle) : {}
       const initialToken: Token = {
         value: token.content,
@@ -193,7 +183,6 @@ export const getTokens: GetTokens = memoize(async function getTokens(
           ? token.color.toLowerCase() === theme.foreground.toLowerCase()
           : false,
         isWhitespace: token.content.trim() === '',
-        diagnostics: tokenDiagnostics.length ? tokenDiagnostics : undefined,
         ...fontStyle,
       }
       let processedTokens: Tokens = []
@@ -266,7 +255,22 @@ export const getTokens: GetTokens = memoize(async function getTokens(
         processedTokens.push(initialToken)
       }
 
-      return processedTokens
+      // Attach diagnostics after splitting tokens
+      return processedTokens.map((token) => {
+        const tokenDiagnostics = sourceFileDiagnostics.filter((diagnostic) => {
+          const start = diagnostic.getStart()
+          const length = diagnostic.getLength()
+          if (!start || !length) {
+            return false
+          }
+          const end = start + length
+          return token.start >= start && token.end <= end
+        })
+        return {
+          ...token,
+          diagnostics: tokenDiagnostics.length ? tokenDiagnostics : undefined,
+        }
+      })
     })
   })
 

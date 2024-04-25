@@ -10,6 +10,10 @@ export function Basic() {
   return <CodeBlock source="./counter/useCounter.ts" />
 }
 
+export function TypeChecking() {
+  return <CodeBlock value={`const a = 1; a + b;`} language="ts" />
+}
+
 export function Ordered() {
   return (
     <div style={{ display: 'grid', gap: '2rem' }}>
