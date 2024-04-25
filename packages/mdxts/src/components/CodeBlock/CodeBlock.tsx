@@ -1,5 +1,6 @@
 import React from 'react'
 
+import { getSourcePath } from '../../utils/get-source-path'
 import { Tokens } from './Tokens'
 import type { Languages } from './get-tokens'
 import { getTokens } from './get-tokens'
@@ -72,7 +73,8 @@ export async function CodeBlock({
   allowErrors,
   ...props
 }: CodeBlockProps) {
-  const { sourcePath } = props as PrivateCodeBlockProps
+  const { sourcePath, sourcePathLine, sourcePathColumn } =
+    props as PrivateCodeBlockProps
   const padding = 'style' in props ? props.style?.padding ?? '1ch' : '1ch'
   const options: any = {}
 
@@ -97,7 +99,9 @@ export async function CodeBlock({
   const contextValue = {
     value: metadata.value,
     filenameLabel: metadata.filenameLabel,
-    sourcePath,
+    sourcePath: sourcePath
+      ? getSourcePath(sourcePath, sourcePathLine, sourcePathColumn)
+      : undefined,
     tokens,
     highlight,
     padding,
