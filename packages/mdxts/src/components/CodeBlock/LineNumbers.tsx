@@ -45,6 +45,7 @@ export function LineNumbers({
         textAlign: 'right',
         userSelect: 'none',
         whiteSpace: 'pre',
+        backgroundColor: 'inherit',
         color: theme.colors['editorLineNumber.foreground'],
         ...style,
       }}
