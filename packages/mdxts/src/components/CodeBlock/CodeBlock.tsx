@@ -73,6 +73,7 @@ export async function CodeBlock({
   ...props
 }: CodeBlockProps) {
   const { sourcePath } = props as PrivateCodeBlockProps
+  const padding = 'style' in props ? props.style?.padding ?? '1ch' : '1ch'
   const options: any = {}
 
   if ('value' in props) {
@@ -93,7 +94,6 @@ export async function CodeBlock({
     metadata.filename,
     allowErrors
   )
-  const padding = 'style' in props ? props.style?.padding ?? '1ch' : '1ch'
   const contextValue = {
     value: metadata.value,
     filenameLabel: metadata.filenameLabel,
@@ -120,7 +120,6 @@ export async function CodeBlock({
           borderRadius: 5,
           boxShadow: `0 0 0 1px ${theme.colors['panel.border']}70`,
           ...props.style,
-          padding: 0,
         },
       }
     : {}
