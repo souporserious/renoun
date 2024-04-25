@@ -5,10 +5,12 @@ import { useQuickInfoContext } from './QuickInfoProvider'
 import { getClosestViewport } from './utils'
 
 export function Symbol({
+  popover,
   children,
   highlightColor = '#87add7',
   style,
 }: {
+  popover: React.ReactNode
   children: React.ReactNode
   highlightColor?: string
   style?: React.CSSProperties
@@ -38,7 +40,7 @@ export function Symbol({
       id={anchorId}
       ref={symbolRef}
       onPointerEnter={() => {
-        setQuickInfo({ anchorId, children })
+        setQuickInfo({ anchorId, popover })
       }}
       onPointerLeave={() => {
         resetQuickInfo()
@@ -47,11 +49,11 @@ export function Symbol({
         resetQuickInfo()
       }}
       style={{
-        position: 'absolute',
-        inset: 0,
         backgroundColor: isHighlighted ? `${highlightColor}3d` : undefined,
         ...style,
       }}
-    />
+    >
+      {children}
+    </span>
   )
 }

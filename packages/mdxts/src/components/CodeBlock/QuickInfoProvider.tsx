@@ -10,7 +10,7 @@ import { createPortal } from 'react-dom'
 
 type QuickInfo = {
   anchorId: string
-  children: React.ReactNode | null
+  popover: React.ReactNode | null
 } | null
 
 export const QuickInfoContext = createContext<{
@@ -102,7 +102,7 @@ export function QuickInfoProvider({
   return (
     <QuickInfoContext.Provider value={value}>
       {children}
-      {quickInfo ? createPortal(quickInfo.children, document.body) : null}
+      {quickInfo ? createPortal(quickInfo.popover, document.body) : null}
     </QuickInfoContext.Provider>
   )
 }
