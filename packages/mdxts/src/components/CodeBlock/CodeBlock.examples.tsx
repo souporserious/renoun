@@ -86,7 +86,11 @@ export function WithToolbar() {
   const theme = getTheme()
 
   return (
-    <CodeBlock filename="toolbar.tsx" source="./counter/Counter.tsx">
+    <CodeBlock
+      allowErrors="2307"
+      filename="toolbar.tsx"
+      source="./counter/Counter.tsx"
+    >
       <div
         style={{
           backgroundColor: theme.background,
