@@ -40,9 +40,9 @@ export async function CodeInline({
       style={{
         padding: '0.1em 0.25em',
         borderRadius: 5,
-        boxShadow: `0 0 0 1px ${theme.colors['panel.border']}70`,
-        backgroundColor: theme.colors['editor.background'],
-        color: theme.colors['editor.foreground'],
+        boxShadow: `0 0 0 1px ${theme.panel.border}70`,
+        backgroundColor: theme.editor.background,
+        color: theme.editor.foreground,
         ...style,
       }}
     >

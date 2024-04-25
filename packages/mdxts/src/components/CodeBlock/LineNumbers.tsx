@@ -47,7 +47,7 @@ export function LineNumbers({
         userSelect: 'none',
         whiteSpace: 'pre',
         backgroundColor: 'inherit',
-        color: theme.colors['editorLineNumber.foreground'],
+        color: theme.editorLineNumber.foreground,
         ...style,
       }}
     >
@@ -56,7 +56,7 @@ export function LineNumbers({
         const content = shouldHighlight ? (
           <span
             style={{
-              color: theme.colors['editorLineNumber.activeForeground'],
+              color: theme.editorLineNumber.activeForeground,
             }}
           >
             {lineIndex + 1}

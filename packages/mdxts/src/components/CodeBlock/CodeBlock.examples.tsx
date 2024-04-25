@@ -41,7 +41,7 @@ export function LineNumbering() {
           wordWrap: 'break-word',
           backgroundColor: theme.background,
           color: theme.foreground,
-          boxShadow: `0 0 0 1px ${theme.colors['panel.border']}70`,
+          boxShadow: `0 0 0 1px ${theme.panel.border}70`,
           borderRadius: 5,
           position: 'relative',
         }}
@@ -93,20 +93,19 @@ export function WithToolbar() {
     >
       <div
         style={{
-          backgroundColor: theme.background,
           color: theme.foreground,
-          boxShadow: `0 0 0 1px ${theme.colors['panel.border']}70`,
-          borderRadius: 5,
+          backgroundColor: theme.background,
+          border: `1px solid ${theme.panel.border}`,
         }}
       >
         <Toolbar allowCopy style={{ padding: '0.5rem 1rem' }} />
         <pre
           style={{
+            padding: '1rem',
             lineHeight: 1.4,
             whiteSpace: 'pre',
             wordWrap: 'break-word',
             overflow: 'auto',
-            position: 'relative',
           }}
         >
           <Tokens />

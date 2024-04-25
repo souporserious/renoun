@@ -640,8 +640,31 @@ export function getTheme() {
       json?.colors?.['foreground'] ||
       '#ffffff'
 
-    theme = Object.assign(json, { background, foreground })
+    theme = dotNotationToObject(
+      Object.assign(json.colors, { background, foreground })
+    )
   }
 
   return theme!
+}
+
+/**
+ * Converts a JSON structure with dot-notation keys into a nested object.
+ * (e.g. `theme.colors['panel.border']` -> `theme.colors.panel.border`)
+ */
+function dotNotationToObject<Type extends Record<string, any>>(
+  flatObject: Record<string, any>
+) {
+  const result: Record<string, any> = {}
+  for (const key in flatObject) {
+    const parts = key.split('.')
+    let target = result
+    for (let index = 0; index < parts.length - 1; index++) {
+      const part = parts[index]
+      if (!target[part]) target[part] = {}
+      target = target[part]
+    }
+    target[parts[parts.length - 1]] = flatObject[key]
+  }
+  return result as Type
 }

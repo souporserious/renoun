@@ -123,7 +123,7 @@ export async function CodeBlock({
           backgroundColor: theme.background,
           color: theme.foreground,
           borderRadius: 5,
-          boxShadow: `0 0 0 1px ${theme.colors['panel.border']}70`,
+          boxShadow: `0 0 0 1px ${theme.panel.border}70`,
           ...props.style,
         },
       }
@@ -150,7 +150,7 @@ export async function CodeBlock({
             borderRadius: shouldRenderToolbar ? undefined : 5,
             boxShadow: shouldRenderToolbar
               ? undefined
-              : `0 0 0 1px ${theme.colors['panel.border']}70`,
+              : `0 0 0 1px ${theme.panel.border}70`,
             ...(shouldRenderToolbar ? {} : props.style),
           }}
         >

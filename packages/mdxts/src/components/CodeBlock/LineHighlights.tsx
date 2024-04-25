@@ -55,7 +55,7 @@ export function LineHighlights({
           left: 0,
           width: '100%',
           height: `calc(${highlight.height} * 1lh)`,
-          backgroundColor: theme.colors['editor.rangeHighlightBackground'],
+          backgroundColor: theme.editor.rangeHighlightBackground,
           pointerEvents: 'none',
           ...style,
         }}

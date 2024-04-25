@@ -31,9 +31,9 @@ export async function QuickInfo({
           width: 'max-content',
           maxWidth: 540,
           borderRadius: 3,
-          border: `1px solid ${theme.colors['panel.border']}`,
-          backgroundColor: theme.colors['panel.background'],
-          color: theme.colors['foreground'],
+          border: `1px solid ${theme.panel.border}`,
+          backgroundColor: theme.panel.background,
+          color: theme.foreground,
           overflow: 'auto',
           overscrollBehavior: 'contain',
           ...style,
@@ -63,7 +63,7 @@ export async function QuickInfo({
                   style={{
                     height: 1,
                     border: 'none',
-                    backgroundColor: theme.colors['panel.border'],
+                    backgroundColor: theme.panel.border,
                     opacity: 0.5,
                   }}
                 />
@@ -96,7 +96,7 @@ export async function QuickInfo({
                   height: 1,
                   margin: 0,
                   border: 'none',
-                  backgroundColor: theme.colors['panel.border'],
+                  backgroundColor: theme.panel.border,
                   opacity: 0.5,
                 }}
               />
@@ -110,7 +110,7 @@ export async function QuickInfo({
                         lineHeight: 'inherit',
                         padding: '0.25rem 0.5rem',
                         margin: 0,
-                        color: theme.colors['foreground'],
+                        color: theme.foreground,
                         // @ts-expect-error
                         textWrap: 'pretty',
                       }}

@@ -72,7 +72,7 @@ export async function Tokens({
 
             return (
               <Symbol
-                highlightColor={theme.colors['editor.hoverHighlightBackground']}
+                highlightColor={theme.editor.hoverHighlightBackground}
                 popover={
                   <QuickInfo
                     diagnostics={token.diagnostics}
