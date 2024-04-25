@@ -4,8 +4,6 @@ export {
   LineNumbers,
   Tokens,
   Toolbar,
-  getTheme,
-  getTokens,
   type BaseCodeBlockProps,
   type CodeBlockProps,
   type TokenProps,
