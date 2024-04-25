@@ -615,7 +615,7 @@ function generateRssFeed<Type extends { frontMatter: Record<string, any> }>(
   return feed.rss2()
 }
 
-export let theme: Record<string, any> | null = null
+let theme: Record<string, any> | null = null
 
 /**
  * Returns the configured code syntax highlighting theme.
