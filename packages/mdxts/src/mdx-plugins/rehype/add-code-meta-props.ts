@@ -1,5 +1,5 @@
 import type { Element, Root } from 'hast'
-import { BUNDLED_LANGUAGES } from 'shiki'
+// import { BUNDLED_LANGUAGES } from 'shiki'
 
 const languageMap: Record<string, any> = {
   mjs: 'javascript',
@@ -49,11 +49,15 @@ export function addCodeMetaProps() {
 
         if (firstSpaceIndex > -1) {
           const possibleLanguage = codeString.substring(0, firstSpaceIndex)
-          const isValidLanguage = BUNDLED_LANGUAGES.map(
-            (language) => language.id
-          )
+          const isValidLanguage = [{ id: '' }]
+            .map((language) => language.id)
             .concat(ADDITIONAL_LANGUAGES)
             .includes(possibleLanguage)
+          // const isValidLanguage = BUNDLED_LANGUAGES.map(
+          //   (language) => language.id
+          // )
+          //   .concat(ADDITIONAL_LANGUAGES)
+          //   .includes(possibleLanguage)
 
           if (isValidLanguage) {
             const language = languageMap[possibleLanguage] || possibleLanguage

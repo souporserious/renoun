@@ -45,9 +45,8 @@ export default async function Page({
     <div
       style={{
         display: 'grid',
-        height: '100dvh',
+        minHeight: '100dvh',
         padding: '3rem 2rem',
-        overflow: 'auto',
         position: 'relative',
       }}
     >
@@ -83,11 +82,10 @@ export default async function Page({
       />
       <div className={styles.container}>
         <CodeBlock
-          allowErrors
           lineNumbers
           value={example.sourceText}
           language="tsx"
-          style={{ margin: 0 }}
+          style={{ container: { margin: 0 } }}
         />
         <div className={styles.preview}>
           <example.moduleExport />

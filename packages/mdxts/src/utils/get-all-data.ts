@@ -6,7 +6,6 @@ import { Directory, SourceFile } from 'ts-morph'
 import { getSymbolDescription, resolveExpression } from '@tsxmod/utils'
 import matter from 'gray-matter'
 
-import { findCommonRootPath } from './find-common-root-path'
 import { filePathToPathname } from './file-path-to-pathname'
 import { getExamplesFromSourceFile } from './get-examples'
 import { getExportedSourceFiles } from './get-exported-source-files'
@@ -15,6 +14,8 @@ import { getGitMetadata } from './get-git-metadata'
 import { getMainExportDeclaration } from './get-main-export-declaration'
 import { getNameFromDeclaration } from './get-name-from-declaration'
 import { getSourcePath } from './get-source-path'
+import { getSharedDirectoryPath } from './get-shared-directory-path'
+import { getPackageMetadata } from './get-package-metadata'
 
 export type Pathname = string
 
@@ -91,39 +92,31 @@ export function getAllData<Type extends { frontMatter: Record<string, any> }>({
     )
   }
 
-  const commonRootPath = findCommonRootPath(allPaths)
-  const { packageJson, path: packageJsonPath } = readPackageUpSync({
-    cwd: commonRootPath,
-  }) || { packageJson: undefined, path: undefined }
-  const hasMainExport = packageJson
-    ? packageJson.exports
-      ? Boolean((packageJson.exports as Record<string, any>)['.'])
-      : false
-    : false
-  const packageName = hasMainExport ? packageJson!.name : undefined
+  const sharedDirectoryPath = getSharedDirectoryPath(...allPaths)
+  const packageMetadata = getPackageMetadata(...allPaths)
   let entrySourceFiles = project.addSourceFilesAtPaths(
-    packageJson?.exports
+    packageMetadata?.exports
       ? /** If package.json exports found use that for calculating public paths. */
-        Object.keys(packageJson.exports).map((key) =>
+        Object.keys(packageMetadata.exports).map((key) =>
           join(
-            dirname(packageJsonPath),
+            packageMetadata.directory,
             sourceDirectory,
             key,
             'index.{js,jsx,ts,tsx}'
           )
         )
       : /** Otherwise default to a common root index file. */
-        join(commonRootPath, 'index.{js,jsx,ts,tsx}')
+        join(sharedDirectoryPath, 'index.{js,jsx,ts,tsx}')
   )
 
-  /** If no root index files exist, assume the top-level directory files are public exports. */
+  /** If no root index files exist, assume the top-level directory files are all public exports. */
   if (
     typeScriptSourceFiles &&
-    !packageJson?.exports &&
+    !packageMetadata?.exports &&
     entrySourceFiles.length === 0
   ) {
     entrySourceFiles = project.addSourceFilesAtPaths(
-      join(commonRootPath, '*.{js,jsx,ts,tsx}')
+      join(sharedDirectoryPath, '*.{js,jsx,ts,tsx}')
     )
   }
 
@@ -148,7 +141,7 @@ export function getAllData<Type extends { frontMatter: Record<string, any> }>({
       path,
       baseDirectory,
       basePathname,
-      packageName
+      packageMetadata?.name
     )
     const previouseData = allData[pathname]
     const sourceFile = project.addSourceFileAtPath(path)
@@ -214,7 +207,7 @@ export function getAllData<Type extends { frontMatter: Record<string, any> }>({
           isPublic ? filePath : sourceFile.getFilePath(),
           baseDirectory,
           basePathname,
-          packageName
+          packageMetadata?.name
         )
         return {
           ...fileExport,
@@ -226,10 +219,10 @@ export function getAllData<Type extends { frontMatter: Record<string, any> }>({
         }
       })
       const examples = getExamplesFromSourceFile(sourceFile, allModules)
-      const isMainExport = packageName
+      const isMainExport = packageMetadata?.name
         ? basePathname
-          ? pathname === join(sep, basePathname, packageName)
-          : pathname === join(sep, packageName)
+          ? pathname === join(sep, basePathname, packageMetadata.name)
+          : pathname === join(sep, packageMetadata.name)
         : false
       const importDeclarations = sourceFile.getImportDeclarations()
       const isServerOnly = importDeclarations.some((importDeclaration) => {
@@ -299,9 +292,9 @@ export function getAllData<Type extends { frontMatter: Record<string, any> }>({
   })
 
   // Add order, this must be done after all data has been collected and added to the project above
-  const commonDirectory = project.addDirectoryAtPath(commonRootPath)
+  const sharedDirectory = project.addDirectoryAtPath(sharedDirectoryPath)
   const sourceFilesSortOrder = getDirectorySourceFilesOrder(
-    commonDirectory,
+    sharedDirectory,
     allPublicPaths
   )
 

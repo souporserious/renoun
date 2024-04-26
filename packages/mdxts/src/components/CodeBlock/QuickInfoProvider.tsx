@@ -10,13 +10,13 @@ import { createPortal } from 'react-dom'
 
 type QuickInfo = {
   anchorId: string
-  children: React.ReactNode | null
+  popover: React.ReactNode | null
 } | null
 
 export const QuickInfoContext = createContext<{
   quickInfo: QuickInfo
   setQuickInfo: (info: QuickInfo) => void
-  resetQuickInfo: () => void
+  resetQuickInfo: (immediate?: boolean) => void
   clearTimeouts: () => void
 } | null>(null)
 
@@ -68,9 +68,11 @@ export function QuickInfoProvider({
           setQuickInfo(info)
         }
       },
-      resetQuickInfo: () => {
+      resetQuickInfo: (immediate?: boolean) => {
         if (openTimeoutId.current) {
           clearTimeout(openTimeoutId.current)
+        } else if (immediate) {
+          setQuickInfo(null)
         } else {
           if (closeTimeoutId) {
             clearTimeout(closeTimeoutId)
@@ -100,7 +102,7 @@ export function QuickInfoProvider({
   return (
     <QuickInfoContext.Provider value={value}>
       {children}
-      {quickInfo ? createPortal(quickInfo.children, document.body) : null}
+      {quickInfo ? createPortal(quickInfo.popover, document.body) : null}
     </QuickInfoContext.Provider>
   )
 }

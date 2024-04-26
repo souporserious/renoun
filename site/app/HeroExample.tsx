@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { basename } from 'node:path'
 import { GeistMono } from 'geist/font/mono'
 import { getTheme } from 'mdxts'
-import { CodeBlock, type CodeBlockProps } from 'mdxts/components'
+import { CodeBlock, type BaseCodeBlockProps } from 'mdxts/components'
 import { allDocs } from 'data'
 
 import styles from './HeroExample.module.css'
@@ -46,14 +46,17 @@ export function Sidebar() {
 `.trim()
 
 const codeProps = {
-  padding: '0.7rem',
-  toolbar: false,
-  className: `${GeistMono.className} ${styles.code}`,
-} satisfies Partial<CodeBlockProps>
+  className: {
+    container: `${GeistMono.className} ${styles.code}`,
+  },
+  style: {
+    container: { padding: '0.7rem' },
+  },
+} satisfies Partial<BaseCodeBlockProps>
 
 export function HeroExample() {
   const theme = getTheme()
-  const lineColor = theme.colors['panel.border']
+  const lineColor = theme.panel.border
   const entries = allDocs.all().filter((doc) => doc.depth === 1)
   const lastEntriesIndex = entries.length - 1
   return (
@@ -64,7 +67,7 @@ export function HeroExample() {
             flex: 1,
             display: 'grid',
             gridAutoRows: '1fr',
-            boxShadow: `0 0 0 1px ${theme.colors['panel.border']}70`,
+            boxShadow: `0 0 0 1px ${theme.panel.border}70`,
             borderRadius: '0.5rem',
           }}
         >
@@ -79,11 +82,11 @@ export function HeroExample() {
                   href={doc.pathname}
                   className={`${GeistMono.className} ${styles.link}`}
                   style={{
-                    color: theme.colors['editor.foreground'],
-                    backgroundColor: theme.colors['editor.background'],
+                    color: theme.editor.foreground,
+                    backgroundColor: theme.editor.background,
                     boxShadow: firstIndex
                       ? undefined
-                      : `inset 0 1px 0 0 ${theme.colors['panel.border']}70`,
+                      : `inset 0 1px 0 0 ${theme.panel.border}70`,
                     borderTopLeftRadius: firstIndex ? '0.5rem' : undefined,
                     borderTopRightRadius: firstIndex ? '0.5rem' : undefined,
                     borderBottomLeftRadius: lastIndex ? '0.5rem' : undefined,
@@ -207,8 +210,8 @@ function Card({
           fontWeight: 400,
           lineHeight: '1rem',
           padding: '0.1rem 0.25rem',
-          backgroundColor: theme.colors['button.background'],
-          color: theme.colors['button.foreground'],
+          backgroundColor: theme.button.background,
+          color: theme.button.foreground,
           borderRadius: '0.25rem',
           translate: '0 -50%',
         }}
@@ -239,7 +242,7 @@ function HorizontalLine({
         gridColumn: column,
         gridRow: row,
         height: 1,
-        backgroundColor: theme.colors['panel.border'],
+        backgroundColor: theme.panel.border,
         ...style,
       }}
     />
@@ -265,7 +268,7 @@ function VerticalLine({
         gridColumn: column,
         gridRow: row,
         width: 1,
-        backgroundColor: theme.colors['panel.border'],
+        backgroundColor: theme.panel.border,
         ...style,
       }}
     />

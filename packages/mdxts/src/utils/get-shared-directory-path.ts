@@ -1,7 +1,7 @@
 import { sep } from 'path'
 
-/** Finds the common root directory path for a set of paths. */
-export function findCommonRootPath(paths: string[]) {
+/** Finds the first shared directory path for a set of paths. */
+export function getSharedDirectoryPath(...paths: string[]) {
   let pathSegments = paths.map((path) => path.split(sep))
 
   if (pathSegments.length === 0) {

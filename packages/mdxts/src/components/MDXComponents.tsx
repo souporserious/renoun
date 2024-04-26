@@ -2,7 +2,8 @@ import * as React from 'react'
 import type { MDXComponents as MDXComponentsType } from 'mdx/types'
 
 import { getClassNameMetadata } from '../utils/get-class-name-metadata'
-import { CodeBlock } from './CodeBlock'
+import type { BaseCodeBlockProps } from './CodeBlock/CodeBlock'
+import { CodeBlock } from './CodeBlock/CodeBlock'
 import { CodeInline } from './CodeInline'
 
 type PrivateCodeBlockProps = {
@@ -14,35 +15,22 @@ type PrivateCodeBlockProps = {
 
 type MDXTSComponentsType = Omit<MDXComponentsType, 'pre'> & {
   pre?: (
-    props: React.HTMLProps<HTMLPreElement> & {
-      allowCopy?: boolean
-      allowErrors?: boolean
-      filename?: string
-      lineNumbers?: boolean
-      showErrors?: boolean
-      highlight?: string
-      toolbar?: boolean
-      fontSize?: string
-      lineHeight?: string
-    } & PrivateCodeBlockProps
+    props: BaseCodeBlockProps & PrivateCodeBlockProps
   ) => React.ReactElement
 }
 
 export type MDXComponents = MDXTSComponentsType
 
-/** Pre-configured MDXTS components for `pre` and `code` elements. */
+/** Preconfigured MDXTS components for `pre` and `code` elements. */
 export const MDXComponents = {
   pre: (props) => {
     const {
       allowCopy,
       allowErrors,
-      filename,
       lineNumbers,
-      showErrors,
       highlight,
       toolbar,
-      fontSize,
-      lineHeight,
+      filename,
       className,
       style,
       children,
@@ -63,15 +51,12 @@ export const MDXComponents = {
       <CodeBlock
         allowCopy={allowCopy}
         allowErrors={allowErrors}
-        filename={filename}
-        language={metadata?.language}
         lineNumbers={lineNumbers}
         highlight={highlight}
-        showErrors={showErrors}
         toolbar={toolbar}
+        filename={filename}
+        language={metadata?.language}
         value={value}
-        fontSize={fontSize}
-        lineHeight={lineHeight}
         className={className}
         style={style}
         // @ts-expect-error - private props
@@ -90,8 +75,6 @@ export const MDXComponents = {
 
     return (
       <CodeInline
-        paddingHorizontal="0.25rem"
-        paddingVertical="0.1rem"
         language={language}
         value={children}
         className={className}

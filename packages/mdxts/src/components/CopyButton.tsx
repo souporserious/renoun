@@ -3,13 +3,11 @@ import * as React from 'react'
 
 export function CopyButton({
   value,
-  className,
   style,
+  ...props
 }: {
   value: string
-  className?: string
-  style?: React.CSSProperties
-}) {
+} & React.ComponentProps<'button'>) {
   const [state, setState] = React.useState<'idle' | 'not-allowed' | 'copied'>(
     'idle'
   )
@@ -30,7 +28,6 @@ export function CopyButton({
             setTimeout(() => setState('idle'), 1000)
           })
       }}
-      className={className}
       style={{
         display: 'flex',
         backgroundColor: 'transparent',
@@ -39,6 +36,7 @@ export function CopyButton({
         cursor: 'pointer',
         ...restStyle,
       }}
+      {...props}
     >
       <svg
         viewBox="0 0 24 24"

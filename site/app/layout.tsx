@@ -2,7 +2,7 @@ import React from 'react'
 import type { Metadata } from 'next'
 import { GeistSans } from 'geist/font/sans'
 import { Analytics } from '@vercel/analytics/react'
-import { PackageStylesAndScript } from 'mdxts/components/PackageInstallClient'
+import { PackageInstallStylesAndScript } from 'mdxts/components/PackageInstall'
 
 import { getSiteMetadata } from 'utils/get-site-metadata'
 
@@ -44,7 +44,7 @@ export default function RootLayout({
       <body className={GeistSans.className}>
         {children}
         <Analytics />
-        <PackageStylesAndScript />
+        <PackageInstallStylesAndScript />
       </body>
     </html>
   )
