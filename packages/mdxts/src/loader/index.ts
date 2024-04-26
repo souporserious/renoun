@@ -7,7 +7,7 @@ import { addComputedTypes } from '@tsxmod/utils'
 
 import { project } from '../components/project'
 import { getExportedSourceFiles } from '../utils/get-exported-source-files'
-import { findCommonRootPath } from '../utils/find-common-root-path'
+import { getSharedDirectoryPath } from '../utils/get-shared-directory-path'
 
 /**
  * A Webpack loader that exports front matter data for MDX files and augments `createSource` call sites to add an additional
@@ -108,20 +108,18 @@ export default async function loader(
               )
             }
 
-            const commonRootPath = findCommonRootPath(allPaths)
+            const sharedDirectoryPath = getSharedDirectoryPath(...allPaths)
             const packageJson = (
-              await readPackageUp({
-                cwd: commonRootPath,
-              })
+              await readPackageUp({ cwd: sharedDirectoryPath })
             )?.packageJson
             const entrySourceFiles = project.addSourceFilesAtPaths(
               packageJson?.exports
                 ? /** If package.json exports found use that for calculating public paths. */
                   Object.keys(packageJson.exports).map((key) =>
-                    join(resolve(commonRootPath, key), 'index.(ts|tsx)')
+                    join(resolve(sharedDirectoryPath, key), 'index.(ts|tsx)')
                   )
                 : /** Otherwise default to a root index file. */
-                  resolve(commonRootPath, '**/index.(ts|tsx)')
+                  resolve(sharedDirectoryPath, '**/index.(ts|tsx)')
             )
             const exportedSourceFiles = getExportedSourceFiles(entrySourceFiles)
             const exportedSourceFilePaths = entrySourceFiles
