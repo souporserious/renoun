@@ -8,7 +8,6 @@ import { getTheme } from '../../index'
 import { isJsxOnly } from '../../utils/is-jsx-only'
 import { project } from '../project'
 import { splitTokenByRanges } from './split-tokens-by-ranges'
-import { memoize } from './utils'
 
 export const languageMap = {
   mjs: 'js',
@@ -81,7 +80,7 @@ export type GetTokens = (
 ) => Promise<Tokens[]>
 
 /** Converts a string of code to an array of highlighted tokens. */
-export const getTokens: GetTokens = memoize(async function getTokens(
+export async function getTokens(
   value: string,
   language: Languages = 'plaintext',
   filename?: string,
@@ -255,7 +254,7 @@ export const getTokens: GetTokens = memoize(async function getTokens(
   }
 
   return parsedTokens
-})
+}
 
 /** Convert documentation entries to markdown-friendly links. */
 function formatDocumentationText(documentation: ts.SymbolDisplayPart[]) {

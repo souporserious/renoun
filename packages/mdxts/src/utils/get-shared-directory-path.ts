@@ -1,9 +1,7 @@
 import { sep } from 'path'
 
-import { memoize } from '../components/CodeBlock/utils'
-
 /** Finds the first shared directory path for a set of paths. */
-export const getSharedDirectoryPath = memoize((...paths: string[]) => {
+export function getSharedDirectoryPath(...paths: string[]) {
   let pathSegments = paths.map((path) => path.split(sep))
 
   if (pathSegments.length === 0) {
@@ -32,4 +30,4 @@ export const getSharedDirectoryPath = memoize((...paths: string[]) => {
   }
 
   return commonRoot.join(sep)
-})
+}

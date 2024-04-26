@@ -1,11 +1,10 @@
 import { dirname } from 'node:path'
 import { readPackageUpSync } from 'read-package-up'
 
-import { memoize } from '../components/CodeBlock/utils'
 import { getSharedDirectoryPath } from './get-shared-directory-path'
 
 /** Returns the package metadata based on the first shared directory between the provided paths. */
-export const getPackageMetadata = memoize((...allPaths: string[]) => {
+export function getPackageMetadata(...allPaths: string[]) {
   const sharedDirectoryPath = getSharedDirectoryPath(...allPaths)
   const result = readPackageUpSync({ cwd: sharedDirectoryPath })
 
@@ -25,4 +24,4 @@ export const getPackageMetadata = memoize((...allPaths: string[]) => {
     exports: result.packageJson.exports as Record<string, any> | undefined,
     directory: dirname(result.path),
   }
-})
+}

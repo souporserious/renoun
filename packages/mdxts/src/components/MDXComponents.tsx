@@ -52,10 +52,10 @@ export const MDXComponents = {
     return (
       <CodeBlock
         allowCopy={allowCopy}
+        allowErrors={allowErrors}
         lineNumbers={lineNumbers}
         highlight={highlight}
         toolbar={toolbar}
-        allowErrors={allowErrors}
         filename={filename}
         language={metadata?.language}
         value={value}
