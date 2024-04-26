@@ -88,6 +88,7 @@ export async function CodeBlock({
   const metadata = await parseSourceTextMetadata({
     filename,
     language,
+    allowErrors,
     ...options,
   })
   const tokens = await getTokens(

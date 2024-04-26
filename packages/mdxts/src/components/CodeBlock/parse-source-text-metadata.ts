@@ -14,6 +14,7 @@ import { project } from '../project'
 type BaseParseMetadataOptions = {
   filename?: string
   language: Languages
+  allowErrors?: boolean | string
 }
 
 export type ParseMetadataOptions = BaseParseMetadataOptions &
@@ -29,6 +30,7 @@ export type ParseMetadataOptions = BaseParseMetadataOptions &
 export async function parseSourceTextMetadata({
   filename: filenameProp,
   language,
+  allowErrors = false,
   ...props
 }: ParseMetadataOptions) {
   let finalValue: string = ''
@@ -117,41 +119,48 @@ export async function parseSourceTextMetadata({
         overwrite: true,
       })
 
-      // Identify and collect missing imports/types to try and resolve theme.
-      // This is specifically the case for examples since they import files relative to the package.
-      // TODO: this needs a ton of optimizing
-      const diagnostics = sourceFile.getPreEmitDiagnostics()
+      const shouldEmitDiagnostics =
+        allowErrors === false ||
+        (typeof allowErrors === 'string' && !allowErrors.includes('2307'))
 
-      sourceFile
-        .getImportDeclarations()
-        .filter((importDeclaration) => {
-          return diagnostics.some((diagnostic) => {
-            const diagnosticStart = diagnostic.getStart()
-            if (diagnosticStart === undefined) {
-              return false
-            }
-            return (
-              diagnostic.getCode() === 2307 &&
-              diagnosticStart >= importDeclaration.getStart() &&
-              diagnosticStart <= importDeclaration.getEnd()
-            )
+      if (shouldEmitDiagnostics) {
+        // Identify and collect missing imports/types to try and resolve theme.
+        // This is specifically the case for examples since they import files relative to the package.
+        const diagnostics = sourceFile.getPreEmitDiagnostics()
+
+        sourceFile
+          .getImportDeclarations()
+          .filter((importDeclaration) => {
+            return diagnostics.some((diagnostic) => {
+              const diagnosticStart = diagnostic.getStart()
+              if (diagnosticStart === undefined) {
+                return false
+              }
+              return (
+                diagnostic.getCode() === 2307 &&
+                diagnosticStart >= importDeclaration.getStart() &&
+                diagnosticStart <= importDeclaration.getEnd()
+              )
+            })
           })
-        })
-        .forEach((importDeclaration) => {
-          importDeclaration.remove()
-        })
+          .forEach((importDeclaration) => {
+            importDeclaration.remove()
+          })
+      }
 
-      // attempt to fix the removed imports
+      // attempt to fix the removed imports and any other missing imports
       sourceFile.fixMissingImports()
 
-      // remap relative module specifiers to package imports if possible
-      // e.g. `import { getTheme } from '../../mdxts/src/components'` -> `import { getTheme } from 'mdxts/components'`
-      sourceFile.getImportDeclarations().forEach((importDeclaration) => {
-        if (importDeclaration.isModuleSpecifierRelative()) {
-          const importSpecifier = getPathRelativeToPackage(importDeclaration)
-          importDeclaration.setModuleSpecifier(importSpecifier)
-        }
-      })
+      if (shouldEmitDiagnostics) {
+        // remap relative module specifiers to package imports if possible
+        // e.g. `import { getTheme } from '../../mdxts/src/components'` -> `import { getTheme } from 'mdxts/components'`
+        sourceFile.getImportDeclarations().forEach((importDeclaration) => {
+          if (importDeclaration.isModuleSpecifierRelative()) {
+            const importSpecifier = getPathRelativeToPackage(importDeclaration)
+            importDeclaration.setModuleSpecifier(importSpecifier)
+          }
+        })
+      }
     } catch (error) {
       if (error instanceof Error) {
         const workingDirectory = process.cwd()
