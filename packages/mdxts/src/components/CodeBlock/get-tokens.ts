@@ -7,6 +7,7 @@ import { findRoot } from '@manypkg/find-root'
 import { getTheme } from '../../index'
 import { isJsxOnly } from '../../utils/is-jsx-only'
 import { project } from '../project'
+import { splitTokenByRanges } from './split-tokens-by-ranges'
 import { memoize } from './utils'
 
 export const languageMap = {
@@ -65,6 +66,7 @@ export type Token = {
   textDecoration?: string
   isBaseColor: boolean
   isWhitespace: boolean
+  isSymbol: boolean
   quickInfo?: { displayText: string; documentationText: string }
   diagnostics?: Diagnostic[]
 }
@@ -94,6 +96,7 @@ export const getTokens: GetTokens = memoize(async function getTokens(
           end: value.length,
           isBaseColor: true,
           isWhitespace: false,
+          isSymbol: false,
         } satisfies Token,
       ],
     ]
@@ -183,6 +186,7 @@ export const getTokens: GetTokens = memoize(async function getTokens(
           ? token.color.toLowerCase() === theme.foreground.toLowerCase()
           : false,
         isWhitespace: token.content.trim() === '',
+        isSymbol: false,
         ...fontStyle,
       }
       let processedTokens: Tokens = []
@@ -196,68 +200,24 @@ export const getTokens: GetTokens = memoize(async function getTokens(
           ? symbolRange.start === tokenStart && symbolRange.end === tokenEnd
           : false
 
-        // split the token to isolate the symbol
         if (symbolRange && !inFullRange) {
-          const symbolToken: Token = {
-            ...initialToken,
-            value: token.content.slice(
-              symbolRange.start - tokenStart,
-              symbolRange.end - tokenStart
-            ),
-            start: symbolRange.start,
-            end: symbolRange.end,
-          }
-
-          if (sourceFile && filename) {
-            const quickInfo = getQuickInfo(
-              sourceFile,
-              filename,
-              symbolRange.start,
-              rootDirectory,
-              baseDirectory
-            )
-            symbolToken.quickInfo = quickInfo
-          }
-
-          const beforeSymbolToken: Token = {
-            ...initialToken,
-            value: token.content.slice(0, symbolRange.start - tokenStart),
-            start: tokenStart,
-            end: symbolRange.start,
-          }
-          const tokenValueEnd = tokenStart + token.content.length
-
-          if (tokenValueEnd > symbolRange.end) {
-            const afterSymbolToken: Token = {
-              ...initialToken,
-              value: token.content.slice(symbolRange.end - tokenStart),
-              start: symbolRange.end,
-              end: tokenEnd,
-            }
-            processedTokens = [beforeSymbolToken, symbolToken, afterSymbolToken]
-          } else {
-            processedTokens = [beforeSymbolToken, symbolToken]
-          }
+          processedTokens = splitTokenByRanges(initialToken, symbolRanges)
         } else {
-          if (symbolRange && sourceFile && filename) {
-            initialToken.quickInfo = getQuickInfo(
-              sourceFile,
-              filename,
-              symbolRange.start,
-              rootDirectory,
-              baseDirectory
-            )
-          }
-
-          processedTokens.push(initialToken)
+          processedTokens.push({
+            ...initialToken,
+            isSymbol: inFullRange,
+          })
         }
       } else {
         processedTokens.push(initialToken)
       }
 
-      // Attach diagnostics after splitting tokens
       return processedTokens.map((token) => {
-        const tokenDiagnostics = sourceFileDiagnostics.filter((diagnostic) => {
+        if (!token.isSymbol) {
+          return token
+        }
+
+        const diagnostics = sourceFileDiagnostics.filter((diagnostic) => {
           const start = diagnostic.getStart()
           const length = diagnostic.getLength()
           if (!start || !length) {
@@ -266,9 +226,21 @@ export const getTokens: GetTokens = memoize(async function getTokens(
           const end = start + length
           return token.start >= start && token.end <= end
         })
+        const quickInfo =
+          sourceFile && filename
+            ? getQuickInfo(
+                sourceFile,
+                filename,
+                token.start,
+                rootDirectory,
+                baseDirectory
+              )
+            : undefined
+
         return {
           ...token,
-          diagnostics: tokenDiagnostics.length ? tokenDiagnostics : undefined,
+          quickInfo,
+          diagnostics: diagnostics.length ? diagnostics : undefined,
         }
       })
     })
@@ -348,7 +320,7 @@ function getQuickInfo(
 
 /** Get the diagnostics for a source file, coerced into a module if necessary. */
 function getDiagnostics(sourceFile: SourceFile) {
-  // if no imports/exports are found, add an empty export to ensure the file is a module
+  // if no imports/exports are found, add an empty export to coerce the file into a module and not pollute the global scope
   const hasImports = sourceFile.getImportDeclarations().length > 0
   const hasExports = sourceFile.getExportDeclarations().length > 0
 
