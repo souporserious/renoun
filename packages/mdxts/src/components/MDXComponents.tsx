@@ -15,9 +15,7 @@ type PrivateCodeBlockProps = {
 
 type MDXTSComponentsType = Omit<MDXComponentsType, 'pre'> & {
   pre?: (
-    props: React.HTMLProps<HTMLPreElement> &
-      BaseCodeBlockProps &
-      PrivateCodeBlockProps
+    props: BaseCodeBlockProps & PrivateCodeBlockProps
   ) => React.ReactElement
 }
 

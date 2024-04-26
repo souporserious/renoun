@@ -33,13 +33,21 @@ export type BaseCodeBlockProps = {
   /** Whether or not to allow errors. Accepts a boolean or comma-separated list of allowed error codes. */
   allowErrors?: boolean | string
 
-  /** Class name to apply to the code block. */
-  className?: string
+  /** Class names to apply to code block elements. Use the `children` prop for full control of styling. */
+  className?: {
+    container?: string
+    toolbar?: string
+    lineNumbers?: string
+  }
 
-  /** Style to apply to the code block. */
-  style?: React.CSSProperties
+  /** Styles to apply to code block elements. Use the `children` prop for full control of styling. */
+  style?: {
+    container?: React.CSSProperties
+    toolbar?: React.CSSProperties
+    lineNumbers?: React.CSSProperties
+  }
 
-  /** Accepts `CodeBlock` components including valid React nodes. */
+  /** Overrides default rendering to allow full control over styles using `CodeBlock` components like `Tokens`, `LineNumbers`, `LineHighlights`, and `Toolbar`. */
   children?: React.ReactNode
 }
 
@@ -75,7 +83,7 @@ export async function CodeBlock({
 }: CodeBlockProps) {
   const { sourcePath, sourcePathLine, sourcePathColumn } =
     props as PrivateCodeBlockProps
-  const padding = 'style' in props ? props.style?.padding ?? '1ch' : '1ch'
+  const padding = props.style?.container?.padding ?? '1ch'
   const options: any = {}
 
   if ('value' in props) {
@@ -119,12 +127,13 @@ export async function CodeBlock({
   const Container = shouldRenderToolbar ? 'div' : React.Fragment
   const containerProps = shouldRenderToolbar
     ? {
+        className: props.className?.container,
         style: {
           backgroundColor: theme.background,
           color: theme.foreground,
           borderRadius: 5,
           boxShadow: `0 0 0 1px ${theme.panel.border}70`,
-          ...props.style,
+          ...props.style?.container,
           padding: 0,
         },
       }
@@ -136,13 +145,16 @@ export async function CodeBlock({
         {shouldRenderToolbar ? (
           <Toolbar
             allowCopy={allowCopy === undefined ? Boolean(filename) : allowCopy}
-            style={{ padding }}
+            className={props.className?.toolbar}
+            style={{ padding, ...props.style?.toolbar }}
           />
         ) : null}
         <pre
-          className={props.className}
+          className={
+            shouldRenderToolbar ? undefined : props.className?.container
+          }
           style={{
-            display: lineNumbers ? 'flex' : undefined,
+            display: lineNumbers || highlight ? 'flex' : undefined,
             lineHeight: 1.4,
             whiteSpace: 'pre',
             wordWrap: 'break-word',
@@ -154,24 +166,26 @@ export async function CodeBlock({
             boxShadow: shouldRenderToolbar
               ? undefined
               : `0 0 0 1px ${theme.panel.border}70`,
-            ...(shouldRenderToolbar ? {} : props.style),
+            ...(shouldRenderToolbar ? {} : props.style?.container),
             padding: lineNumbers ? 0 : padding,
           }}
         >
           {lineNumbers ? (
-            <LineNumbers style={{ width: '4ch', padding }} />
+            <LineNumbers
+              className={props.className?.lineNumbers}
+              style={{ width: '4ch', padding, ...props.style?.lineNumbers }}
+            />
           ) : null}
-          {lineNumbers ? (
-            <div style={{ flex: 1, padding }}>
+          {lineNumbers || highlight ? (
+            <div
+              style={{ flex: 1, padding: lineNumbers ? padding : undefined }}
+            >
               <Tokens />
               {highlight ? <LineHighlights /> : null}
             </div>
           ) : (
             <Tokens />
           )}
-          {!lineNumbers && highlight ? (
-            <LineHighlights offsetTop={padding} />
-          ) : null}
         </pre>
       </Container>
     </Context>

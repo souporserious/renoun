@@ -1,22 +1,29 @@
 import * as React from 'react'
-import { CodeBlock, MDXComponents } from 'mdxts/components'
+import { CodeBlock, type CodeBlockProps, MDXComponents } from 'mdxts/components'
 import { PackageInstall } from 'mdxts/components/PackageInstall'
 import { GeistMono } from 'geist/font/mono'
 
-const codeBlockStyles: React.CSSProperties = {
-  fontSize: 'var(--font-size-body-2)',
-  lineHeight: 'var(--line-height-body-2)',
-  width: 'calc(100% + 2rem)',
-  padding: '1rem',
-  margin: '0 -1rem',
-}
+const codeBlockStyles = {
+  container: {
+    fontSize: 'var(--font-size-body-2)',
+    lineHeight: 'var(--line-height-body-2)',
+    width: 'calc(100% + 2rem)',
+    padding: '1rem',
+    margin: '0 -1rem',
+  },
+  toolbar: {
+    padding: '0.5rem 1rem',
+  },
+} satisfies CodeBlockProps['style']
 
 export function useMDXComponents() {
   return {
     PackageInstall,
     CodeBlock: (props) => (
       <CodeBlock
-        className={GeistMono.className}
+        className={{
+          container: GeistMono.className,
+        }}
         style={codeBlockStyles}
         {...props}
       />
@@ -26,10 +33,14 @@ export function useMDXComponents() {
       return (
         <div style={{ display: 'flex' }}>
           <CodeBlock
-            className={GeistMono.className}
+            className={{
+              container: GeistMono.className,
+            }}
             style={{
-              fontSize: 'var(--font-size-body-2)',
-              lineHeight: 'var(--line-height-body-2)',
+              container: {
+                fontSize: 'var(--font-size-body-2)',
+                lineHeight: 'var(--line-height-body-2)',
+              },
             }}
             language="tsx"
             value={codeBlock}
@@ -92,7 +103,9 @@ export function useMDXComponents() {
     ),
     pre: (props) => (
       <MDXComponents.pre
-        className={GeistMono.className}
+        className={{
+          container: GeistMono.className,
+        }}
         style={codeBlockStyles}
         {...props}
       />
