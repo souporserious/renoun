@@ -49,7 +49,7 @@ export function Symbol({
         resetQuickInfo()
       }}
       style={{
-        backgroundColor: isHighlighted ? `${highlightColor}3d` : undefined,
+        backgroundColor: isHighlighted ? highlightColor : undefined,
         ...style,
       }}
     >
