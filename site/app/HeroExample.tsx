@@ -46,8 +46,12 @@ export function Sidebar() {
 `.trim()
 
 const codeProps = {
-  className: `${GeistMono.className} ${styles.code}`,
-  style: { padding: '0.7rem' },
+  className: {
+    container: `${GeistMono.className} ${styles.code}`,
+  },
+  style: {
+    container: { padding: '0.7rem' },
+  },
 } satisfies Partial<BaseCodeBlockProps>
 
 export function HeroExample() {
