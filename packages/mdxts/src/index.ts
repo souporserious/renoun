@@ -617,9 +617,7 @@ function generateRssFeed<Type extends { frontMatter: Record<string, any> }>(
 
 let theme: Record<string, any> | null = null
 
-/**
- * Returns the configured code syntax highlighting theme.
- */
+/** Gets the configured VS Code theme colors. */
 export function getTheme() {
   const themePath = process.env.MDXTS_THEME_PATH
 
