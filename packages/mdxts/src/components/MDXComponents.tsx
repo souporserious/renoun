@@ -23,15 +23,15 @@ type MDXTSComponentsType = Omit<MDXComponentsType, 'pre'> & {
 
 export type MDXComponents = MDXTSComponentsType
 
-/** Pre-configured MDXTS components for `pre` and `code` elements. */
+/** Preconfigured MDXTS components for `pre` and `code` elements. */
 export const MDXComponents = {
   pre: (props) => {
     const {
       allowCopy,
+      allowErrors,
       lineNumbers,
       highlight,
       toolbar,
-      allowErrors,
       filename,
       className,
       style,

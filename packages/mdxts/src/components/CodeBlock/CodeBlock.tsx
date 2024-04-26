@@ -99,7 +99,7 @@ export async function CodeBlock({
   )
   const contextValue = {
     value: metadata.value,
-    filenameLabel: metadata.filenameLabel,
+    filenameLabel: filename,
     sourcePath: sourcePath
       ? getSourcePath(sourcePath, sourcePathLine, sourcePathColumn)
       : undefined,
@@ -113,10 +113,9 @@ export async function CodeBlock({
   }
 
   const theme = getTheme()
-  const shouldRenderFilename = Boolean(filename)
-  const shouldRenderToolbar = toolbar
-    ? shouldRenderFilename || allowCopy
-    : false
+  const shouldRenderToolbar = Boolean(
+    toolbar === undefined ? filename || allowCopy : toolbar
+  )
   const Container = shouldRenderToolbar ? 'div' : React.Fragment
   const containerProps = shouldRenderToolbar
     ? {
@@ -126,6 +125,7 @@ export async function CodeBlock({
           borderRadius: 5,
           boxShadow: `0 0 0 1px ${theme.panel.border}70`,
           ...props.style,
+          padding: 0,
         },
       }
     : {}
@@ -134,12 +134,14 @@ export async function CodeBlock({
     <Context value={contextValue}>
       <Container {...containerProps}>
         {shouldRenderToolbar ? (
-          <Toolbar allowCopy={allowCopy} style={{ padding }} />
+          <Toolbar
+            allowCopy={allowCopy === undefined ? Boolean(filename) : allowCopy}
+            style={{ padding }}
+          />
         ) : null}
         <pre
           className={props.className}
           style={{
-            padding: lineNumbers ? 0 : padding,
             display: lineNumbers ? 'flex' : undefined,
             lineHeight: 1.4,
             whiteSpace: 'pre',
@@ -153,6 +155,7 @@ export async function CodeBlock({
               ? undefined
               : `0 0 0 1px ${theme.panel.border}70`,
             ...(shouldRenderToolbar ? {} : props.style),
+            padding: lineNumbers ? 0 : padding,
           }}
         >
           {lineNumbers ? (
