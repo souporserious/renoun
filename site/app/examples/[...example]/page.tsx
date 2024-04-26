@@ -85,7 +85,7 @@ export default async function Page({
           lineNumbers
           value={example.sourceText}
           language="tsx"
-          style={{ margin: 0 }}
+          style={{ container: { margin: 0 } }}
         />
         <div className={styles.preview}>
           <example.moduleExport />
