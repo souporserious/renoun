@@ -4,7 +4,7 @@ import { getContext } from '../../utils/context'
 import { CopyButton } from '../CopyButton'
 import { Context } from './Context'
 
-type ToolbarProps = {
+export type ToolbarProps = {
   /** The value of the code block. */
   value?: string
 

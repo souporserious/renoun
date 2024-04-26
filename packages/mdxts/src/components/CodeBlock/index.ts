@@ -5,5 +5,5 @@ export {
 } from './CodeBlock'
 export { LineHighlights } from './LineHighlights'
 export { LineNumbers } from './LineNumbers'
-export { Tokens } from './Tokens'
-export { Toolbar } from './Toolbar'
+export { Tokens, type TokensProps } from './Tokens'
+export { Toolbar, type ToolbarProps } from './Toolbar'
