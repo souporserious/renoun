@@ -43,9 +43,7 @@ describe('getAllData', () => {
     const allData = getAllData({
       project,
       allModules: {
-        '/components/Button.mdx': Promise.resolve({
-          default: () => {},
-        }),
+        '/components/Button.mdx': () => Promise.resolve({ default: () => {} }),
       },
       globPattern: 'components/*.(ts|tsx)',
       baseDirectory: 'components',
@@ -80,18 +78,14 @@ describe('getAllData', () => {
     const allData = getAllData({
       project,
       allModules: {
-        '/package/components/Button.tsx': Promise.resolve({
-          default: () => {},
-        }),
-        '/package/components/Card.tsx': Promise.resolve({
-          default: () => {},
-        }),
-        '/package/hooks/usePressable.ts': Promise.resolve({
-          default: () => {},
-        }),
-        '/package/hooks/useFocus.ts': Promise.resolve({
-          default: () => {},
-        }),
+        '/package/components/Button.tsx': () =>
+          Promise.resolve({ default: () => {} }),
+        '/package/components/Card.tsx': () =>
+          Promise.resolve({ default: () => {} }),
+        '/package/hooks/usePressable.ts': () =>
+          Promise.resolve({ default: () => {} }),
+        '/package/hooks/useFocus.ts': () =>
+          Promise.resolve({ default: () => {} }),
       },
       globPattern: 'package/**/*.(ts|tsx)',
       baseDirectory: 'package',
@@ -204,10 +198,8 @@ describe('getAllData', () => {
         const allData = getAllData({
           project,
           allModules: {
-            [`${workingDirectory}/src/components/Button.examples.tsx`]:
-              Promise.resolve({
-                default: () => {},
-              }),
+            [`${workingDirectory}/src/components/Button.examples.tsx`]: () =>
+              Promise.resolve({ default: () => {} }),
           },
           globPattern: `${workingDirectory}/src/**/*.{ts,tsx}`,
           baseDirectory: 'src',
@@ -247,8 +239,8 @@ describe('getAllData', () => {
     const allData = getAllData({
       project,
       allModules: {
-        [`${workingDirectory}/src/components/Button.examples.tsx`]:
-          Promise.resolve({ Basic: () => {} }),
+        [`${workingDirectory}/src/components/Button.examples.tsx`]: () =>
+          Promise.resolve({ default: () => {} }),
       },
       globPattern: '*.tsx',
       baseDirectory: 'src',
@@ -319,18 +311,13 @@ function getDocsData() {
   return getAllData({
     project,
     allModules: {
-      '/docs/01.getting-started.mdx': Promise.resolve({
-        default: () => {},
-      }),
-      '/docs/02.routing.mdx': Promise.resolve({
-        default: () => {},
-      }),
-      '/docs/03.examples/01.authoring.mdx': Promise.resolve({
-        default: () => {},
-      }),
-      '/docs/03.examples/02.rendering.mdx': Promise.resolve({
-        default: () => {},
-      }),
+      '/docs/01.getting-started.mdx': () =>
+        Promise.resolve({ default: () => {} }),
+      '/docs/02.routing.mdx': () => Promise.resolve({ default: () => {} }),
+      '/docs/03.examples/01.authoring.mdx': () =>
+        Promise.resolve({ default: () => {} }),
+      '/docs/03.examples/02.rendering.mdx': () =>
+        Promise.resolve({ default: () => {} }),
     },
     globPattern: '**/*.mdx',
   })

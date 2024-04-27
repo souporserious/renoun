@@ -63,10 +63,11 @@ test('get examples from source file', async () => {
   project.createSourceFile('Button.examples.tsx', basicUsageSourceFile)
 
   const examples = await getExamplesFromSourceFile(sourceFile, {
-    '/Button.examples.tsx': Promise.resolve({
-      BasicUsage: () => null,
-      AlternateUsage: () => null,
-    }),
+    '/Button.examples.tsx': () =>
+      Promise.resolve({
+        BasicUsage: () => null,
+        AlternateUsage: () => null,
+      }),
   })
 
   expect(examples).toMatchSnapshot()

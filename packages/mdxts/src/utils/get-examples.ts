@@ -57,7 +57,7 @@ export type ExampleItem = {
 /** Gathers examples from a source file. */
 export async function getExamplesFromSourceFile(
   sourceFile: SourceFile,
-  allModules: Record<string, Promise<Record<string, any>>>
+  allModules: Record<string, () => Promise<Record<string, any>>>
 ) {
   const directoryExampleSourceFiles = getExamplesFromDirectory(
     sourceFile.getDirectory()
@@ -75,7 +75,7 @@ export async function getExamplesFromSourceFile(
       allExamples.push(
         ...parseExamplesFromModule(
           exampleSourceFile,
-          await allModules[sourceFilePath]
+          await allModules[sourceFilePath].call(null)
         )
       )
     } else {

@@ -21,7 +21,7 @@ export type Pathname = string
 
 export type ModuleImport = Promise<Record<string, any>>
 
-export type AllModules = Record<Pathname, ModuleImport>
+export type AllModules = Record<Pathname, () => ModuleImport>
 
 export type ModuleData<Type extends { frontMatter: Record<string, any> }> = {
   title: string

@@ -289,7 +289,7 @@ export function createSource<Type extends { frontMatter: Record<string, any> }>(
         readingTime,
         ...moduleExports
       } = data.mdxPath
-        ? await allModules[data.mdxPath]
+        ? await allModules[data.mdxPath].call(null)
         : {
             default: undefined,
             description: undefined,

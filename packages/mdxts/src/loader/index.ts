@@ -165,7 +165,7 @@ export default async function loader(
               const normalizedRelativePath = relativeFilePath.startsWith('.')
                 ? relativeFilePath
                 : `.${sep}${relativeFilePath}`
-              return `'${filePath}': import('${normalizedRelativePath}')`
+              return `'${filePath}': () => import('${normalizedRelativePath}')`
             })
             .join(', ')}}`
 
