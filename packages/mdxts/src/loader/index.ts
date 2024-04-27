@@ -3,7 +3,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path'
 import { glob } from 'fast-glob'
 import globParent from 'glob-parent'
 import { Node, Project, SyntaxKind } from 'ts-morph'
-import { addComputedTypes } from '@tsxmod/utils'
+import { addComputedTypes, resolveObject } from '@tsxmod/utils'
 
 import { getExportedSourceFiles } from '../utils/get-exported-source-files'
 
@@ -108,12 +108,19 @@ export default async function loader(
               )
             }
 
+            const optionsArgument = createSourceCall.getArguments()[1]
+            const { sourceDirectory, outputDirectory } = (
+              Node.isObjectLiteralExpression(optionsArgument)
+                ? resolveObject(optionsArgument)
+                : {}
+            ) as {
+              sourceDirectory?: string
+              outputDirectory?: string
+            }
             const entrySourceFiles = getEntrySourceFiles(
               allPaths,
-              'src',
-              ['dist/src', 'dist/cjs']
-              // sourceDirectory,
-              // outputDirectory
+              sourceDirectory,
+              outputDirectory
             )
             const exportedSourceFiles = getExportedSourceFiles(entrySourceFiles)
             const exportedSourceFilePaths = entrySourceFiles
