@@ -133,8 +133,8 @@ describe('getAllData', () => {
 
   it('includes only public files based on package.json exports', (done) => {
     jest.isolateModules(() => {
-      jest.mock('read-package-up', () => ({
-        readPackageUpSync: () => ({
+      jest.mock('read-pkg-up', () => ({
+        sync: () => ({
           packageJson: {
             name: 'mdxts',
             exports: {

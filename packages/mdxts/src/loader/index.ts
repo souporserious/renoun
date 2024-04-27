@@ -5,9 +5,7 @@ import globParent from 'glob-parent'
 import { Node, Project, SyntaxKind } from 'ts-morph'
 import { addComputedTypes } from '@tsxmod/utils'
 
-import { project } from '../components/project'
 import { getExportedSourceFiles } from '../utils/get-exported-source-files'
-import { getSharedDirectoryPath } from '../utils/get-shared-directory-path'
 
 /**
  * A Webpack loader that exports front matter data for MDX files and augments `createSource` call sites to add an additional
@@ -92,7 +90,9 @@ export default async function loader(
 
           /** Search for MDX files named the same as the source files (e.g. `Button.mdx` for `Button.tsx`) */
           if (!isMdxPattern) {
-            const { readPackageUp } = await import('read-package-up')
+            const { getEntrySourceFiles } = await import(
+              '../utils/get-entry-source-files'
+            )
             const allSourceFilePaths = await glob(globPattern, {
               cwd: workingDirectory,
               ignore: ['**/*.examples.(ts|tsx)'],
@@ -108,18 +108,12 @@ export default async function loader(
               )
             }
 
-            const sharedDirectoryPath = getSharedDirectoryPath(...allPaths)
-            const packageJson = (
-              await readPackageUp({ cwd: sharedDirectoryPath })
-            )?.packageJson
-            const entrySourceFiles = project.addSourceFilesAtPaths(
-              packageJson?.exports
-                ? /** If package.json exports found use that for calculating public paths. */
-                  Object.keys(packageJson.exports).map((key) =>
-                    join(resolve(sharedDirectoryPath, key), 'index.(ts|tsx)')
-                  )
-                : /** Otherwise default to a root index file. */
-                  resolve(sharedDirectoryPath, '**/index.(ts|tsx)')
+            const entrySourceFiles = getEntrySourceFiles(
+              allPaths,
+              'src',
+              ['dist/src', 'dist/cjs']
+              // sourceDirectory,
+              // outputDirectory
             )
             const exportedSourceFiles = getExportedSourceFiles(entrySourceFiles)
             const exportedSourceFilePaths = entrySourceFiles
