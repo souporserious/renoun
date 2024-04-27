@@ -1,7 +1,6 @@
 import { join, resolve } from 'path'
-import { SourceFile } from 'ts-morph'
+import { Project, SourceFile } from 'ts-morph'
 
-import { project } from '../components/project'
 import { getPackageMetadata } from './get-package-metadata'
 import { getSharedDirectoryPath } from './get-shared-directory-path'
 
@@ -17,6 +16,7 @@ const extensionPatterns = [
  * - Top-level directory files
  */
 export function getEntrySourceFiles(
+  project: Project,
   allPaths: string[],
   sourceDirectory: string = 'src',
   outputDirectory: string | string[] = 'dist'
@@ -70,7 +70,7 @@ export function getEntrySourceFiles(
     if (entrySourceFiles.length === 0) {
       entrySourceFiles = project.addSourceFilesAtPaths(
         extensionPatterns.map((pattern, index) => {
-          const sourcePathPattern = join(sharedDirectoryPath, pattern)
+          const sourcePathPattern = join(sharedDirectoryPath, `*${pattern}`)
           return index === 0 ? sourcePathPattern : `!${sourcePathPattern}`
         })
       )

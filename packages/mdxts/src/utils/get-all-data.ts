@@ -99,6 +99,7 @@ export function getAllData<Type extends { frontMatter: Record<string, any> }>({
   const sharedDirectoryPath = getSharedDirectoryPath(...allPaths)
   const packageMetadata = getPackageMetadata(...allPaths)
   const entrySourceFiles = getEntrySourceFiles(
+    project,
     allPaths,
     sourceDirectory,
     outputDirectory

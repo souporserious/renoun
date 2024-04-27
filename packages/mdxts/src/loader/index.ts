@@ -5,6 +5,8 @@ import globParent from 'glob-parent'
 import { Node, Project, SyntaxKind } from 'ts-morph'
 import { addComputedTypes, resolveObject } from '@tsxmod/utils'
 
+import { project } from '../components/project'
+import { getEntrySourceFiles } from '../utils/get-entry-source-files'
 import { getExportedSourceFiles } from '../utils/get-exported-source-files'
 
 /**
@@ -90,9 +92,6 @@ export default async function loader(
 
           /** Search for MDX files named the same as the source files (e.g. `Button.mdx` for `Button.tsx`) */
           if (!isMdxPattern) {
-            const { getEntrySourceFiles } = await import(
-              '../utils/get-entry-source-files'
-            )
             const allSourceFilePaths = await glob(globPattern, {
               cwd: workingDirectory,
               ignore: ['**/*.examples.(ts|tsx)'],
@@ -118,6 +117,7 @@ export default async function loader(
               outputDirectory?: string
             }
             const entrySourceFiles = getEntrySourceFiles(
+              project,
               allPaths,
               sourceDirectory,
               outputDirectory
