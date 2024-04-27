@@ -4,6 +4,10 @@ import { useRouter } from 'next/navigation'
 
 const ws = new WebSocket(`ws://localhost:${process.env.MDXTS_REFRESH_PORT}/ws`)
 
+/**
+ * Refreshes the Next.js development server when MDX or TypeScript source files change.
+ * @internal
+ */
 export function ContentRefresh({
   mdxPath,
   tsPath,

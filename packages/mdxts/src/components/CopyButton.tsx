@@ -1,6 +1,10 @@
 'use client'
 import * as React from 'react'
 
+/**
+ * Copies a value to the user's clipboard.
+ * @internal
+ */
 export function CopyButton({
   value,
   style,
