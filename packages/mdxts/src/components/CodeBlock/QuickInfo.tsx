@@ -2,7 +2,7 @@ import React, { Fragment } from 'react'
 import type { Diagnostic } from 'ts-morph'
 import { getDiagnosticMessageText } from '@tsxmod/utils'
 
-import { getTheme } from '../../index'
+import { getThemeColors } from '../../index'
 import { MDXContent } from '../MDXContent'
 import { QuickInfoPopover } from './QuickInfoPopover'
 import { getTokens } from './get-tokens'
@@ -16,7 +16,7 @@ export async function QuickInfo({
   quickInfo?: { displayText: string; documentationText: string }
   style?: React.CSSProperties
 }) {
-  const theme = getTheme()
+  const theme = getThemeColors()
   const displayTextTokens = quickInfo?.displayText
     ? await getTokens(quickInfo.displayText, 'ts')
     : []

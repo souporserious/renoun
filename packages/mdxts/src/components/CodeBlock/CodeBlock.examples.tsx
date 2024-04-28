@@ -1,5 +1,5 @@
 import React from 'react'
-import { getTheme } from '../../index'
+import { getThemeColors } from '../../index'
 import { CodeBlock } from './CodeBlock'
 import { LineHighlights } from './LineHighlights'
 import { LineNumbers } from './LineNumbers'
@@ -24,7 +24,7 @@ export function Ordered() {
 }
 
 export function LineNumbering() {
-  const theme = getTheme()
+  const theme = getThemeColors()
   const highlight = '4'
 
   return (
@@ -83,7 +83,7 @@ export function LineHighlighting() {
 }
 
 export function WithToolbar() {
-  const theme = getTheme()
+  const theme = getThemeColors()
 
   return (
     <CodeBlock

@@ -1,5 +1,5 @@
 import React from 'react'
-import { getTheme } from '../../index'
+import { getThemeColors } from '../../index'
 import { getContext } from '../../utils/context'
 import { CopyButton } from '../CopyButton'
 import { Context } from './Context'
@@ -34,7 +34,7 @@ export function Toolbar({
   children,
 }: ToolbarProps) {
   const context = getContext(Context)
-  const theme = getTheme()
+  const theme = getThemeColors()
   const value = valueProp ?? context?.value
   const sourcePath = sourcePathProp ?? context?.sourcePath
 

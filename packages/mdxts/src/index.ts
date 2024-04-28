@@ -2,7 +2,6 @@ import parseTitle from 'title'
 import * as React from 'react'
 import type { ComponentType } from 'react'
 import { basename, dirname, extname, join, resolve, sep } from 'node:path'
-import { readFileSync } from 'node:fs'
 import { Feed } from 'feed'
 import { Project } from 'ts-morph'
 import { getDiagnosticMessageText } from '@tsxmod/utils'
@@ -13,6 +12,7 @@ import type { CodeBlocks } from './mdx-plugins/remark/add-code-blocks'
 import type { Headings } from './mdx-plugins/remark/add-headings'
 import type { AllModules, ModuleData } from './utils/get-all-data'
 import { getAllData } from './utils/get-all-data'
+import { getTheme } from './utils/get-theme'
 
 type FeedOptions = Omit<
   ConstructorParameters<typeof Feed>[0],
@@ -634,35 +634,16 @@ function generateRssFeed<Type extends { frontMatter: Record<string, any> }>(
   return feed.rss2()
 }
 
-let theme: Record<string, any> | null = null
+let themeColors: Record<string, any> | null = null
 
-/** Gets the configured VS Code theme colors. */
-export function getTheme() {
-  const themePath = process.env.MDXTS_THEME_PATH
-
-  if (themePath === undefined) {
-    throw new Error(
-      '[mdxts] The MDXTS_THEME_PATH environment variable is undefined. Set process.env.MDXTS_THEME_PATH or configure the `theme` option in the `mdxts/next` plugin to load a theme.'
-    )
+/** Gets the configured VS Code theme colors as an object. */
+export function getThemeColors() {
+  if (themeColors === null) {
+    const { colors } = getTheme()
+    themeColors = dotNotationToObject(colors)
   }
 
-  if (theme === null) {
-    const json = JSON.parse(readFileSync(themePath, 'utf-8'))
-    const background =
-      json?.colors?.['editor.background'] ||
-      json?.colors?.['background'] ||
-      '#000000'
-    const foreground =
-      json?.colors?.['editor.foreground'] ||
-      json?.colors?.['foreground'] ||
-      '#ffffff'
-
-    theme = dotNotationToObject(
-      Object.assign(json.colors, { background, foreground })
-    )
-  }
-
-  return theme!
+  return themeColors!
 }
 
 /**

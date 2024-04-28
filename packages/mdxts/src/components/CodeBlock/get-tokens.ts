@@ -1,20 +1,17 @@
 import type { bundledLanguages, bundledThemes } from 'shiki'
-import { codeToTokens } from 'shiki'
+import { getHighlighter } from 'shiki/bundle/web'
 import type { SourceFile, Diagnostic, ts } from 'ts-morph'
 import { Node, SyntaxKind } from 'ts-morph'
 import { findRoot } from '@manypkg/find-root'
 
-import { getTheme } from '../../index'
+import { getThemeColors } from '../../index'
 import { isJsxOnly } from '../../utils/is-jsx-only'
+import { getTheme } from '../../utils/get-theme'
 import { project } from '../project'
 import { splitTokenByRanges } from './split-tokens-by-ranges'
 
 export const languageMap = {
   mjs: 'js',
-  javascript: 'js',
-  typescript: 'ts',
-  shellscript: 'sh',
-  yml: 'yaml',
 } as const
 
 export type Languages =
@@ -79,6 +76,8 @@ export type GetTokens = (
   allowErrors?: string | boolean
 ) => Promise<Tokens[]>
 
+let highlighter: Awaited<ReturnType<typeof getHighlighter>> | null = null
+
 /** Converts a string of code to an array of highlighted tokens. */
 export async function getTokens(
   value: string,
@@ -101,6 +100,13 @@ export async function getTokens(
     ]
   }
 
+  if (highlighter === null) {
+    highlighter = await getHighlighter({
+      langs: ['css', 'js', 'jsx', 'ts', 'tsx', 'mdx', 'sh'],
+      themes: [getTheme()],
+    })
+  }
+
   const isJavaScriptLikeLanguage = ['js', 'jsx', 'ts', 'tsx'].includes(language)
   const jsxOnly = isJavaScriptLikeLanguage ? isJsxOnly(value) : false
   const sourceFile = filename ? project.getSourceFile(filename) : undefined
@@ -116,13 +122,13 @@ export async function getTokens(
             (diagnostic) => !allowedErrorCodes.includes(diagnostic.getCode())
           )
         : []
-  const theme = getTheme()
+  const theme = getThemeColors()
   const finalLanguage = getLanguage(language)
-  const { tokens } = await codeToTokens(
+  const { tokens } = await highlighter.codeToTokens(
     sourceFile ? sourceFile.getFullText() : value,
     {
-      theme: 'night-owl',
-      lang: finalLanguage,
+      theme: 'mdxts',
+      lang: finalLanguage as any,
     }
   )
   const importSpecifiers =

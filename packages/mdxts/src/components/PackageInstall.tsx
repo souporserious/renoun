@@ -1,6 +1,6 @@
 import React from 'react'
 
-import { getTheme } from '../index'
+import { getThemeColors } from '../index'
 import { CopyButton } from './CopyButton'
 import { CodeBlock } from './CodeBlock/CodeBlock'
 import { Tokens } from './CodeBlock/Tokens'
@@ -29,7 +29,7 @@ export async function PackageInstall({
     tabPanels?: React.CSSProperties
   }
 }) {
-  const theme = getTheme()
+  const theme = getThemeColors()
   const tabs = (
     <div
       style={{

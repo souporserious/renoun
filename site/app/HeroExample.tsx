@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { basename } from 'node:path'
 import { GeistMono } from 'geist/font/mono'
-import { getTheme } from 'mdxts'
+import { getThemeColors } from 'mdxts'
 import { CodeBlock, type BaseCodeBlockProps } from 'mdxts/components'
 import { allDocs } from 'data'
 
@@ -55,7 +55,7 @@ const codeProps = {
 } satisfies Partial<BaseCodeBlockProps>
 
 export function HeroExample() {
-  const theme = getTheme()
+  const theme = getThemeColors()
   const lineColor = theme.panel.border
   const entries = allDocs.all().filter((doc) => doc.depth === 1)
   const lastEntriesIndex = entries.length - 1
@@ -190,7 +190,7 @@ function Card({
   row: string
   children: React.ReactNode
 }) {
-  const theme = getTheme()
+  const theme = getThemeColors()
   return (
     <div
       style={{
@@ -234,7 +234,7 @@ function HorizontalLine({
   align?: 'start' | 'center' | 'end'
   style?: React.CSSProperties
 }) {
-  const theme = getTheme()
+  const theme = getThemeColors()
   return (
     <div
       style={{
@@ -260,7 +260,7 @@ function VerticalLine({
   align?: 'start' | 'center' | 'end'
   style?: React.CSSProperties
 }) {
-  const theme = getTheme()
+  const theme = getThemeColors()
   return (
     <div
       style={{

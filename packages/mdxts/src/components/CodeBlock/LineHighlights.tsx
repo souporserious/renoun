@@ -1,6 +1,6 @@
 import React from 'react'
 
-import { getTheme } from '../../index'
+import { getThemeColors } from '../../index'
 import { getContext } from '../../utils/context'
 import { Context } from './Context'
 
@@ -28,7 +28,7 @@ export function LineHighlights({
   style?: React.CSSProperties
 }) {
   const context = getContext(Context)
-  const theme = getTheme()
+  const theme = getThemeColors()
   const highlightRanges = highlightRangesProp || context?.highlight
 
   if (!highlightRanges) {

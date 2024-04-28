@@ -1,6 +1,6 @@
 import React from 'react'
 
-import { getTheme } from '../../index'
+import { getThemeColors } from '../../index'
 import { getSourcePath } from '../../utils/get-source-path'
 import { Tokens } from './Tokens'
 import type { Languages } from './get-tokens'
@@ -120,7 +120,7 @@ export async function CodeBlock({
     return <Context value={contextValue}>{props.children}</Context>
   }
 
-  const theme = getTheme()
+  const theme = getThemeColors()
   const shouldRenderToolbar = Boolean(
     toolbar === undefined ? filename || allowCopy : toolbar
   )

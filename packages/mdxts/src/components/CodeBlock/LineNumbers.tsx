@@ -1,6 +1,6 @@
 import React, { Fragment } from 'react'
 
-import { getTheme } from '../../index'
+import { getThemeColors } from '../../index'
 import { getContext } from '../../utils/context'
 import { getTokens } from './get-tokens'
 import { Context } from './Context'
@@ -32,7 +32,7 @@ export function LineNumbers({
     )
   }
 
-  const theme = getTheme()
+  const theme = getThemeColors()
   const highlightRanges = highlightRangesProp || context?.highlight
   const shouldHighlightLine = calculateLinesToHighlight(highlightRanges)
 

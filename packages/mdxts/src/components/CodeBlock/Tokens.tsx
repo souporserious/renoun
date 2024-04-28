@@ -1,6 +1,6 @@
 import React, { Fragment } from 'react'
 
-import { getTheme } from '../../index'
+import { getThemeColors } from '../../index'
 import { getContext } from '../../utils/context'
 import { Context } from './Context'
 import { QuickInfo } from './QuickInfo'
@@ -27,7 +27,7 @@ export async function Tokens({
   style = {},
 }: TokensProps) {
   const context = getContext(Context)
-  const theme = getTheme()
+  const theme = getThemeColors()
   const tokens = tokensProp || context?.tokens
 
   if (!tokens) {
