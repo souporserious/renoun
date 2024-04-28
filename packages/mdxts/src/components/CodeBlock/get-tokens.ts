@@ -124,7 +124,7 @@ export async function getTokens(
         : []
   const theme = getThemeColors()
   const finalLanguage = getLanguage(language)
-  const { tokens } = await highlighter.codeToTokens(
+  const { tokens } = highlighter.codeToTokens(
     sourceFile ? sourceFile.getFullText() : value,
     {
       theme: 'mdxts',
