@@ -168,7 +168,7 @@ export async function CodeBlock({
             position: 'relative',
             backgroundColor: shouldRenderToolbar ? 'inherit' : theme.background,
             color: shouldRenderToolbar ? undefined : theme.foreground,
-            borderRadius: shouldRenderToolbar ? undefined : 5,
+            borderRadius: shouldRenderToolbar ? 'inherit' : 5,
             boxShadow: shouldRenderToolbar
               ? undefined
               : `0 0 0 1px ${theme.panel.border}70`,
