@@ -154,38 +154,61 @@ export async function CodeBlock({
             shouldRenderToolbar ? undefined : props.className?.container
           }
           style={{
-            display: lineNumbers || highlight ? 'flex' : undefined,
+            display: lineNumbers || highlight ? 'grid' : undefined,
+            gridTemplateColumns:
+              lineNumbers || highlight ? 'auto 1fr' : undefined,
+            gridTemplateRows:
+              lineNumbers || highlight
+                ? `repeat(${tokens.length}, 1lh)`
+                : undefined,
             lineHeight: 1.4,
             whiteSpace: 'pre',
             wordWrap: 'break-word',
             overflow: 'auto',
             position: 'relative',
-            backgroundColor: shouldRenderToolbar ? undefined : theme.background,
+            backgroundColor: shouldRenderToolbar ? 'inherit' : theme.background,
             color: shouldRenderToolbar ? undefined : theme.foreground,
             borderRadius: shouldRenderToolbar ? undefined : 5,
             boxShadow: shouldRenderToolbar
               ? undefined
               : `0 0 0 1px ${theme.panel.border}70`,
             ...(shouldRenderToolbar ? {} : props.style?.container),
-            padding: lineNumbers ? 0 : padding,
+            padding: lineNumbers
+              ? typeof padding === 'number'
+                ? `${padding}px 0`
+                : `${padding} 0`
+              : padding,
           }}
         >
           {lineNumbers ? (
             <LineNumbers
               className={props.className?.lineNumbers}
-              style={{ width: '4ch', padding, ...props.style?.lineNumbers }}
+              style={{
+                gridColumn: 1,
+                gridRow: '1 / -1',
+                width: '4ch',
+                padding: padding
+                  ? typeof padding === 'number'
+                    ? `0 ${padding}px`
+                    : `0 ${padding}`
+                  : undefined,
+                ...props.style?.lineNumbers,
+              }}
             />
           ) : null}
           {lineNumbers || highlight ? (
             <div
-              style={{ flex: 1, padding: lineNumbers ? padding : undefined }}
+              style={{
+                gridRow: '1 / -1',
+                gridColumn: lineNumbers ? 2 : '1 / -1',
+              }}
             >
               <Tokens />
-              {highlight ? <LineHighlights /> : null}
             </div>
           ) : (
             <Tokens />
           )}
+          {highlight ? <LineHighlights /> : null}
         </pre>
       </Container>
     </Context>

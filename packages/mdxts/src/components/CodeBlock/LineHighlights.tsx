@@ -4,7 +4,14 @@ import { getThemeColors } from '../../index'
 import { getContext } from '../../utils/context'
 import { Context } from './Context'
 
-export function getHighlights(ranges: string) {
+export type HighlightBlock = {
+  start: number
+  end: number
+  height: number
+}
+
+/** Parses a string of comma separated line ranges into an array of highlight blocks. */
+export function getHighlights(ranges: string): HighlightBlock[] {
   return ranges.split(',').map((range) => {
     const [start, end] = range.split('-')
     const parsedStart = parseInt(start, 10) - 1
@@ -18,14 +25,20 @@ export function getHighlights(ranges: string) {
   })
 }
 
+/** Renders a highlight over a range of grid lines. */
 export function LineHighlights({
   highlightRanges: highlightRangesProp,
-  offsetTop,
+  className,
   style,
 }: {
+  /** A string of comma separated lines and ranges to highlight e.g. `'1, 3-5, 7'`. */
   highlightRanges?: string
-  offsetTop?: string | number
-  style?: React.CSSProperties
+  /** Class name to apply to the highlight element. */
+  className?: string | ((highlight: HighlightBlock) => string)
+  /** Styles to apply to the highlight element. */
+  style?:
+    | React.CSSProperties
+    | ((highlight: HighlightBlock) => React.CSSProperties)
 }) {
   const context = getContext(Context)
   const theme = getThemeColors()
@@ -37,27 +50,25 @@ export function LineHighlights({
     )
   }
 
-  if (!offsetTop) {
-    offsetTop = context?.padding
-  }
-
-  if (typeof offsetTop === 'number') {
-    offsetTop = `${offsetTop}px`
-  }
-
   return getHighlights(highlightRanges).map((highlight, index) => {
     return (
       <div
         key={index}
+        className={
+          typeof className === 'function' ? className(highlight) : className
+        }
         style={{
-          position: 'absolute',
-          top: `calc(${highlight.start} * 1lh + ${offsetTop})`,
-          left: 0,
-          width: '100%',
-          height: `calc(${highlight.height} * 1lh)`,
+          position: 'sticky',
+          left: context?.padding ? `calc(${context?.padding} * -1)` : 0,
+          zIndex: 1,
+          gridColumn: '1 / -1',
+          gridRow: `${highlight.start + 1} / span ${highlight.height}`,
+          margin: context?.padding
+            ? `0 calc(${context.padding} * -2)`
+            : undefined,
           backgroundColor: theme.editor.rangeHighlightBackground,
           pointerEvents: 'none',
-          ...style,
+          ...(typeof style === 'function' ? style(highlight) : style),
         }}
       />
     )

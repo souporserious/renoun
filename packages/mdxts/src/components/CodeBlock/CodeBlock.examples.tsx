@@ -1,7 +1,6 @@
 import React from 'react'
 import { getThemeColors } from '../../index'
 import { CodeBlock } from './CodeBlock'
-import { LineHighlights } from './LineHighlights'
 import { LineNumbers } from './LineNumbers'
 import { Tokens } from './Tokens'
 import { Toolbar } from './Toolbar'
@@ -24,38 +23,13 @@ export function Ordered() {
 }
 
 export function LineNumbering() {
-  const theme = getThemeColors()
-  const highlight = '4'
-
   return (
     <CodeBlock
       filename="line-numbers.ts"
       value={`const a = 1;\nconst b = 2;\n\nconst add = a + b\nconst subtract = a - b`}
-    >
-      <pre
-        style={{
-          display: 'flex',
-          padding: '1ch',
-          lineHeight: 1.4,
-          whiteSpace: 'pre',
-          wordWrap: 'break-word',
-          backgroundColor: theme.background,
-          color: theme.foreground,
-          boxShadow: `0 0 0 1px ${theme.panel.border}70`,
-          borderRadius: 5,
-          position: 'relative',
-        }}
-      >
-        <LineNumbers
-          highlightRanges={highlight}
-          style={{ width: '4ch', paddingRight: '1ch' }}
-        />
-        <div style={{ flex: 1, overflow: 'auto' }}>
-          <Tokens />
-        </div>
-        <LineHighlights highlightRanges={highlight} offsetTop="1ch" />
-      </pre>
-    </CodeBlock>
+      lineNumbers
+      highlight="4"
+    />
   )
 }
 
@@ -64,21 +38,8 @@ export function LineHighlighting() {
     <CodeBlock
       filename="line-highlights.ts"
       value={`const a = 1;\nconst b = 2;\n\nconst add = a + b\nconst subtract = a - b`}
-    >
-      <pre
-        style={{
-          padding: '1rem',
-          lineHeight: 1.4,
-          whiteSpace: 'pre',
-          wordWrap: 'break-word',
-          overflow: 'auto',
-          position: 'relative',
-        }}
-      >
-        <Tokens />
-        <LineHighlights highlightRanges="1-2, 4" offsetTop="1rem" />
-      </pre>
-    </CodeBlock>
+      highlight="1-2, 4"
+    />
   )
 }
 
@@ -95,20 +56,27 @@ export function WithToolbar() {
         style={{
           color: theme.foreground,
           backgroundColor: theme.background,
-          border: `1px solid ${theme.panel.border}`,
+          border: `1px solid ${theme.panel.border}70`,
         }}
       >
         <Toolbar allowCopy style={{ padding: '0.5rem 1rem' }} />
         <pre
           style={{
-            padding: '1rem',
+            display: 'grid',
+            gridTemplateColumns: 'auto 1fr',
+            padding: '1rem 0',
             lineHeight: 1.4,
             whiteSpace: 'pre',
             wordWrap: 'break-word',
             overflow: 'auto',
           }}
         >
-          <Tokens />
+          <LineNumbers
+            style={{ padding: '0 1rem', backgroundColor: theme.background }}
+          />
+          <div>
+            <Tokens />
+          </div>
         </pre>
       </div>
     </CodeBlock>
