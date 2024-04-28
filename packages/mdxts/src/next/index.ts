@@ -3,6 +3,7 @@ import { NextConfig } from 'next'
 import { PHASE_DEVELOPMENT_SERVER } from 'next/constants'
 import { dirname, resolve } from 'node:path'
 import createMdxPlugin from '@next/mdx'
+import { sync as readPackageUpSync } from 'read-pkg-up'
 import type { bundledThemes } from 'shiki'
 
 import { getMdxPlugins } from '../mdx-plugins'
@@ -88,8 +89,7 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
       nextConfig.env.MDXTS_SITE_URL = siteUrl
 
       if (!theme.endsWith('.json')) {
-        const { readPackageUp } = await import('read-package-up')
-        const mdxtsPackageJson = await readPackageUp({ cwd: __dirname })
+        const mdxtsPackageJson = readPackageUpSync({ cwd: __dirname })
         themePath = resolve(
           dirname(mdxtsPackageJson!.path),
           `node_modules/tm-themes/themes/${theme}.json`

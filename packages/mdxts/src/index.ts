@@ -93,6 +93,18 @@ export function createSource<Type extends { frontMatter: Record<string, any> }>(
      * the hostname (e.g. `/docs` in `https://mdxts.com/docs`).
      */
     basePathname?: string
+
+    /**
+     * The source directory used to calculate package export paths. This is useful when the source is
+     * located in a different workspace than the project rendering it.
+     */
+    sourceDirectory?: string
+
+    /**
+     * The output directory for built files used to calculate package export paths. This is useful
+     * when the source is located in a different workspace than the project rendering it.
+     */
+    outputDirectory?: string | string[]
   } = {}
 ) {
   let allModules = arguments[2] as AllModules
@@ -111,13 +123,20 @@ export function createSource<Type extends { frontMatter: Record<string, any> }>(
     ])
   )
 
-  const { baseDirectory = '', basePathname = '' } = options || {}
+  const {
+    baseDirectory = '',
+    basePathname = '',
+    sourceDirectory,
+    outputDirectory,
+  } = options || {}
   const allData = getAllData<Type>({
     allModules,
     globPattern,
     project,
     baseDirectory,
     basePathname,
+    sourceDirectory,
+    outputDirectory,
   })
   const filteredDataKeys = Object.keys(allData).filter((pathname) => {
     const moduleData = allData[pathname]

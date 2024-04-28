@@ -14,7 +14,10 @@ const packageManagers = {
   yarn: 'yarn add',
 }
 
-/** Renders a package install command with a variant for each package manager. */
+/**
+ * Renders a package install command with a variant for each package manager.
+ * @internal
+ */
 export async function PackageInstall({
   packages,
   style,

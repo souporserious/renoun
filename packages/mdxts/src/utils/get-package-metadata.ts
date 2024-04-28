@@ -1,5 +1,5 @@
 import { dirname } from 'node:path'
-import { readPackageUpSync } from 'read-package-up'
+import { sync as readPackageUpSync } from 'read-pkg-up'
 
 import { getSharedDirectoryPath } from './get-shared-directory-path'
 

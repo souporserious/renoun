@@ -1,6 +1,5 @@
 import parseTitle from 'title'
 import { dirname, join, sep } from 'node:path'
-import { readPackageUpSync } from 'read-package-up'
 import type { ExportedDeclarations, Project } from 'ts-morph'
 import { Directory, SourceFile } from 'ts-morph'
 import { getSymbolDescription, resolveExpression } from '@tsxmod/utils'
@@ -8,6 +7,7 @@ import matter from 'gray-matter'
 
 import { filePathToPathname } from './file-path-to-pathname'
 import { getExamplesFromSourceFile } from './get-examples'
+import { getEntrySourceFiles } from './get-entry-source-files'
 import { getExportedSourceFiles } from './get-exported-source-files'
 import { getExportedTypes } from './get-exported-types'
 import { getGitMetadata } from './get-git-metadata'
@@ -56,9 +56,10 @@ export function getAllData<Type extends { frontMatter: Record<string, any> }>({
   allModules,
   globPattern,
   project,
-  sourceDirectory = 'src',
   baseDirectory,
   basePathname = '',
+  sourceDirectory = 'src',
+  outputDirectory = 'dist',
 }: {
   /** A map of all MDX modules keyed by their pathname. */
   allModules: AllModules
@@ -69,14 +70,17 @@ export function getAllData<Type extends { frontMatter: Record<string, any> }>({
   /** The ts-morph project to use for parsing source files. */
   project: Project
 
-  /** The source directory used to calculate package export paths. */
-  sourceDirectory?: string
-
   /** The base directory to use when calculating source paths. */
   baseDirectory?: string
 
   /** The base path to use when calculating navigation paths. */
   basePathname?: string
+
+  /** The source directory used to calculate package export paths. */
+  sourceDirectory?: string
+
+  /** The output directory or directories for built files used to calculate package export paths. */
+  outputDirectory?: string | string[]
 }) {
   const typeScriptSourceFiles = /ts(x)?/.test(globPattern)
     ? project.addSourceFilesAtPaths(globPattern)
@@ -94,32 +98,12 @@ export function getAllData<Type extends { frontMatter: Record<string, any> }>({
 
   const sharedDirectoryPath = getSharedDirectoryPath(...allPaths)
   const packageMetadata = getPackageMetadata(...allPaths)
-  let entrySourceFiles = project.addSourceFilesAtPaths(
-    packageMetadata?.exports
-      ? /** If package.json exports found use that for calculating public paths. */
-        Object.keys(packageMetadata.exports).map((key) =>
-          join(
-            packageMetadata.directory,
-            sourceDirectory,
-            key,
-            'index.{js,jsx,ts,tsx}'
-          )
-        )
-      : /** Otherwise default to a common root index file. */
-        join(sharedDirectoryPath, 'index.{js,jsx,ts,tsx}')
+  const entrySourceFiles = getEntrySourceFiles(
+    project,
+    allPaths,
+    sourceDirectory,
+    outputDirectory
   )
-
-  /** If no root index files exist, assume the top-level directory files are all public exports. */
-  if (
-    typeScriptSourceFiles &&
-    !packageMetadata?.exports &&
-    entrySourceFiles.length === 0
-  ) {
-    entrySourceFiles = project.addSourceFilesAtPaths(
-      join(sharedDirectoryPath, '*.{js,jsx,ts,tsx}')
-    )
-  }
-
   const exportedSourceFiles = getExportedSourceFiles(entrySourceFiles)
   const allPublicPaths = entrySourceFiles
     .concat(exportedSourceFiles)

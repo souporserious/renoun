@@ -1,6 +1,10 @@
 'use server'
 import { readFile, writeFile } from 'node:fs/promises'
 
+/**
+ * Modify the MDX code block source to allow errors.
+ * @internal
+ */
 export async function showErrors({
   sourcePath,
   sourcePathLine,
