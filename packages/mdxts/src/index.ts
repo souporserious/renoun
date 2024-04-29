@@ -30,9 +30,7 @@ type Compute<Type> = Type extends object
 export type Module<Type extends { frontMatter: Record<string, any> }> = Compute<
   {
     Content?: ComponentType<{ renderTitle?: boolean }>
-    examples: (Awaited<ModuleData<Type>['examples']>[number] & {
-      pathname: string
-    })[]
+    examples: Awaited<ModuleData<Type>['examples']>
     pathname: string
     codeBlocks: CodeBlocks
     headings: Headings
@@ -317,11 +315,10 @@ export function createSource<Type extends { frontMatter: Record<string, any> }>(
           }
 
       /** Append example links to headings data. */
-      const examples = (await data.examples).map((example) => ({
-        ...example,
-        pathname: join(stringPathname, example.slug),
-      }))
+      const examples = await data.examples
+
       if (examples.length > 0) {
+        /** Append examples heading to the top of the list. */
         headings = [
           ...(headings || []),
           {

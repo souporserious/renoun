@@ -202,7 +202,11 @@ export function getAllData<Type extends { frontMatter: Record<string, any> }>({
             : false,
         }
       })
-      const examples = getExamplesFromSourceFile(sourceFile, allModules)
+      const examples = getExamplesFromSourceFile(
+        sourceFile,
+        pathname,
+        allModules
+      )
       const isMainExport = packageMetadata?.name
         ? basePathname
           ? pathname === join(sep, basePathname, packageMetadata.name)

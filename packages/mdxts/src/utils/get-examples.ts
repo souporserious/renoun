@@ -1,6 +1,7 @@
 import type { Directory, SourceFile } from 'ts-morph'
-import { kebabCase } from 'case-anything'
 import { extractExportByIdentifier } from '@tsxmod/utils'
+import { kebabCase } from 'case-anything'
+import { join } from 'node:path'
 import parseTitle from 'title'
 
 import { getSourcePath } from './get-source-path'
@@ -47,16 +48,26 @@ export type ExampleItem = {
   /** The slug for the example. */
   slug: string
 
+  /** The pathname for the example. */
+  pathname: string
+
   /** The editor or git source path to the example source file */
   sourcePath: string
 
   /** The source text of the example. */
   sourceText: string
+
+  /** The previous example if it exists at the current position. */
+  previous?: { label: string; pathname: string }
+
+  /** The next example if it exists at the current position. */
+  next?: { label: string; pathname: string }
 }
 
 /** Gathers examples from a source file. */
 export async function getExamplesFromSourceFile(
   sourceFile: SourceFile,
+  pathname: string,
   allModules: Record<string, () => Promise<Record<string, any>>>
 ) {
   const directoryExampleSourceFiles = getExamplesFromDirectory(
@@ -75,6 +86,7 @@ export async function getExamplesFromSourceFile(
       allExamples.push(
         ...parseExamplesFromModule(
           exampleSourceFile,
+          pathname,
           await allModules[sourceFilePath].call(null)
         )
       )
@@ -88,6 +100,7 @@ export async function getExamplesFromSourceFile(
 
 function parseExamplesFromModule(
   sourceFile: SourceFile,
+  pathname: string,
   moduleImport: Record<string, any>
 ) {
   const exportedDeclarations = sourceFile.getExportedDeclarations()
@@ -98,15 +111,38 @@ function parseExamplesFromModule(
       const moduleExport = moduleImport[name]
       const line = exportedDeclaration.getStartLineNumber()
       const column = exportedDeclaration.getStartLinePos()
+      const slug = kebabCase(name)
+
       examples.push({
-        name: parseTitle(kebabCase(name).split('-').join(' ')),
         moduleExport,
-        slug: kebabCase(name),
+        slug,
+        name: parseTitle(slug.split('-').join(' ')),
+        pathname: join(pathname, slug),
         sourcePath: getSourcePath(sourceFile.getFilePath(), line, column),
         sourceText: extractExportByIdentifier(sourceFile, name),
       })
     }
   )
 
-  return examples
+  /** Add previous/next data to each example */
+  return examples.map((example, index) => {
+    const previousExample = examples[index - 1]
+    const nextExample = examples[index + 1]
+
+    if (previousExample) {
+      example.previous = {
+        label: previousExample.name,
+        pathname: previousExample.pathname,
+      }
+    }
+
+    if (nextExample) {
+      example.next = {
+        label: nextExample.name,
+        pathname: nextExample.pathname,
+      }
+    }
+
+    return example
+  })
 }

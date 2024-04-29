@@ -76,9 +76,94 @@ export default async function Page({
           Back to <strong>{singlePackage.label}</strong>
         </span>
       </a>
+      <div
+        style={{
+          position: 'absolute',
+          top: '0.8rem',
+          right: '0.6rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+        }}
+      >
+        <h1 style={{ fontSize: 'var(--font-size-body-2)' }}>{example.name}</h1>
+        <nav
+          style={{
+            fontSize: 'var(--font-size-body-3)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.25rem',
+          }}
+        >
+          <a
+            title={
+              example.previous
+                ? `Previous Example: ${example.previous.label}`
+                : undefined
+            }
+            href={
+              example.previous
+                ? `/examples${example.previous.pathname}`
+                : undefined
+            }
+            style={{
+              display: 'flex',
+              opacity: example.previous ? 1 : 0.5,
+              pointerEvents: example.previous ? undefined : 'none',
+            }}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              style={{
+                width: 'var(--font-size-body-2)',
+                height: 'var(--font-size-body-2)',
+              }}
+            >
+              <path
+                d="M14 6L8 12L14 18"
+                stroke="var(--color-foreground-interactive)"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </a>
+          <a
+            title={
+              example.next ? `Next Example: ${example.next.label}` : undefined
+            }
+            href={
+              example.next ? `/examples${example.next.pathname}` : undefined
+            }
+            style={{
+              display: 'flex',
+              opacity: example.next ? 1 : 0.5,
+              pointerEvents: example.next ? undefined : 'none',
+            }}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              style={{
+                width: 'var(--font-size-body-2)',
+                height: 'var(--font-size-body-2)',
+              }}
+            >
+              <path
+                d="M10 18L16 12L10 6"
+                stroke="var(--color-foreground-interactive)"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </a>
+        </nav>
+      </div>
       <ViewSource
         href={example.sourcePath}
-        style={{ position: 'absolute', top: '0.8rem', right: '0.6rem' }}
+        style={{ position: 'absolute', bottom: '0.8rem', right: '0.6rem' }}
       />
       <div className={styles.container}>
         <CodeBlock
