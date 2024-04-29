@@ -21,6 +21,7 @@ export type TokensProps = {
   }) => React.ReactNode
 }
 
+/** Renders syntax highlighted tokens for the `CodeBlock` component. */
 export async function Tokens({
   tokens: tokensProp,
   renderLine,

@@ -25,7 +25,7 @@ export function getHighlights(ranges: string): HighlightBlock[] {
   })
 }
 
-/** Renders a highlight over a range of grid lines. */
+/** Renders a highlight over a range of `CodeBlock` lines. */
 export function LineHighlights({
   highlightRanges: highlightRangesProp,
   className,

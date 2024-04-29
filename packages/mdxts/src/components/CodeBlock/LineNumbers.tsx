@@ -5,6 +5,7 @@ import { getContext } from '../../utils/context'
 import { getTokens } from './get-tokens'
 import { Context } from './Context'
 
+/** Renders line numbers for the `CodeBlock` component. */
 export function LineNumbers({
   tokens: tokensProp,
   highlightRanges: highlightRangesProp,

@@ -19,7 +19,7 @@ export type CodeInlineProps = {
   style?: React.CSSProperties
 }
 
-/** Renders a `code` element with syntax highlighting. */
+/** Renders an inline `code` element with optional syntax highlighting. */
 export async function CodeInline({
   language,
   className,

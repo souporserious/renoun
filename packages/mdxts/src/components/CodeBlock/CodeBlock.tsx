@@ -1,4 +1,5 @@
 import React from 'react'
+import 'server-only'
 
 import { getThemeColors } from '../../index'
 import { getSourcePath } from '../../utils/get-source-path'
@@ -71,6 +72,7 @@ type PrivateCodeBlockProps = Partial<{
   sourcePathColumn: number
 }>
 
+/** Renders a `pre` element with syntax highlighting and type information. */
 export async function CodeBlock({
   filename,
   language,
