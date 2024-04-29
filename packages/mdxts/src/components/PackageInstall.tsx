@@ -147,6 +147,10 @@ document.addEventListener('click', event => {
 });
 `.trim()
 
+/**
+ * Renders a package install command with a variant for each package manager.
+ * @internal
+ */
 export function PackageInstallStylesAndScript() {
   return (
     <>
