@@ -112,6 +112,11 @@ export async function parseSourceTextMetadata({
     filename = join('mdxts', filename)
   }
 
+  // Add extension if filename prop is missing it.
+  if (filenameProp && !filename.includes('.')) {
+    filename = `${filename}.${finalLanguage}`
+  }
+
   // Create a ts-morph source file to type-check JavaScript and TypeScript code blocks.
   if (isJavaScriptLikeLanguage) {
     try {
