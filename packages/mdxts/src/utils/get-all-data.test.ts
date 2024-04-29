@@ -91,19 +91,19 @@ describe('getAllData', () => {
       baseDirectory: 'package',
     })
 
-    expect(allData['/components/button'].order).toBe(1.1)
-    expect(allData['/components/card'].order).toBe(1.2)
-    expect(allData['/hooks/use-focus'].order).toBe(2.1)
-    expect(allData['/hooks/use-pressable'].order).toBe(2.2)
+    expect(allData['/components/button'].order).toBe('01.01')
+    expect(allData['/components/card'].order).toBe('01.02')
+    expect(allData['/hooks/use-focus'].order).toBe('02.01')
+    expect(allData['/hooks/use-pressable'].order).toBe('02.02')
   })
 
   it('parses order from file path', () => {
     const allData = getDocsData()
 
-    expect(allData['/docs/getting-started'].order).toBe(1)
-    expect(allData['/docs/routing'].order).toBe(2)
-    expect(allData['/docs/examples/authoring'].order).toBe(3.1)
-    expect(allData['/docs/examples/rendering'].order).toBe(3.2)
+    expect(allData['/docs/getting-started'].order).toBe('01')
+    expect(allData['/docs/routing'].order).toBe('02')
+    expect(allData['/docs/examples/authoring'].order).toBe('03.01')
+    expect(allData['/docs/examples/rendering'].order).toBe('03.02')
   })
 
   it('adds previous and next pathnames', () => {
