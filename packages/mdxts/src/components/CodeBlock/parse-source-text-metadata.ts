@@ -13,7 +13,7 @@ import { project } from '../project'
 
 type BaseParseMetadataOptions = {
   filename?: string
-  language: Languages
+  language?: Languages
   allowErrors?: boolean | string
 }
 
@@ -112,8 +112,14 @@ export async function parseSourceTextMetadata({
     filename = join('mdxts', filename)
   }
 
-  // Add extension if filename prop is missing it.
-  if (filenameProp && !filename.includes('.')) {
+  // Add extension if filename prop is missing it so it can be loaded into TypeScript.
+  if (isJavaScriptLikeLanguage && !filename.includes('.')) {
+    if (!finalLanguage) {
+      throw new Error(
+        'The [language] prop was not provided to the [CodeBlock] component and could not be inferred from the filename. Pass a valid [filename] with extension or a [language] prop'
+      )
+    }
+
     filename = `${filename}.${finalLanguage}`
   }
 
