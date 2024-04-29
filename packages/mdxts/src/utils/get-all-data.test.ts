@@ -2,6 +2,7 @@ import { Project, InMemoryFileSystemHost } from 'ts-morph'
 import { getAllData } from './get-all-data'
 
 const workingDirectory = '/Users/username/Code/mdxts'
+const mockModule = () => Promise.resolve({ default: () => {} })
 
 jest.mock('./get-git-metadata', () => ({
   getGitMetadata: jest.fn().mockReturnValue({
@@ -78,14 +79,10 @@ describe('getAllData', () => {
     const allData = getAllData({
       project,
       allModules: {
-        '/package/components/Button.tsx': () =>
-          Promise.resolve({ default: () => {} }),
-        '/package/components/Card.tsx': () =>
-          Promise.resolve({ default: () => {} }),
-        '/package/hooks/usePressable.ts': () =>
-          Promise.resolve({ default: () => {} }),
-        '/package/hooks/useFocus.ts': () =>
-          Promise.resolve({ default: () => {} }),
+        '/package/components/Button.tsx': mockModule,
+        '/package/components/Card.tsx': mockModule,
+        '/package/hooks/usePressable.ts': mockModule,
+        '/package/hooks/useFocus.ts': mockModule,
       },
       globPattern: 'package/**/*.(ts|tsx)',
       baseDirectory: 'package',
@@ -198,8 +195,8 @@ describe('getAllData', () => {
         const allData = getAllData({
           project,
           allModules: {
-            [`${workingDirectory}/src/components/Button.examples.tsx`]: () =>
-              Promise.resolve({ default: () => {} }),
+            [`${workingDirectory}/src/components/Button.examples.tsx`]:
+              mockModule,
           },
           globPattern: `${workingDirectory}/src/**/*.{ts,tsx}`,
           baseDirectory: 'src',
@@ -239,8 +236,7 @@ describe('getAllData', () => {
     const allData = getAllData({
       project,
       allModules: {
-        [`${workingDirectory}/src/components/Button.examples.tsx`]: () =>
-          Promise.resolve({ default: () => {} }),
+        [`${workingDirectory}/src/components/Button.examples.tsx`]: mockModule,
       },
       globPattern: '*.tsx',
       baseDirectory: 'src',
@@ -282,6 +278,52 @@ describe('getAllData', () => {
     expect(
       exportedTypes.find((type) => type.name === 'PrivateComponent')
     ).toBeUndefined()
+  })
+
+  it('uses custom sort function if provided', () => {
+    const fileSystem = new InMemoryFileSystemHost()
+    const files = [
+      {
+        path: 'blog/codemods.mdx',
+        content: `---\ndate: 2021-10-31\n---\n\n# Codemods`,
+      },
+      {
+        path: 'blog/design-systems.mdx',
+        content: `---\ndate: 2019-01-01\n---\n\n# Design Systems`,
+      },
+      {
+        path: 'blog/hello-world.mdx',
+        content: `---\ndate: 2021-04-20\n---\n\n# Hello World`,
+      },
+    ]
+
+    files.forEach((file) => {
+      fileSystem.writeFileSync(
+        `${workingDirectory}/src/${file.path}`,
+        file.content
+      )
+    })
+
+    const allData = getAllData<{
+      frontMatter: { date: Date }
+    }>({
+      project: new Project({ fileSystem }),
+      allModules: {
+        [`${workingDirectory}/src/blog/codemods.mdx`]: mockModule,
+        [`${workingDirectory}/src/blog/design-systems.mdx`]: mockModule,
+        [`${workingDirectory}/src/blog/hello-world.mdx`]: mockModule,
+      },
+      globPattern: `${workingDirectory}/src/blog/*.mdx`,
+      baseDirectory: `src`,
+      sort: (a, b) => {
+        return a.frontMatter.date.getTime() - b.frontMatter.date.getTime()
+      },
+    })
+    const dataPaths = Object.values(allData).map((data) => data.pathname)
+
+    expect(dataPaths[0]).toBe('/blog/design-systems')
+    expect(dataPaths[1]).toBe('/blog/hello-world')
+    expect(dataPaths[2]).toBe('/blog/codemods')
   })
 })
 

@@ -103,6 +103,11 @@ export function createSource<Type extends { frontMatter: Record<string, any> }>(
      * when the source is located in a different workspace than the project rendering it.
      */
     outputDirectory?: string | string[]
+
+    /**
+     * A function to sort data items by.
+     */
+    sort?: (a: ModuleData<Type>, b: ModuleData<Type>) => number
   } = {}
 ) {
   let allModules = arguments[2] as AllModules
@@ -126,6 +131,7 @@ export function createSource<Type extends { frontMatter: Record<string, any> }>(
     basePathname = '',
     sourceDirectory,
     outputDirectory,
+    sort,
   } = options || {}
   const allData = getAllData<Type>({
     allModules,
@@ -135,6 +141,7 @@ export function createSource<Type extends { frontMatter: Record<string, any> }>(
     basePathname,
     sourceDirectory,
     outputDirectory,
+    sort,
   })
   const filteredDataKeys = Object.keys(allData).filter((pathname) => {
     const moduleData = allData[pathname]

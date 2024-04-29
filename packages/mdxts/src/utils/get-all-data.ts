@@ -61,6 +61,7 @@ export function getAllData<Type extends { frontMatter: Record<string, any> }>({
   basePathname = '',
   sourceDirectory = 'src',
   outputDirectory = 'dist',
+  sort,
 }: {
   /** A map of all MDX modules keyed by their pathname. */
   allModules: AllModules
@@ -82,6 +83,9 @@ export function getAllData<Type extends { frontMatter: Record<string, any> }>({
 
   /** The output directory or directories for built files used to calculate package export paths. */
   outputDirectory?: string | string[]
+
+  /** A custom sort function to use when sorting the modules. */
+  sort?: (a: ModuleData<Type>, b: ModuleData<Type>) => number
 }) {
   const typeScriptSourceFiles = /ts(x)?/.test(globPattern)
     ? project.addSourceFilesAtPaths(globPattern)
@@ -335,6 +339,11 @@ export function getAllData<Type extends { frontMatter: Record<string, any> }>({
       // Fallback to alphabetical order
       return a[0].localeCompare(b[0])
     })
+
+  // Sort the data if a custom sort function is provided
+  if (sort) {
+    sortedAndFilteredData.sort((a, b) => sort(a[1], b[1]))
+  }
 
   // Add previous/next data to each module now that they're sorted
   sortedAndFilteredData.forEach(([, data], index) => {
