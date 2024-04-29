@@ -59,13 +59,10 @@ export function LineHighlights({
         }
         style={{
           position: 'sticky',
-          left: context?.padding ? `calc(${context?.padding} * -1)` : 0,
+          left: context?.padding ? `-${context?.padding}` : 0,
           zIndex: 1,
           gridColumn: '1 / -1',
           gridRow: `${highlight.start + 1} / span ${highlight.height}`,
-          margin: context?.padding
-            ? `0 calc(${context.padding} * -2)`
-            : undefined,
           backgroundColor: theme.editor.rangeHighlightBackground,
           pointerEvents: 'none',
           ...(typeof style === 'function' ? style(highlight) : style),

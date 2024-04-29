@@ -208,7 +208,19 @@ export async function CodeBlock({
           ) : (
             <Tokens />
           )}
-          {highlight ? <LineHighlights /> : null}
+          {highlight ? (
+            <LineHighlights
+              style={{
+                margin: lineNumbers
+                  ? undefined
+                  : padding
+                    ? typeof padding === 'number'
+                      ? `0 -${padding}px`
+                      : `0 -${padding}`
+                    : undefined,
+              }}
+            />
+          ) : null}
         </pre>
       </Container>
     </Context>
