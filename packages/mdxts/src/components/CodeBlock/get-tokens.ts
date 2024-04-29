@@ -118,19 +118,33 @@ export async function getTokens(
     allowedErrorCodes.length === 0 && allowErrors
       ? []
       : sourceFile
-        ? getDiagnostics(sourceFile).filter(
-            (diagnostic) => !allowedErrorCodes.includes(diagnostic.getCode())
-          )
+        ? sourceFile
+            .getPreEmitDiagnostics()
+            .filter(
+              (diagnostic) => !allowedErrorCodes.includes(diagnostic.getCode())
+            )
         : []
   const theme = getThemeColors()
   const finalLanguage = getLanguage(language)
-  const { tokens } = highlighter.codeToTokens(
+  let { tokens } = highlighter.codeToTokens(
     sourceFile ? sourceFile.getFullText() : value,
     {
       theme: 'mdxts',
       lang: finalLanguage as any,
     }
   )
+  // If tokens contain an "export { }" statement, remove it
+  const exportStatementIndex = tokens.findIndex((line) =>
+    line
+      .map((token) => token.content)
+      .join('')
+      .includes('export { }')
+  )
+  if (exportStatementIndex > -1) {
+    // trim the export statement and the following line break
+    tokens = tokens.slice(0, exportStatementIndex - 1)
+  }
+
   const importSpecifiers =
     sourceFile && !jsxOnly
       ? sourceFile
@@ -321,26 +335,6 @@ function getQuickInfo(
     displayText,
     documentationText,
   }
-}
-
-/** Get the diagnostics for a source file, coerced into a module if necessary. */
-function getDiagnostics(sourceFile: SourceFile) {
-  // if no imports/exports are found, add an empty export to coerce the file into a module and not pollute the global scope
-  const hasImports = sourceFile.getImportDeclarations().length > 0
-  const hasExports = sourceFile.getExportDeclarations().length > 0
-
-  if (!hasImports && !hasExports) {
-    sourceFile.addExportDeclaration({})
-  }
-
-  const diagnostics = sourceFile.getPreEmitDiagnostics()
-
-  // remove the empty export
-  if (!hasImports && !hasExports) {
-    sourceFile.getExportDeclarations().at(0)!.remove()
-  }
-
-  return diagnostics
 }
 
 const FontStyle = {

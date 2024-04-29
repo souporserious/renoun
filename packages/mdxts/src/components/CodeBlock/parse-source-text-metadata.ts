@@ -162,15 +162,25 @@ export async function parseSourceTextMetadata({
       // attempt to fix the removed imports and any other missing imports
       sourceFile.fixMissingImports()
 
+      const importDeclarations = sourceFile.getImportDeclarations()
+
       if (shouldEmitDiagnostics) {
         // remap relative module specifiers to package imports if possible
         // e.g. `import { getTheme } from '../../mdxts/src/components'` -> `import { getTheme } from 'mdxts/components'`
-        sourceFile.getImportDeclarations().forEach((importDeclaration) => {
+        importDeclarations.forEach((importDeclaration) => {
           if (importDeclaration.isModuleSpecifierRelative()) {
             const importSpecifier = getPathRelativeToPackage(importDeclaration)
             importDeclaration.setModuleSpecifier(importSpecifier)
           }
         })
+      }
+
+      // If no imports or exports add an empty export declaration to coerce TypeScript to treat the file as a module
+      const hasImports = importDeclarations.length > 0
+      const hasExports = sourceFile.getExportDeclarations().length > 0
+
+      if (!hasImports && !hasExports) {
+        sourceFile.addExportDeclaration({})
       }
     } catch (error) {
       if (error instanceof Error) {
