@@ -28,7 +28,7 @@ export function LineNumbering() {
       filename="line-numbers.ts"
       value={`const a = 1;\nconst b = 2;\n\nconst add = a + b\nconst subtract = a - b`}
       lineNumbers
-      highlight="4"
+      lineHighlights="4"
     />
   )
 }
@@ -38,7 +38,7 @@ export function LineHighlighting() {
     <CodeBlock
       filename="line-highlights.ts"
       value={`const a = 1;\nconst b = 2;\n\nconst add = a + b\nconst subtract = a - b`}
-      highlight="1-2, 4"
+      lineHighlights="1-2, 4"
     />
   )
 }

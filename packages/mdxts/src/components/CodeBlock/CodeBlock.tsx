@@ -22,7 +22,7 @@ export type BaseCodeBlockProps = {
   lineNumbers?: boolean
 
   /** A string of comma separated lines and ranges to highlight. */
-  highlight?: string
+  lineHighlights?: string
 
   /** Whether or not to show the toolbar. */
   toolbar?: boolean
@@ -75,7 +75,7 @@ export async function CodeBlock({
   filename,
   language,
   lineNumbers,
-  highlight,
+  lineHighlights,
   toolbar,
   allowCopy,
   allowErrors,
@@ -112,7 +112,7 @@ export async function CodeBlock({
       ? getSourcePath(sourcePath, sourcePathLine, sourcePathColumn)
       : undefined,
     tokens,
-    highlight,
+    highlight: lineHighlights,
     padding,
   }
 
@@ -154,11 +154,11 @@ export async function CodeBlock({
             shouldRenderToolbar ? undefined : props.className?.container
           }
           style={{
-            display: lineNumbers || highlight ? 'grid' : undefined,
+            display: lineNumbers || lineHighlights ? 'grid' : undefined,
             gridTemplateColumns:
-              lineNumbers || highlight ? 'auto 1fr' : undefined,
+              lineNumbers || lineHighlights ? 'auto 1fr' : undefined,
             gridTemplateRows:
-              lineNumbers || highlight
+              lineNumbers || lineHighlights
                 ? `repeat(${tokens.length}, 1lh)`
                 : undefined,
             lineHeight: 1.4,
@@ -196,7 +196,7 @@ export async function CodeBlock({
               }}
             />
           ) : null}
-          {lineNumbers || highlight ? (
+          {lineNumbers || lineHighlights ? (
             <div
               style={{
                 gridRow: '1 / -1',
@@ -208,7 +208,7 @@ export async function CodeBlock({
           ) : (
             <Tokens />
           )}
-          {highlight ? (
+          {lineHighlights ? (
             <LineHighlights
               style={{
                 margin: lineNumbers

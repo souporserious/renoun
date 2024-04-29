@@ -26,7 +26,7 @@ function Modal({ children }) {
 
 Next, we need a way to control the open and closed state of the `dialog`. We can call either the [`show`](https://developer.mozilla.org/en-US/docs/Web/API/HTMLDialogElement/show) or [`showModal`](https://developer.mozilla.org/en-US/docs/Web/API/HTMLDialogElement/showModal) methods depending on how we want our dialog to behave. For today, we will only be needing `showModal` since this adds a backdrop and traps focus for us:
 
-```tsx highlight="6-13"
+```tsx lineHighlights="6-13"
 import React from 'react'
 
 function Modal({ children, open }) {
@@ -47,7 +47,7 @@ function Modal({ children, open }) {
 
 This covers opening and closing our `Modal` component using a prop, but there are other ways of closing a `dialog` -- like pressing the `Escape` key. We can listen to the [`cancel`](https://developer.mozilla.org/en-US/docs/Web/API/HTMLDialogElement/cancel_event) event to catch this and provide users of our component a way to update the `open` prop:
 
-```tsx highlight="15-25"
+```tsx lineHighlights="15-25"
 import React from 'react'
 
 function Modal({ children, open, onRequestClose }) {
@@ -80,7 +80,7 @@ function Modal({ children, open, onRequestClose }) {
 
 One last thing we should add is returning focus to the element that opened our `Modal` when it is closed. This functionality is suggested from [WAI-ARIA](https://www.w3.org/TR/wai-aria-practices-1.1/#keyboard-interaction-7). However, it is not part of the dialog spec so we need to implement it ourselves:
 
-```tsx highlight="5,10,14"
+```tsx lineHighlights="5,10,14"
 import React from 'react'
 
 function Modal({ children, open, onRequestClose }) {

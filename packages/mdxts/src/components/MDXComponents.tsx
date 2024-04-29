@@ -28,7 +28,7 @@ export const MDXComponents = {
       allowCopy,
       allowErrors,
       lineNumbers,
-      highlight,
+      lineHighlights,
       toolbar,
       filename,
       className,
@@ -52,7 +52,7 @@ export const MDXComponents = {
         allowCopy={allowCopy}
         allowErrors={allowErrors}
         lineNumbers={lineNumbers}
-        highlight={highlight}
+        lineHighlights={lineHighlights}
         toolbar={toolbar}
         filename={filename}
         language={metadata?.language}
