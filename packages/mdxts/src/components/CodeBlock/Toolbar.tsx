@@ -45,6 +45,7 @@ export function Toolbar({
         fontSize: '0.8em',
         display: 'flex',
         alignItems: 'center',
+        gap: '1ch',
         boxShadow: `inset 0 -1px 0 0 ${theme.panel.border}70`,
         ...style,
       }}
@@ -91,7 +92,10 @@ export function Toolbar({
       {allowCopy && value ? (
         <CopyButton
           value={value}
-          style={{ marginLeft: sourcePath ? '0.5em' : 'auto' }}
+          style={{
+            padding: 0,
+            marginLeft: sourcePath ? undefined : 'auto',
+          }}
         />
       ) : null}
     </div>
