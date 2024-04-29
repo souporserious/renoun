@@ -107,7 +107,7 @@ export async function CodeBlock({
   )
   const contextValue = {
     value: metadata.value,
-    filenameLabel: filename,
+    filenameLabel: filename ? metadata.filenameLabel : undefined,
     sourcePath: sourcePath
       ? getSourcePath(sourcePath, sourcePathLine, sourcePathColumn)
       : undefined,
