@@ -4,6 +4,7 @@ import { getThemeColors } from '../index'
 import { CopyButton } from './CopyButton'
 import { CodeBlock } from './CodeBlock/CodeBlock'
 import { Tokens } from './CodeBlock/Tokens'
+import { PackageInstallClient } from './PackageInstallClient'
 
 const stateKey = 'package-manager'
 const defaultPackageManager = 'npm'
@@ -43,7 +44,11 @@ export async function PackageInstall({
         <button
           key={packageManager}
           data-storage-id={`package-manager-${packageManager}`}
-          className="PackageInstallTab"
+          className={
+            packageManager === defaultPackageManager
+              ? 'PackageInstallTab active'
+              : 'PackageInstallTab'
+          }
           style={{
             fontSize: 'inherit',
             padding: '0.8em',
@@ -70,7 +75,11 @@ export async function PackageInstall({
       <pre
         key={packageManager}
         data-storage-id={`package-manager-${packageManager}`}
-        className="PackageInstallTabPanel"
+        className={
+          packageManager === defaultPackageManager
+            ? 'PackageInstallTabPanel active'
+            : 'PackageInstallTabPanel'
+        }
         suppressHydrationWarning
         style={style?.tabPanels}
       >
@@ -95,6 +104,7 @@ export async function PackageInstall({
     >
       {tabs}
       {tabPanels}
+      <PackageInstallClient />
     </div>
   )
 }
@@ -132,17 +142,19 @@ const packageStyles = `
 `.trim()
 
 const packageScript = `
-function setPackageManager(packageManager) {
+window.setPackageManager = (packageManager) => {
+  if (!packageManager) {
+    packageManager = localStorage.getItem('${stateKey}') ?? '${defaultPackageManager}'
+  }
   document.querySelectorAll('[data-storage-id^="package-manager-"]').forEach(element =>
     element.classList.toggle('active', element.dataset.storageId === \`package-manager-\${packageManager}\`)
   );
 }
-setPackageManager(localStorage.getItem('${stateKey}') ?? '${defaultPackageManager}');
 document.addEventListener('click', event => {
   if (event.target.classList.contains('PackageInstallTab')) {
     const command = event.target.dataset.storageId.replace('package-manager-', '');
     localStorage.setItem('${stateKey}', command);
-    setPackageManager(command);
+    window.setPackageManager(command);
   }
 });
 `.trim()

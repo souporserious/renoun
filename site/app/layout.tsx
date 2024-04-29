@@ -42,9 +42,9 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.png" type="image/png" />
       </head>
       <body className={GeistSans.className}>
+        <PackageInstallStylesAndScript />
         {children}
         <Analytics />
-        <PackageInstallStylesAndScript />
       </body>
     </html>
   )
