@@ -10,7 +10,14 @@ export function Basic() {
 }
 
 export function TypeChecking() {
-  return <CodeBlock value={`const a = 1; a + b;`} language="ts" />
+  return (
+    <CodeBlock
+      value={`const a = 1; a + b;`}
+      language="ts"
+      allowErrors
+      showErrors
+    />
+  )
 }
 
 export function Ordered() {
