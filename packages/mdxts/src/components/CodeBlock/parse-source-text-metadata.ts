@@ -130,12 +130,14 @@ export async function parseSourceTextMetadata({
         overwrite: true,
       })
 
+      const importErrorCode = 2307
       const shouldEmitDiagnostics =
-        allowErrors === false ||
-        (typeof allowErrors === 'string' && !allowErrors.includes('2307'))
+        typeof allowErrors === 'string'
+          ? !allowErrors.includes(importErrorCode.toString())
+          : allowErrors === false
 
       if (shouldEmitDiagnostics) {
-        // Identify and collect missing imports/types to try and resolve theme.
+        // Identify and collect missing imports/types to try and resolve them.
         // This is specifically the case for examples since they import files relative to the package.
         const diagnostics = sourceFile.getPreEmitDiagnostics()
 
@@ -148,7 +150,7 @@ export async function parseSourceTextMetadata({
                 return false
               }
               return (
-                diagnostic.getCode() === 2307 &&
+                diagnostic.getCode() === importErrorCode &&
                 diagnosticStart >= importDeclaration.getStart() &&
                 diagnosticStart <= importDeclaration.getEnd()
               )
