@@ -27,6 +27,7 @@ export const MDXComponents = {
     const {
       allowCopy,
       allowErrors,
+      showErrors,
       lineNumbers,
       lineHighlights,
       toolbar,
@@ -51,6 +52,7 @@ export const MDXComponents = {
       <CodeBlock
         allowCopy={allowCopy}
         allowErrors={allowErrors}
+        showErrors={showErrors}
         lineNumbers={lineNumbers}
         lineHighlights={lineHighlights}
         toolbar={toolbar}

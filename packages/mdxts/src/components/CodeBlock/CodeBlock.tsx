@@ -34,6 +34,9 @@ export type BaseCodeBlockProps = {
   /** Whether or not to allow errors. Accepts a boolean or comma-separated list of allowed error codes. */
   allowErrors?: boolean | string
 
+  /** Whether or not to show error diagnostics. */
+  showErrors?: boolean
+
   /** Class names to apply to code block elements. Use the `children` prop for full control of styling. */
   className?: {
     container?: string
@@ -81,6 +84,7 @@ export async function CodeBlock({
   toolbar,
   allowCopy,
   allowErrors,
+  showErrors,
   ...props
 }: CodeBlockProps) {
   const { sourcePath, sourcePathLine, sourcePathColumn } =
@@ -105,7 +109,8 @@ export async function CodeBlock({
     metadata.value,
     metadata.language,
     metadata.filename,
-    allowErrors
+    allowErrors,
+    showErrors
   )
   const contextValue = {
     value: metadata.value,
@@ -113,8 +118,8 @@ export async function CodeBlock({
     sourcePath: sourcePath
       ? getSourcePath(sourcePath, sourcePathLine, sourcePathColumn)
       : undefined,
-    tokens,
     highlight: lineHighlights,
+    tokens,
     padding,
   }
 

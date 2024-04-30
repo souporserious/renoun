@@ -8,6 +8,7 @@ import { getThemeColors } from '../../index'
 import { isJsxOnly } from '../../utils/is-jsx-only'
 import { getTheme } from '../../utils/get-theme'
 import { project } from '../project'
+import { getDiagnosticsOrThrow } from './get-diagnostics-or-throw'
 import { splitTokenByRanges } from './split-tokens-by-ranges'
 
 export const languageMap = {
@@ -83,7 +84,8 @@ export async function getTokens(
   value: string,
   language: Languages = 'plaintext',
   filename?: string,
-  allowErrors?: string | boolean
+  allowErrors?: string | boolean,
+  showErrors?: boolean
 ) {
   if (language === 'plaintext') {
     return [
@@ -110,20 +112,11 @@ export async function getTokens(
   const isJavaScriptLikeLanguage = ['js', 'jsx', 'ts', 'tsx'].includes(language)
   const jsxOnly = isJavaScriptLikeLanguage ? isJsxOnly(value) : false
   const sourceFile = filename ? project.getSourceFile(filename) : undefined
-  const allowedErrorCodes =
-    typeof allowErrors === 'string'
-      ? allowErrors.split(',').map((code) => parseInt(code))
-      : []
-  const sourceFileDiagnostics =
-    allowedErrorCodes.length === 0 && allowErrors
-      ? []
-      : sourceFile
-        ? sourceFile
-            .getPreEmitDiagnostics()
-            .filter(
-              (diagnostic) => !allowedErrorCodes.includes(diagnostic.getCode())
-            )
-        : []
+  const sourceFileDiagnostics = getDiagnosticsOrThrow(
+    sourceFile,
+    allowErrors,
+    showErrors
+  )
   const theme = getThemeColors()
   const finalLanguage = getLanguage(language)
   let { tokens } = highlighter.codeToTokens(

@@ -2,7 +2,7 @@ import React, { Fragment } from 'react'
 
 import { getThemeColors } from '../../index'
 import { getContext } from '../../utils/context'
-import { getTokens } from './get-tokens'
+import type { getTokens } from './get-tokens'
 import { Context } from './Context'
 
 /** Renders line numbers for the `CodeBlock` component. */

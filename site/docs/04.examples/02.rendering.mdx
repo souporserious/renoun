@@ -45,12 +45,14 @@ For this, you can lean on your specific framework to handle templating and query
 
 ```tsx filename="components/[component]/examples/[example]/page.tsx"
 import { notFound } from 'next/navigation'
-import { allPackages } from 'data'
+import { createSource } from 'mdxts'
+
+const allComponents = createSource('components/**/*.tsx')
 
 export const dynamic = 'force-static'
 
 export async function generateStaticParams() {
-  return (await allPackages.examplePaths()).map((pathname) => ({
+  return (await allComponents.examplePaths()).map((pathname) => ({
     example: pathname,
   }))
 }
@@ -60,8 +62,8 @@ export default async function Page({
 }: {
   params: { example: string[] }
 }) {
-  const singlePackage = await allPackages.get(params.example.slice(0, -1))
-  const example = await allPackages.getExample(params.example)
+  const singlePackage = await allComponents.get(params.example.slice(0, -1))
+  const example = await allComponents.getExample(params.example)
 
   if (singlePackage === undefined || example === undefined) {
     return notFound()
