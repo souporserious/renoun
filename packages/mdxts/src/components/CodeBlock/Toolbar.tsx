@@ -25,7 +25,7 @@ export type ToolbarProps = {
 }
 
 /** A toolbar for code blocks that displays the filename and a copy button. */
-export function Toolbar({
+export async function Toolbar({
   value: valueProp,
   sourcePath: sourcePathProp,
   allowCopy,
@@ -34,7 +34,7 @@ export function Toolbar({
   children,
 }: ToolbarProps) {
   const context = getContext(Context)
-  const theme = getThemeColors()
+  const theme = await getThemeColors()
   const value = valueProp ?? context?.value
   const sourcePath = sourcePathProp ?? context?.sourcePath
 

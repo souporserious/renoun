@@ -26,7 +26,7 @@ export function getHighlights(ranges: string): HighlightBlock[] {
 }
 
 /** Renders a highlight over a range of `CodeBlock` lines. */
-export function LineHighlights({
+export async function LineHighlights({
   highlightRanges: highlightRangesProp,
   className,
   style,
@@ -41,7 +41,7 @@ export function LineHighlights({
     | ((highlight: HighlightBlock) => React.CSSProperties)
 }) {
   const context = getContext(Context)
-  const theme = getThemeColors()
+  const theme = await getThemeColors()
   const highlightRanges = highlightRangesProp || context?.highlight
 
   if (!highlightRanges) {

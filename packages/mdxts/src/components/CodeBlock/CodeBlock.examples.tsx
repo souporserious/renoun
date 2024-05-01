@@ -50,8 +50,8 @@ export function LineHighlighting() {
   )
 }
 
-export function WithToolbar() {
-  const theme = getThemeColors()
+export async function WithToolbar() {
+  const theme = await getThemeColors()
 
   return (
     <CodeBlock

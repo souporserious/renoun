@@ -132,7 +132,7 @@ export async function CodeBlock({
     return <Context value={contextValue}>{props.children}</Context>
   }
 
-  const theme = getThemeColors()
+  const theme = await getThemeColors()
   const shouldRenderToolbar = Boolean(
     toolbar === undefined ? filename || allowCopy : toolbar
   )

@@ -28,7 +28,7 @@ export async function Tokens({
   style = {},
 }: TokensProps) {
   const context = getContext(Context)
-  const theme = getThemeColors()
+  const theme = await getThemeColors()
   const tokens = tokensProp || context?.tokens
 
   if (!tokens) {

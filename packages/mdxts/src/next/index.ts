@@ -1,10 +1,9 @@
 import webpack from 'webpack'
 import { NextConfig } from 'next'
 import { PHASE_DEVELOPMENT_SERVER } from 'next/constants'
-import { dirname, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import createMdxPlugin from '@next/mdx'
-import { sync as readPackageUpSync } from 'read-pkg-up'
-import type { bundledThemes } from 'shiki'
+import type { bundledThemes } from 'shiki/bundle/web'
 
 import { getMdxPlugins } from '../mdx-plugins'
 import { renumberFilenames } from '../utils/renumber'
@@ -28,7 +27,9 @@ type PluginOptions = {
 export function createMdxtsPlugin(pluginOptions: PluginOptions) {
   let refreshServerPort: string | null = null
   let { gitSource, gitBranch = 'main', siteUrl, theme } = pluginOptions
-  let themePath = resolve(process.cwd(), theme)
+  const themePath = theme.endsWith('.json')
+    ? resolve(process.cwd(), theme)
+    : theme
 
   return function withMdxts(nextConfig: NextConfig = {}) {
     const getWebpackConfig = nextConfig.webpack
@@ -87,15 +88,6 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
       nextConfig.env.MDXTS_GIT_SOURCE = gitSource ?? ''
       nextConfig.env.MDXTS_GIT_BRANCH = gitBranch
       nextConfig.env.MDXTS_SITE_URL = siteUrl
-
-      if (!theme.endsWith('.json')) {
-        const mdxtsPackageJson = readPackageUpSync({ cwd: __dirname })
-        themePath = resolve(
-          dirname(mdxtsPackageJson!.path),
-          `node_modules/tm-themes/themes/${theme}.json`
-        )
-      }
-
       nextConfig.env.MDXTS_THEME_PATH = themePath
 
       if (phase === PHASE_DEVELOPMENT_SERVER) {

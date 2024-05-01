@@ -30,7 +30,7 @@ export async function PackageInstall({
     tabPanels?: React.CSSProperties
   }
 }) {
-  const theme = getThemeColors()
+  const theme = await getThemeColors()
   const tabs = (
     <div
       style={{

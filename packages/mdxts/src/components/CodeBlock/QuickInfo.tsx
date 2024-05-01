@@ -16,7 +16,7 @@ export async function QuickInfo({
   quickInfo?: { displayText: string; documentationText: string }
   style?: React.CSSProperties
 }) {
-  const theme = getThemeColors()
+  const theme = await getThemeColors()
   const displayTextTokens = quickInfo?.displayText
     ? await getTokens(quickInfo.displayText, 'ts')
     : []

@@ -1,9 +1,10 @@
+import { bundledThemes, normalizeTheme } from 'shiki/bundle/web'
 import { readFileSync } from 'node:fs'
 
 let theme: Record<string, any> | null = null
 
 /** Gets a normalized VS Code theme. */
-export function getTheme() {
+export async function getTheme() {
   const themePath = process.env.MDXTS_THEME_PATH
 
   if (themePath === undefined) {
@@ -13,19 +14,33 @@ export function getTheme() {
   }
 
   if (theme === null) {
-    const json = JSON.parse(readFileSync(themePath, 'utf-8'))
-
-    if (!json.colors.background) {
-      json.colors.background = json?.colors?.['editor.background'] || '#000000'
+    if (themePath.endsWith('.json')) {
+      theme = JSON.parse(readFileSync(themePath, 'utf-8'))
+    } else if (themePath in bundledThemes) {
+      const themeKey = themePath as keyof typeof bundledThemes
+      const resolveTheme = bundledThemes[themeKey]
+      theme = await resolveTheme().then((mod) => mod.default)
+    } else {
+      throw new Error(
+        `[mdxts] The theme "${themePath}" is not a valid JSON file or a bundled theme.`
+      )
     }
 
-    if (!json.colors.foreground) {
-      json.colors.foreground = json?.colors?.['editor.foreground'] || '#ffffff'
+    const resolvedTheme = theme!
+
+    if (!resolvedTheme.colors.background) {
+      resolvedTheme.colors.background =
+        resolvedTheme.colors['editor.background'] || '#000000'
     }
 
-    json.name = 'mdxts'
+    if (!resolvedTheme.colors.foreground) {
+      resolvedTheme.colors.foreground =
+        resolvedTheme.colors['editor.foreground'] || '#ffffff'
+    }
 
-    theme = json
+    theme = normalizeTheme(resolvedTheme)
+
+    theme.name = 'mdxts'
   }
 
   return theme!

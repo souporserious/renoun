@@ -1,4 +1,4 @@
-import type { bundledLanguages, bundledThemes } from 'shiki'
+import type { bundledLanguages, bundledThemes } from 'shiki/bundle/web'
 import { getHighlighter } from 'shiki/bundle/web'
 import type { SourceFile, Diagnostic, ts } from 'ts-morph'
 import { Node, SyntaxKind } from 'ts-morph'
@@ -117,7 +117,7 @@ export async function getTokens(
     allowErrors,
     showErrors
   )
-  const theme = getThemeColors()
+  const theme = await getThemeColors()
   const finalLanguage = getLanguage(language)
   let { tokens } = highlighter.codeToTokens(
     sourceFile ? sourceFile.getFullText() : value,

@@ -1,5 +1,4 @@
 import type { Element, Root } from 'hast'
-// import { BUNDLED_LANGUAGES } from 'shiki'
 
 const languageMap: Record<string, any> = {
   mjs: 'javascript',
@@ -16,6 +15,7 @@ export function addCodeMetaProps() {
   return async (tree: Root) => {
     const { visit } = await import('unist-util-visit')
     const { toString } = await import('hast-util-to-string')
+    const { bundledLanguages } = await import('shiki/bundle/web')
 
     visit(tree, 'element', (element: Element) => {
       if (element.tagName === 'pre') {
@@ -49,15 +49,9 @@ export function addCodeMetaProps() {
 
         if (firstSpaceIndex > -1) {
           const possibleLanguage = codeString.substring(0, firstSpaceIndex)
-          const isValidLanguage = [{ id: '' }]
-            .map((language) => language.id)
+          const isValidLanguage = Object.keys(bundledLanguages)
             .concat(ADDITIONAL_LANGUAGES)
             .includes(possibleLanguage)
-          // const isValidLanguage = BUNDLED_LANGUAGES.map(
-          //   (language) => language.id
-          // )
-          //   .concat(ADDITIONAL_LANGUAGES)
-          //   .includes(possibleLanguage)
 
           if (isValidLanguage) {
             const language = languageMap[possibleLanguage] || possibleLanguage

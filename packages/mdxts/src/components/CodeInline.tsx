@@ -32,7 +32,7 @@ export async function CodeInline({
       .replace(/\s+/g, ' '),
     language
   )
-  const theme = getThemeColors()
+  const theme = await getThemeColors()
 
   return (
     <code

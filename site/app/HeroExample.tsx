@@ -55,8 +55,8 @@ const codeProps = {
   },
 } satisfies Partial<BaseCodeBlockProps>
 
-export function HeroExample() {
-  const theme = getThemeColors()
+export async function HeroExample() {
+  const theme = await getThemeColors()
   const lineColor = theme.panel.border
   const entries = allDocs.all().filter((doc) => doc.depth === 1)
   const lastEntriesIndex = entries.length - 1
@@ -180,7 +180,7 @@ export function HeroExample() {
   )
 }
 
-function Card({
+async function Card({
   title,
   column,
   row,
@@ -191,7 +191,7 @@ function Card({
   row: string
   children: React.ReactNode
 }) {
-  const theme = getThemeColors()
+  const theme = await getThemeColors()
   return (
     <div
       style={{
@@ -224,7 +224,7 @@ function Card({
   )
 }
 
-function HorizontalLine({
+async function HorizontalLine({
   row,
   column,
   align,
@@ -235,7 +235,7 @@ function HorizontalLine({
   align?: 'start' | 'center' | 'end'
   style?: React.CSSProperties
 }) {
-  const theme = getThemeColors()
+  const theme = await getThemeColors()
   return (
     <div
       style={{
@@ -250,7 +250,7 @@ function HorizontalLine({
   )
 }
 
-function VerticalLine({
+async function VerticalLine({
   row,
   column,
   align,
@@ -261,7 +261,7 @@ function VerticalLine({
   align?: 'start' | 'center' | 'end'
   style?: React.CSSProperties
 }) {
-  const theme = getThemeColors()
+  const theme = await getThemeColors()
   return (
     <div
       style={{

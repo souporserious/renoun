@@ -641,9 +641,9 @@ function generateRssFeed<Type extends { frontMatter: Record<string, any> }>(
 let themeColors: Record<string, any> | null = null
 
 /** Gets the configured VS Code theme colors as an object. */
-export function getThemeColors() {
+export async function getThemeColors() {
   if (themeColors === null) {
-    const { colors } = getTheme()
+    const { colors } = await getTheme()
     themeColors = dotNotationToObject(colors)
   }
 

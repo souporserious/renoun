@@ -6,7 +6,7 @@ import type { getTokens } from './get-tokens'
 import { Context } from './Context'
 
 /** Renders line numbers for the `CodeBlock` component. */
-export function LineNumbers({
+export async function LineNumbers({
   tokens: tokensProp,
   highlightRanges: highlightRangesProp,
   className,
@@ -33,7 +33,7 @@ export function LineNumbers({
     )
   }
 
-  const theme = getThemeColors()
+  const theme = await getThemeColors()
   const highlightRanges = highlightRangesProp || context?.highlight
   const shouldHighlightLine = calculateLinesToHighlight(highlightRanges)
 
