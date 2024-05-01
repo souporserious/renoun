@@ -111,7 +111,7 @@ export async function QuickInfo({
                         padding: '0.25rem 0.5rem',
                         margin: 0,
                         color: theme.foreground,
-                        // @ts-expect-error
+                        // @ts-ignore
                         textWrap: 'pretty',
                       }}
                     >
