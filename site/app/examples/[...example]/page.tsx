@@ -167,6 +167,7 @@ export default async function Page({
       />
       <div className={styles.container}>
         <CodeBlock
+          fixImports
           lineNumbers
           value={example.sourceText}
           language="tsx"

@@ -15,6 +15,7 @@ type BaseParseMetadataOptions = {
   filename?: string
   language?: Languages
   allowErrors?: boolean | string
+  fixImports?: boolean
 }
 
 export type ParseMetadataOptions = BaseParseMetadataOptions &
@@ -31,6 +32,7 @@ export async function parseSourceTextMetadata({
   filename: filenameProp,
   language,
   allowErrors = false,
+  fixImports,
   ...props
 }: ParseMetadataOptions) {
   let finalValue: string = ''
@@ -130,55 +132,63 @@ export async function parseSourceTextMetadata({
         overwrite: true,
       })
 
-      const importErrorCode = 2307
-      const shouldEmitDiagnostics =
-        typeof allowErrors === 'string'
-          ? !allowErrors.includes(importErrorCode.toString())
-          : allowErrors === false
+      // Fixes incorrect imports by removing them and trying to resolve them.
+      // This is the case with examples loaded from outside the main project directory.
+      if (fixImports) {
+        const importErrorCode = 2307
+        const shouldEmitDiagnostics =
+          typeof allowErrors === 'string'
+            ? !allowErrors.includes(importErrorCode.toString())
+            : allowErrors === false
 
-      if (shouldEmitDiagnostics) {
-        // Identify and collect missing imports/types to try and resolve them.
-        // This is specifically the case for examples since they import files relative to the package.
-        const diagnostics = sourceFile.getPreEmitDiagnostics()
+        if (shouldEmitDiagnostics) {
+          // Identify and collect missing imports/types to try and resolve them.
+          // This is specifically the case for examples since they import files relative to the package.
+          const diagnostics = sourceFile.getPreEmitDiagnostics()
 
-        sourceFile
-          .getImportDeclarations()
-          .filter((importDeclaration) => {
-            return diagnostics.some((diagnostic) => {
-              const diagnosticStart = diagnostic.getStart()
-              if (diagnosticStart === undefined) {
-                return false
-              }
-              return (
-                diagnostic.getCode() === importErrorCode &&
-                diagnosticStart >= importDeclaration.getStart() &&
-                diagnosticStart <= importDeclaration.getEnd()
-              )
+          sourceFile
+            .getImportDeclarations()
+            .filter((importDeclaration) => {
+              return diagnostics.some((diagnostic) => {
+                const diagnosticStart = diagnostic.getStart()
+                if (diagnosticStart === undefined) {
+                  return false
+                }
+                return (
+                  diagnostic.getCode() === importErrorCode &&
+                  diagnosticStart >= importDeclaration.getStart() &&
+                  diagnosticStart <= importDeclaration.getEnd()
+                )
+              })
             })
+            .forEach((importDeclaration) => {
+              importDeclaration.remove()
+            })
+        }
+
+        // attempt to fix the removed imports and any other missing imports
+        sourceFile.fixMissingImports()
+
+        const importDeclarations = sourceFile.getImportDeclarations()
+
+        if (shouldEmitDiagnostics) {
+          // remap relative module specifiers to package imports if possible
+          // e.g. `import { getTheme } from '../../mdxts/src/components'` -> `import { getTheme } from 'mdxts/components'`
+          importDeclarations.forEach((importDeclaration) => {
+            if (importDeclaration.isModuleSpecifierRelative()) {
+              const importSpecifier =
+                getPathRelativeToPackage(importDeclaration)
+              importDeclaration.setModuleSpecifier(importSpecifier)
+            }
           })
-          .forEach((importDeclaration) => {
-            importDeclaration.remove()
-          })
-      }
-
-      // attempt to fix the removed imports and any other missing imports
-      sourceFile.fixMissingImports()
-
-      const importDeclarations = sourceFile.getImportDeclarations()
-
-      if (shouldEmitDiagnostics) {
-        // remap relative module specifiers to package imports if possible
-        // e.g. `import { getTheme } from '../../mdxts/src/components'` -> `import { getTheme } from 'mdxts/components'`
-        importDeclarations.forEach((importDeclaration) => {
-          if (importDeclaration.isModuleSpecifierRelative()) {
-            const importSpecifier = getPathRelativeToPackage(importDeclaration)
-            importDeclaration.setModuleSpecifier(importSpecifier)
-          }
-        })
+        }
+      } else if (jsxOnly) {
+        // Since JSX only code blocks don't have imports, attempt to fix them.
+        sourceFile.fixMissingImports()
       }
 
       // If no imports or exports add an empty export declaration to coerce TypeScript to treat the file as a module
-      const hasImports = importDeclarations.length > 0
+      const hasImports = sourceFile.getImportDeclarations().length > 0
       const hasExports = sourceFile.getExportDeclarations().length > 0
 
       if (!hasImports && !hasExports) {
