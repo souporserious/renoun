@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import './layout.css'
 
 export const metadata: Metadata = {
   title: 'Blog',
@@ -16,7 +17,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body style={{ fontFamily: 'sans-serif' }}>{children}</body>
+      <body>{children}</body>
     </html>
   )
 }
