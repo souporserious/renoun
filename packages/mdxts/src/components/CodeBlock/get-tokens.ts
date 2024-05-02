@@ -1,13 +1,15 @@
 import type { bundledLanguages, bundledThemes } from 'shiki/bundle/web'
 import type { SourceFile, Diagnostic, ts } from 'ts-morph'
 import { Node, SyntaxKind } from 'ts-morph'
+import { getDiagnosticMessageText } from '@tsxmod/utils'
+import { join, sep } from 'node:path'
 import { findRoot } from '@manypkg/find-root'
+import chalk from 'chalk'
 
 import { getThemeColors } from '../../index'
 import { isJsxOnly } from '../../utils/is-jsx-only'
 import { project } from '../project'
 import { getHighlighter } from './get-highlighter'
-import { getDiagnosticsOrThrow } from './get-diagnostics-or-throw'
 import { splitTokenByRanges } from './split-tokens-by-ranges'
 import { getTrimmedSourceFileText } from './get-trimmed-source-file-text'
 
@@ -77,15 +79,13 @@ export type GetTokens = (
   allowErrors?: string | boolean
 ) => Promise<Tokens[]>
 
-let highlighter: Awaited<ReturnType<typeof getHighlighter>> | null = null
-
 /** Converts a string of code to an array of highlighted tokens. */
 export async function getTokens(
   value: string,
   language: Languages = 'plaintext',
   filename?: string,
-  allowErrors?: string | boolean,
-  showErrors?: boolean
+  allowErrors: string | boolean = false,
+  showErrors: boolean = false
 ) {
   if (language === 'plaintext') {
     return [
@@ -115,11 +115,10 @@ export async function getTokens(
       lang: finalLanguage as any,
     }
   )
-  const sourceFileDiagnostics = await getDiagnosticsOrThrow(
+  const sourceFileDiagnostics = getDiagnostics(
     sourceFile,
     allowErrors,
-    showErrors,
-    tokens
+    showErrors
   )
   const importSpecifiers =
     sourceFile && !jsxOnly
@@ -249,7 +248,69 @@ export async function getTokens(
     parsedTokens = parsedTokens.slice(firstJsxLineIndex)
   }
 
+  if (allowErrors === false && sourceFile && sourceFileDiagnostics.length > 0) {
+    const workingDirectory = join(process.cwd(), 'mdxts', sep)
+    const filePath = sourceFile.getFilePath().replace(workingDirectory, '')
+    const errorMessages = sourceFileDiagnostics.map((diagnostic) => {
+      const message = getDiagnosticMessageText(diagnostic.getMessageText())
+      const start = diagnostic.getStart()
+      const code = diagnostic.getCode()
+
+      if (!start) {
+        return `${chalk.red(' ⓧ')} ${message} ${chalk.dim(`ts(${code})`)}`
+      }
+
+      const startLineAndCol = sourceFile.getLineAndColumnAtPos(start)
+
+      return `${chalk.red(' ⓧ')} ${message} ${chalk.dim(`ts(${code}) [Ln ${startLineAndCol.line}, Col ${startLineAndCol.column}]`)}`
+    })
+    const formattedErrors = errorMessages.join('\n')
+    const errorMessage = `${tokensToHighlightedText(parsedTokens)}\n\n${formattedErrors}`
+
+    throw new Error(
+      `[mdxts] ${chalk.bold('CodeBlock')} type errors found for filename "${chalk.bold(filePath)}"\n\n${errorMessage}\n\n`
+    )
+  }
+
   return parsedTokens
+}
+
+/** Retrieves diagnostics from a source file. */
+export function getDiagnostics(
+  sourceFile: SourceFile | undefined,
+  allowErrors?: string | boolean,
+  showErrors?: boolean
+): Diagnostic<ts.Diagnostic>[] {
+  const allowedErrorCodes: number[] =
+    typeof allowErrors === 'string'
+      ? allowErrors.split(',').map((code) => parseInt(code, 10))
+      : []
+
+  if (!sourceFile) {
+    return []
+  }
+
+  const diagnostics = sourceFile
+    .getPreEmitDiagnostics()
+    .filter((diagnostic) => diagnostic.getSourceFile())
+
+  if (showErrors) {
+    if (allowedErrorCodes.length > 0) {
+      return diagnostics.filter((diagnostic) => {
+        return allowedErrorCodes.includes(diagnostic.getCode())
+      })
+    }
+
+    return diagnostics
+  }
+
+  if (allowErrors && allowedErrorCodes.length === 0) {
+    return []
+  }
+
+  return diagnostics.filter((diagnostic) => {
+    return !allowedErrorCodes.includes(diagnostic.getCode())
+  })
 }
 
 /** Convert documentation entries to markdown-friendly links. */
@@ -343,4 +404,35 @@ function getFontStyle(fontStyle: number) {
     style['textDecoration'] = 'line-through'
   }
   return style
+}
+
+/** Converts tokens to a colored text block. */
+function tokensToHighlightedText(tokens: Token[][]) {
+  let styledOutput = ''
+  let lineNumber = 1
+
+  for (const line of tokens) {
+    let lineContent = ''
+
+    for (const token of line) {
+      let tokenStyle
+      if (token.color) {
+        tokenStyle = chalk.hex(token.color)
+      } else {
+        tokenStyle = chalk.reset
+      }
+
+      if (token.diagnostics && token.diagnostics.length > 0) {
+        tokenStyle = tokenStyle.underline.red
+      }
+
+      lineContent += tokenStyle(token.value)
+    }
+
+    const paddedLineNumber = String(lineNumber).padStart(2, ' ')
+    styledOutput += `${chalk.dim(paddedLineNumber)} ${lineContent}\n`
+    lineNumber++
+  }
+
+  return styledOutput
 }
