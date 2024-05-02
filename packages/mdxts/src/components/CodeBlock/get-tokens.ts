@@ -249,27 +249,7 @@ export async function getTokens(
   }
 
   if (allowErrors === false && sourceFile && sourceFileDiagnostics.length > 0) {
-    const workingDirectory = join(process.cwd(), 'mdxts', sep)
-    const filePath = sourceFile.getFilePath().replace(workingDirectory, '')
-    const errorMessages = sourceFileDiagnostics.map((diagnostic) => {
-      const message = getDiagnosticMessageText(diagnostic.getMessageText())
-      const start = diagnostic.getStart()
-      const code = diagnostic.getCode()
-
-      if (!start) {
-        return `${chalk.red(' ⓧ')} ${message} ${chalk.dim(`ts(${code})`)}`
-      }
-
-      const startLineAndCol = sourceFile.getLineAndColumnAtPos(start)
-
-      return `${chalk.red(' ⓧ')} ${message} ${chalk.dim(`ts(${code}) [Ln ${startLineAndCol.line}, Col ${startLineAndCol.column}]`)}`
-    })
-    const formattedErrors = errorMessages.join('\n')
-    const errorMessage = `${tokensToHighlightedText(parsedTokens)}\n\n${formattedErrors}`
-
-    throw new Error(
-      `[mdxts] ${chalk.bold('CodeBlock')} type errors found for filename "${chalk.bold(filePath)}"\n\n${errorMessage}\n\n`
-    )
+    throwDiagnosticErrors(sourceFile, sourceFileDiagnostics, parsedTokens)
   }
 
   return parsedTokens
@@ -435,4 +415,60 @@ function tokensToHighlightedText(tokens: Token[][]) {
   }
 
   return styledOutput
+}
+
+/** Converts tokens to plain text. */
+function tokensToPlainText(tokens: Token[][]) {
+  let plainText = ''
+
+  for (const line of tokens) {
+    for (const token of line) {
+      plainText += token.value
+    }
+    plainText += '\n'
+  }
+
+  return plainText
+}
+
+/** Throws diagnostic errors, formatting them for display. */
+function throwDiagnosticErrors(
+  sourceFile: SourceFile,
+  diagnostics: Diagnostic[],
+  tokens: Token[][]
+) {
+  const workingDirectory = join(process.cwd(), 'mdxts', sep)
+  const filePath = sourceFile.getFilePath().replace(workingDirectory, '')
+  const errorMessages = diagnostics.map((diagnostic) => {
+    const message = getDiagnosticMessageText(diagnostic.getMessageText())
+    const start = diagnostic.getStart()
+    const code = diagnostic.getCode()
+
+    if (process.env.MDXTS_HIGHLIGHT_ERRORS === 'true') {
+      if (!start) {
+        return `${chalk.red(' ⓧ')} ${message} ${chalk.dim(`ts(${code})`)}`
+      }
+      const startLineAndCol = sourceFile.getLineAndColumnAtPos(start)
+      return `${chalk.red(' ⓧ')} ${message} ${chalk.dim(`ts(${code}) [Ln ${startLineAndCol.line}, Col ${startLineAndCol.column}]`)}`
+    }
+
+    if (!start) {
+      return ` ⓧ ${message} ts(${code})`
+    }
+    const startLineAndCol = sourceFile.getLineAndColumnAtPos(start)
+    return ` ⓧ ${message} ts(${code}) [Ln ${startLineAndCol.line}, Col ${startLineAndCol.column}]`
+  })
+  const formattedErrors = errorMessages.join('\n')
+
+  if (process.env.MDXTS_HIGHLIGHT_ERRORS === 'true') {
+    const errorMessage = `${tokensToHighlightedText(tokens)}\n\n${formattedErrors}`
+    throw new Error(
+      `[mdxts] ${chalk.bold('CodeBlock')} type errors found for filename "${chalk.bold(filePath)}"\n\n${errorMessage}\n\n`
+    )
+  } else {
+    const errorMessage = `${tokensToPlainText(tokens)}\n\n${formattedErrors}`
+    throw new Error(
+      `[mdxts] CodeBlock type errors found for filename "${filePath}"\n\n${errorMessage}\n\n`
+    )
+  }
 }
