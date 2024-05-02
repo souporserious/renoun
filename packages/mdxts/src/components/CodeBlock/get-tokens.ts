@@ -1,15 +1,15 @@
 import type { bundledLanguages, bundledThemes } from 'shiki/bundle/web'
-import { getHighlighter } from 'shiki/bundle/web'
 import type { SourceFile, Diagnostic, ts } from 'ts-morph'
 import { Node, SyntaxKind } from 'ts-morph'
 import { findRoot } from '@manypkg/find-root'
 
 import { getThemeColors } from '../../index'
 import { isJsxOnly } from '../../utils/is-jsx-only'
-import { getTheme } from '../../utils/get-theme'
 import { project } from '../project'
+import { getHighlighter } from './get-highlighter'
 import { getDiagnosticsOrThrow } from './get-diagnostics-or-throw'
 import { splitTokenByRanges } from './split-tokens-by-ranges'
+import { getTrimmedSourceFileText } from './get-trimmed-source-file-text'
 
 export const languageMap = {
   mjs: 'js',
@@ -102,42 +102,25 @@ export async function getTokens(
     ]
   }
 
-  if (highlighter === null) {
-    highlighter = await getHighlighter({
-      langs: ['css', 'js', 'jsx', 'ts', 'tsx', 'mdx', 'sh'],
-      themes: [getTheme()],
-    })
-  }
-
   const isJavaScriptLikeLanguage = ['js', 'jsx', 'ts', 'tsx'].includes(language)
   const jsxOnly = isJavaScriptLikeLanguage ? isJsxOnly(value) : false
   const sourceFile = filename ? project.getSourceFile(filename) : undefined
-  const sourceFileDiagnostics = getDiagnosticsOrThrow(
-    sourceFile,
-    allowErrors,
-    showErrors
-  )
-  const theme = await getThemeColors()
   const finalLanguage = getLanguage(language)
-  let { tokens } = highlighter.codeToTokens(
-    sourceFile ? sourceFile.getFullText() : value,
+  const theme = await getThemeColors()
+  const highlighter = await getHighlighter()
+  const { tokens } = highlighter.codeToTokens(
+    sourceFile ? getTrimmedSourceFileText(sourceFile) : value,
     {
       theme: 'mdxts',
       lang: finalLanguage as any,
     }
   )
-  // If tokens contain an "export { }" statement, remove it
-  const exportStatementIndex = tokens.findIndex((line) =>
-    line
-      .map((token) => token.content)
-      .join('')
-      .includes('export { }')
+  const sourceFileDiagnostics = await getDiagnosticsOrThrow(
+    sourceFile,
+    allowErrors,
+    showErrors,
+    tokens
   )
-  if (exportStatementIndex > -1) {
-    // trim the export statement and the following line break
-    tokens = tokens.slice(0, exportStatementIndex - 1)
-  }
-
   const importSpecifiers =
     sourceFile && !jsxOnly
       ? sourceFile
