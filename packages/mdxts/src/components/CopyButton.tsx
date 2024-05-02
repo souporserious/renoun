@@ -15,7 +15,6 @@ export function CopyButton({
   const [state, setState] = React.useState<'idle' | 'not-allowed' | 'copied'>(
     'idle'
   )
-  const { width, height, ...restStyle } = style || {}
   return (
     <button
       title="Copy code to clipboard"
@@ -34,11 +33,12 @@ export function CopyButton({
       }}
       style={{
         display: 'flex',
+        color: 'inherit',
         backgroundColor: 'transparent',
         padding: '0.35rem',
         border: 0,
         cursor: 'pointer',
-        ...restStyle,
+        ...style,
       }}
       {...props}
     >
@@ -46,15 +46,14 @@ export function CopyButton({
         viewBox="0 0 24 24"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
-        style={{
-          width: width || 'var(--font-size-body-3)',
-          height: height || 'var(--font-size-body-3)',
-        }}
+        width="1em"
+        height="1em"
+        style={{ color: 'inherit' }}
       >
         {state === 'idle' || state === 'not-allowed' ? (
           <path
             d="M8 9.56402V19.436C8 20.2998 8.70023 21 9.56402 21L19.436 21C20.2998 21 21 20.2998 21 19.436V9.56402C21 8.70023 20.2998 8 19.436 8H9.56402C8.70023 8 8 8.70023 8 9.56402Z"
-            stroke="var(--color-foreground-interactive)"
+            stroke="currentColor"
             strokeWidth="2"
             strokeLinecap="round"
           />
@@ -62,7 +61,7 @@ export function CopyButton({
         {state === 'idle' ? (
           <path
             d="M7.23913 16L4.56402 16C3.70023 16 3 15.2998 3 14.436V4.56402C3 3.70023 3.70023 3 4.56402 3L14.436 3C15.2998 3 16 3.70023 16 4.56402V7.52174"
-            stroke="var(--color-foreground-interactive)"
+            stroke="currentColor"
             strokeWidth="2"
             strokeLinecap="round"
           />
