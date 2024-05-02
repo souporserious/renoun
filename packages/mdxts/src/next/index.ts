@@ -21,12 +21,21 @@ type PluginOptions = {
 
   /** The branch to use for linking to the repository and source files. */
   gitBranch?: string
+
+  /** Whether or not to highlight errors when parsing source code in `CodeBlock`. */
+  highlightErrors?: boolean
 }
 
 /** A Next.js plugin to configure MDXTS theming, `rehype` and `remark` markdown plugins, and the [Webpack loader](mdxts.dev/packages/loader). */
 export function createMdxtsPlugin(pluginOptions: PluginOptions) {
   let refreshServerPort: string | null = null
-  let { gitSource, gitBranch = 'main', siteUrl, theme } = pluginOptions
+  let {
+    gitSource,
+    gitBranch = 'main',
+    siteUrl,
+    theme,
+    highlightErrors,
+  } = pluginOptions
   const themePath = theme.endsWith('.json')
     ? resolve(process.cwd(), theme)
     : theme
@@ -89,6 +98,7 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
       nextConfig.env.MDXTS_GIT_BRANCH = gitBranch
       nextConfig.env.MDXTS_SITE_URL = siteUrl
       nextConfig.env.MDXTS_THEME_PATH = themePath
+      nextConfig.env.MDXTS_HIGHLIGHT_ERRORS = String(highlightErrors)
 
       if (phase === PHASE_DEVELOPMENT_SERVER) {
         if (refreshServerPort === null) {

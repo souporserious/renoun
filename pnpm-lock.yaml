@@ -158,6 +158,9 @@ importers:
       case-anything:
         specifier: ^2.1.13
         version: 2.1.13
+      chalk:
+        specifier: ^4.1.2
+        version: 4.1.2
       chokidar:
         specifier: ^3.6.0
         version: 3.6.0

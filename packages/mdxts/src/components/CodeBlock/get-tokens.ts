@@ -1,15 +1,17 @@
 import type { bundledLanguages, bundledThemes } from 'shiki/bundle/web'
-import { getHighlighter } from 'shiki/bundle/web'
 import type { SourceFile, Diagnostic, ts } from 'ts-morph'
 import { Node, SyntaxKind } from 'ts-morph'
+import { getDiagnosticMessageText } from '@tsxmod/utils'
+import { join, sep } from 'node:path'
 import { findRoot } from '@manypkg/find-root'
+import chalk from 'chalk'
 
 import { getThemeColors } from '../../index'
 import { isJsxOnly } from '../../utils/is-jsx-only'
-import { getTheme } from '../../utils/get-theme'
 import { project } from '../project'
-import { getDiagnosticsOrThrow } from './get-diagnostics-or-throw'
+import { getHighlighter } from './get-highlighter'
 import { splitTokenByRanges } from './split-tokens-by-ranges'
+import { getTrimmedSourceFileText } from './get-trimmed-source-file-text'
 
 export const languageMap = {
   mjs: 'js',
@@ -77,15 +79,13 @@ export type GetTokens = (
   allowErrors?: string | boolean
 ) => Promise<Tokens[]>
 
-let highlighter: Awaited<ReturnType<typeof getHighlighter>> | null = null
-
 /** Converts a string of code to an array of highlighted tokens. */
 export async function getTokens(
   value: string,
   language: Languages = 'plaintext',
   filename?: string,
-  allowErrors?: string | boolean,
-  showErrors?: boolean
+  allowErrors: string | boolean = false,
+  showErrors: boolean = false
 ) {
   if (language === 'plaintext') {
     return [
@@ -102,42 +102,24 @@ export async function getTokens(
     ]
   }
 
-  if (highlighter === null) {
-    highlighter = await getHighlighter({
-      langs: ['css', 'js', 'jsx', 'ts', 'tsx', 'mdx', 'sh'],
-      themes: [getTheme()],
-    })
-  }
-
   const isJavaScriptLikeLanguage = ['js', 'jsx', 'ts', 'tsx'].includes(language)
   const jsxOnly = isJavaScriptLikeLanguage ? isJsxOnly(value) : false
   const sourceFile = filename ? project.getSourceFile(filename) : undefined
-  const sourceFileDiagnostics = getDiagnosticsOrThrow(
-    sourceFile,
-    allowErrors,
-    showErrors
-  )
-  const theme = await getThemeColors()
   const finalLanguage = getLanguage(language)
-  let { tokens } = highlighter.codeToTokens(
-    sourceFile ? sourceFile.getFullText() : value,
+  const theme = await getThemeColors()
+  const highlighter = await getHighlighter()
+  const { tokens } = highlighter.codeToTokens(
+    sourceFile ? getTrimmedSourceFileText(sourceFile) : value,
     {
       theme: 'mdxts',
       lang: finalLanguage as any,
     }
   )
-  // If tokens contain an "export { }" statement, remove it
-  const exportStatementIndex = tokens.findIndex((line) =>
-    line
-      .map((token) => token.content)
-      .join('')
-      .includes('export { }')
+  const sourceFileDiagnostics = getDiagnostics(
+    sourceFile,
+    allowErrors,
+    showErrors
   )
-  if (exportStatementIndex > -1) {
-    // trim the export statement and the following line break
-    tokens = tokens.slice(0, exportStatementIndex - 1)
-  }
-
   const importSpecifiers =
     sourceFile && !jsxOnly
       ? sourceFile
@@ -266,7 +248,49 @@ export async function getTokens(
     parsedTokens = parsedTokens.slice(firstJsxLineIndex)
   }
 
+  if (allowErrors === false && sourceFile && sourceFileDiagnostics.length > 0) {
+    throwDiagnosticErrors(sourceFile, sourceFileDiagnostics, parsedTokens)
+  }
+
   return parsedTokens
+}
+
+/** Retrieves diagnostics from a source file. */
+export function getDiagnostics(
+  sourceFile: SourceFile | undefined,
+  allowErrors?: string | boolean,
+  showErrors?: boolean
+): Diagnostic<ts.Diagnostic>[] {
+  const allowedErrorCodes: number[] =
+    typeof allowErrors === 'string'
+      ? allowErrors.split(',').map((code) => parseInt(code, 10))
+      : []
+
+  if (!sourceFile) {
+    return []
+  }
+
+  const diagnostics = sourceFile
+    .getPreEmitDiagnostics()
+    .filter((diagnostic) => diagnostic.getSourceFile())
+
+  if (showErrors) {
+    if (allowedErrorCodes.length > 0) {
+      return diagnostics.filter((diagnostic) => {
+        return allowedErrorCodes.includes(diagnostic.getCode())
+      })
+    }
+
+    return diagnostics
+  }
+
+  if (allowErrors && allowedErrorCodes.length === 0) {
+    return []
+  }
+
+  return diagnostics.filter((diagnostic) => {
+    return !allowedErrorCodes.includes(diagnostic.getCode())
+  })
 }
 
 /** Convert documentation entries to markdown-friendly links. */
@@ -360,4 +384,91 @@ function getFontStyle(fontStyle: number) {
     style['textDecoration'] = 'line-through'
   }
   return style
+}
+
+/** Converts tokens to a colored text block. */
+function tokensToHighlightedText(tokens: Token[][]) {
+  let styledOutput = ''
+  let lineNumber = 1
+
+  for (const line of tokens) {
+    let lineContent = ''
+
+    for (const token of line) {
+      let tokenStyle
+      if (token.color) {
+        tokenStyle = chalk.hex(token.color)
+      } else {
+        tokenStyle = chalk.reset
+      }
+
+      if (token.diagnostics && token.diagnostics.length > 0) {
+        tokenStyle = tokenStyle.underline.red
+      }
+
+      lineContent += tokenStyle(token.value)
+    }
+
+    const paddedLineNumber = String(lineNumber).padStart(2, ' ')
+    styledOutput += `${chalk.dim(paddedLineNumber)} ${lineContent}\n`
+    lineNumber++
+  }
+
+  return styledOutput
+}
+
+/** Converts tokens to plain text. */
+function tokensToPlainText(tokens: Token[][]) {
+  let plainText = ''
+
+  for (const line of tokens) {
+    for (const token of line) {
+      plainText += token.value
+    }
+    plainText += '\n'
+  }
+
+  return plainText
+}
+
+/** Throws diagnostic errors, formatting them for display. */
+function throwDiagnosticErrors(
+  sourceFile: SourceFile,
+  diagnostics: Diagnostic[],
+  tokens: Token[][]
+) {
+  const workingDirectory = join(process.cwd(), 'mdxts', sep)
+  const filePath = sourceFile.getFilePath().replace(workingDirectory, '')
+  const errorMessages = diagnostics.map((diagnostic) => {
+    const message = getDiagnosticMessageText(diagnostic.getMessageText())
+    const start = diagnostic.getStart()
+    const code = diagnostic.getCode()
+
+    if (process.env.MDXTS_HIGHLIGHT_ERRORS === 'true') {
+      if (!start) {
+        return `${chalk.red(' ⓧ')} ${message} ${chalk.dim(`ts(${code})`)}`
+      }
+      const startLineAndCol = sourceFile.getLineAndColumnAtPos(start)
+      return `${chalk.red(' ⓧ')} ${message} ${chalk.dim(`ts(${code}) [Ln ${startLineAndCol.line}, Col ${startLineAndCol.column}]`)}`
+    }
+
+    if (!start) {
+      return ` ⓧ ${message} ts(${code})`
+    }
+    const startLineAndCol = sourceFile.getLineAndColumnAtPos(start)
+    return ` ⓧ ${message} ts(${code}) [Ln ${startLineAndCol.line}, Col ${startLineAndCol.column}]`
+  })
+  const formattedErrors = errorMessages.join('\n')
+
+  if (process.env.MDXTS_HIGHLIGHT_ERRORS === 'true') {
+    const errorMessage = `${tokensToHighlightedText(tokens)}\n\n${formattedErrors}`
+    throw new Error(
+      `[mdxts] ${chalk.bold('CodeBlock')} type errors found for filename "${chalk.bold(filePath)}"\n\n${errorMessage}\n\n`
+    )
+  } else {
+    const errorMessage = `${tokensToPlainText(tokens)}\n\n${formattedErrors}`
+    throw new Error(
+      `[mdxts] CodeBlock type errors found for filename "${filePath}"\n\n${errorMessage}\n\n`
+    )
+  }
 }
