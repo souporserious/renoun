@@ -5,7 +5,7 @@ import { getClassNameMetadata } from '../../utils/get-class-name-metadata'
 /** Parses `CodeBlock` and `CodeInline` props and adds them to `pre` and `code` element properties respectively. */
 export function addCodeMetaProps() {
   return async (tree: Root) => {
-    const { visit } = await import('unist-util-visit')
+    const { visit, SKIP } = await import('unist-util-visit')
     const { toString } = await import('hast-util-to-string')
     const { bundledLanguages } = await import('shiki/bundle/web')
 
@@ -51,10 +51,10 @@ export function addCodeMetaProps() {
             }
           }
         }
+
+        return SKIP
       } else if (element.tagName === 'code') {
         const codeString = toString(element)
-        element.properties.value = codeString
-
         const firstSpaceIndex = codeString.indexOf(' ')
 
         if (firstSpaceIndex > -1) {

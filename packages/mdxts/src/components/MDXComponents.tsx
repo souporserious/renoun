@@ -1,21 +1,19 @@
 import * as React from 'react'
 import type { MDXComponents as MDXComponentsType } from 'mdx/types'
 
+import type { Languages } from './CodeBlock/get-tokens'
 import type { BaseCodeBlockProps } from './CodeBlock/CodeBlock'
 import { CodeBlock } from './CodeBlock/CodeBlock'
 import { CodeInline } from './CodeInline'
 
-type PrivateCodeBlockProps = {
-  /** Path to the source file on disk provided by the remark plugin. */
-  sourcePath: string
-  sourcePathLine: number
-  sourcePathColumn: number
-}
-
-type MDXTSComponentsType = Omit<MDXComponentsType, 'pre'> & {
-  pre?: (
-    props: BaseCodeBlockProps & PrivateCodeBlockProps & { value: string }
-  ) => React.ReactElement
+type MDXTSComponentsType = Omit<MDXComponentsType, 'pre' | 'code'> & {
+  pre?: (props: BaseCodeBlockProps & { value: string }) => React.ReactElement
+  code?: (props: {
+    language: Languages
+    children: string
+    className?: string
+    style?: React.CSSProperties
+  }) => React.ReactElement
 }
 
 export type MDXComponents = MDXTSComponentsType
@@ -55,11 +53,11 @@ export const MDXComponents = {
       />
     )
   },
-  code: ({ language, value, className, style }) => {
+  code: ({ language, children, className, style }) => {
     return (
       <CodeInline
         language={language}
-        value={value}
+        value={children}
         className={className}
         style={style}
       />
