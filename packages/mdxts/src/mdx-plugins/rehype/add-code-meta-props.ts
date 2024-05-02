@@ -41,7 +41,7 @@ export function addCodeMetaProps() {
           codeNode.tagName === 'code'
         ) {
           const codeString = toString(codeNode)
-          element.properties.code = codeString
+          element.properties.value = codeString
         }
       } else if (element.tagName === 'code') {
         const codeString = toString(element)
