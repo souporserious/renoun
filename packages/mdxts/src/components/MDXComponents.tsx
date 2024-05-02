@@ -32,12 +32,11 @@ export const MDXComponents = {
       toolbar,
       filename,
       language,
+      sourcePath,
       className,
       style,
       value,
     } = props
-    const { sourcePath, sourcePathLine, sourcePathColumn } =
-      props as unknown as PrivateCodeBlockProps
 
     return (
       <CodeBlock
@@ -52,10 +51,7 @@ export const MDXComponents = {
         value={value}
         className={className}
         style={style}
-        // @ts-expect-error - private props
         sourcePath={sourcePath}
-        sourcePathLine={sourcePathLine}
-        sourcePathColumn={sourcePathColumn}
       />
     )
   },

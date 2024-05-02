@@ -1,6 +1,8 @@
 import type { Root } from 'mdast'
 import type { VFile } from 'vfile'
 
+import { getSourcePath } from '../../utils/get-source-path'
+
 /** Adds file meta data to all code blocks and `CodeBlock` components. */
 export function addFileMetaToCodeBlock() {
   return async function (tree: Root, file: VFile) {
@@ -11,10 +13,13 @@ export function addFileMetaToCodeBlock() {
         return
       }
 
+      const sourcePath = getSourcePath(
+        file.path,
+        node.position.start.line,
+        node.position.start.column
+      )
       const sourcePathMeta = [
-        `sourcePath="${file.path}"`,
-        `sourcePathLine="${node.position.start.line - 2}"`,
-        `sourcePathColumn="${node.position.start.column}"`,
+        `sourcePath="${sourcePath}"`,
         `workingDirectory="${file.dirname}"`,
       ].join(' ')
       node.meta = node.meta ? `${node.meta} ${sourcePathMeta}` : sourcePathMeta
@@ -22,21 +27,16 @@ export function addFileMetaToCodeBlock() {
 
     visit(tree, 'mdxJsxFlowElement', (node: any) => {
       if (node.name === 'CodeBlock') {
+        const sourcePath = getSourcePath(
+          file.path,
+          node.position.start.line,
+          node.position.start.column
+        )
         node.attributes = [
           {
             type: 'mdxJsxAttribute',
             name: 'sourcePath',
-            value: file.path,
-          },
-          {
-            type: 'mdxJsxAttribute',
-            name: 'sourcePathLine',
-            value: node.position.start.line,
-          },
-          {
-            type: 'mdxJsxAttribute',
-            name: 'sourcePathColumn',
-            value: node.position.start.column,
+            value: sourcePath,
           },
           {
             type: 'mdxJsxAttribute',

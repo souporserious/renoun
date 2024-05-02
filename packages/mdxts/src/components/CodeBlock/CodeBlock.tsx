@@ -2,7 +2,6 @@ import React from 'react'
 import 'server-only'
 
 import { getThemeColors } from '../../index'
-import { getSourcePath } from '../../utils/get-source-path'
 import { Tokens } from './Tokens'
 import type { Languages } from './get-tokens'
 import { getTokens } from './get-tokens'
@@ -36,6 +35,9 @@ export type BaseCodeBlockProps = {
 
   /** Whether or not to show error diagnostics. */
   showErrors?: boolean
+
+  /** Path to the source file on disk in development and the git provider source in production. */
+  sourcePath?: string
 
   /** Whether or not to attempt to fix broken imports. Useful for code using imports outside of the project. */
   fixImports?: boolean
@@ -71,13 +73,6 @@ export type CodeBlockProps =
       workingDirectory?: string
     } & BaseCodeBlockProps)
 
-/** Private props provided to the CodeBlock component by the remark plugin. */
-type PrivateCodeBlockProps = Partial<{
-  sourcePath: string
-  sourcePathLine: number
-  sourcePathColumn: number
-}>
-
 /** Renders a `pre` element with syntax highlighting and type information. */
 export async function CodeBlock({
   filename,
@@ -89,10 +84,9 @@ export async function CodeBlock({
   allowErrors,
   showErrors,
   fixImports,
+  sourcePath,
   ...props
 }: CodeBlockProps) {
-  const { sourcePath, sourcePathLine, sourcePathColumn } =
-    props as PrivateCodeBlockProps
   const padding = props.style?.container?.padding ?? '1ch'
   const options: any = {}
 
@@ -120,12 +114,10 @@ export async function CodeBlock({
   const contextValue = {
     value: metadata.value,
     filenameLabel: filename ? metadata.filenameLabel : undefined,
-    sourcePath: sourcePath
-      ? getSourcePath(sourcePath, sourcePathLine, sourcePathColumn)
-      : undefined,
     highlight: lineHighlights,
-    tokens,
     padding,
+    sourcePath,
+    tokens,
   }
 
   if ('children' in props) {
