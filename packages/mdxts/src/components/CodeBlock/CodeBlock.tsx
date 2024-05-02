@@ -37,7 +37,7 @@ export type BaseCodeBlockProps = {
   showErrors?: boolean
 
   /** Path to the source file on disk in development and the git provider source in production. */
-  sourcePath?: string
+  sourcePath?: string | false
 
   /** Whether or not to attempt to fix broken imports. Useful for code using imports outside of the project. */
   fixImports?: boolean
@@ -88,11 +88,13 @@ export async function CodeBlock({
   ...props
 }: CodeBlockProps) {
   const padding = props.style?.container?.padding ?? '1ch'
+  const hasValue = 'value' in props
+  const hasSource = 'source' in props
   const options: any = {}
 
-  if ('value' in props) {
+  if (hasValue) {
     options.value = props.value
-  } else if ('source' in props) {
+  } else if (hasSource) {
     options.source = props.source
     options.workingDirectory = props.workingDirectory
   }
@@ -113,7 +115,7 @@ export async function CodeBlock({
   )
   const contextValue = {
     value: metadata.value,
-    filenameLabel: filename ? metadata.filenameLabel : undefined,
+    filenameLabel: filename || hasSource ? metadata.filenameLabel : undefined,
     highlight: lineHighlights,
     padding,
     sourcePath,
@@ -126,7 +128,7 @@ export async function CodeBlock({
 
   const theme = await getThemeColors()
   const shouldRenderToolbar = Boolean(
-    toolbar === undefined ? filename || allowCopy || sourcePath : toolbar
+    toolbar === undefined ? filename || hasSource || allowCopy : toolbar
   )
   const Container = shouldRenderToolbar ? 'div' : React.Fragment
   const containerProps = shouldRenderToolbar

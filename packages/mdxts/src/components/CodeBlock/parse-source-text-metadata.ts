@@ -54,7 +54,7 @@ export async function parseSourceTextMetadata({
 
     if (isRelative && !workingDirectory) {
       throw new Error(
-        'The [workingDirectory] prop was not provided to the [CodeBlock] component while using a relative path. Pass a valid [workingDirectory] or make sure the mdxts/remark plugin and mdxts/loader are configured correctly if this is being renderend in an MDX file.'
+        `The [workingDirectory] prop is required for [CodeBlock] with the relative [source] "${props.source}".\n\nPass a valid [workingDirectory]. If this is being renderend directly in an MDX file, make sure the "mdxts/remark" plugin and "mdxts/loader" Webpack loader are configured correctly.`
       )
     }
 

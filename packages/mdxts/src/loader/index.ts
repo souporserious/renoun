@@ -8,6 +8,7 @@ import { addComputedTypes, resolveObject } from '@tsxmod/utils'
 import { project } from '../components/project'
 import { getEntrySourceFiles } from '../utils/get-entry-source-files'
 import { getExportedSourceFiles } from '../utils/get-exported-source-files'
+import { addCodeMetaProps } from './add-code-meta-props'
 
 /**
  * A Webpack loader that exports front matter data for MDX files and augments `createSource` call sites to add an additional
@@ -24,26 +25,14 @@ export default async function loader(
   const sourceString = source.toString()
   const workingDirectory = dirname(this.resourcePath)
 
-  /** Augment CodeBlock, CodeInline, and ExportedTypes components to add the working directory. */
-  const isMDXComponentImported =
-    /import\s+{\s*([^}]*\b(CodeBlock|CodeInline|ExportedTypes)\b[^}]*)\s*}/g.test(
+  /** Augment CodeBlock and ExportedTypes components to add the working directory and source path. */
+  const isMDXTSComponentImported =
+    /import\s+{\s*([^}]*\b(CodeBlock|ExportedTypes)\b[^}]*)\s*}/g.test(
       sourceString
     )
 
-  if (isMDXComponentImported) {
-    source = sourceString
-      .replaceAll(
-        /<CodeBlock(\.\w+)?/g,
-        `<CodeBlock$1 workingDirectory="${workingDirectory}"`
-      )
-      .replaceAll(
-        '<CodeInline',
-        `<CodeInline workingDirectory="${workingDirectory}"`
-      )
-      .replaceAll(
-        '<ExportedTypes',
-        `<ExportedTypes workingDirectory="${workingDirectory}"`
-      )
+  if (isMDXTSComponentImported) {
+    source = addCodeMetaProps(sourceString, this.resourcePath, workingDirectory)
   }
 
   /** Augment `createSource` calls with MDX/TypeScript file paths. */

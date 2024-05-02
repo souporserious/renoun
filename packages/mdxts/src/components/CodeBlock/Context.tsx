@@ -6,7 +6,7 @@ export const Context = createContext<{
   value: string
   tokens: Awaited<ReturnType<typeof getTokens>>
   filenameLabel?: string
-  sourcePath?: string
+  sourcePath?: string | false
   highlight?: string
   padding?: CSSProperties['padding']
 } | null>(null)
