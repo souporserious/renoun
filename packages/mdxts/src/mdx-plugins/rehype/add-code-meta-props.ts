@@ -1,16 +1,8 @@
 import type { Element, Root } from 'hast'
 
-const languageMap: Record<string, any> = {
-  mjs: 'javascript',
-  js: 'javascript',
-  jsx: 'javascript',
-  ts: 'typescript',
-  tsx: 'typescript',
-}
+import { getClassNameMetadata } from '../../utils/get-class-name-metadata'
 
-const ADDITIONAL_LANGUAGES = Object.keys(languageMap)
-
-/** Adds code meta props to the code element. */
+/** Parses `CodeBlock` and `CodeInline` props and adds them to `pre` and `code` element properties respectively. */
 export function addCodeMetaProps() {
   return async (tree: Root) => {
     const { visit } = await import('unist-util-visit')
@@ -24,6 +16,7 @@ export function addCodeMetaProps() {
         // Map meta string to props
         const meta = (codeNode.data as any)?.meta as string | undefined
         const props: Record<string, any> = {}
+
         meta?.split(' ').forEach((prop) => {
           const [key, value] = prop.split('=')
           props[key] =
@@ -42,20 +35,32 @@ export function addCodeMetaProps() {
         ) {
           const codeString = toString(codeNode)
           element.properties.value = codeString
+
+          // get class name from code element
+          const className = codeNode.properties.className as string
+          const metadata = getClassNameMetadata(className || '')
+
+          // Add filename and language as a props if they don't already exist
+          if (metadata) {
+            if (!element.properties.filename && metadata.filename) {
+              element.properties.filename = metadata.filename
+            }
+
+            if (!element.properties.language) {
+              element.properties.language = metadata.language
+            }
+          }
         }
       } else if (element.tagName === 'code') {
         const codeString = toString(element)
+        element.properties.value = codeString
+
         const firstSpaceIndex = codeString.indexOf(' ')
 
         if (firstSpaceIndex > -1) {
-          const possibleLanguage = codeString.substring(0, firstSpaceIndex)
-          const isValidLanguage = Object.keys(bundledLanguages)
-            .concat(ADDITIONAL_LANGUAGES)
-            .includes(possibleLanguage)
+          const language = codeString.substring(0, firstSpaceIndex)
 
-          if (isValidLanguage) {
-            const language = languageMap[possibleLanguage] || possibleLanguage
-
+          if (Object.keys(bundledLanguages).includes(language)) {
             // Add the language as a prop for syntax highlighting
             element.properties.language = language
 

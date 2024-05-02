@@ -1,7 +1,6 @@
 import * as React from 'react'
 import type { MDXComponents as MDXComponentsType } from 'mdx/types'
 
-import { getClassNameMetadata } from '../utils/get-class-name-metadata'
 import type { BaseCodeBlockProps } from './CodeBlock/CodeBlock'
 import { CodeBlock } from './CodeBlock/CodeBlock'
 import { CodeInline } from './CodeInline'
@@ -15,7 +14,7 @@ type PrivateCodeBlockProps = {
 
 type MDXTSComponentsType = Omit<MDXComponentsType, 'pre'> & {
   pre?: (
-    props: BaseCodeBlockProps & PrivateCodeBlockProps
+    props: BaseCodeBlockProps & PrivateCodeBlockProps & { value: string }
   ) => React.ReactElement
 }
 
@@ -32,21 +31,13 @@ export const MDXComponents = {
       lineHighlights,
       toolbar,
       filename,
+      language,
       className,
       style,
-      children,
+      value,
     } = props
     const { sourcePath, sourcePathLine, sourcePathColumn } =
       props as unknown as PrivateCodeBlockProps
-
-    if (!React.isValidElement(children) || !children.props.children) {
-      throw new Error(
-        'mdxts: Expected children to be defined for MDX `pre` element.'
-      )
-    }
-
-    const value = children.props.children.trimStart()
-    const metadata = getClassNameMetadata(children.props.className || '')
 
     return (
       <CodeBlock
@@ -57,7 +48,7 @@ export const MDXComponents = {
         lineHighlights={lineHighlights}
         toolbar={toolbar}
         filename={filename}
-        language={metadata?.language}
+        language={language}
         value={value}
         className={className}
         style={style}
@@ -68,17 +59,11 @@ export const MDXComponents = {
       />
     )
   },
-  code: ({ language, children, className, style }) => {
-    if (typeof children !== 'string') {
-      throw new Error(
-        'mdxts: Expected children to be a string for MDX `code` element.'
-      )
-    }
-
+  code: ({ language, value, className, style }) => {
     return (
       <CodeInline
         language={language}
-        value={children}
+        value={value}
         className={className}
         style={style}
       />
