@@ -126,7 +126,7 @@ export async function CodeBlock({
 
   const theme = await getThemeColors()
   const shouldRenderToolbar = Boolean(
-    toolbar === undefined ? filename || allowCopy : toolbar
+    toolbar === undefined ? filename || allowCopy || sourcePath : toolbar
   )
   const Container = shouldRenderToolbar ? 'div' : React.Fragment
   const containerProps = shouldRenderToolbar

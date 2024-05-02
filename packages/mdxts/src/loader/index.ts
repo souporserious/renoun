@@ -34,7 +34,7 @@ export default async function loader(
     source = sourceString
       .replaceAll(
         /<CodeBlock(\.\w+)?/g,
-        `<CodeBlock$1 workingDirectory="${workingDirectory}" sourcePath="${this.resourcePath}"`
+        `<CodeBlock$1 workingDirectory="${workingDirectory}"`
       )
       .replaceAll(
         '<CodeInline',
