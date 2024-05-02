@@ -45,7 +45,7 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
     let startedWatcher = false
 
     return async (phase: typeof PHASE_DEVELOPMENT_SERVER) => {
-      const plugins = await getMdxPlugins({ gitSource })
+      const plugins = await getMdxPlugins({ gitSource, gitBranch })
       const withMdx = createMdxPlugin({ options: plugins })
 
       nextConfig.webpack = (config, options) => {

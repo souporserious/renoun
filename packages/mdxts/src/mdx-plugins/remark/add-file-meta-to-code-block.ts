@@ -4,7 +4,13 @@ import type { VFile } from 'vfile'
 import { getSourcePath } from '../../utils/get-source-path'
 
 /** Adds file meta data to all code blocks and `CodeBlock` components. */
-export function addFileMetaToCodeBlock() {
+export function addFileMetaToCodeBlock({
+  gitSource,
+  gitBranch,
+}: {
+  gitSource: string
+  gitBranch: string
+}) {
   return async function (tree: Root, file: VFile) {
     const { visit } = await import('unist-util-visit')
 
@@ -16,7 +22,9 @@ export function addFileMetaToCodeBlock() {
       const sourcePath = getSourcePath(
         file.path,
         node.position.start.line,
-        node.position.start.column
+        node.position.start.column,
+        gitSource,
+        gitBranch
       )
       const sourcePathMeta = [
         `sourcePath="${sourcePath}"`,
@@ -30,7 +38,9 @@ export function addFileMetaToCodeBlock() {
         const sourcePath = getSourcePath(
           file.path,
           node.position.start.line,
-          node.position.start.column
+          node.position.start.column,
+          gitSource,
+          gitBranch
         )
         node.attributes = [
           {

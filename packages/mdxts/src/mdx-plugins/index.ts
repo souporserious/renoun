@@ -7,8 +7,10 @@ import { rehypePlugin } from './rehype'
 /** MDXTS specific plugins for `rehype` and `remark`. */
 export async function getMdxPlugins({
   gitSource,
+  gitBranch,
 }: {
   gitSource?: string
+  gitBranch?: string
 } = {}): Promise<{ remarkPlugins: any[]; rehypePlugins: any[] }> {
   const allPlugins = await Promise.all([
     import('remark-frontmatter'),
@@ -41,7 +43,7 @@ export async function getMdxPlugins({
       remarkStripBadges,
       remarkSqueezeParagraphs,
       remarkUnwrapImages,
-      remarkPlugin,
+      [remarkPlugin, { gitSource, gitBranch }],
       [remarkEmbedder, { transformers: [CodeSandboxTransformer] }],
     ].filter(Boolean),
     rehypePlugins: [rehypeInferReadingTimeMeta, rehypePlugin],

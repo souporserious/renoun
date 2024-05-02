@@ -10,14 +10,17 @@ import { removeParagraphs } from './remove-paragraph'
 import { transformRelativeLinks } from './transform-relative-links'
 import { transformSymbolicLinks } from './transform-symbolic-links'
 
-export function remarkPlugin() {
+export function remarkPlugin(options: {
+  gitSource: string
+  gitBranch: string
+}) {
   return async (tree: Root, file: VFile) => {
     addShouldRenderTitle()(tree)
     await Promise.all([
       addCodeBlocks()(tree, file),
       addHeadings()(tree),
       addDescription()(tree),
-      addFileMetaToCodeBlock()(tree, file),
+      addFileMetaToCodeBlock(options)(tree, file),
       removeParagraphs()(tree),
       transformRelativeLinks()(tree),
       transformSymbolicLinks()(tree),

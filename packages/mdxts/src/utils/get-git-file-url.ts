@@ -1,33 +1,33 @@
 /** Constructs a URL for a specific file in a Git repository. Supports GitHub, GitLab, and Bitbucket. */
 export function getGitFileUrl(
   filePath: string,
-  line?: number,
-  column?: number
+  line: number = 0,
+  column: number = 0,
+  gitSource: string,
+  gitBranch: string = 'main'
 ): string {
-  const normalizedUrl = process.env.MDXTS_GIT_SOURCE!
-  const branch = process.env.MDXTS_GIT_BRANCH!
-  const url = new URL(normalizedUrl)
+  const url = new URL(gitSource)
   let fileUrl: string
 
   switch (url.hostname) {
     case 'github.com':
-      fileUrl = `${normalizedUrl}/blob/${branch}/${filePath}`
+      fileUrl = `${gitSource}/blob/${gitBranch}/${filePath}`
       if (line) fileUrl += `#L${line}`
       if (column) fileUrl += `:${column}`
       break
 
     case 'gitlab.com':
-      fileUrl = `${normalizedUrl}/-/blob/${branch}/${filePath}`
+      fileUrl = `${gitSource}/-/blob/${gitBranch}/${filePath}`
       if (line) fileUrl += `#L${line}`
       break
 
     case 'bitbucket.org':
-      fileUrl = `${normalizedUrl}/src/${branch}/${filePath}`
+      fileUrl = `${gitSource}/src/${gitBranch}/${filePath}`
       if (line) fileUrl += `#lines-${line}`
       break
 
     default:
-      throw new Error(`Git provider not recognized for ${normalizedUrl}`)
+      throw new Error(`Git provider not recognized for ${gitSource}`)
   }
 
   return fileUrl
