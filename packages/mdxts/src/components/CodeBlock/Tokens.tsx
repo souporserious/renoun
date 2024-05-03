@@ -73,6 +73,7 @@ export async function Tokens({
 
             return (
               <Symbol
+                key={token.start}
                 highlightColor={theme.editor.hoverHighlightBackground}
                 popover={
                   <QuickInfo
