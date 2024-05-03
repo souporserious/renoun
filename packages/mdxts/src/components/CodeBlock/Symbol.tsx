@@ -8,11 +8,13 @@ export function Symbol({
   popover,
   children,
   highlightColor = '#87add7',
+  className,
   style,
 }: {
   popover: React.ReactNode
   children: React.ReactNode
   highlightColor?: string
+  className?: string
   style?: React.CSSProperties
 }) {
   const anchorId = useId()
@@ -48,6 +50,7 @@ export function Symbol({
       onPointerCancel={() => {
         resetQuickInfo()
       }}
+      className={className}
       style={{
         backgroundColor: isHighlighted ? highlightColor : undefined,
         ...style,

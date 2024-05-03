@@ -47,6 +47,8 @@ export type BaseCodeBlockProps = {
     container?: string
     toolbar?: string
     lineNumbers?: string
+    token?: string
+    popover?: string
   }
 
   /** Styles to apply to code block elements. Use the `children` prop for full control of styling. */
@@ -54,6 +56,8 @@ export type BaseCodeBlockProps = {
     container?: React.CSSProperties
     toolbar?: React.CSSProperties
     lineNumbers?: React.CSSProperties
+    token?: React.CSSProperties
+    popover?: React.CSSProperties
   }
 
   /** Overrides default rendering to allow full control over styles using `CodeBlock` components like `Tokens`, `LineNumbers`, `LineHighlights`, and `Toolbar`. */
@@ -211,10 +215,28 @@ export async function CodeBlock({
                 gridColumn: lineNumbers ? 2 : '1 / -1',
               }}
             >
-              <Tokens />
+              <Tokens
+                className={{
+                  token: props.className?.token,
+                  popover: props.className?.popover,
+                }}
+                style={{
+                  token: props.style?.token,
+                  popover: props.style?.popover,
+                }}
+              />
             </div>
           ) : (
-            <Tokens />
+            <Tokens
+              className={{
+                token: props.className?.token,
+                popover: props.className?.popover,
+              }}
+              style={{
+                token: props.style?.token,
+                popover: props.style?.popover,
+              }}
+            />
           )}
           {lineHighlights ? (
             <LineHighlights

@@ -10,6 +10,10 @@ import type { GetTokens } from './get-tokens'
 
 export type TokensProps = {
   tokens?: Awaited<ReturnType<GetTokens>>
+  className?: {
+    token?: string
+    popover?: string
+  }
   style?: {
     token?: React.CSSProperties
     popover?: React.CSSProperties
@@ -25,6 +29,7 @@ export type TokensProps = {
 export async function Tokens({
   tokens: tokensProp,
   renderLine,
+  className = {},
   style = {},
 }: TokensProps) {
   const context = getContext(Context)
@@ -79,9 +84,11 @@ export async function Tokens({
                   <QuickInfo
                     diagnostics={token.diagnostics}
                     quickInfo={token.quickInfo}
+                    className={className.token}
                     style={style.popover}
                   />
                 }
+                className={className.token}
                 style={{
                   ...tokenStyles,
                   ...(token.diagnostics && diagnosticStyles),
@@ -93,7 +100,11 @@ export async function Tokens({
           }
 
           return (
-            <span key={token.start} style={tokenStyles}>
+            <span
+              key={token.start}
+              className={className.token}
+              style={tokenStyles}
+            >
               {token.value}
             </span>
           )

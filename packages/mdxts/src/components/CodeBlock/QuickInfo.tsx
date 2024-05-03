@@ -10,10 +10,12 @@ import { getTokens } from './get-tokens'
 export async function QuickInfo({
   diagnostics,
   quickInfo,
+  className,
   style,
 }: {
   diagnostics?: Diagnostic[]
   quickInfo?: { displayText: string; documentationText: string }
+  className?: string
   style?: React.CSSProperties
 }) {
   const theme = await getThemeColors()
@@ -24,6 +26,7 @@ export async function QuickInfo({
   return (
     <QuickInfoPopover>
       <div
+        className={className}
         style={{
           fontSize: '1rem',
           position: 'absolute',
@@ -41,14 +44,14 @@ export async function QuickInfo({
       >
         <div
           style={{
-            fontSize: '0.875rem',
-            lineHeight: '1.4rem',
+            fontSize: '0.875em',
+            lineHeight: '1.4em',
           }}
         >
           {diagnostics ? (
-            <div style={{ padding: '0.25rem 0.5rem' }}>
+            <div style={{ padding: '0.25em 0.5em' }}>
               {diagnostics.map((diagnostic, index) => (
-                <div key={index} style={{ display: 'flex', gap: '0.5rem' }}>
+                <div key={index} style={{ display: 'flex', gap: '0.5em' }}>
                   {getDiagnosticMessageText(diagnostic.getMessageText())}
                   <span style={{ opacity: 0.7 }}>({diagnostic.getCode()})</span>
                 </div>
@@ -72,7 +75,7 @@ export async function QuickInfo({
                 style={{
                   fontFamily: 'monospace',
                   whiteSpace: 'pre-wrap',
-                  padding: '0.25rem 0.5rem',
+                  padding: '0.25em 0.5em',
                 }}
               >
                 {displayTextTokens.map((line, index) => (
@@ -108,7 +111,7 @@ export async function QuickInfo({
                         fontFamily: 'sans-serif',
                         fontSize: 'inherit',
                         lineHeight: 'inherit',
-                        padding: '0.25rem 0.5rem',
+                        padding: '0.25em 0.5em',
                         margin: 0,
                         color: theme.foreground,
                         // @ts-ignore
