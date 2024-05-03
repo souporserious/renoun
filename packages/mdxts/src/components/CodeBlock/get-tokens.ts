@@ -76,7 +76,9 @@ export type GetTokens = (
   value: string,
   language?: Languages,
   filename?: string,
-  allowErrors?: string | boolean
+  allowErrors?: string | boolean,
+  showErrors?: boolean,
+  sourcePath?: string | false
 ) => Promise<Tokens[]>
 
 /** Converts a string of code to an array of highlighted tokens. */
@@ -85,7 +87,8 @@ export async function getTokens(
   language: Languages = 'plaintext',
   filename?: string,
   allowErrors: string | boolean = false,
-  showErrors: boolean = false
+  showErrors: boolean = false,
+  sourcePath?: string | false
 ) {
   if (language === 'plaintext') {
     return [
@@ -249,7 +252,12 @@ export async function getTokens(
   }
 
   if (allowErrors === false && sourceFile && sourceFileDiagnostics.length > 0) {
-    throwDiagnosticErrors(sourceFile, sourceFileDiagnostics, parsedTokens)
+    throwDiagnosticErrors(
+      sourceFile,
+      sourceFileDiagnostics,
+      parsedTokens,
+      sourcePath
+    )
   }
 
   return parsedTokens
@@ -435,7 +443,8 @@ function tokensToPlainText(tokens: Token[][]) {
 function throwDiagnosticErrors(
   sourceFile: SourceFile,
   diagnostics: Diagnostic[],
-  tokens: Token[][]
+  tokens: Token[][],
+  sourcePath?: string | false
 ) {
   const workingDirectory = join(process.cwd(), 'mdxts', sep)
   const filePath = sourceFile.getFilePath().replace(workingDirectory, '')
@@ -463,12 +472,12 @@ function throwDiagnosticErrors(
   if (process.env.MDXTS_HIGHLIGHT_ERRORS === 'true') {
     const errorMessage = `${tokensToHighlightedText(tokens)}\n\n${formattedErrors}`
     throw new Error(
-      `[mdxts] ${chalk.bold('CodeBlock')} type errors found for filename "${chalk.bold(filePath)}"\n\n${errorMessage}\n\n`
+      `[mdxts] ${chalk.bold('CodeBlock')} type errors found ${sourcePath ? `at "${chalk.bold(sourcePath)}" ` : ''}for filename "${chalk.bold(filePath)}"\n\n${errorMessage}\n\n`
     )
   } else {
     const errorMessage = `${tokensToPlainText(tokens)}\n\n${formattedErrors}`
     throw new Error(
-      `[mdxts] CodeBlock type errors found for filename "${filePath}"\n\n${errorMessage}\n\n`
+      `[mdxts] CodeBlock type errors found ${sourcePath ? `at "${sourcePath}" ` : ''}for filename "${filePath}"\n\n${errorMessage}\n\n`
     )
   }
 }

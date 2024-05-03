@@ -111,7 +111,9 @@ export async function CodeBlock({
     metadata.language,
     metadata.filename,
     allowErrors,
-    showErrors
+    showErrors,
+    // Simplify the path for more legibile error messages.
+    sourcePath ? sourcePath.split(process.cwd()).at(1) : undefined
   )
   const contextValue = {
     value: metadata.value,
