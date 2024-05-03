@@ -4,6 +4,7 @@ import { allPackages } from 'data'
 import { ViewSource } from 'components/ViewSource'
 import { getSiteMetadata } from 'utils/get-site-metadata'
 import styles from './page.module.css'
+import { getThemeColors } from 'mdxts'
 
 export const dynamic = 'force-static'
 
@@ -41,6 +42,8 @@ export default async function Page({
     return notFound()
   }
 
+  const theme = await getThemeColors()
+
   return (
     <div
       style={{
@@ -48,6 +51,7 @@ export default async function Page({
         minHeight: '100dvh',
         padding: '3rem 2rem',
         position: 'relative',
+        backgroundColor: 'var(--color-background)',
       }}
     >
       <a
@@ -80,21 +84,14 @@ export default async function Page({
         style={{
           position: 'absolute',
           top: '0.8rem',
-          right: '0.6rem',
+          right: '2rem',
           display: 'flex',
           alignItems: 'center',
           gap: '0.5rem',
         }}
       >
-        <h1 style={{ fontSize: 'var(--font-size-body-2)' }}>{example.name}</h1>
-        <nav
-          style={{
-            fontSize: 'var(--font-size-body-3)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.25rem',
-          }}
-        >
+        <h1 style={{ fontSize: 'var(--font-size-body-3)' }}>{example.name}</h1>
+        <nav style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
           <a
             title={
               example.previous
@@ -115,10 +112,7 @@ export default async function Page({
             <svg
               viewBox="0 0 24 24"
               fill="none"
-              style={{
-                width: 'var(--font-size-body-2)',
-                height: 'var(--font-size-body-2)',
-              }}
+              style={{ width: '1rem', height: '1rem' }}
             >
               <path
                 d="M14 6L8 12L14 18"
@@ -145,10 +139,7 @@ export default async function Page({
             <svg
               viewBox="0 0 24 24"
               fill="none"
-              style={{
-                width: 'var(--font-size-body-2)',
-                height: 'var(--font-size-body-2)',
-              }}
+              style={{ width: '1rem', height: '1rem' }}
             >
               <path
                 d="M10 18L16 12L10 6"
@@ -163,15 +154,29 @@ export default async function Page({
       </div>
       <ViewSource
         href={example.sourcePath}
-        style={{ position: 'absolute', bottom: '0.8rem', right: '0.6rem' }}
+        style={{ position: 'absolute', bottom: '0.8rem', right: '2rem' }}
       />
-      <div className={styles.container}>
+      <div
+        className={styles.container}
+        style={{
+          '--color-border': theme.panel.border,
+          '--color-dot': `${theme.panel.border}8a`,
+        }}
+      >
         <CodeBlock
           fixImports
           lineNumbers
           value={example.sourceText}
           language="tsx"
-          style={{ container: { margin: 0 } }}
+          className={{
+            container: styles.codeBlock,
+          }}
+          style={{
+            container: {
+              boxShadow: undefined,
+              borderRadius: undefined,
+            },
+          }}
         />
         <div className={styles.preview}>
           <example.moduleExport />
