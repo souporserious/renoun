@@ -18,9 +18,13 @@ import { addCodeMetaProps } from './add-code-meta-props'
  * will be used (e.g. `Button.tsx` and `Button.mdx`).
  */
 export default async function loader(
-  this: webpack.LoaderContext<{}>,
+  this: webpack.LoaderContext<{
+    gitSource?: string
+    gitBranch?: string
+  }>,
   source: string | Buffer
 ) {
+  const { gitSource, gitBranch } = this.getOptions()
   const callback = this.async()
   const sourceString = source.toString()
   const workingDirectory = dirname(this.resourcePath)
@@ -32,7 +36,13 @@ export default async function loader(
     )
 
   if (isMDXTSComponentImported) {
-    source = addCodeMetaProps(sourceString, this.resourcePath, workingDirectory)
+    source = addCodeMetaProps(
+      sourceString,
+      this.resourcePath,
+      workingDirectory,
+      gitSource,
+      gitBranch
+    )
   }
 
   /** Augment `createSource` calls with MDX/TypeScript file paths. */

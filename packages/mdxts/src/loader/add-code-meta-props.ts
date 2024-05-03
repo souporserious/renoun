@@ -7,7 +7,9 @@ import { getSourcePath } from '../utils/get-source-path'
 export function addCodeMetaProps(
   sourceCode: string,
   resourcePath: string,
-  workingDirectory: string
+  workingDirectory: string,
+  gitSource?: string,
+  gitBranch?: string
 ): string {
   const project = new Project({ useInMemoryFileSystem: true })
   const sourceFile = project.createSourceFile('index.tsx', sourceCode)
@@ -35,7 +37,13 @@ export function addCodeMetaProps(
         const { line, column } = sourceFile.getLineAndColumnAtPos(
           element.getStart()
         )
-        const sourcePath = getSourcePath(resourcePath, line, column)
+        const sourcePath = getSourcePath(
+          resourcePath,
+          line,
+          column,
+          gitSource,
+          gitBranch
+        )
         attributesToAdd.push({
           name: 'sourcePath',
           initializer: `"${sourcePath}"`,

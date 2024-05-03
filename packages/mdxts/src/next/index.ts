@@ -80,7 +80,7 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
         config.module.rules.push({
           test: /\.(?:jsx?|tsx?)$/,
           exclude: /node_modules/,
-          use: [{ loader: 'mdxts/loader' }],
+          use: [{ loader: 'mdxts/loader', options: { gitSource, gitBranch } }],
         })
 
         if (typeof getWebpackConfig === 'function') {
@@ -118,18 +118,6 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
 
       nextConfig.experimental = {
         ...nextConfig.experimental,
-        turbo: {
-          rules: {
-            '*.ts': {
-              as: '*.ts',
-              loaders: [{ loader: 'mdxts/loader', options: {} }],
-            },
-            '*.tsx': {
-              as: '*.tsx',
-              loaders: [{ loader: 'mdxts/loader', options: {} }],
-            },
-          },
-        },
         serverComponentsExternalPackages: [
           ...(nextConfig.experimental?.serverComponentsExternalPackages ?? []),
           'ts-morph',
