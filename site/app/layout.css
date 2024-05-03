@@ -80,6 +80,10 @@ a:hover :not(.title) {
   text-decoration: underline;
 }
 
+button {
+  color: var(--color-foreground-interactive);
+}
+
 .prose :where(h1, h2, h3) {
   letter-spacing: normal;
   text-wrap: balance;

@@ -61,6 +61,7 @@ export async function WithToolbar() {
     >
       <div
         style={{
+          fontSize: '1rem',
           color: theme.foreground,
           backgroundColor: theme.background,
           border: `1px solid ${theme.panel.border}`,

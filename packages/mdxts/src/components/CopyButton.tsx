@@ -33,7 +33,6 @@ export function CopyButton({
       }}
       style={{
         display: 'flex',
-        color: 'inherit',
         backgroundColor: 'transparent',
         padding: '0.35rem',
         border: 0,
