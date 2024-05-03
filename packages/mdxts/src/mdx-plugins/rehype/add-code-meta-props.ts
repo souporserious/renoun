@@ -18,11 +18,16 @@ export function addCodeMetaProps() {
         const props: Record<string, any> = {}
 
         meta?.split(' ').forEach((prop) => {
-          const [key, value] = prop.split('=')
-          props[key] =
-            typeof value === 'undefined'
-              ? true
-              : value.replace(/^["']|["']$/g, '')
+          const indexOfFirstEquals = prop.indexOf('=')
+          if (indexOfFirstEquals === -1) {
+            // Coerce boolean props to true if they don't have an explicit value
+            props[prop] = true
+          } else {
+            const key = prop.substring(0, indexOfFirstEquals)
+            const value = prop.substring(indexOfFirstEquals + 1)
+            // Strip surrounding quotes if present
+            props[key] = value.replace(/^["']|["']$/g, '')
+          }
         })
 
         // Add props to code element
