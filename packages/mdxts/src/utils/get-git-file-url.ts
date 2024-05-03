@@ -12,6 +12,7 @@ export function getGitFileUrl(
   switch (url.hostname) {
     case 'github.com':
       fileUrl = `${gitSource}/blob/${gitBranch}/${filePath}`
+      if (line || column) fileUrl += `?plain=1`
       if (line) fileUrl += `#L${line}`
       if (column) fileUrl += `:${column}`
       break
