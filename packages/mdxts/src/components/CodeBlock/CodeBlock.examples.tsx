@@ -63,7 +63,7 @@ export async function WithToolbar() {
         style={{
           color: theme.foreground,
           backgroundColor: theme.background,
-          border: `1px solid ${theme.panel.border}70`,
+          border: `1px solid ${theme.panel.border}`,
         }}
       >
         <Toolbar allowCopy style={{ padding: '0.5rem 1rem' }} />

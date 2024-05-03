@@ -46,7 +46,7 @@ export async function Toolbar({
         display: 'flex',
         alignItems: 'center',
         gap: '1ch',
-        boxShadow: `inset 0 -1px 0 0 ${theme.panel.border}70`,
+        boxShadow: `inset 0 -1px 0 0 ${theme.panel.border}`,
         ...style,
       }}
     >

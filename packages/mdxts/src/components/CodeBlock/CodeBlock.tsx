@@ -140,7 +140,7 @@ export async function CodeBlock({
           backgroundColor: theme.background,
           color: theme.foreground,
           borderRadius: 5,
-          boxShadow: `0 0 0 1px ${theme.panel.border}70`,
+          boxShadow: `0 0 0 1px ${theme.panel.border}`,
           ...props.style?.container,
           padding: 0,
         },
@@ -179,7 +179,7 @@ export async function CodeBlock({
             borderRadius: shouldRenderToolbar ? 'inherit' : 5,
             boxShadow: shouldRenderToolbar
               ? undefined
-              : `0 0 0 1px ${theme.panel.border}70`,
+              : `0 0 0 1px ${theme.panel.border}`,
             ...(shouldRenderToolbar ? {} : props.style?.container),
             padding: lineNumbers
               ? typeof padding === 'number'

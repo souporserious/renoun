@@ -68,7 +68,7 @@ export async function HeroExample() {
             flex: 1,
             display: 'grid',
             gridAutoRows: '1fr',
-            boxShadow: `0 0 0 1px ${theme.panel.border}70`,
+            boxShadow: `0 0 0 1px ${theme.panel.border}`,
             borderRadius: '0.5rem',
           }}
         >
@@ -87,7 +87,7 @@ export async function HeroExample() {
                     backgroundColor: theme.editor.background,
                     boxShadow: firstIndex
                       ? undefined
-                      : `inset 0 1px 0 0 ${theme.panel.border}70`,
+                      : `inset 0 1px 0 0 ${theme.panel.border}`,
                     borderTopLeftRadius: firstIndex ? '0.5rem' : undefined,
                     borderTopRightRadius: firstIndex ? '0.5rem' : undefined,
                     borderBottomLeftRadius: lastIndex ? '0.5rem' : undefined,

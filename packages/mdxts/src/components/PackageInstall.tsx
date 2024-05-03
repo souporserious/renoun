@@ -36,7 +36,7 @@ export async function PackageInstall({
       style={{
         display: 'flex',
         alignItems: 'center',
-        boxShadow: `inset 0 -1px 0 0 ${theme.panel.border}70`,
+        boxShadow: `inset 0 -1px 0 0 ${theme.panel.border}`,
         ...style?.tabs,
       }}
     >
@@ -97,7 +97,7 @@ export async function PackageInstall({
         flexDirection: 'column',
         backgroundColor: theme.background,
         color: theme.foreground,
-        boxShadow: `0 0 0 1px ${theme.panel.border}70`,
+        boxShadow: `0 0 0 1px ${theme.panel.border}`,
         borderRadius: 5,
         ...style?.container,
       }}
