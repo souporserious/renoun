@@ -21,21 +21,25 @@ export function getSourcePath(
     return getEditorPath({ path, line, column })
   }
 
-  if (rootDirectory === null) {
-    rootDirectory = findRootSync(process.cwd()).rootDir
-  }
-
-  const relativeFilePath = path.replace(join(rootDirectory, sep), '')
-
   if (process.env.NODE_ENV === 'production' && gitSource !== undefined) {
-    return getGitFileUrl(relativeFilePath, line, column, gitSource, gitBranch)
-  }
+    if (rootDirectory === null) {
+      rootDirectory = findRootSync(process.cwd()).rootDir
+    }
 
-  if (!warned.has(relativeFilePath)) {
-    console.warn(
-      `[mdxts] \`getSourcePath\` could not determine the source path for "${relativeFilePath}". Ensure \`MDXTS_GIT_SOURCE\` is set in production.`
-    )
-    warned.add(relativeFilePath)
+    const relativeFilePath = path.replace(join(rootDirectory, sep), '')
+
+    if (gitSource === undefined) {
+      if (!warned.has(relativeFilePath)) {
+        console.warn(
+          `[mdxts] \`getSourcePath\` could not determine the source path for "${relativeFilePath}". Ensure \`MDXTS_GIT_SOURCE\` is set in production.`
+        )
+        warned.add(relativeFilePath)
+      }
+
+      return ''
+    }
+
+    return getGitFileUrl(relativeFilePath, line, column, gitSource!, gitBranch)
   }
 
   return ''
