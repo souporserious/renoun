@@ -8,7 +8,7 @@ let highlighter: Awaited<ReturnType<typeof getShikiHighlighter>> | null = null
 export async function getHighlighter() {
   if (highlighter === null) {
     highlighter = await getShikiHighlighter({
-      langs: ['css', 'js', 'jsx', 'ts', 'tsx', 'mdx', 'sh'],
+      langs: ['css', 'js', 'jsx', 'ts', 'tsx', 'md', 'mdx', 'sh', 'json'],
       themes: [getTheme()],
     })
   }
