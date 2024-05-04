@@ -49,12 +49,6 @@ export async function PackageInstall({
               ? 'PackageInstallTab active'
               : 'PackageInstallTab'
           }
-          style={{
-            fontSize: 'inherit',
-            padding: '0.8em',
-            backgroundColor: 'transparent',
-            cursor: 'pointer',
-          }}
           suppressHydrationWarning
         >
           {packageManager}
@@ -110,34 +104,36 @@ export async function PackageInstall({
 }
 
 const packageStyles = `
-@layer mdxts {
-  .PackageInstallTab {
-    width: 5em;
-    border: none;
-    border-bottom: 1px solid transparent;
-    color: #fff;
-  }
-  .PackageInstallTab.active {
-    font-weight: 600;
-    border-bottom: 1px solid #fff;
-  }
-  .PackageInstallCopyButton {
-    margin-right: 1rch !important;
-    margin-left: auto !important;
-  }
-  .PackageInstallTabPanel {
-    line-height: 1.4;
-    padding: 1ch;
-    overflow: auto;
-  }
-  .PackageInstallCopyButton,
-  .PackageInstallTabPanel {
-    display: none !important;
-  }
-  .PackageInstallCopyButton.active,
-  .PackageInstallTabPanel.active {
-    display: initial !important;
-  }
+.PackageInstallTab {
+  font-size: inherit;
+  width: 5em;
+  padding: 0.8em;
+  border: none;
+  border-bottom: 1px solid transparent;
+  background-color: transparent;
+  cursor: pointer;
+}
+.PackageInstallTab.active {
+  font-weight: 600;
+  border-bottom: 1px solid #fff;
+  color: #fff;
+}
+.PackageInstallCopyButton {
+  margin-right: 1rch !important;
+  margin-left: auto !important;
+}
+.PackageInstallTabPanel {
+  line-height: 1.4;
+  padding: 1ch;
+  overflow: auto;
+}
+.PackageInstallCopyButton,
+.PackageInstallTabPanel {
+  display: none !important;
+}
+.PackageInstallCopyButton.active,
+.PackageInstallTabPanel.active {
+  display: initial !important;
 }
 `.trim()
 
