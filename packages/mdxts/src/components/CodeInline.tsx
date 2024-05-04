@@ -43,6 +43,8 @@ export async function CodeInline({
         boxShadow: `0 0 0 1px ${theme.panel.border}`,
         backgroundColor: theme.editor.background,
         color: theme.editor.foreground,
+        whiteSpace: 'nowrap',
+        overflow: 'auto',
         ...style,
       }}
     >
