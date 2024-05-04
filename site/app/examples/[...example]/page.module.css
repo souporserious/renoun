@@ -23,7 +23,7 @@
   grid-row: 1;
   display: flex;
   flex-direction: column;
-  width: 100%;
+  max-width: 100%;
   max-height: 70dvh;
   padding: 3rem;
   margin: auto;
