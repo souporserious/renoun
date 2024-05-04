@@ -2,6 +2,7 @@ import React from 'react'
 import 'server-only'
 
 import { getThemeColors } from '../../index'
+import { CopyButton } from '../CopyButton'
 import { Tokens } from './Tokens'
 import type { Languages } from './get-tokens'
 import { getTokens } from './get-tokens'
@@ -147,7 +148,7 @@ export async function CodeBlock({
           boxShadow: `0 0 0 1px ${theme.panel.border}`,
           ...props.style?.container,
           padding: 0,
-        },
+        } satisfies React.CSSProperties,
       }
     : {}
 
@@ -248,6 +249,16 @@ export async function CodeBlock({
                       ? `0 -${padding}px`
                       : `0 -${padding}`
                     : undefined,
+              }}
+            />
+          ) : null}
+          {allowCopy !== false && !shouldRenderToolbar ? (
+            <CopyButton
+              value={metadata.value}
+              style={{
+                position: 'absolute',
+                right: '1ch',
+                top: padding,
               }}
             />
           ) : null}
