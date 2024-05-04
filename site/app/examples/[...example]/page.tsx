@@ -154,7 +154,7 @@ export default async function Page({
       </div>
       <ViewSource
         href={example.sourcePath}
-        style={{ position: 'absolute', bottom: '0.8rem', right: '2rem' }}
+        style={{ position: 'absolute', bottom: '1rem', right: '2rem' }}
       />
       <div
         className={styles.container}
