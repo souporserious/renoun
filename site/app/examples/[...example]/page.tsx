@@ -63,7 +63,7 @@ export default async function Page({
           gap: '0.25rem',
           position: 'absolute',
           top: '0.8rem',
-          left: '0.6rem',
+          left: '2rem',
         }}
       >
         <svg
