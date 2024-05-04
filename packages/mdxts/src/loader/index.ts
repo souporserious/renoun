@@ -13,9 +13,6 @@ import { addCodeMetaProps } from './add-code-meta-props'
 /**
  * A Webpack loader that exports front matter data for MDX files and augments `createSource` call sites to add an additional
  * argument of all dynamic imports based on the provided file pattern.
- *
- * When a TypeScript file pattern is provided, the closest `README.mdx` or MDX file with the same name
- * will be used (e.g. `Button.tsx` and `Button.mdx`).
  */
 export default async function loader(
   this: webpack.LoaderContext<{

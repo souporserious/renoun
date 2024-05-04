@@ -22,7 +22,7 @@ type PluginOptions = {
   /** The branch to use for linking to the repository and source files. */
   gitBranch?: string
 
-  /** Whether or not to highlight errors when parsing source code in `CodeBlock`. */
+  /** Whether or not to add rich highlighted errors in the console when type-checking source code in `CodeBlock`. Note, this may affect framework error boundaries that don't understand color encoding. */
   highlightErrors?: boolean
 }
 

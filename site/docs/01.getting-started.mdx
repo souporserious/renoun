@@ -14,7 +14,9 @@ MDXTS is a collection of components and utilities for rendering [MDX](https://md
 
 ## Automated Setup
 
-The CLI tool is the quickest way to get started using MDXTS. Run the following command in the root of your Next.js project to walk through configuring the plugin and rendering a source:
+The CLI tool is the quickest way to get started using MDXTS.
+
+Run the following command, optionally in the root of your Next.js project, to initialize the blog example or walk through configuring the plugin and rendering a source in an existing project:
 
 ```sh
 npm create mdxts
@@ -22,7 +24,7 @@ npm create mdxts
 
 ## Manual Setup
 
-Alternatively, follow the manual setup guide below to learn how to configure the Next.js plugin and define and render a source.
+Alternatively, follow the manual setup guide below to learn how to configure the Next.js plugin and render a source.
 
 ### Install
 
@@ -43,7 +45,9 @@ In your Next.js project, run the following command to install the `mdxts` packag
 
 ### Configuring the Next.js Plugin
 
-The Next.js plugin sets up everything needed for authoring MDX files and collecting type documentation. This includes default remark plugins, MDX components, and a loader for gathering collections of modules.
+The Next.js plugin sets up everything needed for authoring MDX files and collecting type documentation from TypeScript source files throughout your projects.
+
+The plugin includes default remark plugins, MDX components, and a Webpack loader for gathering collections of modules and their related metadata.
 
 ```js filename="next.config.mjs"
 import { createMdxtsPlugin } from 'mdxts/next'
@@ -58,13 +62,28 @@ export default withMdxts({
 })
 ```
 
-The `theme` option is used for syntax highlighting code blocks and is powered by [Shiki](https://shiki.matsu.io/). The `theme` value should correspond to either a built-in theme or a source path to a custom theme that adheres to the [VS Code theme specification](https://code.visualstudio.com/api/extension-guides/color-theme).
+The `theme` option is used for syntax highlighting code blocks and is powered by [Shiki](https://shiki.matsu.io/). The `theme` value should correspond to either a [built-in](https://shiki.matsu.io/themes) theme or a source path to a custom JSON theme that adheres to the [VS Code theme specification](https://code.visualstudio.com/api/extension-guides/color-theme).
 
-### Defining a Data Source (Optional)
+### Defining a Data Source
 
-Use the `createSource` utility to generate metadata and helpers for MDX and TypeScript source files that can be used to build routes for content and documentation:
+Use the `createSource` utility to generate helpers for gathering metadata about MDX and TypeScript source files. This can be used to build routes for rendering content, documentation, and examples.
 
 ```ts filename="data.ts"
+import { createSource } from 'mdxts'
+
+export const allDocs = createSource('docs/**/*.mdx')
+```
+
+<Note>
+  This file can be rendered anywhere in your project and split into multiple
+  files for organization if needed.
+</Note>
+
+### Routing
+
+The `paths` helper provides a list of paths to generate static routes:
+
+```ts filename="02.data.ts"
 import { createSource } from 'mdxts'
 
 export const allDocs = createSource('docs/**/*.mdx')
@@ -87,7 +106,7 @@ type Props = { params: { slug: string } }
 export default async function Page({ params }: Props) {
   const doc = await allDocs.get(params.slug)
 
-  if (doc === undefined) {
+  if (!doc) {
     return notFound()
   }
 
@@ -155,16 +174,18 @@ export default async function Page({ params }: Props) {
   both fail, the entire directory will be analyzed.
 </Note>
 
-### Type Checking
+### Type Checking Code Blocks
 
-All code blocks will automatically be type-checked using the TypeScript compiler to ensure code works as expected. Notice the following will throw a type error because `b` is not defined:
+All code blocks will automatically be type-checked using the TypeScript compiler to ensure code works as expected.
+
+Notice the following will throw a type error because `b` is not defined:
 
 ```tsx allowErrors showErrors
 const a = 1
 a + b
 ```
 
-We can pass `allowErrors` to disable type checking in this case:
+This can be configured by passing `allowErrors` to disable type checking like in the following example:
 
 ````mdx
 ```tsx allowErrors
@@ -178,7 +199,22 @@ const a = 1
 a + b
 ```
 
-This is useful for showing incomplete or incorrect code examples in documentation for educational purposes. Read more about [type checking](./03.type-checking.mdx) to learn how the TypeScript compiler is used for providing type information for code blocks and validating front matter fields.
+Alternatively, override the `pre` component in a top-level `mdx-components.tsx` file to allow errors by default in MDX content:
+
+```tsx filename="mdx-components.tsx"
+import { MDXComponents } from 'mdxts/components'
+
+export function useMDXComponents() {
+  return {
+    ...MDXComponents,
+    pre: (props) => <MDXComponents.pre allowErrors {...props} />,
+  } satisfies MDXComponents
+}
+```
+
+Allowing errors is useful to show incomplete or incorrect code examples in documentation for educational purposes. It's highly encouraged to disallow errors if possible so code examples are always using correct code that can compile.
+
+Read more about [type checking](./03.type-checking.mdx) to learn how the TypeScript compiler is used for providing type information for code blocks and validating front matter fields.
 
 ### Examples
 

@@ -35,7 +35,7 @@ export async function generateMetadata({
 export default async function Page({ params }: { params: { slug: string[] } }) {
   const doc = await allData.get(['docs', ...params.slug])
 
-  if (doc === undefined) {
+  if (!doc) {
     return notFound()
   }
 

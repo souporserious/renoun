@@ -9,15 +9,22 @@ import { Symbol } from './Symbol'
 import type { GetTokens } from './get-tokens'
 
 export type TokensProps = {
+  /** Syntax highlighted tokens from `getTokens` to render. */
   tokens?: Awaited<ReturnType<GetTokens>>
+
+  /** Class names to apply to the tokens and popover elements. */
   className?: {
     token?: string
     popover?: string
   }
+
+  /** Styles to apply to the tokens and popover elements. */
   style?: {
     token?: React.CSSProperties
     popover?: React.CSSProperties
   }
+
+  /** Custom render function for each line of tokens. */
   renderLine?: (line: {
     children: React.ReactNode
     index: number
