@@ -22,6 +22,9 @@ type PluginOptions = {
   /** The branch to use for linking to the repository and source files. */
   gitBranch?: string
 
+  /** Whether or not to renumber ordered filenames (e.g. 01.getting-started) when adding/removing/modifying MDX files. This only occurs while the development server is running. */
+  renumberFilenames?: boolean
+
   /** Whether or not to add rich highlighted errors in the console when type-checking source code in `CodeBlock`. Note, this may affect framework error boundaries that don't understand color encoding. */
   highlightErrors?: boolean
 }
@@ -34,6 +37,7 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
     gitBranch = 'main',
     siteUrl,
     theme,
+    renumberFilenames: renumberFilenamesOption = true,
     highlightErrors,
   } = pluginOptions
   const themePath = theme.endsWith('.json')
@@ -42,7 +46,7 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
 
   return function withMdxts(nextConfig: NextConfig = {}) {
     const getWebpackConfig = nextConfig.webpack
-    let startedWatcher = false
+    let startedRenumberFilenameWatcher = false
 
     return async (phase: typeof PHASE_DEVELOPMENT_SERVER) => {
       const plugins = await getMdxPlugins({ gitSource, gitBranch })
@@ -72,9 +76,14 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
           })
         )
 
-        if (options.isServer && options.dev && !startedWatcher) {
+        if (
+          !startedRenumberFilenameWatcher &&
+          renumberFilenamesOption &&
+          options.isServer &&
+          options.dev
+        ) {
           renumberFilenames()
-          startedWatcher = true
+          startedRenumberFilenameWatcher = true
         }
 
         config.module.rules.push({
