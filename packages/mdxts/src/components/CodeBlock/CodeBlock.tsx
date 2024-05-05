@@ -78,7 +78,7 @@ export type CodeBlockProps =
       workingDirectory?: string
     } & BaseCodeBlockProps)
 
-/** Renders a `pre` element with syntax highlighting and type information. */
+/** Renders a `pre` element with syntax highlighting, type information, and type checking. */
 export async function CodeBlock({
   filename,
   language,

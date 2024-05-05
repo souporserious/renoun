@@ -3,18 +3,6 @@
   using the [Next.js plugin](/packages/next).
 </Note>
 
-Use the `source` prop to render a code block from a source file.
-
-For example, the following MDX:
-
-```mdx
-<CodeBlock source="./counter/useCounter.ts" />
-```
-
-Will produce a code block with the contents of `./counter/useCounter.ts`:
-
-<CodeBlock source="./counter/useCounter.ts" />
-
 ## Styling
 
 The `CodeBlock` component can be styled using the `className` and `style` props to target specific descendant elements.
@@ -50,7 +38,7 @@ export function CodeBlock(props: React.ComponentProps<typeof MdxtsCodeBlock>) {
 
 ## Overrides
 
-If you need full customization, the `CodeBlock` component can be fully overridden by importing it from `mdxts/components` and extending it:
+If you need more customization, the `CodeBlock` component can be fully overridden by importing it from `mdxts/components` and extending it:
 
 ```tsx filename="CodeBlock.tsx"
 import { CodeBlock as MdxtsCodeBlock, Tokens } from 'mdxts/components'
@@ -65,9 +53,9 @@ export function CodeBlock(props: React.ComponentProps<typeof MdxtsCodeBlock>) {
 ```
 
 <Note>
-  This will only render the tokens, use the other `CodeBlock` components like
-  `LineNumbers`, `LineHighlights`, and `Toolbar` to render the other parts of
-  the code block.
+  This will only render highlighted tokens. Use the other `CodeBlock` components
+  like `LineNumbers`, `LineHighlights`, and `Toolbar` to render the other parts
+  of the code block.
 </Note>
 
 Now import the `CodeBlock` component in your `mdx-components.tsx` file and override the `pre` component to use it instead of the default `CodeBlock` component:
