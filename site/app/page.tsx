@@ -88,9 +88,10 @@ export default function Home() {
             <CopyButton
               value="npm create mdxts"
               style={{
-                padding: 0,
+                fontSize: 'var(--font-size-body-1)',
                 width: 'var(--font-size-body-1)',
                 height: 'var(--font-size-body-1)',
+                padding: 0,
               }}
             />
           </div>
