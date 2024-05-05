@@ -1,5 +1,219 @@
 # mdxts
 
+## 0.16.0
+
+### Minor Changes
+
+- 469b021: Enables type-checking for the `CodeBlock` component. To opt-out of type-checking, use the `allowErrors` prop on the code block:
+
+  ```tsx allowErrors
+  const a = 1;
+  a + b;
+  ```
+
+  This will disable type-checking for the code block and prevent erroring. To show the errors, usually for educational purposes, use the `showErrors` prop:
+
+  ```tsx allowErrors showErrors
+  const a = 1;
+  a + b;
+  ```
+
+  ### Breaking Changes
+
+  `CodeBlock` now throws an error if the code block is not valid TypeScript. This is to ensure that all code blocks are type-checked and work as expected.
+
+- bb372a8: Normalizes passing `CodeBlock` and `CodeInline` props to `pre` and `code` elements in the rehype plugin.
+- 0f49ee9: Adds `previous` and `next` examples metadata to data source.
+- f05b552: Normalizes the internal `getEntrySourceFiles` utility that is responsible for determining what TypeScript data sources are public based on `package.json` exports, index files, and top-level directories.
+
+  To determine what source files should be considered public when dealing with package exports, `createSource` gets two new options used to remap `package.json` exports to their original source files:
+
+  ```ts
+  import { createSource } from "mdxts";
+
+  const allPackages = createSource("../packages/mdxts/src/**/*.{ts,tsx}", {
+    sourceDirectory: "src",
+    outputDirectory: "dist",
+  });
+  ```
+
+  Using a subset of the `mdxts` `package.json` exports as an example:
+
+  ```json
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
+      "require": "./dist/cjs/index.js"
+    },
+    "./components": {
+      "types": "./dist/src/components/index.d.ts",
+      "import": "./dist/src/components/index.js",
+      "require": "./dist/cjs/components/index.js"
+    },
+  },
+  ```
+
+  These would be remapped to their original source files, filtering out any paths gathered from the `createSource` pattern not explicitly exported:
+
+  ```json
+  [
+    "../packages/mdxts/src/index.ts",
+    "../packages/mdxts/src/components/index.ts"
+  ]
+  ```
+
+- 0a4bde2: Moves `CodeBlock:sourcePath` to a public prop and adds `sourcePath` to the code meta in the remark plugin.
+- 9cf1577: Cleans up type errors to be more understandable and adds a configuration to highlight errors in the terminal:
+
+  ```ts
+  import { createMdxtsPlugin } from "mdxts";
+
+  const withMdxtsPlugin = createMdxtsPlugin({ highlightErrors: true });
+
+  export default withMdxtsPlugin();
+  ```
+
+- 2af35d0: Converts theme to object syntax and moves colors to top-level:
+
+  `theme.colors['panel.border']` -> `theme.panel.border`
+
+- 7726268: Adds a new `sort` option to `createSource`:
+
+  ```tsx
+  import { createSource } from "mdxts";
+
+  const allPosts = createSource<{ frontMatter: { date: Date } }>("**/*.mdx", {
+    sort: (a, b) => a.frontMatter.date - b.frontMatter.date,
+  });
+  ```
+
+- c42eb88: Removes panel border modifications which decreased the alpha channel of the `panel.border` theme color. This should now be modified in a custom theme.
+- 2af35d0: Rewrites the `CodeBlock` component to use the latest version of [shiki](https://shiki.style/) as well as allows for better composition using newly exposed `Tokens`, `Toolbar`, `LineNumbers`, and `LineHighlights` components:
+
+  ```tsx
+  import { getTheme } from "mdxts";
+  import { CodeBlock, Toolbar, Tokens } from "mdxts/components";
+
+  function CodeBlockWithToolbar() {
+    const theme = getTheme();
+
+    return (
+      <CodeBlock source="./counter/Counter.tsx">
+        <div
+          style={{
+            backgroundColor: theme.background,
+            color: theme.foreground,
+          }}
+        >
+          <Toolbar allowCopy style={{ padding: "0.5rem 1rem" }} />
+          <pre
+            style={{
+              whiteSpace: "pre",
+              wordWrap: "break-word",
+              overflow: "auto",
+            }}
+          >
+            <Tokens />
+          </pre>
+        </div>
+      </CodeBlock>
+    );
+  }
+  ```
+
+  Individual `CodeBlock` elements can be styled now for simple overriding:
+
+  ```tsx
+  <CodeBlock
+    className={{
+      container: GeistMono.className,
+    }}
+    style={{
+      container: {
+        fontSize: "var(--font-size-body-2)",
+        lineHeight: "var(--line-height-body-2)",
+        padding: "1rem",
+      },
+      toolbar: {
+        padding: "0.5rem 1rem",
+      },
+    }}
+    language="tsx"
+    value="..."
+  />
+  ```
+
+  ### Breaking Changes
+
+  `CodeBlock` now uses a keyed `className` and `style` object to allow for more granular control over the styling of the `CodeBlock` components. To upgrade, move the `className` and `style` definitions to target the `container`:
+
+  ```diff
+  <CodeBlock
+  --  className={GeistMono.className}
+  ++  className={{ container: GeistMono.className }}
+  style={{
+  ++    container: {
+             padding: '1rem'
+  ++    },
+    }}
+  ```
+
+- 0b80bf5: Adds a `fixImports` prop to `CodeBlock` to allow fixing imports when the source code references files outside the project and can't resolve correctly:
+
+  ```tsx
+  import { CodeBlock } from "mdxts/components";
+
+  const source = `
+  import { Button } from './Button'
+  
+  export function BasicUsage() {
+    return <Button>Click Me</Button>
+  }
+  `;
+
+  export default function Page() {
+    return <CodeBlock fixImports value={source} />;
+  }
+  ```
+
+  An example of this is when rendering a source file that imports a module from a package that is not in the immediate project. The `fixImports` prop will attempt to fix these broken imports using installed packages if a match is found:
+
+  ```diff
+  --import { Button } from './Button'
+  ++import { Button } from 'design-system'
+
+  export function BasicUsage() {
+    return <Button>Click Me</Button>
+  }
+  ```
+
+- 2af35d0: Rewrites relative import specifiers pointing outside of the project to use the package name if possible:
+
+  `import { getTheme } from '../../mdxts/src/components'` -> `import { getTheme } from 'mdxts/components'`
+
+- 0e2cc45: Adds a `renumberFilenames` option to the next plugin for configuring whether or not to renumber filenames when adding/removing/modifying ordered content.
+- ad8b17f: ### Breaking Changes
+
+  The `CodeBlock` `highlight` prop has been renamed to `lineHighlights` to better match the `LineHighlights` component nomenclature.
+
+- 7c5df2f: Fixes data source ordering to use strings instead of `parseInt` to ensure that the items are always ordered correctly.
+
+  ### Breaking Changes
+
+  The `order` property for a data source item is now a padded string instead of a number.
+
+### Patch Changes
+
+- 8802a57: Fixes hardcoded CSS properties in `Toolbar` copy button by using `em` values and `currentColor`.
+- 91e87c4: Renames `getTheme` utility to `getThemeColors`.
+- 85722e3: Fixes MDX code block meta values with an equals sign from being parsed incorrectly.
+- f21cf8d: Allows omitting `CodeBlock` filename extension and uses `language` if provided.
+- 2af35d0: Fixes splitting tokens when multiple symbols exist in a single token.
+- 58b9bd3: Fixes source links to direct line and column in GitHub.
+- 885a6cc: Fixes polluting `CodeBlock` globals by always adding a `export { }` declaration to the AST and only removing it from the rendered tokens.
+- c57b51f: Speeds up build by lazily executing dynamic imports.
+
 ## 0.15.3
 
 ### Patch Changes
