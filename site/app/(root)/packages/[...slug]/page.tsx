@@ -123,22 +123,12 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
                     flexDirection: 'column',
                     position: 'relative',
                     padding: '0.5rem',
-                    gap: '0.8rem',
+                    gap: '0.5rem',
                     border: '1px solid var(--color-separator)',
                     borderRadius: '0.25rem',
                     backgroundColor: 'var(--color-surface-2)',
                   }}
                 >
-                  <h3
-                    style={{
-                      fontSize: 'var(--font-size-body-2)',
-                      color: 'var(--color-foreground-interactive)',
-                      flexShrink: 0,
-                      margin: 0,
-                    }}
-                  >
-                    {example.name}
-                  </h3>
                   <div
                     style={{
                       height: '10rem',
@@ -163,6 +153,16 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
                       </div>
                     </div>
                   </div>
+                  <h3
+                    style={{
+                      fontSize: 'var(--font-size-body-2)',
+                      color: 'var(--color-foreground-interactive)',
+                      flexShrink: 0,
+                      margin: 0,
+                    }}
+                  >
+                    {example.name}
+                  </h3>
                   <a
                     href={`/examples${example.pathname}`}
                     style={{
