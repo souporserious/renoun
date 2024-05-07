@@ -9,7 +9,5 @@ export const allPosts = createSource<{
   }
 }>('posts/*.mdx', {
   baseDirectory: 'posts',
-  sort: (a, b) => {
-    return b.frontMatter.date.getTime() - a.frontMatter.date.getTime()
-  },
+  sort: (a, b) => b.frontMatter.date.getTime() - a.frontMatter.date.getTime(),
 })
