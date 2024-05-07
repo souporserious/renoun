@@ -44,7 +44,7 @@ export async function generateMetadata({
 export default async function Page({ params }: { params: { slug: string[] } }) {
   const singlePackage = await allData.get(['packages', ...params.slug])
 
-  if (singlePackage === undefined) {
+  if (!singlePackage) {
     return notFound()
   }
 

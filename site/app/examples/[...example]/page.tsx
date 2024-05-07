@@ -1,10 +1,10 @@
 import { notFound } from 'next/navigation'
+import { getThemeColors } from 'mdxts'
 import { CodeBlock } from 'mdxts/components'
 import { allPackages } from 'data'
 import { ViewSource } from 'components/ViewSource'
 import { getSiteMetadata } from 'utils/get-site-metadata'
 import styles from './page.module.css'
-import { getThemeColors } from 'mdxts'
 
 export const dynamic = 'force-static'
 
@@ -21,8 +21,8 @@ export async function generateMetadata({
 }) {
   const example = await allPackages.getExample(params.example)
 
-  if (example === undefined) {
-    return notFound()
+  if (!example) {
+    throw new Error(`Example not found for "${params.example.join('/')}"`)
   }
 
   return getSiteMetadata({
@@ -38,7 +38,7 @@ export default async function Page({
   const singlePackage = await allPackages.get(params.example.slice(0, -1))
   const example = await allPackages.getExample(params.example)
 
-  if (singlePackage === undefined || example === undefined) {
+  if (!singlePackage || !example) {
     return notFound()
   }
 
