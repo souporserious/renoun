@@ -173,8 +173,6 @@ export type CreateSourceResult<
 export function createSource<
   const Type extends {
     frontMatter: Record<string, any>
-  } = {
-    frontMatter: Record<string, any>
   },
   const FilePattern extends GlobPattern | RecursiveGlobPattern =
     | GlobPattern
