@@ -27,7 +27,7 @@ import { notFound } from 'next/navigation'
 
 const allDocs = createSource('docs/**/*.mdx')
 
-type Props = { params: { slug: string } }
+type Props = { params: { slug: string[] } }
 
 export default async function Page({ params }: Props) {
   const doc = await allDocs.get(params.slug)

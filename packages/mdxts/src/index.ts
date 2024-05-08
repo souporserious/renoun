@@ -8,10 +8,10 @@ import { getDiagnosticMessageText } from '@tsxmod/utils'
 import 'server-only'
 
 import { project } from './components/project'
-import type { CodeBlocks } from './mdx-plugins/remark/add-code-blocks'
 import type { Headings } from './mdx-plugins/remark/add-headings'
 import type { AllModules, ModuleData } from './utils/get-all-data'
 import { getAllData } from './utils/get-all-data'
+import type { ExampleItem } from './utils/get-examples'
 import { getTheme } from './utils/get-theme'
 
 type FeedOptions = Omit<
@@ -19,20 +19,42 @@ type FeedOptions = Omit<
   'generator' | 'link' | 'id'
 >
 
-type Compute<Type> = Type extends object
-  ? {
+type Primitive = string | number | bigint | boolean | symbol | undefined | null
+
+type BuiltInObject =
+  | Date
+  | RegExp
+  | Set<any>
+  | Map<any, any>
+  | WeakSet<any>
+  | WeakMap<any, any>
+  | Promise<any>
+  | Error
+  | ArrayBuffer
+  | SharedArrayBuffer
+  | Int8Array
+  | Uint8Array
+  | Uint8ClampedArray
+  | Int16Array
+  | Uint16Array
+  | Int32Array
+  | Uint32Array
+  | Float32Array
+  | Float64Array
+
+type Compute<Type> = Type extends Function | Primitive | BuiltInObject
+  ? Type
+  : {
       [Key in keyof Type]: Type[Key] extends object
         ? Compute<Type[Key]>
         : Type[Key]
     } & {}
-  : Type
 
 export type Module<Type extends { frontMatter: Record<string, any> }> = Compute<
   {
     Content?: ComponentType<{ renderTitle?: boolean }>
-    examples: Awaited<ModuleData<Type>['examples']>
+    examples: ExampleItem[]
     pathname: string
-    codeBlocks: CodeBlocks
     headings: Headings
     frontMatter?: Record<string, any>
     readingTime?: {
@@ -67,6 +89,80 @@ export type SourceTreeItem = {
   children: SourceTreeItem[]
 }
 
+export type CreateSourceOptions<
+  Type extends { frontMatter: Record<string, any> },
+> = {
+  /**
+   * The base directory used when calculating source paths. This is useful in monorepos where
+   * source files can be located outside of the workspace.
+   */
+  baseDirectory?: string
+
+  /**
+   * The base pathname used when calculating navigation paths. This includes everything after
+   * the hostname (e.g. `/docs` in `https://mdxts.com/docs`).
+   */
+  basePathname?: string
+
+  /**
+   * The source directory used to calculate package export paths. This is useful when the source is
+   * located in a different workspace than the project rendering it.
+   */
+  sourceDirectory?: string
+
+  /**
+   * The output directory for built files used to calculate package export paths. This is useful
+   * when the source is located in a different workspace than the project rendering it.
+   */
+  outputDirectory?: string | string[]
+
+  /**
+   * A function to sort data items by.
+   */
+  sort?: (a: ModuleData<Type>, b: ModuleData<Type>) => number
+}
+
+type GlobPattern = `${string}*${string}`
+
+type RecursiveGlobPattern = `${string}**${string}`
+
+function isRecursiveGlobPattern(
+  pattern: string
+): pattern is RecursiveGlobPattern {
+  return pattern.includes('**')
+}
+
+export type CreateSourceResult<
+  Type extends { frontMatter: Record<string, any> },
+  FilePattern extends GlobPattern | RecursiveGlobPattern,
+> = {
+  /** Returns an array of all statically analyzed module metadata. */
+  all: () => ModuleData<Type>[]
+
+  /** Constructs and returns a hierarchical tree structure of all modules, useful for multi-level navigation. */
+  tree: () => SourceTreeItem[]
+
+  /** Provides paths as a flat array of pathnames if targeting a single directory and an arrays of strings for multi-level dynamic route generation. */
+  paths: () => FilePattern extends RecursiveGlobPattern ? string[][] : string[]
+
+  /** Asynchronously returns paths for all examples across modules, merging data and examples. */
+  examplePaths: () => Promise<string[][]>
+
+  /** Retrieves a module by its pathname, optionally including metadata, examples, and previous/next navigation links. */
+  get: (
+    pathname?: FilePattern extends RecursiveGlobPattern ? string[] : string
+  ) => Promise<Module<Type> | undefined>
+
+  /**
+   * Fetches a specific example by its path, which must include the source module path. Use the
+   * `examplePaths` method to get the full example pathname required for this method.
+   */
+  getExample: (pathname: string[]) => Promise<ExampleItem | undefined>
+
+  /** Generates an RSS feed based on all module metadata. */
+  rss: (options: FeedOptions) => string
+}
+
 /**
  * Loads content and metadata related to MDX and TypeScript files.
  *
@@ -74,42 +170,19 @@ export type SourceTreeItem = {
  * export const allDocs = createSource('./docs/*.mdx', { baseDirectory: 'docs' })
  * export const allComponents = createSource('./components/**\/index.ts')
  */
-export function createSource<Type extends { frontMatter: Record<string, any> }>(
-  /** A file glob pattern to match source files. Supports [micromatch patterns](https://github.com/micromatch/micromatch#matching-features). */
-  globPattern: string,
-
-  /** Options for configuring the source. */
-  options: {
-    /**
-     * The base directory used when calculating source paths. This is useful in monorepos where
-     * source files can be located outside of the workspace.
-     */
-    baseDirectory?: string
-
-    /**
-     * The base pathname used when calculating navigation paths. This includes everything after
-     * the hostname (e.g. `/docs` in `https://mdxts.com/docs`).
-     */
-    basePathname?: string
-
-    /**
-     * The source directory used to calculate package export paths. This is useful when the source is
-     * located in a different workspace than the project rendering it.
-     */
-    sourceDirectory?: string
-
-    /**
-     * The output directory for built files used to calculate package export paths. This is useful
-     * when the source is located in a different workspace than the project rendering it.
-     */
-    outputDirectory?: string | string[]
-
-    /**
-     * A function to sort data items by.
-     */
-    sort?: (a: ModuleData<Type>, b: ModuleData<Type>) => number
-  } = {}
-) {
+export function createSource<
+  const Type extends {
+    frontMatter: Record<string, any>
+  } = {
+    frontMatter: Record<string, any>
+  },
+  const FilePattern extends GlobPattern | RecursiveGlobPattern =
+    | GlobPattern
+    | RecursiveGlobPattern,
+>(
+  globPattern: FilePattern,
+  options: Compute<CreateSourceOptions<Type>> = {}
+): CreateSourceResult<Type, FilePattern> {
   let allModules = arguments[2] as AllModules
 
   if (allModules === undefined) {
@@ -262,18 +335,22 @@ export function createSource<Type extends { frontMatter: Record<string, any> }>(
       return tree
     },
 
-    /** Returns paths for all modules calculated from file system paths. */
     paths() {
-      return filteredDataKeys.map((pathname) =>
+      const allPaths = filteredDataKeys.map((pathname) =>
         pathname
           // Split pathname into an array
           .split(sep)
           // Remove empty strings
           .filter(Boolean)
       )
+
+      return (
+        isRecursiveGlobPattern(globPattern)
+          ? allPaths
+          : allPaths.map((pathname) => pathname.at(-1)!)
+      ) as FilePattern extends RecursiveGlobPattern ? string[][] : string[]
     },
 
-    /** Returns paths for all module examples. */
     async examplePaths() {
       const allData = this.all()
       const allPaths = this.paths()
@@ -285,8 +362,9 @@ export function createSource<Type extends { frontMatter: Record<string, any> }>(
       )
     },
 
-    /** Returns a module by pathname including metadata, examples, and previous/next modules. Defaults to `basePathname` if `pathname` is `undefined`. */
-    async get(pathname: string | string[] | undefined) {
+    async get(
+      pathname: string | string[] | undefined
+    ): Promise<Module<Type> | undefined> {
       if (pathname === undefined) {
         pathname = basePathname
       }
@@ -408,7 +486,7 @@ export function createSource<Type extends { frontMatter: Record<string, any> }>(
         headings,
         metadata,
         ...moduleExports,
-      }
+      } as Module<Type>
     },
 
     /**
@@ -418,7 +496,9 @@ export function createSource<Type extends { frontMatter: Record<string, any> }>(
      */
     async getExample(slug: string[]) {
       const dataSlug = slug.slice(0, -1)
-      const dataItem = await this.get(dataSlug)
+      const dataItem = await this.get(
+        dataSlug as FilePattern extends RecursiveGlobPattern ? string[] : string
+      )
 
       if (dataItem === undefined) {
         return
@@ -436,7 +516,11 @@ export function createSource<Type extends { frontMatter: Record<string, any> }>(
 }
 
 /** Merges multiple sources into a single source. */
-export function mergeSources(...sources: ReturnType<typeof createSource>[]) {
+export function mergeSources<
+  Sources extends Array<ReturnType<typeof createSource>>,
+>(...sources: Sources) {
+  type SourceItem = Sources[number]
+
   function all() {
     const combinedData = sources.flatMap((dataSource) => dataSource.all())
 
@@ -464,8 +548,10 @@ export function mergeSources(...sources: ReturnType<typeof createSource>[]) {
     return sources.flatMap((dataSource) => dataSource.tree())
   }
 
-  function paths() {
-    return sources.flatMap((dataSource) => dataSource.paths())
+  function paths(): ReturnType<SourceItem['paths']> {
+    return sources.flatMap(
+      (dataSource) => dataSource.paths() as unknown
+    ) as ReturnType<SourceItem['paths']>
   }
 
   async function examplePaths() {
@@ -474,11 +560,15 @@ export function mergeSources(...sources: ReturnType<typeof createSource>[]) {
     )
   }
 
-  async function get(pathname: string | string[]) {
+  async function get(pathname: string | string[] | undefined) {
     let result
 
+    if (!pathname) {
+      return
+    }
+
     for (const dataSource of sources) {
-      result = await dataSource.get(pathname)
+      result = await dataSource.get(pathname as any)
       if (result) break
     }
 

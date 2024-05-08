@@ -101,7 +101,7 @@ Use the `get` method from the `allDocs` source we created above to retrieve the 
 import { notFound } from 'next/navigation'
 import { allDocs } from '../../../data'
 
-type Props = { params: { slug: string } }
+type Props = { params: { slug: string[] } }
 
 export default async function Page({ params }: Props) {
   const doc = await allDocs.get(params.slug)
@@ -124,7 +124,7 @@ If the targeted source files are TypeScript files, the exported types will also 
 import { createSource } from 'mdxts'
 import { notFound } from 'next/navigation'
 
-type Props = { params: { slug: string } }
+type Props = { params: { slug: string[] } }
 
 const allComponents = createSource('components/**/*.tsx')
 

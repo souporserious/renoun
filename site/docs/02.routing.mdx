@@ -19,7 +19,7 @@ import { createSource } from 'mdxts'
 
 const allDocs = createSource('docs/**/*.mdx')
 
-export default async function Page({ params }: { params: { slug: string } }) {
+export default async function Page({ params }: { params: { slug: string[] } }) {
   const { Content } = await allDocs.get(params.slug)
   return <Content />
 }
@@ -34,7 +34,7 @@ import { createSource } from 'mdxts'
 
 const allComponents = createSource('components/**/*.tsx')
 
-export default async function Page({ params }: { params: { slug: string } }) {
+export default async function Page({ params }: { params: { slug: string[] } }) {
   const { Content, exportedTypes } = await allComponents.get(params.slug)
   return (
     <>
@@ -85,7 +85,7 @@ export function generateStaticParams() {
   return allDocs.paths().map((pathname) => ({ slug: pathname }))
 }
 
-export default async function Page({ params }: { params: { slug: string } }) {
+export default async function Page({ params }: { params: { slug: string[] } }) {
   const { Content } = await allDocs.get(params.slug)
   return Content ? <Content /> : null
 }
