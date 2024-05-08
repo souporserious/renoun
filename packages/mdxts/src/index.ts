@@ -345,11 +345,22 @@ export function createSource<
         return
       }
 
-      const stringPathname = join(
+      let stringPathname = join(
         sep,
         Array.isArray(pathname) ? pathname.join(sep) : pathname
       )
-      const data = allFilteredData[stringPathname]
+      let data = allFilteredData[stringPathname]
+
+      // If no data was found, try to find it by the base pathname.
+      if (data === undefined && basePathname) {
+        stringPathname = join(
+          sep,
+          basePathname,
+          sep,
+          Array.isArray(pathname) ? pathname.join(sep) : pathname
+        )
+        data = allFilteredData[stringPathname]
+      }
 
       if (data === undefined) {
         return
