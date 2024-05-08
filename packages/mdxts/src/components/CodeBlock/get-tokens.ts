@@ -470,12 +470,12 @@ function throwDiagnosticErrors(
   const formattedErrors = errorMessages.join('\n')
 
   if (process.env.MDXTS_HIGHLIGHT_ERRORS === 'true') {
-    const errorMessage = `${tokensToHighlightedText(tokens)}\n\n${formattedErrors}`
+    const errorMessage = `${formattedErrors}\n\n${tokensToHighlightedText(tokens)}`
     throw new Error(
       `[mdxts] ${chalk.bold('CodeBlock')} type errors found ${sourcePath ? `at "${chalk.bold(sourcePath)}" ` : ''}for filename "${chalk.bold(filePath)}"\n\n${errorMessage}\n\n`
     )
   } else {
-    const errorMessage = `${tokensToPlainText(tokens)}\n\n${formattedErrors}`
+    const errorMessage = `${formattedErrors}\n\n${tokensToPlainText(tokens)}`
     throw new Error(
       `[mdxts] CodeBlock type errors found ${sourcePath ? `at "${sourcePath}" ` : ''}for filename "${filePath}"\n\n${errorMessage}\n\n`
     )
