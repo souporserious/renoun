@@ -19,30 +19,7 @@ type FeedOptions = Omit<
   'generator' | 'link' | 'id'
 >
 
-type Primitive = string | number | bigint | boolean | symbol | undefined | null
-
-type BuiltInObject =
-  | Date
-  | RegExp
-  | Set<any>
-  | Map<any, any>
-  | WeakSet<any>
-  | WeakMap<any, any>
-  | Promise<any>
-  | Error
-  | ArrayBuffer
-  | SharedArrayBuffer
-  | Int8Array
-  | Uint8Array
-  | Uint8ClampedArray
-  | Int16Array
-  | Uint16Array
-  | Int32Array
-  | Uint32Array
-  | Float32Array
-  | Float64Array
-
-type Compute<Type> = Type extends Function | Primitive | BuiltInObject
+type Compute<Type> = Type extends Function
   ? Type
   : {
       [Key in keyof Type]: Type[Key] extends object
@@ -122,19 +99,15 @@ export type CreateSourceOptions<
   sort?: (a: ModuleData<Type>, b: ModuleData<Type>) => number
 }
 
-type GlobPattern = `${string}*${string}`
+export type ShallowGlobPattern = `${string}*${string}`
 
-type RecursiveGlobPattern = `${string}**${string}`
+export type RecursiveGlobPattern = `${string}**${string}`
 
-function isRecursiveGlobPattern(
-  pattern: string
-): pattern is RecursiveGlobPattern {
-  return pattern.includes('**')
-}
+type AllGlobPatterns = ShallowGlobPattern | RecursiveGlobPattern
 
 export type CreateSourceResult<
   Type extends { frontMatter: Record<string, any> },
-  FilePattern extends GlobPattern | RecursiveGlobPattern,
+  GlobPattern extends AllGlobPatterns,
 > = {
   /** Returns an array of all statically analyzed module metadata. */
   all: () => ModuleData<Type>[]
@@ -143,14 +116,14 @@ export type CreateSourceResult<
   tree: () => SourceTreeItem[]
 
   /** Provides paths as a flat array of pathnames if targeting a single directory and an arrays of strings for multi-level dynamic route generation. */
-  paths: () => FilePattern extends RecursiveGlobPattern ? string[][] : string[]
+  paths: () => GlobPattern extends RecursiveGlobPattern ? string[][] : string[]
 
   /** Asynchronously returns paths for all examples across modules, merging data and examples. */
   examplePaths: () => Promise<string[][]>
 
   /** Retrieves a module by its pathname, optionally including metadata, examples, and previous/next navigation links. */
   get: (
-    pathname?: FilePattern extends RecursiveGlobPattern ? string[] : string
+    pathname?: GlobPattern extends RecursiveGlobPattern ? string[] : string
   ) => Promise<Module<Type> | undefined>
 
   /**
@@ -171,16 +144,12 @@ export type CreateSourceResult<
  * export const allComponents = createSource('./components/**\/index.ts')
  */
 export function createSource<
-  const Type extends {
-    frontMatter: Record<string, any>
-  },
-  const FilePattern extends GlobPattern | RecursiveGlobPattern =
-    | GlobPattern
-    | RecursiveGlobPattern,
+  const Type extends { frontMatter: Record<string, any> },
+  const GlobPattern extends AllGlobPatterns = AllGlobPatterns,
 >(
-  globPattern: FilePattern,
-  options: Compute<CreateSourceOptions<Type>> = {}
-): CreateSourceResult<Type, FilePattern> {
+  globPattern: GlobPattern,
+  options: CreateSourceOptions<Type> = {}
+): CreateSourceResult<Type, GlobPattern> {
   let allModules = arguments[2] as AllModules
 
   if (allModules === undefined) {
@@ -262,12 +231,10 @@ export function createSource<
   }
 
   return {
-    /** Returns all modules. */
     all() {
       return Object.values(allFilteredData)
     },
 
-    /** Returns a tree of all module metadata related to navigation. */
     tree() {
       const tree: SourceTreeItem[] = []
 
@@ -343,10 +310,10 @@ export function createSource<
       )
 
       return (
-        isRecursiveGlobPattern(globPattern)
+        globPattern.includes('**')
           ? allPaths
           : allPaths.map((pathname) => pathname.at(-1)!)
-      ) as FilePattern extends RecursiveGlobPattern ? string[][] : string[]
+      ) as GlobPattern extends RecursiveGlobPattern ? string[][] : string[]
     },
 
     async examplePaths() {
@@ -487,15 +454,10 @@ export function createSource<
       } as Module<Type>
     },
 
-    /**
-     * Returns a module example by pathname. Note, the pathname must include the source module
-     * pathname as well. For example, to get the `basic` example from the `button` module, the
-     * pathname would be `['components', 'button', 'examples', 'basic']`.
-     */
     async getExample(slug: string[]) {
       const dataSlug = slug.slice(0, -1)
       const dataItem = await this.get(
-        dataSlug as FilePattern extends RecursiveGlobPattern ? string[] : string
+        dataSlug as GlobPattern extends RecursiveGlobPattern ? string[] : string
       )
 
       if (dataItem === undefined) {
@@ -506,7 +468,6 @@ export function createSource<
       return dataItem.examples.find((example) => example.slug === exampleSlug)
     },
 
-    /** Returns an RSS feed based on all module metadata. */
     rss(options: FeedOptions) {
       return generateRssFeed<Type>(this.all(), options)
     },
@@ -515,7 +476,12 @@ export function createSource<
 
 /** Merges multiple sources into a single source. */
 export function mergeSources<
-  Sources extends Array<ReturnType<typeof createSource>>,
+  Sources extends Array<
+    CreateSourceResult<
+      { frontMatter: Record<string, any> },
+      ShallowGlobPattern | RecursiveGlobPattern
+    >
+  >,
 >(...sources: Sources) {
   type SourceItem = Sources[number]
 
