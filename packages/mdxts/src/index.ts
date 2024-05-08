@@ -206,10 +206,17 @@ export function createSource<
     const allModuleData = Object.values(allFilteredData)
     let contents = `type frontMatter = ${frontMatterType};\n`
 
-    allModuleData.forEach((post) => {
-      const entries = Object.entries(post.frontMatter).map(([key, value]) => {
-        return `${key}: ${formatFrontMatterValue(value)}`
-      })
+    allModuleData.forEach((dataItem) => {
+      const entries = Object.entries(dataItem.frontMatter).map(
+        ([key, value]) => {
+          if (value === undefined) {
+            throw new Error(
+              `Front matter key "${key}" is missing a value in "${dataItem.mdxPath}"`
+            )
+          }
+          return `${key}: ${formatFrontMatterValue(value)}`
+        }
+      )
       contents += `({${entries.join(', ')}}) satisfies frontMatter;\n`
     })
 
@@ -592,13 +599,19 @@ export function mergeSources<
 
 /** Formats a value for front matter. */
 function formatFrontMatterValue(value: any): string {
+  if (value === null) {
+    return 'null'
+  }
   if (value instanceof Date) {
     return `new Date('${value}')`
-  } else if (typeof value === 'boolean' || typeof value === 'number') {
+  }
+  if (typeof value === 'boolean' || typeof value === 'number') {
     return `${value}`
-  } else if (Array.isArray(value)) {
+  }
+  if (Array.isArray(value)) {
     return `[${value.map((item) => formatFrontMatterValue(item)).join(', ')}]`
-  } else if (typeof value === 'object') {
+  }
+  if (typeof value === 'object') {
     return `{${Object.entries(value)
       .map(([subKey, subValue]) => {
         return `${subKey}: ${formatFrontMatterValue(subValue)}`
