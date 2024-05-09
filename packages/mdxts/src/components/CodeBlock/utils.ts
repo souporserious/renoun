@@ -95,3 +95,55 @@ export function keepElementInView(
 
   return styles
 }
+
+export type HighlightBlock = {
+  start: number
+  end: number
+  height: number
+}
+
+/** Parses a string of comma separated line ranges into an array of highlight blocks. */
+export function getHighlights(ranges: string): HighlightBlock[] {
+  return ranges.split(',').map((range) => {
+    const [start, end] = range.split('-')
+    const parsedStart = parseInt(start, 10) - 1
+    const parsedEnd = end ? parseInt(end, 10) - 1 : parsedStart
+
+    return {
+      start: parsedStart,
+      end: parsedEnd,
+      height: parsedEnd - parsedStart + 1,
+    }
+  })
+}
+
+/** Generates a CSS linear gradient mask to focus highlighted lines. */
+export function generateFocusLinesMaskImage(lineHighlights: string) {
+  const blocks = getHighlights(lineHighlights)
+  let maskPieces: string[] = []
+
+  if (blocks.length > 0 && blocks[0].start > 0) {
+    maskPieces.push(`var(--m0) ${blocks[0].start}lh`)
+  }
+
+  blocks.forEach((block, index) => {
+    const start = `${block.start}lh`
+    const end = `${block.end + 1}lh`
+
+    maskPieces.push(`var(--m1) ${start}, var(--m1) ${end}`)
+
+    const nextStart =
+      index + 1 < blocks.length ? `${blocks[index + 1].start}lh` : `100%`
+    if (end !== nextStart) {
+      maskPieces.push(`var(--m0) ${end}, var(--m0) ${nextStart}`)
+    }
+  })
+
+  // Ensure the mask ends with a solid section by adding a last stop at 100% if not already specified
+  const lastEnd = `${blocks[blocks.length - 1].end + 1}lh`
+  if (maskPieces[maskPieces.length - 1] !== `var(--m1) ${lastEnd}`) {
+    maskPieces.push(`var(--m0) 100%`)
+  }
+
+  return `linear-gradient(to bottom, ${maskPieces.join(', ')})`
+}

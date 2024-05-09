@@ -3,27 +3,8 @@ import React from 'react'
 import { getThemeColors } from '../../index'
 import { getContext } from '../../utils/context'
 import { Context } from './Context'
-
-export type HighlightBlock = {
-  start: number
-  end: number
-  height: number
-}
-
-/** Parses a string of comma separated line ranges into an array of highlight blocks. */
-export function getHighlights(ranges: string): HighlightBlock[] {
-  return ranges.split(',').map((range) => {
-    const [start, end] = range.split('-')
-    const parsedStart = parseInt(start, 10) - 1
-    const parsedEnd = end ? parseInt(end, 10) - 1 : parsedStart
-
-    return {
-      start: parsedStart,
-      end: parsedEnd,
-      height: parsedEnd - parsedStart + 1,
-    }
-  })
-}
+import type { HighlightBlock } from './utils'
+import { getHighlights } from './utils'
 
 /** Renders a highlight over a range of `CodeBlock` lines. */
 export async function LineHighlights({
@@ -42,7 +23,7 @@ export async function LineHighlights({
 }) {
   const context = getContext(Context)
   const theme = await getThemeColors()
-  const highlightRanges = highlightRangesProp || context?.highlight
+  const highlightRanges = highlightRangesProp || context?.lineHighlights
 
   if (!highlightRanges) {
     throw new Error(
