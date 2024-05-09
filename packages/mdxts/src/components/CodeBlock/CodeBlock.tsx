@@ -30,9 +30,6 @@ export type BaseCodeBlockProps = {
   /** Opacity of unfocused lines when using `focusedLines`. */
   unfocusedLinesOpacity?: number
 
-  /** Show or hide the toolbar. */
-  toolbar?: boolean
-
   /** Show or hide a button that copies the source code to the clipboard. */
   allowCopy?: boolean
 
@@ -44,6 +41,9 @@ export type BaseCodeBlockProps = {
 
   /** Show or hide line numbers. */
   showLineNumbers?: boolean
+
+  /** Show or hide the toolbar. */
+  showToolbar?: boolean
 
   /** Path to the source file on disk in development and the git provider source in production. */
   sourcePath?: string | false
@@ -93,11 +93,11 @@ export async function CodeBlock({
   highlightedLines,
   focusedLines,
   unfocusedLinesOpacity = 0.6,
-  toolbar,
   allowCopy,
   allowErrors,
   showErrors,
   showLineNumbers,
+  showToolbar,
   fixImports,
   sourcePath,
   ...props
@@ -145,7 +145,7 @@ export async function CodeBlock({
 
   const theme = await getThemeColors()
   const shouldRenderToolbar = Boolean(
-    toolbar === undefined ? filename || hasSource || allowCopy : toolbar
+    showToolbar === undefined ? filename || hasSource || allowCopy : showToolbar
   )
   const imageMask = focusedLines
     ? generateFocusLinesMaskImage(focusedLines)

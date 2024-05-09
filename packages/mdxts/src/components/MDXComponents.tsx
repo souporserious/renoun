@@ -25,8 +25,10 @@ export const MDXComponents = {
     allowErrors,
     showErrors,
     showLineNumbers,
+    showToolbar,
     highlightedLines,
-    toolbar,
+    focusedLines,
+    unfocusedLinesOpacity,
     filename,
     language,
     sourcePath,
@@ -40,8 +42,10 @@ export const MDXComponents = {
         allowErrors={allowErrors}
         showErrors={showErrors}
         showLineNumbers={showLineNumbers}
+        showToolbar={showToolbar}
         highlightedLines={highlightedLines}
-        toolbar={toolbar}
+        focusedLines={focusedLines}
+        unfocusedLinesOpacity={unfocusedLinesOpacity}
         filename={filename}
         language={language}
         sourcePath={sourcePath}

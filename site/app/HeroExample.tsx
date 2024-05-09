@@ -47,7 +47,7 @@ export function Sidebar() {
 
 const codeProps = {
   allowCopy: false,
-  toolbar: false,
+  showToolbar: false,
   className: {
     container: `${GeistMono.className} ${styles.code}`,
   },
