@@ -2,11 +2,13 @@ import { CSSProperties } from 'react'
 import { createContext } from '../../utils/context'
 import type { getTokens } from './get-tokens'
 
-export const Context = createContext<{
+export type ContextValue = {
   value: string
   tokens: Awaited<ReturnType<typeof getTokens>>
   filenameLabel?: string
   sourcePath?: string | false
-  highlight?: string
+  lineHighlights?: string
   padding?: CSSProperties['padding']
-} | null>(null)
+} | null
+
+export const Context = createContext<ContextValue>(null)

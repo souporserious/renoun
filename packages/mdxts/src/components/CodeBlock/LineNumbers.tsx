@@ -34,7 +34,7 @@ export async function LineNumbers({
   }
 
   const theme = await getThemeColors()
-  const highlightRanges = highlightRangesProp || context?.highlight
+  const highlightRanges = highlightRangesProp || context?.lineHighlights
   const shouldHighlightLine = calculateLinesToHighlight(highlightRanges)
 
   return (

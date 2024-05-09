@@ -6,11 +6,13 @@ import { CopyButton } from '../CopyButton'
 import { Tokens } from './Tokens'
 import type { Languages } from './get-tokens'
 import { getTokens } from './get-tokens'
+import type { ContextValue } from './Context'
 import { Context } from './Context'
 import { LineHighlights } from './LineHighlights'
 import { LineNumbers } from './LineNumbers'
 import { Toolbar } from './Toolbar'
 import { parseSourceTextMetadata } from './parse-source-text-metadata'
+import { generateFocusLinesMaskImage } from './utils'
 
 export type BaseCodeBlockProps = {
   /** Name of the file. */
@@ -22,8 +24,14 @@ export type BaseCodeBlockProps = {
   /** Show or hide line numbers. */
   lineNumbers?: boolean
 
-  /** A string of comma separated lines and ranges to highlight. */
+  /** A string of comma separated lines and ranges to highlight e.g. `'1, 3-5, 7'`. */
   lineHighlights?: string
+
+  /** A string of comma separated lines and ranges to focus e.g. `'6-8, 12'`. */
+  focusedLines?: string
+
+  /** Opacity of unfocused lines when using `focusedLines`. */
+  unfocusedLinesOpacity?: number
 
   /** Whether or not to show the toolbar. */
   toolbar?: boolean
@@ -84,6 +92,8 @@ export async function CodeBlock({
   language,
   lineNumbers,
   lineHighlights,
+  focusedLines,
+  unfocusedLinesOpacity = 0.6,
   toolbar,
   allowCopy,
   allowErrors,
@@ -92,7 +102,7 @@ export async function CodeBlock({
   sourcePath,
   ...props
 }: CodeBlockProps) {
-  const padding = props.style?.container?.padding ?? '1ch'
+  const padding = props.style?.container?.padding ?? '0.5lh'
   const hasValue = 'value' in props
   const hasSource = 'source' in props
   const options: any = {}
@@ -123,11 +133,11 @@ export async function CodeBlock({
   const contextValue = {
     value: metadata.value,
     filenameLabel: filename || hasSource ? metadata.filenameLabel : undefined,
-    highlight: lineHighlights,
+    lineHighlights,
     padding,
     sourcePath,
     tokens,
-  }
+  } satisfies ContextValue
 
   if ('children' in props) {
     return <Context value={contextValue}>{props.children}</Context>
@@ -137,6 +147,9 @@ export async function CodeBlock({
   const shouldRenderToolbar = Boolean(
     toolbar === undefined ? filename || hasSource || allowCopy : toolbar
   )
+  const imageMask = focusedLines
+    ? generateFocusLinesMaskImage(focusedLines)
+    : undefined
   const Container = shouldRenderToolbar ? 'div' : React.Fragment
   const containerProps = shouldRenderToolbar
     ? {
@@ -151,6 +164,7 @@ export async function CodeBlock({
         } satisfies React.CSSProperties,
       }
     : {}
+  const isGridLayout = Boolean(lineNumbers || lineHighlights || focusedLines)
 
   return (
     <Context value={contextValue}>
@@ -167,13 +181,11 @@ export async function CodeBlock({
             shouldRenderToolbar ? undefined : props.className?.container
           }
           style={{
-            display: lineNumbers || lineHighlights ? 'grid' : undefined,
-            gridTemplateColumns:
-              lineNumbers || lineHighlights ? 'auto 1fr' : undefined,
-            gridTemplateRows:
-              lineNumbers || lineHighlights
-                ? `repeat(${tokens.length}, 1lh)`
-                : undefined,
+            display: isGridLayout ? 'grid' : undefined,
+            gridTemplateColumns: isGridLayout ? 'auto 1fr' : undefined,
+            gridTemplateRows: isGridLayout
+              ? `repeat(${tokens.length}, 1lh)`
+              : undefined,
             lineHeight: 1.4,
             whiteSpace: 'pre',
             wordWrap: 'break-word',
@@ -209,11 +221,19 @@ export async function CodeBlock({
               }}
             />
           ) : null}
-          {lineNumbers || lineHighlights ? (
+          {isGridLayout ? (
             <div
               style={{
                 gridRow: '1 / -1',
                 gridColumn: lineNumbers ? 2 : '1 / -1',
+                ...(focusedLines
+                  ? {
+                      '--m0': `rgba(0, 0, 0, ${unfocusedLinesOpacity})`,
+                      '--m1': 'rgba(0, 0, 0, 1)',
+                      maskImage: imageMask,
+                      width: 'max-content',
+                    }
+                  : {}),
               }}
             >
               <Tokens
