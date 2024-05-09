@@ -118,8 +118,8 @@ export function getHighlights(ranges: string): HighlightBlock[] {
 }
 
 /** Generates a CSS linear gradient mask to focus highlighted lines. */
-export function generateFocusLinesMaskImage(lineHighlights: string) {
-  const blocks = getHighlights(lineHighlights)
+export function generateFocusLinesMaskImage(highlightedLines: string) {
+  const blocks = getHighlights(highlightedLines)
   let maskPieces: string[] = []
 
   if (blocks.length > 0 && blocks[0].start > 0) {

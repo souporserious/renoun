@@ -35,7 +35,7 @@ export function LineNumbering() {
       filename="line-numbers.ts"
       value={`const a = 1;\nconst b = 2;\n\nconst add = a + b\nconst subtract = a - b`}
       lineNumbers
-      lineHighlights="4"
+      highlightedLines="4"
     />
   )
 }
@@ -45,7 +45,7 @@ export function LineHighlighting() {
     <CodeBlock
       filename="line-highlight.ts"
       value={`const a = 1;\nconst b = 2;\n\nconst add = a + b\nconst subtract = a - b`}
-      lineHighlights="2, 4"
+      highlightedLines="2, 4"
     />
   )
 }
@@ -65,7 +65,7 @@ export function LineHighlightAndFocus() {
     <CodeBlock
       filename="line-highlight-and-focus.ts"
       value={`const a = 1;\nconst b = 2;\n\nconst add = a + b\nconst subtract = a - b`}
-      lineHighlights="2, 4"
+      highlightedLines="2, 4"
       focusedLines="2, 4"
     />
   )

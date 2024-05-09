@@ -23,7 +23,7 @@ export async function LineHighlights({
 }) {
   const context = getContext(Context)
   const theme = await getThemeColors()
-  const highlightRanges = highlightRangesProp || context?.lineHighlights
+  const highlightRanges = highlightRangesProp || context?.highlightedLines
 
   if (!highlightRanges) {
     throw new Error(

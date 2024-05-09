@@ -25,7 +25,7 @@ export type BaseCodeBlockProps = {
   lineNumbers?: boolean
 
   /** A string of comma separated lines and ranges to highlight e.g. `'1, 3-5, 7'`. */
-  lineHighlights?: string
+  highlightedLines?: string
 
   /** A string of comma separated lines and ranges to focus e.g. `'6-8, 12'`. */
   focusedLines?: string
@@ -91,7 +91,7 @@ export async function CodeBlock({
   filename,
   language,
   lineNumbers,
-  lineHighlights,
+  highlightedLines,
   focusedLines,
   unfocusedLinesOpacity = 0.6,
   toolbar,
@@ -133,7 +133,7 @@ export async function CodeBlock({
   const contextValue = {
     value: metadata.value,
     filenameLabel: filename || hasSource ? metadata.filenameLabel : undefined,
-    lineHighlights,
+    highlightedLines,
     padding,
     sourcePath,
     tokens,
@@ -164,7 +164,7 @@ export async function CodeBlock({
         } satisfies React.CSSProperties,
       }
     : {}
-  const isGridLayout = Boolean(lineNumbers || lineHighlights || focusedLines)
+  const isGridLayout = Boolean(lineNumbers || highlightedLines || focusedLines)
 
   return (
     <Context value={contextValue}>
@@ -259,7 +259,7 @@ export async function CodeBlock({
               }}
             />
           )}
-          {lineHighlights ? (
+          {highlightedLines ? (
             <LineHighlights
               style={{
                 margin: lineNumbers
