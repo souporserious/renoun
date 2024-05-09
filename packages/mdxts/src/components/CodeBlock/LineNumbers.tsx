@@ -83,13 +83,13 @@ export function calculateLinesToHighlight(ranges: string | undefined) {
     return () => false
   }
 
-  const lineNumbers = ranges
+  const showLineNumbers = ranges
     .split(',')
     .map((value: string) => value.split('-').map((y) => parseInt(y, 10)))
 
   return (index: number) => {
     const lineNumber = index + 1
-    const inRange = lineNumbers.some(([start, end]: number[]) =>
+    const inRange = showLineNumbers.some(([start, end]: number[]) =>
       end ? lineNumber >= start && lineNumber <= end : lineNumber === start
     )
     return inRange

@@ -165,7 +165,7 @@ export default async function Page({
       >
         <CodeBlock
           fixImports
-          lineNumbers
+          showLineNumbers
           value={example.sourceText}
           language="tsx"
           className={{

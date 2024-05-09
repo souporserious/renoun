@@ -21,9 +21,6 @@ export type BaseCodeBlockProps = {
   /** Language of the source code. When using `source`, the file extension will be used by default. */
   language?: Languages
 
-  /** Show or hide line numbers. */
-  lineNumbers?: boolean
-
   /** A string of comma separated lines and ranges to highlight e.g. `'1, 3-5, 7'`. */
   highlightedLines?: string
 
@@ -33,7 +30,7 @@ export type BaseCodeBlockProps = {
   /** Opacity of unfocused lines when using `focusedLines`. */
   unfocusedLinesOpacity?: number
 
-  /** Whether or not to show the toolbar. */
+  /** Show or hide the toolbar. */
   toolbar?: boolean
 
   /** Show or hide a button that copies the source code to the clipboard. */
@@ -42,8 +39,11 @@ export type BaseCodeBlockProps = {
   /** Whether or not to allow errors. Accepts a boolean or comma-separated list of allowed error codes. */
   allowErrors?: boolean | string
 
-  /** Whether or not to show error diagnostics. */
+  /** Show or hide error diagnostics. */
   showErrors?: boolean
+
+  /** Show or hide line numbers. */
+  showLineNumbers?: boolean
 
   /** Path to the source file on disk in development and the git provider source in production. */
   sourcePath?: string | false
@@ -55,7 +55,7 @@ export type BaseCodeBlockProps = {
   className?: {
     container?: string
     toolbar?: string
-    lineNumbers?: string
+    showLineNumbers?: string
     token?: string
     popover?: string
   }
@@ -64,7 +64,7 @@ export type BaseCodeBlockProps = {
   style?: {
     container?: React.CSSProperties
     toolbar?: React.CSSProperties
-    lineNumbers?: React.CSSProperties
+    showLineNumbers?: React.CSSProperties
     token?: React.CSSProperties
     popover?: React.CSSProperties
   }
@@ -90,7 +90,6 @@ export type CodeBlockProps =
 export async function CodeBlock({
   filename,
   language,
-  lineNumbers,
   highlightedLines,
   focusedLines,
   unfocusedLinesOpacity = 0.6,
@@ -98,6 +97,7 @@ export async function CodeBlock({
   allowCopy,
   allowErrors,
   showErrors,
+  showLineNumbers,
   fixImports,
   sourcePath,
   ...props
@@ -164,7 +164,9 @@ export async function CodeBlock({
         } satisfies React.CSSProperties,
       }
     : {}
-  const isGridLayout = Boolean(lineNumbers || highlightedLines || focusedLines)
+  const isGridLayout = Boolean(
+    highlightedLines || focusedLines || showLineNumbers
+  )
 
   return (
     <Context value={contextValue}>
@@ -198,16 +200,16 @@ export async function CodeBlock({
               ? undefined
               : `0 0 0 1px ${theme.panel.border}`,
             ...(shouldRenderToolbar ? {} : props.style?.container),
-            padding: lineNumbers
+            padding: showLineNumbers
               ? typeof padding === 'number'
                 ? `${padding}px 0`
                 : `${padding} 0`
               : padding,
           }}
         >
-          {lineNumbers ? (
+          {showLineNumbers ? (
             <LineNumbers
-              className={props.className?.lineNumbers}
+              className={props.className?.showLineNumbers}
               style={{
                 gridColumn: 1,
                 gridRow: '1 / -1',
@@ -217,7 +219,7 @@ export async function CodeBlock({
                     ? `0 ${padding}px`
                     : `0 ${padding}`
                   : undefined,
-                ...props.style?.lineNumbers,
+                ...props.style?.showLineNumbers,
               }}
             />
           ) : null}
@@ -225,7 +227,7 @@ export async function CodeBlock({
             <div
               style={{
                 gridRow: '1 / -1',
-                gridColumn: lineNumbers ? 2 : '1 / -1',
+                gridColumn: showLineNumbers ? 2 : '1 / -1',
                 ...(focusedLines
                   ? {
                       '--m0': `rgba(0, 0, 0, ${unfocusedLinesOpacity})`,
@@ -262,7 +264,7 @@ export async function CodeBlock({
           {highlightedLines ? (
             <LineHighlights
               style={{
-                margin: lineNumbers
+                margin: showLineNumbers
                   ? undefined
                   : padding
                     ? typeof padding === 'number'

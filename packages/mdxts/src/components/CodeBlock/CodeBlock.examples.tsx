@@ -34,7 +34,7 @@ export function LineNumbering() {
     <CodeBlock
       filename="line-numbers.ts"
       value={`const a = 1;\nconst b = 2;\n\nconst add = a + b\nconst subtract = a - b`}
-      lineNumbers
+      showLineNumbers
       highlightedLines="4"
     />
   )
