@@ -45,7 +45,7 @@ export async function Tokens({
 
   if (!tokens) {
     throw new Error(
-      '[mdxts] `LineNumbers` must be provided a `tokens` prop or used inside a `CodeBlock` component.'
+      '[mdxts] The `Tokens` component must be used within a `CodeBlock` component or provided a `tokens` prop.'
     )
   }
 
