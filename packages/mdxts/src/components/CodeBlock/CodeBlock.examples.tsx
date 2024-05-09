@@ -71,7 +71,7 @@ export function LineHighlightAndFocus() {
   )
 }
 
-export async function WithToolbar() {
+export async function Custom() {
   const theme = await getThemeColors()
 
   return (
@@ -88,12 +88,12 @@ export async function WithToolbar() {
           border: `1px solid ${theme.panel.border}`,
         }}
       >
-        <Toolbar allowCopy style={{ padding: '0.5rem 1rem' }} />
+        <Toolbar allowCopy style={{ padding: '0.5lh' }} />
         <pre
           style={{
             display: 'grid',
-            gridTemplateColumns: 'auto 1fr',
-            padding: '1rem 0',
+            gridTemplateColumns: 'min-content max-content',
+            padding: '1lh 0',
             lineHeight: 1.4,
             whiteSpace: 'pre',
             wordWrap: 'break-word',
@@ -101,9 +101,9 @@ export async function WithToolbar() {
           }}
         >
           <LineNumbers
-            style={{ padding: '0 1rem', backgroundColor: theme.background }}
+            style={{ padding: '0 0.5lh', backgroundColor: theme.background }}
           />
-          <div>
+          <div style={{ paddingRight: '0.5lh' }}>
             <Tokens />
           </div>
         </pre>

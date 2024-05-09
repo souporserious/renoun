@@ -117,8 +117,48 @@ export function getHighlights(ranges: string): HighlightBlock[] {
   })
 }
 
+/** Generates a CSS linear gradient to highlight the provided lines. */
+export function generateHighlightedLinesGradient(highlightedLines: string) {
+  const blocks = getHighlights(highlightedLines)
+  let highlights = []
+  let previousEnd = 0
+
+  // Start with a dimmed section unless the first block starts at line 0
+  if (blocks.length > 0 && blocks[0].start > 0) {
+    highlights.push(`var(--h0) 0%`)
+    highlights.push(`var(--h0) ${blocks[0].start}lh`)
+  }
+
+  blocks.forEach((block, index) => {
+    const start = `${block.start}lh`
+    const end = `${block.end + 1}lh`
+
+    // Add the highlighted section
+    highlights.push(`var(--h1) ${start}`)
+    highlights.push(`var(--h1) ${end}`)
+
+    // Add a dimmed section after the highlighted section if there's a gap to the next block
+    const nextStart =
+      index + 1 < blocks.length ? `${blocks[index + 1].start}lh` : `100%`
+    if (end !== nextStart) {
+      highlights.push(`var(--h0) ${end}`)
+      highlights.push(`var(--h0) ${nextStart}`)
+    }
+
+    previousEnd = block.end + 1
+  })
+
+  // If the last highlighted block doesn't reach the end of the document, extend the dimming to 100%
+  if (previousEnd < blocks[blocks.length - 1].end) {
+    highlights.push(`var(--h0) ${previousEnd}lh`)
+    highlights.push(`var(--h0) 100%`)
+  }
+
+  return `linear-gradient(to bottom, ${highlights.join(', ')})`
+}
+
 /** Generates a CSS linear gradient mask to focus highlighted lines. */
-export function generateFocusLinesMaskImage(highlightedLines: string) {
+export function generateFocusedLinesGradient(highlightedLines: string) {
   const blocks = getHighlights(highlightedLines)
   let maskPieces: string[] = []
 

@@ -8,11 +8,13 @@ import type { Languages } from './get-tokens'
 import { getTokens } from './get-tokens'
 import type { ContextValue } from './Context'
 import { Context } from './Context'
-import { LineHighlights } from './LineHighlights'
 import { LineNumbers } from './LineNumbers'
 import { Toolbar } from './Toolbar'
 import { parseSourceTextMetadata } from './parse-source-text-metadata'
-import { generateFocusLinesMaskImage } from './utils'
+import {
+  generateFocusedLinesGradient,
+  generateHighlightedLinesGradient,
+} from './utils'
 
 export type BaseCodeBlockProps = {
   /** Name of the file. */
@@ -55,7 +57,7 @@ export type BaseCodeBlockProps = {
   className?: {
     container?: string
     toolbar?: string
-    showLineNumbers?: string
+    lineNumbers?: string
     token?: string
     popover?: string
   }
@@ -64,12 +66,12 @@ export type BaseCodeBlockProps = {
   style?: {
     container?: React.CSSProperties
     toolbar?: React.CSSProperties
-    showLineNumbers?: React.CSSProperties
+    lineNumbers?: React.CSSProperties
     token?: React.CSSProperties
     popover?: React.CSSProperties
   }
 
-  /** Overrides default rendering to allow full control over styles using `CodeBlock` components like `Tokens`, `LineNumbers`, `LineHighlights`, and `Toolbar`. */
+  /** Overrides default rendering to allow full control over styles using `CodeBlock` components like `Tokens`, `LineNumbers`, and `Toolbar`. */
   children?: React.ReactNode
 }
 
@@ -147,8 +149,11 @@ export async function CodeBlock({
   const shouldRenderToolbar = Boolean(
     showToolbar === undefined ? filename || hasSource || allowCopy : showToolbar
   )
-  const imageMask = focusedLines
-    ? generateFocusLinesMaskImage(focusedLines)
+  const highlightedLinesGradient = highlightedLines
+    ? generateHighlightedLinesGradient(highlightedLines)
+    : undefined
+  const focusedLinesGradient = focusedLines
+    ? generateFocusedLinesGradient(focusedLines)
     : undefined
   const Container = shouldRenderToolbar ? 'div' : React.Fragment
   const containerProps = shouldRenderToolbar
@@ -164,9 +169,6 @@ export async function CodeBlock({
         } satisfies React.CSSProperties,
       }
     : {}
-  const isGridLayout = Boolean(
-    highlightedLines || focusedLines || showLineNumbers
-  )
 
   return (
     <Context value={contextValue}>
@@ -183,12 +185,11 @@ export async function CodeBlock({
             shouldRenderToolbar ? undefined : props.className?.container
           }
           style={{
-            display: isGridLayout ? 'grid' : undefined,
-            gridTemplateColumns: isGridLayout ? 'auto 1fr' : undefined,
-            gridTemplateRows: isGridLayout
+            display: showLineNumbers ? 'grid' : undefined,
+            gridTemplateColumns: showLineNumbers ? 'auto 1fr' : undefined,
+            gridTemplateRows: showLineNumbers
               ? `repeat(${tokens.length}, 1lh)`
               : undefined,
-            lineHeight: 1.4,
             whiteSpace: 'pre',
             wordWrap: 'break-word',
             overflow: 'auto',
@@ -199,56 +200,65 @@ export async function CodeBlock({
             boxShadow: shouldRenderToolbar
               ? undefined
               : `0 0 0 1px ${theme.panel.border}`,
+            ...(highlightedLines
+              ? {
+                  '--h0': `rgba(0, 0, 0, 0)`,
+                  '--h1': theme.editor.rangeHighlightBackground,
+                  backgroundPosition: `0 ${padding}`,
+                  backgroundImage: highlightedLinesGradient,
+                }
+              : {}),
+            ...(focusedLines
+              ? {
+                  '--m0': `rgba(0, 0, 0, ${unfocusedLinesOpacity})`,
+                  '--m1': 'rgba(0, 0, 0, 1)',
+                  maskPosition: `0 ${padding}`,
+                  maskImage: focusedLinesGradient,
+                }
+              : {}),
             ...(shouldRenderToolbar ? {} : props.style?.container),
-            padding: showLineNumbers
-              ? typeof padding === 'number'
-                ? `${padding}px 0`
-                : `${padding} 0`
-              : padding,
+            padding: typeof padding === 'number' ? `${padding}px` : padding,
+            paddingLeft: showLineNumbers ? 0 : undefined,
           }}
         >
           {showLineNumbers ? (
-            <LineNumbers
-              className={props.className?.showLineNumbers}
-              style={{
-                gridColumn: 1,
-                gridRow: '1 / -1',
-                width: '4ch',
-                padding: padding
-                  ? typeof padding === 'number'
-                    ? `0 ${padding}px`
-                    : `0 ${padding}`
-                  : undefined,
-                ...props.style?.showLineNumbers,
-              }}
-            />
-          ) : null}
-          {isGridLayout ? (
-            <div
-              style={{
-                gridRow: '1 / -1',
-                gridColumn: showLineNumbers ? 2 : '1 / -1',
-                ...(focusedLines
-                  ? {
-                      '--m0': `rgba(0, 0, 0, ${unfocusedLinesOpacity})`,
-                      '--m1': 'rgba(0, 0, 0, 1)',
-                      maskImage: imageMask,
-                      width: 'max-content',
-                    }
-                  : {}),
-              }}
-            >
-              <Tokens
-                className={{
-                  token: props.className?.token,
-                  popover: props.className?.popover,
-                }}
+            <>
+              <LineNumbers
+                className={props.className?.lineNumbers}
                 style={{
-                  token: props.style?.token,
-                  popover: props.style?.popover,
+                  gridColumn: 1,
+                  gridRow: '1 / -1',
+                  width: '4ch',
+                  padding: padding
+                    ? typeof padding === 'number'
+                      ? `0 ${padding}px`
+                      : `0 ${padding}`
+                    : undefined,
+                  ...(highlightedLines
+                    ? { backgroundImage: highlightedLinesGradient }
+                    : {}),
+                  ...props.style?.lineNumbers,
                 }}
               />
-            </div>
+              <div
+                style={{
+                  gridRow: '1 / -1',
+                  gridColumn: 2,
+                  width: 'max-content',
+                }}
+              >
+                <Tokens
+                  className={{
+                    token: props.className?.token,
+                    popover: props.className?.popover,
+                  }}
+                  style={{
+                    token: props.style?.token,
+                    popover: props.style?.popover,
+                  }}
+                />
+              </div>
+            </>
           ) : (
             <Tokens
               className={{
@@ -261,19 +271,6 @@ export async function CodeBlock({
               }}
             />
           )}
-          {highlightedLines ? (
-            <LineHighlights
-              style={{
-                margin: showLineNumbers
-                  ? undefined
-                  : padding
-                    ? typeof padding === 'number'
-                      ? `0 -${padding}px`
-                      : `0 -${padding}`
-                    : undefined,
-              }}
-            />
-          ) : null}
           {allowCopy !== false && !shouldRenderToolbar ? (
             <CopyButton
               value={metadata.value}
