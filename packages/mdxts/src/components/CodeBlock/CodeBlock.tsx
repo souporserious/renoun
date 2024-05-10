@@ -240,11 +240,12 @@ export async function CodeBlock({
                   ...props.style?.lineNumbers,
                 }}
               />
-              <div
+              <code
                 style={{
-                  gridRow: '1 / -1',
                   gridColumn: 2,
+                  gridRow: '1 / -1',
                   width: 'max-content',
+                  padding: 0,
                 }}
               >
                 <Tokens
@@ -257,26 +258,33 @@ export async function CodeBlock({
                     popover: props.style?.popover,
                   }}
                 />
-              </div>
+              </code>
             </>
           ) : (
-            <Tokens
-              className={{
-                token: props.className?.token,
-                popover: props.className?.popover,
-              }}
+            <code
               style={{
-                token: props.style?.token,
-                popover: props.style?.popover,
+                width: 'max-content',
+                padding: 0,
               }}
-            />
+            >
+              <Tokens
+                className={{
+                  token: props.className?.token,
+                  popover: props.className?.popover,
+                }}
+                style={{
+                  token: props.style?.token,
+                  popover: props.style?.popover,
+                }}
+              />
+            </code>
           )}
           {allowCopy !== false && !shouldRenderToolbar ? (
             <CopyButton
               value={metadata.value}
               style={{
                 position: 'absolute',
-                right: '1ch',
+                right: padding,
                 top: padding,
               }}
             />

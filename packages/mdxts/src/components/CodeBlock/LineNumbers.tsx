@@ -38,7 +38,7 @@ export async function LineNumbers({
   const shouldHighlightLine = calculateLinesToHighlight(highlightRanges)
 
   return (
-    <div
+    <span
       className={className}
       style={{
         position: 'sticky',
@@ -73,7 +73,7 @@ export async function LineNumbers({
           </Fragment>
         )
       })}
-    </div>
+    </span>
   )
 }
 

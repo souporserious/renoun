@@ -103,9 +103,9 @@ export async function Custom() {
           <LineNumbers
             style={{ padding: '0 0.5lh', backgroundColor: theme.background }}
           />
-          <div style={{ paddingRight: '0.5lh' }}>
+          <code style={{ paddingRight: '0.5lh' }}>
             <Tokens />
-          </div>
+          </code>
         </pre>
       </div>
     </CodeBlock>
