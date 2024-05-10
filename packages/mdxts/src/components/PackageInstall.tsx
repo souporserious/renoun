@@ -1,7 +1,7 @@
 import React from 'react'
 
 import { getThemeColors } from '../index'
-import { CopyButton } from './CopyButton'
+import { CopyButton } from './CodeBlock/CopyButton'
 import { CodeBlock } from './CodeBlock/CodeBlock'
 import { Tokens } from './CodeBlock/Tokens'
 import { PackageInstallClient } from './PackageInstallClient'

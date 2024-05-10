@@ -1,5 +1,7 @@
 'use client'
-import * as React from 'react'
+import React, { useContext, useState } from 'react'
+
+import { PreHoverContext } from './Pre'
 
 /**
  * Copies a value to the user's clipboard.
@@ -12,9 +14,13 @@ export function CopyButton({
 }: {
   value: string
 } & React.ComponentProps<'button'>) {
-  const [state, setState] = React.useState<'idle' | 'not-allowed' | 'copied'>(
-    'idle'
-  )
+  const hover = useContext(PreHoverContext)
+  const [state, setState] = useState<'idle' | 'not-allowed' | 'copied'>('idle')
+
+  if (state === 'idle' && hover === false) {
+    return null
+  }
+
   return (
     <button
       title="Copy code to clipboard"
@@ -33,9 +39,13 @@ export function CopyButton({
       }}
       style={{
         display: 'flex',
-        backgroundColor: 'transparent',
-        padding: '0.35rem',
+        width: '1lh',
+        height: '1lh',
+        fontSize: 'inherit',
+        lineHeight: 'inherit',
+        padding: 0,
         border: 0,
+        backgroundColor: 'transparent',
         cursor: 'pointer',
         ...style,
       }}
@@ -45,8 +55,8 @@ export function CopyButton({
         viewBox="0 0 24 24"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
-        width="1em"
-        height="1em"
+        width="100%"
+        height="100%"
         style={{ color: 'inherit' }}
       >
         {state === 'idle' || state === 'not-allowed' ? (

@@ -12,7 +12,7 @@ const codeBlockStyles = {
     margin: '0 -1rem',
   },
   toolbar: {
-    padding: '0.5rem 1rem',
+    padding: '0.8rem 1rem',
   },
 } satisfies CodeBlockProps['style']
 

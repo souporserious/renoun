@@ -2,13 +2,14 @@ import React from 'react'
 import 'server-only'
 
 import { getThemeColors } from '../../index'
-import { CopyButton } from '../CopyButton'
+import { CopyButton } from './CopyButton'
 import { Tokens } from './Tokens'
 import type { Languages } from './get-tokens'
 import { getTokens } from './get-tokens'
 import type { ContextValue } from './Context'
 import { Context } from './Context'
 import { LineNumbers } from './LineNumbers'
+import { Pre } from './Pre'
 import { Toolbar } from './Toolbar'
 import { parseSourceTextMetadata } from './parse-source-text-metadata'
 import {
@@ -169,6 +170,12 @@ export async function CodeBlock({
         } satisfies React.CSSProperties,
       }
     : {}
+  const sharedCodeStyles = {
+    gridRow: '1 / -1',
+    display: 'block',
+    width: 'max-content',
+    padding,
+  } satisfies React.CSSProperties
 
   return (
     <Context value={contextValue}>
@@ -180,20 +187,13 @@ export async function CodeBlock({
             style={{ padding, ...props.style?.toolbar }}
           />
         ) : null}
-        <pre
+        <Pre
           className={
             shouldRenderToolbar ? undefined : props.className?.container
           }
           style={{
-            display: showLineNumbers ? 'grid' : undefined,
+            display: 'grid',
             gridTemplateColumns: showLineNumbers ? 'auto 1fr' : undefined,
-            gridTemplateRows: showLineNumbers
-              ? `repeat(${tokens.length}, 1lh)`
-              : undefined,
-            whiteSpace: 'pre',
-            wordWrap: 'break-word',
-            overflow: 'auto',
-            position: 'relative',
             backgroundColor: shouldRenderToolbar ? 'inherit' : theme.background,
             color: shouldRenderToolbar ? undefined : theme.foreground,
             borderRadius: shouldRenderToolbar ? 'inherit' : 5,
@@ -217,8 +217,7 @@ export async function CodeBlock({
                 }
               : {}),
             ...(shouldRenderToolbar ? {} : props.style?.container),
-            padding: typeof padding === 'number' ? `${padding}px` : padding,
-            paddingLeft: showLineNumbers ? 0 : undefined,
+            padding: 0,
           }}
         >
           {showLineNumbers ? (
@@ -226,14 +225,10 @@ export async function CodeBlock({
               <LineNumbers
                 className={props.className?.lineNumbers}
                 style={{
+                  padding,
                   gridColumn: 1,
                   gridRow: '1 / -1',
                   width: '4ch',
-                  padding: padding
-                    ? typeof padding === 'number'
-                      ? `0 ${padding}px`
-                      : `0 ${padding}`
-                    : undefined,
                   backgroundImage: highlightedLines
                     ? highlightedLinesGradient
                     : undefined,
@@ -242,10 +237,9 @@ export async function CodeBlock({
               />
               <code
                 style={{
+                  ...sharedCodeStyles,
                   gridColumn: 2,
-                  gridRow: '1 / -1',
-                  width: 'max-content',
-                  padding: 0,
+                  paddingLeft: 0,
                 }}
               >
                 <Tokens
@@ -263,8 +257,8 @@ export async function CodeBlock({
           ) : (
             <code
               style={{
-                width: 'max-content',
-                padding: 0,
+                ...sharedCodeStyles,
+                gridColumn: 1,
               }}
             >
               <Tokens
@@ -283,13 +277,19 @@ export async function CodeBlock({
             <CopyButton
               value={metadata.value}
               style={{
-                position: 'absolute',
-                right: padding,
+                placeSelf: 'start end',
+                gridColumn: showLineNumbers ? 2 : 1,
+                gridRow: '1 / -1',
+                padding: '0.15lh',
+                position: 'sticky',
                 top: padding,
+                right: padding,
+                backgroundColor: theme.background,
+                borderRadius: 5,
               }}
             />
           ) : null}
-        </pre>
+        </Pre>
       </Container>
     </Context>
   )

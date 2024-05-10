@@ -1,7 +1,7 @@
 import React from 'react'
 import { getThemeColors } from '../../index'
 import { getContext } from '../../utils/context'
-import { CopyButton } from '../CopyButton'
+import { CopyButton } from './CopyButton'
 import { Context } from './Context'
 
 export type ToolbarProps = {
@@ -43,6 +43,7 @@ export async function Toolbar({
       className={className}
       style={{
         fontSize: '0.8em',
+        lineHeight: '1',
         display: 'flex',
         alignItems: 'center',
         gap: '1ch',
@@ -59,9 +60,16 @@ export async function Toolbar({
           title={`Open source file in ${
             process.env.NODE_ENV === 'development' ? `VS Code` : `GitHub`
           }`}
-          style={{ display: 'flex', marginLeft: 'auto' }}
+          style={{
+            display: 'flex',
+            width: '1lh',
+            height: '1lh',
+            fontSize: 'inherit',
+            lineHeight: 'inherit',
+            marginLeft: 'auto',
+          }}
         >
-          <svg viewBox="0 0 24 24" fill="none" width="1em" height="1em">
+          <svg viewBox="0 0 24 24" fill="none" width="100%" height="100%">
             <path
               d="M18 8L22.5011 11.1556C23.1663 11.622 23.1663 12.378 22.5011 12.8444L18 16"
               stroke="currentColor"
