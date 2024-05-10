@@ -1,6 +1,5 @@
 export {
   CodeBlock,
-  LineHighlights,
   LineNumbers,
   Tokens,
   Toolbar,

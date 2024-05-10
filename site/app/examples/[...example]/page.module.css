@@ -12,6 +12,8 @@
 }
 
 .codeBlock {
+  font-size: var(--font-size-body-2);
+  line-height: var(--line-height-body-2);
   box-shadow: 0 -1px 0 0 var(--color-border);
   border-bottom-left-radius: 5px;
   border-bottom-right-radius: 5px;
