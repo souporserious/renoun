@@ -17,10 +17,10 @@ import {
 } from './utils'
 
 export type BaseCodeBlockProps = {
-  /** Name of the file. */
+  /** Name or path of the code block. Ordered filenames will be stripped from the name e.g. `01.index.tsx` becomes `index.tsx`. */
   filename?: string
 
-  /** Language of the source code. When using `source`, the file extension will be used by default. */
+  /** Language of the source code. When used with `source`, the file extension will be used by default. */
   language?: Languages
 
   /** A string of comma separated lines and ranges to highlight e.g. `'1, 3-5, 7'`. */
@@ -77,14 +77,14 @@ export type BaseCodeBlockProps = {
 
 export type CodeBlockProps =
   | ({
-      /** Code snippet to be highlighted. */
+      /** Source code to highlight. */
       value: string
     } & BaseCodeBlockProps)
   | ({
-      /** Source code to be highlighted. */
+      /** Path to the source file on disk to highlight. */
       source: string
 
-      /** Specify the working directory for the `source`. */
+      /** The working directory for the `source`. Added automatically when using `mdxts/loader`. */
       workingDirectory?: string
     } & BaseCodeBlockProps)
 
