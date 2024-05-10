@@ -8,10 +8,10 @@ export type ToolbarProps = {
   /** The value of the code block. */
   value?: string
 
-  /** The path to the source file on disk in development and the git provider source in production. */
+  /** The path to the source file. */
   sourcePath?: string
 
-  /** Whether or not to allow copying the code block. */
+  /** Whether or not to allow copying the code block value. */
   allowCopy?: boolean
 
   /** Class name to apply to the toolbar. */
@@ -20,7 +20,7 @@ export type ToolbarProps = {
   /** Style to apply to the toolbar. */
   style?: React.CSSProperties
 
-  /** The children of the toolbar. */
+  /** The children of the toolbar rendered at the start. */
   children?: React.ReactNode
 }
 
