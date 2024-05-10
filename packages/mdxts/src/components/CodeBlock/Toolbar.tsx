@@ -24,7 +24,7 @@ export type ToolbarProps = {
   children?: React.ReactNode
 }
 
-/** A toolbar for the `CodeBlock` that displays the filename, and optionally a source link and copy button. */
+/** A toolbar for the `CodeBlock` component that displays the filename, a source link, and copy button. */
 export async function Toolbar({
   value: valueProp,
   sourcePath: sourcePathProp,
