@@ -1,5 +1,51 @@
 # mdxts
 
+## 0.18.0
+
+### Minor Changes
+
+- b796c3f: Removes `LineHighlights` component in favor of simpler CSS approach for highlighting lines.
+- cccf278: Renames `CodeBlock` `lineHighlights` prop to `highlightedLines`.
+
+  ### Breaking Changes
+
+  - `CodeBlock` `lineHighlights` prop has been renamed to `highlightedLines`.
+
+- 044d1ca: Renames `CodeBlock` `toolbar` prop to `showToolbar`.
+
+  ### Breaking Changes
+
+  - `CodeBlock` `toolbar` prop has been renamed to `showToolbar`.
+
+- dfa9384: Fixes `CodeBlock` accessibility and markup by swapping `div`s with `span`s and using a `code` element around tokens.
+- 564806a: Renames `CodeBlock` `lineNumbers` prop to `showLineNumbers`.
+
+  ### Breaking Changes
+
+  - `CodeBlock` `lineNumbers` prop has been renamed to `showLineNumbers`.
+
+- bd646c4: Adds `focusedLines` and `unfocusedLinesOpacity` props to the `CodeBlock` component to control focusing a set of lines and dimming the other lines. It uses an image mask to dim out the lines which can be controlled using `unfocusedLinesOpacity`:
+
+  ````mdx
+  ```tsx focusedLines="3-4"
+  const a = 1;
+  const b = 2;
+  const result = a + b;
+  console.log(result); // 3
+  ```
+  ````
+
+  ```tsx
+  <CodeBlock
+    value={`const a = 1;\nconst b = 2;\n\nconst add = a + b\nconst subtract = a - b`}
+    focusedLines="2, 4"
+  />
+  ```
+
+### Patch Changes
+
+- a02b1d8: Fixes copy button overlapping `CodeBlock` content by only showing the button when hovering the code block. The button now also sticks to the top right of the code block when scrolling.
+
 ## 0.17.0
 
 ### Minor Changes
