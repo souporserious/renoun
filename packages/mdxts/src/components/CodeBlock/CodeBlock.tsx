@@ -234,9 +234,9 @@ export async function CodeBlock({
                       ? `0 ${padding}px`
                       : `0 ${padding}`
                     : undefined,
-                  ...(highlightedLines
-                    ? { backgroundImage: highlightedLinesGradient }
-                    : {}),
+                  backgroundImage: highlightedLines
+                    ? highlightedLinesGradient
+                    : undefined,
                   ...props.style?.lineNumbers,
                 }}
               />
