@@ -131,7 +131,7 @@ const allComponents = createSource('components/**/*.tsx')
 export default async function Page({ params }: Props) {
   const component = await allComponents.get(params.slug)
 
-  if (component === undefined) {
+  if (!component) {
     return notFound()
   }
 

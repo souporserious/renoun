@@ -65,7 +65,7 @@ export default async function Page({
   const singlePackage = await allComponents.get(params.example.slice(0, -1))
   const example = await allComponents.getExample(params.example)
 
-  if (singlePackage === undefined || example === undefined) {
+  if (!singlePackage || !example) {
     return notFound()
   }
 
