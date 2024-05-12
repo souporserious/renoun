@@ -52,7 +52,7 @@ export async function Toolbar({
         fontSize: 'inherit',
         display: 'flex',
         alignItems: 'center',
-        gap: '0.5em',
+        gap: '0.25em',
         boxShadow: `inset 0 -1px 0 0 ${theme.panel.border}`,
         ...style,
       }}
