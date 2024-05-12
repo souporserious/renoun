@@ -29,6 +29,7 @@ export async function PackageInstall({
     tabs?: React.CSSProperties
     tabItem?: React.CSSProperties
     tabPanels?: React.CSSProperties
+    codeBlock?: React.CSSProperties
   }
 }) {
   const theme = await getThemeColors()
@@ -77,7 +78,11 @@ export async function PackageInstall({
             : 'PackageInstallTabPanel'
         }
         suppressHydrationWarning
-        style={style?.tabPanels}
+        style={{
+          lineHeight: '1.4',
+          padding: '1ch',
+          ...style?.tabPanels,
+        }}
       >
         <CodeBlock value={`${install} ${packages.join(' ')}`} language="sh">
           <Tokens />
@@ -125,8 +130,6 @@ const packageStyles = `
   margin-left: auto !important;
 }
 .PackageInstallTabPanel {
-  line-height: 1.4;
-  padding: 1ch;
   overflow: auto;
 }
 .PackageInstallCopyButton,
