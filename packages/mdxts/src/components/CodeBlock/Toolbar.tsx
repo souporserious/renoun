@@ -37,6 +37,13 @@ export async function Toolbar({
   const theme = await getThemeColors()
   const value = valueProp ?? context?.value
   const sourcePath = sourcePathProp ?? context?.sourcePath
+  let childrenToRender = children
+
+  if (childrenToRender === undefined && context) {
+    childrenToRender = (
+      <span style={{ fontSize: '0.8em' }}>{context.filenameLabel}</span>
+    )
+  }
 
   return (
     <div
@@ -45,12 +52,12 @@ export async function Toolbar({
         fontSize: 'inherit',
         display: 'flex',
         alignItems: 'center',
-        gap: '1ch',
+        gap: '0.5em',
         boxShadow: `inset 0 -1px 0 0 ${theme.panel.border}`,
         ...style,
       }}
     >
-      {children || context?.filenameLabel}
+      {childrenToRender}
       {sourcePath ? (
         <a
           href={sourcePath}
