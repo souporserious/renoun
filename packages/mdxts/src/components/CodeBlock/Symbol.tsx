@@ -44,6 +44,9 @@ export function Symbol({
       onPointerEnter={() => {
         setQuickInfo({ anchorId, popover })
       }}
+      onPointerDown={() => {
+        resetQuickInfo()
+      }}
       onPointerLeave={() => {
         resetQuickInfo()
       }}
