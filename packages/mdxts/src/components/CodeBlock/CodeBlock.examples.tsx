@@ -93,7 +93,7 @@ export async function Custom() {
           style={{
             display: 'grid',
             gridTemplateColumns: 'min-content max-content',
-            padding: '1lh 0',
+            padding: '0.5lh 0',
             lineHeight: 1.4,
             whiteSpace: 'pre',
             wordWrap: 'break-word',
