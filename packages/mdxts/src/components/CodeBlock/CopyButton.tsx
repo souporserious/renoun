@@ -39,8 +39,10 @@ export function CopyButton({
       }}
       style={{
         display: 'flex',
-        width: '1em',
-        height: '1em',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '1lh',
+        height: '1lh',
         fontSize: 'inherit',
         lineHeight: 'inherit',
         padding: 0,
@@ -55,8 +57,8 @@ export function CopyButton({
         viewBox="0 0 24 24"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
-        width="100%"
-        height="100%"
+        width="1em"
+        height="1em"
         style={{ color: 'inherit' }}
       >
         {state === 'idle' || state === 'not-allowed' ? (

@@ -61,14 +61,16 @@ export async function Toolbar({
           }`}
           style={{
             display: 'flex',
-            width: '1em',
-            height: '1em',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '1lh',
+            height: '1lh',
             fontSize: 'inherit',
             lineHeight: 'inherit',
             marginLeft: 'auto',
           }}
         >
-          <svg viewBox="0 0 24 24" fill="none" width="100%" height="100%">
+          <svg viewBox="0 0 24 24" fill="none" width="1em" height="1em">
             <path
               d="M18 8L22.5011 11.1556C23.1663 11.622 23.1663 12.378 22.5011 12.8444L18 16"
               stroke="currentColor"
