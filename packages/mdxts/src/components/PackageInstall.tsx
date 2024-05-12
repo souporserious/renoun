@@ -27,6 +27,7 @@ export async function PackageInstall({
   style?: {
     container?: React.CSSProperties
     tabs?: React.CSSProperties
+    tabItem?: React.CSSProperties
     tabPanels?: React.CSSProperties
   }
 }) {
@@ -49,6 +50,7 @@ export async function PackageInstall({
               ? 'PackageInstallTab active'
               : 'PackageInstallTab'
           }
+          style={style?.tabItem}
           suppressHydrationWarning
         >
           {packageManager}

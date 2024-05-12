@@ -39,8 +39,8 @@ export function CopyButton({
       }}
       style={{
         display: 'flex',
-        width: '1lh',
-        height: '1lh',
+        width: '1em',
+        height: '1em',
         fontSize: 'inherit',
         lineHeight: 'inherit',
         padding: 0,

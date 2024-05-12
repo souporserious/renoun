@@ -280,7 +280,6 @@ export async function CodeBlock({
                 placeSelf: 'start end',
                 gridColumn: showLineNumbers ? 2 : 1,
                 gridRow: '1 / -1',
-                padding: '0.15lh',
                 position: 'sticky',
                 top: padding,
                 right: padding,

@@ -42,8 +42,7 @@ export async function Toolbar({
     <div
       className={className}
       style={{
-        fontSize: '0.8em',
-        lineHeight: '1',
+        fontSize: 'inherit',
         display: 'flex',
         alignItems: 'center',
         gap: '1ch',
@@ -62,8 +61,8 @@ export async function Toolbar({
           }`}
           style={{
             display: 'flex',
-            width: '1lh',
-            height: '1lh',
+            width: '1em',
+            height: '1em',
             fontSize: 'inherit',
             lineHeight: 'inherit',
             marginLeft: 'auto',
