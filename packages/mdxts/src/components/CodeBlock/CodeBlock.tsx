@@ -229,9 +229,8 @@ export async function CodeBlock({
                   gridColumn: 1,
                   gridRow: '1 / -1',
                   width: '4ch',
-                  backgroundImage: highlightedLines
-                    ? highlightedLinesGradient
-                    : undefined,
+                  backgroundPosition: 'inherit',
+                  backgroundImage: 'inherit',
                   ...props.style?.lineNumbers,
                 }}
               />
