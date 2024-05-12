@@ -26,6 +26,7 @@ export async function PackageInstall({
   packages: string[]
   style?: {
     container?: React.CSSProperties
+    copyButton?: React.CSSProperties
     tabs?: React.CSSProperties
     tabItem?: React.CSSProperties
     tabPanels?: React.CSSProperties
@@ -59,8 +60,13 @@ export async function PackageInstall({
       ))}
       {Object.entries(packageManagers).map(([packageManager, install]) => (
         <CopyButton
+          key={packageManager}
           data-storage-id={`package-manager-${packageManager}`}
           className="PackageInstallCopyButton"
+          style={{
+            marginRight: '1ch',
+            ...style?.copyButton,
+          }}
           value={`${install} ${packages.join(' ')}`}
           suppressHydrationWarning
         />
@@ -126,7 +132,6 @@ const packageStyles = `
   color: #fff;
 }
 .PackageInstallCopyButton {
-  margin-right: 1rch !important;
   margin-left: auto !important;
 }
 .PackageInstallTabPanel {
@@ -136,7 +141,9 @@ const packageStyles = `
 .PackageInstallTabPanel {
   display: none !important;
 }
-.PackageInstallCopyButton.active,
+.PackageInstallCopyButton.active {
+  display: flex !important;
+}
 .PackageInstallTabPanel.active {
   display: initial !important;
 }
