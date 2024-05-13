@@ -210,7 +210,7 @@ export async function parseSourceTextMetadata({
     .replace(/\d+\./, '') // Remove ordered number prefix
 
   return {
-    value: finalValue,
+    value: sourceFile ? sourceFile.getFullText() : finalValue,
     language: finalLanguage,
     isJsxOnly: jsxOnly,
     sourceFile,
