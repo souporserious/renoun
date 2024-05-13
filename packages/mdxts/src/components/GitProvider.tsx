@@ -115,9 +115,11 @@ export function GitProviderLink({
     throwGitSourceError()
   }
 
+  let styles = { display: 'flex', ...style } satisfies React.CSSProperties
   let childrenToRender = children
 
   if (childrenToRender === undefined) {
+    styles = { width: '1.5rem', height: '1.5rem', ...styles }
     childrenToRender = <GitProviderLogo width="100%" height="100%" />
   }
 
@@ -127,7 +129,7 @@ export function GitProviderLink({
       rel="noopener"
       target="_blank"
       className={className}
-      style={{ display: 'flex', width: '1.5rem', height: '1.5rem', ...style }}
+      style={styles}
     >
       {childrenToRender}
     </a>
