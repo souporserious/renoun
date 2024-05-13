@@ -1,5 +1,38 @@
 # mdxts
 
+## 0.19.0
+
+### Minor Changes
+
+- 00f6547: Uses a slightly smaller filename font size for the `CodeBlock` toolbar by default.
+- 87ee6c4: Adds `Copyright` component to render copyright notices.
+- 8558c3f: Adds `GitProviderLink` and `GitProviderLogo` components to render links and graphics for the configured git provider.
+- 999446c: Adds MDXTS assets for linking back to the MDXTS site:
+
+  ```jsx
+  import { BuiltWithMdxts } from "mdxts/assets";
+
+  export function Footer() {
+    return (
+      <footer>
+        <BuiltWithMdxts />
+      </footer>
+    );
+  }
+  ```
+
+- b7c7f0d: Removes default vertical padding for `CodeInline` component.
+- fcb0a03: Now infers `gitSource` and `siteUrl` in `mdxts/next` using [Vercel environment variables](https://vercel.com/docs/projects/environment-variables/system-environment-variables) if available.
+
+### Patch Changes
+
+- 9a9d33a: Fixes using the initial value rather than the possibly transformed value in `CodeBlock`.
+- de7bad8: Fixes line numbers highlight styles.
+- 759bb79: Fixes interaction when copy button covers code block text by hiding the copy button on the first pointer down until entering the code block area again.
+- 2e384bb: Closes symbol popover on pointer down to allow selecting code block text.
+- ef4b03a: Fixes unnecessarily rendering token when it is whitespace.
+- 308c709: Normalizes `CopyButton` sizes across code components.
+
 ## 0.18.0
 
 ### Minor Changes
