@@ -13,10 +13,10 @@ type PluginOptions = {
   /** Path to the VS Code compatible theme used for syntax highlighting the `CodeBlock`, `CodeInline`, and `Tokens` components. */
   theme: keyof typeof bundledThemes | (string & {})
 
-  /** The URL of the production site. This is used for generating sitemap and RSS feed URLs. */
+  /** The URL of the production site. This is used for generating sitemap and RSS feed URLs. If using Vercel, the `VERCEL_PROJECT_PRODUCTION_URL` [environment variable](https://vercel.com/docs/projects/environment-variables/system-environment-variables) will be used by default. */
   siteUrl?: string
 
-  /** The git source to use for linking to the repository and source files. This is automatically inferred from the git remote URL if not provided. */
+  /** The git source to use for linking to the repository and source files. This is automatically inferred from the git remote URL or [Vercel environment variables](https://vercel.com/docs/projects/environment-variables/system-environment-variables) if not provided. */
   gitSource?: string
 
   /** The branch to use for linking to the repository and source files. */
@@ -33,9 +33,9 @@ type PluginOptions = {
 export function createMdxtsPlugin(pluginOptions: PluginOptions) {
   let refreshServerPort: string | null = null
   let {
-    gitSource,
+    gitSource = getVercelGitSource() ?? '',
     gitBranch = 'main',
-    siteUrl,
+    siteUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL,
     theme,
     renumberFilenames: renumberFilenamesOption = true,
     highlightErrors,
@@ -135,5 +135,23 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
 
       return withMdx(nextConfig)
     }
+  }
+}
+
+const VERCEL_GIT_PROVIDER = process.env.VERCEL_GIT_PROVIDER
+const VERCEL_GIT_REPO_SLUG = process.env.VERCEL_GIT_REPO_SLUG
+const VERCEL_GIT_REPO_OWNER = process.env.VERCEL_GIT_REPO_OWNER
+
+/** Constructs a URL for a repository based on the provider. */
+function getVercelGitSource(): string | null {
+  switch (VERCEL_GIT_PROVIDER?.toLowerCase()) {
+    case 'github':
+      return `https://github.com/${VERCEL_GIT_REPO_OWNER}/${VERCEL_GIT_REPO_SLUG}`
+    case 'gitlab':
+      return `https://gitlab.com/${VERCEL_GIT_REPO_OWNER}/${VERCEL_GIT_REPO_SLUG}`
+    case 'bitbucket':
+      return `https://bitbucket.org/${VERCEL_GIT_REPO_OWNER}/${VERCEL_GIT_REPO_SLUG}`
+    default:
+      return null
   }
 }
