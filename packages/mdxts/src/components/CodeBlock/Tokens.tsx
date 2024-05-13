@@ -61,9 +61,8 @@ export async function Tokens({
           const hasSymbolMeta = token.diagnostics || token.quickInfo
 
           if (
-            !hasTextStyles &&
-            !hasSymbolMeta &&
-            (token.isBaseColor || token.isWhitespace)
+            token.isWhitespace ||
+            (!hasTextStyles && !hasSymbolMeta && token.isBaseColor)
           ) {
             return token.value
           }
