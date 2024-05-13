@@ -1,6 +1,7 @@
 import { GitProviderLink, Navigation } from 'mdxts/components'
+import { MdxtsLogo } from 'mdxts/assets'
+
 import { allData } from 'data'
-import { Logo } from 'components/Logo'
 import styles from './Sidebar.module.css'
 
 import { NavigationBoundary } from './NavigationBoundary'
@@ -20,7 +21,9 @@ export function Sidebar() {
       >
         <div style={{ display: 'flex', gap: '1rem' }}>
           <a href="/" style={{ display: 'flex' }}>
-            <Logo />
+            <MdxtsLogo
+              style={{ width: undefined, height: 'var(--font-size-body-1)' }}
+            />
           </a>
           <span
             style={{

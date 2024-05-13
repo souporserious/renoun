@@ -36,6 +36,11 @@
       "import": "./dist/src/index.js",
       "require": "./dist/cjs/index.js"
     },
+    "./assets": {
+      "types": "./dist/src/assets/index.d.ts",
+      "import": "./dist/src/assets/index.js",
+      "require": "./dist/cjs/assets/index.js"
+    },
     "./components": {
       "types": "./dist/src/components/index.d.ts",
       "import": "./dist/src/components/index.js",
@@ -59,6 +64,9 @@
   },
   "typesVersions": {
     "*": {
+      "assets": [
+        "./dist/src/assets/index.d.ts"
+      ],
       "components": [
         "./dist/src/components/index.d.ts"
       ],

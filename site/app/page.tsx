@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { CopyButton } from 'mdxts/components/CodeBlock/CopyButton'
-import { Logo } from 'components/Logo'
+import { MdxtsLogo } from 'mdxts/assets'
+
 import { HeroExample } from './HeroExample'
 import { PageContainer } from './PageContainer'
 import { SignupForm } from './SignupForm'
@@ -25,7 +26,9 @@ export default function Home() {
               gap: '1rem',
             }}
           >
-            <Logo />
+            <MdxtsLogo
+              style={{ width: undefined, height: 'var(--font-size-body-1)' }}
+            />
             <span
               style={{
                 fontSize: 'var(--font-size-body-2)',
