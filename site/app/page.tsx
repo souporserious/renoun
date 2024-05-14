@@ -29,17 +29,6 @@ export default function Home() {
             <MdxtsLogo
               style={{ width: undefined, height: 'var(--font-size-body-1)' }}
             />
-            <span
-              style={{
-                fontSize: 'var(--font-size-body-2)',
-                padding: '0.25rem 0.8rem',
-                border: '1px solid #3F687E',
-                borderRadius: '1rem',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              Beta
-            </span>
           </header>
           <h1
             style={{
