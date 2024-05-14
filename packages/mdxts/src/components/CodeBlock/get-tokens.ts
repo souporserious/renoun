@@ -21,6 +21,7 @@ export type Languages =
   | keyof typeof bundledLanguages
   | keyof typeof languageMap
   | 'plaintext'
+  | 'diff'
 
 /** Normalizes language to a specific grammar language key. */
 export function getLanguage(
@@ -90,7 +91,7 @@ export async function getTokens(
   showErrors: boolean = false,
   sourcePath?: string | false
 ) {
-  if (language === 'plaintext') {
+  if (language === 'plaintext' || language === 'diff') {
     return [
       [
         {
