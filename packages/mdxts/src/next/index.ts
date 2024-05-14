@@ -50,7 +50,10 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
 
     return async (phase: typeof PHASE_DEVELOPMENT_SERVER) => {
       const plugins = await getMdxPlugins({ gitSource, gitBranch })
-      const withMdx = createMdxPlugin({ options: plugins })
+      const withMdx = createMdxPlugin({
+        options: plugins,
+        extension: /\.(md|mdx)$/,
+      })
 
       nextConfig.webpack = (config, options) => {
         // add default mdx components before @mdx-js/react
