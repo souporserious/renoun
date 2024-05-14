@@ -10,6 +10,6 @@
     grid-template-rows: 1fr min-content;
     height: fit-content;
     min-height: 100dvh;
-    padding: 6rem 2rem 2rem;
+    padding: 2rem;
   }
 }

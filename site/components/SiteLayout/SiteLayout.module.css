@@ -1,0 +1,29 @@
+.container {
+  display: grid;
+  width: 100%;
+  margin: 0 auto;
+  flex: 1;
+}
+
+@media screen and (min-width: 60rem) {
+  .container {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: min-content 1fr;
+    max-width: 72rem;
+  }
+
+  .container header {
+    grid-column: 1 / -1;
+    grid-row: 1 / 2;
+  }
+
+  .container aside {
+    grid-column: 1 / 2;
+    grid-row: 2 / 3;
+  }
+
+  .container main {
+    grid-column: 2 / 3;
+    grid-row: 2 / 3;
+  }
+}

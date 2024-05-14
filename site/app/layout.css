@@ -156,8 +156,8 @@ button {
   text-wrap: pretty;
 }
 
-.prose li :where(h1, h2, h3) {
-  margin: 1rem 0;
+.prose li :where(h1, h2, h3, pre) {
+  margin: 1.4rem 0;
 }
 
 main {
@@ -166,7 +166,7 @@ main {
 
 @media screen and (min-width: 60rem) {
   main {
-    padding: 6rem 2rem 2rem;
+    padding: 2rem;
   }
 }
 

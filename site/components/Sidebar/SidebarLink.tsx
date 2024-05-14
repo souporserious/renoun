@@ -22,7 +22,9 @@ export function SidebarLink({
       style={{
         display: 'block',
         padding: '0.25rem 0',
-        color: isCurrent ? 'white' : 'var(--color-foreground-interactive)',
+        color: isCurrent
+          ? 'var(--color-foreground)'
+          : 'var(--color-foreground-interactive)',
         ...style,
       }}
     >
