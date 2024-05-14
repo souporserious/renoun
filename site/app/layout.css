@@ -156,6 +156,10 @@ button {
   text-wrap: pretty;
 }
 
+.prose li :where(h1, h2, h3) {
+  margin: 1rem 0;
+}
+
 main {
   padding: 2rem;
 }
