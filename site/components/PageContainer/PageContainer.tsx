@@ -7,11 +7,13 @@ import styles from './PageContainer.module.css'
 export function PageContainer({
   children,
   dataSource,
+  viewSource = true,
 }: {
   children: React.ReactNode
   dataSource: NonNullable<
     Awaited<ReturnType<ReturnType<typeof createSource>['get']>>
   >
+  viewSource?: boolean
 }) {
   return (
     <div className={styles.container}>
@@ -55,7 +57,7 @@ export function PageContainer({
       </div>
       <TableOfContents
         headings={dataSource.headings}
-        sourcePath={dataSource.sourcePath}
+        sourcePath={viewSource ? dataSource.sourcePath : undefined}
       />
     </div>
   )

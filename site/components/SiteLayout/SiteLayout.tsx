@@ -38,6 +38,7 @@ export function SiteLayout({
         >
           Docs
         </NavigationLink>
+        <NavigationLink href="/blog">Blog</NavigationLink>
         <NavigationLink href="/changelog">Changelog</NavigationLink>
       </header>
       {sidebar}

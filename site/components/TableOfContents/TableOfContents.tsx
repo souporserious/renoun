@@ -9,7 +9,7 @@ export function TableOfContents({
   sourcePath,
 }: {
   headings: Headings
-  sourcePath: string
+  sourcePath?: string
 }) {
   const sectionObserver = useSectionObserver()
   return (

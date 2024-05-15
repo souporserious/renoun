@@ -3,7 +3,7 @@ import { ImageResponse } from 'next/og'
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { allData } from 'data'
+import { allData, allPosts } from 'data'
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url))
 
@@ -51,8 +51,12 @@ function Container({ children }: { children: React.ReactNode }) {
 }
 
 export function generateStaticParams() {
+  const allPostSlugs = (allPosts.paths() as string[]).map((pathname) => [
+    pathname,
+  ])
   return allData
     .paths()
+    .concat(allPostSlugs)
     .map((pathname) => ({
       slug: [...pathname.slice(0, -1), `${pathname.slice(-1).at(0)!}.png`],
     }))
@@ -87,8 +91,19 @@ export async function GET(
   }
 
   const slug = [...params.slug.slice(0, -1), baseSlug]
-  const data = (await allData.get(slug))!
-  const category = data.pathname.includes('packages') ? 'Packages' : 'Docs'
+  let data = (await allData.get(slug))!
+  let isPost = false
+
+  if (!data) {
+    data = (await allPosts.get(slug))!
+    isPost = true
+  }
+
+  const category = isPost
+    ? 'Blog'
+    : data.pathname.includes('packages')
+      ? 'Packages'
+      : 'Docs'
 
   return new ImageResponse(
     (
@@ -120,7 +135,7 @@ export async function GET(
               color: '#B3C9DD',
             }}
           >
-            {data.title}
+            {data.frontMatter.title || data.title}
           </span>
         </div>
       </Container>
