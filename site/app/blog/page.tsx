@@ -1,4 +1,3 @@
-import Link from 'next/Link'
 import { allPosts } from 'data'
 
 export default function Page() {
@@ -26,7 +25,7 @@ export default function Page() {
         {allPosts.all().map((post) => {
           return (
             <li key={post.pathname}>
-              <Link
+              <a
                 href={post.pathname}
                 style={{
                   fontSize: 'var(--font-size-heading-2)',
@@ -78,7 +77,7 @@ export default function Page() {
                 <p style={{ textDecoration: 'none' }}>
                   {post.frontMatter.summary}
                 </p>
-              </Link>
+              </a>
             </li>
           )
         })}
