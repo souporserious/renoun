@@ -1,5 +1,17 @@
 # mdxts
 
+## 1.0.0
+
+### Major Changes
+
+- 05d31e7: MDXTS v1 is released! 🎉 Check out the [announcement post](https://www.mdxts.dev/blog/introducing-mdxts) for more details.
+
+### Patch Changes
+
+- 15ffbfb: Configure plain markdown files in addition to mdx files for loader.
+- 76ede2b: Treat `diff` as `plaintext` when attempting to tokenize.
+- dfc73a1: Removes code blocks before searching for headings when calculating the data item title to prevent bad heading parsing.
+
 ## 0.19.0
 
 ### Minor Changes
