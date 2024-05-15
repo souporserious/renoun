@@ -5,8 +5,8 @@ import { GeistMono } from 'geist/font/mono'
 
 const codeBlockStyles = {
   container: {
-    fontSize: 'var(--font-size-body-2)',
-    lineHeight: 'var(--line-height-body-2)',
+    fontSize: 'var(--font-size-code)',
+    lineHeight: 'var(--line-height-code)',
     width: 'calc(100% + 2rem)',
     padding: '1rem',
     margin: '0 -1rem',

@@ -18,7 +18,16 @@ export default function Page() {
         components={{
           pre: (props) => (
             // @ts-expect-error
-            <MDXComponents.pre allowErrors {...props} />
+            <MDXComponents.pre
+              allowErrors
+              {...props}
+              style={{
+                container: {
+                  fontSize: 'var(--font-size-code)',
+                  lineHeight: 'var(--line-height-code)',
+                },
+              }}
+            />
           ),
         }}
       />
