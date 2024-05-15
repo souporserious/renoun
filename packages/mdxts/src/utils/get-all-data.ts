@@ -429,8 +429,9 @@ function parseTitleFromBaseName(baseName: string) {
 
 /** Returns the first h1 heading in a Markdown string. */
 function findFirstHeading(sourceFileText: string) {
+  const cleanSourceFileText = sourceFileText.replace(/```[\s\S]*?```/g, '')
   const headingRegex = /(^|\n)#\s(.+)/
-  const match = sourceFileText.match(headingRegex)
+  const match = cleanSourceFileText.match(headingRegex)
   if (match) {
     return match[2]
   }
