@@ -135,7 +135,7 @@ export async function GET(
               color: '#B3C9DD',
             }}
           >
-            {data.frontMatter.title || data.title}
+            {isPost ? data.frontMatter.title : data.title}
           </span>
         </div>
       </Container>
