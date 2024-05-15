@@ -32,7 +32,12 @@ export function SiteLayout({
             style={{ width: undefined, height: 'var(--font-size-body-1)' }}
           />
         </a>
-        <NavigationLink href="/docs/getting-started">Docs</NavigationLink>
+        <NavigationLink
+          href="/docs/getting-started"
+          activePathnames={['/docs', '/packages']}
+        >
+          Docs
+        </NavigationLink>
         <NavigationLink href="/changelog">Changelog</NavigationLink>
       </header>
       {sidebar}

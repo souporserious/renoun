@@ -4,13 +4,17 @@ import Link from 'next/link'
 
 export function NavigationLink({
   href,
+  activePathnames,
   children,
 }: {
   href: string
+  activePathnames?: string[]
   children: React.ReactNode
 }) {
   const currentPathname = usePathname()
-  const isCurrent = currentPathname.startsWith(href)
+  const isCurrent = activePathnames
+    ? activePathnames.some((pathname) => currentPathname.startsWith(pathname))
+    : currentPathname.startsWith(href)
 
   return (
     <Link
