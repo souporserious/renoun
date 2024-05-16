@@ -110,7 +110,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(11rem, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(12rem, 1fr))',
                 gap: '1rem',
               }}
             >
