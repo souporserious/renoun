@@ -1,5 +1,5 @@
 import { join, resolve } from 'path'
-import { Project, SourceFile } from 'ts-morph'
+import type { Project, SourceFile } from 'ts-morph'
 
 import { getPackageMetadata } from './get-package-metadata'
 import { getSharedDirectoryPath } from './get-shared-directory-path'
@@ -18,7 +18,7 @@ const extensionPatterns = [
 export function getEntrySourceFiles(
   project: Project,
   allPaths: string[],
-  sourceDirectory: string = 'src',
+  sourceDirectory = 'src',
   outputDirectory: string | string[] = 'dist'
 ): SourceFile[] {
   if (typeof outputDirectory === 'string') {
@@ -36,18 +36,20 @@ export function getEntrySourceFiles(
       let exportPath = exportValue
 
       if (typeof exportValue === 'object') {
-        exportPath = exportValue.import
-
+        // Could also not exist if it's cjs only for example
+        if (exportValue.import) {
+          exportPath = exportValue.import
+        }
 
         /* 
         This is required for cases with nested export statements like this:
 
         "import": {
-				 "types": "./dist/es/tailwind.d.mts",
-				 "default": "./dist/es/tailwind.mjs"
-			  },
+         "types": "./dist/es/tailwind.d.mts",
+         "default": "./dist/es/tailwind.mjs"
+        },
         **/
-        if(typeof exportValue.import === 'object') {
+        if (typeof exportValue.import === 'object') {
           exportPath = exportValue.import.default
         }
       }
