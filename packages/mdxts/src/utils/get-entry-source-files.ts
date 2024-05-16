@@ -39,6 +39,14 @@ export function getEntrySourceFiles(
         exportPath = exportValue.import
 
 
+        /* 
+        This is required for cases with nested export statements like this:
+
+        "import": {
+				 "types": "./dist/es/tailwind.d.mts",
+				 "default": "./dist/es/tailwind.mjs"
+			  },
+        **/
         if(typeof exportValue.import === 'object') {
           exportPath = exportValue.import.default
         }
