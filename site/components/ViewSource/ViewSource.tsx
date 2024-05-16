@@ -21,8 +21,8 @@ export function ViewSource({
       View Source{' '}
       <svg
         fill="none"
-        width="1rem"
-        height="1rem"
+        width="1em"
+        height="1em"
         stroke="var(--color-foreground-interactive)"
         strokeLinecap="round"
         strokeLinejoin="round"

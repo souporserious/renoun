@@ -71,8 +71,10 @@ export default async function Page({
           stroke="currentColor"
           strokeWidth="1.5"
           viewBox="0 0 24 24"
-          width="1rem"
-          height="1rem"
+          style={{
+            width: 'var(--font-size-body-2)',
+            height: 'var(--font-size-body-2)',
+          }}
         >
           <path d="M15 18l-6-6 6-6" />
         </svg>
@@ -112,7 +114,10 @@ export default async function Page({
             <svg
               viewBox="0 0 24 24"
               fill="none"
-              style={{ width: '1rem', height: '1rem' }}
+              style={{
+                width: 'var(--font-size-body-2)',
+                height: 'var(--font-size-body-2)',
+              }}
             >
               <path
                 d="M14 6L8 12L14 18"
@@ -139,7 +144,10 @@ export default async function Page({
             <svg
               viewBox="0 0 24 24"
               fill="none"
-              style={{ width: '1rem', height: '1rem' }}
+              style={{
+                width: 'var(--font-size-body-2)',
+                height: 'var(--font-size-body-2)',
+              }}
             >
               <path
                 d="M10 18L16 12L10 6"
