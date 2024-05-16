@@ -1,5 +1,11 @@
 # create-mdxts
 
+## 0.3.11
+
+### Patch Changes
+
+- b35373c: Fixes error when trying to find previous version cache that doesn't exist yet.
+
 ## 0.3.10
 
 ### Patch Changes
