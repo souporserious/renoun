@@ -173,6 +173,8 @@ export default async function Page({
           }}
           style={{
             container: {
+              fontSize: 'var(--font-size-code)',
+              lineHeight: 'var(--line-height-code)',
               boxShadow: undefined,
               borderRadius: undefined,
             },
