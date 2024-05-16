@@ -37,6 +37,11 @@ export function getEntrySourceFiles(
 
       if (typeof exportValue === 'object') {
         exportPath = exportValue.import
+
+
+        if(typeof exportValue.import === 'object') {
+          exportPath = exportValue.import.default
+        }
       }
 
       const sourceFilePaths = extensionPatterns
