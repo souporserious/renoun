@@ -47,6 +47,9 @@ function saveVersionToCache(version: string) {
 }
 
 function getVersionFromCache() {
+  if (!existsSync(cacheFilePath)) {
+    return null
+  }
   const cacheContent = JSON.parse(readFileSync(cacheFilePath, 'utf-8'))
   return cacheContent as { version: string; cachedAt: number }
 }
