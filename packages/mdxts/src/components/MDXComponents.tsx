@@ -1,19 +1,16 @@
 import * as React from 'react'
 import type { MDXComponents as MDXComponentsType } from 'mdx/types'
 
-import type { Languages } from './CodeBlock/get-tokens'
 import type { BaseCodeBlockProps } from './CodeBlock/CodeBlock'
 import { CodeBlock } from './CodeBlock/CodeBlock'
+import type { CodeInlineProps } from './CodeInline'
 import { CodeInline } from './CodeInline'
 
 type MDXTSComponentsType = Omit<MDXComponentsType, 'pre' | 'code'> & {
   pre?: (props: BaseCodeBlockProps & { value: string }) => React.ReactElement
-  code?: (props: {
-    language: Languages
-    children: string
-    className?: string
-    style?: React.CSSProperties
-  }) => React.ReactElement
+  code?: (
+    props: Omit<CodeInlineProps, 'value'> & { children: string }
+  ) => React.ReactElement
 }
 
 export type MDXComponents = MDXTSComponentsType
@@ -30,9 +27,9 @@ export const MDXComponents = {
     focusedLines,
     unfocusedLinesOpacity,
     filename,
-    language,
     sourcePath,
     value,
+    language,
     className,
     style,
   }) => {
@@ -47,19 +44,21 @@ export const MDXComponents = {
         focusedLines={focusedLines}
         unfocusedLinesOpacity={unfocusedLinesOpacity}
         filename={filename}
-        language={language}
         sourcePath={sourcePath}
         value={value}
+        language={language}
         className={className}
         style={style}
       />
     )
   },
-  code: ({ language, children, className, style }) => {
+  code: ({ language, children, paddingX, paddingY, className, style }) => {
     return (
       <CodeInline
-        language={language}
         value={children}
+        language={language}
+        paddingX={paddingX}
+        paddingY={paddingY}
         className={className}
         style={style}
       />

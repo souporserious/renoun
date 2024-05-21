@@ -437,7 +437,8 @@ function Props({
             <CodeInline
               value={propType.text}
               language="typescript"
-              style={{ padding: '0.2rem 0.5rem' }}
+              paddingX="0.5rem"
+              paddingY="0.2rem"
             />
             {propType.defaultValue ? (
               <span
