@@ -137,24 +137,6 @@ importers:
       '@tsxmod/utils':
         specifier: ^0.5.1
         version: 0.5.1(ts-morph@22.0.0)
-      '@types/hast':
-        specifier: ^3.0.4
-        version: 3.0.4
-      '@types/mdast':
-        specifier: ^4.0.3
-        version: 4.0.3
-      '@types/mdx':
-        specifier: ^2.0.13
-        version: 2.0.13
-      '@types/react':
-        specifier: ^18.3.1
-        version: 18.3.1
-      '@types/react-dom':
-        specifier: ^18.3.0
-        version: 18.3.0
-      '@types/title':
-        specifier: ^3.4.3
-        version: 3.4.3
       case-anything:
         specifier: ^2.1.13
         version: 2.1.13
@@ -273,6 +255,24 @@ importers:
       '@types/glob-parent':
         specifier: 5.1.3
         version: 5.1.3
+      '@types/hast':
+        specifier: ^3.0.4
+        version: 3.0.4
+      '@types/mdast':
+        specifier: ^4.0.3
+        version: 4.0.3
+      '@types/mdx':
+        specifier: ^2.0.13
+        version: 2.0.13
+      '@types/react':
+        specifier: ^18.3.1
+        version: 18.3.1
+      '@types/react-dom':
+        specifier: ^18.3.0
+        version: 18.3.0
+      '@types/title':
+        specifier: ^3.4.3
+        version: 3.4.3
       '@types/webpack-env':
         specifier: 1.18.4
         version: 1.18.4
