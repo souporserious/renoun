@@ -1,6 +1,6 @@
 .main {
   display: grid;
-  width: 100vw;
+  width: 100%;
   padding: 0;
   min-height: 100dvh;
   perspective: 5000px;
