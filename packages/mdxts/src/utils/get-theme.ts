@@ -38,6 +38,21 @@ export async function getTheme() {
         resolvedTheme.colors['editor.foreground'] || '#ffffff'
     }
 
+    if (!resolvedTheme.colors['scrollbarSlider.background']) {
+      resolvedTheme.colors['scrollbarSlider.background'] =
+        'rgba(121, 121, 121, 0.4)'
+    }
+
+    if (!resolvedTheme.colors['scrollbarSlider.hoverBackground']) {
+      resolvedTheme.colors['scrollbarSlider.hoverBackground'] =
+        'rgba(100, 100, 100, 0.7)'
+    }
+
+    if (!resolvedTheme.colors['scrollbarSlider.activeBackground']) {
+      resolvedTheme.colors['scrollbarSlider.activeBackground'] =
+        'rgba(191, 191, 191, 0.4)'
+    }
+
     theme = normalizeTheme(resolvedTheme)
 
     theme.name = 'mdxts'

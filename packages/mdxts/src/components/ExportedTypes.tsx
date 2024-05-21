@@ -201,7 +201,8 @@ function Types({
             <CodeInline
               value={propertyType.text}
               language="typescript"
-              style={{ padding: '0.2rem 0.5rem' }}
+              paddingX="0.5rem"
+              paddingY="0.2rem"
             />
             {propertyType.defaultValue ? (
               <span
