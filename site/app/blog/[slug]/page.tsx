@@ -92,7 +92,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
           <p>{frontMatter.author}</p>
           <a
             href="https://twitter.com/souporserious"
-            rel="noopener noreferrer"
+            rel="noopener"
             target="_blank"
           >
             @souporserious
