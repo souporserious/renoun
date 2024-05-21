@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import { join, sep, isAbsolute } from 'node:path'
+import { join, posix, isAbsolute } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import type { SourceFile } from 'ts-morph'
 import { format, resolveConfig } from 'prettier'
@@ -206,7 +206,7 @@ export async function parseSourceTextMetadata({
   }
 
   const filenameLabel = (filenameProp || filename)
-    .replace(join('mdxts', sep), '') // Remove mdxts/ prefix
+    .replace(join('mdxts', posix.sep), '') // Remove mdxts/ prefix
     .replace(/\d+\./, '') // Remove ordered number prefix
 
   return {

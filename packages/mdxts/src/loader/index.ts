@@ -1,5 +1,5 @@
 import * as webpack from 'webpack'
-import { dirname, join, relative, resolve, sep } from 'node:path'
+import { dirname, join, relative, resolve, posix } from 'node:path'
 import { glob } from 'fast-glob'
 import globParent from 'glob-parent'
 import { Node, Project, SyntaxKind } from 'ts-morph'
@@ -72,13 +72,22 @@ export default async function loader(
           const globPattern = firstArgument.getLiteralText()
           const globDirectory = globParent(globPattern)
           const baseGlobPattern = dirname(globPattern)
-          const isMdxPattern = globPattern.split(sep).at(-1)?.includes('mdx')
+          const isMdxPattern = globPattern
+            .split(posix.sep)
+            .at(-1)
+            ?.includes('mdx')
           let filePaths = await glob(
             isMdxPattern
               ? globPattern
               : [
-                  join(baseGlobPattern, sep, '*.examples.{ts,tsx}'),
-                  join(baseGlobPattern, sep, 'examples', sep, '*.{ts,tsx}'),
+                  join(baseGlobPattern, posix.sep, '*.examples.{ts,tsx}'),
+                  join(
+                    baseGlobPattern,
+                    posix.sep,
+                    'examples',
+                    posix.sep,
+                    '*.{ts,tsx}'
+                  ),
                 ],
             { cwd: workingDirectory }
           )
@@ -135,7 +144,8 @@ export default async function loader(
                 return isExported
               })
               .forEach((sourceFilePath) => {
-                const sourceFilename = sourceFilePath.split(sep).pop() ?? ''
+                const sourceFilename =
+                  sourceFilePath.split(posix.sep).pop() ?? ''
                 const mdxFilePath = sourceFilename.includes('index')
                   ? join(dirname(sourceFilePath), 'README.mdx')
                   : sourceFilePath.replace(
@@ -161,7 +171,7 @@ export default async function loader(
               const relativeFilePath = relative(workingDirectory, filePath)
               const normalizedRelativePath = relativeFilePath.startsWith('.')
                 ? relativeFilePath
-                : `.${sep}${relativeFilePath}`
+                : `.${posix.sep}${relativeFilePath}`
               return `'${filePath}': () => import('${normalizedRelativePath}')`
             })
             .join(', ')}}`

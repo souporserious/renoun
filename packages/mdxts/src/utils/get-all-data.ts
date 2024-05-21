@@ -1,5 +1,5 @@
 import parseTitle from 'title'
-import { dirname, join, sep } from 'node:path'
+import { dirname, join, posix } from 'node:path'
 import type { ExportedDeclarations, Project } from 'ts-morph'
 import { SourceFile } from 'ts-morph'
 import { getSymbolDescription, resolveExpression } from '@tsxmod/utils'
@@ -137,7 +137,7 @@ export function getAllData<Type extends { frontMatter: Record<string, any> }>({
     const sourceFileTitle = getSourceFileTitle(sourceFile)
     const sourcePath = getSourcePath(path)
     const metadata = getMetadata(sourceFile)
-    const depth = pathname.split(sep).length - 2
+    const depth = pathname.split(posix.sep).length - 2
     let title =
       type === 'md'
         ? findFirstHeading(sourceFile.getText()) || sourceFileTitle
@@ -214,8 +214,8 @@ export function getAllData<Type extends { frontMatter: Record<string, any> }>({
       )
       const isMainExport = packageMetadata?.name
         ? basePathname
-          ? pathname === join(sep, basePathname, packageMetadata.name)
-          : pathname === join(sep, packageMetadata.name)
+          ? pathname === join(posix.sep, basePathname, packageMetadata.name)
+          : pathname === join(posix.sep, packageMetadata.name)
         : false
       const importDeclarations = sourceFile.getImportDeclarations()
       const isServerOnly = importDeclarations.some((importDeclaration) => {

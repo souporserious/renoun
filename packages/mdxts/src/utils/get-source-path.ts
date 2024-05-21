@@ -1,4 +1,4 @@
-import { join, sep } from 'node:path'
+import { join, posix } from 'node:path'
 import { findRootSync } from '@manypkg/find-root'
 
 import { getEditorPath } from './get-editor-path'
@@ -26,7 +26,7 @@ export function getSourcePath(
       rootDirectory = findRootSync(process.cwd()).rootDir
     }
 
-    const relativeFilePath = path.replace(join(rootDirectory, sep), '')
+    const relativeFilePath = path.replace(join(rootDirectory, posix.sep), '')
 
     if (gitSource === undefined) {
       if (!warned.has(relativeFilePath)) {

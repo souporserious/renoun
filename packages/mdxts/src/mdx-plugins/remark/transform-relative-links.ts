@@ -1,5 +1,5 @@
 import type { Root, Link } from 'mdast'
-import { sep } from 'node:path'
+import { posix } from 'node:path'
 
 /** Reformat all relative links that use ordered numbers and extensions. */
 export function transformRelativeLinks() {
@@ -11,11 +11,11 @@ export function transformRelativeLinks() {
         return
       }
 
-      const segments = node.url.split(sep)
+      const segments = node.url.split(posix.sep)
       for (let index = 0; index < segments.length; index++) {
         segments[index] = segments[index].replace(/^\d+\./, '')
       }
-      node.url = segments.join(sep).replace(/\.mdx?$/, '')
+      node.url = segments.join(posix.sep).replace(/\.mdx?$/, '')
     })
   }
 }
