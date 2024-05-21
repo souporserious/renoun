@@ -1,5 +1,5 @@
 ---
-"mdxts": patch
+'mdxts': patch
 ---
 
-fix: detection of deeply nested package.json exports
+Fixes detection of deeply nested package.json exports.
