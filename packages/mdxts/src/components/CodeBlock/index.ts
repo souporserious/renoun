@@ -6,3 +6,4 @@ export {
 export { LineNumbers } from './LineNumbers'
 export { Tokens, type TokensProps } from './Tokens'
 export { Toolbar, type ToolbarProps } from './Toolbar'
+export { loadHighlighterLanguage } from './get-highlighter'
