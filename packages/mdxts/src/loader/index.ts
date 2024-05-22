@@ -169,7 +169,11 @@ export default async function loader(
 
           const objectLiteralText = `{${filePaths
             .map((filePath) => {
-              const relativeFilePath = relative(workingDirectory, filePath)
+              const normalizedFilePath = filePath.split(sep).join(posix.sep)
+              const relativeFilePath = relative(
+                workingDirectory,
+                normalizedFilePath
+              )
               const normalizedRelativePath = relativeFilePath.startsWith('.')
                 ? relativeFilePath
                 : `.${posix.sep}${relativeFilePath}`
