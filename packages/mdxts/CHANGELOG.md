@@ -1,5 +1,17 @@
 # mdxts
 
+## 1.2.0
+
+### Minor Changes
+
+- e5b2b81: Renders `CodeBlock` and `CodeInline` tokens using CSS now through [restyle](https://reactstyle.vercel.app/).
+
+### Patch Changes
+
+- a83ed0e: Normalizes `createSource` import paths to posix for Windows.
+- ced3036: Fixes `CodeInline` overflow breaking from adding display flex.
+- d8d5e6e: Adds export for `Copyright` component from top-level exports.
+
 ## 1.1.0
 
 ### Minor Changes
