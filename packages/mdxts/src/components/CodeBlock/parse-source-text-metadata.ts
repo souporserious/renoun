@@ -80,6 +80,7 @@ export async function parseSourceTextMetadata({
   const isJavaScriptLikeLanguage = ['js', 'jsx', 'ts', 'tsx'].includes(
     finalLanguage
   )
+  const isHtmlLanguage = 'html' === finalLanguage
   const jsxOnly = isJavaScriptLikeLanguage ? isJsxOnly(finalValue) : false
   let filename = 'source' in props ? props.source : filenameProp
   let sourceFile: SourceFile | undefined
@@ -89,7 +90,7 @@ export async function parseSourceTextMetadata({
   }
 
   // Format JavaScript code blocks.
-  if (isJavaScriptLikeLanguage) {
+  if (isJavaScriptLikeLanguage || isHtmlLanguage) {
     try {
       const config = (await resolveConfig(filename)) || {}
       config.filepath = filename
