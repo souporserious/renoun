@@ -1,5 +1,21 @@
 # mdxts
 
+## 1.1.0
+
+### Minor Changes
+
+- e38535a: Uses `posix.sep` and normalizes `createSource` glob patterns.
+- 301629b: Fixes scrollbars for `CodeInline` components that overflow while also moving inline styles to use [restyle](https://github.com/souporserious/restyle).
+- ac9118e: Adds `allowCopy` prop to `CodeInline` for rendering a persistent copy button.
+- 3cc2642: Moves `@types` packages from dependencies to dev dependencies to reduce npm install size. These should be included in the project `mdxts` is used in now e.g. `npm install @types/react`.
+
+### Patch Changes
+
+- 1ccb33c: Fixes detection of deeply nested package.json exports.
+- 35c4b29: Allows setting the fill color for the `MdxtsLogo` and `MdxtsMark` components.
+- 1ff3252: Fixes trimming `CodeBlock` source file comments.
+- 770c7f5: Sets foreground color for `Toolbar` icons in `CodeBlock`.
+
 ## 1.0.0
 
 ### Major Changes
@@ -22,14 +38,14 @@
 - 999446c: Adds MDXTS assets for linking back to the MDXTS site:
 
   ```jsx
-  import { BuiltWithMdxts } from "mdxts/assets";
+  import { BuiltWithMdxts } from 'mdxts/assets'
 
   export function Footer() {
     return (
       <footer>
         <BuiltWithMdxts />
       </footer>
-    );
+    )
   }
   ```
 
@@ -73,10 +89,10 @@
 
   ````mdx
   ```tsx focusedLines="3-4"
-  const a = 1;
-  const b = 2;
-  const result = a + b;
-  console.log(result); // 3
+  const a = 1
+  const b = 2
+  const result = a + b
+  console.log(result) // 3
   ```
   ````
 
@@ -98,18 +114,18 @@
 - e493fbd: Refines `paths` returned from `createSource` and `mergeSources`. Based on the glob pattern provided, either a one-dimensional or two-dimensional array of paths will be returned:
 
   ```ts
-  import { createSource, mergeSources } from "mdxts";
+  import { createSource, mergeSources } from 'mdxts'
 
-  const allPosts = createSource("posts/*.mdx").paths(); // string[]
-  const allDocs = createSource("docs/**/*.mdx").paths(); // string[][]
-  const allPaths = mergeSources(allDocs, allPosts).paths(); // string[] | string[][]
+  const allPosts = createSource('posts/*.mdx').paths() // string[]
+  const allDocs = createSource('docs/**/*.mdx').paths() // string[][]
+  const allPaths = mergeSources(allDocs, allPosts).paths() // string[] | string[][]
   ```
 
   Likewise the `get` method will be narrowed to only accept a single pathname or an array of pathname segments:
 
   ```ts
-  allPosts.get("building-a-button-component-in-react");
-  allDocs.get(["examples", "authoring"]);
+  allPosts.get('building-a-button-component-in-react')
+  allDocs.get(['examples', 'authoring'])
   ```
 
   ### Breaking Changes
@@ -139,15 +155,15 @@
 - 469b021: Enables type-checking for the `CodeBlock` component. To opt-out of type-checking, use the `allowErrors` prop on the code block:
 
   ```tsx allowErrors
-  const a = 1;
-  a + b;
+  const a = 1
+  a + b
   ```
 
   This will disable type-checking for the code block and prevent erroring. To show the errors, usually for educational purposes, use the `showErrors` prop:
 
   ```tsx allowErrors showErrors
-  const a = 1;
-  a + b;
+  const a = 1
+  a + b
   ```
 
   ### Breaking Changes
@@ -161,12 +177,12 @@
   To determine what source files should be considered public when dealing with package exports, `createSource` gets two new options used to remap `package.json` exports to their original source files:
 
   ```ts
-  import { createSource } from "mdxts";
+  import { createSource } from 'mdxts'
 
-  const allPackages = createSource("../packages/mdxts/src/**/*.{ts,tsx}", {
-    sourceDirectory: "src",
-    outputDirectory: "dist",
-  });
+  const allPackages = createSource('../packages/mdxts/src/**/*.{ts,tsx}', {
+    sourceDirectory: 'src',
+    outputDirectory: 'dist',
+  })
   ```
 
   Using a subset of the `mdxts` `package.json` exports as an example:
@@ -199,11 +215,11 @@
 - 9cf1577: Cleans up type errors to be more understandable and adds a configuration to highlight errors in the terminal:
 
   ```ts
-  import { createMdxtsPlugin } from "mdxts";
+  import { createMdxtsPlugin } from 'mdxts'
 
-  const withMdxtsPlugin = createMdxtsPlugin({ highlightErrors: true });
+  const withMdxtsPlugin = createMdxtsPlugin({ highlightErrors: true })
 
-  export default withMdxtsPlugin();
+  export default withMdxtsPlugin()
   ```
 
 - 2af35d0: Converts theme to object syntax and moves colors to top-level:
@@ -213,22 +229,22 @@
 - 7726268: Adds a new `sort` option to `createSource`:
 
   ```tsx
-  import { createSource } from "mdxts";
+  import { createSource } from 'mdxts'
 
-  const allPosts = createSource<{ frontMatter: { date: Date } }>("**/*.mdx", {
+  const allPosts = createSource<{ frontMatter: { date: Date } }>('**/*.mdx', {
     sort: (a, b) => a.frontMatter.date - b.frontMatter.date,
-  });
+  })
   ```
 
 - c42eb88: Removes panel border modifications which decreased the alpha channel of the `panel.border` theme color. This should now be modified in a custom theme.
 - 2af35d0: Rewrites the `CodeBlock` component to use the latest version of [shiki](https://shiki.style/) as well as allows for better composition using newly exposed `Tokens`, `Toolbar`, `LineNumbers`, and `LineHighlights` components:
 
   ```tsx
-  import { getTheme } from "mdxts";
-  import { CodeBlock, Toolbar, Tokens } from "mdxts/components";
+  import { getTheme } from 'mdxts'
+  import { CodeBlock, Toolbar, Tokens } from 'mdxts/components'
 
   function CodeBlockWithToolbar() {
-    const theme = getTheme();
+    const theme = getTheme()
 
     return (
       <CodeBlock source="./counter/Counter.tsx">
@@ -238,19 +254,19 @@
             color: theme.foreground,
           }}
         >
-          <Toolbar allowCopy style={{ padding: "0.5rem 1rem" }} />
+          <Toolbar allowCopy style={{ padding: '0.5rem 1rem' }} />
           <pre
             style={{
-              whiteSpace: "pre",
-              wordWrap: "break-word",
-              overflow: "auto",
+              whiteSpace: 'pre',
+              wordWrap: 'break-word',
+              overflow: 'auto',
             }}
           >
             <Tokens />
           </pre>
         </div>
       </CodeBlock>
-    );
+    )
   }
   ```
 
@@ -263,12 +279,12 @@
     }}
     style={{
       container: {
-        fontSize: "var(--font-size-body-2)",
-        lineHeight: "var(--line-height-body-2)",
-        padding: "1rem",
+        fontSize: 'var(--font-size-body-2)',
+        lineHeight: 'var(--line-height-body-2)',
+        padding: '1rem',
       },
       toolbar: {
-        padding: "0.5rem 1rem",
+        padding: '0.5rem 1rem',
       },
     }}
     language="tsx"
@@ -294,7 +310,7 @@
 - 0b80bf5: Adds a `fixImports` prop to `CodeBlock` to allow fixing imports when the source code references files outside the project and can't resolve correctly:
 
   ```tsx
-  import { CodeBlock } from "mdxts/components";
+  import { CodeBlock } from 'mdxts/components'
 
   const source = `
   import { Button } from './Button'
@@ -302,10 +318,10 @@
   export function BasicUsage() {
     return <Button>Click Me</Button>
   }
-  `;
+  `
 
   export default function Page() {
-    return <CodeBlock fixImports value={source} />;
+    return <CodeBlock fixImports value={source} />
   }
   ```
 
@@ -374,31 +390,31 @@
 - 435c5e8: Allow overriding `frontMatter` type through `createSource` generic.
 
   ```ts
-  import { createSource } from "mdxts";
+  import { createSource } from 'mdxts'
 
   export const allDocs = createSource<{
     frontMatter: {
-      title: string;
-      description: string;
-      date: string;
-      tags?: string[];
-    };
-  }>("docs/*.mdx");
+      title: string
+      description: string
+      date: string
+      tags?: string[]
+    }
+  }>('docs/*.mdx')
   ```
 
 - fac626b: Adds front matter type validation using the generic passed to `createSource`:
 
   ```ts
-  import { createSource } from "mdxts";
+  import { createSource } from 'mdxts'
 
   export const allPosts = createSource<{
     frontMatter: {
-      title: string;
-      date: Date;
-      summary: string;
-      tags?: string[];
-    };
-  }>("posts/**/*.mdx", { baseDirectory: "posts" });
+      title: string
+      date: Date
+      summary: string
+      tags?: string[]
+    }
+  }>('posts/**/*.mdx', { baseDirectory: 'posts' })
   ```
 
   ```posts/markdown-guide.mdx
@@ -509,19 +525,19 @@
 
   ```js
   // app/rss.xml/route.js
-  import { allData } from "data";
+  import { allData } from 'data'
 
   export async function GET() {
     const feed = allData.rss({
-      title: "MDXTS - The Content & Documentation SDK for React",
-      description: "Type-safe content and documentation.",
+      title: 'MDXTS - The Content & Documentation SDK for React',
+      description: 'Type-safe content and documentation.',
       copyright: `©${new Date().getFullYear()} @souporserious`,
-    });
+    })
     return new Response(feed, {
       headers: {
-        "Content-Type": "application/rss+xml",
+        'Content-Type': 'application/rss+xml',
       },
-    });
+    })
   }
   ```
 
