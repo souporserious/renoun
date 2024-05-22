@@ -48,8 +48,8 @@ export async function CodeInline({
   )
   const theme = await getThemeColors()
   const [classNames, styles] = css({
-    display: 'inline-flex',
     padding: `${paddingY} ${paddingX} 0`,
+    paddingRight: allowCopy ? `calc(1ch + 1lh + ${paddingX})` : undefined,
     gap: '1ch',
     color: theme.editor.foreground,
     backgroundColor: theme.editor.background,
@@ -57,6 +57,7 @@ export async function CodeInline({
     borderRadius: 5,
     whiteSpace: 'nowrap',
     overflowX: 'scroll',
+    position: 'relative',
     '::-webkit-scrollbar': {
       height: paddingY,
     },
@@ -101,7 +102,12 @@ export async function CodeInline({
             {lineIndex === tokens.length - 1 ? null : '\n'}
           </Fragment>
         ))}
-        {allowCopy ? <CopyButton value={value} /> : null}
+        {allowCopy ? (
+          <CopyButton
+            value={value}
+            style={{ right: paddingX, position: 'absolute' }}
+          />
+        ) : null}
       </code>
     </>
   )
