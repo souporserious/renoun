@@ -5,6 +5,8 @@
 Adds `RenderedHTML` component for rendering `children` as a highlighted HTML string in a `CodeBlock`:
 
 ```tsx
+import { CodeBlock, RenderedHTML } from 'mdxts'
+
 export function Basic() {
   return (
     <div style={{ display: 'grid', gap: '2rem' }}>
