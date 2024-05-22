@@ -1,5 +1,36 @@
 # mdxts
 
+## 1.3.0
+
+### Minor Changes
+
+- d36ef90: Adds a `loadHighlighterLanguage` utility for adding custom languages to `CodeBlock` and `CodeInline`.
+- 02b3f80: Adds `RenderedHTML` component for rendering `children` as a highlighted HTML string in a `CodeBlock`:
+
+  ```tsx
+  import { CodeBlock, RenderedHTML } from 'mdxts'
+
+  export function Basic() {
+    return (
+      <div style={{ display: 'grid', gap: '2rem' }}>
+        <div style={{ display: 'grid', gap: '1rem' }}>
+          <h2>Input</h2>
+          <CodeBlock
+            language="jsx"
+            value="<h1 style={{ fontSize: '6rem' }}>Hello World</h1>"
+          />
+        </div>
+        <div style={{ display: 'grid', gap: '1rem' }}>
+          <h2>Output</h2>
+          <RenderedHTML includeHtml={false}>
+            <h1 style={{ fontSize: '6rem' }}>Hello World</h1>
+          </RenderedHTML>
+        </div>
+      </div>
+    )
+  }
+  ```
+
 ## 1.2.0
 
 ### Minor Changes
