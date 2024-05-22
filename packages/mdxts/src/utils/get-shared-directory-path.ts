@@ -1,8 +1,8 @@
-import { sep } from 'path'
+import { posix } from 'path'
 
 /** Finds the first shared directory path for a set of paths. */
 export function getSharedDirectoryPath(...paths: string[]) {
-  let pathSegments = paths.map((path) => path.split(sep))
+  let pathSegments = paths.map((path) => path.split(posix.sep))
 
   if (pathSegments.length === 0) {
     throw new Error('mdxts: cannot find common root path for empty array')
@@ -29,5 +29,5 @@ export function getSharedDirectoryPath(...paths: string[]) {
     commonRoot.pop()
   }
 
-  return commonRoot.join(sep)
+  return commonRoot.join(posix.sep)
 }

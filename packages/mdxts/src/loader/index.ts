@@ -1,5 +1,5 @@
 import * as webpack from 'webpack'
-import { dirname, join, relative, resolve, sep } from 'node:path'
+import { dirname, join, relative, resolve, posix, sep } from 'node:path'
 import { glob } from 'fast-glob'
 import globParent from 'glob-parent'
 import { Node, Project, SyntaxKind } from 'ts-morph'
@@ -72,14 +72,18 @@ export default async function loader(
           const globPattern = firstArgument.getLiteralText()
           const globDirectory = globParent(globPattern)
           const baseGlobPattern = dirname(globPattern)
-          const isMdxPattern = globPattern.split(sep).at(-1)?.includes('mdx')
+          const isMdxPattern = globPattern
+            .split(posix.sep)
+            .at(-1)
+            ?.includes('mdx')
+          const filePatterns = isMdxPattern
+            ? [globPattern]
+            : [
+                join(baseGlobPattern, sep, '*.examples.{ts,tsx}'),
+                join(baseGlobPattern, sep, 'examples', sep, '*.{ts,tsx}'),
+              ]
           let filePaths = await glob(
-            isMdxPattern
-              ? globPattern
-              : [
-                  join(baseGlobPattern, sep, '*.examples.{ts,tsx}'),
-                  join(baseGlobPattern, sep, 'examples', sep, '*.{ts,tsx}'),
-                ],
+            filePatterns.map((filePath) => filePath.split(sep).join(posix.sep)),
             { cwd: workingDirectory }
           )
 
@@ -88,13 +92,19 @@ export default async function loader(
 
           /** Search for MDX files named the same as the source files (e.g. `Button.mdx` for `Button.tsx`) */
           if (!isMdxPattern) {
-            const allSourceFilePaths = await glob(globPattern, {
-              cwd: workingDirectory,
-              ignore: ['**/*.examples.(ts|tsx)'],
-            })
-            const allMdxFilePaths = await glob(`${baseGlobPattern}/*.mdx`, {
-              cwd: workingDirectory,
-            })
+            const allSourceFilePaths = await glob(
+              globPattern.split(sep).join(posix.sep),
+              {
+                cwd: workingDirectory,
+                ignore: ['**/*.examples.(ts|tsx)'],
+              }
+            )
+            const allMdxFilePaths = await glob(
+              join(`${baseGlobPattern}`, sep, `*.mdx`)
+                .split(sep)
+                .join(posix.sep),
+              { cwd: workingDirectory }
+            )
             const allPaths = [...allSourceFilePaths, ...allMdxFilePaths]
 
             if (allPaths.length === 0) {
@@ -135,7 +145,8 @@ export default async function loader(
                 return isExported
               })
               .forEach((sourceFilePath) => {
-                const sourceFilename = sourceFilePath.split(sep).pop() ?? ''
+                const sourceFilename =
+                  sourceFilePath.split(posix.sep).pop() ?? ''
                 const mdxFilePath = sourceFilename.includes('index')
                   ? join(dirname(sourceFilePath), 'README.mdx')
                   : sourceFilePath.replace(
@@ -161,11 +172,10 @@ export default async function loader(
               const relativeFilePath = relative(workingDirectory, filePath)
               const normalizedRelativePath = relativeFilePath.startsWith('.')
                 ? relativeFilePath
-                : `.${sep}${relativeFilePath}`
+                : `.${posix.sep}${relativeFilePath}`
               return `'${filePath}': () => import('${normalizedRelativePath}')`
             })
             .join(', ')}}`
-
           const argumentCount = createSourceCall.getArguments().length
           const createSourceCallArguments = []
 

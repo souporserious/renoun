@@ -1,7 +1,7 @@
 import parseTitle from 'title'
 import * as React from 'react'
 import type { ComponentType } from 'react'
-import { basename, dirname, extname, join, resolve, sep } from 'node:path'
+import { basename, dirname, extname, join, posix } from 'node:path'
 import { Feed } from 'feed'
 import { Project } from 'ts-morph'
 import { getDiagnosticMessageText } from '@tsxmod/utils'
@@ -158,14 +158,6 @@ export function createSource<
     )
   }
 
-  /** Convert all modules to absolute paths. */
-  allModules = Object.fromEntries(
-    Object.entries(allModules).map(([pathname, moduleImport]) => [
-      resolve(process.cwd(), pathname),
-      moduleImport,
-    ])
-  )
-
   const {
     baseDirectory = '',
     basePathname = '',
@@ -251,7 +243,7 @@ export function createSource<
         pathIndex++
       ) {
         const currentPath = filteredDataKeys[pathIndex]
-        const pathParts = currentPath.split(sep).filter(Boolean)
+        const pathParts = currentPath.split(posix.sep).filter(Boolean)
         let nodes = tree
 
         for (
@@ -260,8 +252,8 @@ export function createSource<
           pathPartIndex++
         ) {
           const pathname = join(
-            sep,
-            pathParts.slice(0, pathPartIndex + 1).join(sep)
+            posix.sep,
+            pathParts.slice(0, pathPartIndex + 1).join(posix.sep)
           )
           const segment = pathParts[pathPartIndex]
           let node = nodes.find((node) => node.segment === segment)
@@ -291,7 +283,7 @@ export function createSource<
                   nextPathname.startsWith(pathname) &&
                   allFilteredData[nextPathname] !== undefined
                 ) {
-                  node.pathname = join(sep, nextPathname)
+                  node.pathname = join(posix.sep, nextPathname)
                   break
                 }
               }
@@ -311,7 +303,7 @@ export function createSource<
       const allPaths = filteredDataKeys.map((pathname) =>
         pathname
           // Split pathname into an array
-          .split(sep)
+          .split(posix.sep)
           // Remove empty strings
           .filter(Boolean)
       )
@@ -346,18 +338,18 @@ export function createSource<
       }
 
       let stringPathname = join(
-        sep,
-        Array.isArray(pathname) ? pathname.join(sep) : pathname
+        posix.sep,
+        Array.isArray(pathname) ? pathname.join(posix.sep) : pathname
       )
       let data = allFilteredData[stringPathname]
 
       // If no data was found, try to find it by the base pathname.
       if (data === undefined && basePathname) {
         stringPathname = join(
-          sep,
+          posix.sep,
           basePathname,
-          sep,
-          Array.isArray(pathname) ? pathname.join(sep) : pathname
+          posix.sep,
+          Array.isArray(pathname) ? pathname.join(posix.sep) : pathname
         )
         data = allFilteredData[stringPathname]
       }
@@ -560,8 +552,8 @@ export function mergeSources<
 
     const allData = all()
     const stringPathname = join(
-      sep,
-      Array.isArray(pathname) ? pathname.join(sep) : pathname
+      posix.sep,
+      Array.isArray(pathname) ? pathname.join(posix.sep) : pathname
     )
     const currentIndex = allData.findIndex(
       (data) => data.pathname === stringPathname

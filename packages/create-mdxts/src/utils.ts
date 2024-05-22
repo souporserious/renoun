@@ -1,7 +1,7 @@
 import { stdin, stdout } from 'node:process'
 import { createInterface } from 'node:readline/promises'
-import chalk from 'chalk'
 import { sep } from 'node:path'
+import chalk from 'chalk'
 
 export class Log {
   static base = 'mdxts: '

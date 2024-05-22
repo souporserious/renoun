@@ -2,7 +2,7 @@ import type { bundledLanguages, bundledThemes } from 'shiki/bundle/web'
 import type { SourceFile, Diagnostic, ts } from 'ts-morph'
 import { Node, SyntaxKind } from 'ts-morph'
 import { getDiagnosticMessageText } from '@tsxmod/utils'
-import { join, sep } from 'node:path'
+import { join, posix } from 'node:path'
 import { findRoot } from '@manypkg/find-root'
 import chalk from 'chalk'
 
@@ -447,7 +447,7 @@ function throwDiagnosticErrors(
   tokens: Token[][],
   sourcePath?: string | false
 ) {
-  const workingDirectory = join(process.cwd(), 'mdxts', sep)
+  const workingDirectory = join(process.cwd(), 'mdxts', posix.sep)
   const filePath = sourceFile.getFilePath().replace(workingDirectory, '')
   const errorMessages = diagnostics.map((diagnostic) => {
     const message = getDiagnosticMessageText(diagnostic.getMessageText())

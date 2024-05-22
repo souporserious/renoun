@@ -1,4 +1,4 @@
-import { join, resolve, sep } from 'node:path'
+import { join, resolve, posix } from 'node:path'
 import slugify from '@sindresorhus/slugify'
 
 /** Converts a file system path to a URL-friendly pathname. */
@@ -12,9 +12,9 @@ export function filePathToPathname(
   function createPathame(filePath: string) {
     return basePathname
       ? basePathname === filePath
-        ? join(sep, basePathname)
-        : join(sep, basePathname, filePath)
-      : join(sep, filePath)
+        ? join(posix.sep, basePathname)
+        : join(posix.sep, basePathname, filePath)
+      : join(posix.sep, filePath)
   }
 
   // Convert relative paths to absolute paths
@@ -25,15 +25,22 @@ export function filePathToPathname(
   const [baseDirectoryPath, baseFilePath] = baseDirectory
     ? filePath.split(baseDirectory)
     : ['', filePath]
+
+  if (baseFilePath === undefined) {
+    throw new Error(
+      `Cannot determine base path for file path "${filePath}" at base directory "${baseDirectory}".`
+    )
+  }
+
   let parsedFilePath = baseFilePath
     // Remove leading separator "./"
     .replace(/^\.\//, '')
     // Remove leading sorting number "01."
-    .replace(/\/\d+\./g, sep)
+    .replace(/\/\d+\./g, posix.sep)
     // Remove working directory
     .replace(
       baseDirectory
-        ? resolve(process.cwd(), baseDirectoryPath, sep)
+        ? resolve(process.cwd(), baseDirectoryPath, posix.sep)
         : process.cwd(),
       ''
     )
@@ -42,7 +49,7 @@ export function filePathToPathname(
     // Remove trailing "/readme" or "/index"
     .replace(/\/(readme|index)$/i, '')
 
-  const segments = parsedFilePath.split(sep)
+  const segments = parsedFilePath.split(posix.sep)
 
   // Remove duplicate segment if last directory name matches file name (e.g. "Button/Button.tsx")
   if (
@@ -56,7 +63,7 @@ export function filePathToPathname(
   parsedFilePath = segments
     .map((segment) => slugify(segment))
     .filter(Boolean)
-    .join(sep)
+    .join(posix.sep)
 
   // Use directory for root index and readme
   if (
