@@ -76,19 +76,14 @@ export default async function loader(
             .split(posix.sep)
             .at(-1)
             ?.includes('mdx')
+          const filePatterns = isMdxPattern
+            ? [globPattern]
+            : [
+                join(baseGlobPattern, sep, '*.examples.{ts,tsx}'),
+                join(baseGlobPattern, sep, 'examples', sep, '*.{ts,tsx}'),
+              ]
           let filePaths = await glob(
-            isMdxPattern
-              ? globPattern
-              : [
-                  join(baseGlobPattern, posix.sep, '*.examples.{ts,tsx}'),
-                  join(
-                    baseGlobPattern,
-                    posix.sep,
-                    'examples',
-                    posix.sep,
-                    '*.{ts,tsx}'
-                  ),
-                ],
+            filePatterns.map((filePath) => filePath.split(sep).join(posix.sep)),
             { cwd: workingDirectory }
           )
 
@@ -97,13 +92,19 @@ export default async function loader(
 
           /** Search for MDX files named the same as the source files (e.g. `Button.mdx` for `Button.tsx`) */
           if (!isMdxPattern) {
-            const allSourceFilePaths = await glob(globPattern, {
-              cwd: workingDirectory,
-              ignore: ['**/*.examples.(ts|tsx)'],
-            })
-            const allMdxFilePaths = await glob(`${baseGlobPattern}/*.mdx`, {
-              cwd: workingDirectory,
-            })
+            const allSourceFilePaths = await glob(
+              globPattern.split(sep).join(posix.sep),
+              {
+                cwd: workingDirectory,
+                ignore: ['**/*.examples.(ts|tsx)'],
+              }
+            )
+            const allMdxFilePaths = await glob(
+              join(`${baseGlobPattern}`, sep, `*.mdx`)
+                .split(sep)
+                .join(posix.sep),
+              { cwd: workingDirectory }
+            )
             const allPaths = [...allSourceFilePaths, ...allMdxFilePaths]
 
             if (allPaths.length === 0) {
@@ -168,11 +169,7 @@ export default async function loader(
 
           const objectLiteralText = `{${filePaths
             .map((filePath) => {
-              const normalizedFilePath = filePath.split(sep).join(posix.sep)
-              const relativeFilePath = relative(
-                workingDirectory,
-                normalizedFilePath
-              )
+              const relativeFilePath = relative(workingDirectory, filePath)
               const normalizedRelativePath = relativeFilePath.startsWith('.')
                 ? relativeFilePath
                 : `.${posix.sep}${relativeFilePath}`
