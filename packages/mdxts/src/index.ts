@@ -1,7 +1,7 @@
 import parseTitle from 'title'
 import * as React from 'react'
 import type { ComponentType } from 'react'
-import { basename, dirname, extname, join, resolve, posix } from 'node:path'
+import { basename, dirname, extname, join, posix } from 'node:path'
 import { Feed } from 'feed'
 import { Project } from 'ts-morph'
 import { getDiagnosticMessageText } from '@tsxmod/utils'
@@ -157,14 +157,6 @@ export function createSource<
       'mdxts: createSource requires that the mdxts/loader package is configured as a Webpack loader.'
     )
   }
-
-  /** Convert all modules to absolute paths. */
-  allModules = Object.fromEntries(
-    Object.entries(allModules).map(([pathname, moduleImport]) => [
-      resolve(process.cwd(), pathname),
-      moduleImport,
-    ])
-  )
 
   const {
     baseDirectory = '',

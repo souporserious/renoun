@@ -90,8 +90,9 @@ export function getAllData<Type extends { frontMatter: Record<string, any> }>({
   const typeScriptSourceFiles = /ts(x)?/.test(globPattern)
     ? project.addSourceFilesAtPaths(globPattern.split(sep).join(posix.sep))
     : null
+  const allModulePaths = Object.keys(allModules)
   const allPaths = [
-    ...Object.keys(allModules),
+    ...allModulePaths,
     ...(typeScriptSourceFiles?.map((file) => file.getFilePath()) ?? []),
   ]
 
@@ -113,7 +114,7 @@ export function getAllData<Type extends { frontMatter: Record<string, any> }>({
   const allPublicPaths = entrySourceFiles
     .concat(exportedSourceFiles)
     .map((sourceFile) => sourceFile.getFilePath() as string)
-    .concat(Object.keys(allModules))
+    .concat(allModulePaths)
     .filter((path) => !path.includes('.examples.tsx'))
   const allData: Record<Pathname, ModuleData<Type>> = {}
   const allPublicDeclarations: WeakMap<SourceFile, ExportedDeclarations[]> =

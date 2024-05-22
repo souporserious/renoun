@@ -25,6 +25,13 @@ export function filePathToPathname(
   const [baseDirectoryPath, baseFilePath] = baseDirectory
     ? filePath.split(baseDirectory)
     : ['', filePath]
+
+  if (baseFilePath === undefined) {
+    throw new Error(
+      `Cannot determine base path for file path "${filePath}" at base directory "${baseDirectory}".`
+    )
+  }
+
   let parsedFilePath = baseFilePath
     // Remove leading separator "./"
     .replace(/^\.\//, '')

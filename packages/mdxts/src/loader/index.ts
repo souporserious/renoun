@@ -173,10 +173,9 @@ export default async function loader(
               const normalizedRelativePath = relativeFilePath.startsWith('.')
                 ? relativeFilePath
                 : `.${posix.sep}${relativeFilePath}`
-              return `'${normalizedRelativePath}': () => import('${normalizedRelativePath}')`
+              return `'${filePath}': () => import('${normalizedRelativePath}')`
             })
             .join(', ')}}`
-
           const argumentCount = createSourceCall.getArguments().length
           const createSourceCallArguments = []
 
