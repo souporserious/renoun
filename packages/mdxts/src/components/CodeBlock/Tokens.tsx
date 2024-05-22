@@ -1,4 +1,5 @@
 import React, { Fragment } from 'react'
+import { css } from 'restyle'
 
 import { getThemeColors } from '../../index'
 import { getContext } from '../../utils/context'
@@ -72,7 +73,6 @@ export async function Tokens({
             fontWeight: token.fontWeight,
             textDecoration: token.textDecoration,
             color: token.isBaseColor ? undefined : token.color,
-            ...style.token,
           }
 
           if (hasSymbolMeta) {
@@ -81,6 +81,10 @@ export async function Tokens({
               backgroundRepeat: 'repeat-x',
               backgroundPosition: 'bottom left',
             }
+            const [symbolClassName, symbolStyles] = css({
+              ...tokenStyles,
+              ...(token.diagnostics && diagnosticStyles),
+            })
 
             return (
               <Symbol
@@ -94,24 +98,33 @@ export async function Tokens({
                     style={style.popover}
                   />
                 }
-                className={className.token}
-                style={{
-                  ...tokenStyles,
-                  ...(token.diagnostics && diagnosticStyles),
-                }}
+                className={
+                  className.token
+                    ? `${symbolClassName} ${className.token}`
+                    : symbolClassName
+                }
+                style={style.token}
               >
                 {token.value}
+                {symbolStyles}
               </Symbol>
             )
           }
 
+          const [classNames, styles] = css(tokenStyles)
+
           return (
             <span
               key={token.start}
-              className={className.token}
-              style={tokenStyles}
+              className={
+                className.token
+                  ? `${classNames} ${className.token}`
+                  : classNames
+              }
+              style={style.token}
             >
               {token.value}
+              {styles}
             </span>
           )
         })

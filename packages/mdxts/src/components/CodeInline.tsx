@@ -4,7 +4,7 @@ import 'server-only'
 
 import { getThemeColors } from '../index'
 import { CopyButton } from './CodeBlock/CopyButton'
-import type { Languages } from './CodeBlock/get-tokens'
+import type { Languages, Token } from './CodeBlock/get-tokens'
 import { getTokens } from './CodeBlock/get-tokens'
 
 export type CodeInlineProps = {
@@ -81,24 +81,9 @@ export async function CodeInline({
       >
         {tokens.map((line, lineIndex) => (
           <Fragment key={lineIndex}>
-            {line.map((token, tokenIndex) => {
-              if (token.isBaseColor || token.isWhitespace) {
-                return token.value
-              }
-              return (
-                <span
-                  key={tokenIndex}
-                  style={{
-                    fontStyle: token.fontStyle,
-                    fontWeight: token.fontWeight,
-                    textDecoration: token.textDecoration,
-                    color: token.color,
-                  }}
-                >
-                  {token.value}
-                </span>
-              )
-            })}
+            {line.map((token, tokenIndex) => (
+              <Token key={tokenIndex} token={token} />
+            ))}
             {lineIndex === tokens.length - 1 ? null : '\n'}
           </Fragment>
         ))}
@@ -110,5 +95,25 @@ export async function CodeInline({
         ) : null}
       </code>
     </>
+  )
+}
+
+function Token({ token }: { token: Token }) {
+  if (token.isBaseColor || token.isWhitespace) {
+    return token.value
+  }
+
+  const [classNames, styles] = css({
+    fontStyle: token.fontStyle,
+    fontWeight: token.fontWeight,
+    textDecoration: token.textDecoration,
+    color: token.color,
+  })
+
+  return (
+    <span className={classNames}>
+      {token.value}
+      {styles}
+    </span>
   )
 }
