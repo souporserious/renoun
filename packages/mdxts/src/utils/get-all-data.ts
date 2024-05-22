@@ -1,5 +1,5 @@
 import parseTitle from 'title'
-import { dirname, join, posix } from 'node:path'
+import { dirname, join, posix, sep } from 'node:path'
 import type { ExportedDeclarations, Project } from 'ts-morph'
 import { SourceFile } from 'ts-morph'
 import { getSymbolDescription, resolveExpression } from '@tsxmod/utils'
@@ -88,7 +88,7 @@ export function getAllData<Type extends { frontMatter: Record<string, any> }>({
   sort?: (a: ModuleData<Type>, b: ModuleData<Type>) => number
 }) {
   const typeScriptSourceFiles = /ts(x)?/.test(globPattern)
-    ? project.addSourceFilesAtPaths(globPattern)
+    ? project.addSourceFilesAtPaths(globPattern.split(sep).join(posix.sep))
     : null
   const allPaths = [
     ...Object.keys(allModules),
