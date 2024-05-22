@@ -77,31 +77,25 @@ export async function Toolbar({
             marginLeft: 'auto',
           }}
         >
-          <svg viewBox="0 0 24 24" fill="none" width="1em" height="1em">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke={theme.foreground}
+            width="1em"
+            height="1em"
+          >
             <path
               d="M18 8L22.5011 11.1556C23.1663 11.622 23.1663 12.378 22.5011 12.8444L18 16"
-              stroke="currentColor"
               strokeWidth="2"
               strokeLinecap="round"
             />
             <path
               d="M7 8L1.59865 11.1556C0.800449 11.622 0.800449 12.378 1.59865 12.8444L7 16"
-              stroke="currentColor"
               strokeWidth="2"
               strokeLinecap="round"
             />
-            <path
-              d="M10 19L15 5"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-            <path
-              d="M10 19L15 5"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
+            <path d="M10 19L15 5" strokeWidth="2" strokeLinecap="round" />
+            <path d="M10 19L15 5" strokeWidth="2" strokeLinecap="round" />
           </svg>
         </a>
       ) : null}
@@ -111,6 +105,7 @@ export async function Toolbar({
           style={{
             padding: 0,
             marginLeft: sourcePath ? undefined : 'auto',
+            color: theme.foreground,
           }}
         />
       ) : null}
