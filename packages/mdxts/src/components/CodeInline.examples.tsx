@@ -10,3 +10,15 @@ export function Basic() {
     </p>
   )
 }
+
+export function AllowCopy() {
+  return (
+    <CodeInline
+      allowCopy
+      value={`npm install mdxts`}
+      language="sh"
+      paddingX="0.8em"
+      paddingY="0.5em"
+    />
+  )
+}

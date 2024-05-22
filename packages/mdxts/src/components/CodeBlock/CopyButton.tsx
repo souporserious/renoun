@@ -38,7 +38,7 @@ export function CopyButton({
           })
       }}
       style={{
-        display: 'flex',
+        display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
         width: '1lh',
