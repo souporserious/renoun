@@ -1,5 +1,5 @@
 import * as webpack from 'webpack'
-import { dirname, join, relative, resolve, posix } from 'node:path'
+import { dirname, join, relative, resolve, posix, sep } from 'node:path'
 import { glob } from 'fast-glob'
 import globParent from 'glob-parent'
 import { Node, Project, SyntaxKind } from 'ts-morph'
@@ -168,11 +168,15 @@ export default async function loader(
 
           const objectLiteralText = `{${filePaths
             .map((filePath) => {
-              const relativeFilePath = relative(workingDirectory, filePath)
+              const normalizedFilePath = filePath.split(sep).join(posix.sep)
+              const relativeFilePath = relative(
+                workingDirectory,
+                normalizedFilePath
+              )
               const normalizedRelativePath = relativeFilePath.startsWith('.')
                 ? relativeFilePath
                 : `.${posix.sep}${relativeFilePath}`
-              return `'${filePath}': () => import('${normalizedRelativePath}')`
+              return `'${normalizedRelativePath}': () => import('${normalizedRelativePath}')`
             })
             .join(', ')}}`
 
