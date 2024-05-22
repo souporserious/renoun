@@ -29,7 +29,11 @@ export function SiteLayout({
           }}
         >
           <MdxtsLogo
-            style={{ width: undefined, height: 'var(--font-size-body-1)' }}
+            style={{
+              width: undefined,
+              height: 'var(--font-size-body-1)',
+              fill: 'white',
+            }}
           />
         </a>
         <NavigationLink
