@@ -1,7 +1,7 @@
 import { stdin, stdout } from 'node:process'
 import { createInterface } from 'node:readline/promises'
+import { sep } from 'node:path'
 import chalk from 'chalk'
-import { posix } from 'node:path'
 
 export class Log {
   static base = 'mdxts: '
@@ -59,7 +59,7 @@ export async function askYesNo(
 }
 
 export function getFilePatternBaseName(filePattern: string) {
-  const parts = filePattern.split(posix.sep)
+  const parts = filePattern.split(sep)
 
   for (let index = 0; index < parts.length - 1; index++) {
     const nextPart = parts.at(index + 1)
