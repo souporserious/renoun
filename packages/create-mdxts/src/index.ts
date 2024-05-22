@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { extname, join, posix } from 'node:path'
+import { extname, join, sep } from 'node:path'
 import { Project } from 'ts-morph'
 import chalk from 'chalk'
 
@@ -372,7 +372,7 @@ export async function createSource() {
       ? join(sourcePathInput, '**', '*.{ts,tsx,mdx}')
       : sourcePathInput
 
-  if (filePattern.startsWith(posix.sep)) {
+  if (filePattern.startsWith(sep)) {
     filePattern = `.${filePattern}`
   }
 
@@ -435,12 +435,10 @@ export default function Page() {
 `.trim()
 
   project.createSourceFile(collectionPagePath, collectionPage)
-  createdSourceFiles.push(
-    collectionPagePath.replace(process.cwd() + posix.sep, '')
-  )
+  createdSourceFiles.push(collectionPagePath.replace(process.cwd() + sep, ''))
 
   const sourcePagePath = join(baseSourcePath, '[slug]', 'page.tsx')
-  const relativePagePath = sourcePagePath.replace(process.cwd() + posix.sep, '')
+  const relativePagePath = sourcePagePath.replace(process.cwd() + sep, '')
   const sourcePage = `
 import { notFound } from 'next/navigation'
 import { ${allDataIdentifier} } from '${hasSourceDirectory ? '../' : ''}../../../data'
