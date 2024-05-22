@@ -2,7 +2,7 @@ import type { SourceFile } from 'ts-morph'
 
 /** Trims empty export statements added when coercing source text into module. */
 export function getTrimmedSourceFileText(sourceFile: SourceFile) {
-  const sourceText = sourceFile.getText()
+  const sourceText = sourceFile.getFullText()
   const sourceTextLines = sourceText.split('\n')
 
   // If tokens contain an "export { }" statement, remove it
