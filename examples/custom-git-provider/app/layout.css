@@ -1,0 +1,9 @@
+body {
+  font-family: sans-serif;
+  display: grid;
+  grid-template-columns: 1fr minmax(0, 60rem) 1fr;
+}
+
+body > * {
+  grid-column: 2;
+}

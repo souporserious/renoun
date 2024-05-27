@@ -1,0 +1,48 @@
+---
+title: Build a Button Component in React
+date: 2024-03-01
+summary: Learn how to build a reusable Button component in React that can be used across your application.
+tags:
+  - react
+  - design systems
+---
+
+In modern web development, creating reusable UI components is a must for efficiency and scalability. React, with its component-based architecture, allows developers to build encapsulated components that manage their own state and can be reused throughout applications. In this tutorial, we'll create a simple, reusable `Button` component using React.
+
+## Building the Button Component
+
+Let's start by creating our `Button` component. This button will be customizable via props to handle different labels, `onClick` events, and styling options:
+
+```jsx filename="Button.tsx"
+import React from 'react'
+
+export function Button({ label, onClick, className }) {
+  return (
+    <button className={className} onClick={onClick}>
+      {label}
+    </button>
+  )
+}
+```
+
+## Styling
+
+To ensure that the button looks good, we can add some CSS styles. Here's a simple example:
+
+```css
+.Button {
+  font-size: 1rem;
+  padding: 0.25rem 0.5rem;
+  border: none;
+  border-radius: 5px;
+  background-color: blue;
+  color: white;
+  cursor: pointer;
+}
+```
+
+Add this CSS to your application's stylesheet or a CSS module, and ensure it's imported into the component or page using the `Button` component.
+
+## Conclusion
+
+By using React components like our `Button`, you can create more interactive and engaging content for your projects. This setup allows for the flexibility with the power of React components, ideal for documentation sites, blogs, and more complex web applications.
