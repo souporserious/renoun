@@ -27,6 +27,9 @@ type PluginOptions = {
 
   /** Whether or not to add rich highlighted errors in the console when type-checking source code in `CodeBlock`. Note, this may affect framework error boundaries that don't understand color encoding. */
   highlightErrors?: boolean
+
+  /** The git provider to use. This option disables the provider detection from the `gitSource` which is helpful for self-hosted instances. */
+  gitProvider?: 'github' | 'gitlab' | 'bitbucket'
 }
 
 /** A Next.js plugin to configure MDXTS theming, `rehype` and `remark` markdown plugins, and the [Webpack loader](mdxts.dev/packages/loader). */
@@ -39,6 +42,7 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
     theme,
     renumberFilenames: renumberFilenamesOption = true,
     highlightErrors,
+    gitProvider,
   } = pluginOptions
   const themePath = theme.endsWith('.json')
     ? resolve(process.cwd(), theme)
@@ -111,6 +115,7 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
       nextConfig.env.MDXTS_SITE_URL = siteUrl
       nextConfig.env.MDXTS_THEME_PATH = themePath
       nextConfig.env.MDXTS_HIGHLIGHT_ERRORS = String(highlightErrors)
+      nextConfig.env.MDXTS_GIT_PROVIDER = gitProvider
 
       if (phase === PHASE_DEVELOPMENT_SERVER) {
         if (refreshServerPort === null) {
