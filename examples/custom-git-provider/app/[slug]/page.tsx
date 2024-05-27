@@ -1,5 +1,5 @@
 import { allPosts } from '@/data'
-
+import { GitProviderLink } from 'mdxts/components'
 export function generateStaticParams() {
   return allPosts.paths().map((pathname) => ({ slug: pathname }))
 }
@@ -17,6 +17,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
     <>
       <h1>{frontMatter.title}</h1>
       <time>{formattedDate}</time>
+      <GitProviderLink />
       <Content />
     </>
   )
