@@ -8,9 +8,11 @@ import { rehypePlugin } from './rehype'
 export async function getMdxPlugins({
   gitSource,
   gitBranch,
+  gitProvider,
 }: {
   gitSource?: string
   gitBranch?: string
+  gitProvider?: string
 } = {}): Promise<{ remarkPlugins: any[]; rehypePlugins: any[] }> {
   const allPlugins = await Promise.all([
     import('remark-frontmatter'),
@@ -43,7 +45,7 @@ export async function getMdxPlugins({
       remarkStripBadges,
       remarkSqueezeParagraphs,
       remarkUnwrapImages,
-      [remarkPlugin, { gitSource, gitBranch }],
+      [remarkPlugin, { gitSource, gitBranch, gitProvider }],
       [remarkEmbedder, { transformers: [CodeSandboxTransformer] }],
     ].filter(Boolean),
     rehypePlugins: [rehypeInferReadingTimeMeta, rehypePlugin],

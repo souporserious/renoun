@@ -18,10 +18,11 @@ export default async function loader(
   this: webpack.LoaderContext<{
     gitSource?: string
     gitBranch?: string
+    gitProvider?: string
   }>,
   source: string | Buffer
 ) {
-  const { gitSource, gitBranch } = this.getOptions()
+  const { gitSource, gitBranch, gitProvider } = this.getOptions()
   const callback = this.async()
   const sourceString = source.toString()
   const workingDirectory = dirname(this.resourcePath)
@@ -38,7 +39,8 @@ export default async function loader(
       this.resourcePath,
       workingDirectory,
       gitSource,
-      gitBranch
+      gitBranch,
+      gitProvider
     )
   }
 

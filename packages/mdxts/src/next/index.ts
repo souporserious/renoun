@@ -53,7 +53,7 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
     let startedRenumberFilenameWatcher = false
 
     return async (phase: typeof PHASE_DEVELOPMENT_SERVER) => {
-      const plugins = await getMdxPlugins({ gitSource, gitBranch })
+      const plugins = await getMdxPlugins({ gitSource, gitBranch, gitProvider })
       const withMdx = createMdxPlugin({
         options: plugins,
         extension: /\.(md|mdx)$/,
@@ -96,7 +96,12 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
         config.module.rules.push({
           test: /\.(?:jsx?|tsx?)$/,
           exclude: /node_modules/,
-          use: [{ loader: 'mdxts/loader', options: { gitSource, gitBranch } }],
+          use: [
+            {
+              loader: 'mdxts/loader',
+              options: { gitSource, gitBranch, gitProvider },
+            },
+          ],
         })
 
         if (typeof getWebpackConfig === 'function') {
