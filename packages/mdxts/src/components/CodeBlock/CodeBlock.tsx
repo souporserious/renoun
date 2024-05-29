@@ -51,9 +51,6 @@ export type BaseCodeBlockProps = {
   /** Path to the source file on disk in development and the git provider source in production. */
   sourcePath?: string | false
 
-  /** Whether or not to attempt to fix broken imports. Useful for code using imports outside of the project. */
-  fixImports?: boolean
-
   /** Class names to apply to code block elements. Use the `children` prop for full control of styling. */
   className?: {
     container?: string
@@ -101,7 +98,6 @@ export async function CodeBlock({
   showErrors,
   showLineNumbers,
   showToolbar,
-  fixImports,
   sourcePath,
   ...props
 }: CodeBlockProps) {
@@ -121,7 +117,6 @@ export async function CodeBlock({
     filename,
     language,
     allowErrors,
-    fixImports,
     ...options,
   })
   const tokens = await getTokens(
