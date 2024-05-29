@@ -23,6 +23,7 @@ export async function getMdxPlugins({
     import('remark-squeeze-paragraphs'),
     import('remark-unwrap-images'),
     import('rehype-infer-reading-time-meta'),
+    import('rehype-preset-minify')
   ])
   const [
     remarkFrontMatter,
@@ -33,6 +34,7 @@ export async function getMdxPlugins({
     remarkSqueezeParagraphs,
     remarkUnwrapImages,
     rehypeInferReadingTimeMeta,
+    rehypePresetMinify
   ] = allPlugins.map((plugin) => plugin.default)
   return {
     remarkPlugins: [
@@ -48,6 +50,6 @@ export async function getMdxPlugins({
       [remarkPlugin, { gitSource, gitBranch, gitProvider }],
       [remarkEmbedder, { transformers: [CodeSandboxTransformer] }],
     ].filter(Boolean),
-    rehypePlugins: [rehypeInferReadingTimeMeta, rehypePlugin],
+    rehypePlugins: [rehypeInferReadingTimeMeta, rehypePresetMinify, rehypePlugin],
   }
 }
