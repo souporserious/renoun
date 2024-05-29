@@ -1,5 +1,5 @@
 import React from 'react'
-import { CodeInline } from './CodeInline'
+import { CodeInline } from 'mdxts/components'
 
 export function Basic() {
   return (

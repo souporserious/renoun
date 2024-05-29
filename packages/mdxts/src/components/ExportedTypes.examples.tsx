@@ -1,6 +1,5 @@
 import React, { Fragment } from 'react'
-
-import { ExportedTypes } from './ExportedTypes'
+import { ExportedTypes } from 'mdxts/components'
 
 const sourceFileText = `
 import React from 'react'

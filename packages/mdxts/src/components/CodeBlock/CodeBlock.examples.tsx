@@ -1,9 +1,6 @@
 import React from 'react'
-import { getThemeColors } from '../../index'
-import { CodeBlock } from './CodeBlock'
-import { LineNumbers } from './LineNumbers'
-import { Tokens } from './Tokens'
-import { Toolbar } from './Toolbar'
+import { getThemeColors } from 'mdxts'
+import { CodeBlock, LineNumbers, Tokens, Toolbar } from 'mdxts/components'
 
 export function Basic() {
   return <CodeBlock source="./counter/useCounter.ts" />

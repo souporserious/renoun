@@ -1,5 +1,5 @@
 import React from 'react'
-import { Copyright } from './Copyright'
+import { Copyright } from 'mdxts/components'
 
 export function Basic() {
   return <Copyright />

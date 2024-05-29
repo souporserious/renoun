@@ -1,6 +1,5 @@
 import React from 'react'
-import { RenderedHTML } from './RenderedHTML'
-import { CodeBlock } from './CodeBlock'
+import { CodeBlock, RenderedHTML } from 'mdxts/components'
 
 export function Basic() {
   return (

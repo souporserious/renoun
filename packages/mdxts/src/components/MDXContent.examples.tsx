@@ -1,5 +1,5 @@
 import React from 'react'
-import { MDXContent } from './MDXContent'
+import { MDXContent } from 'mdxts/components'
 
 export function Basic() {
   return <MDXContent value="# Hello World" />
