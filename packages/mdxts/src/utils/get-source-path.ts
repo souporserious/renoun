@@ -15,7 +15,8 @@ export function getSourcePath(
   line?: number,
   column?: number,
   gitSource: string | undefined = process.env.MDXTS_GIT_SOURCE,
-  gitBranch: string | undefined = process.env.MDXTS_GIT_BRANCH
+  gitBranch: string | undefined = process.env.MDXTS_GIT_BRANCH,
+  gitProvider: string | undefined = process.env.MDXTS_GIT_PROVIDER
 ) {
   if (process.env.NODE_ENV === 'development') {
     return getEditorPath({ path, line, column })
@@ -39,7 +40,14 @@ export function getSourcePath(
       return ''
     }
 
-    return getGitFileUrl(relativeFilePath, line, column, gitSource!, gitBranch)
+    return getGitFileUrl(
+      relativeFilePath,
+      line,
+      column,
+      gitSource!,
+      gitBranch,
+      gitProvider
+    )
   }
 
   return ''

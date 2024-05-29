@@ -22,7 +22,8 @@ export function GitProviderLogo({
     throwGitSourceError()
   }
 
-  const gitProvider = getGitProviderFromUrl(gitSource!)
+  const gitProvider =
+    process.env.MDXTS_GIT_PROVIDER || getGitProviderFromUrl(gitSource!)
   const sharedProps = {
     width: '24',
     height: '24',

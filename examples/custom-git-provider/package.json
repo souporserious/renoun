@@ -1,0 +1,20 @@
+{
+  "private": true,
+  "name": "@examples/custom-git-provider",
+  "scripts": {
+    "dev": "next",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@types/mdx": "^2.0.13",
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.0",
+    "mdxts": "workspace:*",
+    "next": "14.2.3",
+    "prettier": "^3.2.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.4.5"
+  }
+}

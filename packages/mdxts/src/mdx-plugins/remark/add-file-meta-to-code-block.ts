@@ -7,9 +7,11 @@ import { getSourcePath } from '../../utils/get-source-path'
 export function addFileMetaToCodeBlock({
   gitSource,
   gitBranch,
+  gitProvider,
 }: {
   gitSource: string
   gitBranch: string
+  gitProvider?: string
 }) {
   return async function (tree: Root, file: VFile) {
     const { visit } = await import('unist-util-visit')
@@ -24,7 +26,8 @@ export function addFileMetaToCodeBlock({
         node.position.start.line,
         node.position.start.column,
         gitSource,
-        gitBranch
+        gitBranch,
+        gitProvider
       )
       const sourcePathMeta = [
         `sourcePath="${sourcePath}"`,
@@ -40,7 +43,8 @@ export function addFileMetaToCodeBlock({
           node.position.start.line,
           node.position.start.column,
           gitSource,
-          gitBranch
+          gitBranch,
+          gitProvider
         )
         node.attributes = [
           {

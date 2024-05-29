@@ -9,7 +9,8 @@ export function addCodeMetaProps(
   resourcePath: string,
   workingDirectory: string,
   gitSource?: string,
-  gitBranch?: string
+  gitBranch?: string,
+  gitProvider?: string
 ): string {
   const project = new Project({ useInMemoryFileSystem: true })
   const sourceFile = project.createSourceFile('index.tsx', sourceCode)
@@ -42,7 +43,8 @@ export function addCodeMetaProps(
           line,
           column,
           gitSource,
-          gitBranch
+          gitBranch,
+          gitProvider
         )
         attributesToAdd.push({
           name: 'sourcePath',
