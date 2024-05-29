@@ -1,6 +1,6 @@
-# Blog
+# Custom Git Provider
 
-This example shows how to build a blog with MDXTS and Next.js.
+This example shows how to use a custom git provider with MDXTS and Next.js.
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/souporserious/mdxts/tree/main/examples/blog&project-name=mdxts-blog&repository-name=mdxts-blog)
 
