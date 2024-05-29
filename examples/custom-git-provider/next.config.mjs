@@ -6,6 +6,4 @@ const withMdxts = createMdxtsPlugin({
   gitProvider: 'gitlab'
 })
 
-export default withMdxts({
-  output: 'export',
-})
+export default withMdxts()
