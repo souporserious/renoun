@@ -1,5 +1,5 @@
 import React from 'react'
-import { GitProviderLink, GitProviderLogo } from './GitProvider'
+import { GitProviderLink, GitProviderLogo } from 'mdxts/components'
 
 export function Icon() {
   return <GitProviderLink />
