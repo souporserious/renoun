@@ -109,9 +109,7 @@ Use the `get` method from the `allDocs` source we created above to retrieve the 
 import { notFound } from 'next/navigation'
 import { allDocs } from '../../../data'
 
-type Props = { params: { slug: string[] } }
-
-export default async function Page({ params }: Props) {
+export default async function Page({ params }: { params: { slug: string[] } }) {
   const doc = await allDocs.get(params.slug)
 
   if (!doc) {
@@ -123,6 +121,38 @@ export default async function Page({ params }: Props) {
   return <Content />
 }
 ```
+
+Depending on how you want `paths` structured in your project, you can set a base directory when defining sources with `createSource`:
+
+```ts filename="posts.ts"
+import { createSource } from 'mdxts'
+
+export const allPosts = createSource('src/posts/*.mdx', {
+  baseDirectory: 'posts',
+})
+```
+
+This will affect the `paths` method and how the `get` method is used to retrieve content:
+
+```tsx filename="app/[slug]/page.tsx"
+import { notFound } from 'next/navigation'
+import { allPosts } from '../../posts'
+
+export default async function Page({ params }: { params: { slug: string } }) {
+  // now you don't need to prefix the "/src/posts" path
+  const post = await allPosts.get(params.slug)
+
+  if (!post) {
+    return notFound()
+  }
+
+  const { Content } = post
+
+  return <Content />
+}
+```
+
+Visit the [routing](./02.routing.mdx) section to learn more about how to render content and generate routes statically.
 
 ### Rendering Type Documentation
 

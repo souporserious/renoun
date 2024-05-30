@@ -25,6 +25,40 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
 }
 ```
 
+### Configuring Base Directories
+
+Depending on how you want `paths` structured in your project, you can set a base directory when defining sources with `createSource`:
+
+```ts filename="posts.ts"
+import { createSource } from 'mdxts'
+
+export const allPosts = createSource('src/posts/*.mdx', {
+  baseDirectory: 'posts',
+})
+```
+
+This will affect the `paths` method and how the `get` method is used to retrieve content:
+
+```tsx filename="app/[slug]/page.tsx"
+import { notFound } from 'next/navigation'
+import { allPosts } from '../../posts'
+
+export default async function Page({ params }: { params: { slug: string } }) {
+  // now you don't need to prefix the "/src/posts" path
+  const post = await allPosts.get(params.slug)
+
+  if (!post) {
+    return notFound()
+  }
+
+  const { Content } = post
+
+  return <Content />
+}
+```
+
+Visit the [`createSource`](/packages/mdxts#create-source) API documentation for more information on how to configure sources.
+
 ## Rendering Type Documentation
 
 Type documentation can be rendered using the `exportedTypes` metadata from a source item. Any associated MDX content can be rendered using the `Content` component if present:
