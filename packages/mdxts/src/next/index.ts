@@ -36,7 +36,7 @@ type PluginOptions = {
 export function createMdxtsPlugin(pluginOptions: PluginOptions) {
   let refreshServerPort: string | null = null
   let {
-    gitSource = getVercelGitSource() ?? '',
+    gitSource = getVercelGitSource(),
     gitBranch = 'main',
     siteUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL,
     theme,
@@ -115,7 +115,9 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
         nextConfig.env = {}
       }
 
-      nextConfig.env.MDXTS_GIT_SOURCE = gitSource ?? ''
+      if (gitSource) {
+        nextConfig.env.MDXTS_GIT_SOURCE = gitSource
+      }
       nextConfig.env.MDXTS_GIT_BRANCH = gitBranch
       nextConfig.env.MDXTS_SITE_URL = siteUrl
       nextConfig.env.MDXTS_THEME_PATH = themePath
@@ -156,7 +158,7 @@ const VERCEL_GIT_REPO_SLUG = process.env.VERCEL_GIT_REPO_SLUG
 const VERCEL_GIT_REPO_OWNER = process.env.VERCEL_GIT_REPO_OWNER
 
 /** Constructs a URL for a repository based on the provider. */
-function getVercelGitSource(): string | null {
+function getVercelGitSource(): string | undefined {
   switch (VERCEL_GIT_PROVIDER?.toLowerCase()) {
     case 'github':
       return `https://github.com/${VERCEL_GIT_REPO_OWNER}/${VERCEL_GIT_REPO_SLUG}`
@@ -164,7 +166,5 @@ function getVercelGitSource(): string | null {
       return `https://gitlab.com/${VERCEL_GIT_REPO_OWNER}/${VERCEL_GIT_REPO_SLUG}`
     case 'bitbucket':
       return `https://bitbucket.org/${VERCEL_GIT_REPO_OWNER}/${VERCEL_GIT_REPO_SLUG}`
-    default:
-      return null
   }
 }

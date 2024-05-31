@@ -9,6 +9,12 @@ export function getGitFileUrl(
   gitBranch: string = 'main',
   gitProvider?: string
 ): string {
+  if (gitSource.length === 0) {
+    throw new Error(
+      '[mdxts] A git source is required to construct a source file URL. Received an empty string. Please configure the mdxts/next "gitSource" plugin option or set the `MDXTS_GIT_SOURCE` environment variable manually.'
+    )
+  }
+
   const url = new URL(gitSource)
   let fileUrl: string
 

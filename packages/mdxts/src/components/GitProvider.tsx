@@ -5,9 +5,9 @@ function getGitProviderFromUrl(gitSource: string) {
   return url.hostname.split('.').at(0) as 'bitbucket' | 'github' | 'gitlab'
 }
 
-function throwGitSourceError() {
+function throwGitSourceError(name: string) {
   throw new Error(
-    '[mdxts] MDXTS_GIT_SOURCE environment variable is required. Please configure the mdxts/next plugin or set the environment variable manually.'
+    `[mdxts] MDXTS_GIT_SOURCE environment variable is required for <${name} />. Please configure the mdxts/next "gitSource" plugin option or set the environment variable manually.`
   )
 }
 
@@ -19,7 +19,7 @@ export function GitProviderLogo({
   const gitSource = process.env.MDXTS_GIT_SOURCE
 
   if (!gitSource) {
-    throwGitSourceError()
+    throwGitSourceError('GitProviderLogo')
   }
 
   const gitProvider =
@@ -113,7 +113,7 @@ export function GitProviderLink({
   const gitSource = process.env.MDXTS_GIT_SOURCE
 
   if (!gitSource) {
-    throwGitSourceError()
+    throwGitSourceError('GitProviderLink')
   }
 
   let styles = { display: 'flex', ...style } satisfies React.CSSProperties
