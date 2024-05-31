@@ -1,5 +1,18 @@
 # mdxts
 
+## 1.4.0
+
+### Minor Changes
+
+- 5e3a2b8: Adds a `gitProvider` option to the `mdxts/next` plugin.
+- 96a02e4: Removes the `fixImports` prop from `CodeBlock`. This prop fixed imports specifically for situtations like examples that are located in a different project and used relative imports. However, examples should use the library import path instead of relative paths by configuring the `module` field in `tsconfig.json`. More info [here](https://x.com/remcohaszing/status/1794338155963064548).
+
+### Patch Changes
+
+- b47d846: Remove browser default `pre` margin in `CodeBlock` component.
+- 7d6cb22: Fixes `getGitFileUrl` erroring when no `gitSource` is set.
+- 52de5b1: Fixes theme erroring on missing tokens by adding defaults for every theme token used in `mdxts/components`.
+
 ## 1.3.0
 
 ### Minor Changes
