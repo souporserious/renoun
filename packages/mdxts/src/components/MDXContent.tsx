@@ -1,8 +1,7 @@
 import * as React from 'react'
 import * as jsxRuntime from 'react/jsx-runtime'
 import * as jsxDevRuntime from 'react/jsx-dev-runtime'
-import { compile, run } from '@mdx-js/mdx'
-import type { PluggableList } from '@mdx-js/mdx/lib/core'
+import { compile, run, type CompileOptions } from '@mdx-js/mdx'
 import 'server-only'
 
 import type { MDXComponents } from './MDXComponents'
@@ -26,10 +25,10 @@ export async function MDXContent({
   dependencies?: Record<string, any>
 
   /** Remark plugins to use. See [PluggableList](https://github.com/unifiedjs/unified?tab=readme-ov-file#pluggablelist) for more info. */
-  remarkPlugins?: PluggableList
+  remarkPlugins?: CompileOptions['remarkPlugins']
 
   /** Rehype plugins to use. See [PluggableList](https://github.com/unifiedjs/unified?tab=readme-ov-file#pluggablelist) for more info. */
-  rehypePlugins?: PluggableList
+  rehypePlugins?: CompileOptions['rehypePlugins']
 
   /** Base URL to resolve imports and named exports from (e.g. `import.meta.url`) */
   baseUrl?: string
@@ -38,13 +37,13 @@ export async function MDXContent({
     baseUrl,
     rehypePlugins,
     remarkPlugins,
-    useDynamicImport: true,
     outputFormat: 'function-body',
   })
+
   const { default: Content } = await run(code.value, {
     ...(process.env.NODE_ENV === 'development' ? jsxDevRuntime : jsxRuntime),
     ...dependencies,
-  })
+  } as any)
 
-  return <Content components={components} />
+  return <Content components={components as any} />
 }
