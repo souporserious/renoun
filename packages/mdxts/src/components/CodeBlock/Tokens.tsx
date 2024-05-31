@@ -1,5 +1,5 @@
 import React, { Fragment } from 'react'
-import { css } from 'restyle'
+import { css, type CSSProp } from 'restyle'
 
 import { getThemeColors } from '../../index'
 import { getContext } from '../../utils/context'
@@ -68,12 +68,12 @@ export async function Tokens({
             return token.value
           }
 
-          const tokenStyles: React.CSSProperties = {
+          const tokenStyles = {
             fontStyle: token.fontStyle,
             fontWeight: token.fontWeight,
             textDecoration: token.textDecoration,
             color: token.isBaseColor ? undefined : token.color,
-          }
+          } satisfies CSSProp
 
           if (hasSymbolMeta) {
             const diagnosticStyles = {
