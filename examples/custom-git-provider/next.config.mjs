@@ -1,9 +1,9 @@
 import { createMdxtsPlugin } from 'mdxts/next'
 
 const withMdxts = createMdxtsPlugin({
-  theme: 'nord',
+  theme: 'synthwave-84',
   gitSource: 'https://git.company.tld/souporserious/mdxts',
-  gitProvider: 'gitlab'
+  gitProvider: 'gitlab',
 })
 
 export default withMdxts()

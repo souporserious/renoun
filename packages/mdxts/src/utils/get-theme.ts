@@ -28,14 +28,39 @@ export async function getTheme() {
 
     const resolvedTheme = theme!
 
+    if (!resolvedTheme.colors['editor.background']) {
+      resolvedTheme.colors['editor.background'] =
+        resolvedTheme.colors.background || '#000000'
+    }
+
+    if (!resolvedTheme.colors['editor.foreground']) {
+      resolvedTheme.colors['editor.foreground'] =
+        resolvedTheme.colors.foreground || '#ffffff'
+    }
+
     if (!resolvedTheme.colors.background) {
       resolvedTheme.colors.background =
-        resolvedTheme.colors['editor.background'] || '#000000'
+        resolvedTheme.colors['editor.background']
     }
 
     if (!resolvedTheme.colors.foreground) {
       resolvedTheme.colors.foreground =
-        resolvedTheme.colors['editor.foreground'] || '#ffffff'
+        resolvedTheme.colors['editor.foreground']
+    }
+
+    if (!resolvedTheme.colors['panel.background']) {
+      resolvedTheme.colors['panel.background'] =
+        resolvedTheme.colors['editor.background']
+    }
+
+    if (!resolvedTheme.colors['panel.border']) {
+      resolvedTheme.colors['panel.border'] =
+        resolvedTheme.colors['editor.foreground']
+    }
+
+    if (!resolvedTheme.colors['editor.hoverHighlightBackground']) {
+      resolvedTheme.colors['editor.hoverHighlightBackground'] =
+        'rgba(255, 255, 255, 0.1)'
     }
 
     if (!resolvedTheme.colors['scrollbarSlider.background']) {
