@@ -213,6 +213,7 @@ export async function CodeBlock({
               : {}),
             ...(shouldRenderToolbar ? {} : props.style?.container),
             padding: 0,
+            margin: 0,
           }}
         >
           {showLineNumbers ? (
