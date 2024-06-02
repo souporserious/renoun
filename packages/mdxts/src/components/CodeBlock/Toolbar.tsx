@@ -80,7 +80,7 @@ export async function Toolbar({
           <svg
             viewBox="0 0 24 24"
             fill="none"
-            stroke={theme.foreground}
+            stroke={theme.activityBar.foreground}
             width="1em"
             height="1em"
           >
@@ -105,7 +105,7 @@ export async function Toolbar({
           style={{
             padding: 0,
             marginLeft: sourcePath ? undefined : 'auto',
-            color: theme.editor.foreground,
+            color: theme.activityBar.foreground,
           }}
         />
       ) : null}

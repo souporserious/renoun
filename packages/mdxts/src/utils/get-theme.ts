@@ -63,6 +63,16 @@ export async function getTheme() {
         'rgba(255, 255, 255, 0.1)'
     }
 
+    if (!resolvedTheme.colors['activityBar.background']) {
+      resolvedTheme.colors['activityBar.background'] =
+        resolvedTheme.colors['editor.background']
+    }
+
+    if (!resolvedTheme.colors['activityBar.foreground']) {
+      resolvedTheme.colors['activityBar.foreground'] =
+        resolvedTheme.colors['editor.foreground']
+    }
+
     if (!resolvedTheme.colors['scrollbarSlider.background']) {
       resolvedTheme.colors['scrollbarSlider.background'] =
         'rgba(121, 121, 121, 0.4)'

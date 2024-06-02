@@ -93,7 +93,7 @@ export async function CodeInline({
             style={{
               right: paddingX,
               position: 'absolute',
-              color: theme.editor.foreground,
+              color: theme.activityBar.foreground,
             }}
           />
         ) : null}

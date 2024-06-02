@@ -278,8 +278,8 @@ export async function CodeBlock({
                 position: 'sticky',
                 top: padding,
                 right: padding,
-                backgroundColor: theme.editor.background,
-                color: theme.editor.foreground,
+                backgroundColor: theme.activityBar.background,
+                color: theme.activityBar.foreground,
                 borderRadius: 5,
               }}
             />
