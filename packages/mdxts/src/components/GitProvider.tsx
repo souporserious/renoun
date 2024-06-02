@@ -1,4 +1,5 @@
 import React from 'react'
+import { css, type CSSProp } from 'restyle'
 
 function getGitProviderFromUrl(gitSource: string) {
   const url = new URL(gitSource)
@@ -102,10 +103,12 @@ export function GitProviderLogo({
 
 /** A link to the configured Git provider source code repository. */
 export function GitProviderLink({
+  css: cssProp,
   className,
   style,
   children,
 }: {
+  css?: CSSProp
   className?: string
   style?: React.CSSProperties
   children?: React.ReactNode
@@ -116,7 +119,7 @@ export function GitProviderLink({
     throwGitSourceError('GitProviderLink')
   }
 
-  let styles = { display: 'flex', ...style } satisfies React.CSSProperties
+  let styles = { display: 'flex', ...cssProp } satisfies CSSProp
   let childrenToRender = children
 
   if (childrenToRender === undefined) {
@@ -124,15 +127,18 @@ export function GitProviderLink({
     childrenToRender = <GitProviderLogo width="100%" height="100%" />
   }
 
+  const [classNames, styleElements] = css(styles)
+
   return (
     <a
       href={gitSource}
       rel="noopener"
       target="_blank"
-      className={className}
-      style={styles}
+      className={className ? `${className} ${classNames}` : classNames}
+      style={style}
     >
       {childrenToRender}
+      {styleElements}
     </a>
   )
 }
