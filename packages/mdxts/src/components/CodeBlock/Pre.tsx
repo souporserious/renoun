@@ -1,7 +1,7 @@
 'use client'
 import React, { createContext, useState } from 'react'
 
-export const PreHoverContext = createContext<boolean | null>(null)
+export const PreActiveContext = createContext<boolean | null>(null)
 
 function isTargetValid(event: React.PointerEvent<HTMLPreElement>) {
   if (
@@ -28,26 +28,37 @@ export function Pre({
   style,
   ...props
 }: React.ComponentProps<'pre'>) {
-  const [hover, setHover] = useState(false)
+  const [active, setActive] = useState(false)
+  const handleFocus = () => setActive(true)
+  const handleBlur = (event: React.FocusEvent<HTMLPreElement>) => {
+    if (event.currentTarget.contains(event.relatedTarget)) {
+      return
+    }
+    setActive(false)
+  }
+  const handlePointerEnter = () => setActive(true)
+  const handlePointerLeave = () => setActive(false)
+  const handlePointerDown = (event: React.PointerEvent<HTMLPreElement>) => {
+    if (isTargetValid(event)) {
+      setActive(false)
+    }
+  }
 
   return (
     <pre
-      onPointerEnter={() => setHover(true)}
-      onPointerLeave={() => setHover(false)}
-      onPointerDown={(event) => isTargetValid(event) && setHover(false)}
+      tabIndex={0}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
+      onPointerDown={handlePointerDown}
       className={className}
-      style={{
-        whiteSpace: 'pre',
-        wordWrap: 'break-word',
-        overflow: 'auto',
-        position: 'relative',
-        ...style,
-      }}
+      style={style}
       {...props}
     >
-      <PreHoverContext.Provider value={hover}>
+      <PreActiveContext.Provider value={active}>
         {children}
-      </PreHoverContext.Provider>
+      </PreActiveContext.Provider>
     </pre>
   )
 }

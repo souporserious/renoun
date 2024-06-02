@@ -187,9 +187,13 @@ export async function CodeBlock({
             shouldRenderToolbar ? undefined : props.className?.container
           }
           style={{
+            position: 'relative',
+            whiteSpace: 'pre',
+            wordWrap: 'break-word',
             display: 'grid',
             gridTemplateColumns: showLineNumbers ? 'auto 1fr' : undefined,
             margin: 0,
+            overflow: 'auto',
             backgroundColor: shouldRenderToolbar ? 'inherit' : theme.background,
             color: shouldRenderToolbar ? undefined : theme.foreground,
             borderRadius: shouldRenderToolbar ? 'inherit' : 5,

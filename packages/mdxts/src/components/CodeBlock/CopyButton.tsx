@@ -1,7 +1,7 @@
 'use client'
 import React, { useContext, useState } from 'react'
 
-import { PreHoverContext } from './Pre'
+import { PreActiveContext } from './Pre'
 
 /**
  * Copies a value to the user's clipboard.
@@ -14,10 +14,10 @@ export function CopyButton({
 }: {
   value: string
 } & React.ComponentProps<'button'>) {
-  const hover = useContext(PreHoverContext)
+  const preActive = useContext(PreActiveContext)
   const [state, setState] = useState<'idle' | 'not-allowed' | 'copied'>('idle')
 
-  if (state === 'idle' && hover === false) {
+  if (state === 'idle' && preActive === false) {
     return null
   }
 
