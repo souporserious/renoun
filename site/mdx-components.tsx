@@ -134,12 +134,13 @@ export function useMDXComponents() {
     code: (props) => (
       <MDXComponents.code className={GeistMono.className} {...props} />
     ),
-    pre: (props) => (
+    pre: ({ sourcePath, ...props }) => (
       <MDXComponents.pre
         className={{
           container: GeistMono.className,
         }}
         style={codeBlockStyles}
+        sourcePath={process.env.NODE_ENV === 'development' ? sourcePath : false}
         {...props}
       />
     ),
