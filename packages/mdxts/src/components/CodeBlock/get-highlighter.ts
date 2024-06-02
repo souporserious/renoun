@@ -33,7 +33,10 @@ export async function getHighlighter() {
   return highlighter
 }
 
-/** Loads a language for syntax highlighting. See [shiki](https://shiki.style/guide/load-lang) for more information. */
+/**
+ * Loads a language for syntax highlighting. See [shiki](https://shiki.style/guide/load-lang) for more information.
+ * @internal
+ */
 export async function loadHighlighterLanguage(
   language: BundledLanguage | LanguageInput | SpecialLanguage
 ) {
