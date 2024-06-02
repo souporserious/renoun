@@ -2,4 +2,4 @@
 'mdxts': patch
 ---
 
-Normalize `CopyButton` foreground and background colors.
+Normalizes `CopyButton` foreground and background colors.
