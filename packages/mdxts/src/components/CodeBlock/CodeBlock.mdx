@@ -46,7 +46,15 @@ import { CodeBlock as MdxtsCodeBlock, Tokens } from 'mdxts/components'
 export function CodeBlock(props: React.ComponentProps<typeof MdxtsCodeBlock>) {
   return (
     <MdxtsCodeBlock {...props}>
-      <Tokens />
+      <pre
+        style={{
+          whiteSpace: 'pre',
+          wordWrap: 'break-word',
+          overflow: 'auto',
+        }}
+      >
+        <Tokens />
+      </pre>
     </MdxtsCodeBlock>
   )
 }
