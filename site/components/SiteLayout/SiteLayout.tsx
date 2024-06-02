@@ -1,3 +1,4 @@
+import { GitProviderLink } from 'mdxts/components'
 import { MdxtsLogo } from 'mdxts/assets'
 
 import { NavigationLink } from './NavigationLink'
@@ -44,6 +45,15 @@ export function SiteLayout({
         </NavigationLink>
         <NavigationLink href="/blog">Blog</NavigationLink>
         <NavigationLink href="/changelog">Changelog</NavigationLink>
+        <GitProviderLink
+          css={{
+            width: 'var(--font-size-body-1)',
+            height: 'var(--font-size-body-1)',
+            fill: 'var(--color-foreground-interactive)',
+            marginLeft: '0.5rem',
+            marginRight: '0.25rem',
+          }}
+        />
       </header>
       {sidebar}
       <main>{children}</main>

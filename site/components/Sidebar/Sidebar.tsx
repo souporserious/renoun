@@ -37,7 +37,7 @@ export function Sidebar() {
             }}
           >
             <GitProviderLink
-              style={{
+              css={{
                 width: 'var(--font-size-body-2)',
                 height: 'var(--font-size-body-2)',
                 fill: 'var(--color-foreground-interactive)',
