@@ -278,6 +278,7 @@ export async function CodeBlock({
                 position: 'sticky',
                 top: padding,
                 right: padding,
+                boxShadow: `0 0 0 1px ${theme.panel.border}`,
                 backgroundColor: theme.activityBar.background,
                 color: theme.activityBar.foreground,
                 borderRadius: 5,
