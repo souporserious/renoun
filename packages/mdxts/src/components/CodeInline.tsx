@@ -90,7 +90,11 @@ export async function CodeInline({
         {allowCopy ? (
           <CopyButton
             value={value}
-            style={{ right: paddingX, position: 'absolute' }}
+            style={{
+              right: paddingX,
+              position: 'absolute',
+              color: theme.editor.foreground,
+            }}
           />
         ) : null}
       </code>

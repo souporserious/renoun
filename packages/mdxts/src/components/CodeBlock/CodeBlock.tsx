@@ -278,7 +278,8 @@ export async function CodeBlock({
                 position: 'sticky',
                 top: padding,
                 right: padding,
-                backgroundColor: theme.background,
+                backgroundColor: theme.editor.background,
+                color: theme.editor.foreground,
                 borderRadius: 5,
               }}
             />

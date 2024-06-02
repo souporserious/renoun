@@ -65,6 +65,8 @@ export async function PackageInstall({
           className="PackageInstallCopyButton"
           style={{
             marginRight: '1ch',
+            backgroundColor: theme.editor.background,
+            color: theme.editor.foreground,
             ...style?.copyButton,
           }}
           value={`${install} ${packages.join(' ')}`}

@@ -105,7 +105,7 @@ export async function Toolbar({
           style={{
             padding: 0,
             marginLeft: sourcePath ? undefined : 'auto',
-            color: theme.foreground,
+            color: theme.editor.foreground,
           }}
         />
       ) : null}
