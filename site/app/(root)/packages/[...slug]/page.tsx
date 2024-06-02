@@ -441,6 +441,7 @@ function Props({
               language="typescript"
               paddingX="0.5rem"
               paddingY="0.2rem"
+              css={{ fontSize: 'var(--font-size-body-2)' }}
             />
             {propType.defaultValue ? (
               <span

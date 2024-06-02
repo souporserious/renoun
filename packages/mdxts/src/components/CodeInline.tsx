@@ -1,5 +1,5 @@
 import React, { Fragment } from 'react'
-import { css } from 'restyle'
+import { css, type CSSProp } from 'restyle'
 import 'server-only'
 
 import { getThemeColors } from '../index'
@@ -23,6 +23,9 @@ export type CodeInlineProps = {
   /** Vertical padding to apply to the wrapping element. */
   paddingY?: string
 
+  /** CSS styles to apply to the wrapping element. */
+  css?: CSSProp
+
   /** Class name to apply to the wrapping element. */
   className?: string
 
@@ -37,6 +40,7 @@ export async function CodeInline({
   allowCopy,
   paddingX = '0.25em',
   paddingY = '0.1em',
+  css: cssProp,
   className,
   style,
 }: CodeInlineProps) {
@@ -70,6 +74,7 @@ export async function CodeInline({
     '@-moz-document url-prefix()': {
       paddingBottom: paddingY,
     },
+    ...cssProp,
   })
 
   return (
