@@ -46,7 +46,7 @@ export function Sidebar() {
 
             <a
               aria-label="X formerly known as Twitter"
-              href="https://twitter.com/souporserious"
+              href="https://x.com/mdxts_"
               rel="noopener"
               target="_blank"
               style={{ display: 'flex' }}
