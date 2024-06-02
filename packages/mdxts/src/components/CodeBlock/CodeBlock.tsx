@@ -189,6 +189,7 @@ export async function CodeBlock({
           style={{
             display: 'grid',
             gridTemplateColumns: showLineNumbers ? 'auto 1fr' : undefined,
+            margin: 0,
             backgroundColor: shouldRenderToolbar ? 'inherit' : theme.background,
             color: shouldRenderToolbar ? undefined : theme.foreground,
             borderRadius: shouldRenderToolbar ? 'inherit' : 5,
@@ -213,7 +214,6 @@ export async function CodeBlock({
               : {}),
             ...(shouldRenderToolbar ? {} : props.style?.container),
             padding: 0,
-            margin: 0,
           }}
         >
           {showLineNumbers ? (
