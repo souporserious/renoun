@@ -10,7 +10,7 @@ import { BASE_URL } from 'utils/constants'
 
 const mdxComponents = {
   p: (props) => <p {...props} style={{ margin: 0 }} />,
-  code: MDXComponents.code,
+  code: (props) => <MDXComponents.code {...props} paddingY="0" />,
 } satisfies MDXComponents
 
 export const dynamic = 'force-static'
@@ -85,7 +85,9 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
       {description ? (
         <MDXContent
           value={description}
-          components={{ code: MDXComponents.code }}
+          components={{
+            code: (props) => <MDXComponents.code {...props} paddingY="0" />,
+          }}
         />
       ) : null}
 

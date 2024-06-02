@@ -132,7 +132,11 @@ export function useMDXComponents() {
       />
     ),
     code: (props) => (
-      <MDXComponents.code className={GeistMono.className} {...props} />
+      <MDXComponents.code
+        className={GeistMono.className}
+        paddingY="0"
+        {...props}
+      />
     ),
     pre: ({ sourcePath, ...props }) => (
       <MDXComponents.pre
