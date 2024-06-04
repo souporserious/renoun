@@ -240,8 +240,8 @@ importers:
         specifier: ^4.0.0
         version: 4.0.0
       restyle:
-        specifier: ^1.3.2
-        version: 1.3.2(react@18.3.1)
+        specifier: ^1.4.0
+        version: 1.4.0(react@18.3.1)
       server-only:
         specifier: 0.0.1
         version: 0.0.1
@@ -379,8 +379,8 @@ importers:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
       restyle:
-        specifier: ^1.3.2
-        version: 1.3.2(react@18.3.1)
+        specifier: ^1.4.0
+        version: 1.4.0(react@18.3.1)
 
 packages:
 
@@ -7464,8 +7464,8 @@ packages:
       lowercase-keys: 2.0.0
     dev: true
 
-  /restyle@1.3.2(react@18.3.1):
-    resolution: {integrity: sha512-0Zn70FaTeuin3QlNsNlam73roaSOVhjdkN+uKeKmyJF37hVFOVydFhGrgfwvdDqrYNElCbVcPgbsCTqALFe3tw==}
+  /restyle@1.4.0(react@18.3.1):
+    resolution: {integrity: sha512-sgRptH4HfCLkrNTo9PPHsK0QJObyynd3i/r9hQ+ypeEhxzyjAKEhsx+u3afUbhF4ewHgs2TyuQgcpq988Ke81Q==}
     peerDependencies:
       react: ^18.0.0
     dependencies:
