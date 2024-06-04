@@ -8,6 +8,7 @@ import type { Languages } from './get-tokens'
 import { getTokens } from './get-tokens'
 import type { ContextValue } from './Context'
 import { Context } from './Context'
+import { CopyButtonContextProvider } from './contexts'
 import { LineNumbers } from './LineNumbers'
 import { Pre } from './Pre'
 import { Toolbar } from './Toolbar'
@@ -138,7 +139,13 @@ export async function CodeBlock({
   } satisfies ContextValue
 
   if ('children' in props) {
-    return <Context value={contextValue}>{props.children}</Context>
+    return (
+      <Context value={contextValue}>
+        <CopyButtonContextProvider value={metadata.value}>
+          {props.children}
+        </CopyButtonContextProvider>
+      </Context>
+    )
   }
 
   const theme = await getThemeColors()
@@ -274,8 +281,7 @@ export async function CodeBlock({
           )}
           {allowCopy !== false && !shouldRenderToolbar ? (
             <CopyButton
-              value={metadata.value}
-              style={{
+              css={{
                 placeSelf: 'start end',
                 gridColumn: showLineNumbers ? 2 : 1,
                 gridRow: '1 / -1',
@@ -287,6 +293,7 @@ export async function CodeBlock({
                 color: theme.activityBar.foreground,
                 borderRadius: 5,
               }}
+              value={metadata.value}
             />
           ) : null}
         </Pre>

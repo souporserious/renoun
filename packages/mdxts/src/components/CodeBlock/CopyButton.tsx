@@ -1,21 +1,45 @@
 'use client'
 import React, { useContext, useState } from 'react'
+import { css, type CSSProp } from 'restyle'
 
 import { PreActiveContext } from './Pre'
+import { CopyButtonContext } from './contexts'
 
-/**
- * Copies a value to the user's clipboard.
- * @internal
- */
+/** Copies a value to the user's clipboard. */
 export function CopyButton({
-  value,
-  style,
+  value: valueProp,
+  css: cssProp,
+  className,
   ...props
 }: {
-  value: string
+  value?: string
+  css?: CSSProp
 } & React.ComponentProps<'button'>) {
+  const contextValue = useContext(CopyButtonContext)
+  const value = valueProp || contextValue
+
+  if (!value) {
+    throw new Error(
+      '[mdxts] No value was provided to <CopyButton />. Use the `value` prop or use <CopyButton /> within a <CodeBlock /> component.'
+    )
+  }
+
   const preActive = useContext(PreActiveContext)
   const [state, setState] = useState<'idle' | 'not-allowed' | 'copied'>('idle')
+  const [classNames, styleElements] = css({
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '1lh',
+    height: '1lh',
+    fontSize: 'inherit',
+    lineHeight: 'inherit',
+    padding: 0,
+    border: 0,
+    backgroundColor: 'transparent',
+    cursor: 'pointer',
+    ...cssProp,
+  })
 
   if (state === 'idle' && preActive === false) {
     return null
@@ -26,7 +50,7 @@ export function CopyButton({
       title="Copy code to clipboard"
       onClick={() => {
         navigator.clipboard
-          .writeText(value)
+          .writeText(value!)
           .then(() => {
             setState('copied')
           })
@@ -37,20 +61,7 @@ export function CopyButton({
             setTimeout(() => setState('idle'), 1000)
           })
       }}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: '1lh',
-        height: '1lh',
-        fontSize: 'inherit',
-        lineHeight: 'inherit',
-        padding: 0,
-        border: 0,
-        backgroundColor: 'transparent',
-        cursor: 'pointer',
-        ...style,
-      }}
+      className={className ? `${className} ${classNames}` : classNames}
       {...props}
     >
       <svg
@@ -105,6 +116,7 @@ export function CopyButton({
           />
         ) : null}
       </svg>
+      {styleElements}
     </button>
   )
 }
