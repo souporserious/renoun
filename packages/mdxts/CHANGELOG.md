@@ -1,5 +1,22 @@
 # mdxts
 
+## 1.5.0
+
+### Minor Changes
+
+- 35b05bd: Adds `css` prop for `CodeInline` to allow merging css styles.
+- 9457424: Adds `CopyButton` to be used with custom `CodeBlock` components.
+- 801b9c3: Moves `GitProviderLink` to use css through `restyle` instead of inline styles.
+
+### Patch Changes
+
+- 511d768: Normalizes `CopyButton` foreground and background colors.
+- 2198401: Updates [restyle](https://www.restyle.dev/) to `1.4.0`.
+- bc2ef5e: Doesn't override user-defined pre margin in `CodeBlock`.
+- 1236bcc: Fixes keyboard accessibility for `CodeBlock` inline copy button.
+- 6a05a2a: Uses activity bar foreground color from theme to color source link and copy button icons in `CodeBlock` component.
+- 16e6f26: Adds better contrast for `CodeBlock` inline copy button by adding a stroke based on `theme.panel.border`.
+
 ## 1.4.0
 
 ### Minor Changes
