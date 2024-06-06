@@ -150,7 +150,7 @@
     "remark-squeeze-paragraphs": "^6.0.0",
     "remark-strip-badges": "^7.0.0",
     "remark-unwrap-images": "^4.0.0",
-    "restyle": "^1.4.0",
+    "restyle": "^1.4.1",
     "server-only": "0.0.1",
     "shiki": "^1.6.1",
     "title": "^3.5.3",
