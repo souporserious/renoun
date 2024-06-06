@@ -11,6 +11,7 @@ export function TypeChecking() {
     <CodeBlock
       value={`const a = 1; a + b;`}
       language="ts"
+      allowCopy={false}
       allowErrors
       showErrors
     />
