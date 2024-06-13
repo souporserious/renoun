@@ -1,4 +1,4 @@
-import { join, posix, resolve } from 'node:path'
+import { join, resolve, posix } from 'node:path'
 import slugify from '@sindresorhus/slugify'
 
 /** Converts a file system path to a URL-friendly pathname. */
