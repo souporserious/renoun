@@ -22,8 +22,9 @@ export function filePathToPathname(
     baseDirectory = resolve(process.cwd(), baseDirectory)
   }
 
-  const [baseDirectoryPath, baseFilePath] = baseDirectory
-    ? filePath.split(baseDirectory)
+  // if baseDirectory is defined, ensure that there is a trailing slash
+  let [baseDirectoryPath, baseFilePath] = baseDirectory
+    ? filePath.split(baseDirectory.replace(/\/$|$/, '/'))
     : ['', filePath]
 
   if (baseFilePath === undefined) {
@@ -31,6 +32,9 @@ export function filePathToPathname(
       `Cannot determine base path for file path "${filePath}" at base directory "${baseDirectory}".`
     )
   }
+
+  // ensure that there is a leading slash
+  baseFilePath = createPathame(baseFilePath)
 
   let parsedFilePath = baseFilePath
     // Remove leading separator "./"
