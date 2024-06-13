@@ -15,6 +15,17 @@ export async function augmentCreateSource(
 ) {
   const sourceFile = new Project({
     useInMemoryFileSystem: true,
+    compilerOptions: {
+      lib: [
+        'lib.es5.d.ts',
+        'lib.es2015.symbol.d.ts',
+        'lib.es2015.promise.d.ts',
+        'lib.es2015.collection.d.ts',
+        'lib.es2015.core.d.ts',
+        'lib.es2015.iterable.d.ts',
+        'lib.dom.d.ts',
+      ],
+    },
   }).createSourceFile('index.ts', sourceText)
   const createSourceCalls = sourceFile
     .getDescendantsOfKind(SyntaxKind.CallExpression)
