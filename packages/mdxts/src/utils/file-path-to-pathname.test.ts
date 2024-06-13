@@ -86,4 +86,28 @@ describe('filePathToUrlPathname', () => {
       '/hooks/use-hover'
     )
   })
+
+  it('handles nested paths with the same name - content/', () => {
+    expect(
+      filePathToPathname(
+        'content/content_1/section_1/01.page-1.mdx',
+        'content/'
+      )
+    ).toBe('/content-1/section-1/page-1')
+  })
+
+  it('handles nested paths with the same name - content', () => {
+    expect(
+      filePathToPathname('content/content_1/section_1/01.page-1.mdx', 'content')
+    ).toBe('/content-1/section-1/page-1')
+  })
+
+  it('handles nested paths with the same name - src/content', () => {
+    expect(
+      filePathToPathname(
+        'src/content/content_1/section_1/01.page-1.mdx',
+        'src/content'
+      )
+    ).toBe('/content-1/section-1/page-1')
+  })
 })
