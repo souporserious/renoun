@@ -23,7 +23,30 @@ describe('filePathToUrlPathname', () => {
     )
   })
 
-  it('uses directory for index and readme', () => {
+  it('uses package name for index', () => {
+    expect(
+      filePathToPathname(
+        workingDirectory + '/src/index.ts',
+        'src',
+        undefined,
+        'mdxts'
+      )
+    ).toBe('/mdxts')
+
+    expect(filePathToPathname('src/utils/index.js', 'utils')).toBe('/utils')
+  })
+
+  it('uses base pathname for index', () => {
+    expect(
+      filePathToPathname(
+        workingDirectory + '/src/index.tsx',
+        'src',
+        'components'
+      )
+    ).toBe('/components')
+  })
+
+  it('uses base directory for index', () => {
     expect(
       filePathToPathname(
         workingDirectory + '/src/components/index.tsx',
@@ -31,7 +54,11 @@ describe('filePathToUrlPathname', () => {
       )
     ).toBe('/components')
 
-    expect(filePathToPathname('mdxts/src/components/README.mdx')).toBe(
+    expect(filePathToPathname('src/utils/index.js', 'utils')).toBe('/utils')
+  })
+
+  it('uses directory for readme', () => {
+    expect(filePathToPathname('mdxts/src/components/readme.md')).toBe(
       '/mdxts/src/components'
     )
 
@@ -87,27 +114,35 @@ describe('filePathToUrlPathname', () => {
     )
   })
 
-  it('handles nested paths with the same name - content/', () => {
+  it('handles nested paths with the same name as base directory', () => {
     expect(
       filePathToPathname(
         'content/content_1/section_1/01.page-1.mdx',
         'content/'
       )
     ).toBe('/content-1/section-1/page-1')
-  })
 
-  it('handles nested paths with the same name - content', () => {
     expect(
       filePathToPathname('content/content_1/section_1/01.page-1.mdx', 'content')
     ).toBe('/content-1/section-1/page-1')
-  })
 
-  it('handles nested paths with the same name - src/content', () => {
     expect(
       filePathToPathname(
-        'src/content/content_1/section_1/01.page-1.mdx',
-        'src/content'
+        '/src/content/content_1/section_1/01.page-1.mdx',
+        '/src/content'
       )
     ).toBe('/content-1/section-1/page-1')
+  })
+
+  it('replaces base directory with base pathname', () => {
+    expect(
+      filePathToPathname('/src/posts/getting-started.mdx', 'posts', 'blog')
+    ).toBe('/blog/getting-started')
+  })
+
+  it('removes working directory', () => {
+    expect(filePathToPathname(workingDirectory + '/src/hooks/index.tsx')).toBe(
+      '/src/hooks'
+    )
   })
 })
