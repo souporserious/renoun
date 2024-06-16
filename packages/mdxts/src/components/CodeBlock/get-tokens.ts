@@ -428,13 +428,52 @@ function tokensToHighlightedText(tokens: Token[][]) {
 
 /** Converts tokens to plain text. */
 function tokensToPlainText(tokens: Token[][]) {
+  const lineNumberPadding = 4
   let plainText = ''
+  let lineNumber = 1
 
   for (const line of tokens) {
-    for (const token of line) {
-      plainText += token.value
+    const paddedLineNumber = String(lineNumber).padStart(2, ' ')
+
+    plainText += `${paddedLineNumber} `
+
+    const anyLineDiagnostics = line.some(
+      (token) => token.diagnostics && token.diagnostics.length > 0
+    )
+
+    if (anyLineDiagnostics) {
+      plainText += '|'
+    } else {
+      plainText += ' '
     }
-    plainText += '\n'
+
+    let lineContent = ''
+    let errorMarkers = []
+
+    for (const token of line) {
+      lineContent += token.value
+
+      if (token.diagnostics && token.diagnostics.length > 0) {
+        const tokenLength = token.value.length ?? 1
+        const startIndex = lineContent.length - token.value.length
+        errorMarkers.push({ startIndex, tokenLength })
+      }
+    }
+
+    plainText += `${lineContent}\n`
+
+    if (errorMarkers.length > 0) {
+      let errorLine = ' '.repeat(lineNumberPadding)
+      for (const { startIndex, tokenLength } of errorMarkers) {
+        while (errorLine.length < startIndex + lineNumberPadding) {
+          errorLine += ' '
+        }
+        errorLine += '^'.repeat(tokenLength)
+      }
+      plainText += `${errorLine}\n`
+    }
+
+    lineNumber++
   }
 
   return plainText
