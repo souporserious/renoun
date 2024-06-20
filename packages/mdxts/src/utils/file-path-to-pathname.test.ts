@@ -1,6 +1,7 @@
+import { resolve } from 'node:path'
 import { filePathToPathname } from './file-path-to-pathname'
 
-const workingDirectory = '/Users/username/Code/mdxts/mdxts'
+const workingDirectory = '/Users/username/Code/mdxts/site'
 
 describe('filePathToUrlPathname', () => {
   beforeEach(() => {
@@ -86,8 +87,8 @@ describe('filePathToUrlPathname', () => {
   it('normalizes relative paths', () => {
     expect(
       filePathToPathname(
-        workingDirectory + '/src/components/index.ts',
-        '../mdxts/src'
+        resolve(workingDirectory, '../packages/mdxts/src/components/index.ts'),
+        '../packages/mdxts/src'
       )
     ).toBe('/components')
   })
@@ -144,5 +145,16 @@ describe('filePathToUrlPathname', () => {
     expect(filePathToPathname(workingDirectory + '/src/hooks/index.tsx')).toBe(
       '/src/hooks'
     )
+  })
+
+  it('handles base directory, base pathname, and package name', () => {
+    expect(
+      filePathToPathname(
+        resolve(workingDirectory, '../packages/mdxts/src/index.ts'),
+        '../packages/mdxts/src',
+        'packages',
+        'mdxts'
+      )
+    ).toBe('/packages/mdxts')
   })
 })

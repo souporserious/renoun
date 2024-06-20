@@ -13,9 +13,18 @@ export function filePathToPathname(
   basePathname?: string,
 
   /** The package name to use for index and readme paths. */
-  packageName?: string
+  packageName?: string,
+
+  /** Whether or not to convert the pathname to kebab case. */
+  kebabCase = true
 ) {
   let baseFilePath: string = filePath
+
+  if (filePath.includes('node_modules')) {
+    throw new Error(
+      `[mdxts] Tried converting a node_modules file path to pathname: ${filePath}\nThis is currently not supported. Please file an issue to add support.`
+    )
+  }
 
   // Calculate the base file path
   if (baseDirectory) {
@@ -33,15 +42,15 @@ export function filePathToPathname(
     baseFilePath = baseFilePath.replace(process.cwd(), '')
   }
 
-  let parsedFilePath = baseFilePath
+  let segments = baseFilePath
     // Remove leading separator "./"
     .replace(/^\.\//, '')
     // Remove leading sorting number "01."
     .replace(/\/\d+\./g, posix.sep)
     // Remove file extensions
     .replace(/\.[^/.]+$/, '')
-
-  const segments = parsedFilePath.split(posix.sep)
+    // Get path segments
+    .split(posix.sep)
 
   // Remove duplicate segment if last directory name matches file name (e.g. "Button/Button.tsx")
   if (
@@ -51,37 +60,51 @@ export function filePathToPathname(
     segments.pop()
   }
 
-  // Convert camel and pascal case names to kebab case for case-insensitive paths
-  parsedFilePath = segments
-    .map((segment) => slugify(segment))
-    .filter(Boolean)
-    .join(posix.sep)
-
   // Prepend the base pathname if defined
   if (basePathname) {
-    parsedFilePath = posix.join(basePathname, parsedFilePath)
+    segments.unshift(basePathname)
   }
 
-  // Ensure leading slash
-  if (!parsedFilePath.startsWith(posix.sep)) {
-    parsedFilePath = posix.sep + parsedFilePath
+  const baseIndex = segments.findIndex(
+    (segment) => segment === basePathname || segment === baseDirectory
+  )
+  const filteredSegments = segments
+    .slice(baseIndex + 1)
+    .map((segment) => segment.toLowerCase())
+
+  // Trim index and readme from the end of the path
+  const baseSegment = segments.at(-1)?.toLowerCase()
+
+  if (baseSegment === 'index' || baseSegment === 'readme') {
+    segments = segments.slice(0, -1)
   }
 
   // Use directory for root index and readme
-  if (parsedFilePath === '/index' || parsedFilePath === '/readme') {
+  if (
+    filteredSegments.length === 1 &&
+    (filteredSegments.includes('index') || filteredSegments.includes('readme'))
+  ) {
     if (packageName) {
-      parsedFilePath = posix.join(posix.sep, packageName)
+      segments = segments.concat(packageName)
+    } else if (basePathname) {
+      segments =
+        segments.at(-1) === basePathname
+          ? segments
+          : segments.concat(basePathname)
     } else if (baseDirectory) {
-      parsedFilePath = posix.join(posix.sep, baseDirectory)
+      segments = segments.concat(baseDirectory)
     } else {
       throw new Error(
         `[mdxts] Cannot determine base path for file path "${filePath}". Provide a base directory or base path.`
       )
     }
-  } else {
-    // Otherwise, remove trailing "/readme" or "/index" if it exists
-    parsedFilePath = parsedFilePath.replace(/\/(readme|index)$/i, '')
   }
 
-  return parsedFilePath
+  // Convert camel and pascal case names to kebab case for case-insensitive paths
+  // e.g. "ButtonGroup" -> "button-group"
+  if (kebabCase) {
+    segments = segments.map((segment) => slugify(segment)).filter(Boolean)
+  }
+
+  return posix.join(posix.sep, ...segments)
 }
