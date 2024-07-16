@@ -9,18 +9,9 @@ import type {
   SourceFile,
 } from 'ts-morph'
 import { Node } from 'ts-morph'
-import {
-  getTypeDocumentation,
-  getSymbolDescription,
-  hasJsDocTag,
-  isJsxComponent,
-} from '@tsxmod/utils'
+import { processType, hasJsDocTag } from '@tsxmod/utils'
 
-export type ExportedType = {
-  name: string
-  description: string | null
-  types: NonNullable<ReturnType<typeof getTypeDocumentation>>
-  isComponent: boolean
+export type ExportedType = NonNullable<ReturnType<typeof processType>> & {
   slug: string
   filePath: string
 }
@@ -46,6 +37,28 @@ export function getExportedTypes(
         }
 
         if (
+          Node.isInterfaceDeclaration(declaration) ||
+          Node.isTypeAliasDeclaration(declaration) ||
+          Node.isEnumDeclaration(declaration) ||
+          Node.isClassDeclaration(declaration)
+        ) {
+          const filePath = declaration.getSourceFile().getFilePath()
+          const processedType = processType(declaration.getType(), declaration)
+
+          if (!processedType) {
+            throw new Error(
+              `[mdxts]: Could not process type documentation for: ${name}`
+            )
+          }
+
+          return {
+            slug: kebabCase(name),
+            filePath: filePath as string,
+            ...processedType,
+          } satisfies ExportedType
+        }
+
+        if (
           Node.isFunctionDeclaration(declaration) ||
           Node.isVariableDeclaration(declaration)
         ) {
@@ -56,26 +69,33 @@ export function getExportedTypes(
             : declaration
 
           if (!isDeclarationOrExpression(declarationOrExpression)) {
-            return null
+            throw new Error(
+              `[mdxts]: Unsupported declaration while processing type documentation for:\n(kind: ${declarationOrExpression.getKindName()}) ${declarationOrExpression.getText()}\n\nPlease file an issue to add support or mark as @internal.`
+            )
           }
 
           const filePath = declaration.getSourceFile().getFilePath()
-          const symbol = declaration.getSymbol()
+          const processedType = processType(declaration.getType(), declaration)
+
+          if (!processedType) {
+            throw new Error(
+              `[mdxts]: Could not process type documentation for: ${name}`
+            )
+          }
 
           return {
-            name,
-            description: symbol ? getSymbolDescription(symbol) : null,
-            types: getTypeDocumentation(declarationOrExpression) || [],
-            isComponent: isJsxComponent(declaration),
             slug: kebabCase(name),
             filePath: filePath as string,
+            ...processedType,
           } satisfies ExportedType
         }
 
-        return null
+        throw new Error(
+          `[mdxts]: Unsupported declaration while processing type documentation for: (kind: ${declaration.getKindName()}) ${declaration.getText()}\n\nPlease file an issue to add support or mark as @internal.`
+        )
       })
     )
-    .filter(Boolean) as ExportedType[]
+    .filter(Boolean) as unknown as ExportedType[]
 }
 
 function isDeclarationOrExpression(

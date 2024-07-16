@@ -1,4 +1,4 @@
-import React, { Fragment } from 'react'
+import React from 'react'
 import { ExportedTypes } from 'mdxts/components'
 
 const sourceFileText = `
@@ -24,36 +24,45 @@ export function usePress({ onPress }: PressProps) {
 }
 `
 
-export function Basic() {
-  return <ExportedTypes filename="Button.tsx" value={sourceFileText} />
+export function ValueProp() {
+  return (
+    <ExportedTypes filename="Button.tsx" value={sourceFileText}>
+      {(declarations) => <pre>{JSON.stringify(declarations, null, 2)}</pre>}
+    </ExportedTypes>
+  )
 }
 
-export function Custom() {
+export function SourceProp() {
   return (
     <ExportedTypes source="./MDXContent.tsx">
       {(declarations) =>
-        declarations.map((declaration) => (
-          <div
-            key={declaration.name}
-            style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}
-          >
-            <h2>{declaration.name}</h2>
-            <p>{declaration.description}</p>
-            <ul>
-              {declaration.types.map((type) => (
-                <Fragment key={type.text}>
-                  {type.properties?.length
-                    ? type.properties.map((property) => (
-                        <li key={property.name}>
-                          {property.name}: {property.text}
-                        </li>
-                      ))
-                    : null}
-                </Fragment>
-              ))}
-            </ul>
-          </div>
-        ))
+        declarations.map((exportedType) => {
+          if (exportedType.kind === 'Component') {
+            return (
+              <div
+                key={exportedType.name}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '1rem',
+                }}
+              >
+                <h2>{exportedType.name}</h2>
+                <p>{exportedType.description}</p>
+                <ul>
+                  {/* {exportedType.properties.map((propType) => (
+                    <li key={propType.name}>
+                      <strong>{propType.name}:</strong> {propType.type}
+                    </li>
+                  ))} */}
+                </ul>
+              </div>
+            )
+          }
+
+          // Implement remaining types for Interface, TypeAlias, etc.
+          return null
+        })
       }
     </ExportedTypes>
   )

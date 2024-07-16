@@ -9,31 +9,70 @@ import 'server-only'
 
 import { project } from './components/project'
 import type { Headings } from './mdx-plugins/remark/add-headings'
-import type { AllModules, ModuleData } from './utils/get-all-data'
+import type {
+  AllModules,
+  ModuleData,
+  ModuleExportedTypes,
+} from './utils/get-all-data'
 import { getAllData } from './utils/get-all-data'
 import type { ExampleItem } from './utils/get-examples'
 import { getTheme } from './utils/get-theme'
+
+export { ModuleExportedTypes }
 
 type FeedOptions = Omit<
   ConstructorParameters<typeof Feed>[0],
   'generator' | 'link' | 'id'
 >
 
-type Compute<Type> = Type extends Function
+type Primitive = string | number | bigint | boolean | symbol | undefined | null
+
+type BuiltInObject =
+  | Date
+  | RegExp
+  | Set<any>
+  | Map<any, any>
+  | WeakSet<any>
+  | WeakMap<any, any>
+  | Promise<any>
+  | Error
+  | ArrayBuffer
+  | SharedArrayBuffer
+  | Int8Array
+  | Uint8Array
+  | Uint8ClampedArray
+  | Int16Array
+  | Uint16Array
+  | Int32Array
+  | Uint32Array
+  | Float32Array
+  | Float64Array
+
+type Compute<Type> = Type extends Function | Primitive | BuiltInObject
   ? Type
-  : {
-      [Key in keyof Type]: Type[Key] extends object
-        ? Compute<Type[Key]>
-        : Type[Key]
-    } & {}
+  : { [Key in keyof Type]: Compute<Type[Key]> } & {}
 
 export type Module<Type extends { frontMatter: Record<string, any> }> = Compute<
   {
+    /** The default component exported from the MDX file. */
     Content?: ComponentType<{ renderTitle?: boolean }>
+
+    /** Any associated examples with the module in a `examples` file or directory. */
     examples: ExampleItem[]
+
+    /** Pathname of the module based on the source file position relative to the base directory. */
     pathname: string
+
+    /** Table of contents based on the associated content. */
     headings: Headings
-    frontMatter?: Record<string, any>
+
+    /** Statically analyzed title and description metadata exported from the module. */
+    metadata?: { title: string; description: string }
+
+    /** Front matter data for the MDX file associated with the module. */
+    frontMatter?: Type['frontMatter']
+
+    /** Reading time for the associated content. */
     readingTime?: {
       /** Minimum reading time in minutes and seconds. */
       minimum: { minutes: number; seconds: number }
@@ -47,22 +86,35 @@ export type Module<Type extends { frontMatter: Record<string, any> }> = Compute<
       /** The ISO duration for the average reading time. */
       duration: string
     }
+
     /** The ISO timestamp when the module was first created. */
     createdAt?: string
+
     /** The ISO timestamp when the module was last updated. */
     updatedAt?: string
+
     /** The authors that contributed to the module. */
     authors?: string[]
-    metadata?: { title: string; description: string }
   } & Omit<ModuleData<Type>, 'mdxPath' | 'tsPath' | 'gitMeta' | 'examples'>
 >
 
 export type SourceTreeItem = {
+  /** The segment of the pathname. */
   segment: string
+
+  /** The full pathname of the item. */
   pathname: string
+
+  /** The label of the item. */
   label: string
+
+  /** The depth of the item in the tree. */
   depth: number
+
+  /** Whether the item has data or not (e.g. a module). */
   hasData: boolean
+
+  /** Child source tree items. */
   children: SourceTreeItem[]
 }
 
@@ -99,8 +151,10 @@ export type CreateSourceOptions<
   sort?: (a: ModuleData<Type>, b: ModuleData<Type>) => number
 }
 
+/** A glob pattern that matches files in one directory. */
 export type ShallowGlobPattern = `${string}*${string}`
 
+/** A glob pattern that matches files in the same directory and subdirectories. */
 export type RecursiveGlobPattern = `${string}**${string}`
 
 type AllGlobPatterns = ShallowGlobPattern | RecursiveGlobPattern
@@ -492,7 +546,13 @@ export function mergeSources<
       ShallowGlobPattern | RecursiveGlobPattern
     >
   >,
->(...sources: Sources) {
+>(
+  /** The sources from `createSource` to merge. */
+  ...sources: Sources
+): CreateSourceResult<
+  { frontMatter: Record<string, any> },
+  ShallowGlobPattern | RecursiveGlobPattern
+> {
   type SourceItem = Sources[number]
 
   function all() {
@@ -528,10 +588,10 @@ export function mergeSources<
     ) as ReturnType<SourceItem['paths']>
   }
 
-  async function examplePaths() {
-    return await Promise.all(
+  function examplePaths() {
+    return Promise.all(
       sources.flatMap((dataSource) => dataSource.examplePaths())
-    )
+    ) as ReturnType<SourceItem['examplePaths']>
   }
 
   async function get(pathname: string | string[] | undefined) {

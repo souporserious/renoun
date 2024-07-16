@@ -2,7 +2,7 @@ import { dirname, join, relative, resolve, posix, sep } from 'node:path'
 import { glob } from 'fast-glob'
 import globParent from 'glob-parent'
 import { Node, Project, SyntaxKind } from 'ts-morph'
-import { addComputedTypes, resolveObject } from '@tsxmod/utils'
+import { addComputedTypes, resolveObjectLiteralExpression } from '@tsxmod/utils'
 
 import { project } from '../components/project'
 import { getEntrySourceFiles } from '../utils/get-entry-source-files'
@@ -79,7 +79,7 @@ export async function augmentCreateSource(
         const optionsArgument = createSourceCall.getArguments()[1]
         const { sourceDirectory, outputDirectory } = (
           Node.isObjectLiteralExpression(optionsArgument)
-            ? resolveObject(optionsArgument)
+            ? resolveObjectLiteralExpression(optionsArgument)
             : {}
         ) as {
           sourceDirectory?: string

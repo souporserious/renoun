@@ -179,26 +179,33 @@ export default async function Page({ params }: Props) {
     <>
       {Content ? <Content /> : null}
       <ul>
-        {exportedTypes.map((type) => (
-          <li key={type.name}>
-            <h4>{type.name}</h4>
-            <p>{type.description}</p>
-            {type.types.map((type) =>
-              type.properties ? (
+        {exportedTypes.map((exportedType) => {
+          if (exportedType.kind === 'Component') {
+            return (
+              <div
+                key={exportedType.name}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '1rem',
+                }}
+              >
+                <h2>{exportedType.name}</h2>
+                <p>{exportedType.description}</p>
                 <ul>
-                  {type.properties.map((property) => (
-                    <li key={property.name}>
-                      <h5>{property.name}</h5>
-                      <p>{property.description}</p>
+                  {exportedType.properties.map((propType) => (
+                    <li key={propType.name}>
+                      <strong>{propType.name}:</strong> {propType.type}
                     </li>
                   ))}
                 </ul>
-              ) : (
-                type.text
-              )
-            )}
-          </li>
-        ))}
+              </div>
+            )
+          }
+
+          // Implement remaining types for Interface, TypeAlias, etc.
+          return null
+        })}
       </ul>
     </>
   )

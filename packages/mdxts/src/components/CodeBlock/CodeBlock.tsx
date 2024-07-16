@@ -18,6 +18,7 @@ import {
   generateHighlightedLinesGradient,
 } from './utils'
 
+/** @internal */
 export type BaseCodeBlockProps = {
   /** Name or path of the code block. Ordered filenames will be stripped from the name e.g. `01.index.tsx` becomes `index.tsx`. */
   filename?: string
@@ -74,6 +75,7 @@ export type BaseCodeBlockProps = {
   children?: React.ReactNode
 }
 
+/** @internal */
 export type CodeBlockProps =
   | ({
       /** Source code to highlight. */
@@ -88,30 +90,31 @@ export type CodeBlockProps =
     } & BaseCodeBlockProps)
 
 /** Renders a `pre` element with syntax highlighting, type information, and type checking. */
-export async function CodeBlock({
-  filename,
-  language,
-  highlightedLines,
-  focusedLines,
-  unfocusedLinesOpacity = 0.6,
-  allowCopy,
-  allowErrors,
-  showErrors,
-  showLineNumbers,
-  showToolbar,
-  sourcePath,
-  ...props
-}: CodeBlockProps) {
-  const padding = props.style?.container?.padding ?? '0.5lh'
-  const hasValue = 'value' in props
-  const hasSource = 'source' in props
+export async function CodeBlock(props: CodeBlockProps) {
+  const {
+    filename,
+    language,
+    highlightedLines,
+    focusedLines,
+    unfocusedLinesOpacity = 0.5,
+    allowCopy,
+    allowErrors,
+    showErrors,
+    showLineNumbers,
+    showToolbar,
+    sourcePath,
+    ...restProps
+  } = props
+  const padding = restProps.style?.container?.padding ?? '0.5lh'
+  const hasValue = 'value' in restProps
+  const hasSource = 'source' in restProps
   const options: any = {}
 
   if (hasValue) {
-    options.value = props.value
+    options.value = restProps.value
   } else if (hasSource) {
-    options.source = props.source
-    options.workingDirectory = props.workingDirectory
+    options.source = restProps.source
+    options.workingDirectory = restProps.workingDirectory
   }
 
   const metadata = await parseSourceTextMetadata({
@@ -138,11 +141,11 @@ export async function CodeBlock({
     tokens,
   } satisfies ContextValue
 
-  if ('children' in props) {
+  if ('children' in restProps) {
     return (
       <Context value={contextValue}>
         <CopyButtonContextProvider value={metadata.value}>
-          {props.children}
+          {restProps.children}
         </CopyButtonContextProvider>
       </Context>
     )
@@ -161,13 +164,13 @@ export async function CodeBlock({
   const Container = shouldRenderToolbar ? 'div' : React.Fragment
   const containerProps = shouldRenderToolbar
     ? {
-        className: props.className?.container,
+        className: restProps.className?.container,
         style: {
           backgroundColor: theme.background,
           color: theme.foreground,
           borderRadius: 5,
           boxShadow: `0 0 0 1px ${theme.panel.border}`,
-          ...props.style?.container,
+          ...restProps.style?.container,
           padding: 0,
         } satisfies React.CSSProperties,
       }
@@ -185,13 +188,13 @@ export async function CodeBlock({
         {shouldRenderToolbar ? (
           <Toolbar
             allowCopy={allowCopy === undefined ? Boolean(filename) : allowCopy}
-            className={props.className?.toolbar}
-            style={{ padding, ...props.style?.toolbar }}
+            className={restProps.className?.toolbar}
+            style={{ padding, ...restProps.style?.toolbar }}
           />
         ) : null}
         <Pre
           className={
-            shouldRenderToolbar ? undefined : props.className?.container
+            shouldRenderToolbar ? undefined : restProps.className?.container
           }
           style={{
             position: 'relative',
@@ -223,14 +226,14 @@ export async function CodeBlock({
                   maskImage: focusedLinesGradient,
                 }
               : {}),
-            ...(shouldRenderToolbar ? {} : props.style?.container),
+            ...(shouldRenderToolbar ? {} : restProps.style?.container),
             padding: 0,
           }}
         >
           {showLineNumbers ? (
             <>
               <LineNumbers
-                className={props.className?.lineNumbers}
+                className={restProps.className?.lineNumbers}
                 style={{
                   padding,
                   gridColumn: 1,
@@ -238,7 +241,7 @@ export async function CodeBlock({
                   width: '4ch',
                   backgroundPosition: 'inherit',
                   backgroundImage: 'inherit',
-                  ...props.style?.lineNumbers,
+                  ...restProps.style?.lineNumbers,
                 }}
               />
               <code
@@ -250,12 +253,12 @@ export async function CodeBlock({
               >
                 <Tokens
                   className={{
-                    token: props.className?.token,
-                    popover: props.className?.popover,
+                    token: restProps.className?.token,
+                    popover: restProps.className?.popover,
                   }}
                   style={{
-                    token: props.style?.token,
-                    popover: props.style?.popover,
+                    token: restProps.style?.token,
+                    popover: restProps.style?.popover,
                   }}
                 />
               </code>
@@ -269,12 +272,12 @@ export async function CodeBlock({
             >
               <Tokens
                 className={{
-                  token: props.className?.token,
-                  popover: props.className?.popover,
+                  token: restProps.className?.token,
+                  popover: restProps.className?.popover,
                 }}
                 style={{
-                  token: props.style?.token,
-                  popover: props.style?.popover,
+                  token: restProps.style?.token,
+                  popover: restProps.style?.popover,
                 }}
               />
             </code>

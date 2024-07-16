@@ -2,14 +2,14 @@ import parseTitle from 'title'
 import { dirname, join, posix, sep } from 'node:path'
 import type { ExportedDeclarations, Project } from 'ts-morph'
 import { SourceFile } from 'ts-morph'
-import { getSymbolDescription, resolveExpression } from '@tsxmod/utils'
+import { getSymbolDescription, resolveLiteralExpression } from '@tsxmod/utils'
 import matter from 'gray-matter'
 
 import { filePathToPathname } from './file-path-to-pathname'
 import { getExamplesFromSourceFile } from './get-examples'
 import { getEntrySourceFiles } from './get-entry-source-files'
 import { getExportedSourceFiles } from './get-exported-source-files'
-import { getExportedTypes } from './get-exported-types'
+import { getExportedTypes, type ExportedType } from './get-exported-types'
 import { getGitMetadata } from './get-git-metadata'
 import { getMainExportDeclaration } from './get-main-export-declaration'
 import { getNameFromDeclaration } from './get-name-from-declaration'
@@ -18,40 +18,83 @@ import { getSourcePath } from './get-source-path'
 import { getSharedDirectoryPath } from './get-shared-directory-path'
 import { getPackageMetadata } from './get-package-metadata'
 
+type DistributiveOmit<Type, Key extends PropertyKey> = Type extends any
+  ? Omit<Type, Key>
+  : never
+
 export type Pathname = string
 
 export type ModuleImport = Promise<Record<string, any>>
 
 export type AllModules = Record<Pathname, () => ModuleImport>
 
-export type ModuleData<Type extends { frontMatter: Record<string, any> }> = {
-  title: string
-  label: string
-  description?: string
-  order: string
-  depth: number
-  mdxPath?: string
-  tsPath?: string
-  pathname: string
-  url: string
-  previous?: { label: string; pathname: string }
-  next?: { label: string; pathname: string }
-  sourcePath: string
-  executionEnvironment?: 'server' | 'client' | 'isomorphic'
-  isMainExport?: boolean
-  exportedTypes: (Omit<
-    ReturnType<typeof getExportedTypes>[number],
-    'filePath'
-  > & {
+/** Exported types with additional metadata. */
+export type ModuleExportedTypes = DistributiveOmit<
+  ExportedType & {
     pathname: string
     sourcePath: string
     isMainExport: boolean
-  })[]
+  },
+  'filePath'
+>[]
+
+/** A module data object that represents a TypeScript or MDX module. */
+export type ModuleData<Type extends { frontMatter: Record<string, any> }> = {
+  /** The title of the module. */
+  title: string
+
+  /** The label used for navigation. */
+  label: string
+
+  /** The description of the module. */
+  description?: string
+
+  /** The order of the module. */
+  order: string
+
+  /** The depth of the module in the file system. */
+  depth: number
+
+  /** The path to the MDX file if it exists. */
+  mdxPath?: string
+
+  /** The path to the TypeScript file if it exists. */
+  tsPath?: string
+
+  /** The pathname of the module. */
+  pathname: string
+
+  /** The absolute URL of the module. */
+  url: string
+
+  /** The previous module if it exists at the current position. */
+  previous?: { label: string; pathname: string }
+
+  /** The next module if it exists at the current position. */
+  next?: { label: string; pathname: string }
+
+  /** Source path of the module to the Git repository in production and local file system in development. */
+  sourcePath: string
+
+  /** Where the module is executed. */
+  executionEnvironment?: 'server' | 'client' | 'isomorphic'
+
+  /** Whether the module is the main export of the package or not. */
+  isMainExport?: boolean
+
+  /** The exported types of the module. */
+  exportedTypes: ModuleExportedTypes
+  // exportedTypes: any[]
+
+  /** The examples associated with the module. */
   examples: ReturnType<typeof getExamplesFromSourceFile>
 } & ReturnType<typeof getGitMetadata> &
   ('frontMatter' extends keyof Type
     ? Type
-    : { frontMatter: Record<string, any> })
+    : {
+        /** The front matter of the module. */
+        frontMatter: Record<string, any>
+      })
 
 export function getAllData<Type extends { frontMatter: Record<string, any> }>({
   allModules,
@@ -188,23 +231,24 @@ export function getAllData<Type extends { frontMatter: Record<string, any> }>({
       const mainExportDeclaration = getMainExportDeclaration(sourceFile)
       const mainExportDeclarationSymbol = mainExportDeclaration?.getSymbol()
       const mainExportDeclarationName = mainExportDeclarationSymbol?.getName()
+      const sourceFilePath = sourceFile.getFilePath()
       const exportedTypes = getExportedTypes(
         sourceFile,
         allPublicDeclarations.get(sourceFile)
-      ).map(({ filePath, ...fileExport }) => {
+      ).map(({ filePath, ...exportedType }) => {
         const isPublic = allPublicPaths.includes(filePath)
         const pathname = filePathToPathname(
-          isPublic ? filePath : sourceFile.getFilePath(),
+          isPublic ? filePath : sourceFilePath,
           baseDirectory,
           basePathname,
           packageMetadata?.name
         )
         return {
-          ...fileExport,
+          ...exportedType,
           pathname,
           sourcePath: getSourcePath(filePath),
           isMainExport: mainExportDeclarationName
-            ? mainExportDeclarationName === fileExport.name
+            ? mainExportDeclarationName === exportedType.name
             : false,
         }
       })
@@ -452,12 +496,16 @@ function getMetadata(sourceFile: SourceFile) {
         metadataExport.replaceWithText(
           metadataExport.getText().slice(0, trailingCurlyBraceIndex + 1)
         )
-        const metadata = resolveExpression(metadataExport.getInitializer()!)
+        const metadata = resolveLiteralExpression(
+          metadataExport.getInitializer()!
+        )
         metadataExport.replaceWithText(originalText)
         return metadata as Record<string, any>
       }
     } else {
-      const metadata = resolveExpression(metadataExport.getInitializer()!)
+      const metadata = resolveLiteralExpression(
+        metadataExport.getInitializer()!
+      )
       return metadata as Record<string, any>
     }
   }

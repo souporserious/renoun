@@ -1,5 +1,9 @@
 import { Project, ts } from 'ts-morph'
 
+/**
+ * A TypeScript project instance.
+ * @internal
+ */
 export const project = new Project({
   compilerOptions: {
     allowJs: true,
@@ -14,4 +18,8 @@ export const project = new Project({
   useInMemoryFileSystem: typeof window !== 'undefined',
 })
 
+/**
+ * The TypeScript language service instance.
+ * @internal
+ */
 export const languageService = project.getLanguageService().compilerObject
