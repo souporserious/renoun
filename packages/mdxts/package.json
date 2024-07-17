@@ -28,65 +28,72 @@
     "dist/*"
   ],
   "sideEffects": false,
-  "main": "./dist/src/index.js",
-  "types": "./dist/src/index.d.ts",
+  "main": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/src/index.d.ts",
-      "import": "./dist/src/index.js",
-      "require": "./dist/cjs/index.js"
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/src/index.js"
     },
     "./assets": {
-      "types": "./dist/src/assets/index.d.ts",
-      "import": "./dist/src/assets/index.js",
-      "require": "./dist/cjs/assets/index.js"
+      "types": "./dist/types/assets/index.d.ts",
+      "import": "./dist/esm/assets/index.js",
+      "require": "./dist/cjs/src/assets/index.js"
     },
     "./components": {
-      "types": "./dist/src/components/index.d.ts",
-      "import": "./dist/src/components/index.js",
-      "require": "./dist/cjs/components/index.js"
+      "types": "./dist/types/components/index.d.ts",
+      "import": "./dist/esm/components/index.js",
+      "require": "./dist/cjs/src/components/index.js"
     },
     "./components/*": {
-      "types": "./dist/src/components/*.d.ts",
-      "import": "./dist/src/components/*.js",
-      "require": "./dist/cjs/components/*.js"
+      "types": "./dist/types/components/*.d.ts",
+      "import": "./dist/esm/components/*.js",
+      "require": "./dist/cjs/src/components/*.js"
     },
     "./loader": {
-      "types": "./dist/src/loader/index.d.ts",
-      "import": "./dist/src/loader/index.js",
-      "require": "./dist/cjs/loader/index.js"
+      "types": "./dist/types/loader/index.d.ts",
+      "import": "./dist/esm/loader/index.js",
+      "require": "./dist/cjs/src/loader/index.js"
+    },
+    "./mdx-plugins": {
+      "types": "./dist/types/mdx-plugins/index.d.ts",
+      "import": "./dist/esm/mdx-plugins/index.js",
+      "require": "./dist/cjs/src/mdx-plugins/index.js"
     },
     "./next": {
-      "types": "./dist/src/next/index.d.ts",
-      "import": "./dist/cjs/next/index.js",
-      "require": "./dist/cjs/next/index.js"
+      "types": "./dist/types/next/index.d.ts",
+      "import": "./dist/cjs/src/next/index.js",
+      "require": "./dist/cjs/src/next/index.js"
     }
   },
   "typesVersions": {
     "*": {
       "assets": [
-        "./dist/src/assets/index.d.ts"
+        "./dist/types/assets/index.d.ts"
       ],
       "components": [
-        "./dist/src/components/index.d.ts"
+        "./dist/types/components/index.d.ts"
       ],
       "components/*": [
-        "./dist/src/components/*.d.ts"
+        "./dist/types/components/*.d.ts"
       ],
       "loader": [
-        "./dist/src/loader/index.d.ts"
+        "./dist/types/loader/index.d.ts"
+      ],
+      "mdx-plugins": [
+        "./dist/types/mdx-plugins/index.d.ts"
       ],
       "next": [
-        "./dist/src/next/index.d.ts"
+        "./dist/types/next/index.d.ts"
       ]
     }
   },
   "scripts": {
-    "build": "pnpm build:esm && pnpm build:cjs && pnpm build:types",
-    "build:esm": "swc src --out-dir dist --ignore **/*.test.ts",
-    "build:cjs": "tsup ",
-    "build:types": "tsc --emitDeclarationOnly --outDir dist/src",
-    "dev": "pnpm build:esm --watch",
+    "build": "pnpm build:esm && pnpm build:cjs",
+    "build:esm": "tsc --outDir dist/esm --declaration true --declarationDir dist/types",
+    "build:cjs": "swc src --out-dir dist/cjs --ignore **/*.test.ts --ignore **/*.examples.tsx --config-file .swcrc-cjs",
+    "dev": "concurrently \"pnpm build:esm --watch\" \"pnpm build:cjs --watch\"",
     "test": "jest"
   },
   "peerDependencies": {
@@ -108,6 +115,7 @@
     "@types/title": "^3.4.3",
     "@types/webpack-env": "1.18.5",
     "@types/ws": "^8.5.10",
+    "concurrently": "^8.2.2",
     "next": "14.2.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

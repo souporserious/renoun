@@ -12,5 +12,9 @@
         "pragmaFrag": "React.Fragment"
       }
     }
+  },
+  "module": {
+    "type": "commonjs",
+    "ignoreDynamic": true
   }
 }

@@ -1,20 +1,18 @@
 {
   "compilerOptions": {
-    "target": "esnext",
-    "lib": ["esnext", "dom"],
+    "target": "ESNext",
+    "lib": ["ESNext", "DOM"],
     "skipLibCheck": true,
     "strict": true,
     "forceConsistentCasingInFileNames": true,
     "esModuleInterop": true,
-    "module": "preserve",
-    "moduleResolution": "node",
+    "module": "Preserve",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "react",
-    "declaration": true,
     "rootDir": "./src",
     "outDir": "./dist"
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts"]
+  "exclude": ["src/**/*.examples.tsx", "**/*.test.ts", "dist", "node_modules"]
 }
