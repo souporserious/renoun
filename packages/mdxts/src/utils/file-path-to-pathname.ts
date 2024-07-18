@@ -1,5 +1,6 @@
 import { resolve, posix } from 'node:path'
-import slugify from '@sindresorhus/slugify'
+
+import { createSlug } from '../utils/create-slug'
 
 /** Converts a file system path to a URL-friendly pathname. */
 export function filePathToPathname(
@@ -103,7 +104,7 @@ export function filePathToPathname(
   // Convert camel and pascal case names to kebab case for case-insensitive paths
   // e.g. "ButtonGroup" -> "button-group"
   if (kebabCase) {
-    segments = segments.map((segment) => slugify(segment)).filter(Boolean)
+    segments = segments.map(createSlug).filter(Boolean)
   }
 
   return posix.join(posix.sep, ...segments)

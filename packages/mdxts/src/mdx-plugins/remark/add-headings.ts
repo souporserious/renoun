@@ -1,5 +1,7 @@
 import type { Root, Heading } from 'mdast'
 
+import { createSlug } from '../../utils/create-slug'
+
 export type Headings = {
   id: any
   text: string
@@ -10,18 +12,27 @@ export type Headings = {
 export function addHeadings() {
   return async function (tree: Root) {
     const { valueToEstree } = await import('estree-util-value-to-estree')
-    const { slugifyWithCounter } = await import('@sindresorhus/slugify')
-    const slugify = slugifyWithCounter()
     const headings: Headings = []
+    const headingCounts = new Map()
 
     const { visit } = await import('unist-util-visit')
     const { toString } = await import('mdast-util-to-string')
 
     visit(tree, 'heading', (node: Heading) => {
       const text = node.children.map((child) => toString(child)).join('')
+      let id = createSlug(text)
+
+      if (headingCounts.has(id)) {
+        const count = headingCounts.get(id) + 1
+        headingCounts.set(id, count)
+        id = `${id}-${count}`
+      } else {
+        headingCounts.set(id, 1)
+      }
+
       const heading = {
         text,
-        id: slugify(text),
+        id,
         depth: node.depth,
       }
       headings.push(heading)

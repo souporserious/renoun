@@ -1,7 +1,7 @@
 import * as React from 'react'
 import * as jsxRuntime from 'react/jsx-runtime'
 import * as jsxDevRuntime from 'react/jsx-dev-runtime'
-import { compile, run, type CompileOptions } from '@mdx-js/mdx'
+import type { CompileOptions } from '@mdx-js/mdx'
 import 'server-only'
 
 import type { MDXComponents } from './MDXComponents'
@@ -33,6 +33,7 @@ export async function MDXContent({
   /** Base URL to resolve imports and named exports from (e.g. `import.meta.url`) */
   baseUrl?: string
 }) {
+  const { compile, run } = await import('@mdx-js/mdx')
   const code = await compile(value, {
     baseUrl,
     rehypePlugins,

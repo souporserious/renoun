@@ -1,5 +1,5 @@
-import { getHighlighter as getShikiHighlighter } from 'shiki/bundle/web'
 import type {
+  getHighlighter as getShikiHighlighter,
   BundledLanguage,
   LanguageInput,
   SpecialLanguage,
@@ -24,7 +24,9 @@ let highlighter: Awaited<ReturnType<typeof getShikiHighlighter>> | null = null
 /** Converts a string of code to an array of highlighted tokens. */
 export async function getHighlighter() {
   if (highlighter === null) {
-    highlighter = await getShikiHighlighter({
+    highlighter = await (
+      await import('shiki/bundle/web')
+    ).getHighlighter({
       langs: defaultLanguages,
       themes: [getTheme()],
     })

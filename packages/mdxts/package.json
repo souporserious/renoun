@@ -133,7 +133,6 @@
     "@preact/signals-core": "^1.6.0",
     "@remark-embedder/core": "^3.0.3",
     "@remark-embedder/transformer-codesandbox": "^3.0.0",
-    "@sindresorhus/slugify": "^2.2.1",
     "@tsxmod/utils": "^0.5.1",
     "case-anything": "^2.1.13",
     "chalk": "^4.1.2",

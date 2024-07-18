@@ -1,10 +1,10 @@
-import { bundledThemes, normalizeTheme } from 'shiki/bundle/web'
 import { readFileSync } from 'node:fs'
 
 let theme: Record<string, any> | null = null
 
 /** Gets a normalized VS Code theme. */
 export async function getTheme() {
+  const { bundledThemes, normalizeTheme } = await import('shiki/bundle/web')
   const themePath = process.env.MDXTS_THEME_PATH
 
   if (themePath === undefined) {
