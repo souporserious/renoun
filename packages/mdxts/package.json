@@ -30,6 +30,9 @@
   "sideEffects": false,
   "main": "./dist/esm/index.js",
   "types": "./dist/types/index.d.ts",
+  "bin": {
+    "mdxts": "./dist/cjs/src/cli/index.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/types/index.d.ts",
@@ -65,6 +68,11 @@
       "types": "./dist/types/next/index.d.ts",
       "import": "./dist/cjs/src/next/index.js",
       "require": "./dist/cjs/src/next/index.js"
+    },
+    "./project": {
+      "types": "./dist/types/project/index.d.ts",
+      "import": "./dist/esm/project/index.js",
+      "require": "./dist/cjs/src/project/index.js"
     }
   },
   "typesVersions": {
@@ -86,6 +94,9 @@
       ],
       "next": [
         "./dist/types/next/index.d.ts"
+      ],
+      "project": [
+        "./dist/types/project/index.d.ts"
       ]
     }
   },
@@ -134,6 +145,7 @@
     "@remark-embedder/core": "^3.0.3",
     "@remark-embedder/transformer-codesandbox": "^3.0.0",
     "@tsxmod/utils": "^0.5.1",
+    "bufferutil": "^4.0.8",
     "case-anything": "^2.1.13",
     "chalk": "^4.1.2",
     "chokidar": "^3.6.0",
@@ -168,6 +180,6 @@
     "vfile": "^6.0.1",
     "vscode-oniguruma": "^2.0.1",
     "vscode-textmate": "^9.0.0",
-    "ws": "^8.17.0"
+    "ws": "^8.18.0"
   }
 }

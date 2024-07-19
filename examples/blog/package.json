@@ -2,8 +2,8 @@
   "private": true,
   "name": "@examples/blog",
   "scripts": {
-    "dev": "next",
-    "build": "next build",
+    "dev": "mdxts next",
+    "build": "mdxts next build",
     "start": "next start"
   },
   "dependencies": {
