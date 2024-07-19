@@ -3,6 +3,13 @@ import { signal, effect } from '@preact/signals-core'
 import { setTimeout } from 'node:timers'
 import WebSocket from 'ws'
 
+if (process.env.MDXTS_PORT_NUMBER === undefined) {
+  throw new Error(
+    '[mdxts] The MDXTS_PORT_NUMBER environment variable is "undefined". Make sure the mdxts cli is running.'
+  )
+}
+
+const ws = new WebSocket(`ws://localhost:${process.env.MDXTS_PORT_NUMBER}`)
 const isServerReady = signal(false)
 
 function whenServerReady() {
@@ -21,18 +28,35 @@ function whenServerReady() {
   })
 }
 
-if (process.env.MDXTS_PORT_NUMBER === undefined) {
-  throw new Error(
-    '[mdxts] The MDXTS_PORT_NUMBER environment variable is "undefined". Make sure the mdxts cli is running.'
-  )
-}
-
-const ws = new WebSocket(`ws://localhost:${process.env.MDXTS_PORT_NUMBER}`)
-
 ws.on('open', () => {
   isServerReady.value = true
 })
 
+/** Sends a message to the server and waits for a response. */
+function send<ReturnValue>(type: string, data?: any, timeout: number = 60000) {
+  ws.send(JSON.stringify({ type, data }))
+
+  return new Promise<ReturnValue>((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(
+        new Error(`Server response timed out after one minute for "${type}"`)
+      )
+    }, timeout)
+
+    function handleMessage(message: WebSocket.MessageEvent) {
+      const event = JSON.parse(message.toString())
+      if (event.type === `${type}:done`) {
+        resolve(event.data)
+        clearTimeout(timeoutId)
+        ws.off('message', handleMessage)
+      }
+    }
+
+    ws.on('message', handleMessage)
+  })
+}
+
+/** Creates a project based on the provided options. */
 export function createProject(projectOptions: ProjectOptions) {
   let projectInitialized = false
 
@@ -46,37 +70,7 @@ export function createProject(projectOptions: ProjectOptions) {
 
     projectInitialized = true
 
-    ws.send(JSON.stringify({ type: 'initialize', options }))
-
-    await new Promise<void>((resolve, reject) => {
-      function handleMessage(event: WebSocket.MessageEvent) {
-        const { type } = JSON.parse(event.toString())
-        if (type === 'initialize:done') {
-          resolve()
-          ws.removeEventListener('message', handleMessage)
-        }
-      }
-      ws.on('message', handleMessage)
-
-      setTimeout(() => {
-        reject(new Error('Project initialization timed out'))
-      }, 10000)
-    })
-  }
-
-  function send(type: string, data?: any) {
-    ws.send(JSON.stringify({ type, data }))
-
-    return new Promise((resolve) => {
-      function handleMessage(message: WebSocket.MessageEvent) {
-        const event = JSON.parse(message.toString())
-        if (event.type === `${type}:done`) {
-          resolve(event.data)
-          ws.off('message', handleMessage)
-        }
-      }
-      ws.on('message', handleMessage)
-    })
+    await send<void>('initialize', options)
   }
 
   return {
@@ -87,7 +81,7 @@ export function createProject(projectOptions: ProjectOptions) {
       showErrors?: boolean
     }) => {
       await initializeProject(projectOptions)
-      return send('analyze', options)
+      return send<{}>('analyze', options)
     },
   }
 }
