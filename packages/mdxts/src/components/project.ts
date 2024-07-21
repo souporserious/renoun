@@ -13,5 +13,3 @@ export const project = new Project({
   },
   useInMemoryFileSystem: typeof window !== 'undefined',
 })
-
-export const languageService = project.getLanguageService().compilerObject

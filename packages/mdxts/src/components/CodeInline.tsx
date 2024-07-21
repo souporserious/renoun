@@ -2,10 +2,10 @@ import React, { Fragment } from 'react'
 import { css, type CSSProp } from 'restyle'
 import 'server-only'
 
-import { getThemeColors } from '../index'
+import { getThemeColors } from '../utils/get-theme-colors'
 import { CopyButton } from './CodeBlock/CopyButton'
-import type { Languages, Token } from './CodeBlock/get-tokens'
-import { getTokens } from './CodeBlock/get-tokens'
+import type { Languages, Token } from '../utils/get-tokens'
+import { getTokens } from '../utils/get-tokens'
 
 export type CodeInlineProps = {
   /** Code snippet to be highlighted. */
@@ -44,12 +44,13 @@ export async function CodeInline({
   className,
   style,
 }: CodeInlineProps) {
-  const tokens = await getTokens(
-    value
-      // Trim extra whitespace from inline code blocks since it's difficult to read.
-      .replace(/\s+/g, ' '),
-    language
-  )
+  const tokens: any[] = []
+  // const tokens = await getTokens(
+  //   value
+  //     // Trim extra whitespace from inline code blocks since it's difficult to read.
+  //     .replace(/\s+/g, ' '),
+  //   language
+  // )
   const theme = await getThemeColors()
   const [classNames, styles] = css({
     padding: `${paddingY} ${paddingX} 0`,
@@ -86,9 +87,9 @@ export async function CodeInline({
       >
         {tokens.map((line, lineIndex) => (
           <Fragment key={lineIndex}>
-            {line.map((token, tokenIndex) => (
+            {/* {line.map((token, tokenIndex) => (
               <Token key={tokenIndex} token={token} />
-            ))}
+            ))} */}
             {lineIndex === tokens.length - 1 ? null : '\n'}
           </Fragment>
         ))}

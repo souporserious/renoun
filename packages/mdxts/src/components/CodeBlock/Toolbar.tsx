@@ -1,5 +1,5 @@
 import React from 'react'
-import { getThemeColors } from '../../index'
+import { getThemeColors } from '../../utils/get-theme-colors'
 import { getContext } from '../../utils/context'
 import { CopyButton } from './CopyButton'
 import { Context } from './Context'

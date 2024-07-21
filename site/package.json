@@ -3,8 +3,8 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "rm -rf .next && next dev -p 4000",
-    "build": "next build",
+    "dev": "rm -rf .next && mdxts next dev -p 4000",
+    "build": "mdxts next build",
     "lint": "next lint",
     "test": "next test"
   },

@@ -1,14 +1,13 @@
 import type { bundledLanguages, bundledThemes } from 'shiki/bundle/web'
-import type { SourceFile, Diagnostic, ts } from 'ts-morph'
+import type { SourceFile, Diagnostic, ts, Project } from 'ts-morph'
 import { Node, SyntaxKind } from 'ts-morph'
 import { getDiagnosticMessageText } from '@tsxmod/utils'
 import { join, posix } from 'node:path'
 import { findRoot } from '@manypkg/find-root'
 import chalk from 'chalk'
 
-import { getThemeColors } from '../../index'
-import { isJsxOnly } from '../../utils/is-jsx-only'
-import { project } from '../project'
+import { getThemeColors } from './get-theme-colors'
+import { isJsxOnly } from './is-jsx-only'
 import { getHighlighter } from './get-highlighter'
 import { splitTokenByRanges } from './split-tokens-by-ranges'
 import { getTrimmedSourceFileText } from './get-trimmed-source-file-text'
@@ -84,6 +83,7 @@ export type GetTokens = (
 
 /** Converts a string of code to an array of highlighted tokens. */
 export async function getTokens(
+  project: Project,
   value: string,
   language: Languages = 'plaintext',
   filename?: string,
@@ -112,13 +112,11 @@ export async function getTokens(
   const finalLanguage = getLanguage(language)
   const theme = await getThemeColors()
   const highlighter = await getHighlighter()
-  const { tokens } = highlighter.codeToTokens(
-    sourceFile ? getTrimmedSourceFileText(sourceFile) : value,
-    {
-      theme: 'mdxts',
-      lang: finalLanguage as any,
-    }
-  )
+  const sourceText = sourceFile ? getTrimmedSourceFileText(sourceFile) : value
+  const { tokens } = highlighter.codeToTokens(sourceText, {
+    theme: 'mdxts',
+    lang: finalLanguage as any,
+  })
   const sourceFileDiagnostics = getDiagnostics(
     sourceFile,
     allowErrors,

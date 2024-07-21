@@ -1,6 +1,6 @@
 import { CSSProperties } from 'react'
 import { createContext } from '../../utils/context'
-import type { getTokens } from './get-tokens'
+import type { getTokens } from '../../utils/get-tokens'
 
 export type ContextValue = {
   value: string

@@ -1,49 +1,60 @@
 import crypto from 'node:crypto'
 import { join, posix, isAbsolute } from 'node:path'
 import { readFile } from 'node:fs/promises'
-import type { SourceFile } from 'ts-morph'
+import { Project, SourceFile } from 'ts-morph'
 import { format, resolveConfig } from 'prettier'
-import 'server-only'
 
-import { getPathRelativeToPackage } from '../../utils/get-relative-path-as-package-import'
-import { isJsxOnly } from '../../utils/is-jsx-only'
-import type { Languages } from './get-tokens'
-import { getLanguage } from './get-tokens'
-import { project } from '../project'
+import { getLanguage, type Languages } from './get-language'
+import { isJsxOnly } from './is-jsx-only'
+import type { ExclusiveUnion } from '../types'
 
 type BaseParseMetadataOptions = {
+  project: Project
   filename?: string
   language?: Languages
   allowErrors?: boolean | string
 }
 
 export type ParseMetadataOptions = BaseParseMetadataOptions &
-  (
+  ExclusiveUnion<
     | { value: string }
     | {
         source: string
         workingDirectory?: string
       }
-  )
+  >
+
+export type ParseMetadataResult = {
+  filename: string
+  filenameLabel: string
+  value: string
+  language: Languages
+}
 
 /** Parses and normalizes source text metadata. */
 export async function parseSourceTextMetadata({
+  project,
   filename: filenameProp,
   language,
   allowErrors = false,
   ...props
-}: ParseMetadataOptions) {
+}: ParseMetadataOptions): Promise<ParseMetadataResult> {
   let finalValue: string = ''
   let finalLanguage = language
   let id = 'source' in props ? props.source : filenameProp
 
   if ('value' in props) {
-    finalValue = props.value
+    if (props.value) {
+      finalValue = props.value
 
-    if (id === undefined) {
-      const hex = crypto.createHash('sha256').update(props.value).digest('hex')
-      if (hex) {
-        id = hex
+      if (id === undefined) {
+        const hex = crypto
+          .createHash('sha256')
+          .update(props.value)
+          .digest('hex')
+        if (hex) {
+          id = hex
+        }
       }
     }
   } else if ('source' in props) {
@@ -159,11 +170,9 @@ export async function parseSourceTextMetadata({
     .replace(/\d+\./, '') // Remove ordered number prefix
 
   return {
-    value: sourceFile ? sourceFile.getFullText() : finalValue,
-    language: finalLanguage,
-    isJsxOnly: jsxOnly,
-    sourceFile,
     filename,
     filenameLabel,
+    value: sourceFile ? sourceFile.getFullText() : finalValue,
+    language: finalLanguage,
   }
 }

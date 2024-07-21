@@ -4,6 +4,8 @@ import { createServer, getPort } from '../project/server'
 
 const [firstArgument, ...restArguments] = process.argv.slice(2)
 
+process.env.WS_NO_BUFFER_UTIL = 'true'
+
 const wss = createServer()
 const usageMessage = `Usage:   mdxts <your-framework-args>\nExample: mdxts next dev`
 

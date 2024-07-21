@@ -1,6 +1,8 @@
 import { Project, ts, type ProjectOptions } from 'ts-morph'
 import { WebSocketServer } from 'ws'
 
+import { analyzeSourceText } from '../utils/analyze-source-text'
+
 const projects = new Map<string, Project>()
 const DEFAULT_OPTIONS = {
   compilerOptions: {
@@ -42,24 +44,24 @@ export function createServer() {
       }
       let projectId: string
 
-      ws.on('message', (event) => {
+      ws.on('message', async (event) => {
         const { type, data } = JSON.parse(event.toString())
 
         if (type === 'initialize') {
           projectId = event.toString()
           if (projects.has(projectId)) {
             send('initialize:done')
-            return
+          } else {
+            const project = new Project(data || DEFAULT_OPTIONS)
+            projects.set(projectId, project)
+            send('initialize:done')
           }
-          const project = new Project(data || DEFAULT_OPTIONS)
-          projects.set(projectId, project)
-          send('initialize:done')
-        }
-
-        if (type === 'analyze') {
+        } else if (type === 'analyzeSourceText') {
           const project = getProject(projectId)
-          // TODO: analysis
-          send('analyze:done', {})
+          const result = await analyzeSourceText({ project, ...data })
+          send('analyzeSourceText:done', result)
+        } else {
+          throw new Error(`Unknown message type: ${type}`)
         }
       })
     })

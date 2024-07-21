@@ -20,3 +20,15 @@ export const allPosts = createSource<{
 })
 
 export const allData = mergeSources(allDocs, allPackages)
+
+// export const Project = createProject()
+
+// export const Posts = Project.createSource<{
+//   frontMatter: {
+//     title: string
+//     summary: string
+//   }
+// }>('posts/*.mdx', {
+//   baseDirectory: 'posts',
+//   basePathname: 'blog',
+// })

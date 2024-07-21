@@ -5,7 +5,7 @@ import type {
   SpecialLanguage,
 } from 'shiki/bundle/web'
 
-import { getTheme } from '../../utils/get-theme'
+import { getTheme } from './get-theme'
 
 const defaultLanguages = [
   'css',

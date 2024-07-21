@@ -1,13 +1,13 @@
 import React, { Fragment } from 'react'
 import { css, type CSSProp } from 'restyle'
 
-import { getThemeColors } from '../../index'
+import { getThemeColors } from '../../utils/get-theme-colors'
 import { getContext } from '../../utils/context'
+import type { GetTokens } from '../../utils/get-tokens'
 import { Context } from './Context'
 import { QuickInfo } from './QuickInfo'
 import { QuickInfoProvider } from './QuickInfoProvider'
 import { Symbol } from './Symbol'
-import type { GetTokens } from './get-tokens'
 
 export type TokensProps = {
   /** Syntax highlighted tokens from `getTokens` to render. */

@@ -1,22 +1,21 @@
 import React from 'react'
 import 'server-only'
 
-import { getThemeColors } from '../../index'
+import { getThemeColors } from '../../utils/get-theme-colors'
 import { CopyButton } from './CopyButton'
 import { Tokens } from './Tokens'
-import type { Languages } from './get-tokens'
-import { getTokens } from './get-tokens'
+import type { Languages } from '../../utils/get-tokens'
 import type { ContextValue } from './Context'
 import { Context } from './Context'
 import { CopyButtonContextProvider } from './contexts'
 import { LineNumbers } from './LineNumbers'
 import { Pre } from './Pre'
 import { Toolbar } from './Toolbar'
-import { parseSourceTextMetadata } from './parse-source-text-metadata'
 import {
   generateFocusedLinesGradient,
   generateHighlightedLinesGradient,
 } from './utils'
+import { createProject } from '../../project'
 
 export type BaseCodeBlockProps = {
   /** Name or path of the code block. Ordered filenames will be stripped from the name e.g. `01.index.tsx` becomes `index.tsx`. */
@@ -87,6 +86,8 @@ export type CodeBlockProps =
       workingDirectory?: string
     } & BaseCodeBlockProps)
 
+const project = createProject()
+
 /** Renders a `pre` element with syntax highlighting, type information, and type checking. */
 export async function CodeBlock({
   filename,
@@ -114,24 +115,18 @@ export async function CodeBlock({
     options.workingDirectory = props.workingDirectory
   }
 
-  const metadata = await parseSourceTextMetadata({
+  const { tokens, value, label } = await project.analyzeSourceText({
+    // Simplify the path for more legibile error messages.
+    sourcePath: sourcePath ? sourcePath.split(process.cwd()).at(1) : undefined,
     filename,
     language,
     allowErrors,
+    showErrors,
     ...options,
   })
-  const tokens = await getTokens(
-    metadata.value,
-    metadata.language,
-    metadata.filename,
-    allowErrors,
-    showErrors,
-    // Simplify the path for more legibile error messages.
-    sourcePath ? sourcePath.split(process.cwd()).at(1) : undefined
-  )
   const contextValue = {
-    value: metadata.value,
-    filenameLabel: filename || hasSource ? metadata.filenameLabel : undefined,
+    filenameLabel: filename || hasSource ? label : undefined,
+    value,
     highlightedLines,
     padding,
     sourcePath,
@@ -141,7 +136,7 @@ export async function CodeBlock({
   if ('children' in props) {
     return (
       <Context value={contextValue}>
-        <CopyButtonContextProvider value={metadata.value}>
+        <CopyButtonContextProvider value={value}>
           {props.children}
         </CopyButtonContextProvider>
       </Context>
@@ -279,7 +274,7 @@ export async function CodeBlock({
               />
             </code>
           )}
-          {allowCopy !== false && !shouldRenderToolbar ? (
+          {/* {allowCopy !== false && !shouldRenderToolbar ? (
             <CopyButton
               css={{
                 placeSelf: 'start end',
@@ -295,7 +290,7 @@ export async function CodeBlock({
               }}
               value={metadata.value}
             />
-          ) : null}
+          ) : null} */}
         </Pre>
       </Container>
     </Context>
