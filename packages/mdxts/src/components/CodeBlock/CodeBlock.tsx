@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { Suspense } from 'react'
 import 'server-only'
 
 import { createProject } from '../../project'
@@ -88,8 +88,7 @@ export type CodeBlockProps =
 
 const project = createProject()
 
-/** Renders a `pre` element with syntax highlighting, type information, and type checking. */
-export async function CodeBlock({
+export async function CodeBlockAsync({
   filename,
   language,
   highlightedLines,
@@ -294,5 +293,25 @@ export async function CodeBlock({
         </Pre>
       </Container>
     </Context>
+  )
+}
+
+/** Renders a `pre` element with syntax highlighting, type information, and type checking. */
+export function CodeBlock(props: CodeBlockProps) {
+  return (
+    <Suspense
+      fallback={
+        <div
+          style={{
+            height:
+              'value' in props && props.value
+                ? props.value.split('\n').length + 'lh'
+                : undefined,
+          }}
+        />
+      }
+    >
+      <CodeBlockAsync {...props} />
+    </Suspense>
   )
 }
