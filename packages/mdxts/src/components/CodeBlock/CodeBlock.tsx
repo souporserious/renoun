@@ -1,6 +1,7 @@
 import React from 'react'
 import 'server-only'
 
+import { createProject } from '../../project'
 import { getThemeColors } from '../../utils/get-theme-colors'
 import { CopyButton } from './CopyButton'
 import { Tokens } from './Tokens'
@@ -15,7 +16,6 @@ import {
   generateFocusedLinesGradient,
   generateHighlightedLinesGradient,
 } from './utils'
-import { createProject } from '../../project'
 
 export type BaseCodeBlockProps = {
   /** Name or path of the code block. Ordered filenames will be stripped from the name e.g. `01.index.tsx` becomes `index.tsx`. */

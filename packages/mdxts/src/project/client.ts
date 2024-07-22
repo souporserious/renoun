@@ -74,6 +74,8 @@ export function whenServerReady() {
   })
 }
 
+let eventIdCount = 0
+
 /** Sends a message to the server and waits for a response. */
 export function sendToServer<ReturnValue>(
   type: string,
@@ -84,7 +86,8 @@ export function sendToServer<ReturnValue>(
     return Promise.reject(new Error('WebSocket is not connected'))
   }
 
-  ws.send(JSON.stringify({ type, data }))
+  const id = eventIdCount++
+  ws.send(JSON.stringify({ type, data, id }))
 
   return new Promise<ReturnValue>((resolve, reject) => {
     const timeoutId = setTimeout(() => {
@@ -95,6 +98,9 @@ export function sendToServer<ReturnValue>(
 
     function handleMessage(message: WebSocket.MessageEvent) {
       const event = JSON.parse(message.toString())
+      if (event.id !== id) {
+        return
+      }
       if (event.type === `${type}:done`) {
         resolve(event.data)
         clearTimeout(timeoutId)
