@@ -3,7 +3,8 @@ import type {
   AnalyzeSourceTextOptions,
   AnalyzeSourceTextResult,
 } from '../utils/analyze-source-text'
-import { ProjectOptions } from './types'
+import type { DistributiveOmit } from '../types'
+import type { ProjectOptions } from './types'
 
 /** Creates a project based on the provided options. */
 export function createProject(projectOptions?: ProjectOptions) {
@@ -22,7 +23,9 @@ export function createProject(projectOptions?: ProjectOptions) {
   }
 
   return {
-    analyzeSourceText: async (options: AnalyzeSourceTextOptions) => {
+    analyzeSourceText: async (
+      options: DistributiveOmit<AnalyzeSourceTextOptions, 'project'>
+    ) => {
       await initializeProject(projectOptions)
       return sendToServer<AnalyzeSourceTextResult>('analyzeSourceText', options)
     },

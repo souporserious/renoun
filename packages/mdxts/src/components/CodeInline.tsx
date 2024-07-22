@@ -1,11 +1,11 @@
-import React, { Fragment } from 'react'
+import React, { Fragment, Suspense } from 'react'
 import { css, type CSSProp } from 'restyle'
 import 'server-only'
 
+import { createProject } from '../project'
 import { getThemeColors } from '../utils/get-theme-colors'
-import { CopyButton } from './CodeBlock/CopyButton'
 import type { Languages, Token } from '../utils/get-tokens'
-import { getTokens } from '../utils/get-tokens'
+import { CopyButton } from './CodeBlock/CopyButton'
 
 export type CodeInlineProps = {
   /** Code snippet to be highlighted. */
@@ -33,8 +33,29 @@ export type CodeInlineProps = {
   style?: React.CSSProperties
 }
 
-/** Renders an inline `code` element with optional syntax highlighting and copy button. */
-export async function CodeInline({
+const project = createProject()
+
+function Token({ token }: { token: Token }) {
+  if (token.isBaseColor || token.isWhitespace) {
+    return token.value
+  }
+
+  const [classNames, styles] = css({
+    fontStyle: token.fontStyle,
+    fontWeight: token.fontWeight,
+    textDecoration: token.textDecoration,
+    color: token.color,
+  })
+
+  return (
+    <span className={classNames}>
+      {token.value}
+      {styles}
+    </span>
+  )
+}
+
+async function CodeInlineAsync({
   value,
   language,
   allowCopy,
@@ -44,13 +65,12 @@ export async function CodeInline({
   className,
   style,
 }: CodeInlineProps) {
-  const tokens: any[] = []
-  // const tokens = await getTokens(
-  //   value
-  //     // Trim extra whitespace from inline code blocks since it's difficult to read.
-  //     .replace(/\s+/g, ' '),
-  //   language
-  // )
+  const { tokens } = await project.analyzeSourceText({
+    value: value
+      // Trim extra whitespace from inline code blocks since it's difficult to read.
+      .replace(/\s+/g, ' '),
+    language,
+  })
   const theme = await getThemeColors()
   const [classNames, styles] = css({
     padding: `${paddingY} ${paddingX} 0`,
@@ -87,9 +107,9 @@ export async function CodeInline({
       >
         {tokens.map((line, lineIndex) => (
           <Fragment key={lineIndex}>
-            {/* {line.map((token, tokenIndex) => (
+            {line.map((token, tokenIndex) => (
               <Token key={tokenIndex} token={token} />
-            ))} */}
+            ))}
             {lineIndex === tokens.length - 1 ? null : '\n'}
           </Fragment>
         ))}
@@ -108,22 +128,22 @@ export async function CodeInline({
   )
 }
 
-function Token({ token }: { token: Token }) {
-  if (token.isBaseColor || token.isWhitespace) {
-    return token.value
-  }
-
-  const [classNames, styles] = css({
-    fontStyle: token.fontStyle,
-    fontWeight: token.fontWeight,
-    textDecoration: token.textDecoration,
-    color: token.color,
-  })
-
+/** Renders an inline `code` element with optional syntax highlighting and copy button. */
+export async function CodeInline(props: CodeInlineProps) {
   return (
-    <span className={classNames}>
-      {token.value}
-      {styles}
-    </span>
+    <Suspense
+      fallback={
+        <span
+          style={{
+            display: 'inline-block',
+            width: props.value.length + 'ch',
+            height: '1lh',
+            padding: `${props.paddingY} ${props.paddingX} 0`,
+          }}
+        />
+      }
+    >
+      <CodeInlineAsync {...props} />
+    </Suspense>
   )
 }
