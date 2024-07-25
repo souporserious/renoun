@@ -157,6 +157,19 @@ function updateImportMap(filePattern: string, sourceFiles: SourceFile[]) {
   )
 }
 
+const projectCache = new Map<string, Project>()
+
+function resolveProject(tsConfigFilePath: string): Project {
+  if (!projectCache.has(tsConfigFilePath)) {
+    const project = new Project({
+      skipAddingFilesFromTsConfig: true,
+      tsConfigFilePath,
+    })
+    projectCache.set(tsConfigFilePath, project)
+  }
+  return projectCache.get(tsConfigFilePath)!
+}
+
 /**
  * Creates a collection of files based on a specified file pattern.
  *
@@ -181,11 +194,8 @@ export function createCollection<
   filePattern: FilePattern,
   options?: CollectionOptions
 ): Collection<AllExports> {
-  const project = new Project({
-    skipAddingFilesFromTsConfig: true,
-    tsConfigFilePath: options?.tsConfigFilePath ?? 'tsconfig.json',
-  })
-  const tsConfigFilePath = project.getCompilerOptions().configFilePath as string
+  const tsConfigFilePath = options?.tsConfigFilePath ?? 'tsconfig.json'
+  const project = resolveProject(tsConfigFilePath)
   const aliases = new AliasesFromTSConfig(tsConfigFilePath)
   const absoluteGlobPattern = aliases.apply(filePattern)
   const absoluteBaseGlobPattern = globParent(absoluteGlobPattern)
