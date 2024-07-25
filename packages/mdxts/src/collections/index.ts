@@ -94,8 +94,8 @@ export function setImports(
 }
 
 /** Removes the file extension from a file path. */
-function trimFileExtension(filePath: string) {
-  return filePath.replace(/\.[^/.]+$/, '')
+function trimFileExtensionAndLeadingSlash(filePath: string) {
+  return filePath.replace(/\.[^/.]+$/, '').slice(1)
 }
 
 const PACKAGE_NAME = 'mdxts'
@@ -173,14 +173,14 @@ function updateImportMap(filePattern: string, sourceFiles: SourceFile[]) {
  * @throws An error if no source files are found for the given pattern.
  */
 export function createCollection<
-  NamedExports extends FilePattern extends MdFilePattern | MdxFilePattern
+  AllExports extends FilePattern extends MdFilePattern | MdxFilePattern
     ? { default: MDXContent; [key: string]: unknown }
     : { [key: string]: unknown },
   FilePattern extends AnyFilePattern = AnyFilePattern,
 >(
   filePattern: FilePattern,
   options?: CollectionOptions
-): Collection<NamedExports> {
+): Collection<AllExports> {
   const project = new Project({
     skipAddingFilesFromTsConfig: true,
     tsConfigFilePath: options?.tsConfigFilePath ?? 'tsconfig.json',
@@ -203,7 +203,7 @@ export function createCollection<
   updateImportMap(filePattern, sourceFiles)
 
   return {
-    async getSource(slug: string): Promise<File<NamedExports>> {
+    async getSource(slug: string): Promise<File<AllExports>> {
       const matchingSourceFiles = sourceFiles.filter((sourceFile) => {
         let sourceFileSlug = sourceFile
           .getFilePath()
@@ -233,10 +233,9 @@ export function createCollection<
 
       const slugExtension = Array.from(slugExtensions).at(0)?.slice(1)
       const importKey = `${slugExtension}:${filePattern}`
-      // console.log({ importMaps, importKey })
       const getImport = importMaps.get(importKey) as (
         slug: string
-      ) => Promise<{ default: unknown } & NamedExports>
+      ) => Promise<AllExports>
 
       if (!getImport) {
         throw new Error(
@@ -245,12 +244,11 @@ export function createCollection<
       }
 
       const sourceFile = matchingSourceFiles[0]
-      const importPath = trimFileExtension(
+      const importPath = trimFileExtensionAndLeadingSlash(
         sourceFile.getFilePath().replace(absoluteBaseGlobPattern, '')
-      ).slice(1)
-      const { default: defaultExport, ...restExports } =
-        await getImport(importPath)
-      const namedExports = restExports as NamedExports
+      )
+      const moduleExports = await getImport(importPath)
+      const { default: defaultExport, ...namedExports } = moduleExports
 
       return {
         getLabel() {
@@ -260,7 +258,7 @@ export function createCollection<
           return ''
         },
         getSiblings() {
-          return [] as File<NamedExports>[]
+          return [] as File<AllExports>[]
         },
         getDefaultExport() {
           if (!defaultExport) {
@@ -271,11 +269,13 @@ export function createCollection<
 
           return {
             getValue() {
-              return defaultExport as NamedExports['default']
+              return defaultExport as AllExports['default']
             },
           }
         },
-        getNamedExport<Name extends keyof NamedExports>(name: Name) {
+        getNamedExport<Name extends keyof Omit<AllExports, 'default'>>(
+          name: Name
+        ) {
           return {
             getName() {
               return name as Name
@@ -292,7 +292,7 @@ export function createCollection<
                 )
               }
 
-              return source as NamedExports[Name]
+              return source as AllExports[Name]
             },
           }
         },
@@ -306,11 +306,11 @@ export function createCollection<
             },
           }))
         },
-      } as File<NamedExports>
+      } as File<AllExports>
     },
 
-    async getAllFiles(): Promise<File<NamedExports>[]> {
-      return [] as File<NamedExports>[]
+    async getAllFiles(): Promise<File<AllExports>[]> {
+      return [] as File<AllExports>[]
     },
   }
 }
