@@ -164,6 +164,9 @@ importers:
       '@tsxmod/utils':
         specifier: ^0.5.1
         version: 0.5.1(ts-morph@22.0.0)
+      aliases-from-tsconfig:
+        specifier: ^0.2.0
+        version: 0.2.0
       case-anything:
         specifier: ^2.1.13
         version: 2.1.13
@@ -2501,6 +2504,13 @@ packages:
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
       uri-js: 4.4.1
+    dev: false
+
+  /aliases-from-tsconfig@0.2.0:
+    resolution: {integrity: sha512-/mJeb0j23ASO/pP5PxQGr9wRT6BN7z2pCpn0LgtF6GbW36JecfabDuZHlLTnfO1futFOLeVqJDYx+vXrn1jsmw==}
+    engines: {node: '>= 16'}
+    dependencies:
+      '@types/node': 20.12.14
     dev: false
 
   /ansi-colors@4.1.3:

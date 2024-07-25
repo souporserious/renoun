@@ -21,14 +21,24 @@ export const allPosts = createSource<{
 
 export const allData = mergeSources(allDocs, allPackages)
 
-// export const Project = createProject()
+// import { createCollection, type MDXContent } from 'mdxts'
 
-// export const Posts = Project.createSource<{
+// export const allDocs = createCollection('docs/**/*.mdx')
+
+// export const allPosts = createCollection<{
+//   default: MDXContent,
 //   frontMatter: {
 //     title: string
 //     summary: string
+//     author: string
 //   }
 // }>('posts/*.mdx', {
 //   baseDirectory: 'posts',
 //   basePathname: 'blog',
+// })
+
+// export const allPackages = createCollection('src/**/*.{ts,tsx}', {
+//   baseDirectory: 'src',
+//   basePathname: 'packages',
+//   tsConfigFilePath: '../packages/mdxts/tsconfig.json',
 // })

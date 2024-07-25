@@ -145,6 +145,7 @@
     "@remark-embedder/core": "^3.0.3",
     "@remark-embedder/transformer-codesandbox": "^3.0.0",
     "@tsxmod/utils": "^0.5.1",
+    "aliases-from-tsconfig": "^0.2.0",
     "case-anything": "^2.1.13",
     "chalk": "^4.1.2",
     "chokidar": "^3.6.0",
