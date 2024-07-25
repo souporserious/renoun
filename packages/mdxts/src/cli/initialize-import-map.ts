@@ -3,6 +3,9 @@ import globParent from 'glob-parent'
 import { Project, Node, SyntaxKind, SourceFile } from 'ts-morph'
 import AliasesFromTSConfig from 'aliases-from-tsconfig'
 
+const PACKAGE_NAME = 'mdxts'
+const PACKAGE_DIRECTORY = `./${PACKAGE_NAME}`
+
 /**
  * Generates the initial import maps for each file pattern at the root of the project.
  *
@@ -13,10 +16,6 @@ function initializeImportMap(
   patterns: string[],
   sourceFilesMap: Map<string, SourceFile[]>
 ) {
-  if (!existsSync('.mdxts')) {
-    mkdirSync('.mdxts')
-  }
-
   const importMapEntries = patterns.flatMap((filePattern) => {
     const sourceFiles = sourceFilesMap.get(filePattern) || []
     const baseGlobPattern = globParent(filePattern)
@@ -30,14 +29,12 @@ function initializeImportMap(
     })
   })
 
-  const packageName = 'project'
-
   writeFileSync(
-    '.mdxts/index.js',
+    `${PACKAGE_DIRECTORY}/index.js`,
     [
-      `import { setImports } from 'node_modules/${packageName}';`,
+      `import { setImports } from 'node_modules/${PACKAGE_NAME}';`,
       `setImports([\n${importMapEntries.join(',\n')}\n]);`,
-      `export * from 'node_modules/${packageName}';`,
+      `export * from 'node_modules/${PACKAGE_NAME}';`,
     ].join('\n')
   )
 }
@@ -84,8 +81,8 @@ export function initializeImportMapFromCollections() {
 
   new Project({ tsConfigFilePath: 'tsconfig.json' })
     .createSourceFile(
-      'collection.ts',
-      `import { createCollection } from 'mdxts';`
+      '_.ts',
+      `import { createCollection } from '${PACKAGE_NAME}';`
     )
     .getFirstDescendantByKindOrThrow(SyntaxKind.Identifier)
     .findReferencesAsNodes()
@@ -103,5 +100,10 @@ export function initializeImportMapFromCollections() {
   const filePatternsArray = Array.from(filePatterns)
   const sourceFilesMap = collectSourceFiles(filePatternsArray, 'tsconfig.json')
 
-  initializeImportMap(filePatternsArray, sourceFilesMap)
+  if (filePatternsArray.length > 0) {
+    if (!existsSync(PACKAGE_DIRECTORY)) {
+      mkdirSync(PACKAGE_DIRECTORY)
+    }
+    initializeImportMap(filePatternsArray, sourceFilesMap)
+  }
 }

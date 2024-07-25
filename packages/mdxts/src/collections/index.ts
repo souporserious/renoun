@@ -1,5 +1,5 @@
 import type { MDXContent } from 'mdx/types'
-import { Project } from 'ts-morph'
+import { Project, type SourceFile } from 'ts-morph'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import AliasesFromTSConfig from 'aliases-from-tsconfig'
 import globParent from 'glob-parent'
@@ -98,6 +98,65 @@ function trimFileExtension(filePath: string) {
   return filePath.replace(/\.[^/.]+$/, '')
 }
 
+const PACKAGE_NAME = 'mdxts'
+const PACKAGE_DIRECTORY = `.${PACKAGE_NAME}`
+
+/** Updates the import map for a file pattern and its source files. */
+function updateImportMap(filePattern: string, sourceFiles: SourceFile[]) {
+  const baseGlobPattern = globParent(filePattern)
+  const allExtensions = Array.from(
+    new Set(sourceFiles.map((sourceFile) => sourceFile.getExtension()))
+  )
+  const nextImportMapEntries = allExtensions.map((extension) => {
+    const trimmedExtension = extension.slice(1)
+    return `['${trimmedExtension}:${filePattern}', (slug) => import(\`${baseGlobPattern}/\${slug}${extension}\`)]`
+  })
+  let previousImportMapEntries: string[] = []
+
+  if (existsSync(`${PACKAGE_DIRECTORY}/index.js`)) {
+    const previousImportMapLines = readFileSync(
+      `${PACKAGE_DIRECTORY}/index.js`,
+      'utf-8'
+    )
+      .split('\n')
+      .filter(Boolean)
+    const importMapStartIndex = previousImportMapLines.findIndex((line) =>
+      line.includes('setImports([')
+    )
+    const importMapEndIndex = previousImportMapLines.findIndex((line) =>
+      line.includes(']);')
+    )
+    previousImportMapEntries = previousImportMapLines
+      .slice(importMapStartIndex + 1, importMapEndIndex)
+      .map(
+        // trim space and reomve trailing comma if present
+        (line) => line.trim().replace(/,$/, '')
+      )
+  }
+
+  const mergedImportMapEntries = Array.from(
+    new Set(
+      previousImportMapEntries.concat(nextImportMapEntries).filter(Boolean)
+    )
+  )
+  const importMapEntriesString = mergedImportMapEntries
+    .map((entry) => `  ${entry}`)
+    .join(',\n')
+
+  if (!existsSync(PACKAGE_DIRECTORY)) {
+    mkdirSync(PACKAGE_DIRECTORY)
+  }
+
+  writeFileSync(
+    `${PACKAGE_DIRECTORY}/index.js`,
+    [
+      `import { setImports } from 'node_modules/${PACKAGE_NAME}';`,
+      `setImports([\n${importMapEntriesString}\n]);`,
+      `export * from 'node_modules/${PACKAGE_NAME}';`,
+    ].join('\n')
+  )
+}
+
 /**
  * Creates a collection of files based on a specified file pattern.
  *
@@ -140,56 +199,8 @@ export function createCollection<
     throw new Error(`No source files found for pattern: ${filePattern}`)
   }
 
-  const baseGlobPattern = globParent(filePattern)
-  const allExtensions = Array.from(
-    new Set(sourceFiles.map((sourceFile) => sourceFile.getExtension()))
-  )
-
-  /** Generate import maps for each file pattern at the root of the project */
-  if (!existsSync('.mdxts')) {
-    mkdirSync('.mdxts')
-  }
-
-  const importMapEntries = allExtensions.map((extension) => {
-    const trimmedExtension = extension.slice(1)
-    return `['${trimmedExtension}:${filePattern}', (slug) => import(\`${baseGlobPattern}/\${slug}${extension}\`)]`
-  })
-  const packageName = 'project'
-  let previousImportMapEntries: string[] = []
-
-  if (existsSync('.mdxts/index.js')) {
-    const previousImportMapLines = readFileSync('.mdxts/index.js', 'utf-8')
-      .split('\n')
-      .filter(Boolean)
-    const importMapStartIndex = previousImportMapLines.findIndex((line) =>
-      line.includes('setImports([')
-    )
-    const importMapEndIndex = previousImportMapLines.findIndex((line) =>
-      line.includes(']);')
-    )
-    previousImportMapEntries = previousImportMapLines
-      .slice(importMapStartIndex + 1, importMapEndIndex)
-      .map(
-        // trim space and reomve trailing comma if present
-        (line) => line.trim().replace(/,$/, '')
-      )
-  }
-
-  const mergedImportMapEntries = Array.from(
-    new Set(previousImportMapEntries.concat(importMapEntries).filter(Boolean))
-  )
-  const importMapEntriesString = mergedImportMapEntries
-    .map((entry) => `  ${entry}`)
-    .join(',\n')
-
-  writeFileSync(
-    '.mdxts/index.js',
-    [
-      `import { setImports } from 'node_modules/${packageName}';`,
-      `setImports([\n${importMapEntriesString}\n]);`,
-      `export * from 'node_modules/${packageName}';`,
-    ].join('\n')
-  )
+  /** Update the import map for the file pattern if it was not added when initializing the cli. */
+  updateImportMap(filePattern, sourceFiles)
 
   return {
     async getSource(slug: string): Promise<File<NamedExports>> {
