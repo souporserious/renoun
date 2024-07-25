@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
 import { createServer, getPort } from '../project/server'
+import { initializeImportMapFromCollections } from './initialize-import-map'
 
 const [firstArgument, ...restArguments] = process.argv.slice(2)
 
@@ -13,6 +14,8 @@ if (firstArgument === undefined) {
   console.error(usageMessage)
   process.exit(1)
 } else if (firstArgument === 'next' || firstArgument === 'waku') {
+  initializeImportMapFromCollections()
+
   const subProcess = spawn(firstArgument, restArguments, {
     stdio: 'inherit',
     shell: true,
