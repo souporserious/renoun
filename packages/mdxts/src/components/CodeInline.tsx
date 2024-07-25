@@ -2,7 +2,7 @@ import React, { Fragment, Suspense } from 'react'
 import { css, type CSSProp } from 'restyle'
 import 'server-only'
 
-import { createProject } from '../project'
+import { analyzeSourceText } from '../project'
 import { getThemeColors } from '../utils/get-theme-colors'
 import type { Languages, Token } from '../utils/get-tokens'
 import { CopyButton } from './CodeBlock/CopyButton'
@@ -32,8 +32,6 @@ export type CodeInlineProps = {
   /** Style to apply to the wrapping element. */
   style?: React.CSSProperties
 }
-
-const project = createProject()
 
 function Token({ token }: { token: Token }) {
   if (token.isBaseColor || token.isWhitespace) {
@@ -65,7 +63,7 @@ async function CodeInlineAsync({
   className,
   style,
 }: CodeInlineProps) {
-  const { tokens } = await project.analyzeSourceText({
+  const { tokens } = await analyzeSourceText({
     value: value
       // Trim extra whitespace from inline code blocks since it's difficult to read.
       .replace(/\s+/g, ' '),

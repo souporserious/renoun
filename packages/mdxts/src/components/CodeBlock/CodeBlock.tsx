@@ -1,7 +1,7 @@
 import React, { Suspense } from 'react'
 import 'server-only'
 
-import { createProject } from '../../project'
+import { analyzeSourceText } from '../../project'
 import { getThemeColors } from '../../utils/get-theme-colors'
 import { CopyButton } from './CopyButton'
 import { Tokens } from './Tokens'
@@ -86,8 +86,6 @@ export type CodeBlockProps =
       workingDirectory?: string
     } & BaseCodeBlockProps)
 
-const project = createProject()
-
 export async function CodeBlockAsync({
   filename,
   language,
@@ -114,7 +112,7 @@ export async function CodeBlockAsync({
     options.workingDirectory = props.workingDirectory
   }
 
-  const { tokens, value, label } = await project.analyzeSourceText({
+  const { tokens, value, label } = await analyzeSourceText({
     // Simplify the path for more legibile error messages.
     sourcePath: sourcePath ? sourcePath.split(process.cwd()).at(1) : undefined,
     filename,

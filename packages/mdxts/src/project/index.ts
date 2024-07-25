@@ -6,28 +6,27 @@ import type {
 import type { DistributiveOmit } from '../types'
 import type { ProjectOptions } from './types'
 
-/** Creates a project based on the provided options. */
-export function createProject(projectOptions?: ProjectOptions) {
-  let projectInitialized = false
+const initializedProjects = new Set<string>()
 
-  async function initializeProject(options?: ProjectOptions) {
-    await whenServerReady()
+async function initializeProject(options?: ProjectOptions) {
+  const key = JSON.stringify(options)
 
-    if (projectInitialized) {
-      return
-    }
-
-    projectInitialized = true
-
-    return sendToServer<void>('initialize', options)
+  if (initializedProjects.has(key)) {
+    return
   }
 
-  return {
-    analyzeSourceText: async (
-      options: DistributiveOmit<AnalyzeSourceTextOptions, 'project'>
-    ) => {
-      await initializeProject(projectOptions)
-      return sendToServer<AnalyzeSourceTextResult>('analyzeSourceText', options)
-    },
+  await whenServerReady()
+
+  initializedProjects.add(key)
+
+  return sendToServer<void>('initialize', options)
+}
+
+export async function analyzeSourceText(
+  options: DistributiveOmit<AnalyzeSourceTextOptions, 'project'> & {
+    projectOptions?: ProjectOptions
   }
+): Promise<AnalyzeSourceTextResult> {
+  await initializeProject(options.projectOptions)
+  return sendToServer<AnalyzeSourceTextResult>('analyzeSourceText', options)
 }
