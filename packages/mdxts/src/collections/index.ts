@@ -93,9 +93,9 @@ export function setImports(
   importMaps = new Map(importMapEntries)
 }
 
-/** Removes the file extension from a file path. */
-function trimFileExtensionAndLeadingSlash(filePath: string) {
-  return filePath.replace(/\.[^/.]+$/, '').slice(1)
+/** Removes the leading slash and file extension from a file path. */
+function trimLeadingSlashAndFileExtension(filePath: string) {
+  return filePath.replace(/^\//, '').replace(/\.[^/.]+$/, '')
 }
 
 const PACKAGE_NAME = 'mdxts'
@@ -244,7 +244,7 @@ export function createCollection<
       }
 
       const sourceFile = matchingSourceFiles[0]
-      const importPath = trimFileExtensionAndLeadingSlash(
+      const importPath = trimLeadingSlashAndFileExtension(
         sourceFile.getFilePath().replace(absoluteBaseGlobPattern, '')
       )
       const moduleExports = await getImport(importPath)
