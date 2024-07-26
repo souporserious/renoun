@@ -8,11 +8,11 @@ import globParent from 'glob-parent'
 export type { MDXContent }
 
 export interface Collection<Exports extends Record<string, unknown>> {
-  /** Retrieves a file by its slug. */
-  getSource(slug: string): Promise<File<Exports>>
+  /** Retrieves a source in the collection by its slug. */
+  getSource(slug: string): Promise<Source<Exports>>
 
-  /** Retrieves all files in the collection. */
-  getAllFiles(): Promise<File<Exports>[]>
+  /** Retrieves all sources in the collection. */
+  getAllSources(): Promise<Source<Exports>[]>
 }
 
 export interface CollectionOptions {
@@ -22,7 +22,7 @@ export interface CollectionOptions {
   sort?: (a: string, b: string) => number
 }
 
-export interface Export<Source> {
+export interface Export<Value> {
   /** The line and column where the export starts. */
   getStart(): { line: number; column: number }
 
@@ -30,15 +30,15 @@ export interface Export<Source> {
   getEnd(): { line: number; column: number }
 
   /** The executable source of the export. */
-  getValue(): Source
+  getValue(): Value
 }
 
-export interface NamedExport<Source> extends Export<Source> {
+export interface NamedExport<Value> extends Export<Value> {
   /** The name of the export. */
   getName(): string
 }
 
-export interface File<NamedExports extends Record<string, unknown>> {
+export interface Source<NamedExports extends Record<string, unknown>> {
   /** A human-readable version of the file name. */
   getLabel(): string
 
@@ -46,7 +46,7 @@ export interface File<NamedExports extends Record<string, unknown>> {
   getPath(): string
 
   /** The previous and next files in the collection if they exist. */
-  getSiblings(): File<NamedExports>[]
+  getSiblings(): Source<NamedExports>[]
 
   /** The executable source of the default export. */
   getDefaultExport(): Export<NamedExports['default']>
@@ -215,7 +215,7 @@ export function createCollection<
   updateImportMap(filePattern, sourceFiles)
 
   return {
-    async getSource(slug: string): Promise<File<AllExports>> {
+    async getSource(slug: string): Promise<Source<AllExports>> {
       const matchingSourceFiles = sourceFiles.filter((sourceFile) => {
         let sourceFileSlug = sourceFile
           .getFilePath()
@@ -271,7 +271,7 @@ export function createCollection<
           return ''
         },
         getSiblings() {
-          return [] as File<AllExports>[]
+          return [] as Source<AllExports>[]
         },
         getDefaultExport() {
           if (!defaultExport) {
@@ -341,11 +341,11 @@ export function createCollection<
             },
           }))
         },
-      } as File<AllExports>
+      } as Source<AllExports>
     },
 
-    async getAllFiles(): Promise<File<AllExports>[]> {
-      return [] as File<AllExports>[]
+    async getAllSources(): Promise<Source<AllExports>[]> {
+      return [] as Source<AllExports>[]
     },
   }
 }
