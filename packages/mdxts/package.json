@@ -44,6 +44,11 @@
       "import": "./dist/esm/assets/index.js",
       "require": "./dist/cjs/src/assets/index.js"
     },
+    "./collections": {
+      "types": "./dist/types/collections/index.d.ts",
+      "import": "./dist/esm/collections/index.js",
+      "require": "./dist/cjs/src/collections/index.js"
+    },
     "./components": {
       "types": "./dist/types/components/index.d.ts",
       "import": "./dist/esm/components/index.js",
@@ -53,6 +58,11 @@
       "types": "./dist/types/components/*.d.ts",
       "import": "./dist/esm/components/*.js",
       "require": "./dist/cjs/src/components/*.js"
+    },
+    "./core": {
+      "types": "./dist/types/core.d.ts",
+      "import": "./dist/esm/core.js",
+      "require": "./dist/cjs/src/core.js"
     },
     "./loader": {
       "types": "./dist/types/loader/index.d.ts",
@@ -80,11 +90,17 @@
       "assets": [
         "./dist/types/assets/index.d.ts"
       ],
+      "collections": [
+        "./dist/types/collections/index.d.ts"
+      ],
       "components": [
         "./dist/types/components/index.d.ts"
       ],
       "components/*": [
         "./dist/types/components/*.d.ts"
+      ],
+      "core": [
+        "./dist/types/core.d.ts"
       ],
       "loader": [
         "./dist/types/loader/index.d.ts"

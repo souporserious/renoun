@@ -98,8 +98,8 @@ function trimLeadingSlashAndFileExtension(filePath: string) {
   return filePath.replace(/^\//, '').replace(/\.[^/.]+$/, '')
 }
 
-const PACKAGE_NAME = 'mdxts'
-const PACKAGE_DIRECTORY = `.${PACKAGE_NAME}`
+const PACKAGE_NAME = 'mdxts/core'
+const PACKAGE_DIRECTORY = `.mdxts`
 
 /** Updates the import map for a file pattern and its source files. */
 function updateImportMap(filePattern: string, sourceFiles: SourceFile[]) {
@@ -150,9 +150,9 @@ function updateImportMap(filePattern: string, sourceFiles: SourceFile[]) {
   writeFileSync(
     `${PACKAGE_DIRECTORY}/index.js`,
     [
-      `import { setImports } from 'node_modules/${PACKAGE_NAME}';`,
+      `import { setImports } from '${PACKAGE_NAME}';`,
       `setImports([\n${importMapEntriesString}\n]);`,
-      `export * from 'node_modules/${PACKAGE_NAME}';`,
+      `export * from '${PACKAGE_NAME}';`,
     ].join('\n')
   )
 }
@@ -197,6 +197,7 @@ export function createCollection<
   const tsConfigFilePath = options?.tsConfigFilePath ?? 'tsconfig.json'
   const project = resolveProject(tsConfigFilePath)
   const aliases = new AliasesFromTSConfig(tsConfigFilePath)
+  // TODO: this has a bug where it doesn't resolve the correct path if not relative e.g. ["*"] instead of ["./*"]
   const absoluteGlobPattern = aliases.apply(filePattern)
   const absoluteBaseGlobPattern = globParent(absoluteGlobPattern)
   let sourceFiles = project.getSourceFiles(absoluteGlobPattern)
@@ -249,7 +250,7 @@ export function createCollection<
 
       if (!getImport) {
         throw new Error(
-          `No source found for slug "${slug}" at file pattern "${filePattern}"`
+          `No source found for slug "${slug}" at file pattern "${filePattern}". Make sure the ".mdxts" directory was successfully created and your tsconfig.json is aliased correctly.`
         )
       }
 

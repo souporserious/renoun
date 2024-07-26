@@ -3,8 +3,8 @@ import globParent from 'glob-parent'
 import { Project, Node, SyntaxKind, SourceFile } from 'ts-morph'
 import AliasesFromTSConfig from 'aliases-from-tsconfig'
 
-const PACKAGE_NAME = 'mdxts'
-const PACKAGE_DIRECTORY = `./${PACKAGE_NAME}`
+const PACKAGE_NAME = 'mdxts/core'
+const PACKAGE_DIRECTORY = `./mdxts`
 
 /**
  * Generates the initial import maps for each file pattern at the root of the project.
@@ -32,9 +32,9 @@ function initializeImportMap(
   writeFileSync(
     `${PACKAGE_DIRECTORY}/index.js`,
     [
-      `import { setImports } from 'node_modules/${PACKAGE_NAME}';`,
+      `import { setImports } from '${PACKAGE_NAME}';`,
       `setImports([\n${importMapEntries.join(',\n')}\n]);`,
-      `export * from 'node_modules/${PACKAGE_NAME}';`,
+      `export * from '${PACKAGE_NAME}';`,
     ].join('\n')
   )
 }
@@ -97,13 +97,17 @@ export function initializeImportMapFromCollections() {
       }
     })
 
-  const filePatternsArray = Array.from(filePatterns)
-  const sourceFilesMap = collectSourceFiles(filePatternsArray, 'tsconfig.json')
+  if (filePatterns.size > 0) {
+    const filePatternsArray = Array.from(filePatterns)
+    const sourceFilesMap = collectSourceFiles(
+      filePatternsArray,
+      'tsconfig.json'
+    )
 
-  if (filePatternsArray.length > 0) {
     if (!existsSync(PACKAGE_DIRECTORY)) {
       mkdirSync(PACKAGE_DIRECTORY)
     }
+
     initializeImportMap(filePatternsArray, sourceFilesMap)
   }
 }

@@ -1,4 +1,5 @@
 import React, { Suspense } from 'react'
+import type { MDXComponents } from 'mdx/types'
 import 'server-only'
 
 import { analyzeSourceText } from '../../project'
@@ -312,4 +313,25 @@ export function CodeBlock(props: CodeBlockProps) {
       <CodeBlockAsync {...props} />
     </Suspense>
   )
+}
+
+const languageKey = 'language-'
+const languageLength = languageKey.length
+
+CodeBlock.parsePreProps = (
+  props: React.ComponentProps<NonNullable<MDXComponents['pre']>>
+) => {
+  const code = props.children as React.ReactElement<{
+    className: `language-${string}`
+    children: string
+  }>
+  const languageClassName = code.props.className
+    .split(' ')
+    .find((className) => className.startsWith(languageKey))
+  return {
+    value: code.props.children.trim(),
+    language: (languageClassName
+      ? languageClassName.slice(languageLength)
+      : 'plain') as Languages,
+  }
 }

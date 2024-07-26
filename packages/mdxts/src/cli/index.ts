@@ -22,6 +22,7 @@ if (firstArgument === undefined) {
     env: {
       ...process.env,
       MDXTS_PORT_NUMBER: getPort(wss).toString(),
+      MDXTS_THEME_PATH: 'nord',
     },
   })
   subProcess.on('close', (code) => {
