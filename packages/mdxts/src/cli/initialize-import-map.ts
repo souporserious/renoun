@@ -4,7 +4,7 @@ import { Project, Node, SyntaxKind, SourceFile } from 'ts-morph'
 import AliasesFromTSConfig from 'aliases-from-tsconfig'
 
 const PACKAGE_NAME = 'mdxts/core'
-const PACKAGE_DIRECTORY = `./mdxts`
+const PACKAGE_DIRECTORY = '.mdxts'
 
 /**
  * Generates the initial import maps for each file pattern at the root of the project.

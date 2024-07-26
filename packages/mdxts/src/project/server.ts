@@ -3,13 +3,15 @@ import {
   ts,
   type ProjectOptions as TsMorphProjectOptions,
 } from 'ts-morph'
-import { WebSocketServer } from 'ws'
+import { watch, type FSWatcher } from 'node:fs'
 import { resolve } from 'node:path'
+import { WebSocketServer } from 'ws'
 
 import { analyzeSourceText } from '../utils/analyze-source-text'
 import { ProjectOptions } from './types'
 
 const projects = new Map<string, Project>()
+const watchers = new Map<string, FSWatcher>()
 const DEFAULT_OPTIONS = {
   compilerOptions: {
     allowJs: true,
@@ -83,8 +85,21 @@ export function createServer() {
           const project = getProject(projectId)
           const result = await analyzeSourceText({ project, ...data })
           send('analyzeSourceText:done', { ...result })
+        } else if (type === 'refresh:watch') {
+          watchers.set(
+            data.directory,
+            watch(data.directory, { persistent: true, recursive: true }, () =>
+              ws.send(JSON.stringify({ type: 'refresh:update', data }))
+            )
+          )
+        } else if (type === 'refresh:unwatch') {
+          const watcher = watchers.get(data.directory)
+          if (watcher) {
+            watcher.close()
+            watchers.delete(data.directory)
+          }
         } else {
-          throw new Error(`Unknown message type: ${type}`)
+          throw new Error(`[mdxts] Unknown message type received: ${type}`)
         }
       })
     })

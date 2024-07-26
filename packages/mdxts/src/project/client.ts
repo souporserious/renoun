@@ -2,9 +2,9 @@ import { signal, effect } from '@preact/signals-core'
 import { setTimeout } from 'node:timers'
 import WebSocket from 'ws'
 
-if (process.env.MDXTS_PORT_NUMBER === undefined) {
+if (process.env.MDXTS_WS_PORT === undefined) {
   throw new Error(
-    '[mdxts] The MDXTS_PORT_NUMBER environment variable is "undefined". Make sure the mdxts cli is running.'
+    '[mdxts] The MDXTS_WS_PORT environment variable is "undefined". Make sure the mdxts cli is running.'
   )
 }
 
@@ -23,7 +23,7 @@ function connect() {
     return
   }
 
-  ws = new WebSocket(`ws://localhost:${process.env.MDXTS_PORT_NUMBER}`)
+  ws = new WebSocket(`ws://localhost:${process.env.MDXTS_WS_PORT}`)
 
   ws.on('open', () => {
     isServerReady.value = true
@@ -77,16 +77,17 @@ export function whenServerReady() {
 let eventIdCount = 0
 
 /** Sends a message to the server and waits for a response. */
-export function sendToServer<ReturnValue>(
+export async function sendToServer<ReturnValue>(
   type: string,
   data?: any,
   timeout: number = 60000
 ) {
   if (!ws || ws.readyState !== WebSocket.OPEN) {
-    return Promise.reject(new Error('WebSocket is not connected'))
+    await whenServerReady()
   }
 
   const id = eventIdCount++
+
   ws.send(JSON.stringify({ type, data, id }))
 
   return new Promise<ReturnValue>((resolve, reject) => {

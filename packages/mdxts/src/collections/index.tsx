@@ -1,3 +1,4 @@
+import * as React from 'react'
 import type { MDXContent } from 'mdx/types'
 import { Project, type SourceFile } from 'ts-morph'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -99,7 +100,7 @@ function trimLeadingSlashAndFileExtension(filePath: string) {
 }
 
 const PACKAGE_NAME = 'mdxts/core'
-const PACKAGE_DIRECTORY = `.mdxts`
+const PACKAGE_DIRECTORY = '.mdxts'
 
 /** Updates the import map for a file pattern and its source files. */
 function updateImportMap(filePattern: string, sourceFiles: SourceFile[]) {
@@ -255,8 +256,9 @@ export function createCollection<
       }
 
       const sourceFile = matchingSourceFiles[0]
+      const sourceFilePath = sourceFile.getFilePath()
       const importPath = trimLeadingSlashAndFileExtension(
-        sourceFile.getFilePath().replace(absoluteBaseGlobPattern, '')
+        sourceFilePath.replace(absoluteBaseGlobPattern, '')
       )
       const moduleExports = await getImport(importPath)
       const { default: defaultExport, ...namedExports } = moduleExports
@@ -280,6 +282,28 @@ export function createCollection<
 
           return {
             getValue() {
+              if (
+                process.env.NODE_ENV === 'development' &&
+                process.env.MDXTS_NEXT_JS === 'true'
+              ) {
+                const Component = defaultExport as React.ComponentType
+
+                return async (props: Record<string, unknown>) => {
+                  const { Refresh } = await import('./Refresh')
+                  return (
+                    <>
+                      <Refresh
+                        port={process.env.MDXTS_WS_PORT!}
+                        directory={absoluteBaseGlobPattern
+                          .replace(process.cwd(), '')
+                          .slice(1)}
+                      />
+                      <Component {...props} />
+                    </>
+                  )
+                }
+              }
+
               return defaultExport as AllExports['default']
             },
           }

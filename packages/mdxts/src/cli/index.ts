@@ -21,7 +21,8 @@ if (firstArgument === undefined) {
     shell: true,
     env: {
       ...process.env,
-      MDXTS_PORT_NUMBER: getPort(wss).toString(),
+      MDXTS_NEXT_JS: firstArgument === 'next' ? 'true' : 'false',
+      MDXTS_WS_PORT: getPort(wss).toString(),
       MDXTS_THEME_PATH: 'nord',
     },
   })
