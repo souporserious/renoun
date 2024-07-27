@@ -380,17 +380,12 @@ export function createCollection<
     },
 
     async getAllSources(): Promise<Source<AllExports>[]> {
-      const sources = await Promise.all(
+      return await Promise.all(
         sourceFiles.map(async (sourceFile) => {
-          const sourceFilePath = sourceFile.getFilePath()
-          const slug = trimLeadingSlashAndFileExtension(
-            sourceFilePath.replace(absoluteBaseGlobPattern, '')
-          )
+          const slug = getSlug(sourceFile)
           return this.getSource(slug)
         })
       )
-
-      return sources
     },
   }
 
