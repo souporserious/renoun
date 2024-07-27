@@ -46,7 +46,7 @@ export interface Source<NamedExports extends Record<string, unknown>> {
   getPath(): string
 
   /** The previous and next files in the collection if they exist. */
-  getSiblings(): Source<NamedExports>[]
+  getSiblings(): Promise<Source<NamedExports>[]>
 
   /** The executable source of the default export. */
   getDefaultExport(): Export<NamedExports['default']>
@@ -214,7 +214,12 @@ export function createCollection<
   /** Update the import map for the file pattern if it was not added when initializing the cli. */
   updateImportMap(filePattern, sourceFiles)
 
-  return {
+  const getSlug = (sourceFile: SourceFile) => {
+    return trimLeadingSlashAndFileExtension(
+      sourceFile.getFilePath().replace(absoluteBaseGlobPattern, '')
+    )
+  }
+  const collection: Collection<AllExports> = {
     async getSource(slug: string): Promise<Source<AllExports>> {
       const matchingSourceFiles = sourceFiles.filter((sourceFile) => {
         let sourceFileSlug = sourceFile
@@ -257,10 +262,8 @@ export function createCollection<
 
       const sourceFile = matchingSourceFiles[0]
       const sourceFilePath = sourceFile.getFilePath()
-      const importPath = trimLeadingSlashAndFileExtension(
-        sourceFilePath.replace(absoluteBaseGlobPattern, '')
-      )
-      const moduleExports = await getImport(importPath)
+      const importSlug = getSlug(sourceFile)
+      const moduleExports = await getImport(importSlug)
       const { default: defaultExport, ...namedExports } = moduleExports
 
       return {
@@ -276,8 +279,34 @@ export function createCollection<
 
           return relativePath
         },
-        getSiblings() {
-          return [] as Source<AllExports>[]
+        async getSiblings() {
+          const currentIndex = sourceFiles.findIndex(
+            (file) => file.getFilePath() === sourceFilePath
+          )
+
+          if (currentIndex === -1) {
+            return [] as Source<AllExports>[]
+          }
+
+          const siblings: Promise<Source<AllExports> | undefined>[] = []
+          const previousFile = sourceFiles[currentIndex - 1]
+          const nextFile = sourceFiles[currentIndex + 1]
+
+          if (previousFile) {
+            const previousSlug = getSlug(previousFile)
+            siblings.push(collection.getSource(previousSlug))
+          } else {
+            siblings.push(Promise.resolve(undefined))
+          }
+
+          if (nextFile) {
+            const nextSlug = getSlug(nextFile)
+            siblings.push(collection.getSource(nextSlug))
+          } else {
+            siblings.push(Promise.resolve(undefined))
+          }
+
+          return Promise.all(siblings)
         },
         getDefaultExport() {
           if (!defaultExport) {
@@ -364,4 +393,6 @@ export function createCollection<
       return sources
     },
   }
+
+  return collection
 }
