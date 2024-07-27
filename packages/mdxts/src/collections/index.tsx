@@ -268,7 +268,13 @@ export function createCollection<
           return ''
         },
         getPath() {
-          return ''
+          const relativePath = sourceFilePath
+            // Remove the base directory
+            .replace(process.cwd(), '')
+            // Remove the extension
+            .replace(/\.[^.]+$/, '')
+
+          return relativePath
         },
         getSiblings() {
           return [] as Source<AllExports>[]
@@ -345,7 +351,17 @@ export function createCollection<
     },
 
     async getAllSources(): Promise<Source<AllExports>[]> {
-      return [] as Source<AllExports>[]
+      const sources = await Promise.all(
+        sourceFiles.map(async (sourceFile) => {
+          const sourceFilePath = sourceFile.getFilePath()
+          const slug = trimLeadingSlashAndFileExtension(
+            sourceFilePath.replace(absoluteBaseGlobPattern, '')
+          )
+          return this.getSource(slug)
+        })
+      )
+
+      return sources
     },
   }
 }
