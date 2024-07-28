@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import AliasesFromTSConfig from 'aliases-from-tsconfig'
 import globParent from 'glob-parent'
 
+import { filePathToPathname } from '../utils/file-path-to-pathname'
 import { getGitMetadata } from './get-git-metadata'
 
 export type { MDXContent }
@@ -44,8 +45,8 @@ export interface Source<NamedExports extends Record<string, unknown>> {
   /** A human-readable version of the file name. */
   getLabel(): string
 
-  /** The relative path to the file accounting for collection options. */
-  getPath(): string
+  /** The path to the file accounting for the `baseDirectory` and `basePathname` options. */
+  getPathname(): string
 
   /** The date the file was first created. */
   getCreatedAt(): Promise<Date | undefined>
@@ -291,14 +292,12 @@ export function createCollection<
         getLabel() {
           return ''
         },
-        getPath() {
-          const relativePath = sourceFilePath
-            // Remove the base directory
-            .replace(process.cwd(), '')
-            // Remove the extension
-            .replace(/\.[^.]+$/, '')
-
-          return relativePath
+        getPathname() {
+          return filePathToPathname(
+            sourceFilePath,
+            options?.baseDirectory,
+            options?.basePathname
+          )
         },
         async getCreatedAt() {
           await ensureGetGitMetadata()

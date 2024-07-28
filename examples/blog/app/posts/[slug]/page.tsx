@@ -23,7 +23,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
         {PreviousSource ? (
           <Link
-            href={PreviousSource.getPath()}
+            href={PreviousSource.getPathname()}
             style={{ gridColumn: 1, textAlign: 'left' }}
           >
             <div>Previous</div>
@@ -32,7 +32,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
         ) : null}
         {NextSource ? (
           <Link
-            href={NextSource.getPath()}
+            href={NextSource.getPathname()}
             style={{ gridColumn: 2, textAlign: 'right' }}
           >
             <div>Next</div>

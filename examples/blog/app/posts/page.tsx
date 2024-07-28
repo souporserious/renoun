@@ -10,7 +10,7 @@ export default async function Page() {
         {AllPostSources.map((PostSource) => {
           const { title, description } =
             PostSource.getNamedExport('frontmatter').getValue()
-          const path = PostSource.getPath()
+          const path = PostSource.getPathname()
           return (
             <li key={path}>
               <Link href={path}>
