@@ -9,37 +9,48 @@ export const PostsCollection = createCollection<{
   }
 }>('@/posts/*.mdx')
 
-export default async function Page({ params }: { params: { slug: string } }) {
-  const PostSource = await PostsCollection.getSource(params.slug)
-  const [PreviousSource, NextSource] = await PostSource.getSiblings()
-  const Post = PostSource.getDefaultExport().getValue()
+export default async function Post({ params }: { params: { slug: string } }) {
+  const PostSource = PostsCollection.getSource(params.slug)
+  const [PreviousSource, NextSource] = PostSource.getSiblings()
+  const Content = await PostSource.getDefaultExport().getValue()
   const updatedAt = await PostSource.getUpdatedAt()
 
   return (
     <>
       <Link href="/posts">All Posts</Link>
-      <Post />
+      <Content />
       <div>Last updated: {new Date(updatedAt).toLocaleString()}</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
         {PreviousSource ? (
-          <Link
-            href={PreviousSource.getPathname()}
-            style={{ gridColumn: 1, textAlign: 'left' }}
-          >
-            <div>Previous</div>
-            {PreviousSource.getNamedExport('frontmatter').getValue().title}
-          </Link>
+          <SiblingLink Source={PreviousSource} direction="previous" />
         ) : null}
         {NextSource ? (
-          <Link
-            href={NextSource.getPathname()}
-            style={{ gridColumn: 2, textAlign: 'right' }}
-          >
-            <div>Next</div>
-            {NextSource.getNamedExport('frontmatter').getValue().title}
-          </Link>
+          <SiblingLink Source={NextSource} direction="next" />
         ) : null}
       </div>
     </>
+  )
+}
+
+async function SiblingLink({
+  Source,
+  direction,
+}: {
+  Source: ReturnType<(typeof PostsCollection)['getSource']>
+  direction: 'previous' | 'next'
+}) {
+  const pathname = Source.getPathname()
+  const { title } = await Source.getNamedExport('frontmatter').getValue()
+  return (
+    <Link
+      href={pathname}
+      style={{
+        gridColumn: direction === 'previous' ? 1 : 2,
+        textAlign: direction === 'previous' ? 'left' : 'right',
+      }}
+    >
+      <div>{direction === 'previous' ? 'Previous' : 'Next'}</div>
+      {title}
+    </Link>
   )
 }

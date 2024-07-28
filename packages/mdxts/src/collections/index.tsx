@@ -12,10 +12,10 @@ export type { MDXContent }
 
 export interface Collection<Exports extends Record<string, unknown>> {
   /** Retrieves a source in the collection by its slug. */
-  getSource(slug: string): Promise<Source<Exports>>
+  getSource(slug: string): Source<Exports>
 
   /** Retrieves all sources in the collection. */
-  getAllSources(): Promise<Source<Exports>[]>
+  getAllSources(): Source<Exports>[]
 }
 
 export interface CollectionOptions {
@@ -32,8 +32,8 @@ export interface Export<Value> {
   /** The line and column where the export ends. */
   getEnd(): { line: number; column: number }
 
-  /** The executable source of the export. */
-  getValue(): Value
+  /** The executable value of the export. */
+  getValue(): Promise<Value>
 }
 
 export interface NamedExport<Value> extends Export<Value> {
@@ -58,7 +58,7 @@ export interface Source<NamedExports extends Record<string, unknown>> {
   getAuthors(): Promise<string[]>
 
   /** The previous and next files in the collection if they exist. */
-  getSiblings(): Promise<Source<NamedExports>[]>
+  getSiblings(): Source<NamedExports>[]
 
   /** The execution environment of the file. */
   getExecutionEnvironment(): 'server' | 'client' | 'isomorphic'
@@ -235,7 +235,7 @@ export function createCollection<
     )
   }
   const collection: Collection<AllExports> = {
-    async getSource(slug: string): Promise<Source<AllExports>> {
+    getSource(slug: string): Source<AllExports> {
       const matchingSourceFiles = sourceFiles.filter((sourceFile) => {
         let sourceFileSlug = sourceFile
           .getFilePath()
@@ -278,8 +278,14 @@ export function createCollection<
       const sourceFile = matchingSourceFiles[0]
       const sourceFilePath = sourceFile.getFilePath()
       const importSlug = getSlug(sourceFile)
-      const moduleExports = await getImport(importSlug)
-      const { default: defaultExport, ...namedExports } = moduleExports
+      let moduleExports: AllExports | null = null
+
+      async function ensureModuleExports() {
+        if (moduleExports === null) {
+          moduleExports = await getImport(importSlug)
+        }
+      }
+
       let gitMetadata: Awaited<ReturnType<typeof getGitMetadata>> | null = null
 
       async function ensureGetGitMetadata() {
@@ -311,7 +317,7 @@ export function createCollection<
           await ensureGetGitMetadata()
           return gitMetadata!.authors
         },
-        async getSiblings() {
+        getSiblings() {
           const currentIndex = sourceFiles.findIndex(
             (file) => file.getFilePath() === sourceFilePath
           )
@@ -320,7 +326,7 @@ export function createCollection<
             return [] as Source<AllExports>[]
           }
 
-          const siblings: Promise<Source<AllExports> | undefined>[] = []
+          const siblings: (Source<AllExports> | undefined)[] = []
           const previousFile = sourceFiles[currentIndex - 1]
           const nextFile = sourceFiles[currentIndex + 1]
 
@@ -328,17 +334,17 @@ export function createCollection<
             const previousSlug = getSlug(previousFile)
             siblings.push(collection.getSource(previousSlug))
           } else {
-            siblings.push(Promise.resolve(undefined))
+            siblings.push(undefined)
           }
 
           if (nextFile) {
             const nextSlug = getSlug(nextFile)
             siblings.push(collection.getSource(nextSlug))
           } else {
-            siblings.push(Promise.resolve(undefined))
+            siblings.push(undefined)
           }
 
-          return Promise.all(siblings)
+          return siblings
         },
         getExecutionEnvironment() {
           const importDeclarations = sourceFile.getImportDeclarations()
@@ -356,14 +362,11 @@ export function createCollection<
           return 'isomorphic'
         },
         getDefaultExport() {
-          if (!defaultExport) {
-            throw new Error(
-              `No default export found for slug "${slug}" at file pattern "${filePattern}"`
-            )
-          }
-
           return {
-            getValue() {
+            async getValue() {
+              await ensureModuleExports()
+              const defaultExport = moduleExports!.default
+
               /* Enable hot module reloading in development for Next.js */
               if (
                 process.env.NODE_ENV === 'development' &&
@@ -401,8 +404,9 @@ export function createCollection<
             getStart() {
               return
             },
-            getValue() {
-              const source = namedExports[name]
+            async getValue() {
+              await ensureModuleExports()
+              const source = moduleExports![name]
 
               if (!source) {
                 throw new Error(
@@ -415,25 +419,24 @@ export function createCollection<
           }
         },
         getAllNamedExports() {
-          return Object.entries(namedExports).map(([name, source]) => ({
+          return Object.entries(moduleExports!).map(([name, source]) => ({
             getName() {
               return name
             },
-            getValue() {
-              return source
+            async getValue() {
+              await ensureModuleExports()
+              return moduleExports![name]
             },
           }))
         },
       } as Source<AllExports>
     },
 
-    async getAllSources(): Promise<Source<AllExports>[]> {
-      return await Promise.all(
-        sourceFiles.map((sourceFile) => {
-          const slug = getSlug(sourceFile)
-          return this.getSource(slug)
-        })
-      )
+    getAllSources(): Source<AllExports>[] {
+      return sourceFiles.map((sourceFile) => {
+        const slug = getSlug(sourceFile)
+        return this.getSource(slug)
+      })
     },
   }
 
