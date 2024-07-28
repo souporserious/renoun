@@ -13,11 +13,13 @@ export default async function Page({ params }: { params: { slug: string } }) {
   const PostSource = await PostsCollection.getSource(params.slug)
   const [PreviousSource, NextSource] = await PostSource.getSiblings()
   const Post = PostSource.getDefaultExport().getValue()
+  const updatedAt = await PostSource.getUpdatedAt()
 
   return (
     <>
       <Link href="/posts">All Posts</Link>
       <Post />
+      <div>Last updated: {new Date(updatedAt).toLocaleString()}</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
         {PreviousSource ? (
           <Link

@@ -5,6 +5,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import AliasesFromTSConfig from 'aliases-from-tsconfig'
 import globParent from 'glob-parent'
 
+import { getGitMetadata } from './get-git-metadata'
+
 export type { MDXContent }
 
 export interface Collection<Exports extends Record<string, unknown>> {
@@ -44,6 +46,15 @@ export interface Source<NamedExports extends Record<string, unknown>> {
 
   /** The relative path to the file accounting for collection options. */
   getPath(): string
+
+  /** The date the file was first created. */
+  getCreatedAt(): Promise<Date | undefined>
+
+  /** The date the file was last updated. */
+  getUpdatedAt(): Promise<Date | undefined>
+
+  /** All authors who have contributed to the file. */
+  getAuthors(): Promise<string[]>
 
   /** The previous and next files in the collection if they exist. */
   getSiblings(): Promise<Source<NamedExports>[]>
@@ -265,6 +276,13 @@ export function createCollection<
       const importSlug = getSlug(sourceFile)
       const moduleExports = await getImport(importSlug)
       const { default: defaultExport, ...namedExports } = moduleExports
+      let gitMetadata: ReturnType<typeof getGitMetadata> | null = null
+
+      async function ensureGetGitMetadata() {
+        if (gitMetadata === null) {
+          gitMetadata = await getGitMetadata(sourceFilePath)
+        }
+      }
 
       return {
         getLabel() {
@@ -278,6 +296,18 @@ export function createCollection<
             .replace(/\.[^.]+$/, '')
 
           return relativePath
+        },
+        async getCreatedAt() {
+          await ensureGetGitMetadata()
+          return gitMetadata!.createdAt
+        },
+        async getUpdatedAt() {
+          await ensureGetGitMetadata()
+          return gitMetadata!.updatedAt
+        },
+        async getAuthors() {
+          await ensureGetGitMetadata()
+          return gitMetadata!.authors
         },
         async getSiblings() {
           const currentIndex = sourceFiles.findIndex(
