@@ -59,6 +59,9 @@ export interface Source<NamedExports extends Record<string, unknown>> {
   /** The previous and next files in the collection if they exist. */
   getSiblings(): Promise<Source<NamedExports>[]>
 
+  /** The execution environment of the file. */
+  getExecutionEnvironment(): 'server' | 'client' | 'isomorphic'
+
   /** The executable source of the default export. */
   getDefaultExport(): Export<NamedExports['default']>
 
@@ -337,6 +340,21 @@ export function createCollection<
           }
 
           return Promise.all(siblings)
+        },
+        getExecutionEnvironment() {
+          const importDeclarations = sourceFile.getImportDeclarations()
+
+          for (const importDeclaration of importDeclarations) {
+            const moduleSpecifier = importDeclaration.getModuleSpecifierValue()
+            if (moduleSpecifier === 'server-only') {
+              return 'server'
+            }
+            if (moduleSpecifier === 'client-only') {
+              return 'client'
+            }
+          }
+
+          return 'isomorphic'
         },
         getDefaultExport() {
           if (!defaultExport) {
