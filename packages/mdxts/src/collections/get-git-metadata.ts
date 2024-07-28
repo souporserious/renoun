@@ -1,5 +1,5 @@
 import { findRootSync } from '@manypkg/find-root'
-import { execSync } from 'node:child_process'
+import { exec } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -16,7 +16,7 @@ interface GitMetadata {
 const cache = new Map<string, GitMetadata>()
 
 /** Returns aggregated metadata about a file from git history. */
-export function getGitMetadata(filePath: string): GitMetadata {
+export async function getGitMetadata(filePath: string): Promise<GitMetadata> {
   if (cache.has(filePath)) {
     return cache.get(filePath)!
   }
@@ -28,9 +28,15 @@ export function getGitMetadata(filePath: string): GitMetadata {
 
   if (isGitRepository && !hasCheckedIfShallow) {
     try {
-      const isShallow = execSync('git rev-parse --is-shallow-repository')
-        .toString()
-        .trim()
+      const isShallow = await new Promise<string>((resolve, reject) => {
+        exec('git rev-parse --is-shallow-repository', (error, stdout) => {
+          if (error) {
+            reject(error)
+          } else {
+            resolve(stdout.toString().trim())
+          }
+        })
+      })
 
       if (isShallow === 'true') {
         const message = `[mdxts] This repository is shallow cloned so the createdAt and updatedAt dates cannot be calculated correctly.`
@@ -69,10 +75,19 @@ export function getGitMetadata(filePath: string): GitMetadata {
   let firstCommitDate: Date | undefined = undefined
   let lastCommitDate: Date | undefined = undefined
 
-  const stdout = execSync(
-    `git log --all --follow --format="%aN|%aE|%cD" -- "${filePath}"`
-  )
-  const lines = stdout.toString().trim().split('\n').filter(Boolean)
+  const stdout = await new Promise<string>((resolve, reject) => {
+    exec(
+      `git log --all --follow --format="%aN|%aE|%cD" -- "${filePath}"`,
+      (error, stdout) => {
+        if (error) {
+          reject(error)
+        } else {
+          resolve(stdout.toString().trim())
+        }
+      }
+    )
+  })
+  const lines = stdout.split('\n').filter(Boolean)
 
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
     const line = lines[lineIndex]

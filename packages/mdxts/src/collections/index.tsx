@@ -276,7 +276,7 @@ export function createCollection<
       const importSlug = getSlug(sourceFile)
       const moduleExports = await getImport(importSlug)
       const { default: defaultExport, ...namedExports } = moduleExports
-      let gitMetadata: ReturnType<typeof getGitMetadata> | null = null
+      let gitMetadata: Awaited<ReturnType<typeof getGitMetadata>> | null = null
 
       async function ensureGetGitMetadata() {
         if (gitMetadata === null) {
@@ -347,6 +347,7 @@ export function createCollection<
 
           return {
             getValue() {
+              /* Enable hot module reloading in development for Next.js */
               if (
                 process.env.NODE_ENV === 'development' &&
                 process.env.MDXTS_NEXT_JS === 'true'
@@ -411,7 +412,7 @@ export function createCollection<
 
     async getAllSources(): Promise<Source<AllExports>[]> {
       return await Promise.all(
-        sourceFiles.map(async (sourceFile) => {
+        sourceFiles.map((sourceFile) => {
           const slug = getSlug(sourceFile)
           return this.getSource(slug)
         })
