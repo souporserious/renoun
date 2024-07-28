@@ -7,12 +7,18 @@ let isGitRepository: null | boolean = null
 let hasCheckedIfShallow = false
 let hadGitError = false
 
-const cache = new Map<string, any>()
+interface GitMetadata {
+  authors: string[]
+  createdAt: string | undefined
+  updatedAt: string | undefined
+}
+
+const cache = new Map<string, GitMetadata>()
 
 /** Returns aggregated metadata about a file from git history. */
-export function getGitMetadata(filePath: string) {
+export function getGitMetadata(filePath: string): GitMetadata {
   if (cache.has(filePath)) {
-    return cache.get(filePath)
+    return cache.get(filePath)!
   }
 
   if (isGitRepository === null) {
@@ -106,8 +112,9 @@ export function getGitMetadata(filePath: string) {
     authors: sortedAuthors.map((author) => author.name),
     createdAt: firstCommitDate?.toISOString(),
     updatedAt: lastCommitDate?.toISOString(),
-  }
+  } satisfies GitMetadata
 
   cache.set(filePath, result)
+
   return result
 }
