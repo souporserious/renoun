@@ -6,9 +6,9 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import AliasesFromTSConfig from 'aliases-from-tsconfig'
 import globParent from 'glob-parent'
 
-import { filePathToPathname } from '../utils/file-path-to-pathname'
 import { getSourceFilesOrderMap } from '../utils/get-source-files-sort-order'
 import { getGitMetadata } from './get-git-metadata'
+import { getSourceFilesPathnameMap } from './get-source-files-pathname-map'
 // import { getPackageMetadata } from './get-package-metadata'
 // import { getPublicPaths } from './get-public-paths'
 
@@ -16,7 +16,7 @@ export type { MDXContent }
 
 export interface Collection<AllExports extends Record<string, unknown>> {
   /** Retrieves a source in the collection by its slug. */
-  getSource(slug: string): Source<AllExports>
+  getSource(slug: string | string[]): Source<AllExports>
 
   /** Retrieves all sources in the collection. */
   getSources(): Source<AllExports>[]
@@ -111,11 +111,6 @@ export function setImports(
   importMapEntries: [AnyFilePattern, (slug: string) => Promise<unknown>][]
 ) {
   importMaps = new Map(importMapEntries)
-}
-
-/** Removes the leading slash and file extension from a file path. */
-function trimLeadingSlashAndFileExtension(filePath: string) {
-  return filePath.replace(/^\//, '').replace(/\.[^/.]+$/, '')
 }
 
 const PACKAGE_NAME = 'mdxts/core'
@@ -227,14 +222,6 @@ export function createCollection<
   /** Update the import map for the file pattern if it was not added when initializing the cli. */
   updateImportMap(filePattern, sourceFiles)
 
-  const getSlug = (sourceFile: SourceFile) => {
-    return trimLeadingSlashAndFileExtension(
-      sourceFile
-        .getFilePath()
-        .replace(absoluteBaseGlobPattern, '')
-        .toLowerCase()
-    )
-  }
   // const packageMetadata = getPackageMetadata(dirname(tsConfigFilePath))
 
   // if (!packageMetadata) {
@@ -246,20 +233,40 @@ export function createCollection<
   // const publicPaths = packageMetadata.exports
   //   ? getPublicPaths(packageMetadata)
   //   : sourceFiles.map((sourceFile) => sourceFile.getFilePath())
-  const sourceFilesOrderMap = getSourceFilesOrderMap(
-    project.getDirectoryOrThrow(absoluteBaseGlobPattern)
-  )
+  const baseDirectory = project.getDirectoryOrThrow(absoluteBaseGlobPattern)
+  const sourceFilesOrderMap = getSourceFilesOrderMap(baseDirectory)
+  const sourceFilesPathnameMap = getSourceFilesPathnameMap(baseDirectory, {
+    baseDirectory: options?.baseDirectory,
+    basePathname: options?.basePathname,
+    // packageName: packageMetadata?.name,
+  })
+  const getImportSlug = (sourceFile: SourceFile) => {
+    return (
+      sourceFile
+        .getFilePath()
+        // remove the base glob pattern: /src/posts/welcome.mdx -> /posts/welcome.mdx
+        .replace(absoluteBaseGlobPattern, '')
+        // remove leading slash: /posts/welcome.mdx -> posts/welcome.mdx
+        .replace(/^\//, '')
+        // remove file extension: Button.tsx -> Button
+        .replace(/\.[^/.]+$/, '')
+    )
+  }
   const collection: Collection<AllExports> = {
-    getSource(slug: string): Source<AllExports> {
+    getSource(pathname: string | string[]): Source<AllExports> {
+      let pathnameString = Array.isArray(pathname)
+        ? pathname.join('/')
+        : pathname
+
+      if (!pathnameString.startsWith('/')) {
+        pathnameString = `/${pathnameString}`
+      }
+
       const matchingSourceFiles = sourceFiles.filter((sourceFile) => {
-        let sourceFileSlug = getSlug(sourceFile)
-
-        const index = '/index'
-        if (sourceFileSlug.endsWith(index)) {
-          sourceFileSlug = sourceFileSlug.slice(0, -index.length)
-        }
-
-        return sourceFileSlug === slug
+        const sourceFilePathname = sourceFilesPathnameMap.get(
+          sourceFile.getFilePath()
+        )!
+        return sourceFilePathname === pathnameString
       })
       const slugExtensions = new Set(
         matchingSourceFiles.map((sourceFile) => sourceFile.getExtension())
@@ -267,7 +274,7 @@ export function createCollection<
 
       if (slugExtensions.size > 1) {
         throw new Error(
-          `[mdxts] Multiple sources found for slug "${slug}" at file pattern "${filePattern}". Only one source is currently allowed. Please file an issue for support.`
+          `[mdxts] Multiple sources found for slug "${pathnameString}" at file pattern "${filePattern}". Only one source is currently allowed. Please file an issue for support.`
         )
       }
 
@@ -279,18 +286,12 @@ export function createCollection<
 
       if (!getImport) {
         throw new Error(
-          `[mdxts] No source found for slug "${slug}" at file pattern "${filePattern}":\n   - Make sure the ".mdxts" directory was successfully created and your tsconfig.json is aliased correctly.\n   - Make sure the file pattern is formatted correctly and targeting files that exist.`
+          `[mdxts] No source found for slug "${pathnameString}" at file pattern "${filePattern}":\n   - Make sure the ".mdxts" directory was successfully created and your tsconfig.json is aliased correctly.\n   - Make sure the file pattern is formatted correctly and targeting files that exist.`
         )
       }
 
       const sourceFile = matchingSourceFiles[0]
       const sourceFilePath = sourceFile.getFilePath()
-      const pathname = filePathToPathname(
-        sourceFilePath,
-        options?.baseDirectory,
-        options?.basePathname
-        // packageMetadata?.name
-      )
       // const isMainExport = options?.basePathname
       //   ? pathname === join(options.basePathname, packageMetadata.name)
       //   : pathname === packageMetadata.name
@@ -299,7 +300,7 @@ export function createCollection<
 
       async function ensureModuleExports() {
         if (moduleExports === null) {
-          const importSlug = getSlug(sourceFile)
+          const importSlug = getImportSlug(sourceFile)
           moduleExports = await getImport(importSlug)
         }
       }
@@ -317,13 +318,13 @@ export function createCollection<
           return ''
         },
         getPathname() {
-          return pathname
+          return pathnameString
+        },
+        getDepth() {
+          return pathnameString.split('/').filter(Boolean).length
         },
         getOrder() {
           return sourceFilesOrderMap[sourceFilePath]
-        },
-        getDepth() {
-          return pathname.split('/').filter(Boolean).length
         },
         async getCreatedAt() {
           await ensureGetGitMetadata()
@@ -351,14 +352,16 @@ export function createCollection<
           const nextFile = sourceFiles[currentIndex + 1]
 
           if (previousFile) {
-            const previousSlug = getSlug(previousFile)
+            const previousSlug = sourceFilesPathnameMap.get(
+              previousFile.getFilePath()
+            )!
             siblings.push(collection.getSource(previousSlug))
           } else {
             siblings.push(undefined)
           }
 
           if (nextFile) {
-            const nextSlug = getSlug(nextFile)
+            const nextSlug = sourceFilesPathnameMap.get(nextFile.getFilePath())!
             siblings.push(collection.getSource(nextSlug))
           } else {
             siblings.push(undefined)
@@ -449,7 +452,7 @@ export function createCollection<
 
     getSources(): Source<AllExports>[] {
       return sourceFiles.map((sourceFile) => {
-        const slug = getSlug(sourceFile)
+        const slug = sourceFilesPathnameMap.get(sourceFile.getFilePath())!
         return this.getSource(slug)
       })
     },

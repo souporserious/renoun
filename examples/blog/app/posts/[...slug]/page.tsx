@@ -7,10 +7,13 @@ export const PostsCollection = createCollection<{
     title: string
     description: string
   }
-}>('@/posts/**/*.mdx')
+}>('@/posts/**/*.mdx', {
+  baseDirectory: 'posts',
+  basePathname: 'posts',
+})
 
-export default async function Post({ params }: { params: { slug: string } }) {
-  const PostSource = PostsCollection.getSource(params.slug)
+export default async function Post({ params }: { params: { slug: string[] } }) {
+  const PostSource = PostsCollection.getSource(['posts', ...params.slug])
   const [PreviousSource, NextSource] = PostSource.getSiblings()
   const Content = await PostSource.getDefaultExport().getValue()
   const updatedAt = await PostSource.getUpdatedAt()
