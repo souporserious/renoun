@@ -3,11 +3,11 @@ import Link from 'next/link'
 
 export const PostsCollection = createCollection<{
   default: MDXContent
-  frontmatter: {
+  frontmatter?: {
     title: string
     description: string
   }
-}>('@/posts/*.mdx')
+}>('@/posts/**/*.mdx')
 
 export default async function Post({ params }: { params: { slug: string } }) {
   const PostSource = PostsCollection.getSource(params.slug)
@@ -19,7 +19,9 @@ export default async function Post({ params }: { params: { slug: string } }) {
     <>
       <Link href="/posts">All Posts</Link>
       <Content />
-      <div>Last updated: {new Date(updatedAt).toLocaleString()}</div>
+      {updatedAt ? (
+        <div>Last updated: {new Date(updatedAt).toLocaleString()}</div>
+      ) : null}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
         {PreviousSource ? (
           <SiblingLink Source={PreviousSource} direction="previous" />
@@ -40,7 +42,7 @@ async function SiblingLink({
   direction: 'previous' | 'next'
 }) {
   const pathname = Source.getPathname()
-  const { title } = await Source.getNamedExport('frontmatter').getValue()
+  const frontmatter = await Source.getNamedExport('frontmatter').getValue()
   return (
     <Link
       href={pathname}
@@ -50,7 +52,7 @@ async function SiblingLink({
       }}
     >
       <div>{direction === 'previous' ? 'Previous' : 'Next'}</div>
-      {title}
+      {frontmatter ? frontmatter.title : pathname}
     </Link>
   )
 }

@@ -14,12 +14,12 @@ import { getGitMetadata } from './get-git-metadata'
 
 export type { MDXContent }
 
-export interface Collection<Exports extends Record<string, unknown>> {
+export interface Collection<AllExports extends Record<string, unknown>> {
   /** Retrieves a source in the collection by its slug. */
-  getSource(slug: string): Source<Exports>
+  getSource(slug: string): Source<AllExports>
 
   /** Retrieves all sources in the collection. */
-  getAllSources(): Source<Exports>[]
+  getSources(): Source<AllExports>[]
 }
 
 export interface CollectionOptions {
@@ -45,7 +45,7 @@ export interface NamedExport<Value> extends Export<Value> {
   getName(): string
 }
 
-export interface Source<NamedExports extends Record<string, unknown>> {
+export interface Source<AllExports extends Record<string, unknown>> {
   /** A human-readable version of the file name. */
   getLabel(): string
 
@@ -68,35 +68,29 @@ export interface Source<NamedExports extends Record<string, unknown>> {
   getAuthors(): Promise<string[]>
 
   /** The previous and next files in the collection if they exist. */
-  getSiblings(): Source<NamedExports>[]
+  getSiblings(): Source<AllExports>[]
 
   /** The execution environment of the file. */
   getExecutionEnvironment(): 'server' | 'client' | 'isomorphic'
 
   /** The executable source of the default export. */
-  getDefaultExport(): Export<NamedExports['default']>
+  getDefaultExport(): Export<AllExports['default']>
 
   /** A named export of the file. */
-  getNamedExport<Name extends keyof NamedExports>(
+  getNamedExport<Name extends Exclude<keyof AllExports, 'default'>>(
     name: Name
-  ): NamedExport<NamedExports[Name]>
+  ): NamedExport<AllExports[Name]>
 
   /** All named exports of the file. */
-  getAllNamedExports(): NamedExport<NamedExports[keyof NamedExports]>[]
+  getNamedExports(): NamedExport<AllExports[keyof AllExports]>[]
 }
 
 export type JsFilePattern = `${string}js${string}` | `${string}js`
-
 export type JsxFilePattern = `${string}jsx${string}` | `${string}jsx`
-
 export type TsFilePattern = `${string}ts${string}` | `${string}ts`
-
 export type TsxFilePattern = `${string}tsx${string}` | `${string}tsx`
-
 export type MdFilePattern = `${string}md${string}` | `${string}md`
-
 export type MdxFilePattern = `${string}mdx${string}` | `${string}mdx`
-
 export type AnyFilePattern =
   | JsFilePattern
   | JsxFilePattern
@@ -198,17 +192,11 @@ function resolveProject(tsConfigFilePath: string): Project {
 
 /**
  * Creates a collection of files based on a specified file pattern.
+ * An import getter for each file extension will be generated at the root of the project in a `.mdxts/index.js` file.
  *
  * @param filePattern - A pattern to match files (e.g., "*.ts", "*.mdx").
  * @param options - Optional settings for the collection, including base directory, base pathname, TypeScript config file path, and a custom sort function.
  * @returns A collection object that provides methods to retrieve individual files or all files matching the pattern.
- *
- * The collection object includes:
- * - `getFile(slug: string)`: Retrieves a file by its slug.
- * - `getAllFiles()`: Retrieves all files in the collection.
- *
- * The function also sets up import maps for each file pattern at the root of the project and writes them to a `.mdxts/index.js` file.
- *
  * @throws An error if no source files are found for the given pattern.
  */
 export function createCollection<
@@ -279,7 +267,7 @@ export function createCollection<
 
       if (slugExtensions.size > 1) {
         throw new Error(
-          `Multiple sources found for slug "${slug}" at file pattern "${filePattern}". Only one source is currently allowed. Please file an issue for support.`
+          `[mdxts] Multiple sources found for slug "${slug}" at file pattern "${filePattern}". Only one source is currently allowed. Please file an issue for support.`
         )
       }
 
@@ -291,7 +279,7 @@ export function createCollection<
 
       if (!getImport) {
         throw new Error(
-          `No source found for slug "${slug}" at file pattern "${filePattern}". Make sure the ".mdxts" directory was successfully created and your tsconfig.json is aliased correctly.`
+          `[mdxts] No source found for slug "${slug}" at file pattern "${filePattern}":\n   - Make sure the ".mdxts" directory was successfully created and your tsconfig.json is aliased correctly.\n   - Make sure the file pattern is formatted correctly and targeting files that exist.`
         )
       }
 
@@ -324,7 +312,7 @@ export function createCollection<
         }
       }
 
-      return {
+      const source = {
         getLabel() {
           return ''
         },
@@ -426,7 +414,7 @@ export function createCollection<
             },
           }
         },
-        getNamedExport<Name extends keyof Omit<AllExports, 'default'>>(
+        getNamedExport<Name extends Exclude<keyof AllExports, 'default'>>(
           name: Name
         ) {
           return {
@@ -436,21 +424,14 @@ export function createCollection<
             getStart() {
               return
             },
-            async getValue() {
+            async getValue(): Promise<AllExports[Name]> {
               await ensureModuleExports()
-              const source = moduleExports![name]
-
-              if (!source) {
-                throw new Error(
-                  `No named export found for name "${name.toString()}" at file pattern "${filePattern}"`
-                )
-              }
-
-              return source as AllExports[Name]
+              return moduleExports![name]
             },
           }
         },
-        getAllNamedExports() {
+        getNamedExports() {
+          // TODO: this should use static analysis for the export names
           return Object.entries(moduleExports!).map(([name, source]) => ({
             getName() {
               return name
@@ -462,9 +443,11 @@ export function createCollection<
           }))
         },
       } as Source<AllExports>
+
+      return source
     },
 
-    getAllSources(): Source<AllExports>[] {
+    getSources(): Source<AllExports>[] {
       return sourceFiles.map((sourceFile) => {
         const slug = getSlug(sourceFile)
         return this.getSource(slug)

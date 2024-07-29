@@ -6,8 +6,8 @@ export default async function Posts() {
     <>
       <h1>Blog</h1>
       <ul>
-        {PostsCollection.getAllSources().map((PostSource) => (
-          <PostItem PostSource={PostSource} />
+        {PostsCollection.getSources().map((PostSource) => (
+          <PostItem key={PostSource.getPathname()} PostSource={PostSource} />
         ))}
       </ul>
     </>
@@ -24,8 +24,14 @@ async function PostItem({
   return (
     <li key={pathname}>
       <Link href={pathname}>
-        <h2>{frontmatter.title}</h2>
-        <p>{frontmatter.description}</p>
+        {frontmatter ? (
+          <>
+            <h2>{frontmatter.title}</h2>
+            <p>{frontmatter.description}</p>
+          </>
+        ) : (
+          <h2>{pathname}</h2>
+        )}
       </Link>
     </li>
   )
