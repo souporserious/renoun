@@ -48,6 +48,9 @@ export interface Source<NamedExports extends Record<string, unknown>> {
   /** The path to the file accounting for the `baseDirectory` and `basePathname` options. */
   getPathname(): string
 
+  /** The depth of the file in the directory structure. */
+  getDepth(): number
+
   /** The date the file was first created. */
   getCreatedAt(): Promise<Date | undefined>
 
@@ -277,11 +280,16 @@ export function createCollection<
 
       const sourceFile = matchingSourceFiles[0]
       const sourceFilePath = sourceFile.getFilePath()
-      const importSlug = getSlug(sourceFile)
+      const pathname = filePathToPathname(
+        sourceFilePath,
+        options?.baseDirectory,
+        options?.basePathname
+      )
       let moduleExports: AllExports | null = null
 
       async function ensureModuleExports() {
         if (moduleExports === null) {
+          const importSlug = getSlug(sourceFile)
           moduleExports = await getImport(importSlug)
         }
       }
@@ -299,11 +307,10 @@ export function createCollection<
           return ''
         },
         getPathname() {
-          return filePathToPathname(
-            sourceFilePath,
-            options?.baseDirectory,
-            options?.basePathname
-          )
+          return pathname
+        },
+        getDepth() {
+          return pathname.split('/').filter(Boolean).length
         },
         async getCreatedAt() {
           await ensureGetGitMetadata()
