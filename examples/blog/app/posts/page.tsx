@@ -19,14 +19,13 @@ async function PostItem({
 }: {
   PostSource: ReturnType<(typeof PostsCollection)['getSource']>
 }) {
-  const { title, description } =
-    await PostSource.getNamedExport('frontmatter').getValue()
-  const path = PostSource.getPathname()
+  const pathname = PostSource.getPathname()
+  const frontmatter = await PostSource.getNamedExport('frontmatter').getValue()
   return (
-    <li key={path}>
-      <Link href={path}>
-        <h2>{title}</h2>
-        <p>{description}</p>
+    <li key={pathname}>
+      <Link href={pathname}>
+        <h2>{frontmatter.title}</h2>
+        <p>{frontmatter.description}</p>
       </Link>
     </li>
   )
