@@ -3,19 +3,19 @@ import { Directory } from 'ts-morph'
 /** Returns a map of source file paths to their sort order. */
 export function getSourceFilesOrderMap(
   directory: Directory,
-  allPublicPaths: string[]
+  publicPaths?: string[]
 ): Record<string, string> {
   const orderMap: Record<string, string> = {}
-  traverseDirectory(directory, '', orderMap, allPublicPaths)
+  traverseDirectory(directory, '', orderMap, publicPaths)
   return orderMap
 }
 
-/** Recursively traverses a directory adding each file and directory to path order map. */
+/** Recursively traverses a directory adding each file and directory to a path order map. */
 function traverseDirectory(
   directory: Directory,
   prefix: string,
   orderMap: Record<string, string>,
-  allPublicPaths: string[],
+  publicPaths?: string[],
   level: number = 1,
   index: number = 1
 ) {
@@ -34,15 +34,15 @@ function traverseDirectory(
     })
   })
 
-  const files = directory
-    .getSourceFiles()
-    .filter((file) => allPublicPaths.includes(file.getFilePath()))
+  const files = directory.getSourceFiles()
 
   files.forEach((file) => {
-    entries.push({
-      name: file.getBaseName(),
-      path: file.getFilePath(),
-    })
+    if (!publicPaths || publicPaths.includes(file.getFilePath())) {
+      entries.push({
+        name: file.getBaseName(),
+        path: file.getFilePath(),
+      })
+    }
   })
 
   // Sort alphabetically by name
@@ -60,7 +60,7 @@ function traverseDirectory(
         entry.directory,
         `${orderString}.`,
         orderMap,
-        allPublicPaths,
+        publicPaths,
         level + 1,
         1
       )
