@@ -2,11 +2,15 @@ import * as React from 'react'
 import type { MDXContent } from 'mdx/types'
 import { Project, type SourceFile } from 'ts-morph'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+// import { dirname, join } from 'node:path'
 import AliasesFromTSConfig from 'aliases-from-tsconfig'
 import globParent from 'glob-parent'
 
 import { filePathToPathname } from '../utils/file-path-to-pathname'
+import { getSourceFilesOrderMap } from '../utils/get-source-files-sort-order'
 import { getGitMetadata } from './get-git-metadata'
+// import { getPackageMetadata } from './get-package-metadata'
+// import { getPublicPaths } from './get-public-paths'
 
 export type { MDXContent }
 
@@ -47,6 +51,9 @@ export interface Source<NamedExports extends Record<string, unknown>> {
 
   /** The path to the file accounting for the `baseDirectory` and `basePathname` options. */
   getPathname(): string
+
+  /** The order of the file in the collection based on the position in the file system. */
+  getOrder(): string
 
   /** The depth of the file in the directory structure. */
   getDepth(): number
@@ -213,8 +220,8 @@ export function createCollection<
   filePattern: FilePattern,
   options?: CollectionOptions
 ): Collection<AllExports> {
-  const tsConfigFilePath = options?.tsConfigFilePath ?? 'tsconfig.json'
-  const project = resolveProject(tsConfigFilePath)
+  const project = resolveProject(options?.tsConfigFilePath ?? 'tsconfig.json')
+  const tsConfigFilePath = project.getCompilerOptions().configFilePath as string
   const aliases = new AliasesFromTSConfig(tsConfigFilePath)
   // TODO: this has a bug where it doesn't resolve the correct path if not relative e.g. ["*"] instead of ["./*"]
   const absoluteGlobPattern = aliases.apply(filePattern)
@@ -234,20 +241,30 @@ export function createCollection<
 
   const getSlug = (sourceFile: SourceFile) => {
     return trimLeadingSlashAndFileExtension(
-      sourceFile.getFilePath().replace(absoluteBaseGlobPattern, '')
+      sourceFile
+        .getFilePath()
+        .replace(absoluteBaseGlobPattern, '')
+        .toLowerCase()
     )
   }
+  // const packageMetadata = getPackageMetadata(dirname(tsConfigFilePath))
+
+  // if (!packageMetadata) {
+  //   throw new Error(
+  //     `No package.json found for TypeScript config file path at: ${tsConfigFilePath}`
+  //   )
+  // }
+
+  // const publicPaths = packageMetadata.exports
+  //   ? getPublicPaths(packageMetadata)
+  //   : sourceFiles.map((sourceFile) => sourceFile.getFilePath())
+  const sourceFilesOrderMap = getSourceFilesOrderMap(
+    project.getDirectoryOrThrow(absoluteBaseGlobPattern)
+  )
   const collection: Collection<AllExports> = {
     getSource(slug: string): Source<AllExports> {
       const matchingSourceFiles = sourceFiles.filter((sourceFile) => {
-        let sourceFileSlug = sourceFile
-          .getFilePath()
-          // remove base glob pattern and leading slash
-          .replace(`${absoluteBaseGlobPattern}/`, '')
-          // remove extension
-          .replace(/\.[^.]+$/, '')
-          // normalize casing
-          .toLowerCase()
+        let sourceFileSlug = getSlug(sourceFile)
 
         const index = '/index'
         if (sourceFileSlug.endsWith(index)) {
@@ -284,7 +301,12 @@ export function createCollection<
         sourceFilePath,
         options?.baseDirectory,
         options?.basePathname
+        // packageMetadata?.name
       )
+      // const isMainExport = options?.basePathname
+      //   ? pathname === join(options.basePathname, packageMetadata.name)
+      //   : pathname === packageMetadata.name
+
       let moduleExports: AllExports | null = null
 
       async function ensureModuleExports() {
@@ -308,6 +330,9 @@ export function createCollection<
         },
         getPathname() {
           return pathname
+        },
+        getOrder() {
+          return sourceFilesOrderMap[sourceFilePath]
         },
         getDepth() {
           return pathname.split('/').filter(Boolean).length
