@@ -21,6 +21,7 @@ async function PostItem({
 }) {
   const pathname = PostSource.getPathname()
   const frontmatter = await PostSource.getNamedExport('frontmatter').getValue()
+
   return (
     <li key={pathname}>
       <Link href={pathname}>

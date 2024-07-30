@@ -16,7 +16,7 @@ export type { MDXContent }
 
 export interface Collection<AllExports extends Record<string, unknown>> {
   /** Retrieves a source in the collection by its slug. */
-  getSource(slug: string | string[]): Source<AllExports>
+  getSource(slug: string | string[]): Source<AllExports> | undefined
 
   /** Retrieves all sources in the collection. */
   getSources(): Source<AllExports>[]
@@ -72,9 +72,6 @@ export interface Source<AllExports extends Record<string, unknown>> {
 
   /** The execution environment of the file. */
   getExecutionEnvironment(): 'server' | 'client' | 'isomorphic'
-
-  /** A source for a member of the file name e.g. `tests` for the filename `Button.tests.tsx` and directory `tests/Button.tsx`. */
-  getMemberSource(member: string): Source<AllExports> | undefined
 
   /** The executable source of the default export. */
   getDefaultExport(): Export<AllExports['default']>
@@ -256,8 +253,7 @@ export function createCollection<
     )
   }
   const collection: Collection<AllExports> = {
-    getSource(pathname: string | string[]): Source<AllExports> {
-      const isMember = arguments[1]
+    getSource(pathname: string | string[]): Source<AllExports> | undefined {
       let pathnameString = Array.isArray(pathname)
         ? pathname.join('/')
         : pathname
@@ -276,12 +272,9 @@ export function createCollection<
         matchingSourceFiles.map((sourceFile) => sourceFile.getExtension())
       )
 
-      /* If this is a source member and no member sources were found, return undefined */
-      if (slugExtensions.size === 0 && isMember) {
-        return undefined as any
-      }
-
-      if (slugExtensions.size > 1) {
+      if (slugExtensions.size === 0) {
+        return undefined
+      } else if (slugExtensions.size > 1) {
         throw new Error(
           `[mdxts] Multiple sources found for slug "${pathnameString}" at file pattern "${filePattern}". Only one source is currently allowed. Please file an issue for support.`
         )
@@ -346,13 +339,6 @@ export function createCollection<
         async getAuthors() {
           await ensureGetGitMetadata()
           return gitMetadata!.authors
-        },
-        getMemberSource(member: string) {
-          return collection.getSource(
-            `${pathnameString}/${member}`,
-            // @ts-expect-error - This is a private argument
-            true
-          )
         },
         getSiblings() {
           const currentIndex = sourceFiles.findIndex(
@@ -469,11 +455,13 @@ export function createCollection<
       return source
     },
 
-    getSources(): Source<AllExports>[] {
-      return sourceFiles.map((sourceFile) => {
-        const slug = sourceFilesPathnameMap.get(sourceFile.getFilePath())!
-        return this.getSource(slug)
-      })
+    getSources() {
+      return sourceFiles
+        .map((sourceFile) => {
+          const slug = sourceFilesPathnameMap.get(sourceFile.getFilePath())!
+          return this.getSource(slug)
+        })
+        .filter(Boolean) as Source<AllExports>[]
     },
   }
 

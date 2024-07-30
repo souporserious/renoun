@@ -1,5 +1,6 @@
 import { createCollection } from 'mdxts/collections'
 import Link from 'next/link'
+import { notFound } from 'next/navigation'
 
 export const ComponentsCollection = createCollection(
   '@/components/**/{index,*.examples}.{ts,tsx}',
@@ -31,12 +32,18 @@ export default async function Component({
 }: {
   params: { slug: string[] }
 }) {
-  const ComponentSource = ComponentsCollection.getSource([
-    'components',
-    ...params.slug,
+  const componentsPathname = ['components', ...params.slug]
+  const ComponentSource = ComponentsCollection.getSource(componentsPathname)
+
+  if (!ComponentSource) {
+    notFound()
+  }
+
+  const ExamplesSource = ComponentsCollection.getSource([
+    ...componentsPathname,
+    'examples',
   ])
   const [PreviousSource, NextSource] = ComponentSource.getSiblings()
-  const ExamplesSource = ComponentSource.getMemberSource('examples')
   const isExamplesPage = params.slug.at(-1) === 'examples'
   const updatedAt = await ComponentSource.getUpdatedAt()
 
