@@ -1,7 +1,6 @@
 import * as React from 'react'
 import type { MDXContent } from 'mdx/types'
 import { Project, type SourceFile } from 'ts-morph'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 // import { dirname, join } from 'node:path'
 import AliasesFromTSConfig from 'aliases-from-tsconfig'
 import globParent from 'glob-parent'
@@ -9,10 +8,12 @@ import globParent from 'glob-parent'
 import { getSourceFilesOrderMap } from '../utils/get-source-files-sort-order'
 import { getGitMetadata } from './get-git-metadata'
 import { getSourceFilesPathnameMap } from './get-source-files-pathname-map'
+import { updateImportMap, getImportMap, setImports } from './import-maps'
 // import { getPackageMetadata } from './get-package-metadata'
 // import { getPublicPaths } from './get-public-paths'
 
 export type { MDXContent }
+export { setImports }
 
 export interface Collection<AllExports extends Record<string, unknown>> {
   /** Retrieves a source in the collection by its slug. */
@@ -90,79 +91,6 @@ export interface Source<
 export type FilePatterns<Extension extends string = string> =
   | `${string}${Extension}`
   | `${string}${Extension}${string}`
-
-let importMaps = new Map<string, (slug: string) => Promise<unknown>>()
-
-/**
- * Sets the import maps for a collection's file patterns.
- *
- * @internal
- * @param importMapEntries - An array of tuples where the first element is a file pattern and the second element is a function that returns a promise resolving to the import.
- */
-export function setImports(
-  importMapEntries: [FilePatterns, (slug: string) => Promise<unknown>][]
-) {
-  importMaps = new Map(importMapEntries)
-}
-
-const PACKAGE_NAME = 'mdxts/core'
-const PACKAGE_DIRECTORY = '.mdxts'
-
-/** Updates the import map for a file pattern and its source files. */
-function updateImportMap(filePattern: string, sourceFiles: SourceFile[]) {
-  const baseGlobPattern = globParent(filePattern)
-  const allExtensions = Array.from(
-    new Set(sourceFiles.map((sourceFile) => sourceFile.getExtension()))
-  )
-  const nextImportMapEntries = allExtensions.map((extension) => {
-    const trimmedExtension = extension.slice(1)
-    return `['${trimmedExtension}:${filePattern}', (slug) => import(\`${baseGlobPattern}/\${slug}${extension}\`)]`
-  })
-  let previousImportMapEntries: string[] = []
-
-  if (existsSync(`${PACKAGE_DIRECTORY}/index.js`)) {
-    const previousImportMapLines = readFileSync(
-      `${PACKAGE_DIRECTORY}/index.js`,
-      'utf-8'
-    )
-      .split('\n')
-      .filter(Boolean)
-    const importMapStartIndex = previousImportMapLines.findIndex((line) =>
-      line.includes('setImports([')
-    )
-    const importMapEndIndex = previousImportMapLines.findIndex((line) =>
-      line.includes(']);')
-    )
-    previousImportMapEntries = previousImportMapLines
-      .slice(importMapStartIndex + 1, importMapEndIndex)
-      .map(
-        // trim space and reomve trailing comma if present
-        (line) => line.trim().replace(/,$/, '')
-      )
-  }
-
-  const mergedImportMapEntries = Array.from(
-    new Set(
-      previousImportMapEntries.concat(nextImportMapEntries).filter(Boolean)
-    )
-  )
-  const importMapEntriesString = mergedImportMapEntries
-    .map((entry) => `  ${entry}`)
-    .join(',\n')
-
-  if (!existsSync(PACKAGE_DIRECTORY)) {
-    mkdirSync(PACKAGE_DIRECTORY)
-  }
-
-  writeFileSync(
-    `${PACKAGE_DIRECTORY}/index.js`,
-    [
-      `import { setImports } from '${PACKAGE_NAME}';`,
-      `setImports([\n${importMapEntriesString}\n]);`,
-      `export * from '${PACKAGE_NAME}';`,
-    ].join('\n')
-  )
-}
 
 const projectCache = new Map<string, Project>()
 
@@ -274,9 +202,7 @@ export function createCollection<
 
       const slugExtension = Array.from(slugExtensions).at(0)?.slice(1)
       const importKey = `${slugExtension}:${filePattern}`
-      const getImport = importMaps.get(importKey) as (
-        slug: string
-      ) => Promise<AllExports>
+      const getImport = getImportMap<AllExports>(importKey)
 
       if (!getImport) {
         throw new Error(

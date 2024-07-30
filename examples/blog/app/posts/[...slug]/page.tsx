@@ -32,10 +32,13 @@ export default async function Post({ params }: { params: { slug: string[] } }) {
   return (
     <>
       <Link href="/posts">All Posts</Link>
+
       <Content />
+
       {updatedAt ? (
         <div>Last updated: {new Date(updatedAt).toLocaleString()}</div>
       ) : null}
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
         {PreviousSource ? (
           <SiblingLink Source={PreviousSource} direction="previous" />
