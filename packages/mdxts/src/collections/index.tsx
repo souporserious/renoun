@@ -264,7 +264,7 @@ export function createCollection<
           )
 
           if (currentIndex === -1) {
-            return [] as Source<AllExports>[]
+            return []
           }
 
           const siblings: (Source<AllExports> | undefined)[] = []

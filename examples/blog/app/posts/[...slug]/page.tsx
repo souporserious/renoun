@@ -13,7 +13,7 @@ type PostSchema = {
   }
 }
 
-type PostSource = Source<PostSchema>
+export type PostSource = Source<PostSchema>
 
 export const PostsCollection = createCollection<PostSchema>(
   '@/posts/**/*.mdx',
@@ -60,6 +60,7 @@ async function SiblingLink({
 }) {
   const pathname = Source.getPathname()
   const frontmatter = await Source.getNamedExport('frontmatter').getValue()
+
   return (
     <Link
       href={pathname}

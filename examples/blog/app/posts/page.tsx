@@ -1,26 +1,22 @@
 import Link from 'next/link'
-import { PostsCollection } from './[...slug]/page'
+import { PostsCollection, type PostSource } from './[...slug]/page'
 
 export default async function Posts() {
   return (
     <>
       <h1>Blog</h1>
       <ul>
-        {PostsCollection.getSources().map((PostSource) => (
-          <PostItem key={PostSource.getPathname()} PostSource={PostSource} />
+        {PostsCollection.getSources().map((Source) => (
+          <PostItem key={Source.getPathname()} Source={Source} />
         ))}
       </ul>
     </>
   )
 }
 
-async function PostItem({
-  PostSource,
-}: {
-  PostSource: ReturnType<(typeof PostsCollection)['getSource']>
-}) {
-  const pathname = PostSource.getPathname()
-  const frontmatter = await PostSource.getNamedExport('frontmatter').getValue()
+async function PostItem({ Source }: { Source: PostSource }) {
+  const pathname = Source.getPathname()
+  const frontmatter = await Source.getNamedExport('frontmatter').getValue()
 
   return (
     <li key={pathname}>

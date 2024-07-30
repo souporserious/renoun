@@ -1,26 +1,23 @@
-import type { Source } from 'mdxts/collections'
 import Link from 'next/link'
 
-import { ComponentsCollection } from './[...slug]/page'
+import { ComponentsCollection, type ComponentSource } from './[...slug]/page'
 
 export default async function Components() {
   return (
     <>
       <h1>Components</h1>
       <ul>
-        {ComponentsCollection.getSources().map((PostSource) => (
-          <ComponentItem
-            key={PostSource.getPathname()}
-            ComponentSource={PostSource}
-          />
+        {ComponentsCollection.getSources().map((Source) => (
+          <ComponentItem key={Source.getPathname()} Source={Source} />
         ))}
       </ul>
     </>
   )
 }
 
-async function ComponentItem({ ComponentSource }: { ComponentSource: Source }) {
-  const pathname = ComponentSource.getPathname()
+async function ComponentItem({ Source }: { Source: ComponentSource }) {
+  const pathname = Source.getPathname()
+
   return (
     <li key={pathname}>
       <Link href={pathname}>
