@@ -1,19 +1,30 @@
-import { createCollection, type MDXContent } from 'mdxts/collections'
+import {
+  createCollection,
+  type MDXContent,
+  type Source,
+} from 'mdxts/collections'
 import Link from 'next/link'
 
-export const PostsCollection = createCollection<{
+type PostSchema = {
   default: MDXContent
   frontmatter?: {
     title: string
     description: string
   }
-}>('@/posts/**/*.mdx', {
-  baseDirectory: 'posts',
-  basePathname: 'posts',
-})
+}
+
+type PostSource = Source<PostSchema>
+
+export const PostsCollection = createCollection<PostSchema>(
+  '@/posts/**/*.mdx',
+  {
+    baseDirectory: 'posts',
+    basePathname: 'posts',
+  }
+)
 
 export default async function Post({ params }: { params: { slug: string[] } }) {
-  const PostSource = PostsCollection.getSource(['posts', ...params.slug])
+  const PostSource = PostsCollection.getSource(['posts', ...params.slug])!
   const [PreviousSource, NextSource] = PostSource.getSiblings()
   const Content = await PostSource.getDefaultExport().getValue()
   const updatedAt = await PostSource.getUpdatedAt()
@@ -41,7 +52,7 @@ async function SiblingLink({
   Source,
   direction,
 }: {
-  Source: ReturnType<(typeof PostsCollection)['getSource']>
+  Source: PostSource
   direction: 'previous' | 'next'
 }) {
   const pathname = Source.getPathname()

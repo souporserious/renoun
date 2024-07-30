@@ -45,7 +45,9 @@ export interface NamedExport<Value> extends Export<Value> {
   getName(): string
 }
 
-export interface Source<AllExports extends Record<string, unknown>> {
+export interface Source<
+  AllExports extends Record<string, unknown> = Record<string, unknown>,
+> {
   /** A human-readable version of the file name. */
   getLabel(): string
 
@@ -85,19 +87,9 @@ export interface Source<AllExports extends Record<string, unknown>> {
   getNamedExports(): NamedExport<AllExports[keyof AllExports]>[]
 }
 
-export type JsFilePattern = `${string}js${string}` | `${string}js`
-export type JsxFilePattern = `${string}jsx${string}` | `${string}jsx`
-export type TsFilePattern = `${string}ts${string}` | `${string}ts`
-export type TsxFilePattern = `${string}tsx${string}` | `${string}tsx`
-export type MdFilePattern = `${string}md${string}` | `${string}md`
-export type MdxFilePattern = `${string}mdx${string}` | `${string}mdx`
-export type AnyFilePattern =
-  | JsFilePattern
-  | JsxFilePattern
-  | TsFilePattern
-  | TsxFilePattern
-  | MdFilePattern
-  | MdxFilePattern
+export type FilePatterns<Extension extends string = string> =
+  | `${string}${Extension}`
+  | `${string}${Extension}${string}`
 
 let importMaps = new Map<string, (slug: string) => Promise<unknown>>()
 
@@ -108,7 +100,7 @@ let importMaps = new Map<string, (slug: string) => Promise<unknown>>()
  * @param importMapEntries - An array of tuples where the first element is a file pattern and the second element is a function that returns a promise resolving to the import.
  */
 export function setImports(
-  importMapEntries: [AnyFilePattern, (slug: string) => Promise<unknown>][]
+  importMapEntries: [FilePatterns, (slug: string) => Promise<unknown>][]
 ) {
   importMaps = new Map(importMapEntries)
 }
@@ -195,10 +187,10 @@ function resolveProject(tsConfigFilePath: string): Project {
  * @throws An error if no source files are found for the given pattern.
  */
 export function createCollection<
-  AllExports extends FilePattern extends MdFilePattern | MdxFilePattern
+  AllExports extends FilePattern extends FilePatterns<'md' | 'mdx'>
     ? { default: MDXContent; [key: string]: unknown }
     : { [key: string]: unknown },
-  FilePattern extends AnyFilePattern = AnyFilePattern,
+  FilePattern extends FilePatterns = string,
 >(
   filePattern: FilePattern,
   options?: CollectionOptions

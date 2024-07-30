@@ -1,4 +1,6 @@
+import type { Source } from 'mdxts/collections'
 import Link from 'next/link'
+
 import { ComponentsCollection } from './[...slug]/page'
 
 export default async function Components() {
@@ -17,11 +19,7 @@ export default async function Components() {
   )
 }
 
-async function ComponentItem({
-  ComponentSource,
-}: {
-  ComponentSource: ReturnType<(typeof ComponentsCollection)['getSource']>
-}) {
+async function ComponentItem({ ComponentSource }: { ComponentSource: Source }) {
   const pathname = ComponentSource.getPathname()
   return (
     <li key={pathname}>

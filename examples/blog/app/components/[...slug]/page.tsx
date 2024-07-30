@@ -1,4 +1,4 @@
-import { createCollection } from 'mdxts/collections'
+import { createCollection, type Source } from 'mdxts/collections'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
@@ -13,9 +13,7 @@ export const ComponentsCollection = createCollection(
 async function ComponentExport({
   NamedExport,
 }: {
-  NamedExport: ReturnType<
-    ReturnType<(typeof ComponentsCollection)['getSource']>['getNamedExports']
-  >[number]
+  NamedExport: ReturnType<Source['getNamedExports']>[number]
 }) {
   const name = NamedExport.getName()
   const Component = (await NamedExport.getValue()) as React.ComponentType
@@ -92,7 +90,7 @@ async function SiblingLink({
   Source,
   direction,
 }: {
-  Source: ReturnType<(typeof ComponentsCollection)['getSource']>
+  Source: Source
   direction: 'previous' | 'next'
 }) {
   const pathname = Source.getPathname()
