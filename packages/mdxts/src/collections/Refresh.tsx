@@ -1,6 +1,5 @@
 'use client'
 import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 
 let ws: WebSocket
 
@@ -15,8 +14,6 @@ export function Refresh({
   port: string
   directory: string
 }) {
-  const router = useRouter()
-
   if (ws === undefined) {
     ws = new WebSocket(`ws://localhost:${port}`)
   }
@@ -36,14 +33,18 @@ export function Refresh({
         message.type === 'refresh:update' &&
         message.data.directory === directory
       ) {
+        // @ts-ignore - private Next.js API
+        const router = window.nd.router
         if ('hmrRefresh' in router) {
-          // @ts-expect-error - private Next.js API
           router.hmrRefresh()
         } else if ('fastRefresh' in router) {
-          // @ts-expect-error - private Next.js API
           router.fastRefresh()
-        } else {
+        } else if ('refresh' in router) {
           router.refresh()
+        } else {
+          throw new Error(
+            'Could not refresh the development server. Please file an issue if you see this error.'
+          )
         }
       }
     }
@@ -64,7 +65,7 @@ export function Refresh({
       }
       ws.removeEventListener('message', handleMessage)
     }
-  }, [router])
+  }, [])
 
   return null
 }
