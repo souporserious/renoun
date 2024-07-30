@@ -241,7 +241,13 @@ export function createCollection<
           return pathnameString
         },
         getDepth() {
-          return pathnameString.split('/').filter(Boolean).length
+          const segments = pathnameString.split('/').filter(Boolean)
+
+          if (segments.at(0) === options?.basePathname) {
+            return segments.length - 2
+          }
+
+          return segments.length - 1
         },
         getOrder() {
           return sourceFilesOrderMap[sourceFilePath]
