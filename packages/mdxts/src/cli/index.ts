@@ -14,6 +14,7 @@ if (firstArgument === undefined) {
   console.error(usageMessage)
   process.exit(1)
 } else if (firstArgument === 'next' || firstArgument === 'waku') {
+  // TODO: need to tie into the WSS server to update the import map if a collection is added, updated, or removed
   initializeImportMapFromCollections()
 
   const subProcess = spawn(firstArgument, restArguments, {

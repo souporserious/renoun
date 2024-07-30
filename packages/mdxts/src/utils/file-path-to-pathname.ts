@@ -53,12 +53,26 @@ export function filePathToPathname(
     // Get path segments
     .split(posix.sep)
 
-  // Remove duplicate segment if last directory name matches file name (e.g. "Button/Button.tsx")
-  if (
-    segments.length > 1 &&
-    segments.at(-2)!.toLowerCase() === segments.at(-1)!.toLowerCase()
-  ) {
-    segments.pop()
+  // Extract the segment member if present
+  // filename: "Button/Button.examples.tsx" -> "examples"
+  // directory: "Button/examples.tsx" -> "examples"
+  // sub-directory: "Button/examples/Basic.tsx" -> "examples"
+  const lastSegment = segments.pop()
+  if (lastSegment?.includes('.')) {
+    const [baseName, member] = lastSegment.split('.')
+    segments.push(baseName, member)
+  } else if (lastSegment) {
+    segments.push(lastSegment)
+  }
+
+  // Remove consecutive duplicate segments (e.g. "Button/Button.tsx")
+  if (segments.length > 1) {
+    segments = segments.reduce((result, segment) => {
+      if (result.at(-1) !== segment) {
+        result.push(segment)
+      }
+      return result
+    }, [] as string[])
   }
 
   // Prepend the base pathname if defined

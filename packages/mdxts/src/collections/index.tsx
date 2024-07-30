@@ -73,6 +73,9 @@ export interface Source<AllExports extends Record<string, unknown>> {
   /** The execution environment of the file. */
   getExecutionEnvironment(): 'server' | 'client' | 'isomorphic'
 
+  /** A source for a member of the file name e.g. `tests` for the filename `Button.tests.tsx` and directory `tests/Button.tsx`. */
+  getMemberSource(member: string): Source<AllExports> | undefined
+
   /** The executable source of the default export. */
   getDefaultExport(): Export<AllExports['default']>
 
@@ -254,6 +257,7 @@ export function createCollection<
   }
   const collection: Collection<AllExports> = {
     getSource(pathname: string | string[]): Source<AllExports> {
+      const isMember = arguments[1]
       let pathnameString = Array.isArray(pathname)
         ? pathname.join('/')
         : pathname
@@ -271,6 +275,11 @@ export function createCollection<
       const slugExtensions = new Set(
         matchingSourceFiles.map((sourceFile) => sourceFile.getExtension())
       )
+
+      /* If this is a source member and no member sources were found, return undefined */
+      if (slugExtensions.size === 0 && isMember) {
+        return undefined as any
+      }
 
       if (slugExtensions.size > 1) {
         throw new Error(
@@ -337,6 +346,13 @@ export function createCollection<
         async getAuthors() {
           await ensureGetGitMetadata()
           return gitMetadata!.authors
+        },
+        getMemberSource(member: string) {
+          return collection.getSource(
+            `${pathnameString}/${member}`,
+            // @ts-expect-error - This is a private argument
+            true
+          )
         },
         getSiblings() {
           const currentIndex = sourceFiles.findIndex(
@@ -434,16 +450,19 @@ export function createCollection<
           }
         },
         getNamedExports() {
-          // TODO: this should use static analysis for the export names
-          return Object.entries(moduleExports!).map(([name, source]) => ({
-            getName() {
-              return name
-            },
-            async getValue() {
-              await ensureModuleExports()
-              return moduleExports![name]
-            },
-          }))
+          return sourceFile.getExportSymbols().map((symbol) => {
+            const name = symbol.getName()
+
+            return {
+              getName() {
+                return name
+              },
+              async getValue() {
+                await ensureModuleExports()
+                return moduleExports![name]
+              },
+            }
+          })
         },
       } as Source<AllExports>
 
