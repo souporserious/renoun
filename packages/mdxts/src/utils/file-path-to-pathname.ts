@@ -19,13 +19,18 @@ export function filePathToPathname(
   /** Whether or not to convert the pathname to kebab case. */
   kebabCase = true
 ) {
-  let baseFilePath: string = filePath
-
   if (filePath.includes('node_modules')) {
     throw new Error(
       `[mdxts] Tried converting a node_modules file path to pathname: ${filePath}\nThis is currently not supported. Please file an issue to add support.`
     )
   }
+
+  // First, normalize the file path
+  let baseFilePath: string = filePath
+    // Remove leading sorting number "01."
+    .replace(/\/\d+\./g, posix.sep)
+    // Remove file extensions
+    .replace(/\.[^/.]+$/, '')
 
   // Calculate the base file path
   if (baseDirectory) {
@@ -35,23 +40,16 @@ export function filePathToPathname(
     }
 
     // Ensure that there is a trailing separator
+    const normalizedFilePath = baseFilePath.replace(/\/$|$/, posix.sep)
     const normalizedBaseDirectory = baseDirectory.replace(/\/$|$/, posix.sep)
 
     // Remove the base directory from the file path
-    ;[, baseFilePath] = filePath.split(normalizedBaseDirectory)
+    ;[, baseFilePath] = normalizedFilePath.split(normalizedBaseDirectory)
   } else {
     baseFilePath = baseFilePath.replace(process.cwd(), '')
   }
 
-  let segments = baseFilePath
-    // Remove leading separator "./"
-    .replace(/^\.\//, '')
-    // Remove leading sorting number "01."
-    .replace(/\/\d+\./g, posix.sep)
-    // Remove file extensions
-    .replace(/\.[^/.]+$/, '')
-    // Get path segments
-    .split(posix.sep)
+  let segments = baseFilePath.split(posix.sep).filter(Boolean)
 
   // Extract the segment member if present
   // filename: "Button/Button.examples.tsx" -> "examples"

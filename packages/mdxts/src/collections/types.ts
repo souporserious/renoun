@@ -10,7 +10,7 @@ export interface BaseSource {
 
   /**
    * The path to the source, taking into account the `baseDirectory` and
-   * `basePathname` configuration, and formatted to be URL-friendly.
+   * `basePath` configuration, and formatted to be URL-friendly.
    */
   getPath(): string
 
@@ -38,7 +38,7 @@ export interface ExportSource<Value> extends BaseSource {
   getValue(): Promise<Value>
 
   /** The execution environment of the export source. */
-  getEnvironment(): 'server' | 'client' | 'isomorphic'
+  getEnvironment(): 'server' | 'client' | 'isomorphic' | 'unknown'
 
   /** The lines and columns where the export starts and ends. */
   getPosition(): {
@@ -104,7 +104,7 @@ export interface CollectionOptions {
    * The base pathname used when calculating navigation paths. This includes everything after
    * the hostname (e.g. `/docs` in `https://mdxts.com/docs`).
    */
-  basePathname?: string
+  basePath?: string
 
   /** The path to the TypeScript config file. */
   tsConfigFilePath?: string

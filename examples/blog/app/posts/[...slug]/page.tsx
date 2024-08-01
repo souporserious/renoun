@@ -19,12 +19,12 @@ export const PostsCollection = createCollection<PostSchema>(
   '@/posts/**/*.mdx',
   {
     baseDirectory: 'posts',
-    basePathname: 'posts',
+    basePath: 'posts', // TODO: test this works without specifying
   }
 )
 
 export default async function Post({ params }: { params: { slug: string[] } }) {
-  const PostSource = PostsCollection.getSource(['posts', ...params.slug])!
+  const PostSource = PostsCollection.getSource(params.slug)!
   const [PreviousSource, NextSource] = PostSource.getSiblings()
   const Content = await PostSource.getDefaultExport().getValue()
   const updatedAt = await PostSource.getUpdatedAt()

@@ -1,11 +1,11 @@
 import * as React from 'react'
 import type { MDXContent } from 'mdx/types'
-import { Project, type SourceFile } from 'ts-morph'
+import { Project, Directory, SourceFile } from 'ts-morph'
 import AliasesFromTSConfig from 'aliases-from-tsconfig'
 import globParent from 'glob-parent'
 
 import { getGitMetadata } from './get-git-metadata'
-import { getSourceFilesPathnameMap } from './get-source-files-pathname-map'
+import { getSourcePathMap } from './get-source-files-path-map'
 import { getSourceFilesOrderMap } from './get-source-files-sort-order'
 import { updateImportMap, getImportMap, setImports } from './import-maps'
 import type {
@@ -15,6 +15,7 @@ import type {
   FileSystemSource,
   ExportSource,
 } from './types'
+import { getDirectorySourceFile } from './get-directory-source-file'
 
 export type { MDXContent, FileSystemSource, ExportSource }
 
@@ -34,13 +35,13 @@ function resolveProject(tsConfigFilePath: string): Project {
 }
 
 /**
- * Creates a collection of files based on a specified file pattern.
+ * Creates a collection of sources based on a specified file pattern.
  * An import getter for each file extension will be generated at the root of the project in a `.mdxts/index.js` file.
  *
  * @param filePattern - A pattern to match files (e.g., "*.ts", "*.mdx").
- * @param options - Optional settings for the collection, including base directory, base pathname, TypeScript config file path, and a custom sort function.
- * @returns A collection object that provides methods to retrieve individual files or all files matching the pattern.
- * @throws An error if no source files are found for the given pattern.
+ * @param options - Optional settings for the collection, including base directory, base path, TypeScript config file path, and a custom sort function.
+ * @returns A collection object that provides methods to retrieve individual sources or all sources matching the pattern.
+ * @throws An error if no sources are found for the given pattern.
  */
 export function createCollection<
   AllExports extends FilePattern extends FilePatterns<'md' | 'mdx'>
@@ -57,14 +58,15 @@ export function createCollection<
   // TODO: this has a bug where it doesn't resolve the correct path if not relative e.g. ["*"] instead of ["./*"]
   const absoluteGlobPattern = aliases.apply(filePattern)
   const absoluteBaseGlobPattern = globParent(absoluteGlobPattern)
-  let sourceFiles = project.getSourceFiles(absoluteGlobPattern)
+  const { fileSystemSources, sourceFiles } = getSourceFilesAndDirectories(
+    project,
+    absoluteGlobPattern
+  )
 
-  if (sourceFiles.length === 0) {
-    sourceFiles = project.addSourceFilesAtPaths(absoluteGlobPattern)
-  }
-
-  if (sourceFiles.length === 0) {
-    throw new Error(`No source files found for pattern: ${filePattern}`)
+  if (fileSystemSources.length === 0) {
+    throw new Error(
+      `[mdxts] No source files or directories were found for the file pattern: ${filePattern}`
+    )
   }
 
   /** Update the import map for the file pattern if it was not added when initializing the cli. */
@@ -72,14 +74,13 @@ export function createCollection<
 
   const baseDirectory = project.getDirectoryOrThrow(absoluteBaseGlobPattern)
   const sourceFilesOrderMap = getSourceFilesOrderMap(baseDirectory)
-  const sourceFilesPathnameMap = getSourceFilesPathnameMap(baseDirectory, {
+  const sourcePathMap = getSourcePathMap(baseDirectory, {
     baseDirectory: options?.baseDirectory,
-    basePathname: options?.basePathname,
+    basePath: options?.basePath,
   })
-  const getImportSlug = (sourceFile: SourceFile) => {
+  const getImportSlug = (source: SourceFile | Directory) => {
     return (
-      sourceFile
-        .getFilePath()
+      getSourcePath(source)
         // remove the base glob pattern: /src/posts/welcome.mdx -> /posts/welcome.mdx
         .replace(absoluteBaseGlobPattern, '')
         // remove leading slash: /posts/welcome.mdx -> posts/welcome.mdx
@@ -99,51 +100,63 @@ export function createCollection<
       return 'TODO'
     },
     getSource(
-      pathname: string | string[]
+      path: string | string[]
     ): FileSystemSource<AllExports> | undefined {
-      let pathnameString = Array.isArray(pathname)
-        ? pathname.join('/')
-        : pathname
+      let pathString = Array.isArray(path) ? path.join('/') : path
 
-      if (!pathnameString.startsWith('/')) {
-        pathnameString = `/${pathnameString}`
+      // ensure the path starts with a slash
+      if (!pathString.startsWith('/')) {
+        pathString = `/${pathString}`
       }
 
-      const matchingSourceFiles = sourceFiles.filter((sourceFile) => {
-        const sourceFilePathname = sourceFilesPathnameMap.get(
-          sourceFile.getFilePath()
-        )!
-        return sourceFilePathname === pathnameString
+      // prepend the collection base path if it exists and the path does not already start with it
+      if (options?.basePath) {
+        if (!pathString.startsWith(`/${options.basePath}`)) {
+          pathString = `/${options.basePath}${pathString}`
+        }
+      }
+
+      const matchingSources = fileSystemSources.filter((sourceFile) => {
+        const path = sourcePathMap.get(getSourcePath(sourceFile))!
+        return path === pathString
       })
+
       const slugExtensions = new Set(
-        matchingSourceFiles.map((sourceFile) => sourceFile.getExtension())
+        matchingSources
+          .map((source) =>
+            source instanceof SourceFile ? source.getExtension() : undefined
+          )
+          .filter(Boolean)
       )
 
-      if (slugExtensions.size === 0) {
-        return undefined
+      if (matchingSources.length === 0 && slugExtensions.size === 0) {
+        return
       } else if (slugExtensions.size > 1) {
         throw new Error(
-          `[mdxts] Multiple sources found for slug "${pathnameString}" at file pattern "${filePattern}". Only one source is currently allowed. Please file an issue for support.`
+          `[mdxts] Multiple sources found for file pattern "${filePattern}" at path "${pathString}". Only one source is currently allowed. Please file an issue for support.`
         )
       }
 
+      const sourceFileOrDirectory = matchingSources.at(0)!
+      const sourcePath = getSourcePath(sourceFileOrDirectory)
       const slugExtension = Array.from(slugExtensions).at(0)?.slice(1)
       const importKey = `${slugExtension}:${filePattern}`
       const getImport = getImportMap<AllExports>(importKey)
 
-      if (!getImport) {
+      if (!getImport && sourceFileOrDirectory instanceof SourceFile) {
         throw new Error(
-          `[mdxts] No source found for slug "${pathnameString}" at file pattern "${filePattern}":\n   - Make sure the ".mdxts" directory was successfully created and your tsconfig.json is aliased correctly.\n   - Make sure the file pattern is formatted correctly and targeting files that exist.`
+          `[mdxts] No source found for slug "${pathString}" at file pattern "${filePattern}":\n   - Make sure the ".mdxts" directory was successfully created and your tsconfig.json is aliased correctly.\n   - Make sure the file pattern is formatted correctly and targeting files that exist.`
         )
       }
 
-      const sourceFile = matchingSourceFiles[0]
-      const sourceFilePath = sourceFile.getFilePath()
       let moduleExports: AllExports | null = null
 
       async function ensureModuleExports() {
-        if (moduleExports === null) {
-          const importSlug = getImportSlug(sourceFile)
+        if (
+          moduleExports === null &&
+          sourceFileOrDirectory instanceof SourceFile
+        ) {
+          const importSlug = getImportSlug(sourceFileOrDirectory)
           moduleExports = await getImport(importSlug)
         }
       }
@@ -152,29 +165,29 @@ export function createCollection<
 
       async function ensureGetGitMetadata() {
         if (gitMetadata === null) {
-          gitMetadata = await getGitMetadata(sourceFilePath)
+          gitMetadata = await getGitMetadata(sourcePath)
         }
       }
 
       const source = {
         getName() {
-          return sourceFile.getBaseName()
+          return sourceFileOrDirectory.getBaseName()
         },
         getPath() {
-          return pathnameString
+          return pathString
         },
         getEditPath() {
-          return sourceFilePath
+          return sourcePath
         },
         getDepth() {
-          return getDepth(pathnameString, options?.basePathname)
+          return getPathDepth(pathString)
         },
         getOrder() {
-          const order = sourceFilesOrderMap.get(sourceFilePath)
+          const order = sourceFilesOrderMap.get(sourcePath)
 
           if (order === undefined) {
             throw new Error(
-              `[mdxts] Source file order not found for file path "${sourceFilePath}". If you see this error, please file an issue.`
+              `[mdxts] Source file order not found for file path "${sourcePath}". If you see this error, please file an issue.`
             )
           }
 
@@ -182,36 +195,54 @@ export function createCollection<
         },
         async getCreatedAt() {
           await ensureGetGitMetadata()
+
           return gitMetadata!.createdAt
             ? new Date(gitMetadata!.createdAt)
             : undefined
         },
         async getUpdatedAt() {
           await ensureGetGitMetadata()
+
           return gitMetadata!.updatedAt
             ? new Date(gitMetadata!.updatedAt)
             : undefined
         },
         async getAuthors() {
           await ensureGetGitMetadata()
+
           return gitMetadata!.authors
         },
-        getSource(pathname: string | string[]) {
+        getSource(path: string | string[]) {
           const currentPath = this.getPath()
-          const fullPath = Array.isArray(pathname)
-            ? `${currentPath}/${pathname.join('/')}`
-            : `${currentPath}/${pathname}`
+          const fullPath = Array.isArray(path)
+            ? `${currentPath}/${path.join('/')}`
+            : `${currentPath}/${path}`
+
           return collection.getSource(fullPath)
         },
         getSources() {
+          const path = this.getPath()
           const depth = this.getDepth()
-          return collection
-            .getSources()
-            .filter((source) => source.getDepth() === depth + 1)
+
+          return fileSystemSources
+            .map((source) => {
+              const path = sourcePathMap.get(getSourcePath(source))!
+              return collection.getSource(path)
+            })
+            .filter((source) => {
+              if (source) {
+                const descendantPath = source.getPath()
+                const descendantDepth = source.getDepth()
+                return (
+                  descendantPath.startsWith(path) &&
+                  descendantDepth === depth + 1
+                )
+              }
+            }) as FileSystemSource<AllExports>[]
         },
         getSiblings() {
-          const currentIndex = sourceFiles.findIndex(
-            (file) => file.getFilePath() === sourceFilePath
+          const currentIndex = fileSystemSources.findIndex(
+            (source) => getSourcePath(source) === sourcePath
           )
 
           if (currentIndex === -1) {
@@ -222,18 +253,18 @@ export function createCollection<
             FileSystemSource<AllExports> | undefined,
             FileSystemSource<AllExports> | undefined,
           ] = [undefined, undefined]
-          const previousFile = sourceFiles[currentIndex - 1]
-          const nextFile = sourceFiles[currentIndex + 1]
+          const previousSource = fileSystemSources[currentIndex - 1]
+          const nextSource = fileSystemSources[currentIndex + 1]
 
-          if (previousFile) {
-            const previousSlug = sourceFilesPathnameMap.get(
-              previousFile.getFilePath()
+          if (previousSource) {
+            const previousSlug = sourcePathMap.get(
+              getSourcePath(previousSource)
             )!
             siblings[0] = collection.getSource(previousSlug)
           }
 
-          if (nextFile) {
-            const nextSlug = sourceFilesPathnameMap.get(nextFile.getFilePath())!
+          if (nextSource) {
+            const nextSlug = sourcePathMap.get(getSourcePath(nextSource))!
             siblings[1] = collection.getSource(nextSlug)
           }
 
@@ -251,9 +282,11 @@ export function createCollection<
               return 'TODO'
             },
             getEnvironment() {
-              const importDeclarations = sourceFile.getImportDeclarations()
+              if (sourceFileOrDirectory instanceof Directory) {
+                return 'unknown'
+              }
 
-              for (const importDeclaration of importDeclarations) {
+              for (const importDeclaration of sourceFileOrDirectory.getImportDeclarations()) {
                 const specifier = importDeclaration.getModuleSpecifierValue()
                 if (specifier === 'server-only') {
                   return 'server'
@@ -324,9 +357,11 @@ export function createCollection<
               return 'TODO'
             },
             getEnvironment() {
-              const importDeclarations = sourceFile.getImportDeclarations()
+              if (sourceFileOrDirectory instanceof Directory) {
+                return 'unknown'
+              }
 
-              for (const importDeclaration of importDeclarations) {
+              for (const importDeclaration of sourceFileOrDirectory.getImportDeclarations()) {
                 const specifier = importDeclaration.getModuleSpecifierValue()
                 if (specifier === 'server-only') {
                   return 'server'
@@ -359,6 +394,23 @@ export function createCollection<
           }
         },
         getNamedExports() {
+          let sourceFile: SourceFile
+
+          if (sourceFileOrDirectory instanceof Directory) {
+            const directorySourceFile = getDirectorySourceFile(
+              sourceFileOrDirectory
+            )!
+            if (directorySourceFile) {
+              sourceFile = getDirectorySourceFile(sourceFileOrDirectory)!
+            } else {
+              throw new Error(
+                `[mdxts] No source file found for directory while attempting to load named exports at "${sourceFileOrDirectory.getBaseName()}".`
+              )
+            }
+          } else {
+            sourceFile = sourceFileOrDirectory
+          }
+
           return sourceFile.getExportSymbols().map((symbol) => {
             const name = symbol.getName()
             return this.getNamedExport(
@@ -372,32 +424,69 @@ export function createCollection<
     },
 
     getSources() {
-      const baseDepth = options?.basePathname
-        ? options.basePathname.split('/').filter(Boolean).length
-        : 0
+      const depthOffset = options?.basePath
+        ? getPathDepth(options.basePath) + 1
+        : 1
 
-      return sourceFiles
-        .filter((sourceFile) => {
-          const pathname = sourceFilesPathnameMap.get(sourceFile.getFilePath())!
-          const depth = getDepth(pathname)
-          return depth === baseDepth
+      return fileSystemSources
+        .map((source) => {
+          const path = sourcePathMap.get(getSourcePath(source))!
+          return this.getSource(path)
         })
-        .map((sourceFile) => {
-          const slug = sourceFilesPathnameMap.get(sourceFile.getFilePath())!
-          return this.getSource(slug)
-        })
-        .filter(Boolean) as FileSystemSource<AllExports>[]
+        .filter(
+          (source) => source?.getDepth() === depthOffset
+        ) as FileSystemSource<AllExports>[]
     },
   } satisfies CollectionSource<AllExports>
 
   return collection
 }
 
-/** Get the depth of a pathname relative to a base pathname. */
-function getDepth(pathname: string, basePathname?: string) {
-  const segments = pathname.split('/').filter(Boolean)
+/** Get all sources for a file pattern. */
+function getSourceFilesAndDirectories(
+  project: Project,
+  filePattern: string
+): {
+  fileSystemSources: (SourceFile | Directory)[]
+  sourceFiles: SourceFile[]
+  sourceDirectories: Directory[]
+} {
+  let sourceFiles = project.getSourceFiles(filePattern)
 
-  if (segments.at(0) === basePathname) {
+  if (sourceFiles.length === 0) {
+    sourceFiles = project.addSourceFilesAtPaths(filePattern)
+  }
+
+  const fileSystemSources = new Set<SourceFile | Directory>(sourceFiles)
+  const sourceDirectories = Array.from(
+    new Set(sourceFiles.map((sourceFile) => sourceFile.getDirectory()))
+  )
+
+  for (const sourceDirectory of sourceDirectories) {
+    const directorySourceFile = getDirectorySourceFile(sourceDirectory)
+    fileSystemSources.add(directorySourceFile || sourceDirectory)
+  }
+
+  return {
+    fileSystemSources: Array.from(fileSystemSources),
+    sourceFiles,
+    sourceDirectories,
+  }
+}
+
+/** Get the path of a source file or directory. */
+function getSourcePath(source: SourceFile | Directory) {
+  if (source instanceof SourceFile) {
+    return source.getFilePath()
+  }
+  return source.getPath()
+}
+
+/** Get the depth of a path relative to a base path. */
+function getPathDepth(path: string, basePath?: string) {
+  const segments = path.split('/').filter(Boolean)
+
+  if (segments.at(0) === basePath) {
     return segments.length - 2
   }
 
