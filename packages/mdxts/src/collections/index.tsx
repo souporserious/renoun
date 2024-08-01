@@ -139,11 +139,13 @@ export function createCollection<
 
       const sourceFileOrDirectory = matchingSources.at(0)!
       const sourcePath = getSourcePath(sourceFileOrDirectory)
+      const isSourceFile = sourceFileOrDirectory instanceof SourceFile
+      const isDirectory = sourceFileOrDirectory instanceof Directory
       const slugExtension = Array.from(slugExtensions).at(0)?.slice(1)
       const importKey = `${slugExtension}:${filePattern}`
       const getImport = getImportMap<AllExports>(importKey)
 
-      if (!getImport && sourceFileOrDirectory instanceof SourceFile) {
+      if (isSourceFile && !getImport) {
         throw new Error(
           `[mdxts] No source found for slug "${pathString}" at file pattern "${filePattern}":\n   - Make sure the ".mdxts" directory was successfully created and your tsconfig.json is aliased correctly.\n   - Make sure the file pattern is formatted correctly and targeting files that exist.`
         )
@@ -152,10 +154,7 @@ export function createCollection<
       let moduleExports: AllExports | null = null
 
       async function ensureModuleExports() {
-        if (
-          moduleExports === null &&
-          sourceFileOrDirectory instanceof SourceFile
-        ) {
+        if (isSourceFile && moduleExports === null) {
           const importSlug = getImportSlug(sourceFileOrDirectory)
           moduleExports = await getImport(importSlug)
         }
@@ -389,6 +388,11 @@ export function createCollection<
             },
             async getValue(): Promise<AllExports[Name]> {
               await ensureModuleExports()
+              if (isDirectory) {
+                throw new Error(
+                  `[mdxts] No module exports found for named export "${String(name)}" for path "${source.getPath()}". Either catch and handle the error, or alternatively, add an index or readme file to the directory with a named export of "${String(name)}".`
+                )
+              }
               return moduleExports![name]
             },
           }

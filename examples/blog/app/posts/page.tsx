@@ -6,9 +6,9 @@ export default async function Posts() {
     <>
       <h1>Blog</h1>
       <ul>
-        {/* {PostsCollection.getSources().map((Source) => (
+        {PostsCollection.getSources().map((Source) => (
           <PostItem key={Source.getPath()} Source={Source} />
-        ))} */}
+        ))}
       </ul>
     </>
   )
@@ -16,7 +16,9 @@ export default async function Posts() {
 
 async function PostItem({ Source }: { Source: PostSource }) {
   const pathname = Source.getPath()
-  const frontmatter = await Source.getNamedExport('frontmatter').getValue()
+  const frontmatter = await Source.getNamedExport('frontmatter')
+    .getValue()
+    .catch(() => null)
 
   return (
     <li key={pathname}>

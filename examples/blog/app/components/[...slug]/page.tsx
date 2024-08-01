@@ -14,7 +14,7 @@ export const ComponentsCollection = createCollection<ComponentSchema>(
   '@/components/**/{index,*.examples}.{ts,tsx}',
   {
     baseDirectory: 'components',
-    basePathname: 'components',
+    basePath: 'components',
   }
 )
 
