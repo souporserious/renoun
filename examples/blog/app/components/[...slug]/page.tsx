@@ -1,14 +1,14 @@
 import {
   createCollection,
-  type Source,
-  type NamedExport,
+  type FileSystemSource,
+  type ExportSource,
 } from 'mdxts/collections'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
 type ComponentSchema = Record<string, React.ComponentType>
 
-export type ComponentSource = Source<ComponentSchema>
+export type ComponentSource = FileSystemSource<ComponentSchema>
 
 export const ComponentsCollection = createCollection<ComponentSchema>(
   '@/components/**/{index,*.examples}.{ts,tsx}',
@@ -21,7 +21,7 @@ export const ComponentsCollection = createCollection<ComponentSchema>(
 async function ComponentExport({
   NamedExport,
 }: {
-  NamedExport: NamedExport<React.ComponentType>
+  NamedExport: ExportSource<React.ComponentType>
 }) {
   const name = NamedExport.getName()
   const Component = await NamedExport.getValue()
@@ -57,7 +57,7 @@ export default async function Component({
   return (
     <>
       <Link href="/components">All Components</Link>
-      <h1>{ComponentSource.getPathname()}</h1>
+      <h1>{ComponentSource.getPath()}</h1>
 
       <h2>Exports</h2>
       {ComponentSource.getNamedExports().map((NamedExport) => (
@@ -102,7 +102,7 @@ async function SiblingLink({
   Source: ComponentSource
   direction: 'previous' | 'next'
 }) {
-  const pathname = Source.getPathname()
+  const pathname = Source.getPath()
 
   return (
     <Link

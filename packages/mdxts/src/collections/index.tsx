@@ -1,7 +1,6 @@
 import * as React from 'react'
 import type { MDXContent } from 'mdx/types'
 import { Project, type SourceFile } from 'ts-morph'
-// import { dirname, join } from 'node:path'
 import AliasesFromTSConfig from 'aliases-from-tsconfig'
 import globParent from 'glob-parent'
 
@@ -9,88 +8,17 @@ import { getSourceFilesOrderMap } from '../utils/get-source-files-sort-order'
 import { getGitMetadata } from './get-git-metadata'
 import { getSourceFilesPathnameMap } from './get-source-files-pathname-map'
 import { updateImportMap, getImportMap, setImports } from './import-maps'
-// import { getPackageMetadata } from './get-package-metadata'
-// import { getPublicPaths } from './get-public-paths'
+import type {
+  FilePatterns,
+  CollectionOptions,
+  CollectionSource,
+  FileSystemSource,
+  ExportSource,
+} from './types'
 
-export type { MDXContent }
+export type { MDXContent, FileSystemSource, ExportSource }
+
 export { setImports }
-
-export interface Collection<AllExports extends Record<string, unknown>> {
-  /** Retrieves a source in the collection by its slug. */
-  getSource(slug: string | string[]): Source<AllExports> | undefined
-
-  /** Retrieves all sources in the collection. */
-  getSources(): Source<AllExports>[]
-}
-
-export interface CollectionOptions {
-  baseDirectory?: string
-  basePathname?: string
-  tsConfigFilePath?: string
-  sort?: (a: string, b: string) => number
-}
-
-export interface Export<Value> {
-  /** The line and column where the export starts. */
-  getStart(): { line: number; column: number }
-
-  /** The line and column where the export ends. */
-  getEnd(): { line: number; column: number }
-
-  /** The executable value of the export. */
-  getValue(): Promise<Value>
-}
-
-export interface NamedExport<Value> extends Export<Value> {
-  /** The name of the export. */
-  getName(): string
-}
-
-export interface Source<
-  AllExports extends Record<string, unknown> = Record<string, unknown>,
-> {
-  /** A human-readable version of the file name. */
-  getLabel(): string
-
-  /** The path to the file accounting for the `baseDirectory` and `basePathname` options. */
-  getPathname(): string
-
-  /** The order of the file in the collection based on the position in the file system. */
-  getOrder(): string
-
-  /** The depth of the file in the directory structure. */
-  getDepth(): number
-
-  /** The date the file was first created. */
-  getCreatedAt(): Promise<Date | undefined>
-
-  /** The date the file was last updated. */
-  getUpdatedAt(): Promise<Date | undefined>
-
-  /** All authors who have contributed to the file. */
-  getAuthors(): Promise<string[]>
-
-  /** The previous and next files in the collection if they exist. */
-  getSiblings(): Source<AllExports>[]
-
-  /** The execution environment of the file. */
-  getExecutionEnvironment(): 'server' | 'client' | 'isomorphic'
-
-  /** The executable source of the default export. */
-  getDefaultExport(): Export<AllExports['default']>
-
-  /** A named export of the file. */
-  getNamedExport<Name extends Exclude<keyof AllExports, 'default'>>(
-    name: Name
-  ): NamedExport<AllExports[Name]>
-
-  /** All named exports of the file. */
-  getNamedExports(): NamedExport<AllExports[keyof AllExports]>[]
-}
-
-export type FilePatterns<Extension extends string = string> =
-  | `${string}${Extension}`
-  | `${string}${Extension}${string}`
 
 const projectCache = new Map<string, Project>()
 
@@ -122,7 +50,7 @@ export function createCollection<
 >(
   filePattern: FilePattern,
   options?: CollectionOptions
-): Collection<AllExports> {
+): CollectionSource<AllExports> {
   const project = resolveProject(options?.tsConfigFilePath ?? 'tsconfig.json')
   const tsConfigFilePath = project.getCompilerOptions().configFilePath as string
   const aliases = new AliasesFromTSConfig(tsConfigFilePath)
@@ -142,23 +70,11 @@ export function createCollection<
   /** Update the import map for the file pattern if it was not added when initializing the cli. */
   updateImportMap(filePattern, sourceFiles)
 
-  // const packageMetadata = getPackageMetadata(dirname(tsConfigFilePath))
-
-  // if (!packageMetadata) {
-  //   throw new Error(
-  //     `No package.json found for TypeScript config file path at: ${tsConfigFilePath}`
-  //   )
-  // }
-
-  // const publicPaths = packageMetadata.exports
-  //   ? getPublicPaths(packageMetadata)
-  //   : sourceFiles.map((sourceFile) => sourceFile.getFilePath())
   const baseDirectory = project.getDirectoryOrThrow(absoluteBaseGlobPattern)
   const sourceFilesOrderMap = getSourceFilesOrderMap(baseDirectory)
   const sourceFilesPathnameMap = getSourceFilesPathnameMap(baseDirectory, {
     baseDirectory: options?.baseDirectory,
     basePathname: options?.basePathname,
-    // packageName: packageMetadata?.name,
   })
   const getImportSlug = (sourceFile: SourceFile) => {
     return (
@@ -172,8 +88,19 @@ export function createCollection<
         .replace(/\.[^/.]+$/, '')
     )
   }
-  const collection: Collection<AllExports> = {
-    getSource(pathname: string | string[]): Source<AllExports> | undefined {
+  const collection = {
+    getName() {
+      return ''
+    },
+    getPath() {
+      return ''
+    },
+    getEditPath() {
+      return ''
+    },
+    getSource(
+      pathname: string | string[]
+    ): FileSystemSource<AllExports> | undefined {
       let pathnameString = Array.isArray(pathname)
         ? pathname.join('/')
         : pathname
@@ -212,10 +139,6 @@ export function createCollection<
 
       const sourceFile = matchingSourceFiles[0]
       const sourceFilePath = sourceFile.getFilePath()
-      // const isMainExport = options?.basePathname
-      //   ? pathname === join(options.basePathname, packageMetadata.name)
-      //   : pathname === packageMetadata.name
-
       let moduleExports: AllExports | null = null
 
       async function ensureModuleExports() {
@@ -234,11 +157,14 @@ export function createCollection<
       }
 
       const source = {
-        getLabel() {
-          return ''
+        getName() {
+          return sourceFile.getBaseName()
         },
-        getPathname() {
+        getPath() {
           return pathnameString
+        },
+        getEditPath() {
+          return sourceFilePath
         },
         getDepth() {
           const segments = pathnameString.split('/').filter(Boolean)
@@ -255,14 +181,31 @@ export function createCollection<
         async getCreatedAt() {
           await ensureGetGitMetadata()
           return gitMetadata!.createdAt
+            ? new Date(gitMetadata!.createdAt)
+            : undefined
         },
         async getUpdatedAt() {
           await ensureGetGitMetadata()
           return gitMetadata!.updatedAt
+            ? new Date(gitMetadata!.updatedAt)
+            : undefined
         },
         async getAuthors() {
           await ensureGetGitMetadata()
           return gitMetadata!.authors
+        },
+        getSource(pathname: string | string[]) {
+          const currentPath = this.getPath()
+          const fullPath = Array.isArray(pathname)
+            ? `${currentPath}/${pathname.join('/')}`
+            : `${currentPath}/${pathname}`
+          return collection.getSource(fullPath)
+        },
+        getSources() {
+          const depth = this.getDepth()
+          return collection
+            .getSources()
+            .filter((source) => source.getDepth() === depth)
         },
         getSiblings() {
           const currentIndex = sourceFiles.findIndex(
@@ -273,7 +216,10 @@ export function createCollection<
             return []
           }
 
-          const siblings: (Source<AllExports> | undefined)[] = []
+          const siblings: [
+            FileSystemSource<AllExports> | undefined,
+            FileSystemSource<AllExports> | undefined,
+          ] = [undefined, undefined]
           const previousFile = sourceFiles[currentIndex - 1]
           const nextFile = sourceFiles[currentIndex + 1]
 
@@ -281,37 +227,56 @@ export function createCollection<
             const previousSlug = sourceFilesPathnameMap.get(
               previousFile.getFilePath()
             )!
-            siblings.push(collection.getSource(previousSlug))
-          } else {
-            siblings.push(undefined)
+            siblings[0] = collection.getSource(previousSlug)
           }
 
           if (nextFile) {
             const nextSlug = sourceFilesPathnameMap.get(nextFile.getFilePath())!
-            siblings.push(collection.getSource(nextSlug))
-          } else {
-            siblings.push(undefined)
+            siblings[1] = collection.getSource(nextSlug)
           }
 
           return siblings
         },
-        getExecutionEnvironment() {
-          const importDeclarations = sourceFile.getImportDeclarations()
-
-          for (const importDeclaration of importDeclarations) {
-            const moduleSpecifier = importDeclaration.getModuleSpecifierValue()
-            if (moduleSpecifier === 'server-only') {
-              return 'server'
-            }
-            if (moduleSpecifier === 'client-only') {
-              return 'client'
-            }
-          }
-
-          return 'isomorphic'
-        },
         getDefaultExport() {
           return {
+            getName() {
+              return 'TODO'
+            },
+            getType() {
+              return 'TODO'
+            },
+            getText() {
+              return 'TODO'
+            },
+            getEnvironment() {
+              const importDeclarations = sourceFile.getImportDeclarations()
+
+              for (const importDeclaration of importDeclarations) {
+                const specifier = importDeclaration.getModuleSpecifierValue()
+                if (specifier === 'server-only') {
+                  return 'server'
+                }
+                if (specifier === 'client-only') {
+                  return 'client'
+                }
+              }
+
+              return 'isomorphic'
+            },
+            getPath() {
+              return 'TODO'
+            },
+            getEditPath() {
+              return 'TODO'
+            },
+            getPosition() {
+              return {
+                startLine: 0,
+                startColumn: 0,
+                endLine: 0,
+                endColumn: 0,
+              }
+            },
             async getValue() {
               await ensureModuleExports()
               const defaultExport = moduleExports!.default
@@ -348,10 +313,42 @@ export function createCollection<
         ) {
           return {
             getName() {
-              return name as Name
+              return name as string
             },
-            getStart() {
-              return
+            getType() {
+              return 'TODO'
+            },
+            getText() {
+              return 'TODO'
+            },
+            getEnvironment() {
+              const importDeclarations = sourceFile.getImportDeclarations()
+
+              for (const importDeclaration of importDeclarations) {
+                const specifier = importDeclaration.getModuleSpecifierValue()
+                if (specifier === 'server-only') {
+                  return 'server'
+                }
+                if (specifier === 'client-only') {
+                  return 'client'
+                }
+              }
+
+              return 'isomorphic'
+            },
+            getPath() {
+              return 'TODO'
+            },
+            getEditPath() {
+              return 'TODO'
+            },
+            getPosition() {
+              return {
+                startLine: 0,
+                startColumn: 0,
+                endLine: 0,
+                endColumn: 0,
+              }
             },
             async getValue(): Promise<AllExports[Name]> {
               await ensureModuleExports()
@@ -362,32 +359,34 @@ export function createCollection<
         getNamedExports() {
           return sourceFile.getExportSymbols().map((symbol) => {
             const name = symbol.getName()
-
-            return {
-              getName() {
-                return name
-              },
-              async getValue() {
-                await ensureModuleExports()
-                return moduleExports![name]
-              },
-            }
+            return this.getNamedExport(
+              name as Exclude<keyof AllExports, 'default'>
+            )
           })
         },
-      } as Source<AllExports>
+      } satisfies FileSystemSource<AllExports>
 
       return source
     },
 
     getSources() {
+      const baseDepth = options?.basePathname
+        ? options.basePathname.split('/').filter(Boolean).length
+        : 0
+
       return sourceFiles
+        .filter((sourceFile) => {
+          const slug = sourceFilesPathnameMap.get(sourceFile.getFilePath())!
+          const depth = slug.split('/').filter(Boolean).length
+          return depth === baseDepth + 1
+        })
         .map((sourceFile) => {
           const slug = sourceFilesPathnameMap.get(sourceFile.getFilePath())!
           return this.getSource(slug)
         })
-        .filter(Boolean) as Source<AllExports>[]
+        .filter(Boolean) as FileSystemSource<AllExports>[]
     },
-  }
+  } satisfies CollectionSource<AllExports>
 
   return collection
 }

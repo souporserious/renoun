@@ -1,14 +1,3 @@
-// import { createMdxtsPlugin } from 'mdxts/next'
-
-// const withMdxts = createMdxtsPlugin({
-//   theme: 'nord',
-//   gitSource: 'https://github.com/souporserious/mdxts',
-// })
-
-// export default withMdxts({
-//   // output: 'export',
-// })
-
 import createMDXPlugin from '@next/mdx'
 import webpack from 'webpack'
 import remarkFrontmatter from 'remark-frontmatter'

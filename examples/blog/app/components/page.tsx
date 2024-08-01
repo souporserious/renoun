@@ -8,7 +8,7 @@ export default async function Components() {
       <h1>Components</h1>
       <ul>
         {ComponentsCollection.getSources().map((Source) => (
-          <ComponentItem key={Source.getPathname()} Source={Source} />
+          <ComponentItem key={Source.getPath()} Source={Source} />
         ))}
       </ul>
     </>
@@ -16,7 +16,7 @@ export default async function Components() {
 }
 
 async function ComponentItem({ Source }: { Source: ComponentSource }) {
-  const pathname = Source.getPathname()
+  const pathname = Source.getPath()
 
   return (
     <li key={pathname}>

@@ -1,11 +1,11 @@
 import {
   createCollection,
   type MDXContent,
-  type Source,
+  type FileSystemSource,
 } from 'mdxts/collections'
 import Link from 'next/link'
 
-type PostSchema = {
+export type PostSchema = {
   default: MDXContent
   frontmatter?: {
     title: string
@@ -13,7 +13,7 @@ type PostSchema = {
   }
 }
 
-export type PostSource = Source<PostSchema>
+export type PostSource = FileSystemSource<PostSchema>
 
 export const PostsCollection = createCollection<PostSchema>(
   '@/posts/**/*.mdx',
@@ -32,8 +32,11 @@ export default async function Post({ params }: { params: { slug: string[] } }) {
   return (
     <>
       <Link href="/posts">All Posts</Link>
+      {/* <Link href={PostsCollection.getPathname()}>
+        All {PostsCollection.getLabel()}
+      </Link> */}
 
-      <Content />
+      {Content ? <Content /> : null}
 
       {updatedAt ? (
         <div>Last updated: {new Date(updatedAt).toLocaleString()}</div>
@@ -58,7 +61,7 @@ async function SiblingLink({
   Source: PostSource
   direction: 'previous' | 'next'
 }) {
-  const pathname = Source.getPathname()
+  const pathname = Source.getPath()
   const frontmatter = await Source.getNamedExport('frontmatter').getValue()
 
   return (
