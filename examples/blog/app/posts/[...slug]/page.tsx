@@ -18,6 +18,7 @@ export type PostSource = FileSystemSource<PostSchema>
 export const PostsCollection = createCollection<PostSchema>(
   '@/posts/**/*.mdx',
   {
+    title: 'Posts',
     baseDirectory: 'posts',
     basePath: 'posts', // TODO: test this works without specifying
   }
@@ -26,15 +27,16 @@ export const PostsCollection = createCollection<PostSchema>(
 export default async function Post({ params }: { params: { slug: string[] } }) {
   const PostSource = PostsCollection.getSource(params.slug)!
   const [PreviousSource, NextSource] = PostSource.getSiblings()
-  const Content = await PostSource.getDefaultExport().getValue()
+  const Content = await PostSource.getDefaultExport()
+    .getValue()
+    .catch(() => null)
   const updatedAt = await PostSource.getUpdatedAt()
 
   return (
     <>
-      <Link href="/posts">All Posts</Link>
-      {/* <Link href={PostsCollection.getPathname()}>
-        All {PostsCollection.getLabel()}
-      </Link> */}
+      <Link href={PostsCollection.getPath()}>
+        All {PostsCollection.getTitle()}
+      </Link>
 
       {Content ? <Content /> : null}
 
@@ -62,7 +64,9 @@ async function SiblingLink({
   direction: 'previous' | 'next'
 }) {
   const pathname = Source.getPath()
-  const frontmatter = await Source.getNamedExport('frontmatter').getValue()
+  const frontmatter = await Source.getNamedExport('frontmatter')
+    .getValue()
+    .catch(() => null)
 
   return (
     <Link
@@ -73,7 +77,7 @@ async function SiblingLink({
       }}
     >
       <div>{direction === 'previous' ? 'Previous' : 'Next'}</div>
-      {frontmatter ? frontmatter.title : pathname}
+      {frontmatter ? frontmatter.title : Source.getTitle()}
     </Link>
   )
 }

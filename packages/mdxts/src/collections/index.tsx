@@ -91,17 +91,25 @@ export function createCollection<
     )
   }
   const collection = {
-    getName() {
-      return 'TODO'
-    },
     getTitle() {
-      return parseTitle(this.getName())
+      if (!options?.title) {
+        throw new Error(
+          `[mdxts] No title provided for collection with file pattern "${filePattern}".`
+        )
+      }
+
+      return parseTitle(options.title)
     },
     getPath() {
-      return 'TODO'
+      if (options?.basePath) {
+        return options.basePath.startsWith('/')
+          ? options.basePath
+          : `/${options.basePath}`
+      }
+      return '/'
     },
     getEditPath() {
-      return 'TODO'
+      return absoluteBaseGlobPattern.replace(process.cwd(), '')
     },
     getSource(
       path: string | string[]

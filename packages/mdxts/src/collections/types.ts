@@ -87,8 +87,10 @@ export interface FileSystemSource<Exports extends SourceExports>
   getNamedExports(): ExportSource<Exports[keyof Exports]>[]
 }
 
-export type CollectionSource<Exports extends SourceExports> =
-  BaseSourceWithGetters<Exports>
+export type CollectionSource<Exports extends SourceExports> = Omit<
+  BaseSourceWithGetters<Exports>,
+  'getName'
+>
 
 export interface CollectionOptions {
   /** The title used for the collection when rendered for a page. */
