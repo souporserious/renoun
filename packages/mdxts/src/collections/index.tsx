@@ -4,9 +4,9 @@ import { Project, type SourceFile } from 'ts-morph'
 import AliasesFromTSConfig from 'aliases-from-tsconfig'
 import globParent from 'glob-parent'
 
-import { getSourceFilesOrderMap } from '../utils/get-source-files-sort-order'
 import { getGitMetadata } from './get-git-metadata'
 import { getSourceFilesPathnameMap } from './get-source-files-pathname-map'
+import { getSourceFilesOrderMap } from './get-source-files-sort-order'
 import { updateImportMap, getImportMap, setImports } from './import-maps'
 import type {
   FilePatterns,
@@ -90,13 +90,13 @@ export function createCollection<
   }
   const collection = {
     getName() {
-      return ''
+      return 'TODO'
     },
     getPath() {
-      return ''
+      return 'TODO'
     },
     getEditPath() {
-      return ''
+      return 'TODO'
     },
     getSource(
       pathname: string | string[]
@@ -167,16 +167,18 @@ export function createCollection<
           return sourceFilePath
         },
         getDepth() {
-          const segments = pathnameString.split('/').filter(Boolean)
-
-          if (segments.at(0) === options?.basePathname) {
-            return segments.length - 2
-          }
-
-          return segments.length - 1
+          return getDepth(pathnameString, options?.basePathname)
         },
         getOrder() {
-          return sourceFilesOrderMap[sourceFilePath]
+          const order = sourceFilesOrderMap.get(sourceFilePath)
+
+          if (order === undefined) {
+            throw new Error(
+              `[mdxts] Source file order not found for file path "${sourceFilePath}". If you see this error, please file an issue.`
+            )
+          }
+
+          return order
         },
         async getCreatedAt() {
           await ensureGetGitMetadata()
@@ -205,7 +207,7 @@ export function createCollection<
           const depth = this.getDepth()
           return collection
             .getSources()
-            .filter((source) => source.getDepth() === depth)
+            .filter((source) => source.getDepth() === depth + 1)
         },
         getSiblings() {
           const currentIndex = sourceFiles.findIndex(
@@ -376,9 +378,9 @@ export function createCollection<
 
       return sourceFiles
         .filter((sourceFile) => {
-          const slug = sourceFilesPathnameMap.get(sourceFile.getFilePath())!
-          const depth = slug.split('/').filter(Boolean).length
-          return depth === baseDepth + 1
+          const pathname = sourceFilesPathnameMap.get(sourceFile.getFilePath())!
+          const depth = getDepth(pathname)
+          return depth === baseDepth
         })
         .map((sourceFile) => {
           const slug = sourceFilesPathnameMap.get(sourceFile.getFilePath())!
@@ -389,4 +391,15 @@ export function createCollection<
   } satisfies CollectionSource<AllExports>
 
   return collection
+}
+
+/** Get the depth of a pathname relative to a base pathname. */
+function getDepth(pathname: string, basePathname?: string) {
+  const segments = pathname.split('/').filter(Boolean)
+
+  if (segments.at(0) === basePathname) {
+    return segments.length - 2
+  }
+
+  return segments.length - 1
 }
