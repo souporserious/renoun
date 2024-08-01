@@ -6,7 +6,9 @@ async function TreeNavigation({ Source }: { Source: PostSource }) {
   const Sources = Source.getSources()
   const depth = Source.getDepth()
   const path = Source.getPath()
-  // const frontMatter = await Source.getNamedExport('frontmatter').getValue()
+  const frontMatter = await Source.getNamedExport('frontmatter')
+    .getValue()
+    .catch(() => null)
 
   if (Sources.length === 0) {
     return (
@@ -18,8 +20,7 @@ async function TreeNavigation({ Source }: { Source: PostSource }) {
             color: 'white',
           }}
         >
-          {Source.getName()} <small>{Source.getPath()}</small>
-          {/* {frontMatter?.title || Source.getName()} */}
+          {frontMatter?.title || Source.getTitle()}
         </Link>
       </li>
     )
@@ -33,8 +34,7 @@ async function TreeNavigation({ Source }: { Source: PostSource }) {
     return (
       <li style={{ paddingLeft: `${depth}rem` }}>
         <Link href={path} style={{ color: 'white' }}>
-          {Source.getName()} <small>{Source.getPath()}</small>
-          {/* {frontMatter?.title || Source.getName()} */}
+          {frontMatter?.title || Source.getTitle()}
         </Link>
         <ul
           style={{

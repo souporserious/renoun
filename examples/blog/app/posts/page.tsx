@@ -29,7 +29,7 @@ async function PostItem({ Source }: { Source: PostSource }) {
             <p>{frontmatter.description}</p>
           </>
         ) : (
-          <h2>{pathname}</h2>
+          <h2>{Source.getTitle()}</h2>
         )}
       </Link>
     </li>

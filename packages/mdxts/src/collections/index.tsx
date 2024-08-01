@@ -3,6 +3,7 @@ import type { MDXContent } from 'mdx/types'
 import { Project, Directory, SourceFile } from 'ts-morph'
 import AliasesFromTSConfig from 'aliases-from-tsconfig'
 import globParent from 'glob-parent'
+import parseTitle from 'title'
 
 import { getGitMetadata } from './get-git-metadata'
 import { getSourcePathMap } from './get-source-files-path-map'
@@ -93,6 +94,9 @@ export function createCollection<
     getName() {
       return 'TODO'
     },
+    getTitle() {
+      return parseTitle(this.getName())
+    },
     getPath() {
       return 'TODO'
     },
@@ -170,7 +174,22 @@ export function createCollection<
 
       const source = {
         getName() {
-          return sourceFileOrDirectory.getBaseName()
+          const baseName = isDirectory
+            ? sourceFileOrDirectory.getBaseName()
+            : sourceFileOrDirectory.getBaseNameWithoutExtension()
+
+          return (
+            baseName
+              // remove leading numbers e.g. 01.intro -> intro
+              .replace(/^\d+\./, '')
+          )
+        },
+        getTitle() {
+          return (
+            parseTitle(this.getName())
+              // remove hyphens e.g. my-component -> my component
+              .replace(/-/g, ' ')
+          )
         },
         getPath() {
           return pathString
@@ -274,6 +293,9 @@ export function createCollection<
             getName() {
               return 'TODO'
             },
+            getTitle() {
+              return parseTitle(this.getName())
+            },
             getType() {
               return 'TODO'
             },
@@ -348,6 +370,9 @@ export function createCollection<
           return {
             getName() {
               return name as string
+            },
+            getTitle() {
+              return parseTitle(name as string)
             },
             getType() {
               return 'TODO'

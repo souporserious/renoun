@@ -8,6 +8,9 @@ export interface BaseSource {
   /** The name of the source. */
   getName(): string
 
+  /** The name formatted as a title. */
+  getTitle(): string
+
   /**
    * The path to the source, taking into account the `baseDirectory` and
    * `basePath` configuration, and formatted to be URL-friendly.
