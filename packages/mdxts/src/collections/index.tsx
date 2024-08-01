@@ -159,7 +159,13 @@ export function createCollection<
 
       if (isSourceFile && !getImport) {
         throw new Error(
-          `[mdxts] No source found for slug "${pathString}" at file pattern "${filePattern}":\n   - Make sure the ".mdxts" directory was successfully created and your tsconfig.json is aliased correctly.\n   - Make sure the file pattern is formatted correctly and targeting files that exist.`
+          `[mdxts] No source found for slug "${pathString}" at file pattern "${filePattern}":
+You can fix this error by taking the following actions:
+
+- Make sure the ".mdxts" directory was successfully created and your tsconfig.json is aliases "mdxts" to ".mdxts/index.js" correctly.
+- Make sure the file pattern is formatted correctly and targeting files that exist.
+- Try refreshing the page or restarting server.
+- If you continue to see this error, please file an issue: https://github.com/souporserious/mdxts/issues`
         )
       }
 
@@ -297,6 +303,20 @@ export function createCollection<
           return siblings
         },
         getDefaultExport() {
+          if (isDirectory) {
+            const baseName = sourceFileOrDirectory.getBaseName()
+            throw new Error(
+              `[mdxts] Directory "${baseName}" at path "${source.getPath()}" does not have a default export.
+
+You can fix this error by taking one of the following actions:
+
+- Catch and handle this error in your code.
+- Add an index or readme file to the ${baseName} directory.
+  . Ensure the file has a valid extension based this collection's file pattern (${filePattern}).
+  . Define a default export in the file.`
+            )
+          }
+
           return {
             getName() {
               return 'TODO'
@@ -305,16 +325,12 @@ export function createCollection<
               return parseTitle(this.getName())
             },
             getType() {
-              return 'TODO'
+              return sourceFileOrDirectory
             },
             getText() {
               return 'TODO'
             },
             getEnvironment() {
-              if (sourceFileOrDirectory instanceof Directory) {
-                return 'unknown'
-              }
-
               for (const importDeclaration of sourceFileOrDirectory.getImportDeclarations()) {
                 const specifier = importDeclaration.getModuleSpecifierValue()
                 if (specifier === 'server-only') {
@@ -345,15 +361,21 @@ export function createCollection<
               await ensureModuleExports()
               const defaultExport = moduleExports!.default
 
+              if (defaultExport === undefined) {
+                return
+              }
+
               /* Enable hot module reloading in development for Next.js */
               if (
                 process.env.NODE_ENV === 'development' &&
                 process.env.MDXTS_NEXT_JS === 'true'
               ) {
+                // TODO: not every default export is a React component, this should be enabled in the root layout
                 const Component = defaultExport as React.ComponentType
 
                 return async (props: Record<string, unknown>) => {
                   const { Refresh } = await import('./Refresh')
+
                   return (
                     <>
                       <Refresh
@@ -375,6 +397,20 @@ export function createCollection<
         getNamedExport<Name extends Exclude<keyof AllExports, 'default'>>(
           name: Name
         ) {
+          if (isDirectory) {
+            const baseName = sourceFileOrDirectory.getBaseName()
+            throw new Error(
+              `[mdxts] Directory "${baseName}" at path "${source.getPath()}" does not have a named export for "${name.toString()}".
+
+You can fix this error by taking one of the following actions:
+
+- Catch and handle this error in your code.
+- Add an index or readme file to the directory.
+  . Ensure the file has a valid extension based this collection's file pattern (${filePattern}).
+  . Define a named export of "${name.toString()}" in the file.`
+            )
+          }
+
           return {
             getName() {
               return name as string
@@ -389,10 +425,6 @@ export function createCollection<
               return 'TODO'
             },
             getEnvironment() {
-              if (sourceFileOrDirectory instanceof Directory) {
-                return 'unknown'
-              }
-
               for (const importDeclaration of sourceFileOrDirectory.getImportDeclarations()) {
                 const specifier = importDeclaration.getModuleSpecifierValue()
                 if (specifier === 'server-only') {
@@ -421,11 +453,6 @@ export function createCollection<
             },
             async getValue(): Promise<AllExports[Name]> {
               await ensureModuleExports()
-              if (isDirectory) {
-                throw new Error(
-                  `[mdxts] No module exports found for named export "${String(name)}" for path "${source.getPath()}". Either catch and handle the error, or alternatively, add an index or readme file to the directory with a named export of "${String(name)}".`
-                )
-              }
               return moduleExports![name]
             },
           }

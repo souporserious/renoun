@@ -16,7 +16,7 @@ export type PostSchema = {
 export type PostSource = FileSystemSource<PostSchema>
 
 export const PostsCollection = createCollection<PostSchema>(
-  '@/posts/**/*.mdx',
+  '@/posts/**/*.{ts,mdx}',
   {
     title: 'Posts',
     baseDirectory: 'posts',
