@@ -531,28 +531,34 @@ You can fix this error by taking one of the following actions:
                 return
               }
 
-              /* Enable hot module reloading in development for Next.js */
+              /* Enable hot module reloading for MDX files during development in Next.js */
               if (
                 process.env.NODE_ENV === 'development' &&
-                process.env.MDXTS_NEXT_JS === 'true'
+                process.env.MDXTS_NEXT_JS === 'true' &&
+                sourceFileOrDirectory.getExtension() === '.mdx'
               ) {
-                // TODO: not every default export is a React component, this should be enabled in the root layout
-                const Component = defaultExport as React.ComponentType
+                const isReactComponent = /react.*jsx|jsx.*react/i.test(
+                  String(defaultExport)
+                )
 
-                return async (props: Record<string, unknown>) => {
-                  const { Refresh } = await import('./Refresh')
+                if (isReactComponent) {
+                  const Component = defaultExport as React.ComponentType
 
-                  return (
-                    <>
-                      <Refresh
-                        port={process.env.MDXTS_WS_PORT!}
-                        directory={absoluteBaseGlobPattern
-                          .replace(process.cwd(), '')
-                          .slice(1)}
-                      />
-                      <Component {...props} />
-                    </>
-                  )
+                  return async (props: Record<string, unknown>) => {
+                    const { Refresh } = await import('./Refresh')
+
+                    return (
+                      <>
+                        <Refresh
+                          port={process.env.MDXTS_WS_PORT!}
+                          directory={absoluteBaseGlobPattern
+                            .replace(process.cwd(), '')
+                            .slice(1)}
+                        />
+                        <Component {...props} />
+                      </>
+                    )
+                  }
                 }
               }
 
