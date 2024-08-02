@@ -42,12 +42,16 @@ export function createServer() {
   const wss = new WebSocketServer({ port: 0 })
   const port = getPort(wss)
 
+  wss.setMaxListeners(20)
+
   return wss
     .on('listening', () => {
       console.log(`[mdxts] server is listening at port ${port}`)
     })
     .on('connection', (ws) => {
       let projectId: string
+
+      ws.setMaxListeners(20)
 
       ws.on('message', async (event) => {
         const { type, data, id } = JSON.parse(event.toString())
@@ -100,6 +104,12 @@ export function createServer() {
           }
         } else {
           throw new Error(`[mdxts] Unknown message type received: ${type}`)
+        }
+      })
+
+      ws.on('close', () => {
+        if (projectId) {
+          projects.delete(projectId)
         }
       })
     })
