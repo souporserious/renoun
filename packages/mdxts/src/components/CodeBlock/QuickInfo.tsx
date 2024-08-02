@@ -3,9 +3,10 @@ import type { Diagnostic } from 'ts-morph'
 import { getDiagnosticMessageText } from '@tsxmod/utils'
 
 import { getThemeColors } from '../../utils/get-theme-colors'
-// import { getTokens } from '../../utils/get-tokens'
+import { analyzeSourceText } from '../../project'
 import { MDXContent } from '../MDXContent'
 import { QuickInfoPopover } from './QuickInfoPopover'
+import type { Token } from '../../utils/get-tokens'
 
 export async function QuickInfo({
   diagnostics,
@@ -19,10 +20,15 @@ export async function QuickInfo({
   style?: React.CSSProperties
 }) {
   const theme = await getThemeColors()
-  const displayTextTokens: any[] = []
-  // const displayTextTokens = quickInfo?.displayText
-  //   ? await getTokens(quickInfo.displayText, 'ts')
-  //   : []
+  let displayTextTokens: Token[][] = []
+
+  if (quickInfo?.displayText) {
+    const { tokens } = await analyzeSourceText({
+      value: quickInfo.displayText,
+      language: 'typescript',
+    })
+    displayTextTokens = tokens
+  }
 
   return (
     <QuickInfoPopover>
@@ -82,11 +88,11 @@ export async function QuickInfo({
                 {displayTextTokens.map((line, index) => (
                   <Fragment key={index}>
                     {index === 0 ? null : '\n'}
-                    {/* {line.map((token, index) => (
+                    {line.map((token, index) => (
                       <span key={index} style={{ color: token.color }}>
                         {token.value}
                       </span>
-                    ))} */}
+                    ))}
                   </Fragment>
                 ))}
               </div>
