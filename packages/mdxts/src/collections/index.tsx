@@ -11,8 +11,12 @@ import AliasesFromTSConfig from 'aliases-from-tsconfig'
 import globParent from 'glob-parent'
 import parseTitle from 'title'
 
-import { getGitMetadata } from './get-git-metadata'
+import {
+  getDeclarationLocation,
+  type DeclarationPosition,
+} from './get-declaration-location'
 import { getDirectorySourceFile } from './get-directory-source-file'
+import { getGitMetadata } from './get-git-metadata'
 import { getSourcePathMap } from './get-source-files-path-map'
 import { getSourceFilesOrderMap } from './get-source-files-sort-order'
 import { updateImportMap, getImportMap, setImports } from './import-maps'
@@ -61,12 +65,7 @@ export interface ExportSource<Value> extends BaseSource {
   getEnvironment(): 'server' | 'client' | 'isomorphic' | 'unknown'
 
   /** The lines and columns where the export starts and ends. */
-  getPosition(): {
-    startLine: number
-    startColumn: number
-    endLine: number
-    endColumn: number
-  }
+  getPosition(): DeclarationPosition
 }
 
 export interface DefaultExportSource<Value> extends ExportSource<Value> {
@@ -455,7 +454,10 @@ You can fix this error by taking one of the following actions:
             )
           }
 
-          const defaultDeclaration = exportedDeclarations.get('default')
+          const defaultDeclaration = getExportedDeclaration(
+            exportedDeclarations,
+            'default'
+          )
 
           return {
             getName(): string {
@@ -504,15 +506,22 @@ You can fix this error by taking one of the following actions:
               return path
             },
             getEditPath() {
-              return defaultDeclaration.getSourceFile().getFilePath()
+              if (!defaultDeclaration) {
+                throw new Error(
+                  `[mdxts] Default export could not be statically analyzed from source file at "${sourcePath}".`
+                )
+              }
+
+              return getDeclarationLocation(defaultDeclaration).filePath
             },
             getPosition() {
-              return {
-                startLine: 0,
-                startColumn: 0,
-                endLine: 0,
-                endColumn: 0,
+              if (!defaultDeclaration) {
+                throw new Error(
+                  `[mdxts] Default export could not be statically analyzed from source file at "${sourcePath}".`
+                )
               }
+
+              return getDeclarationLocation(defaultDeclaration).position
             },
             async getValue() {
               await ensureModuleExports()
@@ -568,9 +577,10 @@ You can fix this error by taking one of the following actions:
             )
           }
 
-          const exportDeclaration = exportedDeclarations.get(name as string) as
-            | ExportedDeclarations
-            | undefined
+          const exportDeclaration = getExportedDeclaration(
+            exportedDeclarations,
+            name as string
+          )
 
           return {
             getName() {
@@ -605,18 +615,22 @@ You can fix this error by taking one of the following actions:
               return `${this.getPath()}/${name as string}`
             },
             getEditPath() {
-              if (exportDeclaration) {
-                return exportDeclaration.getSourceFile().getFilePath()
+              if (!exportDeclaration) {
+                throw new Error(
+                  `[mdxts] Named export "${name.toString()}" could not be statically analyzed from source file at "${sourcePath}".`
+                )
               }
-              return sourceFileOrDirectory.getFilePath()
+
+              return getDeclarationLocation(exportDeclaration).filePath
             },
             getPosition() {
-              return {
-                startLine: 0,
-                startColumn: 0,
-                endLine: 0,
-                endColumn: 0,
+              if (!exportDeclaration) {
+                throw new Error(
+                  `[mdxts] Named export "${name.toString()}" could not be statically analyzed from source file at "${sourcePath}".`
+                )
               }
+
+              return getDeclarationLocation(exportDeclaration).position
             },
             async getValue(): Promise<AllExports[Name]> {
               await ensureModuleExports()
@@ -733,4 +747,29 @@ function getDeclarationName(declaration: Node) {
   } else if (Node.isClassDeclaration(declaration)) {
     return declaration.getName()
   }
+}
+
+/** Unwraps exported declarations from a source file. */
+function getExportedDeclaration(
+  exportedDeclarations: ReadonlyMap<string, ExportedDeclarations[]>,
+  name: string
+) {
+  const exportDeclarations = exportedDeclarations.get(name)
+
+  if (!exportDeclarations) {
+    return
+  }
+
+  if (exportDeclarations.length > 1) {
+    const filePath = exportDeclarations[0]
+      .getSourceFile()
+      .getFilePath()
+      .replace(process.cwd(), '')
+
+    throw new Error(
+      `[mdxts] Multiple declarations found for export in source file at ${filePath}. Only one export declaration is currently allowed. Please file an issue for support.`
+    )
+  }
+
+  return exportDeclarations[0]
 }

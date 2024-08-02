@@ -1,7 +1,7 @@
 import {
   createCollection,
   type FileSystemSource,
-  type ExportSource,
+  type NamedExportSource,
 } from 'mdxts/collections'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -21,15 +21,20 @@ export const ComponentsCollection = createCollection<ComponentSchema>(
 async function ComponentExport({
   NamedExport,
 }: {
-  NamedExport: ExportSource<React.ComponentType>
+  NamedExport: NamedExportSource<React.ComponentType>
 }) {
   const name = NamedExport.getName()
+  const position = NamedExport.getPosition()
   const Component = await NamedExport.getValue()
 
   return (
     <div key={name}>
       <h3>{name}</h3>
       {Component ? <Component /> : null}
+      <pre>
+        {position.start.line}:{position.start.column} - {position.end.line}:
+        {position.end.column}
+      </pre>
     </div>
   )
 }
