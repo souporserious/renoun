@@ -300,14 +300,18 @@ export function CodeBlock(props: CodeBlockProps) {
   return (
     <Suspense
       fallback={
-        <div
-          style={{
-            height:
-              'value' in props && props.value
-                ? props.value.split('\n').length + 'lh'
-                : undefined,
-          }}
-        />
+        'value' in props && props.value ? (
+          <pre
+            style={{
+              whiteSpace: 'pre',
+              wordWrap: 'break-word',
+              padding: '0.5lh',
+              margin: 0,
+            }}
+          >
+            <code>{props.value}</code>
+          </pre>
+        ) : null
       }
     >
       <CodeBlockAsync {...props} />
@@ -328,6 +332,7 @@ CodeBlock.parsePreProps = (
   const languageClassName = code.props.className
     .split(' ')
     .find((className) => className.startsWith(languageKey))
+
   return {
     value: code.props.children.trim(),
     language: (languageClassName
