@@ -5,12 +5,6 @@ export type FilePatterns<Extension extends string = string> =
 export type SourceExports = Record<string, unknown>
 
 export interface BaseSource {
-  /** The name of the source. */
-  getName(): string
-
-  /** The name formatted as a title. */
-  getTitle(): string
-
   /**
    * The path to the source, taking into account the `baseDirectory` and
    * `basePath` configuration, and formatted to be URL-friendly.
@@ -52,8 +46,30 @@ export interface ExportSource<Value> extends BaseSource {
   }
 }
 
+export interface DefaultExportSource<Value> extends ExportSource<Value> {
+  /** The name of the source, which can be undefined for default exports. */
+  getName(): string | undefined
+
+  /** The name formatted as a title. */
+  getTitle(): string | undefined
+}
+
+export interface NamedExportSource<Value> extends ExportSource<Value> {
+  /** The name of the exported source. */
+  getName(): string
+
+  /** The name formatted as a title. */
+  getTitle(): string
+}
+
 export interface FileSystemSource<Exports extends SourceExports>
   extends BaseSourceWithGetters<Exports> {
+  /** The base file name or directory name. */
+  getName(): string
+
+  /** The name formatted as a title. */
+  getTitle(): string
+
   /** Order of the source in the collection based on its position in the file system. */
   getOrder(): string
 
@@ -76,21 +92,21 @@ export interface FileSystemSource<Exports extends SourceExports>
   ]
 
   /** The default export source. */
-  getDefaultExport(): ExportSource<Exports['default']>
+  getDefaultExport(): DefaultExportSource<Exports['default']>
 
   /** A single named export source of the file. */
   getNamedExport<Name extends Exclude<keyof Exports, 'default'>>(
     name: Name
-  ): ExportSource<Exports[Name]>
+  ): NamedExportSource<Exports[Name]>
 
   /** All named export sources of the file. */
-  getNamedExports(): ExportSource<Exports[keyof Exports]>[]
+  getNamedExports(): NamedExportSource<Exports[keyof Exports]>[]
 }
 
-export type CollectionSource<Exports extends SourceExports> = Omit<
-  BaseSourceWithGetters<Exports>,
-  'getName'
->
+export type CollectionSource<Exports extends SourceExports> = {
+  /** Get the configured collection title. */
+  getTitle(): string | undefined
+} & BaseSourceWithGetters<Exports>
 
 export interface CollectionOptions {
   /** The title used for the collection when rendered for a page. */

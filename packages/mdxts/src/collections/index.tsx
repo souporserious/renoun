@@ -1,6 +1,12 @@
 import * as React from 'react'
 import type { MDXContent } from 'mdx/types'
-import { Project, Directory, SourceFile } from 'ts-morph'
+import {
+  Project,
+  Directory,
+  Node,
+  SourceFile,
+  type ExportedDeclarations,
+} from 'ts-morph'
 import AliasesFromTSConfig from 'aliases-from-tsconfig'
 import globParent from 'glob-parent'
 import parseTitle from 'title'
@@ -15,10 +21,18 @@ import type {
   CollectionSource,
   FileSystemSource,
   ExportSource,
+  DefaultExportSource,
+  NamedExportSource,
 } from './types'
 import { getDirectorySourceFile } from './get-directory-source-file'
 
-export type { MDXContent, FileSystemSource, ExportSource }
+export type {
+  MDXContent,
+  FileSystemSource,
+  ExportSource,
+  DefaultExportSource,
+  NamedExportSource,
+}
 
 export { setImports }
 
@@ -153,6 +167,9 @@ export function createCollection<
       const sourcePath = getSourcePath(sourceFileOrDirectory)
       const isSourceFile = sourceFileOrDirectory instanceof SourceFile
       const isDirectory = sourceFileOrDirectory instanceof Directory
+      const exportedDeclarations = isSourceFile
+        ? sourceFileOrDirectory.getExportedDeclarations()
+        : new Map()
       const slugExtension = Array.from(slugExtensions).at(0)?.slice(1)
       const importKey = `${slugExtension}:${filePattern}`
       const getImport = getImportMap<AllExports>(importKey)
@@ -317,18 +334,32 @@ You can fix this error by taking one of the following actions:
             )
           }
 
+          const defaultDeclaration = exportedDeclarations.get('default')
+
           return {
-            getName() {
-              return 'TODO'
+            getName(): string {
+              if (defaultDeclaration) {
+                const declarationName = getDeclarationName(defaultDeclaration)
+
+                if (declarationName) {
+                  return declarationName
+                }
+              }
+              return source.getName() as string
             },
             getTitle() {
-              return parseTitle(this.getName())
-            },
-            getType() {
-              return sourceFileOrDirectory
+              const name = this.getName()
+              if (name) {
+                return parseTitle(name)
+              }
             },
             getText() {
-              return 'TODO'
+              if (!defaultDeclaration) {
+                throw new Error(
+                  `[mdxts] Default export could not be statically analyzed from source file at "${sourcePath}".`
+                )
+              }
+              return defaultDeclaration.getText()
             },
             getEnvironment() {
               for (const importDeclaration of sourceFileOrDirectory.getImportDeclarations()) {
@@ -344,10 +375,15 @@ You can fix this error by taking one of the following actions:
               return 'isomorphic'
             },
             getPath() {
-              return 'TODO'
+              const name = this.getName()
+              const path = this.getPath()
+              if (name) {
+                return `${path}/${name}`
+              }
+              return path
             },
             getEditPath() {
-              return 'TODO'
+              return defaultDeclaration.getSourceFile().getFilePath()
             },
             getPosition() {
               return {
@@ -411,6 +447,10 @@ You can fix this error by taking one of the following actions:
             )
           }
 
+          const exportDeclaration = exportedDeclarations.get(name as string) as
+            | ExportedDeclarations
+            | undefined
+
           return {
             getName() {
               return name as string
@@ -418,11 +458,14 @@ You can fix this error by taking one of the following actions:
             getTitle() {
               return parseTitle(name as string)
             },
-            getType() {
-              return 'TODO'
-            },
             getText() {
-              return 'TODO'
+              if (!exportDeclaration) {
+                throw new Error(
+                  `[mdxts] Named export "${name.toString()}" could not be statically analyzed from source file at "${sourcePath}".`
+                )
+              }
+
+              return exportDeclaration.getText()
             },
             getEnvironment() {
               for (const importDeclaration of sourceFileOrDirectory.getImportDeclarations()) {
@@ -438,10 +481,13 @@ You can fix this error by taking one of the following actions:
               return 'isomorphic'
             },
             getPath() {
-              return 'TODO'
+              return `${this.getPath()}/${name as string}`
             },
             getEditPath() {
-              return 'TODO'
+              if (exportDeclaration) {
+                return exportDeclaration.getSourceFile().getFilePath()
+              }
+              return sourceFileOrDirectory.getFilePath()
             },
             getPosition() {
               return {
@@ -555,4 +601,15 @@ function getPathDepth(path: string, basePath?: string) {
   }
 
   return segments.length - 1
+}
+
+/** Get the name of a declaration. */
+function getDeclarationName(declaration: Node) {
+  if (Node.isVariableDeclaration(declaration)) {
+    return declaration.getNameNode().getText()
+  } else if (Node.isFunctionDeclaration(declaration)) {
+    return declaration.getName()
+  } else if (Node.isClassDeclaration(declaration)) {
+    return declaration.getName()
+  }
 }
