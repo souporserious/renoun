@@ -494,7 +494,6 @@ class Collection<AllExports extends FileExports> {
   public filePattern: string
   public options: CollectionOptions
   public project: Project
-  public aliases: AliasesFromTSConfig
   public absoluteGlobPattern: string
   public absoluteBaseGlobPattern: string
   public fileSystemSources: (SourceFile | Directory)[]
@@ -505,10 +504,9 @@ class Collection<AllExports extends FileExports> {
     this.filePattern = filePattern
     this.options = options
     this.project = resolveProject(options.tsConfigFilePath ?? 'tsconfig.json')
-    this.aliases = new AliasesFromTSConfig(
+    this.absoluteGlobPattern = new AliasesFromTSConfig(
       this.project.getCompilerOptions().configFilePath as string
-    )
-    this.absoluteGlobPattern = this.aliases.apply(filePattern)
+    ).apply(filePattern)
     this.absoluteBaseGlobPattern = globParent(this.absoluteGlobPattern)
 
     const { fileSystemSources, sourceFiles } = getSourceFilesAndDirectories(
