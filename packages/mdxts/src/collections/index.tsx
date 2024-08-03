@@ -454,19 +454,14 @@ class Source<AllExports extends FileExports>
     const previousSource = this.collection.fileSystemSources[currentIndex - 1]
     const nextSource = this.collection.fileSystemSources[currentIndex + 1]
 
-    const previous = previousSource
-      ? this.collection.getSource(
-          this.collection.sourcePathMap.get(getSourcePath(previousSource))!
-        )
-      : undefined
-
-    const next = nextSource
-      ? this.collection.getSource(
-          this.collection.sourcePathMap.get(getSourcePath(nextSource))!
-        )
-      : undefined
-
-    return [previous, next]
+    return [
+      previousSource
+        ? this.collection.getSourceFromFileSystemSource(previousSource)
+        : undefined,
+      nextSource
+        ? this.collection.getSourceFromFileSystemSource(nextSource)
+        : undefined,
+    ]
   }
 
   getDefaultExport(): DefaultExportSource<AllExports['default']> {
