@@ -560,7 +560,9 @@ You can fix this error by taking the following actions:
   }
 }
 
-class Collection<AllExports extends FileExports> {
+class Collection<AllExports extends FileExports>
+  implements CollectionSource<AllExports>
+{
   public filePattern: string
   public options: CollectionOptions
   public project: Project
