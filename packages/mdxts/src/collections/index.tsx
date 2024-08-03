@@ -337,11 +337,19 @@ class Source<AllExports extends FileExports>
         ? this.sourceFileOrDirectory.getBaseName()
         : this.sourceFileOrDirectory.getBaseNameWithoutExtension()
 
-    return baseName.replace(/^\d+\./, '')
+    return (
+      baseName
+        // remove leading numbers e.g. 01.intro -> intro
+        .replace(/^\d+\./, '')
+    )
   }
 
   getTitle() {
-    return parseTitle(this.getName()).replace(/-/g, ' ')
+    return (
+      parseTitle(this.getName())
+        // remove hyphens e.g. my-component -> my component
+        .replace(/-/g, ' ')
+    )
   }
 
   getPath() {
@@ -369,7 +377,7 @@ class Source<AllExports extends FileExports>
 
     if (order === undefined) {
       throw new Error(
-        `[mdxts] Source file order not found for file path "${this.sourcePath}".`
+        `[mdxts] Source file order not found for file path "${this.sourcePath}". If you see this error, please file an issue.`
       )
     }
 
@@ -454,8 +462,15 @@ class Source<AllExports extends FileExports>
     const sourceFile = this.sourceFileOrDirectory
 
     if (sourceFile instanceof Directory) {
+      const baseName = sourceFile.getBaseName()
+
       throw new Error(
-        `[mdxts] Directory at path "${this.sourcePath}" does not have a default export.`
+        `[mdxts] Directory "${baseName}" at path "${this.getPath()}" does not have a default export.
+You can fix this error by taking one of the following actions:
+  - Catch and handle this error in your code.
+  - Add an index or readme file to the ${baseName} directory.
+    . Ensure the file has a valid extension based on this collection's file pattern "${this.collection.filePattern}".
+    . Define a default export in the file.`
       )
     }
 
@@ -474,8 +489,15 @@ class Source<AllExports extends FileExports>
     const sourceFile = this.sourceFileOrDirectory
 
     if (sourceFile instanceof Directory) {
+      const baseName = sourceFile.getBaseName()
+
       throw new Error(
-        `[mdxts] Directory at path "${this.sourcePath}" does not have a named export for "${exportName}".`
+        `[mdxts] Directory "${baseName}" at path "${this.getPath()}" does not have a named export for "${name.toString()}".
+You can fix this error by taking one of the following actions:
+  - Catch and handle this error in your code.
+  - Add an index or readme file to the directory.
+    . Ensure the file has a valid extension based on this collection's file pattern "${this.collection.filePattern}".
+    . Define a named export of "${name.toString()}" in the file.`
       )
     }
 
@@ -519,7 +541,12 @@ class Source<AllExports extends FileExports>
 
     if (!getImport) {
       throw new Error(
-        `[mdxts] Import map not found for file pattern "${this.collection.filePattern}".`
+        `[mdxts] No source found for path "${this.getPath()}" at file pattern "${this.collection.filePattern}":
+You can fix this error by taking the following actions:
+- Make sure the ".mdxts" directory was successfully created and your tsconfig.json is aliases "mdxts" to ".mdxts/index.js" correctly.
+- Make sure the file pattern is formatted correctly and targeting files that exist.
+- Try refreshing the page or restarting server.
+- If you continue to see this error, please file an issue: https://github.com/souporserious/mdxts/issues`
       )
     }
 
@@ -604,10 +631,12 @@ class Collection<AllExports extends FileExports> {
   getSource(path: string | string[]): FileSystemSource<AllExports> | undefined {
     let pathString = Array.isArray(path) ? path.join('/') : path
 
+    // ensure the path starts with a slash
     if (!pathString.startsWith('/')) {
       pathString = `/${pathString}`
     }
 
+    // prepend the collection base path if it exists and the path does not already start with it
     if (this.options.basePath) {
       if (!pathString.startsWith(`/${this.options.basePath}`)) {
         pathString = `/${this.options.basePath}${pathString}`
@@ -621,6 +650,10 @@ class Collection<AllExports extends FileExports> {
 
     if (matchingSources.length === 0) {
       return undefined
+    } else if (matchingSources.length > 1) {
+      throw new Error(
+        `[mdxts] Multiple sources found for file pattern "${this.filePattern}" at path "${pathString}". Only one source is currently allowed. Please file an issue for support.`
+      )
     }
 
     const sourceFileOrDirectory = matchingSources[0]!
@@ -666,6 +699,14 @@ class Collection<AllExports extends FileExports> {
   }
 }
 
+/**
+ * Creates a collection of sources based on a specified file pattern.
+ * Note, an import getter for each file extension will be generated at the root of the project in a `.mdxts/index.js` file.
+ *
+ * @param filePattern - A pattern to match a set of source files (e.g., "*.ts", "*.mdx").
+ * @param options - Optional settings for the collection, including base directory, base path, TypeScript config file path, and a custom sort function.
+ * @returns A collection object that provides methods to retrieve individual sources or all sources matching the pattern.
+ */
 export function createCollection<
   AllExports extends FilePattern extends FilePatterns<'md' | 'mdx'>
     ? { default: MDXContent; [key: string]: unknown }
@@ -758,7 +799,7 @@ function getExportedDeclaration(
       .replace(process.cwd(), '')
 
     throw new Error(
-      `[mdxts] Multiple declarations found for export in source file at ${filePath}.`
+      `[mdxts] Multiple declarations found for export in source file at ${filePath}. Only one export declaration is currently allowed. Please file an issue for support.`
     )
   }
 
