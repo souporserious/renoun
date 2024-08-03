@@ -6,7 +6,6 @@ import {
   SourceFile,
   type ExportedDeclarations,
 } from 'ts-morph'
-import AliasesFromTSConfig from 'aliases-from-tsconfig'
 import globParent from 'glob-parent'
 import parseTitle from 'title'
 
@@ -19,6 +18,7 @@ import { getGitMetadata } from './get-git-metadata'
 import { getSourcePathMap } from './get-source-files-path-map'
 import { getSourceFilesOrderMap } from './get-source-files-sort-order'
 import { updateImportMap, getImportMap, setImports } from './import-maps'
+import { resolveTsConfigPath } from './resolve-ts-config-path'
 
 export type { MDXContent }
 
@@ -504,9 +504,17 @@ class Collection<AllExports extends FileExports> {
     this.filePattern = filePattern
     this.options = options
     this.project = resolveProject(options.tsConfigFilePath ?? 'tsconfig.json')
-    this.absoluteGlobPattern = new AliasesFromTSConfig(
-      this.project.getCompilerOptions().configFilePath as string
-    ).apply(filePattern)
+
+    const compilerOptions = this.project.getCompilerOptions()
+
+    this.absoluteGlobPattern =
+      compilerOptions.baseUrl && compilerOptions.paths
+        ? resolveTsConfigPath(
+            compilerOptions.baseUrl,
+            compilerOptions.paths,
+            filePattern
+          )
+        : filePattern
     this.absoluteBaseGlobPattern = globParent(this.absoluteGlobPattern)
 
     const { fileSystemSources, sourceFiles } = getSourceFilesAndDirectories(

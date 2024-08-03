@@ -19,7 +19,7 @@
     ],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"],
+      "@/*": ["*"],
       "mdxts/collections": ["./.mdxts/index.js"]
     }
   },

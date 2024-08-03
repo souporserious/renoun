@@ -1,7 +1,9 @@
-import { existsSync, mkdirSync, writeFileSync } from 'fs'
-import globParent from 'glob-parent'
 import { Project, Node, SyntaxKind, SourceFile } from 'ts-morph'
-import AliasesFromTSConfig from 'aliases-from-tsconfig'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import globParent from 'glob-parent'
+
+import { resolveTsConfigPath } from '../collections/resolve-ts-config-path'
 
 const PACKAGE_NAME = 'mdxts/core'
 const PACKAGE_DIRECTORY = '.mdxts'
@@ -54,11 +56,18 @@ function collectSourceFiles(
     skipAddingFilesFromTsConfig: true,
     tsConfigFilePath: tsConfigFilePath,
   })
-  const aliases = new AliasesFromTSConfig(tsConfigFilePath)
+  const compilerOptions = project.getCompilerOptions()
   const sourceFilesMap = new Map<string, SourceFile[]>()
 
   filePatterns.forEach((filePattern) => {
-    const absoluteGlobPattern = aliases.apply(filePattern)
+    const absoluteGlobPattern =
+      compilerOptions.baseUrl && compilerOptions.paths
+        ? resolveTsConfigPath(
+            compilerOptions.baseUrl,
+            compilerOptions.paths,
+            filePattern
+          )
+        : resolve(filePattern)
     let sourceFiles = project.getSourceFiles(absoluteGlobPattern)
 
     if (sourceFiles.length === 0) {
