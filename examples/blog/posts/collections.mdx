@@ -12,7 +12,7 @@ A collection is created by calling `createCollection` with a glob pattern and op
 import { createCollection, type SourceOf } from 'mdxts'
 
 export const PostsCollection = createCollection<{
-  frontMatter: {
+  frontmatter: {
     title: string
     description: string
   }
@@ -35,13 +35,13 @@ export default async function Page({ params }: { params: { slug: string } }) {
 
   if (!Post) notFound()
 
-  const frontMatter = await Post.getNamedExport('frontMatter').getValue()
+  const frontmatter = await Post.getNamedExport('frontmatter').getValue()
   const Content = await Post.getDefaultExport().getValue()
 
   return (
     <>
-      <h1>{frontMatter.title}</h1>
-      <p>{frontMatter.description}</p>
+      <h1>{frontmatter.title}</h1>
+      <p>{frontmatter.description}</p>
       <Content />
     </>
   )
@@ -87,6 +87,8 @@ export default async function Page() {
 
 ## Paginated Navigation
 
+To paginate the sources, we can use the `getSources` method to retrieve all sources, sort them, and paginate them:
+
 ```tsx filename="app/posts/page.tsx"
 const LIMIT = 10
 
@@ -96,40 +98,44 @@ export default async function Page({
   searchParams: { page: string; order: 'asc' | 'desc' }
 }) {
   const page = parseInt(searchParams.page, 10) || 0
-  const offset = parseInt(searchParams.order, 10) || 0
-  const sources = await PostsCollection.getSources()
-  const totalPages = Math.ceil(allSources.length / LIMIT)
+  const allSources = await PostsCollection.getSources()
+
+  // Retrieve the frontmatter for sorting
+  const sourcesWithfrontmatter = await Promise.all(
+    allSources.map(async (source) => {
+      const frontmatter = await source.getNamedExport('frontmatter').getValue()
+      return { source, frontmatter }
+    })
+  )
 
   // Sort the sources based on the order
-  allSources.sort(async (a, b) => {
-    const frontMatterA = await a.getNamedExport('frontMatter').getValue()
-    const frontMatterB = await b.getNamedExport('frontMatter').getValue()
-
+  sourcesWithfrontmatter.sort((a, b) => {
     if (searchParams.order === 'asc') {
-      return frontMatterA.date - frontMatterB.date
+      return new Date(a.frontmatter.date) - new Date(b.frontmatter.date)
     }
-
-    return frontMatterB.date - frontMatterA.date
+    return new Date(b.frontmatter.date) - new Date(a.frontmatter.date)
   })
 
   // Paginate the sources
-  const startIndex = offset * LIMIT
+  const offset = page * LIMIT
+  const totalPages = Math.ceil(allSources.length / LIMIT)
+  const startIndex = offset
   const endIndex = startIndex + LIMIT
-  const paginatedSources = sources.slice(startIndex, endIndex)
+  const paginatedSources = sourcesWithfrontmatter.slice(startIndex, endIndex)
 
   return (
     <>
       <h1>Posts</h1>
       <nav>
         <ul>
-          {paginatedSources.map((source) => (
+          {paginatedSources.map(({ source }) => (
             <Post key={source.getPath()} Source={source} />
           ))}
         </ul>
       </nav>
       <nav>
         <ul>
-          {Array.from({ length: totalPages }).map((_, index) => (
+          {Array.from(Array(totalPages).keys()).map((index) => (
             <li key={index}>
               <Link href={`/posts/page/${index}`}>{index + 1}</Link>
             </li>
@@ -160,15 +166,15 @@ export default async function Layout() {
 
 async function TreeNavigation({ Source }: { Source: PostSource }) {
   const Sources = Source.getSources()
-  const depth = Source.getDepth()
   const path = Source.getPath()
-  const frontMatter = await Source.getNamedExport('frontMatter').getValue()
+  const depth = Source.getDepth()
+  const frontmatter = await Source.getNamedExport('frontmatter').getValue()
 
   if (Sources.length === 0) {
     return (
       <li style={{ paddingLeft: `${depth}rem` }}>
         <Link href={path} style={{ color: 'white' }}>
-          {frontMatter.title}
+          {frontmatter.title}
         </Link>
       </li>
     )
@@ -182,7 +188,7 @@ async function TreeNavigation({ Source }: { Source: PostSource }) {
     return (
       <li style={{ paddingLeft: `${depth}rem` }}>
         <Link href={path} style={{ color: 'white' }}>
-          {frontMatter.title}
+          {frontmatter.title}
         </Link>
         <ul>{childrenSources}</ul>
       </li>
@@ -202,13 +208,13 @@ export default async function Page({ params }) {
   if (!PostFile) notFound()
 
   const Post = await PostFile.getDefaultExport().getValue()
-  const frontMatter = await PostFile.getNamedExport('frontMatter')
+  const frontmatter = await PostFile.getNamedExport('frontmatter').getValue()
   const [Previous, Next] = PostFile.getSiblings()
 
   return (
     <>
-      <h1>{frontMatter.title}</h1>
-      <p>{frontMatter.description}</p>
+      <h1>{frontmatter.title}</h1>
+      <p>{frontmatter.description}</p>
       <Post />
       {Previous ? <Sibling Source={Previous} direction="previous" /> : null}
       {Next ? <Sibling Source={Next} direction="next" /> : null}
@@ -223,11 +229,11 @@ function Sibling({
   Source: ReturnType<typeof Posts.getSource>
   direction: 'previous' | 'next'
 }) {
-  const frontMatter = await Source.getNamedExport('frontMatter').getValue()
+  const frontmatter = await Source.getNamedExport('frontmatter').getValue()
   return (
     <a href={Source.getPath()}>
       <span>{direction === 'previous' ? 'Previous' : 'Next'}</span>
-      {frontMatter.title}
+      {frontmatter.title}
     </a>
   )
 }
@@ -238,11 +244,13 @@ function Sibling({
 ## blog/[slug]/page.tsx
 
 ```tsx
-import { createCollection, type SourceOf } from 'mdxts'
+import type { MDXContent, SourceOf } from 'mdxts'
+import { createCollection } from 'mdxts'
 import { getSiteMetadata } from '@/utils'
 
 export const Posts = createCollection<{
-  frontMatter: {
+  default: MDXContent
+  frontmatter: {
     title: string
     description: string
   }
@@ -260,11 +268,11 @@ export function generateStaticParams() {
 
 export async function generateMetadata({ params }) {
   const Post = Posts.getSource(params.slug)
-  const frontMatter = await Post.getNamedExport('frontMatter').getValue()
+  const frontmatter = await Post.getNamedExport('frontmatter').getValue()
 
   return getSiteMetadata({
-    title: `${frontMatter.title} - MDXTS`,
-    description: frontMatter.description,
+    title: `${frontmatter.title} - MDXTS`,
+    description: frontmatter.description,
   })
 }
 
@@ -273,13 +281,13 @@ export default async function Page({ params }) {
 
   if (!Post) notFound()
 
-  const Content = Post.getDefaultExport().getValue()
-  const { title, description } = Post.getNamedExport('frontMatter').getValue()
+  const Content = await Post.getDefaultExport().getValue()
+  const frontmatter = await Post.getNamedExport('frontmatter').getValue()
 
   return (
     <>
-      <h1>{title}</h1>
-      <p>{description}</p>
+      <h1>{frontmatter.title}</h1>
+      <p>{frontmatter.description}</p>
       <Content />
     </>
   )
@@ -344,13 +352,13 @@ export default async function BlogPage() {
 }
 
 async function BlogPost({ Source }: { Source: PostSource }) {
-  const frontMatter = await Source.getNamedExport('frontMatter').getValue()
+  const frontmatter = await Source.getNamedExport('frontmatter').getValue()
 
   return (
     <li>
       <a href={Source.getPath()}>
-        <h2>{frontMatter.title}</h2>
-        <p>{frontMatter.description}</p>
+        <h2>{frontmatter.title}</h2>
+        <p>{frontmatter.description}</p>
       </a>
     </li>
   )
@@ -485,7 +493,7 @@ export default async function Page({ params }) {
 
   if (!PackageFile && !PackageMDXFile) notFound()
 
-  const PackageDocs = PackageMDXFile.getDefaultExport().getValue()
+  const PackageDocs = await PackageMDXFile.getDefaultExport().getValue()
 
   return (
     <>
@@ -513,14 +521,14 @@ export default async function Page({ params }) {
 
   if (!PostFile) notFound()
 
+  const frontmatter = await PostFile.getNamedExport('frontmatter').getValue()
   const Post = await PostFile.getDefaultExport().getValue()
   const [Previous, Next] = PostFile.getSiblings()
-  const { title, description } = PostFile.getNamedExport('frontMatter')
 
   return (
     <>
-      <h1>{title}</h1>
-      <p>{description}</p>
+      <h1>{frontmatter.title}</h1>
+      <p>{frontmatter.description}</p>
       <Post />
       {Previous ? <Sibling Source={Previous} direction="previous" /> : null}
       {Next ? <Sibling Source={Next} direction="next" /> : null}
@@ -535,11 +543,12 @@ function Sibling({
   Source: ReturnType<typeof Posts.getSource>
   direction: 'previous' | 'next'
 }) {
-  const { title } = await Source.getNamedExport('frontMatter').getValue()
+  const frontmatter = await Source.getNamedExport('frontmatter').getValue()
+
   return (
     <a href={Source.getPath()}>
       <span>{direction === 'previous' ? 'Previous' : 'Next'}</span>
-      {title}
+      {frontmatter.title}
     </a>
   )
 }
