@@ -1,4 +1,5 @@
 'use client'
+import { useEffect } from 'react'
 
 let ws: WebSocket
 
@@ -15,12 +16,18 @@ export function Refresh({
 }) {
   if (ws === undefined) {
     ws = new WebSocket(`ws://localhost:${port}`)
+  }
 
-    ws.onopen = function handleOpen() {
+  useEffect(() => {
+    function handleWatch() {
       ws.send(JSON.stringify({ type: 'refresh:watch', data: { directory } }))
     }
 
-    ws.onmessage = function handleMessage(event: MessageEvent) {
+    function handleUnwatch() {
+      ws.send(JSON.stringify({ type: 'refresh:unwatch', data: { directory } }))
+    }
+
+    function handleMessage(event: MessageEvent) {
       const message = JSON.parse(event.data)
       if (
         message.type === 'refresh:update' &&
@@ -41,7 +48,24 @@ export function Refresh({
         }
       }
     }
-  }
+
+    if (ws.readyState === WebSocket.OPEN) {
+      handleWatch()
+    } else {
+      ws.addEventListener('open', handleWatch)
+    }
+
+    ws.addEventListener('message', handleMessage)
+
+    return () => {
+      if (ws.readyState === WebSocket.OPEN) {
+        handleUnwatch()
+      } else {
+        ws.removeEventListener('open', handleWatch)
+      }
+      ws.removeEventListener('message', handleMessage)
+    }
+  }, [])
 
   return null
 }
