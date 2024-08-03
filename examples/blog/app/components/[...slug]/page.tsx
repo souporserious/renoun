@@ -25,7 +25,7 @@ async function ComponentExport({
 }) {
   const name = NamedExport.getName()
   const position = NamedExport.getPosition()
-  const Component = await NamedExport.getValue()
+  const Component = await NamedExport.getValue().catch(() => null)
 
   return (
     <div key={name}>

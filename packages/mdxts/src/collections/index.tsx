@@ -237,7 +237,7 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
     const exportValue = moduleExports![name]
     if (exportValue === undefined) {
       throw new Error(
-        `[mdxts] Export value is undefined for source file at "${this.source.getPath()}".`
+        `[mdxts] Export value does not have a runtime value for declaration "${name}" in source file at "${this.source.getPath()}".`
       )
     }
     return exportValue as Value
