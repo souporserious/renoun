@@ -45,13 +45,21 @@ export interface BaseSource {
   getEditPath(): string
 }
 
+type PositiveIntegerOrInfinity<Type extends number> = `${Type}` extends
+  | `-${string}`
+  | `${string}.${string}`
+  ? never
+  : Type
+
 export interface BaseSourceWithGetters<Exports extends FileExports>
   extends BaseSource {
   /** Retrieves a source in the directory by its path. */
   getSource(path: string | string[]): FileSystemSource<Exports> | undefined
 
-  /** Retrieves all sources in the directory. */
-  getSources(): FileSystemSource<Exports>[]
+  /** Retrieves sources in the directory. Defaults to a depth of `1`, passing `Infinity` will return all sources. */
+  getSources<Depth extends number>(
+    depth?: PositiveIntegerOrInfinity<Depth>
+  ): FileSystemSource<Exports>[]
 }
 
 export interface ExportSource<Value> extends BaseSource {
@@ -408,21 +416,24 @@ class Source<AllExports extends FileExports>
     return this.collection.getSource(fullPath)
   }
 
-  getSources() {
-    const path = this.getPath()
-    const depth = this.getDepth()
+  getSources(depth: number = 1) {
+    const currentPath = this.getPath()
+    const currentDepth = this.getDepth()
+    const maxDepth = depth === Infinity ? Infinity : currentDepth + depth
 
     return this.collection.fileSystemSources
-      .map((source) => {
-        const path = this.collection.sourcePathMap.get(getSourcePath(source))!
-        return this.collection.getSource(path)
+      .map((fileSystemSource) => {
+        return this.collection.getSourceFromFileSystemSource(fileSystemSource)
       })
       .filter((source) => {
         if (source) {
           const descendantPath = source.getPath()
           const descendantDepth = source.getDepth()
+
           return (
-            descendantPath.startsWith(path) && descendantDepth === depth + 1
+            descendantPath.startsWith(currentPath) &&
+            descendantDepth > currentDepth &&
+            descendantDepth <= maxDepth
           )
         }
       }) as FileSystemSource<AllExports>[]
@@ -671,19 +682,27 @@ class Collection<AllExports extends FileExports> {
     )
   }
 
-  getSources() {
-    const depthOffset = this.options.basePath
-      ? getPathDepth(this.options.basePath) + 1
-      : 1
+  getSources(depth: number = 1) {
+    const currentDepth = this.options.basePath
+      ? getPathDepth(this.options.basePath)
+      : 0
+    const maxDepth = depth === Infinity ? Infinity : currentDepth + depth
 
     return this.fileSystemSources
-      .map((source) => {
-        const path = this.sourcePathMap.get(getSourcePath(source))!
-        return this.getSource(path)
+      .map((fileSystemSource) => {
+        return this.getSourceFromFileSystemSource(fileSystemSource)
       })
-      .filter(
-        (source) => source?.getDepth() === depthOffset
-      ) as FileSystemSource<AllExports>[]
+      .filter((source) => {
+        if (source) {
+          const descendantDepth = source.getDepth()
+          return descendantDepth > currentDepth && descendantDepth <= maxDepth
+        }
+      }) as FileSystemSource<AllExports>[]
+  }
+
+  getSourceFromFileSystemSource(sourceFileOrDirectory: SourceFile | Directory) {
+    const path = this.sourcePathMap.get(getSourcePath(sourceFileOrDirectory))!
+    return this.getSource(path)
   }
 
   getImportSlug(source: SourceFile | Directory) {
