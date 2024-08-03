@@ -417,6 +417,12 @@ class Source<AllExports extends FileExports>
   }
 
   getSources(depth: number = 1) {
+    if (!isPositiveIntegerOrInfinity(depth)) {
+      throw new Error(
+        `[mdxts] Invalid depth "${depth}" provided for source at path "${this.getPath()}". Depth must be a positive integer or Infinity.`
+      )
+    }
+
     const currentPath = this.getPath()
     const currentDepth = this.getDepth()
     const maxDepth = depth === Infinity ? Infinity : currentDepth + depth
@@ -680,6 +686,12 @@ class Collection<AllExports extends FileExports>
   }
 
   getSources(depth: number = 1) {
+    if (!isPositiveIntegerOrInfinity(depth)) {
+      throw new Error(
+        `[mdxts] Invalid depth "${depth}" provided for collection with file pattern "${this.filePattern}". Depth must be a positive integer or Infinity.`
+      )
+    }
+
     const currentDepth = this.options.basePath
       ? getPathDepth(this.options.basePath)
       : 0
@@ -820,4 +832,9 @@ function getExportedDeclaration(
   }
 
   return exportDeclarations[0]
+}
+
+/** Whether a value is a positive integer or Infinity. */
+function isPositiveIntegerOrInfinity(value: number) {
+  return (value > 0 && Number.isInteger(value)) || value === Infinity
 }
