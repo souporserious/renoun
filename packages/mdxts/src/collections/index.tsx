@@ -1,3 +1,4 @@
+import * as React from 'react'
 import type { MDXContent } from 'mdx/types'
 import {
   Project,
@@ -235,11 +236,47 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
     const moduleExports = await this.source.getModuleExports()
     const name = this.getName() || 'default'
     const exportValue = moduleExports![name]
+
     if (exportValue === undefined) {
       throw new Error(
         `[mdxts] Export value does not have a runtime value for declaration "${name}" in source file at "${this.source.getPath()}".`
       )
     }
+
+    /* Enable hot module reloading in development for Next.js MDX content. */
+    if (
+      process.env.NODE_ENV === 'development' &&
+      process.env.MDXTS_NEXT_JS === 'true' &&
+      name === 'default'
+    ) {
+      const sourceFile = this.source.getSourceFile()
+
+      if (sourceFile.getExtension() === '.mdx') {
+        const isReactComponent = /react.*jsx|jsx.*react/i.test(
+          String(exportValue)
+        )
+
+        if (isReactComponent) {
+          const Component = exportValue as React.ComponentType
+          const WrappedComponent = async (props: Record<string, unknown>) => {
+            const { Refresh } = await import('./Refresh')
+
+            return (
+              <>
+                <Refresh
+                  port={process.env.MDXTS_WS_PORT!}
+                  directory={sourceFile.getDirectoryPath()}
+                />
+                <Component {...props} />
+              </>
+            )
+          }
+
+          return WrappedComponent as Value
+        }
+      }
+    }
+
     return exportValue as Value
   }
 }
