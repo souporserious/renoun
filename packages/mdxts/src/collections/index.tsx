@@ -1,4 +1,3 @@
-import * as React from 'react'
 import type { MDXContent } from 'mdx/types'
 import {
   Project,
@@ -169,29 +168,20 @@ function resolveProject(tsConfigFilePath: string): Project {
   return projectCache.get(tsConfigFilePath)!
 }
 
-class DefaultExport<AllExports extends FileExports>
-  implements DefaultExportSource<AllExports['default']>
+abstract class Export<Value, AllExports extends FileExports = FileExports>
+  implements ExportSource<Value>
 {
   constructor(
-    private source: Source<AllExports>,
-    private exportDeclaration: ExportedDeclarations | undefined
+    protected source: Source<AllExports>,
+    protected exportDeclaration: ExportedDeclarations | undefined
   ) {}
 
-  getName() {
-    return this.exportDeclaration
-      ? getDeclarationName(this.exportDeclaration) || this.source.getName()
-      : undefined
-  }
-
-  getTitle() {
-    const name = this.getName()
-    return name ? parseTitle(name) : undefined
-  }
+  abstract getName(): string | undefined
 
   getText() {
     if (!this.exportDeclaration) {
       throw new Error(
-        `[mdxts] Default export could not be statically analyzed from source file at "${this.source.getPath()}".`
+        `[mdxts] Export could not be statically analyzed from source file at "${this.source.getPath()}".`
       )
     }
     return this.exportDeclaration.getText()
@@ -200,7 +190,7 @@ class DefaultExport<AllExports extends FileExports>
   getEnvironment() {
     if (!this.exportDeclaration) {
       throw new Error(
-        `[mdxts] Default export could not be statically analyzed from source file at "${this.source.getPath()}".`
+        `[mdxts] Export could not be statically analyzed from source file at "${this.source.getPath()}".`
       )
     }
     for (const importDeclaration of this.exportDeclaration
@@ -226,7 +216,7 @@ class DefaultExport<AllExports extends FileExports>
   getEditPath() {
     if (!this.exportDeclaration) {
       throw new Error(
-        `[mdxts] Default export could not be statically analyzed from source file at "${this.source.getPath()}".`
+        `[mdxts] Export could not be statically analyzed from source file at "${this.source.getPath()}".`
       )
     }
     return getDeclarationLocation(this.exportDeclaration).filePath
@@ -235,36 +225,55 @@ class DefaultExport<AllExports extends FileExports>
   getPosition() {
     if (!this.exportDeclaration) {
       throw new Error(
-        `[mdxts] Default export could not be statically analyzed from source file at "${this.source.getPath()}".`
+        `[mdxts] Export could not be statically analyzed from source file at "${this.source.getPath()}".`
       )
     }
     return getDeclarationLocation(this.exportDeclaration).position
   }
 
-  async getValue() {
+  async getValue(): Promise<Value> {
     const moduleExports = await this.source.getModuleExports()
-    const defaultExport = moduleExports?.default
-
-    if (defaultExport === undefined) {
+    const name = this.getName() || 'default'
+    const exportValue = moduleExports![name]
+    if (exportValue === undefined) {
       throw new Error(
-        `[mdxts] Default export is undefined for source file at "${this.source.getPath()}".`
+        `[mdxts] Export value is undefined for source file at "${this.source.getPath()}".`
       )
     }
+    return exportValue as Value
+  }
+}
 
-    return defaultExport as AllExports['default']
+class DefaultExport<AllExports extends FileExports>
+  extends Export<AllExports['default'], AllExports>
+  implements DefaultExportSource<AllExports['default']>
+{
+  getName() {
+    return this.exportDeclaration
+      ? getDeclarationName(this.exportDeclaration) || this.source.getName()
+      : undefined
+  }
+
+  getTitle() {
+    const name = this.getName()
+    return name ? parseTitle(name) : undefined
   }
 }
 
 class NamedExport<
-  AllExports extends FileExports,
-  Name extends Exclude<keyof AllExports, 'default'>,
-> implements NamedExportSource<AllExports[Name]>
+    AllExports extends FileExports,
+    Name extends Exclude<keyof AllExports, 'default'>,
+  >
+  extends Export<AllExports[Name], AllExports>
+  implements NamedExportSource<AllExports[Name]>
 {
   constructor(
-    private source: Source<AllExports>,
+    source: Source<AllExports>,
     private exportName: Name,
-    private exportDeclaration: ExportedDeclarations | undefined
-  ) {}
+    exportDeclaration: ExportedDeclarations | undefined
+  ) {
+    super(source, exportDeclaration)
+  }
 
   getName() {
     return this.exportName as string
@@ -272,62 +281,6 @@ class NamedExport<
 
   getTitle() {
     return parseTitle(this.getName())
-  }
-
-  getText() {
-    if (!this.exportDeclaration) {
-      throw new Error(
-        `[mdxts] Named export "${this.getName()}" could not be statically analyzed from source file at "${this.source.getPath()}".`
-      )
-    }
-    return this.exportDeclaration.getText()
-  }
-
-  getEnvironment() {
-    if (!this.exportDeclaration) {
-      throw new Error(
-        `[mdxts] Default export could not be statically analyzed from source file at "${this.source.getPath()}".`
-      )
-    }
-    for (const importDeclaration of this.exportDeclaration
-      .getSourceFile()
-      .getImportDeclarations()) {
-      const specifier = importDeclaration.getModuleSpecifierValue()
-      if (specifier === 'server-only') {
-        return 'server'
-      }
-      if (specifier === 'client-only') {
-        return 'client'
-      }
-    }
-    return 'isomorphic'
-  }
-
-  getPath() {
-    return `${this.source.getPath()}/${this.getName()}`
-  }
-
-  getEditPath() {
-    if (!this.exportDeclaration) {
-      throw new Error(
-        `[mdxts] Named export "${this.getName()}" could not be statically analyzed from source file at "${this.source.getPath()}".`
-      )
-    }
-    return getDeclarationLocation(this.exportDeclaration).filePath
-  }
-
-  getPosition() {
-    if (!this.exportDeclaration) {
-      throw new Error(
-        `[mdxts] Named export "${this.getName()}" could not be statically analyzed from source file at "${this.source.getPath()}".`
-      )
-    }
-    return getDeclarationLocation(this.exportDeclaration).position
-  }
-
-  async getValue() {
-    const moduleExports = await this.source.getModuleExports()
-    return moduleExports![this.exportName] as AllExports[Name]
   }
 }
 
