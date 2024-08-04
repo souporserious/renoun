@@ -15,6 +15,7 @@ import {
   type DeclarationPosition,
 } from './get-declaration-location'
 import { getDirectorySourceFile } from './get-directory-source-file'
+import { getEditPath } from './get-edit-path'
 import { getGitMetadata } from './get-git-metadata'
 import { getSourcePathMap } from './get-source-files-path-map'
 import { getSourceFilesOrderMap } from './get-source-files-sort-order'
@@ -227,7 +228,9 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
         `[mdxts] Export could not be statically analyzed from source file at "${this.source.getPath()}".`
       )
     }
-    return getDeclarationLocation(this.exportDeclaration).filePath
+    const { filePath } = getDeclarationLocation(this.exportDeclaration)
+    const position = this.getPosition()
+    return getEditPath(filePath, position.start.line, position.start.column)
   }
 
   getPosition() {
@@ -372,7 +375,7 @@ class Source<AllExports extends FileExports>
   }
 
   getEditPath() {
-    return this.sourcePath
+    return getEditPath(this.sourcePath)
   }
 
   getDepth() {
@@ -665,12 +668,13 @@ class Collection<AllExports extends FileExports>
     return '/'
   }
 
-  getDepth() {
-    return this.options.basePath ? getPathDepth(this.options.basePath) : 0
+  getEditPath() {
+    // TODO: this should point to the location of where the collection is defined
+    return this.absoluteBaseGlobPattern.replace(process.cwd(), '')
   }
 
-  getEditPath() {
-    return this.absoluteBaseGlobPattern.replace(process.cwd(), '')
+  getDepth() {
+    return this.options.basePath ? getPathDepth(this.options.basePath) : 0
   }
 
   getSource(path: string | string[]): FileSystemSource<AllExports> | undefined {

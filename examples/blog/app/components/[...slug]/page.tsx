@@ -58,6 +58,7 @@ export default async function Component({
   const [PreviousSource, NextSource] = ComponentSource.getSiblings(0)
   const isExamplesPage = params.slug.at(-1) === 'examples'
   const updatedAt = await ComponentSource.getUpdatedAt()
+  const editPath = ComponentSource.getEditPath()
 
   return (
     <>
@@ -84,11 +85,33 @@ export default async function Component({
         </>
       )}
 
-      {updatedAt ? (
-        <div>Last updated: {new Date(updatedAt).toLocaleString()}</div>
-      ) : null}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          padding: '1rem',
+        }}
+      >
+        {updatedAt ? (
+          <div style={{ gridColumn: 1, textAlign: 'left' }}>
+            Last updated: {new Date(updatedAt).toLocaleString()}
+          </div>
+        ) : null}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
+        {editPath ? (
+          <a href={editPath} style={{ gridColumn: 2, textAlign: 'right' }}>
+            Edit this page
+          </a>
+        ) : null}
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          padding: '1rem',
+        }}
+      >
         {PreviousSource ? (
           <SiblingLink Source={PreviousSource} direction="previous" />
         ) : null}
