@@ -600,8 +600,6 @@ class Collection<AllExports extends FileExports>
       this.absoluteGlobPattern
     )
 
-    this.fileSystemSources = fileSystemSources
-
     if (fileSystemSources.length === 0) {
       throw new Error(
         `[mdxts] No source files or directories were found for the file pattern: ${filePattern}`
@@ -617,6 +615,16 @@ class Collection<AllExports extends FileExports>
     this.sourcePathMap = getSourcePathMap(baseDirectory, {
       baseDirectory: options.baseDirectory,
       basePath: options.basePath,
+    })
+
+    // sort sources based on the order map by default or custom sort function if provided
+    this.fileSystemSources = fileSystemSources.sort((a, b) => {
+      const aOrder = this.sourceFilesOrderMap.get(getSourcePath(a))!
+      const bOrder = this.sourceFilesOrderMap.get(getSourcePath(b))!
+
+      return this.options.sort
+        ? this.options.sort(aOrder, bOrder)
+        : aOrder.localeCompare(bOrder)
     })
   }
 
