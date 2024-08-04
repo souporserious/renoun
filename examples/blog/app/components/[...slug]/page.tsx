@@ -55,7 +55,7 @@ export default async function Component({
     ...componentsPathname,
     'examples',
   ])
-  const [PreviousSource, NextSource] = ComponentSource.getSiblings()
+  const [PreviousSource, NextSource] = ComponentSource.getSiblings(0)
   const isExamplesPage = params.slug.at(-1) === 'examples'
   const updatedAt = await ComponentSource.getUpdatedAt()
 

@@ -7,7 +7,7 @@ export default async function Components() {
     <>
       <h1>Components</h1>
       <ul>
-        {ComponentsCollection.getSources(Infinity).map((Source) => (
+        {ComponentsCollection.getSources().map((Source) => (
           <ComponentItem key={Source.getPath()} Source={Source} />
         ))}
       </ul>

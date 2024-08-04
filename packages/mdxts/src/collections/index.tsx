@@ -115,11 +115,10 @@ export interface FileSystemSource<Exports extends FileExports>
   /** Authors who have contributed to the source. */
   getAuthors(): Promise<string[]>
 
-  /** The previous and next sources in the parent source if they exist. */
-  getSiblings(): [
-    previous?: FileSystemSource<Exports>,
-    next?: FileSystemSource<Exports>,
-  ]
+  /** The previous and next sources in the collection if they exist. Defaults to a depth of `Infinity` which considers all descendants. */
+  getSiblings(
+    depth?: number
+  ): [previous?: FileSystemSource<Exports>, next?: FileSystemSource<Exports>]
 
   /** The default export source. */
   getDefaultExport(): DefaultExportSource<Exports['default']>
@@ -417,7 +416,7 @@ class Source<AllExports extends FileExports>
   }
 
   getSources(depth: number = 1) {
-    if (!isPositiveIntegerOrInfinity(depth)) {
+    if (!isValidDepth(depth)) {
       throw new Error(
         `[mdxts] Invalid depth "${depth}" provided for source at path "${this.getPath()}". Depth must be a positive integer or Infinity.`
       )
@@ -445,20 +444,40 @@ class Source<AllExports extends FileExports>
       }) as FileSystemSource<AllExports>[]
   }
 
-  getSiblings(): [
+  getSiblings(
+    depth: number = Infinity
+  ): [
     previous?: FileSystemSource<AllExports> | undefined,
     next?: FileSystemSource<AllExports> | undefined,
   ] {
-    const currentIndex = this.collection.fileSystemSources.findIndex(
-      (source) => getSourcePath(source) === this.sourcePath
+    if (!isValidDepth(depth)) {
+      throw new Error(
+        `[mdxts] Invalid depth "${depth}" provided for source siblings at path "${this.getPath()}". Depth must be a positive integer or Infinity.`
+      )
+    }
+
+    const minDepth = this.collection.getDepth()
+    const maxDepth = depth === Infinity ? Infinity : this.getDepth() + depth
+    const filteredSources = this.collection.fileSystemSources.filter(
+      (source) => {
+        const sourcePath = this.collection.sourcePathMap.get(
+          getFileSystemSourcePath(source)
+        )!
+        const sourceDepth = getPathDepth(sourcePath)
+
+        return sourceDepth >= minDepth && sourceDepth <= maxDepth
+      }
+    )
+    const currentIndex = filteredSources.findIndex(
+      (source) => getFileSystemSourcePath(source) === this.sourcePath
     )
 
     if (currentIndex === -1) {
       return [undefined, undefined]
     }
 
-    const previousSource = this.collection.fileSystemSources[currentIndex - 1]
-    const nextSource = this.collection.fileSystemSources[currentIndex + 1]
+    const previousSource = filteredSources[currentIndex - 1]
+    const nextSource = filteredSources[currentIndex + 1]
 
     return [
       previousSource
@@ -619,8 +638,8 @@ class Collection<AllExports extends FileExports>
 
     // sort sources based on the order map by default or custom sort function if provided
     this.fileSystemSources = fileSystemSources.sort((a, b) => {
-      const aOrder = this.sourceFilesOrderMap.get(getSourcePath(a))!
-      const bOrder = this.sourceFilesOrderMap.get(getSourcePath(b))!
+      const aOrder = this.sourceFilesOrderMap.get(getFileSystemSourcePath(a))!
+      const bOrder = this.sourceFilesOrderMap.get(getFileSystemSourcePath(b))!
 
       return this.options.sort
         ? this.options.sort(aOrder, bOrder)
@@ -646,6 +665,10 @@ class Collection<AllExports extends FileExports>
     return '/'
   }
 
+  getDepth() {
+    return this.options.basePath ? getPathDepth(this.options.basePath) : 0
+  }
+
   getEditPath() {
     return this.absoluteBaseGlobPattern.replace(process.cwd(), '')
   }
@@ -666,7 +689,9 @@ class Collection<AllExports extends FileExports>
     }
 
     const matchingSources = this.fileSystemSources.filter((sourceFile) => {
-      const sourcePath = this.sourcePathMap.get(getSourcePath(sourceFile))!
+      const sourcePath = this.sourcePathMap.get(
+        getFileSystemSourcePath(sourceFile)
+      )!
       return sourcePath === pathString
     })
 
@@ -679,7 +704,7 @@ class Collection<AllExports extends FileExports>
     }
 
     const sourceFileOrDirectory = matchingSources[0]!
-    const sourcePath = getSourcePath(sourceFileOrDirectory)
+    const sourcePath = getFileSystemSourcePath(sourceFileOrDirectory)
     const isSourceFile = sourceFileOrDirectory instanceof SourceFile
     const exportedDeclarations = isSourceFile
       ? sourceFileOrDirectory.getExportedDeclarations()
@@ -694,16 +719,14 @@ class Collection<AllExports extends FileExports>
   }
 
   getSources(depth: number = 1) {
-    if (!isPositiveIntegerOrInfinity(depth)) {
+    if (!isValidDepth(depth)) {
       throw new Error(
         `[mdxts] Invalid depth "${depth}" provided for collection with file pattern "${this.filePattern}". Depth must be a positive integer or Infinity.`
       )
     }
 
-    const currentDepth = this.options.basePath
-      ? getPathDepth(this.options.basePath)
-      : 0
-    const maxDepth = depth === Infinity ? Infinity : currentDepth + depth
+    const minDepth = this.getDepth()
+    const maxDepth = depth === Infinity ? Infinity : minDepth + depth
 
     return this.fileSystemSources
       .map((fileSystemSource) => {
@@ -712,19 +735,21 @@ class Collection<AllExports extends FileExports>
       .filter((source) => {
         if (source) {
           const descendantDepth = source.getDepth()
-          return descendantDepth > currentDepth && descendantDepth <= maxDepth
+          return descendantDepth > minDepth && descendantDepth <= maxDepth
         }
       }) as FileSystemSource<AllExports>[]
   }
 
   getSourceFromFileSystemSource(sourceFileOrDirectory: SourceFile | Directory) {
-    const path = this.sourcePathMap.get(getSourcePath(sourceFileOrDirectory))!
+    const path = this.sourcePathMap.get(
+      getFileSystemSourcePath(sourceFileOrDirectory)
+    )!
     return this.getSource(path)
   }
 
   getImportSlug(source: SourceFile | Directory) {
     return (
-      getSourcePath(source)
+      getFileSystemSourcePath(source)
         // remove the base glob pattern: /src/posts/welcome.mdx -> /posts/welcome.mdx
         .replace(this.absoluteBaseGlobPattern, '')
         // remove leading slash: /posts/welcome.mdx -> posts/welcome.mdx
@@ -788,7 +813,7 @@ function getSourceFilesAndDirectories(
 }
 
 /** Get the path of a source file or directory. */
-function getSourcePath(source: SourceFile | Directory) {
+function getFileSystemSourcePath(source: SourceFile | Directory) {
   if (source instanceof SourceFile) {
     return source.getFilePath()
   }
@@ -842,7 +867,7 @@ function getExportedDeclaration(
   return exportDeclarations[0]
 }
 
-/** Whether a value is a positive integer or Infinity. */
-function isPositiveIntegerOrInfinity(value: number) {
-  return (value > 0 && Number.isInteger(value)) || value === Infinity
+/** Whether a depth value is zero, a positive integer, or Infinity. */
+function isValidDepth(depth: number) {
+  return (depth >= 0 && Number.isInteger(depth)) || depth === Infinity
 }
