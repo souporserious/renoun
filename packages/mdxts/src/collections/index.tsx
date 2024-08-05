@@ -600,6 +600,8 @@ class Collection<AllExports extends FileExports>
   public sourceFilesOrderMap: Map<string, string>
   public sourcePathMap: Map<string, string>
 
+  #sources = new Map<string, Source<AllExports>>()
+
   constructor(filePattern: string, options: CollectionOptions = {}) {
     this.filePattern = filePattern
     this.options = options
@@ -680,6 +682,10 @@ class Collection<AllExports extends FileExports>
   getSource(path: string | string[]): FileSystemSource<AllExports> | undefined {
     let pathString = Array.isArray(path) ? path.join('/') : path
 
+    if (this.#sources.has(pathString)) {
+      return this.#sources.get(pathString)
+    }
+
     // ensure the path starts with a slash
     if (!pathString.startsWith('/')) {
       pathString = `/${pathString}`
@@ -714,12 +720,16 @@ class Collection<AllExports extends FileExports>
       ? sourceFileOrDirectory.getExportedDeclarations()
       : new Map()
 
-    return new Source(
+    const source = new Source(
       this,
       sourceFileOrDirectory,
       sourcePath,
       exportedDeclarations
     )
+
+    this.#sources.set(pathString, source)
+
+    return source
   }
 
   getSources(depth: number = 1) {
