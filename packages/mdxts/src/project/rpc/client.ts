@@ -14,11 +14,6 @@ export class WebSocketClient {
   } = {}
 
   constructor() {
-    if (process.env.MDXTS_WS_PORT === undefined) {
-      throw new Error(
-        '[mdxts] The MDXTS_WS_PORT environment variable is "undefined". Make sure the mdxts cli is running.'
-      )
-    }
     this.#ws = new WebSocket(`ws://localhost:${process.env.MDXTS_WS_PORT}`)
     this.#ws.once('open', () => (this.#isConnected = true))
     this.#ws.on('message', this.#handleMessage.bind(this))

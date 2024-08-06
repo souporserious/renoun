@@ -6,12 +6,26 @@ import type { DistributiveOmit } from '../types'
 import { WebSocketClient } from './rpc/client'
 import type { ProjectOptions } from './types'
 
-const client = new WebSocketClient()
+let client: WebSocketClient | undefined
+
+if (process.env.MDXTS_WS_PORT) {
+  client = new WebSocketClient()
+}
 
 export async function analyzeSourceText(
   options: DistributiveOmit<AnalyzeSourceTextOptions, 'project'> & {
     projectOptions?: ProjectOptions
   }
 ): Promise<AnalyzeSourceTextResult> {
-  return client.callMethod('analyzeSourceText', options)
+  if (client) {
+    return client.callMethod('analyzeSourceText', options)
+  }
+
+  const { project } = await import('../components/project')
+
+  return import('../utils/analyze-source-text').then(
+    ({ analyzeSourceText }) => {
+      return analyzeSourceText({ project, ...options })
+    }
+  )
 }
