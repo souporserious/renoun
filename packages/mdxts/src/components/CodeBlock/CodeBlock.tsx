@@ -272,7 +272,7 @@ export async function CodeBlockAsync({
               />
             </code>
           )}
-          {/* {allowCopy !== false && !shouldRenderToolbar ? (
+          {allowCopy !== false && !shouldRenderToolbar ? (
             <CopyButton
               css={{
                 placeSelf: 'start end',
@@ -286,9 +286,9 @@ export async function CodeBlockAsync({
                 color: theme.activityBar.foreground,
                 borderRadius: 5,
               }}
-              value={metadata.value}
+              value={value}
             />
-          ) : null} */}
+          ) : null}
         </Pre>
       </Container>
     </Context>
