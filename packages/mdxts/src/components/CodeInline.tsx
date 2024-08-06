@@ -57,8 +57,8 @@ async function CodeInlineAsync({
   value,
   language,
   allowCopy,
-  paddingX = '0.25em',
-  paddingY = '0.1em',
+  paddingX,
+  paddingY,
   css: cssProp,
   className,
   style,
@@ -127,21 +127,26 @@ async function CodeInlineAsync({
 }
 
 /** Renders an inline `code` element with optional syntax highlighting and copy button. */
-export async function CodeInline(props: CodeInlineProps) {
+export async function CodeInline({
+  paddingX = '0.25em',
+  paddingY = '0.1em',
+  ...props
+}: CodeInlineProps) {
   return (
     <Suspense
       fallback={
-        <span
-          style={{
-            display: 'inline-block',
-            width: props.value.length + 'ch',
-            height: '1lh',
-            padding: `${props.paddingY} ${props.paddingX} 0`,
-          }}
-        />
+        'value' in props && props.value ? (
+          <code
+            style={{
+              padding: `${paddingY} ${paddingX} 0`,
+            }}
+          >
+            {props.value}
+          </code>
+        ) : null
       }
     >
-      <CodeInlineAsync {...props} />
+      <CodeInlineAsync paddingX={paddingX} paddingY={paddingY} {...props} />
     </Suspense>
   )
 }
