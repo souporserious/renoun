@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
-import { createServer, getPort } from '../project/server'
+import { createServer } from '../project/server'
 import { initializeImportMapFromCollections } from './initialize-import-map'
 
 const [firstArgument, ...restArguments] = process.argv.slice(2)
 
 process.env.WS_NO_BUFFER_UTIL = 'true'
 
-const wss = createServer()
+const server = createServer()
 const usageMessage = `Usage:   mdxts <your-framework-args>\nExample: mdxts next dev`
 
 if (firstArgument === undefined) {
@@ -23,7 +23,7 @@ if (firstArgument === undefined) {
     env: {
       ...process.env,
       MDXTS_NEXT_JS: firstArgument === 'next' ? 'true' : 'false',
-      MDXTS_WS_PORT: getPort(wss).toString(),
+      MDXTS_WS_PORT: server.getPort().toString(),
       MDXTS_THEME_PATH: 'nord',
     },
   })

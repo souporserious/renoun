@@ -1,4 +1,4 @@
-import { sendToServer, whenServerReady } from './client'
+import { WebSocketClient } from './rpc/client'
 import type {
   AnalyzeSourceTextOptions,
   AnalyzeSourceTextResult,
@@ -7,6 +7,7 @@ import type { DistributiveOmit } from '../types'
 import type { ProjectOptions } from './types'
 
 const initializedProjects = new Set<string>()
+const client = new WebSocketClient()
 
 async function initializeProject(options?: ProjectOptions) {
   const key = JSON.stringify(options)
@@ -15,11 +16,7 @@ async function initializeProject(options?: ProjectOptions) {
     return
   }
 
-  await whenServerReady()
-
-  initializedProjects.add(key)
-
-  return sendToServer<void>('initialize', options)
+  client.callMethod('initialize', options)
 }
 
 export async function analyzeSourceText(
@@ -28,5 +25,5 @@ export async function analyzeSourceText(
   }
 ): Promise<AnalyzeSourceTextResult> {
   await initializeProject(options.projectOptions)
-  return sendToServer<AnalyzeSourceTextResult>('analyzeSourceText', options)
+  return client.callMethod('analyzeSourceText', options)
 }
