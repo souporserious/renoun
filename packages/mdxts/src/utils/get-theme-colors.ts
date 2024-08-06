@@ -2,7 +2,10 @@ import { getTheme } from './get-theme'
 
 let themeColors: Record<string, any> | null = null
 
-/** Gets the configured VS Code theme colors as an object. */
+/**
+ * Gets the configured VS Code theme colors as an object.
+ * @internal
+ */
 export async function getThemeColors() {
   if (themeColors === null) {
     const { colors } = await getTheme()

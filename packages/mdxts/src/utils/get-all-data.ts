@@ -133,6 +133,11 @@ export function getAllData<Type extends { frontMatter: Record<string, any> }>({
       basePathname,
       packageMetadata?.name
     )
+
+    if (!pathname) {
+      return
+    }
+
     const previouseData = allData[pathname]
     const sourceFile = project.addSourceFileAtPath(path)
     const sourceFileTitle = getSourceFileTitle(sourceFile)
@@ -191,23 +196,30 @@ export function getAllData<Type extends { frontMatter: Record<string, any> }>({
       const exportedTypes = getExportedTypes(
         sourceFile,
         allPublicDeclarations.get(sourceFile)
-      ).map(({ filePath, ...fileExport }) => {
-        const isPublic = allPublicPaths.includes(filePath)
-        const pathname = filePathToPathname(
-          isPublic ? filePath : sourceFile.getFilePath(),
-          baseDirectory,
-          basePathname,
-          packageMetadata?.name
-        )
-        return {
-          ...fileExport,
-          pathname,
-          sourcePath: getSourcePath(filePath),
-          isMainExport: mainExportDeclarationName
-            ? mainExportDeclarationName === fileExport.name
-            : false,
-        }
-      })
+      )
+        .map(({ filePath, ...fileExport }) => {
+          const isPublic = allPublicPaths.includes(filePath)
+          const pathname = filePathToPathname(
+            isPublic ? filePath : sourceFile.getFilePath(),
+            baseDirectory,
+            basePathname,
+            packageMetadata?.name
+          )
+
+          if (!pathname) {
+            return
+          }
+
+          return {
+            ...fileExport,
+            pathname,
+            sourcePath: getSourcePath(filePath),
+            isMainExport: mainExportDeclarationName
+              ? mainExportDeclarationName === fileExport.name
+              : false,
+          }
+        })
+        .filter(Boolean) as ModuleData<Type>['exportedTypes']
       const examples = getExamplesFromSourceFile(
         sourceFile,
         pathname,

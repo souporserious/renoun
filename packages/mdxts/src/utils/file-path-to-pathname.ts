@@ -20,9 +20,10 @@ export function filePathToPathname(
   kebabCase = true
 ) {
   if (filePath.includes('node_modules')) {
-    throw new Error(
-      `[mdxts] Tried converting a node_modules file path to pathname: ${filePath}\nThis is currently not supported. Please file an issue to add support.`
+    console.warn(
+      `[mdxts] Tried converting a node_modules file path to pathname: ${filePath.replace(process.cwd(), '')}\nThis is currently not supported. Please file an issue to add support.`
     )
+    return ''
   }
 
   // First, normalize the file path

@@ -12,6 +12,10 @@ if (process.env.MDXTS_WS_PORT) {
   client = new WebSocketClient()
 }
 
+/**
+ * Analyze source text and return highlighted tokens with diagnostics.
+ * @internal
+ */
 export async function analyzeSourceText(
   options: DistributiveOmit<AnalyzeSourceTextOptions, 'project'> & {
     projectOptions?: ProjectOptions

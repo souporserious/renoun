@@ -4,7 +4,10 @@ import CodeSandboxTransformer from '@remark-embedder/transformer-codesandbox'
 import { remarkPlugin } from './remark'
 import { rehypePlugin } from './rehype'
 
-/** MDXTS specific plugins for `rehype` and `remark`. */
+/**
+ * MDXTS specific plugins for `rehype` and `remark`.
+ * @internal
+ */
 export async function getMdxPlugins({
   gitSource,
   gitBranch,
