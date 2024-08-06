@@ -1,16 +1,17 @@
 import WebSocket from 'ws'
 import type { WebSocketRequest, WebSocketResponse } from './server'
 
+let requestId = 0
+
 export class WebSocketClient {
   #ws: WebSocket
+  #isConnected = false
   #requests: {
     [key: number]: {
       resolve: (value?: any) => void
       reject: (reason?: any) => void
     }
   } = {}
-  #isConnected = false
-  #id = 0
 
   constructor() {
     if (process.env.MDXTS_WS_PORT === undefined) {
@@ -20,14 +21,14 @@ export class WebSocketClient {
     }
     this.#ws = new WebSocket(`ws://localhost:${process.env.MDXTS_WS_PORT}`)
     this.#ws.once('open', () => (this.#isConnected = true))
-    this.#ws.on('message', (message: string) => this.#handleMessage(message))
+    this.#ws.on('message', this.#handleMessage.bind(this))
   }
 
   #handleMessage(message: string) {
     const response: WebSocketResponse = JSON.parse(message)
     const { id, result, error } = response
 
-    if (id && this.#requests[id]) {
+    if (this.#requests[id]) {
       if (error) {
         this.#requests[id].reject(error)
       } else {
@@ -39,17 +40,15 @@ export class WebSocketClient {
   }
 
   callMethod(method: string, params: any, timeout = 60000): Promise<any> {
-    const id = this.#id++
-    const request: WebSocketRequest = {
-      method: method,
-      params: params,
-      id: id,
-    }
+    const id = requestId++
+    const request: WebSocketRequest = { method, params, id }
 
     return new Promise((resolve, reject) => {
       const timeoutId = setTimeout(() => {
         reject(
-          new Error(`Request timed out after one minute for method: ${method}`)
+          new Error(
+            `[mdxts] Timed out after one minute for request: ${JSON.stringify(request)}`
+          )
         )
         delete this.#requests[id]
       }, timeout)

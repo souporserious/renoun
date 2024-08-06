@@ -11,7 +11,7 @@ import { ProjectOptions } from './types'
 
 const projects = new Map<string, Project>()
 const watchers = new Map<string, FSWatcher>()
-const DEFAULT_OPTIONS = {
+const DEFAULT_PROJECT_OPTIONS = {
   compilerOptions: {
     allowJs: true,
     resolveJsonModule: true,
@@ -25,13 +25,20 @@ const DEFAULT_OPTIONS = {
   tsConfigFilePath: 'tsconfig.json',
 } satisfies TsMorphProjectOptions
 
-/** Get the project associated with the provided WebSocket connection. */
-function getProject(id: string) {
-  const project = projects.get(id)
+/** Get the project associated with the provided options. */
+function getProject(options?: ProjectOptions) {
+  const projectId = JSON.stringify(options)
 
-  if (!project) {
-    throw new Error('Project not found for WebSocket connection')
+  if (projects.has(projectId)) {
+    return projects.get(projectId)!
   }
+
+  const project = new Project({
+    ...DEFAULT_PROJECT_OPTIONS,
+    ...options,
+  })
+
+  projects.set(projectId, project)
 
   return project
 }
@@ -39,21 +46,6 @@ function getProject(id: string) {
 /** Create a WebSocket server. */
 export function createServer() {
   const server = new WebSocketServer()
-
-  server.registerMethod('initialize', async (options?: ProjectOptions) => {
-    const projectId = JSON.stringify(options)
-
-    if (projects.has(projectId)) {
-      return
-    }
-
-    const project = new Project({
-      ...DEFAULT_OPTIONS,
-      ...options,
-    })
-
-    projects.set(projectId, project)
-  })
 
   server.registerMethod(
     'analyzeSourceText',
@@ -63,8 +55,7 @@ export function createServer() {
     }: Parameters<typeof analyzeSourceText>[0] & {
       projectOptions?: ProjectOptions
     }) => {
-      const projectId = JSON.stringify(projectOptions)
-      const project = getProject(projectId)
+      const project = getProject(projectOptions)
 
       process.env.MDXTS_THEME_PATH = 'nord'
 

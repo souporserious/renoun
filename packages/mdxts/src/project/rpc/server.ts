@@ -3,13 +3,13 @@ import WebSocket from 'ws'
 export interface WebSocketRequest {
   method: string
   params: any
-  id: number | null
+  id: number
 }
 
 export interface WebSocketResponse {
   result?: any
   error?: { code: number; message: string; data?: any }
-  id: number | null
+  id: number
 }
 
 export class WebSocketServer {
@@ -53,7 +53,7 @@ export class WebSocketServer {
     try {
       request = JSON.parse(message)
     } catch (error) {
-      this.#sendError(ws, null, -32700, 'Parse error')
+      this.#sendError(ws, -1, -32700, 'Parse error')
       return
     }
 
@@ -78,32 +78,31 @@ export class WebSocketServer {
     }
   }
 
-  #sendResponse(ws: WebSocket, id: number | null, result: any) {
-    const response: WebSocketResponse = {
-      id: id,
-      result: result,
-    }
-    ws.send(JSON.stringify(response))
+  #sendResponse(ws: WebSocket, id: number, result: any) {
+    ws.send(
+      JSON.stringify({
+        id,
+        result,
+      } satisfies WebSocketResponse)
+    )
   }
 
   #sendError(
     ws: WebSocket,
-    id: number | null,
+    id: number,
     code: number,
     message: string,
     data: any = null
   ) {
-    const error = {
-      code: code,
-      message: message,
-      data: data,
-    }
-
-    const response: WebSocketResponse = {
-      id: id,
-      error: error,
-    }
-
-    ws.send(JSON.stringify(response))
+    ws.send(
+      JSON.stringify({
+        id,
+        error: {
+          code,
+          message,
+          data,
+        },
+      } satisfies WebSocketResponse)
+    )
   }
 }
