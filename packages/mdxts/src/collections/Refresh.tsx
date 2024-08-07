@@ -1,6 +1,11 @@
 'use client'
 import { useEffect } from 'react'
 
+import type {
+  WebSocketRequest,
+  WebSocketNotification,
+} from '../project/rpc/server'
+
 let ws: WebSocket
 
 /**
@@ -20,18 +25,29 @@ export function Refresh({
 
   useEffect(() => {
     function handleWatch() {
-      ws.send(JSON.stringify({ type: 'refresh:watch', data: { directory } }))
+      ws.send(
+        JSON.stringify({
+          method: 'refreshWatch',
+          params: { directory },
+        } satisfies WebSocketRequest)
+      )
     }
 
     function handleUnwatch() {
-      ws.send(JSON.stringify({ type: 'refresh:unwatch', data: { directory } }))
+      ws.send(
+        JSON.stringify({
+          method: 'refreshUnwatch',
+          params: { directory },
+        } satisfies WebSocketRequest)
+      )
     }
 
     function handleMessage(event: MessageEvent) {
-      const message = JSON.parse(event.data)
+      const message = JSON.parse(event.data) as WebSocketNotification
+
       if (
-        message.type === 'refresh:update' &&
-        message.data.directory === directory
+        message.method === 'refreshUpdate' &&
+        message.params.directory === directory
       ) {
         // @ts-ignore - private Next.js API
         const router = window.nd.router

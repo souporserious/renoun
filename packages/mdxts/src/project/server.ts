@@ -69,10 +69,22 @@ export function createServer() {
   server.registerMethod(
     'refreshWatch',
     async (options: { directory: string }) => {
-      watchers.set(
+      if (watchers.has(options.directory)) {
+        return
+      }
+
+      const watcher = watch(
         options.directory,
-        watch(options.directory, { persistent: true, recursive: true })
+        { persistent: true, recursive: true },
+        () => {
+          server.sendNotification({
+            method: 'refreshUpdate',
+            params: { directory: options.directory },
+          })
+        }
       )
+
+      watchers.set(options.directory, watcher)
     }
   )
 

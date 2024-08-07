@@ -42,7 +42,7 @@ export class WebSocketClient {
     const response: WebSocketResponse = JSON.parse(message)
     const { id, result, error } = response
 
-    if (this.#requests[id]) {
+    if (id !== undefined && this.#requests[id]) {
       if (error) {
         this.#requests[id].reject(error)
       } else {

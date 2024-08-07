@@ -3,23 +3,40 @@ import WebSocket from 'ws'
 export interface WebSocketRequest {
   method: string
   params: any
-  id: number
+  id?: number
 }
 
 export interface WebSocketResponse {
   result?: any
   error?: { code: number; message: string; data?: any }
-  id: number
+  id?: number
+}
+
+export interface WebSocketNotification {
+  method: string
+  params: any
 }
 
 export class WebSocketServer {
   #server: WebSocket.Server
+
+  #sockets: Set<WebSocket> = new Set()
+
   #handlers: { [key: string]: (params: any) => Promise<any> | any } = {}
 
   constructor(port: number = 0) {
     this.#server = new WebSocket.Server({ port })
+
     this.#server.on('connection', (ws: WebSocket) => {
-      ws.on('message', (message: string) => this.#handleMessage(ws, message))
+      this.#sockets.add(ws)
+
+      ws.on('close', () => {
+        this.#sockets.delete(ws)
+      })
+
+      ws.on('message', (message: string) => {
+        this.#handleMessage(ws, message)
+      })
     })
   }
 
@@ -78,7 +95,13 @@ export class WebSocketServer {
     }
   }
 
-  #sendResponse(ws: WebSocket, id: number, result: any) {
+  sendNotification(message: WebSocketNotification) {
+    this.#sockets.forEach((ws) => {
+      ws.send(JSON.stringify(message))
+    })
+  }
+
+  #sendResponse(ws: WebSocket, id: number | undefined, result: any) {
     ws.send(
       JSON.stringify({
         id,
@@ -89,7 +112,7 @@ export class WebSocketServer {
 
   #sendError(
     ws: WebSocket,
-    id: number,
+    id: number | undefined,
     code: number,
     message: string,
     data: any = null
