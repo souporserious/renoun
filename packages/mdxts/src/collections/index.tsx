@@ -660,7 +660,7 @@ class Collection<AllExports extends FileExports>
 
       return this.options.sort
         ? this.options.sort(aOrder, bOrder)
-        : aOrder.localeCompare(bOrder)
+        : aOrder?.localeCompare(bOrder)
     })
   }
 
