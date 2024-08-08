@@ -34,6 +34,10 @@ export class WebSocketServer {
         this.#sockets.delete(ws)
       })
 
+      ws.on('error', (error) => {
+        throw new Error(`[mdxts] WebSocket server error: ${error}`)
+      })
+
       ws.on('message', (message: string) => {
         this.#handleMessage(ws, message)
       })
@@ -44,14 +48,14 @@ export class WebSocketServer {
     const address = this.#server.address()
 
     if (address === null) {
-      throw new Error('WebSocket server is not bound to an address')
+      throw new Error('[mdxts] WebSocket server is not bound to an address')
     }
 
     if (typeof address === 'string') {
       const port = parseInt(address, 10)
       if (isNaN(port)) {
         throw new Error(
-          `WebSocket server must be bound to a port, but is using a named pipe or an invalid address: ${address}`
+          `[mdxts] WebSocket server must be bound to a port, but is using a named pipe or an invalid address: ${address}`
         )
       }
       return port
@@ -70,18 +74,18 @@ export class WebSocketServer {
     try {
       request = JSON.parse(message)
     } catch (error) {
-      this.#sendError(ws, -1, -32700, 'Parse error')
+      this.#sendError(ws, -1, -32700, '[mdxts] Parse error')
       return
     }
 
     if (!request.method || typeof request.method !== 'string') {
-      this.#sendError(ws, request.id, -32600, 'Invalid Request')
+      this.#sendError(ws, request.id, -32600, '[mdxts] Invalid Request')
       return
     }
 
     const handler = this.#handlers[request.method]
     if (!handler) {
-      this.#sendError(ws, request.id, -32601, 'Method not found')
+      this.#sendError(ws, request.id, -32601, '[mdxts] Method not found')
       return
     }
 
@@ -90,7 +94,13 @@ export class WebSocketServer {
       this.#sendResponse(ws, request.id, result)
     } catch (error) {
       if (error instanceof Error) {
-        this.#sendError(ws, request.id, -32603, 'Internal error', error.message)
+        this.#sendError(
+          ws,
+          request.id,
+          -32603,
+          '[mdxts] Internal error',
+          error.message
+        )
       }
     }
   }
