@@ -1,28 +1,12 @@
-import {
-  createCollection,
-  type MDXContent,
-  type FileSystemSource,
-} from 'mdxts/collections'
 import Link from 'next/link'
 
-export type PostSchema = {
-  default: MDXContent
-  frontmatter?: {
-    title: string
-    description: string
-  }
+import { PostsCollection, type PostSource } from '@/collections'
+
+export function generateStaticParams() {
+  return PostsCollection.getSources(Infinity).map((Source) => ({
+    slug: Source.getPathSegments(),
+  }))
 }
-
-export type PostSource = FileSystemSource<PostSchema>
-
-export const PostsCollection = createCollection<PostSchema>(
-  '@/posts/**/*.{ts,mdx}',
-  {
-    title: 'Posts',
-    baseDirectory: 'posts',
-    basePath: 'posts', // TODO: test this works without specifying
-  }
-)
 
 export default async function Post({ params }: { params: { slug: string[] } }) {
   const PostSource = PostsCollection.getSource(params.slug)!

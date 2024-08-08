@@ -39,10 +39,16 @@ export type FileExports = Record<string, unknown>
 /** @internal */
 export interface BaseSource {
   /**
-   * The path to the source, taking into account the `baseDirectory` and
-   * `basePath` configuration, and formatted to be URL-friendly.
+   * The full path to the source formatted to be URL-friendly, taking the
+   * collection `baseDirectory` and `basePath` configuration into account.
    */
   getPath(): string
+
+  /**
+   * An array of path segments to the source excluding the collection `basePath`
+   * if configured.
+   */
+  getPathSegments(): string[]
 
   /**
    * The path to the source on the local filesystem in development
@@ -147,7 +153,7 @@ export interface FileSystemSource<Exports extends FileExports>
 export type CollectionSource<Exports extends FileExports> = {
   /** Get the configured collection title. */
   getTitle(): string | undefined
-} & BaseSourceWithGetters<Exports>
+} & Omit<BaseSourceWithGetters<Exports>, 'getPathSegments'>
 
 /** @internal */
 export interface CollectionOptions {
@@ -229,9 +235,14 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
   }
 
   getPath() {
-    const name = this.getName()
     const path = this.source.getPath()
+    const name = this.getName()
+
     return name ? `${path}/${name}` : path
+  }
+
+  getPathSegments(): string[] {
+    return this.source.getPathSegments().concat(this.getName() || [])
   }
 
   getEditPath() {
@@ -384,6 +395,14 @@ class Source<AllExports extends FileExports>
     }
 
     return calculatedPath
+  }
+
+  getPathSegments() {
+    const basePath = this.collection.options.basePath
+
+    return this.getPath()
+      .split('/')
+      .filter((segment) => segment !== basePath && segment !== '')
   }
 
   getEditPath() {

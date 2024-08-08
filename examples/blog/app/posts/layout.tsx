@@ -1,6 +1,6 @@
 import Link from 'next/link'
 
-import { PostsCollection, type PostSource } from './[...slug]/page'
+import { PostsCollection, type PostSource } from '@/collections'
 
 async function TreeNavigation({ Source }: { Source: PostSource }) {
   const Sources = Source.getSources()

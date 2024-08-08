@@ -1,6 +1,6 @@
 import Link from 'next/link'
 
-import { ComponentsCollection, type ComponentSource } from './[...slug]/page'
+import { ComponentsCollection, type ComponentSource } from '@/collections'
 
 export default async function Components() {
   return (

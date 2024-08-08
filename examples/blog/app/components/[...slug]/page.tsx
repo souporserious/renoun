@@ -1,22 +1,14 @@
-import {
-  createCollection,
-  type FileSystemSource,
-  type NamedExportSource,
-} from 'mdxts/collections'
+import { type NamedExportSource } from 'mdxts/collections'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
-type ComponentSchema = Record<string, React.ComponentType>
+import { ComponentsCollection, type ComponentSource } from '@/collections'
 
-export type ComponentSource = FileSystemSource<ComponentSchema>
-
-export const ComponentsCollection = createCollection<ComponentSchema>(
-  '@/components/**/{index,*.examples}.{ts,tsx}',
-  {
-    baseDirectory: 'components',
-    basePath: 'components',
-  }
-)
+export function generateStaticParams() {
+  return ComponentsCollection.getSources(Infinity).map((Source) => ({
+    slug: Source.getPathSegments(),
+  }))
+}
 
 async function ComponentExport({
   NamedExport,
@@ -130,18 +122,18 @@ async function SiblingLink({
   Source: ComponentSource
   direction: 'previous' | 'next'
 }) {
-  const pathname = Source.getPath()
+  const path = Source.getPath()
 
   return (
     <Link
-      href={pathname}
+      href={path}
       style={{
         gridColumn: direction === 'previous' ? 1 : 2,
         textAlign: direction === 'previous' ? 'left' : 'right',
       }}
     >
       <div>{direction === 'previous' ? 'Previous' : 'Next'}</div>
-      {pathname}
+      {path}
     </Link>
   )
 }

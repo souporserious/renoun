@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { PostsCollection, type PostSource } from './[...slug]/page'
+import { PostsCollection, type PostSource } from '@/collections'
 
 export default async function Posts() {
   return (
