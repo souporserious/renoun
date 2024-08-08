@@ -1,7 +1,6 @@
 import WebSocket from 'ws'
-import type { WebSocketRequest, WebSocketResponse } from './server'
 
-let requestId = 0
+import type { WebSocketRequest, WebSocketResponse } from './server'
 
 type Request = {
   resolve: (value?: any) => void
@@ -54,29 +53,36 @@ export class WebSocketClient {
   }
 
   callMethod(method: string, params: any, timeout = 60000): Promise<any> {
-    const id = requestId++
+    const id = performance.now()
     const request: WebSocketRequest = { method, params, id }
 
     return new Promise((resolve, reject) => {
-      const timeoutId = setTimeout(() => {
-        reject(
-          new Error(
-            `[mdxts] Timed out after one minute for request: ${JSON.stringify(request)}`
+      if (process.env.NODE_ENV === 'development') {
+        const timeoutId = setTimeout(() => {
+          reject(
+            new Error(
+              `[mdxts] Timed out after one minute for the following request: ${JSON.stringify(request)}`
+            )
           )
-        )
-        delete this.#requests[id]
-      }, timeout)
+          delete this.#requests[id]
+        }, timeout)
 
-      this.#requests[id] = {
-        resolve: (value) => {
-          clearTimeout(timeoutId)
-          resolve(value)
-        },
-        reject: (reason) => {
-          clearTimeout(timeoutId)
-          reject(reason)
-        },
-      } satisfies Request
+        this.#requests[id] = {
+          resolve: (value) => {
+            clearTimeout(timeoutId)
+            resolve(value)
+          },
+          reject: (reason) => {
+            clearTimeout(timeoutId)
+            reject(reason)
+          },
+        } satisfies Request
+      } else {
+        this.#requests[id] = {
+          resolve,
+          reject,
+        } satisfies Request
+      }
 
       if (this.#isConnected) {
         this.#ws.send(JSON.stringify(request))
