@@ -22,6 +22,7 @@ export async function analyzeSourceText({
   allowErrors,
   showErrors,
   sourcePath,
+  isInline,
   ...options
 }: AnalyzeSourceTextOptions): Promise<AnalyzeSourceTextResult> {
   const metadata = await parseSourceTextMetadata({
@@ -29,6 +30,7 @@ export async function analyzeSourceText({
     filename,
     language,
     allowErrors,
+    isInline,
     ...options,
   })
   const tokens = await getTokens(
@@ -38,6 +40,7 @@ export async function analyzeSourceText({
     metadata.filename,
     allowErrors,
     showErrors,
+    isInline,
     // Simplify the path for more legibile error messages.
     sourcePath ? sourcePath.split(process.cwd()).at(1) : undefined
   )

@@ -64,9 +64,8 @@ async function CodeInlineAsync({
   style,
 }: CodeInlineProps) {
   const { tokens } = await analyzeSourceText({
-    value: value
-      // Trim extra whitespace from inline code blocks since it's difficult to read.
-      .replace(/\s+/g, ' '),
+    isInline: true,
+    value,
     language,
   })
   const theme = await getThemeColors()
