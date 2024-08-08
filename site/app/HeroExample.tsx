@@ -12,7 +12,7 @@ import { allDocs } from '../../data'
 
 export default async function Page({ params }) {
   const { Content } = await allDocs.get(params.slug)
-  return <Content />
+  return Content ? <Content /> : null
 }
 `.trim()
 
@@ -47,6 +47,7 @@ export function Sidebar() {
 
 const codeProps = {
   allowCopy: false,
+  allowErrors: true,
   showToolbar: false,
   className: {
     container: `${GeistMono.className} ${styles.code}`,

@@ -21,6 +21,7 @@ export function useMDXComponents() {
     PackageInstall,
     CodeBlock: (props) => (
       <CodeBlock
+        allowErrors
         className={{
           container: GeistMono.className,
         }}
@@ -33,6 +34,7 @@ export function useMDXComponents() {
       return (
         <div style={{ display: 'flex' }}>
           <CodeBlock
+            allowErrors
             className={{
               container: GeistMono.className,
             }}
@@ -140,6 +142,7 @@ export function useMDXComponents() {
     ),
     pre: ({ sourcePath, ...props }) => (
       <MDXComponents.pre
+        allowErrors
         className={{
           container: GeistMono.className,
         }}
