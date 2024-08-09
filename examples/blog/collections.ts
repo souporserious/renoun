@@ -31,6 +31,6 @@ export const PostsCollection = createCollection<PostSchema>(
   {
     title: 'Posts',
     baseDirectory: 'posts',
-    basePath: 'posts', // TODO: test this works without specifying
+    basePath: 'posts',
   }
 )

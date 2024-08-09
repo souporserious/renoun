@@ -702,7 +702,7 @@ class Collection<AllExports extends FileExports>
   }
 
   getDepth() {
-    return this.options.basePath ? getPathDepth(this.options.basePath) : 0
+    return this.options.basePath ? getPathDepth(this.options.basePath) : -1
   }
 
   getSource(path: string | string[]): FileSystemSource<AllExports> | undefined {
