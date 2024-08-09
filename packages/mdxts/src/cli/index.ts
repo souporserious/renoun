@@ -6,7 +6,7 @@ import { Project } from 'ts-morph'
 import { createServer } from '../project/server'
 import {
   PACKAGE_DIRECTORY,
-  writeImportMapFromCollections,
+  generateCollectionImportMap,
 } from '../collections/import-maps'
 
 const [firstArgument, secondArgument, ...restArguments] = process.argv.slice(2)
@@ -19,7 +19,7 @@ if (firstArgument === 'help') {
 
 const project = new Project({ tsConfigFilePath: 'tsconfig.json' })
 
-writeImportMapFromCollections(project)
+generateCollectionImportMap(project)
 
 if (firstArgument === undefined) {
   process.exit(0)
@@ -57,6 +57,6 @@ if (firstArgument === 'next' || firstArgument === 'waku') {
     if (ignoredFiles.some((ignoredFile) => filename?.startsWith(ignoredFile))) {
       return
     }
-    writeImportMapFromCollections(project)
+    generateCollectionImportMap(project)
   })
 }

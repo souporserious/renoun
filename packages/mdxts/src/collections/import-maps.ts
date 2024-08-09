@@ -123,7 +123,7 @@ function collectSourceFiles(
 }
 
 /** Initializes an import map at the root of the project based on all `createCollection` file patterns. */
-export function writeImportMapFromCollections(project: Project) {
+export function generateCollectionImportMap(project: Project) {
   const filePatterns = new Set<string>()
 
   /* Update the tsconfig.json paths field to alias the package. */
