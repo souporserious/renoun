@@ -65,7 +65,7 @@ function writeImportMap(
     return allExtensions.flatMap((extension) => {
       const trimmedExtension = extension.slice(1)
       return [
-        `'${trimmedExtension}:${filePattern}'`,
+        `\`${trimmedExtension}:${filePattern}\``,
         `(slug) => import(\`${baseGlobPattern}/\${slug}${extension}\`)`,
       ]
     })

@@ -2,13 +2,13 @@
 import { createCollection } from 'mdxts/core'
 
 createCollection.setImportMap(
-  'ts:@/components/**/{index,*.examples}.{ts,tsx}',
+  `ts:@/components/**/{index,*.examples}.{ts,tsx}`,
   (slug) => import(`@/components/${slug}.ts`),
-  'tsx:@/components/**/{index,*.examples}.{ts,tsx}',
+  `tsx:@/components/**/{index,*.examples}.{ts,tsx}`,
   (slug) => import(`@/components/${slug}.tsx`),
-  'mdx:@/posts/**/*.{ts,mdx}',
+  `mdx:@/posts/**/*.{ts,mdx}`,
   (slug) => import(`@/posts/${slug}.mdx`),
-  'ts:@/posts/**/*.{ts,mdx}',
+  `ts:@/posts/**/*.{ts,mdx}`,
   (slug) => import(`@/posts/${slug}.ts`)
 )
 
