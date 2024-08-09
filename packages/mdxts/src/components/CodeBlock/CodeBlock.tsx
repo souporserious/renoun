@@ -297,19 +297,61 @@ export async function CodeBlockAsync({
 
 /** Renders a `pre` element with syntax highlighting, type information, and type checking. */
 export function CodeBlock(props: CodeBlockProps) {
+  const padding = props.style?.container?.padding ?? '0.5lh'
+
   return (
     <Suspense
       fallback={
         'value' in props && props.value ? (
           <pre
+            className={props.className?.container}
             style={{
+              display: 'grid',
+              gridTemplateColumns: props.showLineNumbers
+                ? 'auto 1fr'
+                : undefined,
               whiteSpace: 'pre',
               wordWrap: 'break-word',
-              padding: '0.5lh',
               margin: 0,
+              overflow: 'auto',
+              boxShadow: '0 0 0 1px #666',
+              ...props.style?.container,
             }}
           >
-            <code>{props.value}</code>
+            {props.showLineNumbers && (
+              <div
+                className={props.className?.lineNumbers}
+                style={{
+                  padding,
+                  position: 'sticky',
+                  left: 0,
+                  zIndex: 1,
+                  textAlign: 'right',
+                  userSelect: 'none',
+                  whiteSpace: 'pre',
+                  gridColumn: 1,
+                  gridRow: '1 / -1',
+                  width: '4ch',
+                  backgroundColor: 'inherit',
+                  ...props.style?.lineNumbers,
+                }}
+              >
+                {Array.from(
+                  { length: props.value.split('\n').length },
+                  (_, index) => index + 1
+                ).join('\n')}
+              </div>
+            )}
+            <code
+              style={{
+                padding,
+                display: 'block',
+                width: 'max-content',
+                gridColumn: props.showLineNumbers ? 2 : 1,
+              }}
+            >
+              {props.value}
+            </code>
           </pre>
         ) : null
       }
