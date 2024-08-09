@@ -297,6 +297,10 @@ export async function CodeBlockAsync({
 
 /** Renders a `pre` element with syntax highlighting, type information, and type checking. */
 export function CodeBlock(props: CodeBlockProps) {
+  if ('children' in props) {
+    return <CodeBlockAsync {...props} />
+  }
+
   const padding = props.style?.container?.padding ?? '0.5lh'
 
   return (
