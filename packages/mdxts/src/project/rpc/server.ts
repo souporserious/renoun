@@ -24,8 +24,8 @@ export class WebSocketServer {
 
   #handlers: { [key: string]: (params: any) => Promise<any> | any } = {}
 
-  constructor(port: number = 0) {
-    this.#server = new WebSocket.Server({ port })
+  constructor() {
+    this.#server = new WebSocket.Server({ port: 5996 })
 
     this.#server.on('connection', (ws: WebSocket) => {
       this.#sockets.add(ws)
@@ -42,26 +42,6 @@ export class WebSocketServer {
         this.#handleMessage(ws, message)
       })
     })
-  }
-
-  getPort(): number {
-    const address = this.#server.address()
-
-    if (address === null) {
-      throw new Error('[mdxts] WebSocket server is not bound to an address')
-    }
-
-    if (typeof address === 'string') {
-      const port = parseInt(address, 10)
-      if (isNaN(port)) {
-        throw new Error(
-          `[mdxts] WebSocket server must be bound to a port, but is using a named pipe or an invalid address: ${address}`
-        )
-      }
-      return port
-    }
-
-    return address.port
   }
 
   registerMethod(method: string, handler: (params: any) => Promise<any> | any) {

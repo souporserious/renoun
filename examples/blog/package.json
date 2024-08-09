@@ -2,7 +2,7 @@
   "private": true,
   "name": "@examples/blog",
   "scripts": {
-    "dev": "concurrently \"mdxts --watch\" \"next dev\"",
+    "dev": "concurrently \"mdxts watch\" \"next dev\"",
     "build": "mdxts && next build",
     "start": "next start"
   },

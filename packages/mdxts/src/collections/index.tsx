@@ -277,11 +277,7 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
     }
 
     /* Enable hot module reloading in development for Next.js MDX content. */
-    if (
-      process.env.NODE_ENV === 'development' &&
-      process.env.MDXTS_NEXT_JS === 'true' &&
-      name === 'default'
-    ) {
+    if (process.env.NODE_ENV === 'development' && name === 'default') {
       const sourceFile = this.source.getSourceFile()
 
       if (sourceFile.getExtension() === '.mdx') {
@@ -296,10 +292,7 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
 
             return (
               <>
-                <Refresh
-                  port={process.env.MDXTS_WS_PORT!}
-                  directory={sourceFile.getDirectoryPath()}
-                />
+                <Refresh directory={sourceFile.getDirectoryPath()} />
                 <Component {...props} />
               </>
             )

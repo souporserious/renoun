@@ -9,7 +9,7 @@ import type { ProjectOptions } from './types'
 
 let client: WebSocketClient | undefined
 
-if (process.env.NODE_ENV === 'development' && process.env.MDXTS_WS_PORT) {
+if (process.env.NODE_ENV === 'development') {
   client = new WebSocketClient()
 }
 

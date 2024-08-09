@@ -25,40 +25,33 @@ if (firstArgument === undefined) {
   process.exit(0)
 }
 
+process.env.WS_NO_BUFFER_UTIL = 'true'
+
 if (firstArgument === 'next' || firstArgument === 'waku') {
   const isDev = secondArgument === undefined || secondArgument === 'dev'
   const runSubProcess = () => {
     const subProcess = spawn(
       firstArgument,
-      [secondArgument, ...restArguments].filter(
-        (argument) => argument !== '--watch'
-      ),
-      {
-        stdio: 'inherit',
-        shell: true,
-        env: {
-          ...process.env,
-          MDXTS_NEXT_JS: firstArgument === 'next' ? 'true' : 'false',
-          MDXTS_WS_PORT: server ? server.getPort().toString() : '',
-        },
-      }
+      [secondArgument, ...restArguments],
+      { stdio: 'inherit', shell: true }
     )
+
     subProcess.on('close', (code) => {
       if (!isDev) {
         process.exit(code)
       }
     })
   }
-  let server: ReturnType<typeof createServer> | undefined
 
   if (isDev) {
-    process.env.WS_NO_BUFFER_UTIL = 'true'
-    server = createServer()
+    createServer()
   }
 
   runSubProcess()
-} else if (firstArgument === '--watch') {
+} else if (firstArgument === 'watch') {
   const ignoredFiles = [PACKAGE_DIRECTORY, '.next']
+
+  createServer()
 
   watch(process.cwd(), { recursive: true }, (_, filename) => {
     if (ignoredFiles.some((ignoredFile) => filename?.startsWith(ignoredFile))) {
