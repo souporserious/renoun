@@ -315,6 +315,7 @@ export function CodeBlock(props: CodeBlockProps) {
               margin: 0,
               overflow: 'auto',
               boxShadow: '0 0 0 1px #666',
+              borderRadius: 5,
               ...props.style?.container,
             }}
           >
