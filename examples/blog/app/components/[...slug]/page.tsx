@@ -4,8 +4,8 @@ import { notFound } from 'next/navigation'
 
 import { ComponentsCollection, type ComponentSource } from '@/collections'
 
-export function generateStaticParams() {
-  return ComponentsCollection.getSources().map((Source) => ({
+export async function generateStaticParams() {
+  return (await ComponentsCollection.getSources()).map((Source) => ({
     slug: Source.getPathSegments(),
   }))
 }
@@ -47,7 +47,7 @@ export default async function Component({
     ...componentsPathname,
     'examples',
   ])
-  const [PreviousSource, NextSource] = ComponentSource.getSiblings(0)
+  const [PreviousSource, NextSource] = await ComponentSource.getSiblings(0)
   const isExamplesPage = params.slug.at(-1) === 'examples'
   const updatedAt = await ComponentSource.getUpdatedAt()
   const editPath = ComponentSource.getEditPath()

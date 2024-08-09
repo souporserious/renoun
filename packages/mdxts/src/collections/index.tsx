@@ -72,7 +72,7 @@ export interface BaseSourceWithGetters<Exports extends FileExports>
    */
   getSources<Depth extends number>(
     depth?: PositiveIntegerOrInfinity<Depth>
-  ): FileSystemSource<Exports>[]
+  ): Promise<FileSystemSource<Exports>[]>
 }
 
 /** @internal */
@@ -135,7 +135,9 @@ export interface FileSystemSource<Exports extends FileExports>
   /** The previous and next sources in the collection if they exist. Defaults to a depth of `Infinity` which considers all descendants. */
   getSiblings(
     depth?: number
-  ): [previous?: FileSystemSource<Exports>, next?: FileSystemSource<Exports>]
+  ): Promise<
+    [previous?: FileSystemSource<Exports>, next?: FileSystemSource<Exports>]
+  >
 
   /** The default export source. */
   getDefaultExport(): DefaultExportSource<Exports['default']>
@@ -156,7 +158,7 @@ export type CollectionSource<Exports extends FileExports> = {
 } & Omit<BaseSourceWithGetters<Exports>, 'getEditPath' | 'getPathSegments'>
 
 /** @internal */
-export interface CollectionOptions {
+export interface CollectionOptions<Exports extends FileExports> {
   /** The title used for the collection when rendered for a page. */
   title?: string
 
@@ -179,7 +181,10 @@ export interface CollectionOptions {
   tsConfigFilePath?: string
 
   /** A custom sort function for ordering sources. */
-  sort?: (a: string, b: string) => number
+  sort?: (
+    a: FileSystemSource<Exports>,
+    b: FileSystemSource<Exports>
+  ) => Promise<number>
 }
 
 const projectCache = new Map<string, Project>()
@@ -442,7 +447,7 @@ class Source<AllExports extends FileExports>
     return this.collection.getSource(fullPath)
   }
 
-  getSources(depth: number = Infinity) {
+  async getSources(depth: number = Infinity) {
     if (!isValidDepth(depth)) {
       throw new Error(
         `[mdxts] Invalid depth "${depth}" provided for source at path "${this.getPath()}". Depth must be a positive integer or Infinity.`
@@ -453,30 +458,28 @@ class Source<AllExports extends FileExports>
     const currentDepth = this.getDepth()
     const maxDepth = depth === Infinity ? Infinity : currentDepth + depth
 
-    return this.collection.fileSystemSources
-      .map((fileSystemSource) => {
-        return this.collection.getSourceFromFileSystemSource(fileSystemSource)
-      })
-      .filter((source) => {
-        if (source) {
-          const descendantPath = source.getPath()
-          const descendantDepth = source.getDepth()
+    return (await this.collection.getFileSystemSources()).filter((source) => {
+      if (source) {
+        const descendantPath = source.getPath()
+        const descendantDepth = source.getDepth()
 
-          return (
-            descendantPath.startsWith(currentPath) &&
-            descendantDepth > currentDepth &&
-            descendantDepth <= maxDepth
-          )
-        }
-      }) as FileSystemSource<AllExports>[]
+        return (
+          descendantPath.startsWith(currentPath) &&
+          descendantDepth > currentDepth &&
+          descendantDepth <= maxDepth
+        )
+      }
+    }) as FileSystemSource<AllExports>[]
   }
 
-  getSiblings(
+  async getSiblings(
     depth: number = Infinity
-  ): [
-    previous?: FileSystemSource<AllExports> | undefined,
-    next?: FileSystemSource<AllExports> | undefined,
-  ] {
+  ): Promise<
+    [
+      previous?: FileSystemSource<AllExports> | undefined,
+      next?: FileSystemSource<AllExports> | undefined,
+    ]
+  > {
     if (!isValidDepth(depth)) {
       throw new Error(
         `[mdxts] Invalid depth "${depth}" provided for source siblings at path "${this.getPath()}". Depth must be a positive integer or Infinity.`
@@ -485,18 +488,15 @@ class Source<AllExports extends FileExports>
 
     const minDepth = this.collection.getDepth()
     const maxDepth = depth === Infinity ? Infinity : this.getDepth() + depth
-    const filteredSources = this.collection.fileSystemSources.filter(
-      (source) => {
-        const sourcePath = this.collection.sourcePathMap.get(
-          getFileSystemSourcePath(source)
-        )!
-        const sourceDepth = getPathDepth(sourcePath)
+    const filteredSources = (
+      await this.collection.getFileSystemSources()
+    ).filter((source) => {
+      const sourceDepth = source.getDepth()
 
-        return sourceDepth >= minDepth && sourceDepth <= maxDepth
-      }
-    )
+      return sourceDepth >= minDepth && sourceDepth <= maxDepth
+    })
     const currentIndex = filteredSources.findIndex(
-      (source) => getFileSystemSourcePath(source) === this.sourcePath
+      (source) => source.getPath() === this.getPath()
     )
 
     if (currentIndex === -1) {
@@ -506,14 +506,7 @@ class Source<AllExports extends FileExports>
     const previousSource = filteredSources[currentIndex - 1]
     const nextSource = filteredSources[currentIndex + 1]
 
-    return [
-      previousSource
-        ? this.collection.getSourceFromFileSystemSource(previousSource)
-        : undefined,
-      nextSource
-        ? this.collection.getSourceFromFileSystemSource(nextSource)
-        : undefined,
-    ]
+    return [previousSource, nextSource]
   }
 
   getDefaultExport(): DefaultExportSource<AllExports['default']> {
@@ -616,7 +609,7 @@ class Collection<AllExports extends FileExports>
   implements CollectionSource<AllExports>
 {
   public filePattern: string
-  public options: CollectionOptions
+  public options: CollectionOptions<AllExports>
   public project: Project
   public absoluteGlobPattern: string
   public absoluteBaseGlobPattern: string
@@ -626,7 +619,10 @@ class Collection<AllExports extends FileExports>
 
   #sources = new Map<string, Source<AllExports>>()
 
-  constructor(filePattern: string, options: CollectionOptions = {}) {
+  constructor(
+    filePattern: string,
+    options: CollectionOptions<AllExports> = {}
+  ) {
     this.filePattern = filePattern
     this.options = options
     this.project = resolveProject(options.tsConfigFilePath ?? 'tsconfig.json')
@@ -643,7 +639,7 @@ class Collection<AllExports extends FileExports>
         : filePattern
     this.absoluteBaseGlobPattern = globParent(this.absoluteGlobPattern)
 
-    const { fileSystemSources, sourceFiles } = getSourceFilesAndDirectories(
+    const fileSystemSources = getSourceFilesAndDirectories(
       this.project,
       this.absoluteGlobPattern
     )
@@ -654,6 +650,8 @@ class Collection<AllExports extends FileExports>
       )
     }
 
+    this.fileSystemSources = fileSystemSources
+
     const baseDirectory = this.project.getDirectoryOrThrow(
       this.absoluteBaseGlobPattern
     )
@@ -662,15 +660,22 @@ class Collection<AllExports extends FileExports>
       baseDirectory: options.baseDirectory,
       basePath: options.basePath,
     })
+  }
 
-    // sort sources based on the order map by default or custom sort function if provided
-    this.fileSystemSources = fileSystemSources.sort((a, b) => {
-      const aOrder = this.sourceFilesOrderMap.get(getFileSystemSourcePath(a))!
-      const bOrder = this.sourceFilesOrderMap.get(getFileSystemSourcePath(b))!
+  getFileSystemSource(sourceFileOrDirectory: SourceFile | Directory) {
+    const path = this.sourcePathMap.get(
+      getFileSystemSourcePath(sourceFileOrDirectory)
+    )!
+    return this.getSource(path)
+  }
 
-      return this.options.sort
-        ? this.options.sort(aOrder, bOrder)
-        : aOrder?.localeCompare(bOrder)
+  async getFileSystemSources() {
+    const sources = this.fileSystemSources
+      .map((fileSystemSource) => this.getFileSystemSource(fileSystemSource))
+      .filter(Boolean) as FileSystemSource<AllExports>[]
+
+    return sources.sort((a, b) => {
+      return a.getOrder().localeCompare(b.getOrder())
     })
   }
 
@@ -749,7 +754,7 @@ class Collection<AllExports extends FileExports>
     return source
   }
 
-  getSources(depth: number = Infinity) {
+  async getSources(depth: number = Infinity) {
     if (!isValidDepth(depth)) {
       throw new Error(
         `[mdxts] Invalid depth "${depth}" provided for collection with file pattern "${this.filePattern}". Depth must be a positive integer or Infinity.`
@@ -759,23 +764,12 @@ class Collection<AllExports extends FileExports>
     const minDepth = this.getDepth()
     const maxDepth = depth === Infinity ? Infinity : minDepth + depth
 
-    return this.fileSystemSources
-      .map((fileSystemSource) => {
-        return this.getSourceFromFileSystemSource(fileSystemSource)
-      })
-      .filter((source) => {
-        if (source) {
-          const descendantDepth = source.getDepth()
-          return descendantDepth > minDepth && descendantDepth <= maxDepth
-        }
-      }) as FileSystemSource<AllExports>[]
-  }
-
-  getSourceFromFileSystemSource(sourceFileOrDirectory: SourceFile | Directory) {
-    const path = this.sourcePathMap.get(
-      getFileSystemSourcePath(sourceFileOrDirectory)
-    )!
-    return this.getSource(path)
+    return (await this.getFileSystemSources()).filter((source) => {
+      if (source) {
+        const descendantDepth = source.getDepth()
+        return descendantDepth > minDepth && descendantDepth <= maxDepth
+      }
+    }) as FileSystemSource<AllExports>[]
   }
 
   getImportSlug(source: SourceFile | Directory) {
@@ -807,7 +801,7 @@ export function createCollection<
   FilePattern extends FilePatterns = string,
 >(
   filePattern: FilePattern,
-  options?: CollectionOptions
+  options?: CollectionOptions<AllExports>
 ): CollectionSource<AllExports> {
   return new Collection<AllExports>(filePattern, options)
 }
@@ -822,11 +816,7 @@ createCollection.setImportMap = setImportMap
 function getSourceFilesAndDirectories(
   project: Project,
   filePattern: string
-): {
-  fileSystemSources: (SourceFile | Directory)[]
-  sourceFiles: SourceFile[]
-  sourceDirectories: Directory[]
-} {
+): (SourceFile | Directory)[] {
   let sourceFiles = project.getSourceFiles(filePattern)
 
   if (sourceFiles.length === 0) {
@@ -843,11 +833,7 @@ function getSourceFilesAndDirectories(
     fileSystemSources.add(directorySourceFile || sourceDirectory)
   }
 
-  return {
-    fileSystemSources: Array.from(fileSystemSources),
-    sourceFiles,
-    sourceDirectories,
-  }
+  return Array.from(fileSystemSources)
 }
 
 /** Get the path of a source file or directory. */

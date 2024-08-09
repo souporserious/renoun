@@ -2,15 +2,15 @@ import Link from 'next/link'
 
 import { PostsCollection, type PostSource } from '@/collections'
 
-export function generateStaticParams() {
-  return PostsCollection.getSources().map((Source) => ({
+export async function generateStaticParams() {
+  return (await PostsCollection.getSources()).map((Source) => ({
     slug: Source.getPathSegments(),
   }))
 }
 
 export default async function Post({ params }: { params: { slug: string[] } }) {
   const PostSource = PostsCollection.getSource(params.slug)!
-  const [PreviousSource, NextSource] = PostSource.getSiblings()
+  const [PreviousSource, NextSource] = await PostSource.getSiblings()
   const Content = await PostSource.getDefaultExport()
     .getValue()
     .catch(() => null)
