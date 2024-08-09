@@ -4,7 +4,7 @@ import { watch } from 'node:fs'
 import { Project } from 'ts-morph'
 
 import { createServer } from '../project/server'
-import { initializeImportMapFromCollections } from './initialize-import-map'
+import { writeImportMapFromCollections } from '../collections/import-maps'
 
 const [firstArgument, secondArgument, ...restArguments] = process.argv.slice(2)
 
@@ -14,12 +14,9 @@ if (firstArgument === 'help') {
   process.exit(0)
 }
 
-const project = new Project({
-  skipAddingFilesFromTsConfig: true,
-  tsConfigFilePath: 'tsconfig.json',
-})
+const project = new Project({ tsConfigFilePath: 'tsconfig.json' })
 
-initializeImportMapFromCollections(project)
+writeImportMapFromCollections(project)
 
 if (firstArgument === undefined) {
   process.exit(0)
@@ -64,6 +61,6 @@ if (firstArgument === 'next' || firstArgument === 'waku') {
     if (ignoredFiles.some((ignoredFile) => filename?.startsWith(ignoredFile))) {
       return
     }
-    initializeImportMapFromCollections(project)
+    writeImportMapFromCollections(project)
   })
 }

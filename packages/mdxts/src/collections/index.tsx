@@ -19,7 +19,7 @@ import { getEditPath } from './get-edit-path'
 import { getGitMetadata } from './get-git-metadata'
 import { getSourcePathMap } from './get-source-files-path-map'
 import { getSourceFilesOrderMap } from './get-source-files-sort-order'
-import { updateImportMap, getImportMap, setImports } from './import-maps'
+import { getImportMap, setImportMap } from './import-maps'
 import { resolveTsConfigPath } from './resolve-ts-config-path'
 
 /** @internal */
@@ -658,8 +658,6 @@ class Collection<AllExports extends FileExports>
       )
     }
 
-    updateImportMap(filePattern, sourceFiles)
-
     const baseDirectory = this.project.getDirectoryOrThrow(
       this.absoluteBaseGlobPattern
     )
@@ -827,7 +825,7 @@ export function createCollection<
  * Sets the import maps for a collection's file patterns.
  * @internal
  */
-createCollection.setImports = setImports
+createCollection.setImportMap = setImportMap
 
 /** Get all sources for a file pattern. */
 function getSourceFilesAndDirectories(
