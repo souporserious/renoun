@@ -26,9 +26,6 @@ import { resolveTsConfigPath } from './resolve-ts-config-path'
 export type { MDXContent }
 
 /** @internal */
-export { setImports }
-
-/** @internal */
 export type FilePatterns<Extension extends string = string> =
   | `${string}${Extension}`
   | `${string}${Extension}${string}`
@@ -825,6 +822,12 @@ export function createCollection<
 ): CollectionSource<AllExports> {
   return new Collection<AllExports>(filePattern, options)
 }
+
+/**
+ * Sets the import maps for a collection's file patterns.
+ * @internal
+ */
+createCollection.setImports = setImports
 
 /** Get all sources for a file pattern. */
 function getSourceFilesAndDirectories(
