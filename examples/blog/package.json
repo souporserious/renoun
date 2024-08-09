@@ -2,8 +2,8 @@
   "private": true,
   "name": "@examples/blog",
   "scripts": {
-    "dev": "mdxts next",
-    "build": "mdxts next build",
+    "dev": "concurrently \"mdxts --watch\" \"next dev\"",
+    "build": "mdxts && next build",
     "start": "next start"
   },
   "dependencies": {
@@ -13,6 +13,7 @@
     "@types/mdx": "^2.0.13",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
+    "concurrently": "^8.2.2",
     "mdxts": "workspace:*",
     "next": "14.2.3",
     "prettier": "^3.2.5",

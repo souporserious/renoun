@@ -1,15 +1,36 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 let theme: Record<string, any> | null = null
+
+/** Load config from .mdxts/config.json */
+async function loadConfig(): Promise<{ theme?: string }> {
+  const configPath = resolve(process.cwd(), '.mdxts/config.json')
+  const configExists = existsSync(configPath)
+
+  if (configExists) {
+    return JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, any>
+  }
+
+  return {}
+}
+
+/** Gets the theme path from the config or environment variable. */
+async function getThemePath() {
+  const config = await loadConfig()
+  const theme = config.theme ?? process.env.MDXTS_THEME_PATH ?? 'nord'
+
+  return theme.endsWith('.json') ? resolve(process.cwd(), theme) : theme
+}
 
 /** Gets a normalized VS Code theme. */
 export async function getTheme() {
   const { bundledThemes, normalizeTheme } = await import('shiki/bundle/web')
-  const themePath = process.env.MDXTS_THEME_PATH
+  const themePath = await getThemePath()
 
   if (themePath === undefined) {
     throw new Error(
-      '[mdxts] The MDXTS_THEME_PATH environment variable is undefined. Set process.env.MDXTS_THEME_PATH or configure the `theme` option in the `mdxts/next` plugin to load a theme.'
+      '[mdxts] The theme is undefined. Either create a config at ".mdxts/config.json" that defines a valid theme or set "process.env.MDXTS_THEME_PATH" to a valid theme.'
     )
   }
 

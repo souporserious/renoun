@@ -21,8 +21,6 @@ export function createServer() {
     }) => {
       const project = getProject(projectOptions)
 
-      process.env.MDXTS_THEME_PATH = 'nord'
-
       return analyzeSourceText({
         ...options,
         project,

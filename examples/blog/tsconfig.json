@@ -20,7 +20,7 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["*"],
-      "mdxts/collections": ["./.mdxts/index.js"]
+      "mdxts/collections": [".mdxts/index.js"]
     }
   },
   "include": ["next-env.d.ts", ".next/types/**/*.ts", "**/*.ts", "**/*.tsx"],

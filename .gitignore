@@ -1,6 +1,6 @@
 .DS_Store
 .next
-.mdxts
+**/.mdxts/index.js
 .turbo
 .vercel
 dist
