@@ -150,7 +150,7 @@ export interface FileSystemSource<Exports extends FileExports>
 export type CollectionSource<Exports extends FileExports> = {
   /** Get the configured collection title. */
   getTitle(): string | undefined
-} & Omit<BaseSourceWithGetters<Exports>, 'getPathSegments'>
+} & Omit<BaseSourceWithGetters<Exports>, 'getEditPath' | 'getPathSegments'>
 
 /** @internal */
 export interface CollectionOptions {
@@ -694,11 +694,6 @@ class Collection<AllExports extends FileExports>
         : `/${this.options.basePath}`
     }
     return '/'
-  }
-
-  getEditPath() {
-    // TODO: this should point to the location of where the collection is defined
-    return this.absoluteBaseGlobPattern.replace(process.cwd(), '')
   }
 
   getDepth() {
