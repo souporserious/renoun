@@ -5,7 +5,7 @@ import { notFound } from 'next/navigation'
 import { ComponentsCollection, type ComponentSource } from '@/collections'
 
 export function generateStaticParams() {
-  return ComponentsCollection.getSources(Infinity).map((Source) => ({
+  return ComponentsCollection.getSources().map((Source) => ({
     slug: Source.getPathSegments(),
   }))
 }

@@ -63,10 +63,13 @@ type PositiveIntegerOrInfinity<Type extends number> = `${Type}` extends
 /** @internal */
 export interface BaseSourceWithGetters<Exports extends FileExports>
   extends BaseSource {
-  /** Retrieves a source in the directory by its path. */
+  /** Retrieves a source in the immediate directory or sub-directory by its path. */
   getSource(path: string | string[]): FileSystemSource<Exports> | undefined
 
-  /** Retrieves sources in the directory. Defaults to a depth of `1`, passing `Infinity` will return all sources. */
+  /**
+   * Retrieves sources in the immediate directory and possibly sub-directories based on the provided `depth`.
+   * Defaults to a depth of `Infinity` which will return all sources.
+   */
   getSources<Depth extends number>(
     depth?: PositiveIntegerOrInfinity<Depth>
   ): FileSystemSource<Exports>[]
@@ -446,7 +449,7 @@ class Source<AllExports extends FileExports>
     return this.collection.getSource(fullPath)
   }
 
-  getSources(depth: number = 1) {
+  getSources(depth: number = Infinity) {
     if (!isValidDepth(depth)) {
       throw new Error(
         `[mdxts] Invalid depth "${depth}" provided for source at path "${this.getPath()}". Depth must be a positive integer or Infinity.`
@@ -753,7 +756,7 @@ class Collection<AllExports extends FileExports>
     return source
   }
 
-  getSources(depth: number = 1) {
+  getSources(depth: number = Infinity) {
     if (!isValidDepth(depth)) {
       throw new Error(
         `[mdxts] Invalid depth "${depth}" provided for collection with file pattern "${this.filePattern}". Depth must be a positive integer or Infinity.`

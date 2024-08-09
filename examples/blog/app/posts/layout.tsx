@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { PostsCollection, type PostSource } from '@/collections'
 
 async function TreeNavigation({ Source }: { Source: PostSource }) {
-  const Sources = Source.getSources()
+  const Sources = Source.getSources(1)
   const depth = Source.getDepth()
   const path = Source.getPath()
   const frontMatter = await Source.getNamedExport('frontmatter')
@@ -80,7 +80,7 @@ export default function BlogLayout({
             margin: 0,
           }}
         >
-          {PostsCollection.getSources().map((Source) => (
+          {PostsCollection.getSources(1).map((Source) => (
             <TreeNavigation key={Source.getPath()} Source={Source} />
           ))}
         </ul>

@@ -6,7 +6,7 @@ export default async function Posts() {
     <>
       <h1>Blog</h1>
       <ul>
-        {PostsCollection.getSources().map((Source) => (
+        {PostsCollection.getSources(1).map((Source) => (
           <PostItem key={Source.getPath()} Source={Source} />
         ))}
       </ul>

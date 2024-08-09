@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { PostsCollection, type PostSource } from '@/collections'
 
 export function generateStaticParams() {
-  return PostsCollection.getSources(Infinity).map((Source) => ({
+  return PostsCollection.getSources().map((Source) => ({
     slug: Source.getPathSegments(),
   }))
 }
