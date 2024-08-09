@@ -275,12 +275,6 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
     const name = this.getName() || 'default'
     const exportValue = moduleExports![name]
 
-    if (exportValue === undefined) {
-      throw new Error(
-        `[mdxts] Export value does not have a runtime value for declaration "${name}" in source file at "${this.source.getPath()}".`
-      )
-    }
-
     /* Enable hot module reloading in development for Next.js MDX content. */
     if (process.env.NODE_ENV === 'development' && name === 'default') {
       const sourceFile = this.source.getSourceFile()
@@ -674,9 +668,32 @@ class Collection<AllExports extends FileExports>
       .map((fileSystemSource) => this.getFileSystemSource(fileSystemSource))
       .filter(Boolean) as FileSystemSource<AllExports>[]
 
-    return sources.sort((a, b) => {
-      return a.getOrder().localeCompare(b.getOrder())
-    })
+    sources.sort((a, b) => a.getOrder().localeCompare(b.getOrder()))
+
+    if (this.options.sort) {
+      const sourcesCount = sources.length
+
+      for (let sourceIndex = 0; sourceIndex < sourcesCount - 1; sourceIndex++) {
+        for (
+          let sourceCompareIndex = 0;
+          sourceCompareIndex < sourcesCount - 1 - sourceIndex;
+          sourceCompareIndex++
+        ) {
+          if (
+            (await this.options.sort(
+              sources[sourceCompareIndex],
+              sources[sourceCompareIndex + 1]
+            )) > 0
+          ) {
+            const compareSource = sources[sourceCompareIndex]
+            sources[sourceCompareIndex] = sources[sourceCompareIndex + 1]
+            sources[sourceCompareIndex + 1] = compareSource
+          }
+        }
+      }
+    }
+
+    return sources
   }
 
   getTitle() {

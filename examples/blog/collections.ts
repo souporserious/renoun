@@ -21,6 +21,7 @@ export type PostSchema = {
   frontmatter?: {
     title: string
     description: string
+    date: string
   }
 }
 
@@ -32,5 +33,19 @@ export const PostsCollection = createCollection<PostSchema>(
     title: 'Posts',
     baseDirectory: 'posts',
     basePath: 'posts',
+    sort: async (a, b) => {
+      const frontmatterA = await a.getNamedExport('frontmatter').getValue()
+      const frontmatterB = await b.getNamedExport('frontmatter').getValue()
+
+      if (!frontmatterA?.date || !frontmatterB?.date) {
+        return 0
+      }
+
+      return frontmatterA.date > frontmatterB.date
+        ? -1
+        : frontmatterA.date < frontmatterB.date
+          ? 1
+          : 0
+    },
   }
 )
