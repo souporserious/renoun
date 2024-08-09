@@ -126,7 +126,33 @@ function collectSourceFiles(
 export function writeImportMapFromCollections(project: Project) {
   const filePatterns = new Set<string>()
 
+  /* Update the tsconfig.json paths field to alias the package. */
+  const tsconfigFilePath = project.getCompilerOptions().configFilePath
+
+  if (typeof tsconfigFilePath === 'string') {
+    const tsconfigContents = readFileSync(tsconfigFilePath, 'utf-8') || '{}'
+    const tsconfigJson = JSON.parse(tsconfigContents)
+
+    if (!tsconfigJson.compilerOptions) {
+      tsconfigJson.compilerOptions = {}
+    }
+
+    if (!tsconfigJson.compilerOptions.paths) {
+      tsconfigJson.compilerOptions.paths = {}
+    }
+
+    if (tsconfigJson.compilerOptions.paths['mdxts/*'] === undefined) {
+      tsconfigJson.compilerOptions.paths['mdxts/*'] = ['.mdxts/*.js']
+
+      writeFileSync(tsconfigFilePath, JSON.stringify(tsconfigJson, null, 2))
+    }
+  }
+
   /* Prime the file so it gets picked up by the bundler. */
+  if (!existsSync(PACKAGE_DIRECTORY)) {
+    mkdirSync(PACKAGE_DIRECTORY)
+  }
+
   writeFileSync(
     `${PACKAGE_DIRECTORY}/${FILENAME}`,
     `export * from '${PACKAGE_NAME}';\n`
