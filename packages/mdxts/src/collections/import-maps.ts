@@ -1,9 +1,12 @@
-import type { SourceFile } from 'ts-morph'
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { Project, Node, SyntaxKind, type SourceFile } from 'ts-morph'
+import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import globParent from 'glob-parent'
 
-export const PACKAGE_NAME = 'mdxts/collections'
-export const PACKAGE_DIRECTORY = '#mdxts'
+import { resolveTsConfigPath } from '../collections/resolve-ts-config-path'
+
+export const PACKAGE_NAME = 'mdxts/core'
+export const PACKAGE_DIRECTORY = '.mdxts'
 export const FILENAME = 'collections.js'
 
 type GetImport<Exports extends unknown = unknown> = (
@@ -41,18 +44,6 @@ export function setImportMap(...entries: (string | GetImport)[]) {
 export function getImportMap<AllExports>(slug: string) {
   return importMap.get(slug) as GetImport<AllExports>
 }
-
-import { Project, Node, SyntaxKind } from 'ts-morph'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
-
-import { resolveTsConfigPath } from '../collections/resolve-ts-config-path'
-
-/* Prime the file so it gets picked up by the bundler. */
-writeFileSync(
-  `${PACKAGE_DIRECTORY}/${FILENAME}`,
-  `export * from '${PACKAGE_NAME}';\n`
-)
 
 /**
  * Generates import maps for each file pattern at the root of the project.
@@ -135,6 +126,13 @@ function collectSourceFiles(
 export function writeImportMapFromCollections(project: Project) {
   const filePatterns = new Set<string>()
 
+  /* Prime the file so it gets picked up by the bundler. */
+  writeFileSync(
+    `${PACKAGE_DIRECTORY}/${FILENAME}`,
+    `export * from '${PACKAGE_NAME}';\n`
+  )
+
+  /* Find all `createCollection` calls and extract the file patterns. */
   project
     .createSourceFile(
       '__createCollectionReferences.ts',
@@ -155,6 +153,7 @@ export function writeImportMapFromCollections(project: Project) {
       }
     })
 
+  /* Collect source files for each file pattern and write the import map. */
   if (filePatterns.size > 0) {
     const filePatternsArray = Array.from(filePatterns)
     const sourceFilesMap = collectSourceFiles(project, filePatternsArray)

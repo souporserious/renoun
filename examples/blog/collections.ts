@@ -2,7 +2,7 @@ import {
   createCollection,
   type MDXContent,
   type FileSystemSource,
-} from '#mdxts/collections'
+} from 'mdxts/collections'
 
 type ComponentSchema = Record<string, React.ComponentType>
 

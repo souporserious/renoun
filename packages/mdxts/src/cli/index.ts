@@ -4,7 +4,10 @@ import { watch } from 'node:fs'
 import { Project } from 'ts-morph'
 
 import { createServer } from '../project/server'
-import { writeImportMapFromCollections } from '../collections/import-maps'
+import {
+  PACKAGE_DIRECTORY,
+  writeImportMapFromCollections,
+} from '../collections/import-maps'
 
 const [firstArgument, secondArgument, ...restArguments] = process.argv.slice(2)
 
@@ -55,7 +58,7 @@ if (firstArgument === 'next' || firstArgument === 'waku') {
 
   runSubProcess()
 } else if (firstArgument === '--watch') {
-  const ignoredFiles = ['.mdxts', '.next']
+  const ignoredFiles = [PACKAGE_DIRECTORY, '.next']
 
   watch(process.cwd(), { recursive: true }, (_, filename) => {
     if (ignoredFiles.some((ignoredFile) => filename?.startsWith(ignoredFile))) {
