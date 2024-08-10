@@ -3,7 +3,7 @@
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
-    "strict": true,
+    "strict": false,
     "noEmit": true,
     "incremental": true,
     "esModuleInterop": true,
@@ -19,8 +19,7 @@
     ],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["*"],
-      "mdxts/*": [".mdxts/*.js"]
+      "@/*": ["*"]
     }
   },
   "include": ["next-env.d.ts", ".next/types/**/*.ts", "**/*.ts", "**/*.tsx"],

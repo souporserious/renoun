@@ -1,21 +1,7 @@
-:root {
-  --color-background: #f8f8f8;
-  --color-foreground: #333;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-background: #000000;
-    --color-foreground: #f8f8f8;
-  }
-}
-
 body {
   font-family: sans-serif;
   display: grid;
   grid-template-columns: 1fr minmax(0, 60rem) 1fr;
-  background-color: var(--color-background);
-  color: var(--color-foreground);
 }
 
 body > * {
