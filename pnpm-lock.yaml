@@ -162,8 +162,8 @@ importers:
         specifier: ^3.0.0
         version: 3.0.0(@remark-embedder/core@3.0.3)
       '@tsxmod/utils':
-        specifier: ^0.5.1
-        version: 0.5.1(ts-morph@22.0.0)
+        specifier: ^0.5.2
+        version: 0.5.2(ts-morph@22.0.0)
       case-anything:
         specifier: ^2.1.13
         version: 2.1.13
@@ -2044,8 +2044,8 @@ packages:
       path-browserify: 1.0.1
     dev: false
 
-  /@tsxmod/utils@0.5.1(ts-morph@22.0.0):
-    resolution: {integrity: sha512-PuItaMH0WB0hiid4K6UQMVd/BCT+nXnF7biDn5wM8l0Yaarddl/wDdMlVv5R2dknmuZVBlgmqaMojQA8ztXYDw==}
+  /@tsxmod/utils@0.5.2(ts-morph@22.0.0):
+    resolution: {integrity: sha512-wfG7V/fdP02tKzwgYIn7e0ziYFDze5C2R52CzLeIinQTDrxeK/W6t8oGWe5dJf4vn1A3/vhGAk1OsY171zIMiw==}
     peerDependencies:
       ts-morph: '>=17.0.0'
     dependencies:
