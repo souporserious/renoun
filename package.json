@@ -1,6 +1,7 @@
 {
   "name": "mdxts",
   "private": true,
+  "license": "AGPL-3.0-or-later",
   "scripts": {
     "build": "turbo run build",
     "build:site": "pnpm build --filter=site",
