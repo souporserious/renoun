@@ -42,7 +42,7 @@ export function CopyButton({
   })
 
   if (state === 'idle' && preActive === false) {
-    return null
+    return styleElements
   }
 
   return (
