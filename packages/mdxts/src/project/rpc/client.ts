@@ -14,7 +14,7 @@ export class WebSocketClient {
 
   #requests: Record<number, Request> = {}
 
-  #pendingRequestIds = new Set<number>()
+  #pendingRequests = new Set<string>()
 
   constructor() {
     process.env.WS_NO_BUFFER_UTIL = 'true'
@@ -48,10 +48,10 @@ export class WebSocketClient {
   #handleOpen() {
     this.#isConnected = true
 
-    this.#pendingRequestIds.forEach((id) => {
-      this.#ws.send(JSON.stringify(this.#requests[id]))
+    this.#pendingRequests.forEach((request) => {
+      this.#ws.send(request)
     })
-    this.#pendingRequestIds.clear()
+    this.#pendingRequests.clear()
 
     this.#ws.removeEventListener('open', this.#handleOpen)
   }
@@ -99,7 +99,7 @@ export class WebSocketClient {
       if (this.#isConnected) {
         this.#ws.send(JSON.stringify(request))
       } else {
-        this.#pendingRequestIds.add(id)
+        this.#pendingRequests.add(JSON.stringify(request))
       }
     })
   }

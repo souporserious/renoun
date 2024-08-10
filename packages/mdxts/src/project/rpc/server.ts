@@ -48,11 +48,11 @@ export class WebSocketServer {
     this.#handlers[method] = handler
   }
 
-  async #handleMessage(ws: WebSocket, message: string) {
+  async #handleMessage(ws: WebSocket, message: string | Buffer) {
     let request: WebSocketRequest
 
     try {
-      request = JSON.parse(message)
+      request = JSON.parse(message.toString())
     } catch (error) {
       this.#sendError(ws, -1, -32700, '[mdxts] Parse error')
       return
