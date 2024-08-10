@@ -49,6 +49,8 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
     ? resolve(process.cwd(), theme)
     : theme
 
+  process.env.MDXTS_THEME_PATH = themePath
+
   return function withMdxts(nextConfig: NextConfig = {}) {
     const getWebpackConfig = nextConfig.webpack
     let startedRenumberFilenameWatcher = false
