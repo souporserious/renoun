@@ -157,4 +157,24 @@ describe('filePathToUrlPathname', () => {
       )
     ).toBe('/packages/mdxts')
   })
+
+  it('file name member', () => {
+    expect(filePathToPathname('src/components/Button.tests.tsx', 'src')).toBe(
+      '/components/button/tests'
+    )
+  })
+
+  it('directory, file name, and file name member', () => {
+    expect(
+      filePathToPathname('src/components/Button/Button/examples', 'src')
+    ).toBe('/components/button/examples')
+
+    expect(
+      filePathToPathname('src/components/Button/examples.tsx', 'src')
+    ).toBe('/components/button/examples')
+
+    expect(
+      filePathToPathname('src/components/Button/Button.examples.tsx', 'src')
+    ).toBe('/components/button/examples')
+  })
 })

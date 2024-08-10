@@ -1,11 +1,11 @@
-import React, { Fragment } from 'react'
+import React, { Fragment, Suspense } from 'react'
 import { css, type CSSProp } from 'restyle'
 import 'server-only'
 
-import { getThemeColors } from '../index'
+import { analyzeSourceText } from '../project'
+import { getThemeColors } from '../utils/get-theme-colors'
+import type { Languages, Token } from '../utils/get-tokens'
 import { CopyButton } from './CodeBlock/CopyButton'
-import type { Languages, Token } from './CodeBlock/get-tokens'
-import { getTokens } from './CodeBlock/get-tokens'
 
 export type CodeInlineProps = {
   /** Code snippet to be highlighted. */
@@ -33,23 +33,41 @@ export type CodeInlineProps = {
   style?: React.CSSProperties
 }
 
-/** Renders an inline `code` element with optional syntax highlighting and copy button. */
-export async function CodeInline({
+function Token({ token }: { token: Token }) {
+  if (token.isBaseColor || token.isWhitespace) {
+    return token.value
+  }
+
+  const [classNames, styles] = css({
+    fontStyle: token.fontStyle,
+    fontWeight: token.fontWeight,
+    textDecoration: token.textDecoration,
+    color: token.color,
+  })
+
+  return (
+    <span className={classNames}>
+      {token.value}
+      {styles}
+    </span>
+  )
+}
+
+async function CodeInlineAsync({
   value,
   language,
   allowCopy,
-  paddingX = '0.25em',
-  paddingY = '0.1em',
+  paddingX,
+  paddingY,
   css: cssProp,
   className,
   style,
 }: CodeInlineProps) {
-  const tokens = await getTokens(
-    value
-      // Trim extra whitespace from inline code blocks since it's difficult to read.
-      .replace(/\s+/g, ' '),
-    language
-  )
+  const { tokens } = await analyzeSourceText({
+    isInline: true,
+    value,
+    language,
+  })
   const theme = await getThemeColors()
   const [classNames, styles] = css({
     padding: `${paddingY} ${paddingX} 0`,
@@ -107,22 +125,27 @@ export async function CodeInline({
   )
 }
 
-function Token({ token }: { token: Token }) {
-  if (token.isBaseColor || token.isWhitespace) {
-    return token.value
-  }
-
-  const [classNames, styles] = css({
-    fontStyle: token.fontStyle,
-    fontWeight: token.fontWeight,
-    textDecoration: token.textDecoration,
-    color: token.color,
-  })
-
+/** Renders an inline `code` element with optional syntax highlighting and copy button. */
+export async function CodeInline({
+  paddingX = '0.25em',
+  paddingY = '0.1em',
+  ...props
+}: CodeInlineProps) {
   return (
-    <span className={classNames}>
-      {token.value}
-      {styles}
-    </span>
+    <Suspense
+      fallback={
+        'value' in props && props.value ? (
+          <code
+            style={{
+              padding: `${paddingY} ${paddingX} 0`,
+            }}
+          >
+            {props.value}
+          </code>
+        ) : null
+      }
+    >
+      <CodeInlineAsync paddingX={paddingX} paddingY={paddingY} {...props} />
+    </Suspense>
   )
 }

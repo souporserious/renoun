@@ -4,7 +4,6 @@ export {
   LineNumbers,
   Tokens,
   Toolbar,
-  loadHighlighterLanguage,
   type BaseCodeBlockProps,
   type CodeBlockProps,
   type TokensProps,

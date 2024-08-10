@@ -1,18 +1,18 @@
-import React from 'react'
+import React, { Suspense } from 'react'
+import type { MDXComponents } from 'mdx/types'
 import 'server-only'
 
-import { getThemeColors } from '../../index'
+import { analyzeSourceText } from '../../project'
+import { getThemeColors } from '../../utils/get-theme-colors'
 import { CopyButton } from './CopyButton'
 import { Tokens } from './Tokens'
-import type { Languages } from './get-tokens'
-import { getTokens } from './get-tokens'
+import type { Languages } from '../../utils/get-tokens'
 import type { ContextValue } from './Context'
 import { Context } from './Context'
 import { CopyButtonContextProvider } from './contexts'
 import { LineNumbers } from './LineNumbers'
 import { Pre } from './Pre'
 import { Toolbar } from './Toolbar'
-import { parseSourceTextMetadata } from './parse-source-text-metadata'
 import {
   generateFocusedLinesGradient,
   generateHighlightedLinesGradient,
@@ -87,8 +87,7 @@ export type CodeBlockProps =
       workingDirectory?: string
     } & BaseCodeBlockProps)
 
-/** Renders a `pre` element with syntax highlighting, type information, and type checking. */
-export async function CodeBlock({
+export async function CodeBlockAsync({
   filename,
   language,
   highlightedLines,
@@ -114,24 +113,18 @@ export async function CodeBlock({
     options.workingDirectory = props.workingDirectory
   }
 
-  const metadata = await parseSourceTextMetadata({
+  const { tokens, value, label } = await analyzeSourceText({
+    // Simplify the path for more legibile error messages.
+    sourcePath: sourcePath ? sourcePath.split(process.cwd()).at(1) : undefined,
     filename,
     language,
     allowErrors,
+    showErrors,
     ...options,
   })
-  const tokens = await getTokens(
-    metadata.value,
-    metadata.language,
-    metadata.filename,
-    allowErrors,
-    showErrors,
-    // Simplify the path for more legibile error messages.
-    sourcePath ? sourcePath.split(process.cwd()).at(1) : undefined
-  )
   const contextValue = {
-    value: metadata.value,
-    filenameLabel: filename || hasSource ? metadata.filenameLabel : undefined,
+    filenameLabel: filename || hasSource ? label : undefined,
+    value,
     highlightedLines,
     padding,
     sourcePath,
@@ -141,7 +134,7 @@ export async function CodeBlock({
   if ('children' in props) {
     return (
       <Context value={contextValue}>
-        <CopyButtonContextProvider value={metadata.value}>
+        <CopyButtonContextProvider value={value}>
           {props.children}
         </CopyButtonContextProvider>
       </Context>
@@ -293,11 +286,104 @@ export async function CodeBlock({
                 color: theme.activityBar.foreground,
                 borderRadius: 5,
               }}
-              value={metadata.value}
+              value={value}
             />
           ) : null}
         </Pre>
       </Container>
     </Context>
   )
+}
+
+/** Renders a `pre` element with syntax highlighting, type information, and type checking. */
+export function CodeBlock(props: CodeBlockProps) {
+  if ('children' in props) {
+    return <CodeBlockAsync {...props} />
+  }
+
+  const padding = props.style?.container?.padding ?? '0.5lh'
+
+  return (
+    <Suspense
+      fallback={
+        'value' in props && props.value ? (
+          <pre
+            className={props.className?.container}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: props.showLineNumbers
+                ? 'auto 1fr'
+                : undefined,
+              whiteSpace: 'pre',
+              wordWrap: 'break-word',
+              margin: 0,
+              overflow: 'auto',
+              boxShadow: '0 0 0 1px #666',
+              borderRadius: 5,
+              ...props.style?.container,
+            }}
+          >
+            {props.showLineNumbers && (
+              <div
+                className={props.className?.lineNumbers}
+                style={{
+                  padding,
+                  position: 'sticky',
+                  left: 0,
+                  zIndex: 1,
+                  textAlign: 'right',
+                  userSelect: 'none',
+                  whiteSpace: 'pre',
+                  gridColumn: 1,
+                  gridRow: '1 / -1',
+                  width: '4ch',
+                  backgroundColor: 'inherit',
+                  ...props.style?.lineNumbers,
+                }}
+              >
+                {Array.from(
+                  { length: props.value.split('\n').length },
+                  (_, index) => index + 1
+                ).join('\n')}
+              </div>
+            )}
+            <code
+              style={{
+                padding,
+                display: 'block',
+                width: 'max-content',
+                gridColumn: props.showLineNumbers ? 2 : 1,
+              }}
+            >
+              {props.value}
+            </code>
+          </pre>
+        ) : null
+      }
+    >
+      <CodeBlockAsync {...props} />
+    </Suspense>
+  )
+}
+
+const languageKey = 'language-'
+const languageLength = languageKey.length
+
+CodeBlock.parsePreProps = (
+  props: React.ComponentProps<NonNullable<MDXComponents['pre']>>
+) => {
+  const code = props.children as React.ReactElement<{
+    className: `language-${string}`
+    children: string
+  }>
+  const languageClassName = code.props.className
+    .split(' ')
+    .find((className) => className.startsWith(languageKey))
+
+  return {
+    value: code.props.children.trim(),
+    language: (languageClassName
+      ? languageClassName.slice(languageLength)
+      : 'plain') as Languages,
+  }
 }

@@ -6,6 +6,7 @@ import createMdxPlugin from '@next/mdx'
 import type { bundledThemes } from 'shiki/bundle/web'
 
 import { getMdxPlugins } from '../mdx-plugins'
+import { createServer } from '../project/server'
 import { renumberFilenames } from '../utils/renumber'
 import { createRefreshServer } from './create-refresh-server'
 
@@ -89,6 +90,7 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
           options.isServer &&
           options.dev
         ) {
+          createServer()
           renumberFilenames()
           startedRenumberFilenameWatcher = true
         }

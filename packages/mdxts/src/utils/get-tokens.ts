@@ -1,17 +1,17 @@
 import type { bundledLanguages, bundledThemes } from 'shiki/bundle/web'
-import type { SourceFile, Diagnostic, ts } from 'ts-morph'
+import type { SourceFile, Diagnostic, ts, Project } from 'ts-morph'
 import { Node, SyntaxKind } from 'ts-morph'
 import { getDiagnosticMessageText } from '@tsxmod/utils'
 import { join, posix } from 'node:path'
 import { findRoot } from '@manypkg/find-root'
 import chalk from 'chalk'
 
-import { getThemeColors } from '../../index'
-import { isJsxOnly } from '../../utils/is-jsx-only'
-import { project } from '../project'
+import { getThemeColors } from './get-theme-colors'
+import { isJsxOnly } from './is-jsx-only'
+import { generatedFilenames } from './parse-source-text-metadata'
 import { getHighlighter } from './get-highlighter'
-import { splitTokenByRanges } from './split-tokens-by-ranges'
 import { getTrimmedSourceFileText } from './get-trimmed-source-file-text'
+import { splitTokenByRanges } from './split-tokens-by-ranges'
 
 export const languageMap = {
   mjs: 'js',
@@ -84,11 +84,13 @@ export type GetTokens = (
 
 /** Converts a string of code to an array of highlighted tokens. */
 export async function getTokens(
+  project: Project,
   value: string,
   language: Languages = 'plaintext',
   filename?: string,
   allowErrors: string | boolean = false,
   showErrors: boolean = false,
+  isInline: boolean = false,
   sourcePath?: string | false
 ) {
   if (language === 'plaintext' || language === 'diff') {
@@ -106,19 +108,18 @@ export async function getTokens(
     ]
   }
 
+  const componentName = isInline ? 'CodeInline' : 'CodeBlock'
   const isJavaScriptLikeLanguage = ['js', 'jsx', 'ts', 'tsx'].includes(language)
   const jsxOnly = isJavaScriptLikeLanguage ? isJsxOnly(value) : false
   const sourceFile = filename ? project.getSourceFile(filename) : undefined
   const finalLanguage = getLanguage(language)
   const theme = await getThemeColors()
   const highlighter = await getHighlighter()
-  const { tokens } = highlighter.codeToTokens(
-    sourceFile ? getTrimmedSourceFileText(sourceFile) : value,
-    {
-      theme: 'mdxts',
-      lang: finalLanguage as any,
-    }
-  )
+  const sourceText = sourceFile ? getTrimmedSourceFileText(sourceFile) : value
+  const { tokens } = highlighter.codeToTokens(sourceText, {
+    theme: 'mdxts',
+    lang: finalLanguage as any,
+  })
   const sourceFileDiagnostics = getDiagnostics(
     sourceFile,
     allowErrors,
@@ -254,6 +255,8 @@ export async function getTokens(
 
   if (allowErrors === false && sourceFile && sourceFileDiagnostics.length > 0) {
     throwDiagnosticErrors(
+      componentName,
+      filename,
       sourceFile,
       sourceFileDiagnostics,
       parsedTokens,
@@ -481,13 +484,17 @@ function tokensToPlainText(tokens: Token[][]) {
 
 /** Throws diagnostic errors, formatting them for display. */
 function throwDiagnosticErrors(
+  componentName: string,
+  filename: string | undefined,
   sourceFile: SourceFile,
   diagnostics: Diagnostic[],
   tokens: Token[][],
   sourcePath?: string | false
 ) {
   const workingDirectory = join(process.cwd(), 'mdxts', posix.sep)
-  const filePath = sourceFile.getFilePath().replace(workingDirectory, '')
+  const formattedPath = generatedFilenames.has(filename!)
+    ? ''
+    : `for filename "${sourceFile.getFilePath().replace(workingDirectory, '')}"`
   const errorMessages = diagnostics.map((diagnostic) => {
     const message = getDiagnosticMessageText(diagnostic.getMessageText())
     const start = diagnostic.getStart()
@@ -512,12 +519,12 @@ function throwDiagnosticErrors(
   if (process.env.MDXTS_HIGHLIGHT_ERRORS === 'true') {
     const errorMessage = `${formattedErrors}\n\n${tokensToHighlightedText(tokens)}`
     throw new Error(
-      `[mdxts] ${chalk.bold('CodeBlock')} type errors found ${sourcePath ? `at "${chalk.bold(sourcePath)}" ` : ''}for filename "${chalk.bold(filePath)}"\n\n${errorMessage}\n\n`
+      `[mdxts] ${chalk.bold(componentName)} type errors found ${sourcePath ? `at ${chalk.bold(`"${sourcePath}"`)} ` : ''}${chalk.bold(formattedPath)}\n\n${errorMessage}\n\n`
     )
   } else {
     const errorMessage = `${formattedErrors}\n\n${tokensToPlainText(tokens)}`
     throw new Error(
-      `[mdxts] CodeBlock type errors found ${sourcePath ? `at "${sourcePath}" ` : ''}for filename "${filePath}"\n\n${errorMessage}\n\n`
+      `[mdxts] ${componentName} type errors found ${sourcePath ? `at "${sourcePath}" ` : ''}${formattedPath}\n\n${errorMessage}\n\n`
     )
   }
 }

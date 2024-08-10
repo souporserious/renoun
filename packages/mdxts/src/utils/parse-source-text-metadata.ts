@@ -1,49 +1,67 @@
 import crypto from 'node:crypto'
 import { join, posix, isAbsolute } from 'node:path'
 import { readFile } from 'node:fs/promises'
-import type { SourceFile } from 'ts-morph'
+import { Project, SourceFile } from 'ts-morph'
 import { format, resolveConfig } from 'prettier'
-import 'server-only'
 
-import { getPathRelativeToPackage } from '../../utils/get-relative-path-as-package-import'
-import { isJsxOnly } from '../../utils/is-jsx-only'
-import type { Languages } from './get-tokens'
-import { getLanguage } from './get-tokens'
-import { project } from '../project'
+import { getLanguage, type Languages } from './get-language'
+import { isJsxOnly } from './is-jsx-only'
+import type { ExclusiveUnion } from '../types'
 
 type BaseParseMetadataOptions = {
+  project: Project
   filename?: string
   language?: Languages
   allowErrors?: boolean | string
+  isInline?: boolean
 }
 
 export type ParseMetadataOptions = BaseParseMetadataOptions &
-  (
+  ExclusiveUnion<
     | { value: string }
     | {
         source: string
         workingDirectory?: string
       }
-  )
+  >
+
+export type ParseMetadataResult = {
+  filename: string
+  filenameLabel: string
+  value: string
+  language: Languages
+}
+
+export const generatedFilenames = new Set<string>()
 
 /** Parses and normalizes source text metadata. */
 export async function parseSourceTextMetadata({
+  project,
   filename: filenameProp,
   language,
   allowErrors = false,
+  isInline = false,
   ...props
-}: ParseMetadataOptions) {
+}: ParseMetadataOptions): Promise<ParseMetadataResult> {
+  const componentName = isInline ? 'CodeInline' : 'CodeBlock'
   let finalValue: string = ''
   let finalLanguage = language
+  let isGeneratedFilename = false
   let id = 'source' in props ? props.source : filenameProp
 
   if ('value' in props) {
-    finalValue = props.value
+    if (props.value) {
+      finalValue = props.value
 
-    if (id === undefined) {
-      const hex = crypto.createHash('sha256').update(props.value).digest('hex')
-      if (hex) {
-        id = hex
+      // generate a unique id for the code block based on the contents if a filename is not provided
+      if (id === undefined) {
+        const hex = crypto
+          .createHash('sha256')
+          .update(props.value)
+          .digest('hex')
+        if (hex) {
+          id = hex
+        }
       }
     }
   } else if ('source' in props) {
@@ -52,7 +70,7 @@ export async function parseSourceTextMetadata({
 
     if (isRelative && !workingDirectory) {
       throw new Error(
-        `The [workingDirectory] prop is required for [CodeBlock] with the relative [source] "${props.source}".\n\nPass a valid [workingDirectory]. If this is being renderend directly in an MDX file, make sure the "mdxts/remark" plugin and "mdxts/loader" Webpack loader are configured correctly.`
+        `[mdxts] The "workingDirectory" prop is required for "${componentName}" with the relative source "${props.source}".\n\nPass a valid [workingDirectory]. If this is being renderend directly in an MDX file, make sure the "mdxts/remark" plugin and "mdxts/loader" Webpack loader are configured correctly.`
       )
     }
 
@@ -85,6 +103,7 @@ export async function parseSourceTextMetadata({
 
   if (!filename) {
     filename = `${id}.${finalLanguage}`
+    isGeneratedFilename = true
   }
 
   // Format JavaScript code blocks.
@@ -113,15 +132,25 @@ export async function parseSourceTextMetadata({
     filename = join('mdxts', filename)
   }
 
+  // Store generated filenames to provide better error messages
+  if (isGeneratedFilename) {
+    generatedFilenames.add(filename)
+  }
+
   // Add extension if filename prop is missing it so it can be loaded into TypeScript.
   if (isJavaScriptLikeLanguage && !filename.includes('.')) {
     if (!finalLanguage) {
       throw new Error(
-        'The [language] prop was not provided to the [CodeBlock] component and could not be inferred from the filename. Pass a valid [filename] with extension or a [language] prop'
+        `[mdxts] The "language" prop was not provided to the "${componentName}" component and could not be inferred from the filename. Pass a valid "filename" with extension or a "language" prop`
       )
     }
 
     filename = `${filename}.${finalLanguage}`
+  }
+
+  // Trim extra whitespace from inline code blocks since it's difficult to read.
+  if (isInline) {
+    finalValue = finalValue.replace(/\s+/g, ' ')
   }
 
   // Create a ts-morph source file to type-check JavaScript and TypeScript code blocks.
@@ -131,23 +160,25 @@ export async function parseSourceTextMetadata({
         overwrite: true,
       })
 
-      if (jsxOnly) {
-        // Since JSX only code blocks don't have imports, attempt to fix them.
-        sourceFile.fixMissingImports()
-      }
+      if (!isInline) {
+        if (jsxOnly) {
+          // Since JSX only code blocks don't have imports, attempt to fix them.
+          sourceFile.fixMissingImports()
+        }
 
-      // If no imports or exports add an empty export declaration to coerce TypeScript to treat the file as a module
-      const hasImports = sourceFile.getImportDeclarations().length > 0
-      const hasExports = sourceFile.getExportDeclarations().length > 0
+        // If no imports or exports add an empty export declaration to coerce TypeScript to treat the file as a module
+        const hasImports = sourceFile.getImportDeclarations().length > 0
+        const hasExports = sourceFile.getExportDeclarations().length > 0
 
-      if (!hasImports && !hasExports) {
-        sourceFile.addExportDeclaration({})
+        if (!hasImports && !hasExports) {
+          sourceFile.addExportDeclaration({})
+        }
       }
     } catch (error) {
       if (error instanceof Error) {
         const workingDirectory = process.cwd()
         throw new Error(
-          `[mdxts] Error trying to create CodeBlock source file at working directory "${workingDirectory}"`,
+          `[mdxts] Error trying to create "${componentName}" source file at working directory "${workingDirectory}"`,
           { cause: error }
         )
       }
@@ -159,11 +190,9 @@ export async function parseSourceTextMetadata({
     .replace(/\d+\./, '') // Remove ordered number prefix
 
   return {
-    value: sourceFile ? sourceFile.getFullText() : finalValue,
-    language: finalLanguage,
-    isJsxOnly: jsxOnly,
-    sourceFile,
     filename,
     filenameLabel,
+    value: sourceFile ? sourceFile.getFullText() : finalValue,
+    language: finalLanguage,
   }
 }

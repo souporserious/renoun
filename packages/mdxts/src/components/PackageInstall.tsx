@@ -1,6 +1,6 @@
 import React from 'react'
 
-import { getThemeColors } from '../index'
+import { getThemeColors } from '../utils/get-theme-colors'
 import { CopyButton } from './CodeBlock/CopyButton'
 import { CodeBlock } from './CodeBlock/CodeBlock'
 import { Tokens } from './CodeBlock/Tokens'

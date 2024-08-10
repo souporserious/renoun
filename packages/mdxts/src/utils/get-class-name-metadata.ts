@@ -1,4 +1,4 @@
-import type { Languages } from '../components/CodeBlock/get-tokens'
+import type { Languages } from '../utils/get-tokens'
 
 const languageKey = 'language-'
 const languageLength = languageKey.length
