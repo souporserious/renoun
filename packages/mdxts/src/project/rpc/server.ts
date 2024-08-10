@@ -35,7 +35,7 @@ export class WebSocketServer {
       })
 
       ws.on('error', (error) => {
-        throw new Error(`[mdxts] WebSocket server error: ${error}`)
+        throw new Error(`[mdxts] WebSocket server error`, { cause: error })
       })
 
       ws.on('message', (message: string) => {
