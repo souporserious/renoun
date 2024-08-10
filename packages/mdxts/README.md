@@ -46,4 +46,4 @@ Visit the [Getting Started](https://mdxts.dev/docs/getting-started) guide to vie
 
 ## License
 
-[MIT](/LICENSE.md) © [souporserious](https://souporserious.com/)
+[AGPLv3](/LICENSE.md) © [souporserious](https://souporserious.com/)
