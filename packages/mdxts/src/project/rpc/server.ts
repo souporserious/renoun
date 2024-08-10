@@ -65,7 +65,12 @@ export class WebSocketServer {
 
     const handler = this.#handlers[request.method]
     if (!handler) {
-      this.#sendError(ws, request.id, -32601, '[mdxts] Method not found')
+      this.#sendError(
+        ws,
+        request.id,
+        -32601,
+        `[mdxts] Method not registered: "${request.method}"`
+      )
       return
     }
 
@@ -78,7 +83,7 @@ export class WebSocketServer {
           ws,
           request.id,
           -32603,
-          '[mdxts] Internal error',
+          `[mdxts] Internal error for method "${request.method}" with params: ${JSON.stringify(request.params)}`,
           error.message
         )
       }
