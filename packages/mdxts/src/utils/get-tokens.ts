@@ -56,6 +56,11 @@ export type Theme = {
   tokenColors: ThemeTokenColor[]
 }
 
+export type TokenDiagnostic = {
+  code: number
+  message: string
+}
+
 export type Token = {
   value: string
   start: number
@@ -68,7 +73,7 @@ export type Token = {
   isWhitespace: boolean
   isSymbol: boolean
   quickInfo?: { displayText: string; documentationText: string }
-  diagnostics?: Diagnostic[]
+  diagnostics?: TokenDiagnostic[]
 }
 
 export type Tokens = Token[]
@@ -216,15 +221,20 @@ export async function getTokens(
           return token
         }
 
-        const diagnostics = sourceFileDiagnostics.filter((diagnostic) => {
-          const start = diagnostic.getStart()
-          const length = diagnostic.getLength()
-          if (!start || !length) {
-            return false
-          }
-          const end = start + length
-          return token.start >= start && token.end <= end
-        })
+        const diagnostics = sourceFileDiagnostics
+          .filter((diagnostic) => {
+            const start = diagnostic.getStart()
+            const length = diagnostic.getLength()
+            if (!start || !length) {
+              return false
+            }
+            const end = start + length
+            return token.start >= start && token.end <= end
+          })
+          .map((diagnostic) => ({
+            code: diagnostic.getCode(),
+            message: getDiagnosticMessageText(diagnostic.getMessageText()),
+          }))
         const quickInfo =
           sourceFile && filename
             ? getQuickInfo(

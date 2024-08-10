@@ -1,12 +1,10 @@
 import React, { Fragment } from 'react'
-import type { Diagnostic } from 'ts-morph'
-import { getDiagnosticMessageText } from '@tsxmod/utils'
 
 import { getThemeColors } from '../../utils/get-theme-colors'
 import { analyzeSourceText } from '../../project'
 import { MDXContent } from '../MDXContent'
 import { QuickInfoPopover } from './QuickInfoPopover'
-import type { Token } from '../../utils/get-tokens'
+import type { Token, TokenDiagnostic } from '../../utils/get-tokens'
 
 export async function QuickInfo({
   diagnostics,
@@ -14,7 +12,7 @@ export async function QuickInfo({
   className,
   style,
 }: {
-  diagnostics?: Diagnostic[]
+  diagnostics?: TokenDiagnostic[]
   quickInfo?: { displayText: string; documentationText: string }
   className?: string
   style?: React.CSSProperties
@@ -59,8 +57,8 @@ export async function QuickInfo({
             <div style={{ padding: '0.25em 0.5em' }}>
               {diagnostics.map((diagnostic, index) => (
                 <div key={index} style={{ display: 'flex', gap: '0.5em' }}>
-                  {getDiagnosticMessageText(diagnostic.getMessageText())}
-                  <span style={{ opacity: 0.7 }}>({diagnostic.getCode()})</span>
+                  {diagnostic.message}
+                  <span style={{ opacity: 0.7 }}>({diagnostic.code})</span>
                 </div>
               ))}
             </div>
