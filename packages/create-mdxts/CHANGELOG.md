@@ -1,5 +1,11 @@
 # create-mdxts
 
+## 0.4.0
+
+### Minor Changes
+
+- 64eeaf0: Updates license from MIT to AGPL-3.0. This ensures that modifications and improvements to the code remain open source and accessible to the community.
+
 ## 0.3.11
 
 ### Patch Changes
