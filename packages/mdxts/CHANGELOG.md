@@ -1,5 +1,82 @@
 # mdxts
 
+## 1.6.0
+
+### Minor Changes
+
+- 252f4c4: This adds an `mdxts` cli command to allow running the project analysis in a separate process to improve overall performance during local development.
+
+  ## CLI
+
+  This can be prepended to your framework's development process e.g. `next dev`. For example, to start the `mdxts` process prior to starting the Next.js server simply prepend the `mdxts` command:
+
+  ```json
+  {
+    "scripts": {
+      "dev": "mdxts next",
+      "build": "mdxts next build"
+    }
+  }
+  ```
+
+  This ensures the server starts and allows decoupling the code block analysis and syntax highlighting from Next.js.
+
+  Alternatively, the process can be managed yourself using a library like [concurrently](https://github.com/open-cli-tools/concurrently):
+
+  ```json
+  {
+    "scripts": {
+      "dev": "concurrently \"mdxts watch\" \"next\"",
+      "build": "mdxts && next build"
+    }
+  }
+  ```
+
+  ## Collections
+
+  This also introduces a new `createCollection` utility:
+
+  ```ts
+  import {
+    createCollection,
+    type MDXContent,
+    type FileSystemSource,
+  } from 'mdxts/collections'
+
+  export type PostSchema = {
+    default: MDXContent
+    frontmatter?: {
+      title: string
+      description: string
+    }
+  }
+
+  export type PostSource = FileSystemSource<PostSchema>
+
+  export const PostsCollection = createCollection<PostSchema>(
+    '@/posts/**/*.{ts,mdx}',
+    {
+      title: 'Posts',
+      baseDirectory: 'posts',
+      basePath: 'posts',
+    }
+  )
+  ```
+
+  Collections will soon replace the `createSource` utility and provide a more performant and flexible way to query file system information and render module exports. They focus primarily on querying source files and providing a way to analyze and render file exports.
+
+- 64eeaf0: Updates license from MIT to AGPL-3.0. This ensures that modifications and improvements to the code remain open source and accessible to the community.
+
+### Patch Changes
+
+- 22a4617: Improves error messages for `CodeBlock` type errors to show exactly where each diagnostic occurs.
+- 6095e9d: Loads proper lib declarations for in memory file system when type checking front matter.
+- abaa320: Fix pathname generation in case the `baseDirectory` exists multiple times in the `filePath`.
+
+  Previously having a file path like `content/content_1/path/file.mdx` and using `content` as base directory results in an invalid pathname like `content-1path/file`.
+
+  Now we get the correct path name like `/content-1/path/file`.
+
 ## 1.5.0
 
 ### Minor Changes
