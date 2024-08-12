@@ -582,6 +582,12 @@ You can fix this error by taking one of the following actions:
       sourceFile = this.sourceFileOrDirectory
     }
 
+    if (!sourceFile) {
+      throw new Error(
+        `[mdxts] Source file not found for directory at path "${this.getPath()}".`
+      )
+    }
+
     return sourceFile.getExportSymbols().map((symbol) => {
       const name = symbol.getName()
       return this.getNamedExport(name as Exclude<keyof AllExports, 'default'>)
