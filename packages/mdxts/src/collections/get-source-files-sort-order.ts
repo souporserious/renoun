@@ -4,7 +4,7 @@ import { Directory } from 'ts-morph'
 export function getSourceFilesOrderMap(
   directory: Directory
 ): Map<string, string> {
-  const orderMap = new Map<string, string>()
+  const orderMap = new Map<string, string>([[directory.getPath(), '00']])
   traverseDirectory(directory, '', orderMap)
   return orderMap
 }

@@ -391,6 +391,14 @@ class Source<AllExports extends FileExports>
       )
     }
 
+    if (calculatedPath.endsWith('/index')) {
+      return calculatedPath.slice(0, -6)
+    }
+
+    if (calculatedPath.endsWith('/readme')) {
+      return calculatedPath.slice(0, -7)
+    }
+
     return calculatedPath
   }
 
@@ -399,7 +407,13 @@ class Source<AllExports extends FileExports>
 
     return this.getPath()
       .split('/')
-      .filter((segment) => segment !== basePath && segment !== '')
+      .filter(
+        (segment) =>
+          segment !== basePath &&
+          segment !== '' &&
+          segment !== 'index' &&
+          segment !== 'readme'
+      )
   }
 
   getEditPath() {
@@ -615,6 +629,7 @@ class Collection<AllExports extends FileExports>
   public fileSystemSources: (SourceFile | Directory)[]
   public sourceFilesOrderMap: Map<string, string>
   public sourcePathMap: Map<string, string>
+  public validExtensions: Set<string> = new Set()
 
   #sources = new Map<string, Source<AllExports>>()
 
@@ -650,6 +665,15 @@ class Collection<AllExports extends FileExports>
     }
 
     this.fileSystemSources = fileSystemSources
+    this.validExtensions = new Set(
+      fileSystemSources
+        .map((source) => {
+          if (source instanceof SourceFile) {
+            return source.getExtension().slice(1)
+          }
+        })
+        .filter(Boolean) as string[]
+    )
 
     const baseDirectory = this.project.getDirectoryOrThrow(
       this.absoluteBaseGlobPattern
@@ -762,22 +786,16 @@ class Collection<AllExports extends FileExports>
       }
     }
 
-    const matchingSources = this.fileSystemSources.filter((sourceFile) => {
-      const sourcePath = this.sourcePathMap.get(
-        getFileSystemSourcePath(sourceFile)
-      )!
+    const sourceFileOrDirectory = this.fileSystemSources.find((source) => {
+      const fileSystemSourcePath = getFileSystemSourcePath(source)
+      const sourcePath = this.sourcePathMap.get(fileSystemSourcePath)
       return sourcePath === pathString
     })
 
-    if (matchingSources.length === 0) {
+    if (!sourceFileOrDirectory) {
       return undefined
-    } else if (matchingSources.length > 1) {
-      throw new Error(
-        `[mdxts] Multiple sources found for file pattern "${this.filePattern}" at path "${pathString}". Only one source is currently allowed. Please file an issue for support.`
-      )
     }
 
-    const sourceFileOrDirectory = matchingSources[0]!
     const sourcePath = getFileSystemSourcePath(sourceFileOrDirectory)
     const isSourceFile = sourceFileOrDirectory instanceof SourceFile
     const exportedDeclarations = isSourceFile
@@ -869,8 +887,7 @@ function getSourceFilesAndDirectories(
   )
 
   for (const sourceDirectory of sourceDirectories) {
-    const directorySourceFile = getDirectorySourceFile(sourceDirectory)
-    fileSystemSources.add(directorySourceFile || sourceDirectory)
+    fileSystemSources.add(sourceDirectory)
   }
 
   return Array.from(fileSystemSources)
