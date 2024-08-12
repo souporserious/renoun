@@ -1,5 +1,11 @@
 # mdxts
 
+## 1.6.1
+
+### Patch Changes
+
+- 85f528d: Fixes constraint type error when using an interface with `FileSystemSource` or `createCollection`.
+
 ## 1.6.0
 
 ### Minor Changes
