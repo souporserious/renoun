@@ -31,7 +31,9 @@ export type FilePatterns<Extension extends string = string> =
   | `${string}${Extension}${string}`
 
 /** @internal */
-export type FileExports = Record<string, unknown>
+export interface FileExports {
+  [key: string]: any
+}
 
 /** @internal */
 export interface BaseSource {
@@ -812,9 +814,7 @@ class Collection<AllExports extends FileExports>
  * @returns A collection object that provides methods to retrieve individual sources or all sources matching the pattern.
  */
 export function createCollection<
-  AllExports extends FilePattern extends FilePatterns<'md' | 'mdx'>
-    ? { default: MDXContent; [key: string]: unknown }
-    : { [key: string]: unknown },
+  AllExports extends { [key: string]: any } = { [key: string]: any },
   FilePattern extends FilePatterns = string,
 >(
   filePattern: FilePattern,
