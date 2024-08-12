@@ -157,6 +157,9 @@ export interface FileSystemSource<Exports extends FileExports>
 export type CollectionSource<Exports extends FileExports> = {
   /** Get the configured collection title. */
   getTitle(): string | undefined
+
+  /** An array of all source path segments in the collection. */
+  getPathSegments(): Promise<string[][]>
 } & Omit<BaseSourceWithGetters<Exports>, 'getEditPath' | 'getPathSegments'>
 
 /** @internal */
@@ -714,6 +717,26 @@ class Collection<AllExports extends FileExports>
         : `/${this.options.basePath}`
     }
     return '/'
+  }
+
+  async getPathSegments() {
+    const sources = await this.getSources()
+    const slugs = new Map<string, string[]>()
+
+    return sources
+      .map((source) => {
+        const pathSegments = source.getPathSegments()
+        const path = source.getPath()
+
+        if (pathSegments.length === 0 || slugs.has(path)) {
+          return null
+        }
+
+        slugs.set(path, pathSegments)
+
+        return pathSegments
+      })
+      .filter(Boolean) as string[][]
   }
 
   getDepth() {
