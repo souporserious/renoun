@@ -710,7 +710,18 @@ class Collection<AllExports extends FileExports>
 
   async getFileSystemSources() {
     const sources = this.fileSystemSources
-      .map((fileSystemSource) => this.getFileSystemSource(fileSystemSource))
+      .map((fileSystemSource) => {
+        // Filter out directories that have an index or readme file
+        if (fileSystemSource instanceof Directory) {
+          const directorySourceFile = getDirectorySourceFile(fileSystemSource)
+
+          if (directorySourceFile) {
+            return
+          }
+        }
+
+        return this.getFileSystemSource(fileSystemSource)
+      })
       .filter(Boolean) as FileSystemSource<AllExports>[]
 
     sources.sort((a, b) => a.getOrder().localeCompare(b.getOrder()))
@@ -761,22 +772,7 @@ class Collection<AllExports extends FileExports>
 
   async getPathSegments() {
     const sources = await this.getSources()
-    const slugs = new Map<string, string[]>()
-
-    return sources
-      .map((source) => {
-        const pathSegments = source.getPathSegments()
-        const path = source.getPath()
-
-        if (pathSegments.length === 0 || slugs.has(path)) {
-          return null
-        }
-
-        slugs.set(path, pathSegments)
-
-        return pathSegments
-      })
-      .filter(Boolean) as string[][]
+    return sources.map((source) => source.getPathSegments())
   }
 
   getDepth() {
@@ -839,8 +835,9 @@ class Collection<AllExports extends FileExports>
 
     const minDepth = this.getDepth()
     const maxDepth = depth === Infinity ? Infinity : minDepth + depth
+    const sources = await this.getFileSystemSources()
 
-    return (await this.getFileSystemSources()).filter((source) => {
+    return sources.filter((source) => {
       if (source) {
         const descendantDepth = source.getDepth()
         return descendantDepth > minDepth && descendantDepth <= maxDepth
