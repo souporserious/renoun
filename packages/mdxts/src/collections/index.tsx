@@ -366,12 +366,22 @@ class Source<AllExports extends FileExports>
       this.sourceFileOrDirectory instanceof Directory
         ? this.sourceFileOrDirectory.getBaseName()
         : this.sourceFileOrDirectory.getBaseNameWithoutExtension()
+    let name = baseName
+      // remove leading numbers e.g. 01.intro -> intro
+      .replace(/^\d+\./, '')
 
-    return (
-      baseName
+    if (
+      (name === 'index' || name === 'readme') &&
+      this.sourceFileOrDirectory instanceof SourceFile
+    ) {
+      name = this.sourceFileOrDirectory
+        .getDirectory()
+        .getBaseName()
         // remove leading numbers e.g. 01.intro -> intro
         .replace(/^\d+\./, '')
-    )
+    }
+
+    return name
   }
 
   getTitle() {
