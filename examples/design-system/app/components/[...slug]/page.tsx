@@ -15,19 +15,21 @@ export async function generateStaticParams() {
   }))
 }
 
-async function ComponentExport({
-  exportSource,
+async function Export({
+  source,
 }: {
-  exportSource: ExportSource<React.ComponentType>
+  source: ExportSource<React.ComponentType>
 }) {
-  const name = exportSource.getName()
-  const Component = await exportSource.getValue().catch(() => null)
+  const name = source.getName()
+  const Value = await source.getValue()
+  const isUppercase = name[0] === name[0].toUpperCase()
+  const isComponent = typeof Value === 'function' && isUppercase
 
   return (
     <div key={name}>
       <h3>{name}</h3>
-      {Component ? <Component /> : null}
-      <CodeBlock allowErrors value={exportSource.getText()} language="tsx" />
+      {isComponent ? <Value /> : null}
+      <CodeBlock allowErrors value={source.getText()} language="tsx" />
     </div>
   )
 }
@@ -73,10 +75,14 @@ export default async function Component({
 
       <h2>Exports</h2>
       {componentSource.getExports().map((exportSource) => (
-        <ComponentExport
-          key={exportSource.getName()}
-          exportSource={exportSource}
-        />
+        <div key={exportSource.getName()}>
+          <h3>{exportSource.getName()}</h3>
+          <CodeBlock
+            allowErrors
+            value={exportSource.getText()}
+            language="tsx"
+          />
+        </div>
       ))}
 
       {isExamplesPage || !examples ? null : (
@@ -86,10 +92,7 @@ export default async function Component({
             examplesSource
               .getExports()
               .map((exportSource) => (
-                <ComponentExport
-                  key={exportSource.getName()}
-                  exportSource={exportSource}
-                />
+                <Export key={exportSource.getName()} source={exportSource} />
               ))
           )}
         </>
