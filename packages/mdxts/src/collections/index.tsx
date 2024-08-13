@@ -139,6 +139,12 @@ export interface FileSystemSource<Exports extends FileExports>
 
   /** All exported sources of the file. */
   getExports(): ExportSource<Exports[keyof Exports]>[]
+
+  /** If the source is a file. */
+  isFile(): boolean
+
+  /** If the source is a directory. */
+  isDirectory(): boolean
 }
 
 /** @internal */
@@ -361,6 +367,14 @@ class Source<AllExports extends FileExports>
     private sourceFileOrDirectory: SourceFile | Directory
   ) {
     this.#sourcePath = getFileSystemSourcePath(this.sourceFileOrDirectory)
+  }
+
+  isFile() {
+    return this.sourceFileOrDirectory instanceof SourceFile
+  }
+
+  isDirectory() {
+    return this.sourceFileOrDirectory instanceof Directory
   }
 
   getName() {
@@ -788,11 +802,6 @@ class Collection<AllExports extends FileExports>
         : `/${this.options.basePath}`
     }
     return '/'
-  }
-
-  async getPathSegments() {
-    const sources = await this.getSources()
-    return sources.map((source) => source.getPathSegments())
   }
 
   getDepth() {

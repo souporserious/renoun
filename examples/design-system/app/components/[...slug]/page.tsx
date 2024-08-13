@@ -12,7 +12,9 @@ import { ComponentsCollection, type ComponentSource } from '@/collections'
 export async function generateStaticParams() {
   const sources = await ComponentsCollection.getSources()
 
-  return sources.map((source) => ({ slug: source.getPathSegments() }))
+  return sources
+    .filter((source) => source.isFile())
+    .map((source) => ({ slug: source.getPathSegments() }))
 }
 
 async function Export({
