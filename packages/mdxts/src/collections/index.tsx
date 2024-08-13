@@ -803,11 +803,19 @@ class Collection<AllExports extends FileExports>
       }
     }
 
-    const sourceFileOrDirectory = this.fileSystemSources.find((source) => {
+    let sourceFileOrDirectory = this.fileSystemSources.find((source) => {
       const fileSystemSourcePath = getFileSystemSourcePath(source)
       const sourcePath = this.sourcePathMap.get(fileSystemSourcePath)
       return sourcePath === pathString
     })
+
+    if (sourceFileOrDirectory instanceof Directory) {
+      const directorySourceFile = getDirectorySourceFile(sourceFileOrDirectory)
+
+      if (directorySourceFile) {
+        sourceFileOrDirectory = directorySourceFile
+      }
+    }
 
     if (!sourceFileOrDirectory) {
       return undefined
