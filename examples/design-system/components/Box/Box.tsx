@@ -1,13 +1,11 @@
 import * as React from 'react'
 
-type BoxColors = 'red' | 'green' | 'blue'
-
 export type BoxProps = {
   as?: React.ElementType
   children?: React.ReactNode
   padding?: number | string
   backgroundColor?: string
-  color?: BoxColors
+  color?: string
   style?: React.CSSProperties
 } & React.HTMLAttributes<HTMLElement>
 

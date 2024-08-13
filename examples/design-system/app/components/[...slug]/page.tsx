@@ -46,10 +46,7 @@ export default async function Component({
   params: { slug: string[] }
 }) {
   const componentsPathname = ['components', ...params.slug]
-  const componentSource = ComponentsCollection.getSource([
-    ...componentsPathname,
-    'index',
-  ])
+  const componentSource = ComponentsCollection.getSource(componentsPathname)
 
   if (!componentSource) {
     notFound()

@@ -24,5 +24,5 @@ export function useHover() {
       onMouseEnter: () => setHover(true),
       onMouseLeave: () => setHover(false),
     },
-  ]
+  ] as const
 }

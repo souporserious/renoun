@@ -2,8 +2,10 @@
 import { createCollection } from 'mdxts/core'
 
 createCollection.setImportMap(
-  `ts:@/components/**/{index,*.examples}.{ts,tsx}`,
+  `ts:@/components/**/{index,*.examples,examples/*}.{ts,tsx}`,
   (slug) => import(`@/components/${slug}.ts`),
+  `tsx:@/components/**/{index,*.examples,examples/*}.{ts,tsx}`,
+  (slug) => import(`@/components/${slug}.tsx`),
   `mdx:@/components/**/README.mdx`,
   (slug) => import(`@/components/${slug}.mdx`)
 )
