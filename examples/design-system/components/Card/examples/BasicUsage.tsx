@@ -1,6 +1,6 @@
-import * as React from 'react'
 import { Card } from 'components'
 
+/** A basic card component */
 export default function BasicUsage() {
   return (
     <Card variant="outlined">

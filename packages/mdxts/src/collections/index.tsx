@@ -7,6 +7,7 @@ import {
   SourceFile,
   type ExportedDeclarations,
 } from 'ts-morph'
+import { getSymbolDescription } from '@tsxmod/utils'
 import globParent from 'glob-parent'
 import parseTitle from 'title'
 
@@ -84,6 +85,9 @@ export interface ExportSource<Value> extends BaseSource {
 
   /** The name formatted as a title. */
   getTitle(): string
+
+  /** The description of the exported source based on the JSDoc comment if it exists. */
+  getDescription(): string | undefined
 
   /** A text representation of the exported source if it is statically analyzable. */
   getText(): string
@@ -223,6 +227,20 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
     }
 
     return this.exportDeclaration.getText()
+  }
+
+  getDescription() {
+    if (!this.exportDeclaration) {
+      throw new Error(
+        `[mdxts] Export could not be statically analyzed from source file at "${this.source.getPath()}".`
+      )
+    }
+
+    const symbol = this.exportDeclaration.getSymbol()
+
+    if (symbol) {
+      return getSymbolDescription(symbol) ?? undefined
+    }
   }
 
   getEnvironment() {

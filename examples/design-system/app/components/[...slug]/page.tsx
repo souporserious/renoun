@@ -23,6 +23,7 @@ async function Preview({
   source: ExportSource<React.ComponentType>
 }) {
   const name = source.getName()
+  const description = source.getDescription()
   const Value = await source.getValue()
   const isUppercase = name[0] === name[0].toUpperCase()
   const isComponent = typeof Value === 'function' && isUppercase
@@ -30,14 +31,27 @@ async function Preview({
   return (
     <div key={name}>
       <h3>{name}</h3>
+      {description ? <p>{description}</p> : null}
       <div
         css={{
+          display: 'grid',
+          gridTemplateRows: isComponent ? 'minmax(16rem, 1fr) auto' : undefined,
           borderRadius: 5,
           boxShadow: '0 0 0 1px #3b4252',
           overflow: 'clip',
         }}
       >
-        {isComponent ? <Value /> : null}
+        {isComponent ? (
+          <div
+            css={{
+              padding: '4rem',
+              margin: 'auto',
+              overflow: 'auto',
+            }}
+          >
+            <Value />
+          </div>
+        ) : null}
         <CodeBlock allowErrors value={source.getText()} language="tsx">
           <pre
             css={{

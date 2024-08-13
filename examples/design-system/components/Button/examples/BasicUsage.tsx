@@ -1,6 +1,6 @@
-import React from 'react'
 import { Box, Button } from 'components'
 
+/** A basic button component */
 export default function BasicUsage() {
   return (
     <Box padding={16} backgroundColor="papayawhip">

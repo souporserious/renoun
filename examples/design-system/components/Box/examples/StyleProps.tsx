@@ -1,5 +1,6 @@
 import { Box } from 'components'
 
+/** Using the `Box` component with style props */
 export default function StyleProps() {
   return (
     <Box padding={16} backgroundColor="tomato">
