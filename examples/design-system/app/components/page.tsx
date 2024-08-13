@@ -7,7 +7,7 @@ export default async function Components() {
   const sources = await ComponentsCollection.getSources({ depth: 1 })
 
   return (
-    <div css={{ display: 'grid', padding: '1rem 0', gap: '1rem' }}>
+    <div css={{ display: 'grid', padding: '5rem 0', gap: '1rem' }}>
       <h1 css={{ margin: 0 }}>Components</h1>
       <ul
         css={{
@@ -27,11 +27,9 @@ export default async function Components() {
 const StyledLink = styled(Link, { display: 'block', padding: '1rem' })
 
 async function ComponentItem({ source }: { source: ComponentSource }) {
-  const path = source.getPath()
-
   return (
-    <li key={path}>
-      <StyledLink href={path}>
+    <li>
+      <StyledLink href={source.getPath()}>
         <h2 css={{ margin: 0 }}>{source.getTitle()}</h2>
       </StyledLink>
     </li>

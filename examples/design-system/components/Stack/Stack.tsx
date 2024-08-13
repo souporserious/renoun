@@ -58,6 +58,7 @@ const alignments = {
   center: 'center',
   end: 'flex-end',
   stretch: 'stretch',
+  baseline: 'baseline',
 }
 
 const distributions = {

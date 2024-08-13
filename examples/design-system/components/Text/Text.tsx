@@ -37,7 +37,7 @@ const textStyles = {
   },
 }
 
-export type DropDollarPrefix<T> = {
+type DropDollarPrefix<T> = {
   [K in keyof T as K extends `$${infer I}` ? I : K]: T[K]
 }
 

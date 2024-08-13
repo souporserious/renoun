@@ -19,7 +19,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <Link href="/">Home</Link>
+        <nav css={{ display: 'flex', gap: '1rem' }}>
+          <Link href="/">Home</Link>
+          <Link href="/components">Components</Link>
+        </nav>
         {children}
       </body>
     </html>
