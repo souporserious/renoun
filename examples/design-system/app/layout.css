@@ -21,3 +21,7 @@ body {
 body > * {
   grid-column: 2;
 }
+
+a {
+  color: inherit;
+}

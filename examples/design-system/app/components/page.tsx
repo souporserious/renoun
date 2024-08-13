@@ -1,28 +1,39 @@
+import { styled } from 'restyle'
 import Link from 'next/link'
 
 import { ComponentsCollection, type ComponentSource } from '@/collections'
 
 export default async function Components() {
+  const sources = await ComponentsCollection.getSources({ depth: 1 })
+
   return (
-    <>
-      <h1>Components</h1>
-      <ul>
-        {(await ComponentsCollection.getSources({ depth: 1 })).map((source) => (
+    <div css={{ display: 'grid', padding: '1rem 0', gap: '1rem' }}>
+      <h1 css={{ margin: 0 }}>Components</h1>
+      <ul
+        css={{
+          listStyle: 'none',
+          padding: 0,
+          margin: 0,
+        }}
+      >
+        {sources.map((source) => (
           <ComponentItem key={source.getPath()} source={source} />
         ))}
       </ul>
-    </>
+    </div>
   )
 }
+
+const StyledLink = styled(Link, { display: 'block', padding: '1rem' })
 
 async function ComponentItem({ source }: { source: ComponentSource }) {
   const path = source.getPath()
 
   return (
     <li key={path}>
-      <Link href={path}>
-        <h2>{source.getName()}</h2>
-      </Link>
+      <StyledLink href={path}>
+        <h2 css={{ margin: 0 }}>{source.getTitle()}</h2>
+      </StyledLink>
     </li>
   )
 }
