@@ -3,7 +3,7 @@
   "name": "@examples/design-system",
   "scripts": {
     "dev": "concurrently \"mdxts watch\" \"next dev\"",
-    "build": "mdxts && next build",
+    "build": "node ../../packages/mdxts/dist/cjs/src/cli/index.js && next build",
     "start": "next start"
   },
   "dependencies": {
