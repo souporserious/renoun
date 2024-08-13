@@ -145,9 +145,6 @@ export interface FileSystemSource<Exports extends FileExports>
 export type CollectionSource<Exports extends FileExports> = {
   /** Get the configured collection title. */
   getTitle(): string | undefined
-
-  /** An array of all source path segments in the collection. */
-  getPathSegments(): Promise<string[][]>
 } & Omit<BaseSourceWithGetters<Exports>, 'getEditPath' | 'getPathSegments'>
 
 /** @internal */

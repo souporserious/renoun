@@ -10,11 +10,9 @@ import { notFound } from 'next/navigation'
 import { ComponentsCollection, type ComponentSource } from '@/collections'
 
 export async function generateStaticParams() {
-  return (await ComponentsCollection.getPathSegments())
-    .map((pathSegments) => ({
-      slug: pathSegments,
-    }))
-    .filter((params) => params.slug.at(-1) !== 'examples')
+  const sources = await ComponentsCollection.getSources()
+
+  return sources.map((source) => ({ slug: source.getPathSegments() }))
 }
 
 async function Export({
