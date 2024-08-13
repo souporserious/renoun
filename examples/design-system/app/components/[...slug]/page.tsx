@@ -64,7 +64,9 @@ export default async function Component({
   const isExamplesPage = params.slug.at(-1) === 'examples'
   const updatedAt = await componentSource.getUpdatedAt()
   const editPath = componentSource.getEditPath()
-  const [previousSource, nextSource] = await componentSource.getSiblings(0)
+  const [previousSource, nextSource] = await componentSource.getSiblings({
+    depth: 0,
+  })
 
   return (
     <>

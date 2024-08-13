@@ -72,9 +72,9 @@ export interface BaseSourceWithGetters<Exports extends FileExports>
    * Retrieves sources in the immediate directory and possibly sub-directories based on the provided `depth`.
    * Defaults to a depth of `Infinity` which will return all sources.
    */
-  getSources<Depth extends number>(
+  getSources<Depth extends number>(options?: {
     depth?: PositiveIntegerOrInfinity<Depth>
-  ): Promise<FileSystemSource<Exports>[]>
+  }): Promise<FileSystemSource<Exports>[]>
 }
 
 /** @internal */
@@ -123,9 +123,9 @@ export interface FileSystemSource<Exports extends FileExports>
   getAuthors(): Promise<string[]>
 
   /** The previous and next sources in the collection if they exist. Defaults to a depth of `Infinity` which considers all descendants. */
-  getSiblings(
+  getSiblings(options?: {
     depth?: number
-  ): Promise<
+  }): Promise<
     [previous?: FileSystemSource<Exports>, next?: FileSystemSource<Exports>]
   >
 
@@ -475,7 +475,7 @@ class Source<AllExports extends FileExports>
     return this.collection.getSource(fullPath)
   }
 
-  async getSources(depth: number = Infinity) {
+  async getSources({ depth = Infinity }: { depth?: number } = {}) {
     if (!isValidDepth(depth)) {
       throw new Error(
         `[mdxts] Invalid depth "${depth}" provided for source at path "${this.getPath()}". Depth must be a positive integer or Infinity.`
@@ -500,9 +500,11 @@ class Source<AllExports extends FileExports>
     }) as FileSystemSource<AllExports>[]
   }
 
-  async getSiblings(
-    depth: number = Infinity
-  ): Promise<
+  async getSiblings({
+    depth = Infinity,
+  }: {
+    depth?: number
+  } = {}): Promise<
     [
       previous?: FileSystemSource<AllExports> | undefined,
       next?: FileSystemSource<AllExports> | undefined,
@@ -833,7 +835,7 @@ class Collection<AllExports extends FileExports>
     return source
   }
 
-  async getSources(depth: number = Infinity) {
+  async getSources({ depth = Infinity }: { depth?: number } = {}) {
     if (!isValidDepth(depth)) {
       throw new Error(
         `[mdxts] Invalid depth "${depth}" provided for collection with file pattern "${this.filePattern}". Depth must be a positive integer or Infinity.`

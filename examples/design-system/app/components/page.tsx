@@ -7,7 +7,7 @@ export default async function Components() {
     <>
       <h1>Components</h1>
       <ul>
-        {(await ComponentsCollection.getSources(1)).map((source) => (
+        {(await ComponentsCollection.getSources({ depth: 1 })).map((source) => (
           <ComponentItem key={source.getPath()} source={source} />
         ))}
       </ul>
