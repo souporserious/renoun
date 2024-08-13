@@ -214,6 +214,11 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
         `[mdxts] Export could not be statically analyzed from source file at "${this.source.getPath()}".`
       )
     }
+
+    if (Node.isVariableDeclaration(this.exportDeclaration)) {
+      return this.exportDeclaration.getParentOrThrow().getText()
+    }
+
     return this.exportDeclaration.getText()
   }
 
