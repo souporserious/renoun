@@ -79,6 +79,12 @@ export interface BaseSourceWithGetters<Exports extends FileExports>
 
 /** @internal */
 export interface ExportSource<Value> extends BaseSource {
+  /** The name of the exported source. If the default export name cannot be derived, the file name will be used. */
+  getName(): string
+
+  /** The name formatted as a title. */
+  getTitle(): string
+
   /** A text representation of the exported source if it is statically analyzable. */
   getText(): string
 
@@ -90,24 +96,6 @@ export interface ExportSource<Value> extends BaseSource {
 
   /** The lines and columns where the export starts and ends. */
   getPosition(): DeclarationPosition
-}
-
-/** @internal */
-export interface DefaultExportSource<Value> extends ExportSource<Value> {
-  /** The name of the source, which can be undefined for default exports. */
-  getName(): string | undefined
-
-  /** The name formatted as a title. */
-  getTitle(): string | undefined
-}
-
-/** @internal */
-export interface NamedExportSource<Value> extends ExportSource<Value> {
-  /** The name of the exported source. */
-  getName(): string
-
-  /** The name formatted as a title. */
-  getTitle(): string
 }
 
 /** @internal */
@@ -142,15 +130,15 @@ export interface FileSystemSource<Exports extends FileExports>
   >
 
   /** The default export source. */
-  getDefaultExport(): DefaultExportSource<Exports['default']>
+  getDefaultExport(): ExportSource<Exports['default']>
 
   /** A single named export source of the file. */
   getNamedExport<Name extends Exclude<keyof Exports, 'default'>>(
     name: Name
-  ): NamedExportSource<Exports[Name]>
+  ): ExportSource<Exports[Name]>
 
-  /** All named export sources of the file. */
-  getNamedExports(): NamedExportSource<Exports[keyof Exports]>[]
+  /** All exported sources of the file. */
+  getExports(): ExportSource<Exports[keyof Exports]>[]
 }
 
 /** @internal */
@@ -213,7 +201,11 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
     protected exportDeclaration: ExportedDeclarations | undefined
   ) {}
 
-  abstract getName(): string | undefined
+  abstract getName(): string
+
+  getTitle() {
+    return parseTitle(this.getName())
+  }
 
   getText() {
     if (!this.exportDeclaration) {
@@ -313,17 +305,19 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
 
 class DefaultExport<AllExports extends FileExports>
   extends Export<AllExports['default'], AllExports>
-  implements DefaultExportSource<AllExports['default']>
+  implements ExportSource<AllExports['default']>
 {
   getName() {
-    return this.exportDeclaration
+    const name = this.exportDeclaration
       ? getDeclarationName(this.exportDeclaration) || this.source.getName()
       : undefined
-  }
 
-  getTitle() {
-    const name = this.getName()
-    return name ? parseTitle(name) : undefined
+    // Use the source name as the default export name if it is not defined
+    if (name === undefined) {
+      return this.source.getName()
+    }
+
+    return name
   }
 }
 
@@ -332,7 +326,7 @@ class NamedExport<
     Name extends Exclude<keyof AllExports, 'default'>,
   >
   extends Export<AllExports[Name], AllExports>
-  implements NamedExportSource<AllExports[Name]>
+  implements ExportSource<AllExports[Name]>
 {
   constructor(
     source: Source<AllExports>,
@@ -344,10 +338,6 @@ class NamedExport<
 
   getName() {
     return this.exportName as string
-  }
-
-  getTitle() {
-    return parseTitle(this.getName())
   }
 }
 
@@ -532,7 +522,7 @@ class Source<AllExports extends FileExports>
     return [previousSource, nextSource]
   }
 
-  getDefaultExport(): DefaultExportSource<AllExports['default']> {
+  getDefaultExport(): ExportSource<AllExports['default']> {
     const sourceFile = this.sourceFileOrDirectory
 
     if (sourceFile instanceof Directory) {
@@ -583,7 +573,7 @@ You can fix this error by taking one of the following actions:
     return new NamedExport<AllExports, Name>(this, name, exportDeclaration)
   }
 
-  getNamedExports() {
+  getExports() {
     let sourceFile: SourceFile
 
     if (this.sourceFileOrDirectory instanceof Directory) {
@@ -600,6 +590,11 @@ You can fix this error by taking one of the following actions:
 
     return sourceFile.getExportSymbols().map((symbol) => {
       const name = symbol.getName()
+
+      if (name === 'default') {
+        return this.getDefaultExport()
+      }
+
       return this.getNamedExport(name as Exclude<keyof AllExports, 'default'>)
     })
   }

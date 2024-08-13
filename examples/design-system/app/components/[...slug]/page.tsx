@@ -2,7 +2,7 @@ import { CodeBlock } from 'mdxts/components'
 import {
   createCollection,
   type MDXContent,
-  type NamedExportSource,
+  type ExportSource,
 } from 'mdxts/collections'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -16,18 +16,18 @@ export async function generateStaticParams() {
 }
 
 async function ComponentExport({
-  namedExport,
+  exportSource,
 }: {
-  namedExport: NamedExportSource<React.ComponentType>
+  exportSource: ExportSource<React.ComponentType>
 }) {
-  const name = namedExport.getName()
-  const Component = await namedExport.getValue().catch(() => null)
+  const name = exportSource.getName()
+  const Component = await exportSource.getValue().catch(() => null)
 
   return (
     <div key={name}>
       <h3>{name}</h3>
       {Component ? <Component /> : null}
-      <CodeBlock allowErrors value={namedExport.getText()} language="tsx" />
+      <CodeBlock allowErrors value={exportSource.getText()} language="tsx" />
     </div>
   )
 }
@@ -50,24 +50,23 @@ export default async function Component({
     ...componentsPathname,
     'index',
   ])
-  const readmeSource = ComponentsReadmeCollection.getSource([
-    ...componentsPathname,
-    'readme',
-  ])
 
   if (!componentSource) {
     notFound()
   }
 
-  const examplesSource = ComponentsCollection.getSource([
+  const Readme = await ComponentsReadmeCollection.getSource([
     ...componentsPathname,
-    'examples',
+    'readme',
   ])
-  const Readme = await readmeSource?.getDefaultExport().getValue()
-  const [previousSource, nextSource] = await componentSource.getSiblings(0)
+    ?.getDefaultExport()
+    .getValue()
+  const examplesSource = componentSource.getSource('examples')
+  const examples = await examplesSource?.getSources()
   const isExamplesPage = params.slug.at(-1) === 'examples'
   const updatedAt = await componentSource.getUpdatedAt()
   const editPath = componentSource.getEditPath()
+  const [previousSource, nextSource] = await componentSource.getSiblings(0)
 
   return (
     <>
@@ -77,22 +76,26 @@ export default async function Component({
       {Readme ? <Readme /> : null}
 
       <h2>Exports</h2>
-      {componentSource.getNamedExports().map((namedExport) => (
+      {componentSource.getExports().map((exportSource) => (
         <ComponentExport
-          key={namedExport.getName()}
-          namedExport={namedExport}
+          key={exportSource.getName()}
+          exportSource={exportSource}
         />
       ))}
 
-      {isExamplesPage || !examplesSource ? null : (
+      {isExamplesPage || !examples ? null : (
         <>
           <h2>Examples</h2>
-          {examplesSource.getNamedExports().map((namedExport) => (
-            <ComponentExport
-              key={namedExport.getName()}
-              namedExport={namedExport}
-            />
-          ))}
+          {examples.map((examplesSource) =>
+            examplesSource
+              .getExports()
+              .map((exportSource) => (
+                <ComponentExport
+                  key={exportSource.getName()}
+                  exportSource={exportSource}
+                />
+              ))
+          )}
         </>
       )}
 
