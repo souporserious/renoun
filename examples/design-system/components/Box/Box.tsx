@@ -1,38 +1,13 @@
-import * as React from 'react'
+import { styled } from 'restyle'
 
 export type BoxProps = {
-  as?: React.ElementType
-  children?: React.ReactNode
   padding?: number | string
   backgroundColor?: string
   color?: string
-  style?: React.CSSProperties
-} & React.HTMLAttributes<HTMLElement>
+}
 
-export const Box = React.forwardRef(function Box(
-  {
-    as: Element = 'div',
-    padding,
-    backgroundColor,
-    color,
-    children,
-    style,
-    ...props
-  }: BoxProps,
-  ref: React.Ref<HTMLElement>
-) {
-  return (
-    <Element
-      ref={ref}
-      {...props}
-      style={{
-        ...style,
-        padding,
-        backgroundColor,
-        color,
-      }}
-    >
-      {children}
-    </Element>
-  )
-})
+export const Box = styled('div', (props: BoxProps) => ({
+  padding: props.padding,
+  backgroundColor: props.backgroundColor,
+  color: props.color,
+}))

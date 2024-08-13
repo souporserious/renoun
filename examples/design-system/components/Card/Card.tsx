@@ -1,10 +1,8 @@
-import * as React from 'react'
-import { Box } from '../Box'
+import { styled } from 'restyle'
 
 export type CardProps = {
-  children: React.ReactNode
+  padding?: React.CSSProperties['padding']
   variant: 'default' | 'outlined' | 'elevated' | 'flat'
-  style?: React.CSSProperties
 }
 
 const cardVariants = {
@@ -25,24 +23,11 @@ const cardVariants = {
   },
 }
 
-export function Card({
-  variant = 'default',
-  children,
-  style,
-  ...props
-}: CardProps) {
+export const Card = styled('div', ({ padding, variant }: CardProps) => {
   const variantStyle = cardVariants[variant]
 
-  return (
-    <Box
-      {...props}
-      padding="1rem"
-      style={{
-        ...variantStyle,
-        ...style,
-      }}
-    >
-      {children}
-    </Box>
-  )
-}
+  return {
+    padding,
+    ...variantStyle,
+  }
+})

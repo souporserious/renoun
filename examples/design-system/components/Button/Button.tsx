@@ -1,5 +1,4 @@
-import * as React from 'react'
-import { Box } from '../Box'
+import { styled } from 'restyle'
 
 export const variants = {
   primary: {
@@ -20,30 +19,16 @@ export type ButtonProps = {
   style?: React.CSSProperties
 }
 
-/**
- * Button allows users to take specific actions.
- */
-export function Button({
-  variant = 'primary',
-  backgroundColor: propsBackgroundColor,
-  color: propsColor,
-  children,
-  style,
-  ...props
-}: ButtonProps) {
-  const { backgroundColor, color } = variants[variant] || {}
-  return (
-    <Box
-      as="button"
-      {...props}
-      style={{
-        ...style,
-        appearance: 'none',
-        backgroundColor: propsBackgroundColor || backgroundColor,
-        color: propsColor || color,
-      }}
-    >
-      {children}
-    </Box>
-  )
-}
+/** Allow users to take specific actions. */
+export const Button = styled(
+  'button',
+  ({ backgroundColor, color, variant = 'primary' }: ButtonProps) => {
+    const variantProps = variants[variant] || {}
+
+    return {
+      appearance: 'none',
+      backgroundColor: backgroundColor || variantProps.backgroundColor,
+      color: color || variantProps.color,
+    }
+  }
+)

@@ -48,6 +48,7 @@ type StyledTextProps = {
   $alignment?: 'start' | 'center' | 'end'
   $width?: string | number
   $lineHeight?: string
+  $color?: string
 }
 
 export type TextProps = {
@@ -71,6 +72,7 @@ export const Text = ({
   alignment,
   width,
   lineHeight,
+  color,
   children,
 }: TextProps) => {
   const hasTextAncestor = useContext(TextAncestorContext)
@@ -92,6 +94,7 @@ export const Text = ({
         $alignment={alignment}
         $lineHeight={lineHeight}
         $width={width}
+        $color={color}
         $variant={variant}
       >
         {children}
@@ -106,12 +109,14 @@ const StyledText = styled(
     $alignment,
     $lineHeight,
     $width,
+    $color,
     $variant = 'body1',
   }: StyledTextProps) => {
     const styles = {
       margin: 0,
       textAlign: $alignment,
       width: $width,
+      color: $color,
       ...(textStyles[$variant] ?? {}),
     } as CSSObject
 
