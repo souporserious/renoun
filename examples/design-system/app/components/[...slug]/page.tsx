@@ -143,18 +143,16 @@ async function SiblingLink({
   source: ComponentSource
   direction: 'previous' | 'next'
 }) {
-  const path = source.getPath()
-
   return (
     <Link
-      href={path}
+      href={source.getPath()}
       style={{
         gridColumn: direction === 'previous' ? 1 : 2,
         textAlign: direction === 'previous' ? 'left' : 'right',
       }}
     >
       <div>{direction === 'previous' ? 'Previous' : 'Next'}</div>
-      {path}
+      {source.getTitle()}
     </Link>
   )
 }
