@@ -1,5 +1,25 @@
 # mdxts
 
+## 1.6.2
+
+### Patch Changes
+
+- 2ad7cee: Moves to an options object for `getSources` and `getSiblings`.
+
+  ```diff
+  - source.getSources(1);
+  + source.getSources({ depth: 1 });
+
+  - source.getSiblings(0);
+  + source.getSiblings({ depth: 0 });
+  ```
+
+- 6b52578: Uses directory name for collection source if it is an index or readme file.
+- ff66a21: Returns entire variable declaration for `getText` method.
+- c0d7a2d: Adds `getPathSegments` to collections.
+- 699218b: Allow passing `index` or `readme` to `getSource` for collections.
+- 1db78ec: Renames `getNamedExports` to `getExports` to better reflect that the default export is included.
+
 ## 1.6.1
 
 ### Patch Changes
