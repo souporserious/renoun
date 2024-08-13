@@ -544,13 +544,14 @@ class Source<AllExports extends FileExports>
 
     if (sourceFile instanceof Directory) {
       const baseName = sourceFile.getBaseName()
+      const validExtensions = Array.from(this.collection.validExtensions)
 
       throw new Error(
         `[mdxts] Directory "${baseName}" at path "${this.getPath()}" does not have a default export.
 You can fix this error by taking one of the following actions:
   - Catch and handle this error in your code.
   - Add an index or readme file to the ${baseName} directory.
-    . Ensure the file has a valid extension based on this collection's file pattern "${this.collection.filePattern}".
+    . Ensure the file has a valid extension based on this collection's file pattern "${validExtensions.join(', ')}".
     . Define a default export in the file.`
       )
     }
@@ -571,13 +572,14 @@ You can fix this error by taking one of the following actions:
 
     if (sourceFile instanceof Directory) {
       const baseName = sourceFile.getBaseName()
+      const validExtensions = Array.from(this.collection.validExtensions)
 
       throw new Error(
         `[mdxts] Directory "${baseName}" at path "${this.getPath()}" does not have a named export for "${name.toString()}".
 You can fix this error by taking one of the following actions:
   - Catch and handle this error in your code.
   - Add an index or readme file to the directory.
-    . Ensure the file has a valid extension based on this collection's file pattern "${this.collection.filePattern}".
+    . Ensure the file has a valid extension based on this collection's file pattern "${validExtensions.join(', ')}".
     . Define a named export of "${name.toString()}" in the file.`
       )
     }
@@ -600,8 +602,17 @@ You can fix this error by taking one of the following actions:
     }
 
     if (!sourceFile) {
+      const baseName = this.sourceFileOrDirectory.getBaseName()
+      const validExtensions = Array.from(this.collection.validExtensions)
+
       throw new Error(
-        `[mdxts] Source file not found for directory at path "${this.getPath()}".`
+        `[mdxts] Directory "${baseName}" at path "${this.getPath()}" does not have an associated source file.
+You can fix this error by taking one of the following actions:
+  - Catch and handle this error in your code where "getExports" is being called.
+  - Filter the directory out from the sources e.g. (await ComponentsCollection.getSources()).filter(source => !source.isDirectory()).
+  - Add an index or readme file to the directory.
+    . Ensure the file has a valid extension based on this collection's file pattern "${validExtensions.join(', ')}".
+    . Define a default or named export in the file.`
       )
     }
 
