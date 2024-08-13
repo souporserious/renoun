@@ -1,4 +1,4 @@
-import { CodeBlock } from 'mdxts/components'
+import { CodeBlock, Tokens } from 'mdxts/components'
 import {
   createCollection,
   type MDXContent,
@@ -17,7 +17,7 @@ export async function generateStaticParams() {
     .map((source) => ({ slug: source.getPathSegments() }))
 }
 
-async function Export({
+async function Preview({
   source,
 }: {
   source: ExportSource<React.ComponentType>
@@ -30,8 +30,30 @@ async function Export({
   return (
     <div key={name}>
       <h3>{name}</h3>
-      {isComponent ? <Value /> : null}
-      <CodeBlock allowErrors value={source.getText()} language="tsx" />
+      <div
+        css={{
+          borderRadius: 5,
+          boxShadow: '0 0 0 1px #3b4252',
+          overflow: 'clip',
+        }}
+      >
+        {isComponent ? <Value /> : null}
+        <CodeBlock allowErrors value={source.getText()} language="tsx">
+          <pre
+            css={{
+              position: 'relative',
+              whiteSpace: 'pre',
+              wordWrap: 'break-word',
+              padding: '0.5lh',
+              margin: 0,
+              overflow: 'auto',
+              backgroundColor: '#2e3440',
+            }}
+          >
+            <Tokens />
+          </pre>
+        </CodeBlock>
+      </div>
     </div>
   )
 }
@@ -96,7 +118,7 @@ export default async function Component({
             examplesSource
               .getExports()
               .map((exportSource) => (
-                <Export key={exportSource.getName()} source={exportSource} />
+                <Preview key={exportSource.getName()} source={exportSource} />
               ))
           )}
         </>
