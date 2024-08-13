@@ -55,12 +55,11 @@ export default async function Component({
     notFound()
   }
 
-  const Readme = await ComponentsReadmeCollection.getSource([
+  const readmeSource = ComponentsReadmeCollection.getSource([
     ...componentsPathname,
     'readme',
   ])
-    ?.getDefaultExport()
-    .getValue()
+  const Readme = await readmeSource?.getDefaultExport().getValue()
   const examplesSource = componentSource.getSource('examples')
   const examples = await examplesSource?.getSources()
   const isExamplesPage = params.slug.at(-1) === 'examples'

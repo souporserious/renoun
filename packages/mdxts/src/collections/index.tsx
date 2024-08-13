@@ -198,7 +198,8 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
 {
   constructor(
     protected source: Source<AllExports>,
-    protected exportDeclaration: ExportedDeclarations | undefined
+    protected exportDeclaration: ExportedDeclarations | undefined,
+    protected isDefaultExport: boolean = false
   ) {}
 
   abstract getName(): string
@@ -269,7 +270,7 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
 
   async getValue(): Promise<Value> {
     const moduleExports = await this.source.getModuleExports()
-    const name = this.getName() || 'default'
+    const name = this.isDefaultExport ? 'default' : this.getName()
     const exportValue = moduleExports![name]
 
     /* Enable hot module reloading in development for Next.js MDX content. */
@@ -307,6 +308,13 @@ class DefaultExport<AllExports extends FileExports>
   extends Export<AllExports['default'], AllExports>
   implements ExportSource<AllExports['default']>
 {
+  constructor(
+    source: Source<AllExports>,
+    exportDeclaration: ExportedDeclarations | undefined
+  ) {
+    super(source, exportDeclaration, true)
+  }
+
   getName() {
     const name = this.exportDeclaration
       ? getDeclarationName(this.exportDeclaration) || this.source.getName()
@@ -344,12 +352,14 @@ class NamedExport<
 class Source<AllExports extends FileExports>
   implements FileSystemSource<AllExports>
 {
+  #sourcePath: string
+
   constructor(
     private collection: Collection<AllExports>,
-    private sourceFileOrDirectory: SourceFile | Directory,
-    private sourcePath: string,
-    private exportedDeclarations: ReadonlyMap<string, ExportedDeclarations[]>
-  ) {}
+    private sourceFileOrDirectory: SourceFile | Directory
+  ) {
+    this.#sourcePath = getFileSystemSourcePath(this.sourceFileOrDirectory)
+  }
 
   getName() {
     const baseName =
@@ -383,11 +393,11 @@ class Source<AllExports extends FileExports>
   }
 
   getPath() {
-    const calculatedPath = this.collection.sourcePathMap.get(this.sourcePath)
+    const calculatedPath = this.collection.sourcePathMap.get(this.#sourcePath)
 
     if (!calculatedPath) {
       throw new Error(
-        `[mdxts] Could not calculate depth. Source path not found for file path "${this.sourcePath}".`
+        `[mdxts] Could not calculate depth. Source path not found for file path "${this.#sourcePath}".`
       )
     }
 
@@ -417,7 +427,7 @@ class Source<AllExports extends FileExports>
   }
 
   getEditPath() {
-    return getEditPath(this.sourcePath)
+    return getEditPath(this.#sourcePath)
   }
 
   getDepth() {
@@ -425,11 +435,11 @@ class Source<AllExports extends FileExports>
   }
 
   getOrder() {
-    const order = this.collection.sourceFilesOrderMap.get(this.sourcePath)
+    const order = this.collection.sourceFilesOrderMap.get(this.#sourcePath)
 
     if (order === undefined) {
       throw new Error(
-        `[mdxts] Source file order not found for file path "${this.sourcePath}". If you see this error, please file an issue.`
+        `[mdxts] Source file order not found for file path "${this.#sourcePath}". If you see this error, please file an issue.`
       )
     }
 
@@ -437,17 +447,17 @@ class Source<AllExports extends FileExports>
   }
 
   async getCreatedAt() {
-    const gitMetadata = await getGitMetadata(this.sourcePath)
+    const gitMetadata = await getGitMetadata(this.#sourcePath)
     return gitMetadata.createdAt ? new Date(gitMetadata.createdAt) : undefined
   }
 
   async getUpdatedAt() {
-    const gitMetadata = await getGitMetadata(this.sourcePath)
+    const gitMetadata = await getGitMetadata(this.#sourcePath)
     return gitMetadata.updatedAt ? new Date(gitMetadata.updatedAt) : undefined
   }
 
   async getAuthors() {
-    const gitMetadata = await getGitMetadata(this.sourcePath)
+    const gitMetadata = await getGitMetadata(this.#sourcePath)
     return gitMetadata.authors
   }
 
@@ -539,7 +549,7 @@ You can fix this error by taking one of the following actions:
     }
 
     const defaultDeclaration = getExportedDeclaration(
-      this.exportedDeclarations,
+      sourceFile.getExportedDeclarations(),
       'default'
     )
 
@@ -566,7 +576,7 @@ You can fix this error by taking one of the following actions:
     }
 
     const exportDeclaration = getExportedDeclaration(
-      this.exportedDeclarations,
+      sourceFile.getExportedDeclarations(),
       exportName
     )
 
@@ -604,7 +614,7 @@ You can fix this error by taking one of the following actions:
       return this.sourceFileOrDirectory
     }
     throw new Error(
-      `[mdxts] Expected a source file but got a directory at "${this.sourcePath}".`
+      `[mdxts] Expected a source file but got a directory at "${this.#sourcePath}".`
     )
   }
 
@@ -803,18 +813,7 @@ class Collection<AllExports extends FileExports>
       return undefined
     }
 
-    const sourcePath = getFileSystemSourcePath(sourceFileOrDirectory)
-    const isSourceFile = sourceFileOrDirectory instanceof SourceFile
-    const exportedDeclarations = isSourceFile
-      ? sourceFileOrDirectory.getExportedDeclarations()
-      : new Map()
-
-    const source = new Source(
-      this,
-      sourceFileOrDirectory,
-      sourcePath,
-      exportedDeclarations
-    )
+    const source = new Source(this, sourceFileOrDirectory)
 
     this.#sources.set(pathString, source)
 
