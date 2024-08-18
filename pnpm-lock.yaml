@@ -165,8 +165,8 @@ importers:
         specifier: ^5.0.0
         version: 5.0.0
       restyle:
-        specifier: ^1.5.0
-        version: 1.5.0(react@18.3.1)
+        specifier: ^2.0.2
+        version: 2.0.2(react@18.3.1)
       typescript:
         specifier: ^5.4.5
         version: 5.4.5
@@ -291,8 +291,8 @@ importers:
         specifier: ^4.0.0
         version: 4.0.0
       restyle:
-        specifier: ^1.5.0
-        version: 1.5.0(react@18.3.1)
+        specifier: ^2.0.2
+        version: 2.0.2(react@18.3.1)
       server-only:
         specifier: 0.0.1
         version: 0.0.1
@@ -433,8 +433,8 @@ importers:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
       restyle:
-        specifier: ^1.5.0
-        version: 1.5.0(react@18.3.1)
+        specifier: ^2.0.2
+        version: 2.0.2(react@18.3.1)
 
 packages:
 
@@ -7583,8 +7583,8 @@ packages:
       lowercase-keys: 2.0.0
     dev: true
 
-  /restyle@1.5.0(react@18.3.1):
-    resolution: {integrity: sha512-MW83Cjn/bw8EgWEBTU3cmHsdE3odaVl0jL3CduPWN+lQr7oMiDQvVizmvOmZ0tqjpfluoxa0Pb67dxXkN4HU1Q==}
+  /restyle@2.0.2(react@18.3.1):
+    resolution: {integrity: sha512-dK9+ptf7r+d8WF2/o68SMy7ux/SujJc5GCFKOeTjSE5btjhKRjWYICJ/YfPbVygSNXDJ7Td69PfBM0vRwOjxyw==}
     peerDependencies:
       react: ^18.0.0
     dependencies:

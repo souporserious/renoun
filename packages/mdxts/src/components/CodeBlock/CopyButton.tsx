@@ -1,6 +1,6 @@
 'use client'
 import React, { useContext, useState } from 'react'
-import { css, type CSSProp } from 'restyle'
+import { css, type CSSObject } from 'restyle'
 
 import { PreActiveContext } from './Pre'
 import { CopyButtonContext } from './contexts'
@@ -13,7 +13,7 @@ export function CopyButton({
   ...props
 }: {
   value?: string
-  css?: CSSProp
+  css?: CSSObject
 } & React.ComponentProps<'button'>) {
   const contextValue = useContext(CopyButtonContext)
   const value = valueProp || contextValue
@@ -26,7 +26,7 @@ export function CopyButton({
 
   const preActive = useContext(PreActiveContext)
   const [state, setState] = useState<'idle' | 'not-allowed' | 'copied'>('idle')
-  const [classNames, styleElements] = css({
+  const [classNames, Styles] = css({
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -42,7 +42,7 @@ export function CopyButton({
   })
 
   if (state === 'idle' && preActive === false) {
-    return styleElements
+    return null
   }
 
   return (
@@ -116,7 +116,7 @@ export function CopyButton({
           />
         ) : null}
       </svg>
-      {styleElements}
+      <Styles />
     </button>
   )
 }

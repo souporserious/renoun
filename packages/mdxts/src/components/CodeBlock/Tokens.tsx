@@ -1,5 +1,5 @@
 import React, { Fragment } from 'react'
-import { css, type CSSProp } from 'restyle'
+import { css, type CSSObject } from 'restyle/css'
 
 import { getThemeColors } from '../../utils/get-theme-colors'
 import { getContext } from '../../utils/context'
@@ -73,7 +73,7 @@ export async function Tokens({
             fontWeight: token.fontWeight,
             textDecoration: token.textDecoration,
             color: token.isBaseColor ? undefined : token.color,
-          } satisfies CSSProp
+          } satisfies CSSObject
 
           if (hasSymbolMeta) {
             const diagnosticStyles = {
@@ -81,7 +81,7 @@ export async function Tokens({
               backgroundRepeat: 'repeat-x',
               backgroundPosition: 'bottom left',
             }
-            const [symbolClassName, symbolStyles] = css({
+            const [symbolClassName, Styles] = css({
               ...tokenStyles,
               ...(token.diagnostics && diagnosticStyles),
             })
@@ -106,12 +106,12 @@ export async function Tokens({
                 style={style.token}
               >
                 {token.value}
-                {symbolStyles}
+                <Styles />
               </Symbol>
             )
           }
 
-          const [classNames, styles] = css(tokenStyles)
+          const [classNames, Styles] = css(tokenStyles)
 
           return (
             <span
@@ -124,7 +124,7 @@ export async function Tokens({
               style={style.token}
             >
               {token.value}
-              {styles}
+              <Styles />
             </span>
           )
         })

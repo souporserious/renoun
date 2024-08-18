@@ -1,5 +1,5 @@
 import React, { Fragment, Suspense } from 'react'
-import { css, type CSSProp } from 'restyle'
+import { css, type CSSObject } from 'restyle'
 import 'server-only'
 
 import { analyzeSourceText } from '../project'
@@ -24,7 +24,7 @@ export type CodeInlineProps = {
   paddingY?: string
 
   /** CSS styles to apply to the wrapping element. */
-  css?: CSSProp
+  css?: CSSObject
 
   /** Class name to apply to the wrapping element. */
   className?: string
@@ -38,7 +38,7 @@ function Token({ token }: { token: Token }) {
     return token.value
   }
 
-  const [classNames, styles] = css({
+  const [classNames, Styles] = css({
     fontStyle: token.fontStyle,
     fontWeight: token.fontWeight,
     textDecoration: token.textDecoration,
@@ -48,7 +48,7 @@ function Token({ token }: { token: Token }) {
   return (
     <span className={classNames}>
       {token.value}
-      {styles}
+      <Styles />
     </span>
   )
 }
@@ -69,7 +69,7 @@ async function CodeInlineAsync({
     language,
   })
   const theme = await getThemeColors()
-  const [classNames, styles] = css({
+  const [classNames, Styles] = css({
     padding: `${paddingY} ${paddingX} 0`,
     paddingRight: allowCopy ? `calc(1ch + 1lh + ${paddingX})` : undefined,
     gap: '1ch',
@@ -97,7 +97,6 @@ async function CodeInlineAsync({
 
   return (
     <>
-      {styles}
       <code
         className={className ? `${classNames} ${className}` : classNames}
         style={style}
@@ -121,6 +120,7 @@ async function CodeInlineAsync({
           />
         ) : null}
       </code>
+      <Styles />
     </>
   )
 }

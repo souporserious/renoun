@@ -1,5 +1,5 @@
 import React from 'react'
-import { css, type CSSProp } from 'restyle'
+import { css, type CSSObject } from 'restyle'
 
 function getGitProviderFromUrl(gitSource: string) {
   const url = new URL(gitSource)
@@ -108,7 +108,7 @@ export function GitProviderLink({
   style,
   children,
 }: {
-  css?: CSSProp
+  css?: CSSObject
   className?: string
   style?: React.CSSProperties
   children?: React.ReactNode
@@ -119,7 +119,7 @@ export function GitProviderLink({
     throwGitSourceError('GitProviderLink')
   }
 
-  let styles = { display: 'flex', ...cssProp } satisfies CSSProp
+  let styles = { display: 'flex', ...cssProp } satisfies CSSObject
   let childrenToRender = children
 
   if (childrenToRender === undefined) {
@@ -127,7 +127,7 @@ export function GitProviderLink({
     childrenToRender = <GitProviderLogo width="100%" height="100%" />
   }
 
-  const [classNames, styleElements] = css(styles)
+  const [classNames, Styles] = css(styles)
 
   return (
     <a
@@ -138,7 +138,7 @@ export function GitProviderLink({
       style={style}
     >
       {childrenToRender}
-      {styleElements}
+      <Styles />
     </a>
   )
 }
