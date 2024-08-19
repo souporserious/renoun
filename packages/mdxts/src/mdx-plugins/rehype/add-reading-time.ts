@@ -1,14 +1,12 @@
-import type { Root } from 'hast'
+import type { Parent } from 'unist'
 import type { VFile } from 'vfile'
 
 export function addReadingTime() {
-  return async (tree: Root, file: VFile) => {
+  return async (tree: Parent, file: VFile) => {
     const { valueToEstree } = await import('estree-util-value-to-estree')
 
     tree.children.unshift({
-      // @ts-expect-error
       type: 'mdxjsEsm',
-      value: '',
       data: {
         estree: {
           type: 'Program',

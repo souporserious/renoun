@@ -1,20 +1,32 @@
-import type { Element, Root } from 'hast'
+import type { Parent } from 'unist'
+import type { Element, Properties } from 'hast'
 
 import { getClassNameMetadata } from '../../utils/get-class-name-metadata'
 
+interface CodeMetaElement extends Element {
+  data?: {
+    meta?: string
+  }
+  properties: Properties & {
+    className?: string | string[]
+    filename?: string
+    language?: string
+  }
+}
+
 /** Parses `CodeBlock` and `CodeInline` props and adds them to `pre` and `code` element properties respectively. */
 export function addCodeMetaProps() {
-  return async (tree: Root) => {
+  return async (tree: Parent) => {
     const { visit, SKIP } = await import('unist-util-visit')
     const { toString } = await import('hast-util-to-string')
     const { bundledLanguages } = await import('shiki/bundle/web')
 
-    visit(tree, 'element', (element: Element) => {
+    visit(tree, 'element', (element: CodeMetaElement) => {
       if (element.tagName === 'pre') {
-        const codeNode = element.children[0]
+        const codeNode = element.children[0] as CodeMetaElement
 
         // Map meta string to props
-        const meta = (codeNode.data as any)?.meta as string | undefined
+        const meta = codeNode.data?.meta
         const props: Record<string, any> = {}
 
         meta?.split(' ').forEach((prop) => {
