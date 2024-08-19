@@ -95,7 +95,7 @@ export async function GET(
   let isPost = false
 
   if (!data) {
-    data = (await allPosts.get(slug))!
+    data = (await allPosts.get(slug))! as any
     isPost = true
   }
 
