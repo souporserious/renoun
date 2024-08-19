@@ -1,5 +1,12 @@
 # mdxts
 
+## 1.6.4
+
+### Patch Changes
+
+- b350e9f: Remove unused dependencies and fix rehype types.
+- d0ab9a3: Update dependencies.
+
 ## 1.6.3
 
 ### Patch Changes
