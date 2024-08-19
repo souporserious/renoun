@@ -1,5 +1,14 @@
 # mdxts
 
+## 1.6.3
+
+### Patch Changes
+
+- 732799f: Upgrade restyle to `2.0.2`.
+- 4ecd7b5: Adds `getDescription` method to export source.
+- e5fc9bf: Adds `isFile` and `isDirectory` helper methods to collection source.
+- 7e461f0: Removes `getPathSegments` from collection in favor of using source `getPathSegments`.
+
 ## 1.6.2
 
 ### Patch Changes
