@@ -2,7 +2,7 @@
 import type { ReactNode } from 'react'
 import { createContext, useContext } from 'react'
 import { styled } from 'restyle'
-import type { CSSObject } from 'restyle/dist/types'
+import type { CSSObject } from 'restyle'
 
 const textStyles = {
   heading1: {
