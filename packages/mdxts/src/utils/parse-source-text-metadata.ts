@@ -2,7 +2,6 @@ import crypto from 'node:crypto'
 import { join, posix, isAbsolute } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import { Project, SourceFile } from 'ts-morph'
-import { format, resolveConfig } from 'prettier'
 
 import { getLanguage, type Languages } from './get-language'
 import { isJsxOnly } from './is-jsx-only'
@@ -107,12 +106,14 @@ export async function parseSourceTextMetadata({
   }
 
   // Format JavaScript code blocks.
+  // TODO: reimplement formatting that allows for other formatters (this should move to .mdxts directory config e.g. `getFormatter`)
   if (isJavaScriptLikeLanguage || isHtmlLanguage) {
     try {
-      const config = (await resolveConfig(filename)) || {}
-      config.filepath = filename
-      config.printWidth = 80
-      finalValue = await format(finalValue, config)
+      // const { format, resolveConfig } = await import('prettier')
+      // const config = (await resolveConfig(filename)) || {}
+      // config.filepath = filename
+      // config.printWidth = 80
+      // finalValue = await format(finalValue, config)
     } catch (error) {
       // Ignore formatting errors.
     }
