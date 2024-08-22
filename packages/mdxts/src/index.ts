@@ -140,6 +140,8 @@ export type CreateSourceResult<
 /**
  * Loads content and metadata related to MDX and TypeScript files.
  *
+ * @deprecated Use `import { createCollection } from 'mdxts'` instead.
+ *
  * @example
  * export const allDocs = createSource('./docs/*.mdx', { baseDirectory: 'docs' })
  * export const allComponents = createSource('./components/**\/index.ts')
