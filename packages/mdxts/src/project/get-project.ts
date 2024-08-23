@@ -93,7 +93,13 @@ export async function getProject(options?: ProjectOptions) {
         }
         // The file contents were changed
         else if (eventType === 'change') {
-          project.getSourceFileOrThrow(filename).refreshFromFileSystem()
+          const previousSourceFile = project.getSourceFile(filename)
+
+          if (previousSourceFile) {
+            previousSourceFile.refreshFromFileSystem()
+          } else {
+            project.addSourceFileAtPath(filename)
+          }
         }
       }
     )
