@@ -1,14 +1,38 @@
 import { watch, type FSWatcher } from 'node:fs'
 
+import { generateCollectionImportMap } from '../collections/import-maps'
 import { analyzeSourceText } from '../utils/analyze-source-text'
 import { WebSocketServer } from './rpc/server'
-import { getProject } from './get-project'
+import { getProject, getProjects } from './get-project'
 import { ProjectOptions } from './types'
 
+const DEFAULT_IGNORED_PATHS = [
+  'node_modules',
+  'dist',
+  'out',
+  '.mdxts',
+  '.next',
+  '.turbo',
+]
 const watchers = new Map<string, FSWatcher>()
 
 /** Create a WebSocket server. */
 export function createServer() {
+  /* Update the collection import maps when files change. */
+  watch(process.cwd(), { recursive: true }, (_, filename) => {
+    if (
+      DEFAULT_IGNORED_PATHS.some((ignoredFile) =>
+        filename?.startsWith(ignoredFile)
+      )
+    ) {
+      return
+    }
+
+    for (const project of getProjects().values()) {
+      generateCollectionImportMap(project)
+    }
+  })
+
   const server = new WebSocketServer()
 
   server.registerMethod(
@@ -19,7 +43,7 @@ export function createServer() {
     }: Parameters<typeof analyzeSourceText>[0] & {
       projectOptions?: ProjectOptions
     }) => {
-      const project = getProject(projectOptions)
+      const project = await getProject(projectOptions)
 
       return analyzeSourceText({
         ...options,

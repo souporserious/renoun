@@ -28,7 +28,7 @@ export async function analyzeSourceText(
 
   /* Switch to synchronous analysis when building for production to prevent timeouts. */
   const { projectOptions, ...analyzeOptions } = options
-  const project = getProject(projectOptions)
+  const project = await getProject(projectOptions)
 
   return import('../utils/analyze-source-text').then(
     ({ analyzeSourceText }) => {
