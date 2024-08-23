@@ -14,7 +14,7 @@ export interface WebSocketResponse {
 
 export interface WebSocketNotification {
   method: string
-  params: any
+  params?: any
 }
 
 export class WebSocketServer {

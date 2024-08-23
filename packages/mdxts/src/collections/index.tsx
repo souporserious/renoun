@@ -299,30 +299,26 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
     const name = this.isDefaultExport ? 'default' : this.getName()
     const exportValue = moduleExports![name]
 
-    /* Enable hot module reloading in development for Next.js MDX content. */
-    if (process.env.NODE_ENV === 'development' && name === 'default') {
-      const sourceFile = this.source.getSourceFile()
+    /* Enable hot module reloading in development for Next.js component exports. */
+    if (process.env.NODE_ENV === 'development') {
+      const isReactComponent = /react.*jsx|jsx.*react/i.test(
+        String(exportValue)
+      )
 
-      if (sourceFile.getExtension() === '.mdx') {
-        const isReactComponent = /react.*jsx|jsx.*react/i.test(
-          String(exportValue)
-        )
+      if (isReactComponent) {
+        const Component = exportValue as React.ComponentType
+        const WrappedComponent = async (props: Record<string, unknown>) => {
+          const { Refresh } = await import('./Refresh')
 
-        if (isReactComponent) {
-          const Component = exportValue as React.ComponentType
-          const WrappedComponent = async (props: Record<string, unknown>) => {
-            const { Refresh } = await import('./Refresh')
-
-            return (
-              <>
-                <Refresh directory={sourceFile.getDirectoryPath()} />
-                <Component {...props} />
-              </>
-            )
-          }
-
-          return WrappedComponent as Value
+          return (
+            <>
+              <Refresh />
+              <Component {...props} />
+            </>
+          )
         }
+
+        return WrappedComponent as Value
       }
     }
 

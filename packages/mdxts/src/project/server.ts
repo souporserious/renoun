@@ -1,4 +1,4 @@
-import { watch, type FSWatcher } from 'node:fs'
+import { watch } from 'node:fs'
 
 import { generateCollectionImportMap } from '../collections/import-maps'
 import { analyzeSourceText } from '../utils/analyze-source-text'
@@ -14,11 +14,11 @@ const DEFAULT_IGNORED_PATHS = [
   '.next',
   '.turbo',
 ]
-const watchers = new Map<string, FSWatcher>()
 
 /** Create a WebSocket server. */
 export function createServer() {
-  /* Update the collection import maps when files change. */
+  const server = new WebSocketServer()
+
   watch(process.cwd(), { recursive: true }, (_, filename) => {
     if (
       DEFAULT_IGNORED_PATHS.some((ignoredFile) =>
@@ -28,12 +28,14 @@ export function createServer() {
       return
     }
 
+    /* Update all collection import maps when files change. */
     for (const project of getProjects().values()) {
       generateCollectionImportMap(project)
     }
-  })
 
-  const server = new WebSocketServer()
+    /* Notify the client to refresh when files change. */
+    server.sendNotification({ method: 'refreshUpdate' })
+  })
 
   server.registerMethod(
     'analyzeSourceText',
@@ -49,40 +51,6 @@ export function createServer() {
         ...options,
         project,
       })
-    }
-  )
-
-  server.registerMethod(
-    'refreshWatch',
-    async (options: { directory: string }) => {
-      if (watchers.has(options.directory)) {
-        return
-      }
-
-      const watcher = watch(
-        options.directory,
-        { persistent: true, recursive: true },
-        () => {
-          server.sendNotification({
-            method: 'refreshUpdate',
-            params: { directory: options.directory },
-          })
-        }
-      )
-
-      watchers.set(options.directory, watcher)
-    }
-  )
-
-  server.registerMethod(
-    'refreshUnwatch',
-    async (options: { directory: string }) => {
-      const watcher = watchers.get(options.directory)
-
-      if (watcher) {
-        watcher.close()
-        watchers.delete(options.directory)
-      }
     }
   )
 }
