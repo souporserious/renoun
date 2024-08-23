@@ -21,7 +21,7 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["*"],
-      "mdxts/*": [".mdxts/*.js"]
+      "mdxts/*": [".mdxts/*.ts"]
     }
   },
   "include": ["next-env.d.ts", ".next/types/**/*.ts", "**/*.ts", "**/*.tsx"],
