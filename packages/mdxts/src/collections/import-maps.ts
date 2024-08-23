@@ -1,7 +1,8 @@
-import { Project, Node, SyntaxKind, type SourceFile } from 'ts-morph'
+import { Project, Node, SyntaxKind } from 'ts-morph'
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { extname, resolve } from 'node:path'
 import globParent from 'glob-parent'
+import glob from 'fast-glob'
 
 import { resolveTsConfigPath } from '../collections/resolve-ts-config-path'
 
@@ -53,13 +54,14 @@ export function getImportMap<AllExports>(slug: string) {
  */
 function writeImportMap(
   patterns: string[],
-  sourceFilesMap: Map<string, SourceFile[]>
+  filePatternPaths: Map<string, string[]>
 ) {
   const importMapEntries = patterns.flatMap((filePattern) => {
-    const sourceFiles = sourceFilesMap.get(filePattern) || []
     const baseGlobPattern = globParent(filePattern)
     const allExtensions = Array.from(
-      new Set(sourceFiles.map((sourceFile) => sourceFile.getExtension()))
+      new Set(
+        filePatternPaths.get(filePattern)!.map((filePath) => extname(filePath))
+      )
     )
 
     return allExtensions.flatMap((extension) => {
@@ -97,9 +99,9 @@ function writeImportMap(
 function collectSourceFiles(
   project: Project,
   filePatterns: string[]
-): Map<string, SourceFile[]> {
+): Map<string, string[]> {
   const compilerOptions = project.getCompilerOptions()
-  const sourceFilesMap = new Map<string, SourceFile[]>()
+  const filePatternPaths = new Map<string, string[]>()
 
   filePatterns.forEach((filePattern) => {
     const absoluteGlobPattern =
@@ -110,16 +112,18 @@ function collectSourceFiles(
             filePattern
           )
         : resolve(filePattern)
-    const sourceFiles = project.addSourceFilesAtPaths(absoluteGlobPattern)
+    const filePaths = glob.sync(absoluteGlobPattern)
 
-    if (sourceFiles.length === 0) {
-      throw new Error(`No source files found for pattern: ${filePattern}`)
+    if (filePaths.length === 0) {
+      throw new Error(
+        `[mdxts] No source files found for collection file pattern: ${filePattern}`
+      )
     }
 
-    sourceFilesMap.set(filePattern, sourceFiles)
+    filePatternPaths.set(filePattern, filePaths)
   })
 
-  return sourceFilesMap
+  return filePatternPaths
 }
 
 /** Initializes an import map at the root of the project based on all `createCollection` file patterns. */
