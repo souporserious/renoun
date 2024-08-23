@@ -34,7 +34,7 @@ export function createServer() {
     }
 
     /* Notify the client to refresh when files change. */
-    server.sendNotification({ method: 'refreshUpdate' })
+    server.sendNotification({ type: 'refresh' })
   })
 
   server.registerMethod(

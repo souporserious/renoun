@@ -14,7 +14,7 @@ export function Refresh() {
       (event: MessageEvent) => {
         const message = JSON.parse(event.data) as WebSocketNotification
 
-        if (message.method === 'refreshUpdate' && 'nd' in window) {
+        if (message.type === 'refresh' && 'nd' in window) {
           // @ts-ignore - private Next.js API
           const router = window.nd.router
 

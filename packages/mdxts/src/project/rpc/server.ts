@@ -13,8 +13,8 @@ export interface WebSocketResponse {
 }
 
 export interface WebSocketNotification {
-  method: string
-  params?: any
+  type: string
+  data?: any
 }
 
 export class WebSocketServer {
