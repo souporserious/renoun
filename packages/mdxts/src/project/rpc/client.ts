@@ -8,55 +8,45 @@ type Request = {
 }
 
 export class WebSocketClient {
-  #ws: WebSocket
-
+  #ws!: WebSocket
   #isConnected = false
-
   #requests: Record<number, Request> = {}
-
   #pendingRequests = new Set<string>()
+  #retryInterval: number = 5000
+  #maxRetries: number = 5
+  #currentRetries: number = 0
+  #handleOpenEvent = this.#handleOpen.bind(this)
+  #handleMessageEvent = this.#handleMessage.bind(this)
+  #handleErrorEvent = this.#handleError.bind(this)
+  #handleCloseEvent = this.#handleClose.bind(this)
 
   constructor() {
     process.env.WS_NO_BUFFER_UTIL = 'true'
-
-    this.#ws = undefined as any
-
-    import('ws').then(({ default: WebSocket }) => {
-      this.#ws = new WebSocket(`ws://localhost:5996`)
-      this.init()
-    })
+    this.#connect()
   }
 
-  init() {
-    this.#ws.addEventListener('open', this.#handleOpen.bind(this))
-
-    this.#ws.addEventListener('message', (event) => {
-      this.#handleMessage(event.data.toString())
-    })
-
-    this.#ws.addEventListener('error', (event) => {
-      let message = `[mdxts] WebSocket client error`
-
-      if (event.error.code === 'ECONNREFUSED') {
-        message = `[mdxts] Could not connect to the WebSocket server. Please ensure that the "mdxts" server is running.`
-      }
-
-      throw new Error(message, { cause: event.error })
+  #connect() {
+    import('ws').then(({ default: WebSocket }) => {
+      this.#ws = new WebSocket(`ws://localhost:5996`)
+      this.#ws.addEventListener('open', this.#handleOpenEvent)
+      this.#ws.addEventListener('message', this.#handleMessageEvent)
+      this.#ws.addEventListener('error', this.#handleErrorEvent)
+      this.#ws.addEventListener('close', this.#handleCloseEvent)
     })
   }
 
   #handleOpen() {
     this.#isConnected = true
+    this.#currentRetries = 0
 
     this.#pendingRequests.forEach((request) => {
       this.#ws.send(request)
     })
     this.#pendingRequests.clear()
-
-    this.#ws.removeEventListener('open', this.#handleOpen)
   }
 
-  #handleMessage(message: string) {
+  #handleMessage(event: WebSocket.MessageEvent) {
+    const message = event.data.toString()
     const response: WebSocketResponse = JSON.parse(message)
     const { id, result, error } = response
 
@@ -68,6 +58,35 @@ export class WebSocketClient {
       }
 
       delete this.#requests[id]
+    }
+  }
+
+  #handleError(event: WebSocket.ErrorEvent) {
+    console.error('[mdxts] WebSocket client error:', event.message)
+  }
+
+  #handleClose() {
+    this.#isConnected = false
+    this.#ws.removeEventListener('open', this.#handleOpenEvent)
+    this.#ws.removeEventListener('message', this.#handleMessageEvent)
+    this.#ws.removeEventListener('error', this.#handleErrorEvent)
+    this.#ws.removeEventListener('close', this.#handleCloseEvent)
+    this.#retryConnection()
+  }
+
+  #retryConnection() {
+    if (this.#currentRetries < this.#maxRetries) {
+      this.#currentRetries++
+      setTimeout(() => {
+        console.log(
+          `[mdxts] Attempting to reconnect to WebSocket server... (${this.#currentRetries}/${this.#maxRetries})`
+        )
+        this.#connect()
+      }, this.#retryInterval)
+    } else {
+      throw new Error(
+        `[mdxts] Could not reconnect to the WebSocket server after ${this.#maxRetries} attempts.`
+      )
     }
   }
 
