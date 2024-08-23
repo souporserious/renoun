@@ -3,9 +3,11 @@ import { NextConfig } from 'next'
 import { PHASE_DEVELOPMENT_SERVER } from 'next/constants'
 import { resolve } from 'node:path'
 import createMdxPlugin from '@next/mdx'
+import { Project } from 'ts-morph'
 import type { bundledThemes } from 'shiki/bundle/web'
 
 import { getMdxPlugins } from '../mdx-plugins'
+import { generateCollectionImportMap } from '../collections/import-maps'
 import { createServer } from '../project/server'
 import { renumberFilenames } from '../utils/renumber'
 import { createRefreshServer } from './create-refresh-server'
@@ -32,6 +34,11 @@ type PluginOptions = {
   /** The git provider to use. This option disables the provider detection from the `gitSource` which is helpful for self-hosted instances. */
   gitProvider?: 'github' | 'gitlab' | 'bitbucket'
 }
+
+/** Immediately generate the initial collection import map. */
+const project = new Project({ tsConfigFilePath: 'tsconfig.json' })
+
+generateCollectionImportMap(project)
 
 /** A Next.js plugin to configure MDXTS theming, `rehype` and `remark` markdown plugins, and the [Webpack loader](mdxts.dev/packages/loader). */
 export function createMdxtsPlugin(pluginOptions: PluginOptions) {
