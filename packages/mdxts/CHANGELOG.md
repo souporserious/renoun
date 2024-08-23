@@ -1,5 +1,21 @@
 # mdxts
 
+## 1.7.0
+
+### Minor Changes
+
+- abe2d84: Add `deprecated` tag to `createSource` in favor of `createCollection`.
+- 71384b3: Generates import map in `.mdxts` directory when initially running Next.js plugin.
+- 9dca168: Remove `CodeBlock` syntax formatting until a better solution can be implemented that doesn't throw console warnings.
+
+### Patch Changes
+
+- c545243: Updates shiki from deprecated `getHighlighter` to `createHighlighter`.
+- b76908a: Fixes missing directory error when removing directory and regenerating the import map.
+- 5628c89: Retry connecting to the WebSocket server from the client if it gets disconnected.
+- ac4006a: Keeps project files for code blocks in sync with changes to the file system.
+- d0a285f: Throw more helpful error if both the cli and Next.js plugin are being used together.
+
 ## 1.6.4
 
 ### Patch Changes
