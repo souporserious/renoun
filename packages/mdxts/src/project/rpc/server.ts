@@ -27,6 +27,16 @@ export class WebSocketServer {
   constructor() {
     this.#server = new WebSocket.Server({ port: 5996 })
 
+    this.#server.on('error', (error: NodeJS.ErrnoException) => {
+      let message = '[mdxts] WebSocket server error'
+
+      if (error.code === 'EADDRINUSE') {
+        message = `[mdxts] WebSocket server is already in use. This issue likely occurred because both the 'mdxts' CLI and the Next.js plugin are running simultaneously. The Next.js plugin already manages the WebSocket server. Please ensure that only one of these is used at a time to avoid conflicts. You may need to stop one of the processes or verify that the port is not being used by another application. Please file an issue if this error persists.`
+      }
+
+      throw new Error(message, { cause: error })
+    })
+
     this.#server.on('connection', (ws: WebSocket) => {
       this.#sockets.add(ws)
 
