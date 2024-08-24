@@ -1,10 +1,12 @@
-import { Project, Node, SyntaxKind } from 'ts-morph'
+import { Project } from 'ts-morph'
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
-import { extname, resolve, join } from 'node:path'
+import { extname, resolve, join, dirname, relative } from 'node:path'
 import globParent from 'glob-parent'
-import glob from 'fast-glob'
+import { glob } from 'fast-glob'
 
-import { resolveTsConfigPath } from '../collections/resolve-ts-config-path'
+import { getCollectionConfigurations } from './get-collection-configurations'
+import { getProject } from '../project/get-project'
+import { resolveTsConfigPath } from './resolve-ts-config-path'
 
 export const PACKAGE_NAME = 'mdxts/core'
 export const PACKAGE_DIRECTORY = '.mdxts'
@@ -53,26 +55,57 @@ export function getImportMap<AllExports>(slug: string) {
  * @param patterns - An array of file patterns to match.
  * @param sourceFilesMap - A map of file patterns to their respective source files.
  */
-function writeImportMap(
-  patterns: string[],
-  filePatternPaths: Map<string, string[]>
+async function writeImportMap(
+  collectionConfigurations: ReturnType<typeof getCollectionConfigurations>
 ) {
-  const importMapEntries = patterns.flatMap((filePattern) => {
-    const baseGlobPattern = globParent(filePattern)
-    const allExtensions = Array.from(
-      new Set(
-        filePatternPaths.get(filePattern)!.map((filePath) => extname(filePath))
-      )
-    )
+  const configs = Array.from(collectionConfigurations)
+  const importMapEntries: string[] = []
 
-    return allExtensions.flatMap((extension) => {
-      const trimmedExtension = extension.slice(1)
-      return [
-        `\`${trimmedExtension}:${filePattern}\``,
-        `(slug) => import(\`${baseGlobPattern}/\${slug}${extension}\`)`,
-      ]
+  await Promise.all(
+    configs.map(async ([filePattern, options]) => {
+      const project = await getProject({
+        tsConfigFilePath: options?.tsConfigFilePath || 'tsconfig.json',
+      })
+      const compilerOptions = project.getCompilerOptions()
+      const tsConfigFilePath = compilerOptions.configFilePath
+      const tsConfigDirectory = tsConfigFilePath
+        ? dirname(String(tsConfigFilePath))
+        : project.getDirectoryOrThrow('.').getPath()
+      const absoluteGlobPattern =
+        compilerOptions.baseUrl && compilerOptions.paths
+          ? resolveTsConfigPath(
+              tsConfigDirectory,
+              compilerOptions.baseUrl,
+              compilerOptions.paths,
+              filePattern
+            )
+          : resolve(tsConfigDirectory, filePattern)
+      const filePaths = await glob(absoluteGlobPattern)
+
+      if (filePaths.length === 0) {
+        throw new Error(
+          `[mdxts] No source files found for collection file pattern: ${filePattern}`
+        )
+      }
+
+      const relativeGlobPattern = relative(
+        join(process.cwd(), PACKAGE_DIRECTORY),
+        absoluteGlobPattern
+      )
+      const baseGlobPattern = globParent(relativeGlobPattern)
+      const allExtensions = Array.from(new Set(filePaths.map(extname)))
+
+      allExtensions.forEach((extension) => {
+        const trimmedExtension = extension.slice(1)
+
+        importMapEntries.push(
+          `\`${trimmedExtension}:${filePattern}\``,
+          `(slug) => import(\`${baseGlobPattern}/\${slug}${extension}\`)`
+        )
+      })
     })
-  })
+  )
+
   const currentImportMap = existsSync(FILE_PATH)
     ? readFileSync(FILE_PATH, 'utf-8')
     : null
@@ -90,48 +123,8 @@ function writeImportMap(
   writeFileSync(FILE_PATH, nextImportMap)
 }
 
-/**
- * Collects file patterns and their corresponding source files.
- *
- * @param filePatterns - An array of file patterns to match.
- * @param tsConfigFilePath - The path to the TypeScript configuration file.
- * @returns A map of file patterns to their respective source files.
- */
-function collectSourceFiles(
-  project: Project,
-  filePatterns: string[]
-): Map<string, string[]> {
-  const compilerOptions = project.getCompilerOptions()
-  const filePatternPaths = new Map<string, string[]>()
-
-  filePatterns.forEach((filePattern) => {
-    const absoluteGlobPattern =
-      compilerOptions.baseUrl && compilerOptions.paths
-        ? resolveTsConfigPath(
-            compilerOptions.baseUrl,
-            compilerOptions.paths,
-            filePattern
-          )
-        : resolve(filePattern)
-    const filePaths = glob.sync(absoluteGlobPattern)
-
-    if (filePaths.length === 0) {
-      throw new Error(
-        `[mdxts] No source files found for collection file pattern: ${filePattern}`
-      )
-    }
-
-    filePatternPaths.set(filePattern, filePaths)
-  })
-
-  return filePatternPaths
-}
-
-/** Initializes an import map at the root of the project based on all `createCollection` file patterns. */
-export function generateCollectionImportMap(project: Project) {
-  const filePatterns = new Set<string>()
-
-  /* Update the tsconfig.json paths field to alias the package. */
+/** Updates the tsconfig.json file to include the `mdxts` package alias in the `paths` field. */
+function codemodTsConfigPaths(project: Project) {
   const tsconfigFilePath = project.getCompilerOptions().configFilePath
 
   if (typeof tsconfigFilePath === 'string') {
@@ -156,7 +149,10 @@ export function generateCollectionImportMap(project: Project) {
       writeFileSync(tsconfigFilePath, JSON.stringify(tsconfigJson, null, 2))
     }
   }
+}
 
+/** Initializes an import map at the root of the project based on all `createCollection` configurations. */
+export async function generateCollectionImportMap(project: Project) {
   /* Prime the file so it gets picked up by the bundler. */
   if (!existsSync(PACKAGE_DIRECTORY)) {
     mkdirSync(PACKAGE_DIRECTORY)
@@ -164,36 +160,17 @@ export function generateCollectionImportMap(project: Project) {
 
   writeFileSync(FILE_PATH, `export * from '${PACKAGE_NAME}';\n`)
 
-  /* Find all `createCollection` calls and extract the file patterns. */
-  project
-    .createSourceFile(
-      '__createCollectionReferences.ts',
-      `import { createCollection } from '${PACKAGE_NAME}';`,
-      { overwrite: true }
-    )
-    .getFirstDescendantByKindOrThrow(SyntaxKind.Identifier)
-    .findReferencesAsNodes()
-    .forEach((node) => {
-      const callExpression = node.getParent()
+  /* Update the tsconfig.json file to include the `mdxts` package alias in the `paths` field. */
+  codemodTsConfigPaths(project)
 
-      if (Node.isCallExpression(callExpression)) {
-        const argument = callExpression.getArguments().at(0)
-        if (Node.isStringLiteral(argument)) {
-          const filePattern = argument.getLiteralText()
-          filePatterns.add(filePattern)
-        }
-      }
-    })
+  /* Find all `createCollection` call sites and extract the file patterns and options. */
+  const collectionConfigurations = getCollectionConfigurations(project)
 
-  /* Collect source files for each file pattern and write the import map. */
-  if (filePatterns.size > 0) {
-    const filePatternsArray = Array.from(filePatterns)
-    const sourceFilesMap = collectSourceFiles(project, filePatternsArray)
-
+  if (collectionConfigurations.size > 0) {
     if (!existsSync(PACKAGE_DIRECTORY)) {
       mkdirSync(PACKAGE_DIRECTORY)
     }
 
-    writeImportMap(filePatternsArray, sourceFilesMap)
+    await writeImportMap(collectionConfigurations)
   }
 }

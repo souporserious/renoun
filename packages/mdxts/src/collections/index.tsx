@@ -706,10 +706,12 @@ class Collection<AllExports extends FileExports>
     this.project = resolveProject(options.tsConfigFilePath ?? 'tsconfig.json')
 
     const compilerOptions = this.project.getCompilerOptions()
+    const tsConfigFilePath = String(compilerOptions.configFilePath)
 
     this.absoluteGlobPattern =
       compilerOptions.baseUrl && compilerOptions.paths
         ? resolveTsConfigPath(
+            tsConfigFilePath,
             compilerOptions.baseUrl,
             compilerOptions.paths,
             filePattern

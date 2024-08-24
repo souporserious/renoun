@@ -4,11 +4,12 @@ import { resolve } from 'node:path'
  * Resolves a file path using the provided tsconfig paths.
  */
 export function resolveTsConfigPath(
+  baseDirectory: string,
   baseUrl: string,
   paths: Record<string, string[]>,
-  filePath: string
+  filePattern: string
 ): string {
-  const normalizedFilePath = filePath.replace(/\\/g, '/')
+  const normalizedFilePath = filePattern.replace(/\\/g, '/')
 
   for (const [alias, locations] of Object.entries(paths)) {
     const aliasPattern = alias.replace(/\*/g, '(.*)')
@@ -17,16 +18,19 @@ export function resolveTsConfigPath(
 
     if (match) {
       for (const location of locations) {
-        const resolvedPath = location.replace(/\*/g, match[1])
-        const finalPath = resolve(baseUrl, resolvedPath)
-        return finalPath
+        const resolvedPath = resolve(
+          baseDirectory,
+          baseUrl,
+          location.replace(/\*/g, match[1])
+        )
+        return resolvedPath
       }
     }
   }
 
   if (baseUrl) {
-    return resolve(baseUrl, filePath)
+    return resolve(baseDirectory, baseUrl, filePattern)
   }
 
-  return filePath
+  return resolve(baseDirectory, filePattern)
 }
