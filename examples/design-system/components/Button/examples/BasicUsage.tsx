@@ -1,4 +1,4 @@
-import { Box, Button } from 'components'
+import { Box, Button } from '../..'
 
 /** A basic button component */
 export default function BasicUsage() {

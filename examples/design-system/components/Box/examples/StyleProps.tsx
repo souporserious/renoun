@@ -1,4 +1,4 @@
-import { Box } from 'components'
+import { Box } from '..'
 
 /** Using the `Box` component with style props */
 export default function StyleProps() {

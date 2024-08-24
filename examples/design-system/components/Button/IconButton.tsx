@@ -1,5 +1,6 @@
 import { styled } from 'restyle'
-import { type ButtonProps, variants } from 'components'
+
+import { type ButtonProps, variants } from './Button'
 
 /** Allows users to take specific actions using a simplified icon graphic. */
 export const IconButton = styled(

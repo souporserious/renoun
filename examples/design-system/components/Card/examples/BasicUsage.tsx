@@ -1,4 +1,4 @@
-import { Card } from 'components'
+import { Card } from '..'
 
 /** A basic card component */
 export default function BasicUsage() {

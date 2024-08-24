@@ -1,5 +1,6 @@
-import { Box } from 'components'
 import { styled } from 'restyle'
+
+import { Box } from '..'
 
 const StyledText = styled('span', { color: 'tomato' })
 
