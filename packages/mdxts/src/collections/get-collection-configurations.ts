@@ -38,10 +38,19 @@ export function getCollectionConfigurations(project: Project) {
         const optionsArgument = callExpression.getArguments().at(1)
 
         if (Node.isObjectLiteralExpression(optionsArgument)) {
-          options = resolveExpression(optionsArgument) as Omit<
-            CollectionOptions<any>,
-            'sort'
-          >
+          try {
+            options = resolveExpression(optionsArgument) as Omit<
+              CollectionOptions<any>,
+              'sort'
+            >
+          } catch (error) {
+            if (optionsArgument.getText().includes('tsConfigFilePath')) {
+              throw new Error(
+                `[mdxts] Expected the second argument to "createCollection" to be an object literal`,
+                { cause: error }
+              )
+            }
+          }
         }
 
         collectionConfigurations.set(filePattern!, options)
