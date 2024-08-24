@@ -21,15 +21,9 @@ export const PostsCollection = createCollection<{
       return 0
     }
 
-    const aDate = await a
-      .getNamedExport('frontmatter')
-      .getValue()
-      .then((frontMatter) => new Date(frontMatter.date))
-    const bDate = await b
-      .getNamedExport('frontmatter')
-      .getValue()
-      .then((frontMatter) => new Date(frontMatter.date))
+    const aFrontmatter = await a.getNamedExport('frontmatter').getValue()
+    const bFrontmatter = await b.getNamedExport('frontmatter').getValue()
 
-    return bDate.getTime() - aDate.getTime()
+    return bFrontmatter.date.getTime() - aFrontmatter.date.getTime()
   },
 })
