@@ -1,5 +1,14 @@
 # mdxts
 
+## 1.7.1
+
+### Patch Changes
+
+- f7c488d: Fix fast refresh for all component exports.
+- b7e68af: Fixes relative collection file patterns and ts config paths causing incorrect import map path generation.
+- 0dad0d3: Fixes error when trying to refresh file that hasn't been loaded into the project yet.
+- 4db37c9: Generates `ts` file instead of `js` file for aliased collection import map.
+
 ## 1.7.0
 
 ### Minor Changes
