@@ -3,7 +3,7 @@ import type { bundledThemes } from 'shiki/bundle/web'
 
 export type ProjectOptions = {
   /** Path to the VS Code compatible theme used for syntax highlighting the `CodeBlock`, `CodeInline`, and `Tokens` components. */
-  theme: keyof typeof bundledThemes | (string & {})
+  theme?: keyof typeof bundledThemes | (string & {})
 
   /** The URL of the production site. This is used for generating sitemap and RSS feed URLs. If using Vercel, the `VERCEL_PROJECT_PRODUCTION_URL` [environment variable](https://vercel.com/docs/projects/environment-variables/system-environment-variables) will be used by default. */
   siteUrl?: string
