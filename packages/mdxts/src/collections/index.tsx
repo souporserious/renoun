@@ -572,12 +572,18 @@ class Source<AllExports extends FileExports>
       const validExtensions = Array.from(this.collection.validExtensions)
 
       throw new Error(
-        `[mdxts] Directory "${baseName}" at path "${this.getPath()}" does not have a default export.
+        `[mdxts] "getDefaultExport" was called for the directory "${baseName}" which does not have an associated index or readme file.
+
 You can fix this error by taking one of the following actions:
-  - Catch and handle this error in your code.
-  - Add an index or readme file to the ${baseName} directory.
-    . Ensure the file has a valid extension based on this collection's file pattern "${validExtensions.join(', ')}".
-    . Define a default export in the file.`
+  - Filter the source:
+    Before calling "getDefaultExport", check if the source is a directory by using "isDirectory".
+  
+  - Add an index or README file to the "${baseName}" directory:
+    . Ensure the file has a valid extension based on the targeted file patterns of this collection: ${validExtensions.join(', ')}
+    . Define a default export in the file or ensure the default export exists if compiled.
+    
+  - Handle the error:
+    Catch and manage this error in your code to prevent it from causing a failure.`
       )
     }
 
@@ -600,12 +606,18 @@ You can fix this error by taking one of the following actions:
       const validExtensions = Array.from(this.collection.validExtensions)
 
       throw new Error(
-        `[mdxts] Directory "${baseName}" at path "${this.getPath()}" does not have a named export for "${name.toString()}".
+        `[mdxts] "getNamedExport('${name.toString()}')" was called for the directory "${baseName}" which does not have an associated index or readme file.
+
 You can fix this error by taking one of the following actions:
-  - Catch and handle this error in your code.
-  - Add an index or readme file to the directory.
-    . Ensure the file has a valid extension based on this collection's file pattern "${validExtensions.join(', ')}".
-    . Define a named export of "${name.toString()}" in the file.`
+  - Filter the source:
+    Before calling "getNamedExport", check if the source is a directory by using "isDirectory".
+  
+  - Add an index or README file to the "${baseName}" directory:
+    . Ensure the file has a valid extension based on the targeted file patterns of this collection: ${validExtensions.join(', ')}
+    . Define a named export of "${name.toString()}" in the file or ensure the named export exists if compiled.
+    
+  - Handle the error:
+    Catch and manage this error in your code to prevent it from causing a failure.`
       )
     }
 
@@ -632,12 +644,16 @@ You can fix this error by taking one of the following actions:
 
       throw new Error(
         `[mdxts] Directory "${baseName}" at path "${this.getPath()}" does not have an associated source file.
+
 You can fix this error by taking one of the following actions:
-  - Catch and handle this error in your code where "getExports" is being called.
-  - Filter the directory out from the sources e.g. (await ComponentsCollection.getSources()).filter(source => !source.isDirectory()).
-  - Add an index or readme file to the directory.
-    . Ensure the file has a valid extension based on this collection's file pattern "${validExtensions.join(', ')}".
-    . Define a default or named export in the file.`
+  - Filter the source:
+    Before calling "getExports", check if the source is a directory by using "isDirectory" e.g. (await <collection>.getSources()).filter(source => !source.isDirectory()).
+  
+  - Add an index or README file to the "${baseName}" directory:
+    . Ensure the file has a valid extension based on the targeted file patterns of this collection: ${validExtensions.join(', ')}
+    
+  - Handle the error:
+    Catch and manage this error in your code to prevent it from causing a failure.`
       )
     }
 
@@ -670,11 +686,13 @@ You can fix this error by taking one of the following actions:
     if (!getImport) {
       throw new Error(
         `[mdxts] No source found for path "${this.getPath()}" at file pattern "${this.collection.filePattern}":
-You can fix this error by taking the following actions:
-- Make sure the ".mdxts" directory was successfully created and your tsconfig.json is aliases "mdxts" to ".mdxts/index.js" correctly.
-- Make sure the file pattern is formatted correctly and targeting files that exist.
-- Try refreshing the page or restarting server.
-- If you continue to see this error, please file an issue: https://github.com/souporserious/mdxts/issues`
+
+You can fix this error by ensuring the following:
+  
+  - The ".mdxts" directory was successfully created and your tsconfig.json file aliases "mdxts" to ".mdxts/index.js" correctly.
+  - The file pattern is formatted correctly and targeting files that exist.
+  - Try refreshing the page or restarting server.
+  - If you continue to see this error, please file an issue: https://github.com/souporserious/mdxts/issues`
       )
     }
 
@@ -777,25 +795,39 @@ class Collection<AllExports extends FileExports>
     sources.sort((a, b) => a.getOrder().localeCompare(b.getOrder()))
 
     if (this.options.sort) {
-      const sourcesCount = sources.length
+      try {
+        const sourcesCount = sources.length
 
-      for (let sourceIndex = 0; sourceIndex < sourcesCount - 1; sourceIndex++) {
         for (
-          let sourceCompareIndex = 0;
-          sourceCompareIndex < sourcesCount - 1 - sourceIndex;
-          sourceCompareIndex++
+          let sourceIndex = 0;
+          sourceIndex < sourcesCount - 1;
+          sourceIndex++
         ) {
-          if (
-            (await this.options.sort(
-              sources[sourceCompareIndex],
-              sources[sourceCompareIndex + 1]
-            )) > 0
+          for (
+            let sourceCompareIndex = 0;
+            sourceCompareIndex < sourcesCount - 1 - sourceIndex;
+            sourceCompareIndex++
           ) {
-            const compareSource = sources[sourceCompareIndex]
-            sources[sourceCompareIndex] = sources[sourceCompareIndex + 1]
-            sources[sourceCompareIndex + 1] = compareSource
+            if (
+              (await this.options.sort(
+                sources[sourceCompareIndex],
+                sources[sourceCompareIndex + 1]
+              )) > 0
+            ) {
+              const compareSource = sources[sourceCompareIndex]
+              sources[sourceCompareIndex] = sources[sourceCompareIndex + 1]
+              sources[sourceCompareIndex + 1] = compareSource
+            }
           }
         }
+      } catch (error) {
+        const badge = '[mdxts] '
+        if (error instanceof Error && error.message.includes(badge)) {
+          throw new Error(
+            `[mdxts] Error occurred while sorting sources for collection with file pattern "${this.filePattern}". \n\n${error.message.slice(badge.length)}`
+          )
+        }
+        throw error
       }
     }
 
