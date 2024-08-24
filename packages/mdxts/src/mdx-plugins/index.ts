@@ -19,6 +19,7 @@ export async function getMdxPlugins({
 } = {}): Promise<{ remarkPlugins: any[]; rehypePlugins: any[] }> {
   const allPlugins = await Promise.all([
     import('remark-frontmatter'),
+    import('remark-mdx-frontmatter'),
     import('remark-gfm'),
     import('remark-github'),
     import('remark-smartypants'),
@@ -29,6 +30,7 @@ export async function getMdxPlugins({
   ])
   const [
     remarkFrontMatter,
+    remarkMdxFrontMatter,
     remarkGfm,
     remarkGitHub,
     remarkSmartyPants,
@@ -40,6 +42,7 @@ export async function getMdxPlugins({
   return {
     remarkPlugins: [
       remarkFrontMatter,
+      remarkMdxFrontMatter,
       remarkGfm,
       gitSource?.includes('github')
         ? [remarkGitHub, { repository: gitSource }]
