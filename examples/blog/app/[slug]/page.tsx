@@ -1,21 +1,24 @@
-import { allPosts } from '@/data'
+import { PostsCollection } from '@/collections'
 
-export function generateStaticParams() {
-  return allPosts.paths().map((pathname) => ({ slug: pathname }))
+export async function generateStaticParams() {
+  const sources = await PostsCollection.getSources()
+  return sources.map((source) => ({ slug: source.getPathSegments().at(0) }))
 }
 
 export default async function Page({ params }: { params: { slug: string } }) {
-  const { Content, frontMatter } = (await allPosts.get(params.slug))!
+  const PostSource = PostsCollection.getSource(params.slug)
+  const Content = await PostSource.getDefaultExport().getValue()
+  const frontmatter = await PostSource.getNamedExport('frontmatter').getValue()
   const formattedDate = new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
     timeZone: 'UTC',
-  }).format(frontMatter.date)
+  }).format(new Date(frontmatter.date))
 
   return (
     <>
-      <h1>{frontMatter.title}</h1>
+      <h1>{frontmatter.title}</h1>
       <time>{formattedDate}</time>
       <Content />
     </>

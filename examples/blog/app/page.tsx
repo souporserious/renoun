@@ -1,15 +1,22 @@
 import Link from 'next/link'
-import { allPosts } from '@/data'
+import { PostsCollection } from '@/collections'
 
-export default function Page() {
+export default async function Page() {
+  const allPosts = await PostsCollection.getSources({ depth: 1 })
+
   return (
     <>
       <h1>Blog</h1>
       <ul>
-        {allPosts.all().map((post) => {
+        {allPosts.map(async (post) => {
+          const path = post.getPath()
+          const frontmatter = await post
+            .getNamedExport('frontmatter')
+            .getValue()
+
           return (
-            <li key={post.pathname}>
-              <Link href={post.pathname}>{post.frontMatter.title}</Link>
+            <li key={path}>
+              <Link href={path}>{frontmatter.title}</Link>
             </li>
           )
         })}
