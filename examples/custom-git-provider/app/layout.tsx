@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './layout.css'
 
 export const metadata: Metadata = {
-  title: 'Blog',
-  description: 'A blog built with MDXTS and Next.js.',
+  title: 'Docs',
+  description: 'A docs site built with MDXTS and Next.js.',
   robots: {
     index: false,
     follow: false,
