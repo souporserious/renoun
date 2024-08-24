@@ -185,6 +185,11 @@ export interface CollectionOptions<Exports extends FileExports> {
     a: FileSystemSource<Exports>,
     b: FileSystemSource<Exports>
   ) => Promise<number>
+
+  /** Validate and transform exported values from source files. */
+  schema?: {
+    [Name in keyof Exports]?: (value: Exports[Name]) => Exports[Name]
+  }
 }
 
 const projectCache = new Map<string, Project>()
@@ -297,7 +302,27 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
   async getValue(): Promise<Value> {
     const moduleExports = await this.source.getModuleExports()
     const name = this.isDefaultExport ? 'default' : this.getName()
-    const exportValue = moduleExports![name]
+    let exportValue = moduleExports![name]
+
+    /* Apply validation if schema is provided. */
+    const collection = this.source.getCollection()
+
+    if (collection.options.schema) {
+      const parseExport = collection.options.schema[name]
+
+      if (parseExport) {
+        try {
+          exportValue = parseExport(exportValue)
+        } catch (error) {
+          if (error instanceof Error) {
+            throw new Error(
+              `[mdxts] Failed to parse export "${name}" using schema for file "${this.source.getPath()}" \n\n${error.message}`,
+              { cause: error }
+            )
+          }
+        }
+      }
+    }
 
     /* Enable hot module reloading in development for Next.js component exports. */
     if (process.env.NODE_ENV === 'development') {
@@ -389,6 +414,10 @@ class Source<AllExports extends FileExports>
 
   isDirectory() {
     return this.sourceFileOrDirectory instanceof Directory
+  }
+
+  getCollection() {
+    return this.collection
   }
 
   getName() {

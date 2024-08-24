@@ -14,7 +14,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
     month: '2-digit',
     day: '2-digit',
     timeZone: 'UTC',
-  }).format(new Date(frontmatter.date))
+  }).format(frontmatter.date)
 
   return (
     <>

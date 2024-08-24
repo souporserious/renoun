@@ -1,3 +1,10 @@
+---
+'mdxts': minor
+---
+
+Adds support for defining schemas for collections:
+
+```tsx
 import { createCollection, type MDXContent } from 'mdxts/collections'
 import { z } from 'zod'
 
@@ -16,20 +23,5 @@ export const PostsCollection = createCollection<{
   schema: {
     frontmatter: frontmatterSchema.parse,
   },
-  sort: async (a, b) => {
-    if (a.isDirectory() || b.isDirectory()) {
-      return 0
-    }
-
-    const aDate = await a
-      .getNamedExport('frontmatter')
-      .getValue()
-      .then((frontMatter) => new Date(frontMatter.date))
-    const bDate = await b
-      .getNamedExport('frontmatter')
-      .getValue()
-      .then((frontMatter) => new Date(frontMatter.date))
-
-    return bDate.getTime() - aDate.getTime()
-  },
 })
+```
