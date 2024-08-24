@@ -308,11 +308,11 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
     const collection = this.source.getCollection()
 
     if (collection.options.schema) {
-      const parseExport = collection.options.schema[name]
+      const parseExportValue = collection.options.schema[name]
 
-      if (parseExport) {
+      if (parseExportValue) {
         try {
-          exportValue = parseExport(exportValue)
+          exportValue = parseExportValue(exportValue)
         } catch (error) {
           if (error instanceof Error) {
             throw new Error(
