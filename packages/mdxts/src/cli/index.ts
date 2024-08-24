@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
-import { Project } from 'ts-morph'
 
 import { generateCollectionImportMap } from '../collections/import-maps'
 import { createServer } from '../project/server'
@@ -13,10 +12,7 @@ if (firstArgument === 'help') {
   process.exit(0)
 }
 
-/* Use the default project to find all collection configurations and generate the collection import map. */
-const project = new Project({ tsConfigFilePath: 'tsconfig.json' })
-
-generateCollectionImportMap(project)
+generateCollectionImportMap()
 
 /* Disable the buffer util for WebSocket. */
 process.env.WS_NO_BUFFER_UTIL = 'true'

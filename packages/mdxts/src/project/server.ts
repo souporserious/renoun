@@ -3,7 +3,7 @@ import { watch } from 'node:fs'
 import { generateCollectionImportMap } from '../collections/import-maps'
 import { analyzeSourceText } from '../utils/analyze-source-text'
 import { WebSocketServer } from './rpc/server'
-import { getProject, getProjects } from './get-project'
+import { getProject } from './get-project'
 import { ProjectOptions } from './types'
 
 const DEFAULT_IGNORED_PATHS = [
@@ -21,6 +21,7 @@ export function createServer() {
 
   watch(process.cwd(), { recursive: true }, (_, filename) => {
     if (
+      !filename ||
       DEFAULT_IGNORED_PATHS.some((ignoredFile) =>
         filename?.startsWith(ignoredFile)
       )
@@ -29,9 +30,7 @@ export function createServer() {
     }
 
     /* Update all collection import maps when files change. */
-    for (const project of getProjects().values()) {
-      generateCollectionImportMap(project)
-    }
+    generateCollectionImportMap(filename)
 
     /* Notify the client to refresh when files change. */
     server.sendNotification({ type: 'refresh' })

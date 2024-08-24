@@ -28,11 +28,6 @@ const DEFAULT_PROJECT_OPTIONS = {
   tsConfigFilePath: 'tsconfig.json',
 } satisfies TsMorphProjectOptions
 
-/** Get all projects. */
-export function getProjects() {
-  return projects
-}
-
 /** Get the project associated with the provided options. */
 export async function getProject(options?: ProjectOptions) {
   const projectId = JSON.stringify(options)

@@ -3,7 +3,6 @@ import { NextConfig } from 'next'
 import { PHASE_DEVELOPMENT_SERVER } from 'next/constants'
 import { resolve } from 'node:path'
 import createMdxPlugin from '@next/mdx'
-import { Project } from 'ts-morph'
 import type { bundledThemes } from 'shiki/bundle/web'
 
 import { getMdxPlugins } from '../mdx-plugins'
@@ -36,9 +35,7 @@ type PluginOptions = {
 }
 
 /** Immediately generate the initial collection import map. */
-const project = new Project({ tsConfigFilePath: 'tsconfig.json' })
-
-generateCollectionImportMap(project)
+generateCollectionImportMap()
 
 /** A Next.js plugin to configure MDXTS theming, `rehype` and `remark` markdown plugins, and the [Webpack loader](mdxts.dev/packages/loader). */
 export function createMdxtsPlugin(pluginOptions: PluginOptions) {
