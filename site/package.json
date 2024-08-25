@@ -23,6 +23,6 @@
     "prettier": "^3.3.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "restyle": "^2.0.4"
+    "restyle": "^2.1.0"
   }
 }

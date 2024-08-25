@@ -1,4 +1,5 @@
 import React, { Fragment } from 'react'
+import { styled, type CSSObject } from 'restyle'
 
 import { getThemeColors } from '../../utils/get-theme-colors'
 import { getContext } from '../../utils/context'
@@ -9,6 +10,7 @@ import { Context } from './Context'
 export async function LineNumbers({
   tokens: tokensProp,
   highlightRanges: highlightRangesProp,
+  css,
   className,
   style,
 }: {
@@ -17,6 +19,9 @@ export async function LineNumbers({
 
   /** A string of comma separated lines and ranges to highlight. */
   highlightRanges?: string
+
+  /** CSS object to apply to the line numbers container. */
+  css?: CSSObject
 
   /** Class name to apply to the line numbers container. */
   className?: string
@@ -38,30 +43,17 @@ export async function LineNumbers({
   const shouldHighlightLine = calculateLinesToHighlight(highlightRanges)
 
   return (
-    <span
+    <Container
+      css={{ color: theme.editorLineNumber.foreground, ...css }}
       className={className}
-      style={{
-        position: 'sticky',
-        left: 0,
-        zIndex: 1,
-        textAlign: 'right',
-        userSelect: 'none',
-        whiteSpace: 'pre',
-        backgroundColor: 'inherit',
-        color: theme.editorLineNumber.foreground,
-        ...style,
-      }}
+      style={style}
     >
       {tokens.map((_: any, lineIndex: number) => {
         const shouldHighlight = shouldHighlightLine(lineIndex)
         const content = shouldHighlight ? (
-          <span
-            style={{
-              color: theme.editorLineNumber.activeForeground,
-            }}
-          >
+          <Highlighted css={{ color: theme.editorLineNumber.activeForeground }}>
             {lineIndex + 1}
-          </span>
+          </Highlighted>
         ) : (
           lineIndex + 1
         )
@@ -73,9 +65,21 @@ export async function LineNumbers({
           </Fragment>
         )
       })}
-    </span>
+    </Container>
   )
 }
+
+const Container = styled('span', {
+  position: 'sticky',
+  left: 0,
+  zIndex: 1,
+  textAlign: 'right',
+  userSelect: 'none',
+  whiteSpace: 'pre',
+  backgroundColor: 'inherit',
+})
+
+const Highlighted = styled('span')
 
 /** Calculate which lines to highlight based on the range meta string added by the rehype plugin. */
 export function calculateLinesToHighlight(ranges: string | undefined) {

@@ -1,4 +1,6 @@
 import React from 'react'
+import { styled, type CSSObject } from 'restyle'
+
 import { getThemeColors } from '../../utils/get-theme-colors'
 import { getContext } from '../../utils/context'
 import { CopyButton } from './CopyButton'
@@ -13,6 +15,9 @@ export type ToolbarProps = {
 
   /** Whether or not to allow copying the code block value. */
   allowCopy?: boolean
+
+  /** CSS object to apply to the toolbar. */
+  css?: CSSObject
 
   /** Class name to apply to the toolbar. */
   className?: string
@@ -29,6 +34,7 @@ export async function Toolbar({
   value: valueProp,
   sourcePath: sourcePathProp,
   allowCopy,
+  css,
   className,
   style,
   children,
@@ -40,42 +46,25 @@ export async function Toolbar({
   let childrenToRender = children
 
   if (childrenToRender === undefined && context) {
-    childrenToRender = (
-      <span style={{ fontSize: '0.8em' }}>{context.filenameLabel}</span>
-    )
+    childrenToRender = <Label>{context.filenameLabel}</Label>
   }
 
   return (
-    <div
+    <Container
+      css={{ boxShadow: `inset 0 -1px 0 0 ${theme.panel.border}`, ...css }}
       className={className}
-      style={{
-        fontSize: 'inherit',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '0.25em',
-        boxShadow: `inset 0 -1px 0 0 ${theme.panel.border}`,
-        ...style,
-      }}
+      style={style}
     >
       {childrenToRender}
+
       {sourcePath ? (
-        <a
+        <SourcePathLink
           href={sourcePath}
           target={process.env.NODE_ENV === 'development' ? undefined : '_blank'}
           rel="noopener noreferrer"
           title={`Open source file in ${
             process.env.NODE_ENV === 'development' ? `VS Code` : `GitHub`
           }`}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '1lh',
-            height: '1lh',
-            fontSize: 'inherit',
-            lineHeight: 'inherit',
-            marginLeft: 'auto',
-          }}
         >
           <svg
             viewBox="0 0 24 24"
@@ -97,18 +86,41 @@ export async function Toolbar({
             <path d="M10 19L15 5" strokeWidth="2" strokeLinecap="round" />
             <path d="M10 19L15 5" strokeWidth="2" strokeLinecap="round" />
           </svg>
-        </a>
+        </SourcePathLink>
       ) : null}
+
       {allowCopy && value ? (
         <CopyButton
           value={value}
-          style={{
+          css={{
             padding: 0,
             marginLeft: sourcePath ? undefined : 'auto',
             color: theme.activityBar.foreground,
           }}
         />
       ) : null}
-    </div>
+    </Container>
   )
 }
+
+const Container = styled('div', {
+  fontSize: 'inherit',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '0.25em',
+})
+
+const Label = styled('span', {
+  fontSize: '0.8em',
+})
+
+const SourcePathLink = styled('a', {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '1lh',
+  height: '1lh',
+  fontSize: 'inherit',
+  lineHeight: 'inherit',
+  marginLeft: 'auto',
+})

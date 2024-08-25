@@ -13,6 +13,12 @@ export type TokensProps = {
   /** Syntax highlighted tokens from `getTokens` to render. */
   tokens?: Awaited<ReturnType<GetTokens>>
 
+  /** CSS style object to apply to the tokens and popover elements. */
+  css?: {
+    token?: CSSObject
+    popover?: CSSObject
+  }
+
   /** Class names to apply to the tokens and popover elements. */
   className?: {
     token?: string
@@ -37,6 +43,7 @@ export type TokensProps = {
 export async function Tokens({
   tokens: tokensProp,
   renderLine,
+  css: cssProp = {},
   className = {},
   style = {},
 }: TokensProps) {
@@ -84,6 +91,7 @@ export async function Tokens({
             const [symbolClassName, Styles] = css({
               ...tokenStyles,
               ...(token.diagnostics && diagnosticStyles),
+              ...cssProp.token,
             })
 
             return (
@@ -94,6 +102,7 @@ export async function Tokens({
                   <QuickInfo
                     diagnostics={token.diagnostics}
                     quickInfo={token.quickInfo}
+                    css={cssProp.popover}
                     className={className.token}
                     style={style.popover}
                   />

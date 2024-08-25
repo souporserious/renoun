@@ -1,4 +1,5 @@
 import React, { Fragment } from 'react'
+import { styled, type CSSObject } from 'restyle'
 
 import { getThemeColors } from '../../utils/get-theme-colors'
 import { analyzeSourceText } from '../../project'
@@ -9,11 +10,13 @@ import type { Token, TokenDiagnostic } from '../../utils/get-tokens'
 export async function QuickInfo({
   diagnostics,
   quickInfo,
+  css,
   className,
   style,
 }: {
   diagnostics?: TokenDiagnostic[]
   quickInfo?: { displayText: string; documentationText: string }
+  css?: CSSObject
   className?: string
   style?: React.CSSProperties
 }) {
@@ -30,109 +33,116 @@ export async function QuickInfo({
 
   return (
     <QuickInfoPopover>
-      <div
-        className={className}
-        style={{
-          fontSize: '1rem',
-          position: 'absolute',
-          zIndex: 1000,
-          width: 'max-content',
-          maxWidth: 540,
-          borderRadius: 3,
+      <Container
+        css={{
           border: `1px solid ${theme.panel.border}`,
           backgroundColor: theme.panel.background,
           color: theme.foreground,
-          overflow: 'auto',
-          overscrollBehavior: 'contain',
-          ...style,
+          ...css,
         }}
+        className={className}
+        style={style}
       >
-        <div
-          style={{
-            fontSize: '0.875em',
-            lineHeight: '1.4em',
-          }}
-        >
+        <ContentContainer>
           {diagnostics ? (
-            <div style={{ padding: '0.25em 0.5em' }}>
+            <DiagnosticContainer>
               {diagnostics.map((diagnostic, index) => (
-                <div key={index} style={{ display: 'flex', gap: '0.5em' }}>
+                <Diagnostic key={index}>
                   {diagnostic.message}
-                  <span style={{ opacity: 0.7 }}>({diagnostic.code})</span>
-                </div>
+                  <DiagnosticCode>({diagnostic.code})</DiagnosticCode>
+                </Diagnostic>
               ))}
-            </div>
+            </DiagnosticContainer>
           ) : null}
 
           {displayTextTokens.length ? (
             <>
-              {diagnostics ? (
-                <hr
-                  style={{
-                    height: 1,
-                    border: 'none',
-                    backgroundColor: theme.panel.border,
-                    opacity: 0.5,
-                  }}
-                />
-              ) : null}
-              <div
-                style={{
-                  fontFamily: 'monospace',
-                  whiteSpace: 'pre-wrap',
-                  padding: '0.25em 0.5em',
-                }}
-              >
+              {diagnostics ? <Divider color={theme.panel.border} /> : null}
+              <DisplayTextContainer>
                 {displayTextTokens.map((line, index) => (
                   <Fragment key={index}>
                     {index === 0 ? null : '\n'}
                     {line.map((token, index) => (
-                      <span key={index} style={{ color: token.color }}>
+                      <TokenSpan key={index} css={{ color: token.color }}>
                         {token.value}
-                      </span>
+                      </TokenSpan>
                     ))}
                   </Fragment>
                 ))}
-              </div>
+              </DisplayTextContainer>
             </>
           ) : null}
 
           {quickInfo?.documentationText.length ? (
             <>
-              <hr
-                style={{
-                  height: 1,
-                  margin: 0,
-                  border: 'none',
-                  backgroundColor: theme.panel.border,
-                  opacity: 0.5,
-                }}
-              />
+              <Divider color={theme.panel.border} />
               <MDXContent
                 components={{
                   p: ({ children }) => (
-                    <p
-                      style={{
-                        fontFamily: 'sans-serif',
-                        fontSize: 'inherit',
-                        lineHeight: 'inherit',
-                        padding: '0.25em 0.5em',
-                        margin: 0,
-                        color: theme.foreground,
-                        // @ts-ignore
-                        textWrap: 'pretty',
-                      }}
-                    >
+                    <Paragraph css={{ color: theme.foreground }}>
                       {children}
-                    </p>
+                    </Paragraph>
                   ),
                 }}
                 value={quickInfo.documentationText}
               />
             </>
           ) : null}
-        </div>
-      </div>
+        </ContentContainer>
+      </Container>
     </QuickInfoPopover>
   )
 }
+
+const Container = styled('div', {
+  fontSize: '1rem',
+  position: 'absolute',
+  zIndex: 1000,
+  width: 'max-content',
+  maxWidth: 540,
+  borderRadius: 3,
+  overflow: 'auto',
+  overscrollBehavior: 'contain',
+})
+
+const ContentContainer = styled('div', {
+  fontSize: '0.875em',
+  lineHeight: '1.4em',
+})
+
+const DiagnosticContainer = styled('div', {
+  padding: '0.25em 0.5em',
+})
+
+const Diagnostic = styled('div', {
+  display: 'flex',
+  gap: '0.5em',
+})
+
+const DiagnosticCode = styled('span', {
+  opacity: 0.7,
+})
+
+const Divider = styled('hr', ({ color }: { color: string }) => ({
+  height: 1,
+  border: 'none',
+  backgroundColor: color,
+  opacity: 0.5,
+}))
+
+const DisplayTextContainer = styled('div', {
+  fontFamily: 'monospace',
+  whiteSpace: 'pre-wrap',
+  padding: '0.25em 0.5em',
+})
+
+const TokenSpan = styled('span')
+
+const Paragraph = styled('p', {
+  fontFamily: 'sans-serif',
+  fontSize: 'inherit',
+  lineHeight: 'inherit',
+  padding: '0.25em 0.5em',
+  margin: 0,
+  textWrap: 'pretty',
+})

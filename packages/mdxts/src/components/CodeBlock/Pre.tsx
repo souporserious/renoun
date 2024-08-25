@@ -1,5 +1,6 @@
 'use client'
 import React, { createContext, useState } from 'react'
+import { styled } from 'restyle'
 
 export const PreActiveContext = createContext<boolean | null>(null)
 
@@ -22,43 +23,38 @@ function isTargetValid(event: React.PointerEvent<HTMLPreElement>) {
   return true
 }
 
-export function Pre({
-  children,
-  className,
-  style,
-  ...props
-}: React.ComponentProps<'pre'>) {
-  const [active, setActive] = useState(false)
-  const handleFocus = () => setActive(true)
-  const handleBlur = (event: React.FocusEvent<HTMLPreElement>) => {
-    if (event.currentTarget.contains(event.relatedTarget)) {
-      return
-    }
-    setActive(false)
-  }
-  const handlePointerEnter = () => setActive(true)
-  const handlePointerLeave = () => setActive(false)
-  const handlePointerDown = (event: React.PointerEvent<HTMLPreElement>) => {
-    if (isTargetValid(event)) {
+export const Pre = styled(
+  ({ children, ...props }: React.ComponentProps<'pre'>) => {
+    const [active, setActive] = useState(false)
+    const handleFocus = () => setActive(true)
+    const handleBlur = (event: React.FocusEvent<HTMLPreElement>) => {
+      if (event.currentTarget.contains(event.relatedTarget)) {
+        return
+      }
       setActive(false)
     }
-  }
+    const handlePointerEnter = () => setActive(true)
+    const handlePointerLeave = () => setActive(false)
+    const handlePointerDown = (event: React.PointerEvent<HTMLPreElement>) => {
+      if (isTargetValid(event)) {
+        setActive(false)
+      }
+    }
 
-  return (
-    <pre
-      tabIndex={0}
-      onFocus={handleFocus}
-      onBlur={handleBlur}
-      onPointerEnter={handlePointerEnter}
-      onPointerLeave={handlePointerLeave}
-      onPointerDown={handlePointerDown}
-      className={className}
-      style={style}
-      {...props}
-    >
-      <PreActiveContext.Provider value={active}>
-        {children}
-      </PreActiveContext.Provider>
-    </pre>
-  )
-}
+    return (
+      <pre
+        tabIndex={0}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        onPointerEnter={handlePointerEnter}
+        onPointerLeave={handlePointerLeave}
+        onPointerDown={handlePointerDown}
+        {...props}
+      >
+        <PreActiveContext.Provider value={active}>
+          {children}
+        </PreActiveContext.Provider>
+      </pre>
+    )
+  }
+)

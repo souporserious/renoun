@@ -1,4 +1,5 @@
 import React, { Suspense } from 'react'
+import { type CSSObject, styled } from 'restyle'
 import type { MDXComponents } from 'mdx/types'
 import 'server-only'
 
@@ -52,7 +53,16 @@ export type BaseCodeBlockProps = {
   /** Path to the source file on disk in development and the git provider source in production. */
   sourcePath?: string | false
 
-  /** Class names to apply to code block elements. Use the `children` prop for full control of styling. */
+  /** CSS styles to apply to code block elements. */
+  css?: {
+    container?: CSSObject
+    toolbar?: CSSObject
+    lineNumbers?: CSSObject
+    token?: CSSObject
+    popover?: CSSObject
+  }
+
+  /** Class names to apply to code block elements. */
   className?: {
     container?: string
     toolbar?: string
@@ -61,7 +71,7 @@ export type BaseCodeBlockProps = {
     popover?: string
   }
 
-  /** Styles to apply to code block elements. Use the `children` prop for full control of styling. */
+  /** Styles to apply to code block elements. */
   style?: {
     container?: React.CSSProperties
     toolbar?: React.CSSProperties
@@ -151,26 +161,21 @@ export async function CodeBlockAsync({
   const focusedLinesGradient = focusedLines
     ? generateFocusedLinesGradient(focusedLines)
     : undefined
-  const Container = shouldRenderToolbar ? 'div' : React.Fragment
+  const Container = shouldRenderToolbar ? StyledContainer : React.Fragment
   const containerProps = shouldRenderToolbar
     ? {
-        className: props.className?.container,
-        style: {
+        css: {
           backgroundColor: theme.background,
           color: theme.foreground,
           borderRadius: 5,
           boxShadow: `0 0 0 1px ${theme.panel.border}`,
-          ...props.style?.container,
+          ...props.css?.container,
           padding: 0,
-        } satisfies React.CSSProperties,
+        } satisfies CSSObject,
+        className: props.className?.container,
+        style: props.style?.container,
       }
     : {}
-  const sharedCodeStyles = {
-    gridRow: '1 / -1',
-    display: 'block',
-    width: 'max-content',
-    padding,
-  } satisfies React.CSSProperties
 
   return (
     <Context value={contextValue}>
@@ -178,15 +183,13 @@ export async function CodeBlockAsync({
         {shouldRenderToolbar ? (
           <Toolbar
             allowCopy={allowCopy === undefined ? Boolean(filename) : allowCopy}
+            css={{ padding, ...props.css?.toolbar }}
             className={props.className?.toolbar}
-            style={{ padding, ...props.style?.toolbar }}
+            style={props.style?.toolbar}
           />
         ) : null}
         <Pre
-          className={
-            shouldRenderToolbar ? undefined : props.className?.container
-          }
-          style={{
+          css={{
             position: 'relative',
             whiteSpace: 'pre',
             wordWrap: 'break-word',
@@ -216,32 +219,35 @@ export async function CodeBlockAsync({
                   maskImage: focusedLinesGradient,
                 }
               : {}),
-            ...(shouldRenderToolbar ? {} : props.style?.container),
+            ...(shouldRenderToolbar ? {} : props.css?.container),
             padding: 0,
           }}
+          className={
+            shouldRenderToolbar ? undefined : props.className?.container
+          }
+          style={props.style?.container}
         >
           {showLineNumbers ? (
             <>
               <LineNumbers
                 className={props.className?.lineNumbers}
-                style={{
+                css={{
                   padding,
                   gridColumn: 1,
                   gridRow: '1 / -1',
                   width: '4ch',
                   backgroundPosition: 'inherit',
                   backgroundImage: 'inherit',
-                  ...props.style?.lineNumbers,
+                  ...props.css?.lineNumbers,
                 }}
+                style={props.style?.lineNumbers}
               />
-              <code
-                style={{
-                  ...sharedCodeStyles,
-                  gridColumn: 2,
-                  paddingLeft: 0,
-                }}
-              >
+              <Code css={{ padding, gridColumn: 2, paddingLeft: 0 }}>
                 <Tokens
+                  css={{
+                    token: props.css?.token,
+                    popover: props.css?.popover,
+                  }}
                   className={{
                     token: props.className?.token,
                     popover: props.className?.popover,
@@ -251,16 +257,15 @@ export async function CodeBlockAsync({
                     popover: props.style?.popover,
                   }}
                 />
-              </code>
+              </Code>
             </>
           ) : (
-            <code
-              style={{
-                ...sharedCodeStyles,
-                gridColumn: 1,
-              }}
-            >
+            <Code css={{ padding, gridColumn: 1 }}>
               <Tokens
+                css={{
+                  token: props.css?.token,
+                  popover: props.css?.popover,
+                }}
                 className={{
                   token: props.className?.token,
                   popover: props.className?.popover,
@@ -270,7 +275,7 @@ export async function CodeBlockAsync({
                   popover: props.style?.popover,
                 }}
               />
-            </code>
+            </Code>
           )}
           {allowCopy !== false && !shouldRenderToolbar ? (
             <CopyButton
@@ -307,57 +312,36 @@ export function CodeBlock(props: CodeBlockProps) {
     <Suspense
       fallback={
         'value' in props && props.value ? (
-          <pre
-            className={props.className?.container}
-            style={{
-              display: 'grid',
+          <FallbackPre
+            css={{
               gridTemplateColumns: props.showLineNumbers
                 ? 'auto 1fr'
                 : undefined,
-              whiteSpace: 'pre',
-              wordWrap: 'break-word',
-              margin: 0,
-              overflow: 'auto',
-              boxShadow: '0 0 0 1px #666',
-              borderRadius: 5,
-              ...props.style?.container,
             }}
+            className={props.className?.container}
+            style={props.style?.container}
           >
             {props.showLineNumbers && (
-              <div
+              <FallbackLineNumbers
+                css={{ padding }}
                 className={props.className?.lineNumbers}
-                style={{
-                  padding,
-                  position: 'sticky',
-                  left: 0,
-                  zIndex: 1,
-                  textAlign: 'right',
-                  userSelect: 'none',
-                  whiteSpace: 'pre',
-                  gridColumn: 1,
-                  gridRow: '1 / -1',
-                  width: '4ch',
-                  backgroundColor: 'inherit',
-                  ...props.style?.lineNumbers,
-                }}
+                style={props.style?.lineNumbers}
               >
                 {Array.from(
                   { length: props.value.split('\n').length },
                   (_, index) => index + 1
                 ).join('\n')}
-              </div>
+              </FallbackLineNumbers>
             )}
-            <code
-              style={{
+            <FallbackCode
+              css={{
                 padding,
-                display: 'block',
-                width: 'max-content',
                 gridColumn: props.showLineNumbers ? 2 : 1,
               }}
             >
               {props.value}
-            </code>
-          </pre>
+            </FallbackCode>
+          </FallbackPre>
         ) : null
       }
     >
@@ -387,3 +371,39 @@ CodeBlock.parsePreProps = (
       : 'plain') as Languages,
   }
 }
+
+const StyledContainer = styled('div')
+
+const Code = styled('code', {
+  gridRow: '1 / -1',
+  display: 'block',
+  width: 'max-content',
+})
+
+const FallbackPre = styled('pre', {
+  display: 'grid',
+  whiteSpace: 'pre',
+  wordWrap: 'break-word',
+  margin: 0,
+  overflow: 'auto',
+  boxShadow: '0 0 0 1px #666',
+  borderRadius: 5,
+})
+
+const FallbackLineNumbers = styled('span', {
+  position: 'sticky',
+  left: 0,
+  zIndex: 1,
+  textAlign: 'right',
+  userSelect: 'none',
+  whiteSpace: 'pre',
+  gridColumn: 1,
+  gridRow: '1 / -1',
+  width: '4ch',
+  backgroundColor: 'inherit',
+})
+
+const FallbackCode = styled('code', {
+  display: 'block',
+  width: 'max-content',
+})
