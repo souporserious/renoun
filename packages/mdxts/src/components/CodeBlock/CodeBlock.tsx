@@ -301,11 +301,12 @@ export async function CodeBlockAsync({
 }
 
 /** Renders a `pre` element with syntax highlighting, type information, and type checking. */
-export function CodeBlock(props: CodeBlockProps) {
+export async function CodeBlock(props: CodeBlockProps) {
   if ('children' in props) {
     return <CodeBlockAsync {...props} />
   }
 
+  const theme = await getThemeColors()
   const padding = props.style?.container?.padding ?? '0.5lh'
 
   return (
@@ -317,6 +318,9 @@ export function CodeBlock(props: CodeBlockProps) {
               gridTemplateColumns: props.showLineNumbers
                 ? 'auto 1fr'
                 : undefined,
+              backgroundColor: theme.background,
+              color: theme.foreground,
+              boxShadow: `0 0 0 1px ${theme.panel.border}`,
             }}
             className={props.className?.container}
             style={props.style?.container}
@@ -386,7 +390,6 @@ const FallbackPre = styled('pre', {
   wordWrap: 'break-word',
   margin: 0,
   overflow: 'auto',
-  boxShadow: '0 0 0 1px #666',
   borderRadius: 5,
 })
 
