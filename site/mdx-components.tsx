@@ -5,8 +5,6 @@ import { GeistMono } from 'geist/font/mono'
 
 const codeBlockStyles = {
   container: {
-    fontSize: 'var(--font-size-code)',
-    lineHeight: 'var(--line-height-code)',
     width: 'calc(100% + 2rem)',
     padding: '1rem',
     margin: '0 -1rem',
@@ -14,7 +12,7 @@ const codeBlockStyles = {
   toolbar: {
     padding: '0.8rem 1rem',
   },
-} satisfies CodeBlockProps['style']
+} satisfies CodeBlockProps['css']
 
 export function useMDXComponents() {
   return {
@@ -22,10 +20,16 @@ export function useMDXComponents() {
     CodeBlock: (props) => (
       <CodeBlock
         allowErrors
+        css={codeBlockStyles}
         className={{
           container: GeistMono.className,
         }}
-        style={codeBlockStyles}
+        style={{
+          container: {
+            fontSize: 'var(--font-size-code)',
+            lineHeight: 'var(--line-height-code)',
+          },
+        }}
         {...props}
       />
     ),
@@ -143,10 +147,16 @@ export function useMDXComponents() {
     pre: ({ sourcePath, ...props }) => (
       <MDXComponents.pre
         allowErrors
+        css={codeBlockStyles}
         className={{
           container: GeistMono.className,
         }}
-        style={codeBlockStyles}
+        style={{
+          container: {
+            fontSize: 'var(--font-size-code)',
+            lineHeight: 'var(--line-height-code)',
+          },
+        }}
         sourcePath={process.env.NODE_ENV === 'development' ? sourcePath : false}
         {...props}
       />
