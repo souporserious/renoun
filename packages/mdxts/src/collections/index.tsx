@@ -285,8 +285,13 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
         `[mdxts] Export could not be statically analyzed from source file at "${this.source.getPath()}".`
       )
     }
-    const { filePath } = getDeclarationLocation(this.exportDeclaration)
+
+    const filePath =
+      process.env.NODE_ENV === 'development'
+        ? this.source.getSourceFile().getFilePath()
+        : getDeclarationLocation(this.exportDeclaration).filePath
     const position = this.getPosition()
+
     return getEditPath(filePath, position.start.line, position.start.column)
   }
 
