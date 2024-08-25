@@ -382,6 +382,7 @@ const Code = styled('code', {
   gridRow: '1 / -1',
   display: 'block',
   width: 'max-content',
+  backgroundColor: 'inherit',
 })
 
 const FallbackPre = styled('pre', {
