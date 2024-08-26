@@ -13,7 +13,10 @@ import type { ProjectOptions } from './types'
 
 let client: WebSocketClient | undefined
 
-if (process.env.NODE_ENV === 'development') {
+if (
+  process.env.NODE_ENV === 'development' ||
+  process.env.MDXTS_SERVER === 'true'
+) {
   client = new WebSocketClient()
 }
 
