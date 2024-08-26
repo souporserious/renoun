@@ -93,7 +93,10 @@ export interface ExportSource<Value> extends BaseSource {
   /** A text representation of the exported source if it is statically analyzable. */
   getText(): string
 
-  /** The runtime value of the export. */
+  /**
+   * The runtime value of the export loaded from a dynamic import map generated in the `.mdxts` directory at the root of the project.
+   * Note, any side-effects in modules of targeted files will be run.
+   */
   getValue(): Promise<Value>
 
   /** The execution environment of the export source. */
