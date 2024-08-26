@@ -150,14 +150,6 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
         nextConfig.pageExtensions = ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx']
       }
 
-      nextConfig.experimental = {
-        ...nextConfig.experimental,
-        serverComponentsExternalPackages: [
-          ...(nextConfig.experimental?.serverComponentsExternalPackages ?? []),
-          'ts-morph',
-        ],
-      }
-
       return withMdx(nextConfig)
     }
   }
