@@ -8,6 +8,7 @@ import {
   type ExportedDeclarations,
 } from 'ts-morph'
 import { getSymbolDescription } from '@tsxmod/utils'
+import { dirname, resolve } from 'node:path'
 import globParent from 'glob-parent'
 import parseTitle from 'title'
 
@@ -759,8 +760,8 @@ class Collection<AllExports extends FileExports>
 
     const compilerOptions = this.project.getCompilerOptions()
     const tsConfigFilePath = String(compilerOptions.configFilePath)
-
-    this.absoluteGlobPattern =
+    const tsConfigDirectory = dirname(tsConfigFilePath)
+    const resolvedGlobPattern =
       compilerOptions.baseUrl && compilerOptions.paths
         ? resolveTsConfigPath(
             tsConfigFilePath,
@@ -769,6 +770,7 @@ class Collection<AllExports extends FileExports>
             filePattern
           )
         : filePattern
+    this.absoluteGlobPattern = resolve(tsConfigDirectory, resolvedGlobPattern)
     this.absoluteBaseGlobPattern = globParent(this.absoluteGlobPattern)
 
     const fileSystemSources = getSourceFilesAndDirectories(
