@@ -4,10 +4,10 @@
   "license": "AGPL-3.0-or-later",
   "scripts": {
     "build": "turbo run build",
-    "build:site": "pnpm build --filter=site",
+    "build:site": "pnpm build --filter=@apps/site",
     "build:examples": "pnpm build --filter=@examples/*",
     "dev": "turbo run dev",
-    "dev:site": "pnpm dev --filter=mdxts --filter=site",
+    "dev:site": "pnpm dev --filter=mdxts --filter=@apps/site",
     "dev:examples": "pnpm dev --filter=mdxts --filter=@examples/*",
     "test": "turbo run test",
     "format": "prettier --write '**/**/*.{js,ts,tsx,json,css}'",

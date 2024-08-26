@@ -1,9 +1,0 @@
-.container {
-  display: none;
-}
-
-@media screen and (min-width: 60rem) {
-  .container {
-    display: block;
-  }
-}
