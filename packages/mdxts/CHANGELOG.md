@@ -1,5 +1,44 @@
 # mdxts
 
+## 1.8.0
+
+### Minor Changes
+
+- 3378b26: Adds support for defining schemas for collections:
+
+  ```tsx
+  import { createCollection, type MDXContent } from 'mdxts/collections'
+  import { z } from 'zod'
+
+  const frontmatterSchema = z.object({
+    title: z.string(),
+    date: z.coerce.date(),
+    summary: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+  })
+
+  export const PostsCollection = createCollection<{
+    default: MDXContent
+    frontmatter: z.infer<typeof frontmatterSchema>
+  }>('posts/*.mdx', {
+    baseDirectory: 'posts',
+    schema: {
+      frontmatter: frontmatterSchema.parse,
+    },
+  })
+  ```
+
+- 53bfeb8: Moves all `CodeBlock` components to use `restyle` and exposes a `css` prop for each component to allow overriding styles.
+
+### Patch Changes
+
+- 361b420: Improves error messaging when working with collection utilities.
+- 3207ce0: Adds export for `frontmatter` from MDX files when using `mdx-plugins`.
+- 598bd9c: Fixes `getEditPath` for export source in local development.
+- 38b7b4b: Fixes caching implementation for shiki highlighter.
+- e401fe0: Updates collection import map during development when adding, removing, or editing collections.
+- 400384a: Inherit background color in code element in `CodeBlock` to prevent global styles leaking in.
+
 ## 1.7.1
 
 ### Patch Changes
