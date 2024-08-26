@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "rm -rf .next && next dev -p 4000",
-    "build": "NODE_OPTIONS='--max-old-space-size=4096' next build",
+    "build": "NODE_OPTIONS='--max-old-space-size=4096' node ../packages/mdxts/dist/cjs/src/cli/index.js next build",
     "lint": "next lint",
     "test": "next test"
   },
