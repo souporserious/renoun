@@ -1,5 +1,4 @@
 import React from 'react'
-import { getThemeColors } from 'mdxts'
 import { CodeBlock, LineNumbers, Tokens, Toolbar } from 'mdxts/components'
 
 export function Basic() {
@@ -69,23 +68,14 @@ export function LineHighlightAndFocus() {
   )
 }
 
-export async function Custom() {
-  const theme = await getThemeColors()
-
+export function Custom() {
   return (
     <CodeBlock
       allowErrors="2307"
       filename="toolbar.tsx"
       source="./counter/Counter.tsx"
     >
-      <div
-        style={{
-          fontSize: '1rem',
-          color: theme.foreground,
-          backgroundColor: theme.background,
-          border: `1px solid ${theme.panel.border}`,
-        }}
-      >
+      <div style={{ fontSize: '1rem' }}>
         <Toolbar allowCopy style={{ padding: '0.5lh' }} />
         <pre
           style={{
@@ -98,9 +88,7 @@ export async function Custom() {
             overflow: 'auto',
           }}
         >
-          <LineNumbers
-            style={{ padding: '0 0.5lh', backgroundColor: theme.background }}
-          />
+          <LineNumbers style={{ padding: '0 0.5lh' }} />
           <code style={{ paddingRight: '0.5lh' }}>
             <Tokens />
           </code>

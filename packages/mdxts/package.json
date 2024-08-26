@@ -28,17 +28,10 @@
     "dist/*"
   ],
   "sideEffects": false,
-  "main": "./dist/esm/index.js",
-  "types": "./dist/types/index.d.ts",
   "bin": {
     "mdxts": "./dist/cjs/src/cli/index.js"
   },
   "exports": {
-    ".": {
-      "types": "./dist/types/index.d.ts",
-      "import": "./dist/esm/index.js",
-      "require": "./dist/cjs/src/index.js"
-    },
     "./assets": {
       "types": "./dist/types/assets/index.d.ts",
       "import": "./dist/esm/assets/index.js",
