@@ -62,7 +62,9 @@ export class WebSocketClient {
   }
 
   #handleError(event: WebSocket.ErrorEvent) {
-    console.error('[mdxts] WebSocket client error:', event.message)
+    throw new Error(
+      `[mdxts] WebSocket client error: ${event.message} \n\nThis was most likely caused by the "mdxts" server not running.`
+    )
   }
 
   #handleClose() {

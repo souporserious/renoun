@@ -96,7 +96,9 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
           options.isServer &&
           options.dev
         ) {
-          createServer()
+          if (process.env.MDXTS_SERVER !== 'true') {
+            createServer()
+          }
           renumberFilenames()
           startedRenumberFilenameWatcher = true
         }

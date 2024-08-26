@@ -9,7 +9,7 @@ import chalk from 'chalk'
 import { getThemeColors } from './get-theme-colors'
 import { isJsxOnly } from './is-jsx-only'
 import { generatedFilenames } from './parse-source-text-metadata'
-import { getHighlighter } from './get-highlighter'
+import type { Highlighter } from './create-highlighter'
 import { getTrimmedSourceFileText } from './get-trimmed-source-file-text'
 import { splitTokenByRanges } from './split-tokens-by-ranges'
 
@@ -96,6 +96,7 @@ export async function getTokens(
   allowErrors: string | boolean = false,
   showErrors: boolean = false,
   isInline: boolean = false,
+  highlighter: Highlighter | null = null,
   sourcePath?: string | false
 ) {
   if (language === 'plaintext' || language === 'diff') {
@@ -113,13 +114,18 @@ export async function getTokens(
     ]
   }
 
+  if (highlighter === null) {
+    throw new Error(
+      '[mdxts] Highlighter was not initialized. Ensure that the highlighter is created before calling "getTokens".'
+    )
+  }
+
   const componentName = isInline ? 'CodeInline' : 'CodeBlock'
   const isJavaScriptLikeLanguage = ['js', 'jsx', 'ts', 'tsx'].includes(language)
   const jsxOnly = isJavaScriptLikeLanguage ? isJsxOnly(value) : false
   const sourceFile = filename ? project.getSourceFile(filename) : undefined
   const finalLanguage = getLanguage(language)
   const theme = await getThemeColors()
-  const highlighter = await getHighlighter()
   const sourceText = sourceFile ? getTrimmedSourceFileText(sourceFile) : value
   const { tokens } = highlighter.codeToTokens(sourceText, {
     theme: 'mdxts',

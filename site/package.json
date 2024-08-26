@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "rm -rf .next && next dev -p 4000",
-    "build": "next build",
+    "build": "NODE_OPTIONS='--max-old-space-size=4096' next build",
     "lint": "next lint",
     "test": "next test"
   },

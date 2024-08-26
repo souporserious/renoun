@@ -29,19 +29,24 @@ if (firstArgument === 'next' || firstArgument === 'waku') {
     const subProcess = spawn(
       firstArgument,
       [secondArgument, ...restArguments],
-      { stdio: 'inherit', shell: true }
+      {
+        stdio: 'inherit',
+        shell: true,
+        env: {
+          ...process.env,
+          MDXTS_SERVER: 'true',
+        },
+      }
     )
 
     subProcess.on('close', (code) => {
       if (!isDev) {
+        server.cleanup()
         process.exit(code)
       }
     })
   }
-
-  if (isDev) {
-    createServer()
-  }
+  const server = createServer()
 
   runSubProcess()
 } else if (firstArgument === 'watch') {

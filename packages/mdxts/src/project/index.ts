@@ -2,6 +2,10 @@ import type {
   AnalyzeSourceTextOptions,
   AnalyzeSourceTextResult,
 } from '../utils/analyze-source-text'
+import {
+  createHighlighter,
+  type Highlighter,
+} from '../utils/create-highlighter'
 import type { DistributiveOmit } from '../types'
 import { WebSocketClient } from './rpc/client'
 import { getProject } from './get-project'
@@ -11,6 +15,19 @@ let client: WebSocketClient | undefined
 
 if (process.env.NODE_ENV === 'development') {
   client = new WebSocketClient()
+}
+
+let currentHighlighter: { current: Highlighter | null } = { current: null }
+let highlighterPromise: Promise<void> | null = null
+
+function untilHighlighterLoaded(): Promise<void> {
+  if (highlighterPromise) return highlighterPromise
+
+  highlighterPromise = createHighlighter().then((highlighter) => {
+    currentHighlighter.current = highlighter
+  })
+
+  return highlighterPromise
 }
 
 /**
@@ -30,9 +47,21 @@ export async function analyzeSourceText(
   const { projectOptions, ...analyzeOptions } = options
   const project = await getProject(projectOptions)
 
+  await untilHighlighterLoaded()
+
   return import('../utils/analyze-source-text').then(
     ({ analyzeSourceText }) => {
-      return analyzeSourceText({ project, ...analyzeOptions })
+      if (currentHighlighter.current === null) {
+        throw new Error(
+          '[mdxts] Highlighter is not initialized in "analyzeSourceText"'
+        )
+      }
+
+      return analyzeSourceText({
+        ...analyzeOptions,
+        highlighter: currentHighlighter.current,
+        project,
+      })
     }
   )
 }

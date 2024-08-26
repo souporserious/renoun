@@ -2,6 +2,10 @@ import { watch } from 'node:fs'
 
 import { generateCollectionImportMap } from '../collections/import-maps'
 import { analyzeSourceText } from '../utils/analyze-source-text'
+import {
+  createHighlighter,
+  type Highlighter,
+} from '../utils/create-highlighter'
 import { WebSocketServer } from './rpc/server'
 import { getProject } from './get-project'
 import { ProjectOptions } from './types'
@@ -14,6 +18,13 @@ const DEFAULT_IGNORED_PATHS = [
   '.next',
   '.turbo',
 ]
+let currentHighlighter: Highlighter | null = null
+
+if (currentHighlighter === null) {
+  createHighlighter().then((highlighter) => {
+    currentHighlighter = highlighter
+  })
+}
 
 /** Create a WebSocket server. */
 export function createServer() {
@@ -46,10 +57,19 @@ export function createServer() {
     }) => {
       const project = await getProject(projectOptions)
 
+      if (currentHighlighter === null) {
+        throw new Error(
+          '[mdxts] Highlighter is not initialized in web socket "analyzeSourceText"'
+        )
+      }
+
       return analyzeSourceText({
         ...options,
+        highlighter: currentHighlighter,
         project,
       })
     }
   )
+
+  return server
 }

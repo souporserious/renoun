@@ -1,10 +1,12 @@
 import type { Project } from 'ts-morph'
 import { getTokens } from './get-tokens'
+import type { createHighlighter } from './create-highlighter'
 import type { ParseMetadataOptions } from './parse-source-text-metadata'
 import { parseSourceTextMetadata } from './parse-source-text-metadata'
 
 export type AnalyzeSourceTextOptions = ParseMetadataOptions & {
   project: Project
+  highlighter?: Awaited<ReturnType<typeof createHighlighter>>
   sourcePath?: string
   showErrors?: boolean
 }
@@ -23,6 +25,7 @@ export async function analyzeSourceText({
   showErrors,
   sourcePath,
   isInline,
+  highlighter,
   ...options
 }: AnalyzeSourceTextOptions): Promise<AnalyzeSourceTextResult> {
   const metadata = await parseSourceTextMetadata({
@@ -41,6 +44,7 @@ export async function analyzeSourceText({
     allowErrors,
     showErrors,
     isInline,
+    highlighter,
     // Simplify the path for more legibile error messages.
     sourcePath ? sourcePath.split(process.cwd()).at(1) : undefined
   )

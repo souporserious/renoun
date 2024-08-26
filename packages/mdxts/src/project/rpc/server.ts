@@ -54,6 +54,24 @@ export class WebSocketServer {
     })
   }
 
+  cleanup() {
+    // Close all active WebSocket connection
+    this.#sockets.forEach((ws) => {
+      ws.close()
+    })
+
+    // Stop the WebSocket server from accepting new connections
+    this.#server.close((error) => {
+      if (error) {
+        new Error('[mdxts] Error while closing WebSocket server', {
+          cause: error,
+        })
+      } else {
+        console.log('[mdxts] WebSocket server closed successfully.')
+      }
+    })
+  }
+
   registerMethod(method: string, handler: (params: any) => Promise<any> | any) {
     this.#handlers[method] = handler
   }
