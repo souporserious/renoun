@@ -12,7 +12,6 @@ const withMDX = createMDXPlugin({
 
 export default withMDX({
   output: 'export',
-  transpilePackages: ['project'],
   pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
   webpack(config) {
     config.plugins.push(
