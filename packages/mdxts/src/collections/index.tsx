@@ -502,7 +502,7 @@ class Source<AllExports extends FileExports>
         .replace(/^\d+\./, '')
     }
 
-    return name
+    return name.split('.').at(0)!
   }
 
   getTitle() {
