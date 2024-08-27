@@ -57,11 +57,6 @@
       "import": "./dist/esm/core.js",
       "require": "./dist/cjs/src/core.js"
     },
-    "./loader": {
-      "types": "./dist/types/loader/index.d.ts",
-      "import": "./dist/esm/loader/index.js",
-      "require": "./dist/cjs/src/loader/index.js"
-    },
     "./mdx-plugins": {
       "types": "./dist/types/mdx-plugins/index.d.ts",
       "import": "./dist/esm/mdx-plugins/index.js",
@@ -94,9 +89,6 @@
       ],
       "core": [
         "./dist/types/core.d.ts"
-      ],
-      "loader": [
-        "./dist/types/loader/index.d.ts"
       ],
       "mdx-plugins": [
         "./dist/types/mdx-plugins/index.d.ts"

@@ -268,7 +268,7 @@ export function ExportedTypes(props: ExportedTypesProps) {
 
     if (isRelative && !workingDirectory) {
       throw new Error(
-        'The [workingDirectory] prop was not provided to the [ExportedTypes] component while using a relative path. Pass a valid [workingDirectory] or make sure the mdxts/remark plugin and mdxts/loader are configured correctly if this is being renderend in an MDX file.'
+        'The [workingDirectory] prop was not provided to the [ExportedTypes] component while using a relative path. Pass a valid [workingDirectory] or make sure the mdxts/remark plugin is configured correctly if this is being renderend in an MDX file.'
       )
     }
 

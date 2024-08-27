@@ -36,9 +36,8 @@ type PluginOptions = {
 /** Immediately generate the initial collection import map. */
 generateCollectionImportMap()
 
-/** A Next.js plugin to configure MDXTS theming, `rehype` and `remark` markdown plugins, and the [Webpack loader](mdxts.dev/packages/loader). */
+/** A Next.js plugin to configure MDXTS theming, `rehype` and `remark` markdown plugins. */
 export function createMdxtsPlugin(pluginOptions: PluginOptions) {
-  let refreshServerPort: string | null = null
   let {
     gitSource = getVercelGitSource(),
     gitBranch = 'main',
@@ -101,17 +100,6 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
           renumberFilenames()
           startedRenumberFilenameWatcher = true
         }
-
-        config.module.rules.push({
-          test: /\.(?:jsx?|tsx?)$/,
-          exclude: /node_modules/,
-          use: [
-            {
-              loader: 'mdxts/loader',
-              options: { gitSource, gitBranch, gitProvider },
-            },
-          ],
-        })
 
         if (typeof getWebpackConfig === 'function') {
           return getWebpackConfig(config, options)

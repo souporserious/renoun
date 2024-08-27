@@ -93,7 +93,7 @@ export type CodeBlockProps =
       /** Path to the source file on disk to highlight. */
       source: string
 
-      /** The working directory for the `source`. Added automatically when using `mdxts/loader`. */
+      /** The working directory for the `source`. */
       workingDirectory?: string
     } & BaseCodeBlockProps)
 

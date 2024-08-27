@@ -69,7 +69,7 @@ export async function parseSourceTextMetadata({
 
     if (isRelative && !workingDirectory) {
       throw new Error(
-        `[mdxts] The "workingDirectory" prop is required for "${componentName}" with the relative source "${props.source}".\n\nPass a valid [workingDirectory]. If this is being renderend directly in an MDX file, make sure the "mdxts/remark" plugin and "mdxts/loader" Webpack loader are configured correctly.`
+        `[mdxts] The "workingDirectory" prop is required for "${componentName}" with the relative source "${props.source}".\n\nPass a valid [workingDirectory]. If this is being renderend directly in an MDX file, make sure the "mdxts/remark" plugin is configured correctly.`
       )
     }
 
