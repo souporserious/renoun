@@ -1078,8 +1078,9 @@ function getExportedDeclaration(
   if (exportDeclarations.length > 1) {
     const filteredExportDeclarations = exportDeclarations.filter(
       (declaration) =>
-        Node.isTypeAliasDeclaration(declaration) ||
-        Node.isInterfaceDeclaration(declaration)
+        !Node.isTypeAliasDeclaration(declaration) &&
+        !Node.isInterfaceDeclaration(declaration) &&
+        !Node.isPropertyAccessExpression(declaration.getParentOrThrow())
     )
 
     if (filteredExportDeclarations.length > 1) {
@@ -1089,7 +1090,7 @@ function getExportedDeclaration(
         .replace(process.cwd(), '')
 
       throw new Error(
-        `[mdxts] Multiple declarations found for export in source file at ${filePath}. Only one export declaration is currently allowed. Please file an issue for support.`
+        `[mdxts] Multiple declarations found for export after filtering type aliases, interfaces, and property access expressions in source file at ${filePath}. Only one export declaration is currently allowed. Please file an issue for support.`
       )
     }
 
