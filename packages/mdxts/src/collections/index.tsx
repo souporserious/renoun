@@ -14,6 +14,7 @@ import parseTitle from 'title'
 
 import { createSlug } from '../utils/create-slug'
 import { filePathToPathname } from '../utils/file-path-to-pathname'
+import { getExportedDeclaration } from '../utils/get-exported-declaration'
 import {
   getDeclarationLocation,
   type DeclarationPosition,
@@ -92,6 +93,9 @@ export interface ExportSource<Value> extends BaseSource {
   /** The description of the exported source based on the JSDoc comment if it exists. */
   getDescription(): string | undefined
 
+  /** The URL-friendly slug of the export name. */
+  getSlug(): string
+
   /** A text representation of the exported source if it is statically analyzable. */
   getText(): string
 
@@ -111,6 +115,9 @@ export interface ExportSource<Value> extends BaseSource {
   getSiblings(): Promise<
     [previous?: ExportSource<Value>, next?: ExportSource<Value>]
   >
+
+  /** Whether the export is considered the main export of the file based on the name matching the file name or directory name. */
+  isMainExport(): boolean
 }
 
 /** @internal */
@@ -151,6 +158,9 @@ export interface FileSystemSource<Exports extends FileExports>
   getNamedExport<Name extends Exclude<keyof Exports, 'default'>>(
     name: Name
   ): ExportSource<Exports[Name]>
+
+  /** The main export source of the file based on the file name or directory name. */
+  getMainExport(): ExportSource<Exports[keyof Exports]> | undefined
 
   /** All exported sources of the file. */
   getExports(): ExportSource<Exports[keyof Exports]>[]
@@ -226,6 +236,11 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
   ) {}
 
   abstract getName(): string
+
+  isMainExport(): boolean {
+    const mainExport = this.source.getMainExport()
+    return mainExport ? this === mainExport : false
+  }
 
   getTitle() {
     return parseTitle(this.getName())
@@ -711,6 +726,17 @@ You can fix this error by taking one of the following actions:
     return new NamedExport<AllExports, Name>(this, name, exportDeclaration)
   }
 
+  getMainExport() {
+    const baseName = this.getSourceFile().getBaseNameWithoutExtension()
+
+    return this.getExports().find((exportSource) => {
+      return (
+        exportSource.getName() === baseName ||
+        exportSource.getSlug() === baseName
+      )
+    })
+  }
+
   getExports() {
     let sourceFile: SourceFile
 
@@ -1100,43 +1126,6 @@ function getDeclarationName(declaration: Node) {
   } else if (Node.isClassDeclaration(declaration)) {
     return declaration.getName()
   }
-}
-
-/** Unwraps exported declarations from a source file. */
-function getExportedDeclaration(
-  exportedDeclarations: ReadonlyMap<string, ExportedDeclarations[]>,
-  name: string
-) {
-  const exportDeclarations = exportedDeclarations.get(name)
-
-  if (!exportDeclarations) {
-    return undefined
-  }
-
-  // Filter out types if multiple declarations are found
-  if (exportDeclarations.length > 1) {
-    const filteredExportDeclarations = exportDeclarations.filter(
-      (declaration) =>
-        !Node.isTypeAliasDeclaration(declaration) &&
-        !Node.isInterfaceDeclaration(declaration) &&
-        !Node.isPropertyAccessExpression(declaration.getParentOrThrow())
-    )
-
-    if (filteredExportDeclarations.length > 1) {
-      const filePath = exportDeclarations[0]
-        .getSourceFile()
-        .getFilePath()
-        .replace(process.cwd(), '')
-
-      throw new Error(
-        `[mdxts] Multiple declarations found for export after filtering type aliases, interfaces, and property access expressions in source file at ${filePath}. Only one export declaration is currently allowed. Please file an issue for support.`
-      )
-    }
-
-    return filteredExportDeclarations[0]
-  }
-
-  return exportDeclarations[0]
 }
 
 /** Whether a depth value is zero, a positive integer, or Infinity. */
