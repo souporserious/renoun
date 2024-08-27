@@ -120,7 +120,15 @@ async function CodeBlockAsync({
     options.value = props.value
   } else if (hasSource) {
     options.source = props.source
-    options.workingDirectory = props.workingDirectory
+
+    if (props.workingDirectory) {
+      if (URL.canParse(props.workingDirectory)) {
+        const { pathname } = new URL(props.workingDirectory)
+        options.workingDirectory = pathname.slice(0, pathname.lastIndexOf('/'))
+      } else {
+        options.workingDirectory = props.workingDirectory
+      }
+    }
   }
 
   const { tokens, value, label } = await analyzeSourceText({
