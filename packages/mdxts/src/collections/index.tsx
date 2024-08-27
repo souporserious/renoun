@@ -12,6 +12,8 @@ import { dirname, resolve } from 'node:path'
 import globParent from 'glob-parent'
 import parseTitle from 'title'
 
+import { createSlug } from '../utils/create-slug'
+import { filePathToPathname } from '../utils/file-path-to-pathname'
 import {
   getDeclarationLocation,
   type DeclarationPosition,
@@ -272,11 +274,21 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
     return 'isomorphic'
   }
 
-  getPath() {
-    const path = this.source.getPath()
-    const name = this.getName()
+  getSlug() {
+    return createSlug(this.getName())
+  }
 
-    return name ? `${path}/${name}` : path
+  getPath() {
+    const collection = this.source.getCollection()
+    const filePath = this.exportDeclaration
+      ? this.exportDeclaration.getSourceFile().getFilePath()
+      : this.source.getSourceFile().getFilePath()
+
+    return filePathToPathname(
+      filePath,
+      collection.options.baseDirectory,
+      collection.options.basePath
+    )
   }
 
   getPathSegments(): string[] {
