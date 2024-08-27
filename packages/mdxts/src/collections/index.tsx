@@ -106,6 +106,11 @@ export interface ExportSource<Value> extends BaseSource {
 
   /** The lines and columns where the export starts and ends. */
   getPosition(): DeclarationPosition
+
+  /** The previous and next export sources within the same file. */
+  getSiblings(): Promise<
+    [previous?: ExportSource<Value>, next?: ExportSource<Value>]
+  >
 }
 
 /** @internal */
@@ -369,6 +374,27 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
     }
 
     return exportValue as Value
+  }
+
+  async getSiblings(): Promise<
+    [previous?: Export<Value, AllExports>, next?: Export<Value, AllExports>]
+  > {
+    const sourceExports = this.source.getExports()
+    const currentIndex = sourceExports.findIndex(
+      (exportItem) => exportItem.getName() === this.getName()
+    )
+
+    if (currentIndex === -1) {
+      return [undefined, undefined]
+    }
+
+    const previousExport = sourceExports[currentIndex - 1]
+    const nextExport = sourceExports[currentIndex + 1]
+
+    return [
+      previousExport as Export<Value, AllExports> | undefined,
+      nextExport as Export<Value, AllExports> | undefined,
+    ]
   }
 }
 

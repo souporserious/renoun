@@ -1,10 +1,12 @@
 import { styled } from 'restyle'
+import type { ExportSource } from 'mdxts/collections'
 import Link from 'next/link'
 
-import { ComponentsCollection, type ComponentSource } from '@/collections'
+import { ComponentsCollection } from '@/collections'
 
-export default async function Components() {
-  const sources = await ComponentsCollection.getSources({ depth: 1 })
+export default function Components() {
+  const source = ComponentsCollection.getSource()!
+  const sourceExports = source.getExports()
 
   return (
     <main css={{ display: 'grid', padding: '4rem 0', gap: '1rem' }}>
@@ -16,7 +18,7 @@ export default async function Components() {
           margin: 0,
         }}
       >
-        {sources.map((source) => (
+        {sourceExports.map((source) => (
           <ComponentItem key={source.getPath()} source={source} />
         ))}
       </ul>
@@ -26,7 +28,11 @@ export default async function Components() {
 
 const StyledLink = styled(Link, { display: 'block', padding: '1rem' })
 
-async function ComponentItem({ source }: { source: ComponentSource }) {
+async function ComponentItem({
+  source,
+}: {
+  source: ExportSource<React.ComponentType>
+}) {
   return (
     <li>
       <StyledLink href={source.getPath()}>
