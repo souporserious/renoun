@@ -11,7 +11,6 @@ export {
 } from './CodeBlock'
 export { CodeInline, type CodeInlineProps } from './CodeInline'
 export { Copyright } from './Copyright'
-export { ExportedTypes } from './ExportedTypes'
 export { GitProviderLogo, GitProviderLink } from './GitProvider'
 export { MDXContent } from './MDXContent'
 export { MDXComponents } from './MDXComponents'
