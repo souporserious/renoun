@@ -9,7 +9,6 @@ import { getMdxPlugins } from '../mdx-plugins'
 import { generateCollectionImportMap } from '../collections/import-maps'
 import { createServer } from '../project/server'
 import { renumberFilenames } from '../utils/renumber'
-import { createRefreshServer } from './create-refresh-server'
 
 type PluginOptions = {
   /** Path to the VS Code compatible theme used for syntax highlighting the `CodeBlock`, `CodeInline`, and `Tokens` components. */
@@ -133,18 +132,6 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
       nextConfig.env.MDXTS_THEME_PATH = themePath
       nextConfig.env.MDXTS_HIGHLIGHT_ERRORS = String(highlightErrors)
       nextConfig.env.MDXTS_GIT_PROVIDER = gitProvider
-
-      if (phase === PHASE_DEVELOPMENT_SERVER) {
-        if (refreshServerPort === null) {
-          const server = await createRefreshServer()
-          const address = server.address()
-          if (address === null || typeof address === 'string') {
-            throw new Error('Expected server to be listening')
-          }
-          refreshServerPort = String(address.port)
-        }
-        nextConfig.env.MDXTS_REFRESH_PORT = refreshServerPort
-      }
 
       if (nextConfig.pageExtensions === undefined) {
         nextConfig.pageExtensions = ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx']
