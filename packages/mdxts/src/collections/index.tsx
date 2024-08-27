@@ -619,11 +619,17 @@ class Source<AllExports extends FileExports>
 
     const minDepth = this.collection.getDepth()
     const maxDepth = depth === Infinity ? Infinity : this.getDepth() + depth
+    const seenPaths = new Set<string>()
     const filteredSources = (
       await this.collection.getFileSystemSources()
     ).filter((source) => {
-      const sourceDepth = source.getDepth()
+      const sourcePath = source.getPath()
+      if (seenPaths.has(sourcePath)) {
+        return false
+      }
+      seenPaths.add(sourcePath)
 
+      const sourceDepth = source.getDepth()
       return sourceDepth >= minDepth && sourceDepth <= maxDepth
     })
     const currentIndex = filteredSources.findIndex(
@@ -989,8 +995,15 @@ class Collection<AllExports extends FileExports>
     const minDepth = this.getDepth()
     const maxDepth = depth === Infinity ? Infinity : minDepth + depth
     const sources = await this.getFileSystemSources()
+    const seenPaths = new Set<string>()
 
     return sources.filter((source) => {
+      const sourcePath = source.getPath()
+      if (seenPaths.has(sourcePath)) {
+        return false
+      }
+      seenPaths.add(sourcePath)
+
       if (source) {
         const descendantDepth = source.getDepth()
         return descendantDepth > minDepth && descendantDepth <= maxDepth
