@@ -68,7 +68,7 @@ type PositiveIntegerOrInfinity<Type extends number> = `${Type}` extends
 export interface BaseSourceWithGetters<Exports extends FileExports>
   extends BaseSource {
   /** Retrieves a source in the immediate directory or sub-directory by its path. */
-  getSource(path: string | string[]): FileSystemSource<Exports> | undefined
+  getSource(path?: string | string[]): FileSystemSource<Exports> | undefined
 
   /**
    * Retrieves sources in the immediate directory and possibly sub-directories based on the provided `depth`.
@@ -1062,15 +1062,26 @@ function getExportedDeclaration(
     return undefined
   }
 
+  // Filter out types if multiple declarations are found
   if (exportDeclarations.length > 1) {
-    const filePath = exportDeclarations[0]
-      .getSourceFile()
-      .getFilePath()
-      .replace(process.cwd(), '')
-
-    throw new Error(
-      `[mdxts] Multiple declarations found for export in source file at ${filePath}. Only one export declaration is currently allowed. Please file an issue for support.`
+    const filteredExportDeclarations = exportDeclarations.filter(
+      (declaration) =>
+        Node.isTypeAliasDeclaration(declaration) ||
+        Node.isInterfaceDeclaration(declaration)
     )
+
+    if (filteredExportDeclarations.length > 1) {
+      const filePath = exportDeclarations[0]
+        .getSourceFile()
+        .getFilePath()
+        .replace(process.cwd(), '')
+
+      throw new Error(
+        `[mdxts] Multiple declarations found for export in source file at ${filePath}. Only one export declaration is currently allowed. Please file an issue for support.`
+      )
+    }
+
+    return filteredExportDeclarations[0]
   }
 
   return exportDeclarations[0]
