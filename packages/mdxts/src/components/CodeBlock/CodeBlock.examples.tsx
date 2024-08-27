@@ -2,7 +2,12 @@ import React from 'react'
 import { CodeBlock, LineNumbers, Tokens, Toolbar } from 'mdxts/components'
 
 export function Basic() {
-  return <CodeBlock source="./counter/useCounter.ts" />
+  return (
+    <CodeBlock
+      source="./counter/useCounter.ts"
+      workingDirectory={import.meta.url}
+    />
+  )
 }
 
 export function TypeChecking() {
@@ -74,6 +79,7 @@ export function Custom() {
       allowErrors="2307"
       filename="toolbar.tsx"
       source="./counter/Counter.tsx"
+      workingDirectory={import.meta.url}
     >
       <div style={{ fontSize: '1rem' }}>
         <Toolbar allowCopy style={{ padding: '0.5lh' }} />

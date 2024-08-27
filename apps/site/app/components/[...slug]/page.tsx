@@ -44,8 +44,15 @@ export default async function Component({
   ])
   const Readme = await readmeSource?.getDefaultExport().getValue()
   const examplesSource = componentSource.getSource('examples')
-  const examples = await examplesSource?.getSources()
+  const examplesSources = await examplesSource?.getSources()
   const isExamplesPage = params.slug.at(-1) === 'examples'
+  const examplesExports = isExamplesPage
+    ? componentSource.getExports()
+    : examplesSource
+      ? examplesSources?.length
+        ? examplesSources.flatMap((source) => source.getExports())
+        : examplesSource.getExports()
+      : []
   const updatedAt = await componentSource.getUpdatedAt()
   const editPath = componentSource.getEditPath()
   const [previousSource, nextSource] = await componentSource.getSiblings({
@@ -62,7 +69,9 @@ export default async function Component({
       }}
     >
       <div>
-        <h1>{componentSource.getTitle()}</h1>
+        <h1>
+          {componentSource.getName()} {isExamplesPage ? 'Examples' : ''}
+        </h1>
         {Readme ? <Readme /> : null}
       </div>
 
@@ -80,7 +89,7 @@ export default async function Component({
         ))}
       </div>
 
-      {isExamplesPage || !examples ? null : (
+      {examplesExports.length ? (
         <div>
           <h2 css={{ margin: '0 0 2rem' }}>Examples</h2>
           <ul
@@ -92,16 +101,14 @@ export default async function Component({
               gap: '2rem',
             }}
           >
-            {examples.map((examplesSource) =>
-              examplesSource.getExports().map((exportSource) => (
-                <li key={exportSource.getName()}>
-                  <Preview source={exportSource} />
-                </li>
-              ))
-            )}
+            {examplesExports.map((exportSource) => (
+              <li key={exportSource.getName()}>
+                <Preview source={exportSource} />
+              </li>
+            ))}
           </ul>
         </div>
-      )}
+      ) : null}
 
       <div>
         <div
@@ -156,7 +163,10 @@ async function Preview({
   const isComponent = typeof Value === 'function' && isUppercase
 
   return (
-    <section key={name}>
+    <section
+      key={name}
+      css={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}
+    >
       <header>
         <Stack flexDirection="row" alignItems="baseline" gap="0.5rem">
           <h3 css={{ margin: 0 }}>{name}</h3>{' '}
