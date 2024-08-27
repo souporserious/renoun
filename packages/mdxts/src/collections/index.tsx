@@ -993,7 +993,7 @@ export function createCollection<
 }
 
 /**
- * Sets the import maps for a collection's file patterns.
+ * Sets the import map of dynamic imports for all collection file patterns.
  * @internal
  */
 createCollection.setImportMap = setImportMap
