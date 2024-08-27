@@ -97,7 +97,7 @@ export type CodeBlockProps =
       workingDirectory?: string
     } & BaseCodeBlockProps)
 
-export async function CodeBlockAsync({
+async function CodeBlockAsync({
   filename,
   language,
   highlightedLines,
