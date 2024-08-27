@@ -895,7 +895,9 @@ class Collection<AllExports extends FileExports>
     return this.options.basePath ? getPathDepth(this.options.basePath) : -1
   }
 
-  getSource(path: string | string[]): FileSystemSource<AllExports> | undefined {
+  getSource(
+    path: string | string[] = 'index'
+  ): FileSystemSource<AllExports> | undefined {
     let pathString = Array.isArray(path) ? path.join('/') : path
 
     if (this.#sources.has(pathString)) {
