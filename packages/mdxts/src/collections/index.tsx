@@ -115,7 +115,7 @@ export interface ExportSource<Value> extends BaseSource {
   >
 
   /** Whether the export is considered the main export of the file based on the name matching the file name or directory name. */
-  isMainExports(): boolean
+  isMainExport(): boolean
 }
 
 export interface FileSystemSource<Exports extends FileExports>
@@ -232,7 +232,7 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
 
   abstract getName(): string
 
-  isMainExports(): boolean {
+  isMainExport(): boolean {
     const mainExport = this.source.getMainExport()
     return mainExport ? this === mainExport : false
   }
@@ -364,7 +364,9 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
         } catch (error) {
           if (error instanceof Error) {
             throw new Error(
-              `[mdxts] Failed to parse export "${name}" using schema for file "${this.source.getPath()}" \n\n${error.message}`,
+              `[mdxts] Failed to parse export "${name}" using schema for file "${this.source.getPath()}" \n\n${
+                error.message
+              }`,
               { cause: error }
             )
           }
@@ -447,7 +449,7 @@ class DefaultExport<AllExports extends FileExports>
 
 class NamedExport<
     AllExports extends FileExports,
-    Name extends Exclude<keyof AllExports, 'default'>,
+    Name extends Exclude<keyof AllExports, 'default'>
   >
   extends Export<AllExports[Name], AllExports>
   implements ExportSource<AllExports[Name]>
@@ -525,7 +527,9 @@ class Source<AllExports extends FileExports>
 
     if (!calculatedPath) {
       throw new Error(
-        `[mdxts] Could not calculate depth. Source path not found for file path "${this.#sourcePath}".`
+        `[mdxts] Could not calculate depth. Source path not found for file path "${
+          this.#sourcePath
+        }".`
       )
     }
 
@@ -567,7 +571,9 @@ class Source<AllExports extends FileExports>
 
     if (order === undefined) {
       throw new Error(
-        `[mdxts] Source file order not found for file path "${this.#sourcePath}". If you see this error, please file an issue.`
+        `[mdxts] Source file order not found for file path "${
+          this.#sourcePath
+        }". If you see this error, please file an issue.`
       )
     }
 
@@ -630,7 +636,7 @@ class Source<AllExports extends FileExports>
   } = {}): Promise<
     [
       previous?: FileSystemSource<AllExports> | undefined,
-      next?: FileSystemSource<AllExports> | undefined,
+      next?: FileSystemSource<AllExports> | undefined
     ]
   > {
     if (!isValidDepth(depth)) {
@@ -683,7 +689,9 @@ You can fix this error by taking one of the following actions:
     Before calling "getDefaultExport", check if the source is a directory by using "isDirectory".
   
   - Add an index or README file to the "${baseName}" directory:
-    . Ensure the file has a valid extension based on the targeted file patterns of this collection: ${validExtensions.join(', ')}
+    . Ensure the file has a valid extension based on the targeted file patterns of this collection: ${validExtensions.join(
+      ', '
+    )}
     . Define a default export in the file or ensure the default export exists if compiled.
     
   - Handle the error:
@@ -717,7 +725,9 @@ You can fix this error by taking one of the following actions:
     Before calling "getNamedExport", check if the source is a directory by using "isDirectory".
   
   - Add an index or README file to the "${baseName}" directory:
-    . Ensure the file has a valid extension based on the targeted file patterns of this collection: ${validExtensions.join(', ')}
+    . Ensure the file has a valid extension based on the targeted file patterns of this collection: ${validExtensions.join(
+      ', '
+    )}
     . Define a named export of "${name.toString()}" in the file or ensure the named export exists if compiled.
     
   - Handle the error:
@@ -765,7 +775,9 @@ You can fix this error by taking one of the following actions:
     Before calling "getExports", check if the source is a directory by using "isDirectory" e.g. (await <collection>.getSources()).filter(source => !source.isDirectory()).
   
   - Add an index or README file to the "${baseName}" directory:
-    . Ensure the file has a valid extension based on the targeted file patterns of this collection: ${validExtensions.join(', ')}
+    . Ensure the file has a valid extension based on the targeted file patterns of this collection: ${validExtensions.join(
+      ', '
+    )}
     
   - Handle the error:
     Catch and manage this error in your code to prevent it from causing a failure.`
@@ -788,7 +800,9 @@ You can fix this error by taking one of the following actions:
       return this.sourceFileOrDirectory
     }
     throw new Error(
-      `[mdxts] Expected a source file but got a directory at "${this.#sourcePath}".`
+      `[mdxts] Expected a source file but got a directory at "${
+        this.#sourcePath
+      }".`
     )
   }
 
@@ -800,7 +814,9 @@ You can fix this error by taking one of the following actions:
 
     if (!getImport) {
       throw new Error(
-        `[mdxts] No source found for path "${this.getPath()}" at file pattern "${this.collection.filePattern}":
+        `[mdxts] No source found for path "${this.getPath()}" at file pattern "${
+          this.collection.filePattern
+        }":
 
 You can fix this error by ensuring the following:
   
@@ -940,7 +956,9 @@ class Collection<AllExports extends FileExports>
         const badge = '[mdxts] '
         if (error instanceof Error && error.message.includes(badge)) {
           throw new Error(
-            `[mdxts] Error occurred while sorting sources for collection with file pattern "${this.filePattern}". \n\n${error.message.slice(badge.length)}`
+            `[mdxts] Error occurred while sorting sources for collection with file pattern "${
+              this.filePattern
+            }". \n\n${error.message.slice(badge.length)}`
           )
         }
         throw error
@@ -1067,7 +1085,7 @@ class Collection<AllExports extends FileExports>
  */
 export function createCollection<
   AllExports extends { [key: string]: any } = { [key: string]: any },
-  FilePattern extends FilePatterns = string,
+  FilePattern extends FilePatterns = string
 >(
   filePattern: FilePattern,
   options?: CollectionOptions<AllExports>
