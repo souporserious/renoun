@@ -20,8 +20,9 @@ import {
   getJsDocMetadata,
   getPropertyDefaultValueKey,
   getPropertyDefaultValue,
-  getSymbolDescription,
 } from '@tsxmod/utils'
+
+import { getSymbolDescription } from './get-symbol-description'
 
 export interface BaseType {
   /** Distinguishs between different kinds of types, such as primitives, objects, classes, functions, etc. */
