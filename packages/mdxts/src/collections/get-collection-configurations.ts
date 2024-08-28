@@ -1,10 +1,10 @@
 import type { Project } from 'ts-morph'
 import { Node, SyntaxKind } from 'ts-morph'
+
 import {
   resolveObjectLiteralExpression,
   isLiteralExpressionValue,
-} from '@tsxmod/utils'
-
+} from '../utils/resolve-expressions'
 import type { CollectionOptions } from './index'
 
 /** Finds all `createCollection` configurations. */
