@@ -1,6 +1,8 @@
 import React from 'react'
 import { css, type CSSObject } from 'restyle'
 
+import { loadConfig } from '../utils/load-config'
+
 function getGitProviderFromUrl(gitSource: string) {
   const url = new URL(gitSource)
   return url.hostname.split('.').at(0) as 'bitbucket' | 'github' | 'gitlab'
@@ -8,7 +10,7 @@ function getGitProviderFromUrl(gitSource: string) {
 
 function throwGitSourceError(name: string) {
   throw new Error(
-    `[mdxts] MDXTS_GIT_SOURCE environment variable is required for <${name} />. Please configure the mdxts/next "gitSource" plugin option or set the environment variable manually.`
+    `[mdxts] \`gitSource\` configuration is required for <${name} />. Configure the \`gitSource\` property in \`.mdxts/config.json\`.`
   )
 }
 
@@ -17,14 +19,14 @@ export function GitProviderLogo({
   fill = 'currentColor',
   ...props
 }: React.SVGProps<SVGSVGElement>) {
-  const gitSource = process.env.MDXTS_GIT_SOURCE
+  const config = loadConfig()
+  const gitSource = config.gitSource
 
   if (!gitSource) {
     throwGitSourceError('GitProviderLogo')
   }
 
-  const gitProvider =
-    process.env.MDXTS_GIT_PROVIDER || getGitProviderFromUrl(gitSource!)
+  const gitProvider = config.gitProvider ?? getGitProviderFromUrl(gitSource!)
   const sharedProps = {
     width: '24',
     height: '24',
@@ -113,9 +115,9 @@ export function GitProviderLink({
   style?: React.CSSProperties
   children?: React.ReactNode
 }) {
-  const gitSource = process.env.MDXTS_GIT_SOURCE
+  const config = loadConfig()
 
-  if (!gitSource) {
+  if (!config.gitSource) {
     throwGitSourceError('GitProviderLink')
   }
 
@@ -131,7 +133,7 @@ export function GitProviderLink({
 
   return (
     <a
-      href={gitSource}
+      href={config.gitSource}
       rel="noopener"
       target="_blank"
       className={className ? `${className} ${classNames}` : classNames}

@@ -1,32 +1,23 @@
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+
+import { loadConfig } from './load-config'
 
 let theme: Record<string, any> | null = null
 
-/** Load config from .mdxts/config.json */
-async function loadConfig(): Promise<{ theme?: string }> {
-  const configPath = resolve(process.cwd(), '.mdxts/config.json')
-  const configExists = existsSync(configPath)
-
-  if (configExists) {
-    return JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, any>
-  }
-
-  return {}
-}
-
 /** Gets the theme path from the config or environment variable. */
-async function getThemePath() {
-  const config = await loadConfig()
-  const theme = config.theme ?? process.env.MDXTS_THEME_PATH ?? 'nord'
+function getThemePath() {
+  const config = loadConfig()
 
-  return theme.endsWith('.json') ? resolve(process.cwd(), theme) : theme
+  return config.theme.endsWith('.json')
+    ? resolve(process.cwd(), config.theme)
+    : config.theme
 }
 
 /** Gets a normalized VS Code theme. */
 export async function getTheme() {
   const { bundledThemes, normalizeTheme } = await import('shiki/bundle/web')
-  const themePath = await getThemePath()
+  const themePath = getThemePath()
 
   if (themePath === undefined) {
     throw new Error(
