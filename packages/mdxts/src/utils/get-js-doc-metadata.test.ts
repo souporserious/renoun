@@ -1,5 +1,6 @@
 import { Project } from 'ts-morph'
-import { getJsDocMetadata } from './getJsDocMetadata'
+
+import { getJsDocMetadata } from './get-js-doc-metadata'
 
 describe('getJsDocMetadata', () => {
   const project = new Project()

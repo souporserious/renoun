@@ -1,9 +1,10 @@
 import { Project, SyntaxKind } from 'ts-morph'
+
 import {
   resolveLiteralExpression,
   resolveArrayLiteralExpression,
   resolveObjectLiteralExpression,
-} from './resolveExpressions'
+} from './resolve-expressions'
 
 const project = new Project()
 

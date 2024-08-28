@@ -1,6 +1,7 @@
 import dedent from 'dedent'
 import { Project, SyntaxKind } from 'ts-morph'
-import { getPropertyDefaultValue } from './getPropertyDefaultValue'
+
+import { getPropertyDefaultValue } from './get-property-default-value'
 
 describe('getParameterDefaultValue', () => {
   const project = new Project()
