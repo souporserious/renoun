@@ -1,11 +1,11 @@
 import type { bundledLanguages, bundledThemes } from 'shiki/bundle/web'
 import type { SourceFile, Diagnostic, ts, Project } from 'ts-morph'
 import { Node, SyntaxKind } from 'ts-morph'
-import { getDiagnosticMessageText } from '@tsxmod/utils'
 import { join, posix } from 'node:path'
 import { findRoot } from '@manypkg/find-root'
 import chalk from 'chalk'
 
+import { getDiagnosticMessageText } from './get-diagnostic-message'
 import { getThemeColors } from './get-theme-colors'
 import { isJsxOnly } from './is-jsx-only'
 import { generatedFilenames } from './parse-source-text-metadata'
@@ -521,7 +521,9 @@ function throwDiagnosticErrors(
         return `${chalk.red(' ⓧ')} ${message} ${chalk.dim(`ts(${code})`)}`
       }
       const startLineAndCol = sourceFile.getLineAndColumnAtPos(start)
-      return `${chalk.red(' ⓧ')} ${message} ${chalk.dim(`ts(${code}) [Ln ${startLineAndCol.line}, Col ${startLineAndCol.column}]`)}`
+      return `${chalk.red(' ⓧ')} ${message} ${chalk.dim(
+        `ts(${code}) [Ln ${startLineAndCol.line}, Col ${startLineAndCol.column}]`
+      )}`
     }
 
     if (!start) {
@@ -533,14 +535,20 @@ function throwDiagnosticErrors(
   const formattedErrors = errorMessages.join('\n')
 
   if (process.env.MDXTS_HIGHLIGHT_ERRORS === 'true') {
-    const errorMessage = `${formattedErrors}\n\n${tokensToHighlightedText(tokens)}`
+    const errorMessage = `${formattedErrors}\n\n${tokensToHighlightedText(
+      tokens
+    )}`
     throw new Error(
-      `[mdxts] ${chalk.bold(componentName)} type errors found ${sourcePath ? `at ${chalk.bold(`"${sourcePath}"`)} ` : ''}${chalk.bold(formattedPath)}\n\n${errorMessage}\n\n`
+      `[mdxts] ${chalk.bold(componentName)} type errors found ${
+        sourcePath ? `at ${chalk.bold(`"${sourcePath}"`)} ` : ''
+      }${chalk.bold(formattedPath)}\n\n${errorMessage}\n\n`
     )
   } else {
     const errorMessage = `${formattedErrors}\n\n${tokensToPlainText(tokens)}`
     throw new Error(
-      `[mdxts] ${componentName} type errors found ${sourcePath ? `at "${sourcePath}" ` : ''}${formattedPath}\n\n${errorMessage}\n\n`
+      `[mdxts] ${componentName} type errors found ${
+        sourcePath ? `at "${sourcePath}" ` : ''
+      }${formattedPath}\n\n${errorMessage}\n\n`
     )
   }
 }
