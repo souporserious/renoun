@@ -3,7 +3,7 @@
   "name": "@apps/site",
   "scripts": {
     "dev": "mdxts next dev",
-    "build": "node ../../packages/mdxts/dist/cjs/src/cli/index.js && next build",
+    "build": "node ../../packages/mdxts/dist/cjs/src/cli/index.js next build",
     "start": "next start"
   },
   "dependencies": {
