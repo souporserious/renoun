@@ -52,880 +52,37 @@ describe('processProperties', () => {
     const processedProperties = resolveType(typeAlias.getType())
 
     expect(processedProperties).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Object",
-          "name": "ModuleData",
-          "position": {
-            "end": {
-              "column": 5,
-              "line": 10,
-            },
-            "start": {
-              "column": 3,
-              "line": 7,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Object",
+        "name": "ModuleData",
+        "position": {
+          "end": {
+            "column": 7,
+            "line": 10,
           },
-          "properties": [
-            {
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "Function",
-              "name": "method",
-              "position": {
-                "end": {
-                  "column": 70,
-                  "line": 8,
-                },
-                "start": {
-                  "column": 5,
-                  "line": 8,
-                },
-              },
-              "signatures": [
-                {
-                  "kind": "FunctionSignature",
-                  "modifier": undefined,
-                  "parameters": [
-                    {
-                      "defaultValue": undefined,
-                      "description": undefined,
-                      "filePath": "test.ts",
-                      "isOptional": false,
-                      "kind": "Object",
-                      "name": "parameterValue",
-                      "position": {
-                        "end": {
-                          "column": 51,
-                          "line": 8,
-                        },
-                        "start": {
-                          "column": 12,
-                          "line": 8,
-                        },
-                      },
-                      "properties": [
-                        {
-                          "defaultValue": undefined,
-                          "filePath": "test.ts",
-                          "isOptional": false,
-                          "isReadonly": false,
-                          "kind": "Number",
-                          "name": "objectValue",
-                          "position": {
-                            "end": {
-                              "column": 49,
-                              "line": 8,
-                            },
-                            "start": {
-                              "column": 30,
-                              "line": 8,
-                            },
-                          },
-                          "type": "number",
-                          "value": undefined,
-                        },
-                      ],
-                      "type": "{ objectValue: number; }",
-                    },
-                  ],
-                  "returnType": "Promise<number>",
-                  "type": "(parameterValue: { objectValue: number; }) => Promise<number>",
-                },
-              ],
-              "type": "(parameterValue: {    objectValue: number;}) => Promise<number>",
-            },
-            {
-              "defaultValue": undefined,
-              "element": {
-                "filePath": "test.ts",
-                "kind": "Reference",
-                "position": {
-                  "end": {
-                    "column": 5,
-                    "line": 5,
-                  },
-                  "start": {
-                    "column": 3,
-                    "line": 2,
-                  },
-                },
-                "type": "ExportedType",
-              },
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "Array",
-              "name": "exportedTypes",
-              "position": {
-                "end": {
-                  "column": 40,
-                  "line": 9,
-                },
-                "start": {
-                  "column": 5,
-                  "line": 9,
-                },
-              },
-              "type": "Array<ExportedType>",
-            },
-          ],
-          "type": "ModuleData",
-        }
-      `)
-  })
-
-  test('complex properties', () => {
-    const typeAlias = sourceFile.getTypeAliasOrThrow('ComplexType')
-    const type = typeAlias.getType()
-    const processedProperties = resolveTypeProperties(type)
-
-    expect(processedProperties).toMatchInlineSnapshot(`
-        [
-          {
-            "arguments": [
-              {
-                "filePath": "test.ts",
-                "kind": "Reference",
-                "position": {
-                  "end": {
-                    "column": 5,
-                    "line": 5,
-                  },
-                  "start": {
-                    "column": 3,
-                    "line": 2,
-                  },
-                },
-                "type": "ExportedType",
-              },
-            ],
-            "defaultValue": undefined,
-            "filePath": "test.ts",
-            "isOptional": true,
-            "isReadonly": false,
-            "kind": "Generic",
-            "name": "promiseObject",
-            "position": {
-              "end": {
-                "column": 43,
-                "line": 22,
-              },
-              "start": {
-                "column": 5,
-                "line": 22,
-              },
-            },
-            "type": "Promise<ExportedType>",
-            "typeName": "Promise",
+          "start": {
+            "column": 5,
+            "line": 7,
           },
+        },
+        "properties": [
           {
-            "arguments": [
-              {
-                "filePath": "test.ts",
-                "kind": "Function",
-                "name": undefined,
-                "position": {
-                  "end": {
-                    "column": 60,
-                    "line": 23,
-                  },
-                  "start": {
-                    "column": 30,
-                    "line": 23,
-                  },
-                },
-                "signatures": [
-                  {
-                    "kind": "FunctionSignature",
-                    "modifier": undefined,
-                    "parameters": [
-                      {
-                        "defaultValue": undefined,
-                        "description": undefined,
-                        "filePath": "test.ts",
-                        "isOptional": false,
-                        "kind": "Number",
-                        "name": "a",
-                        "position": {
-                          "end": {
-                            "column": 40,
-                            "line": 23,
-                          },
-                          "start": {
-                            "column": 31,
-                            "line": 23,
-                          },
-                        },
-                        "type": "number",
-                        "value": undefined,
-                      },
-                      {
-                        "defaultValue": undefined,
-                        "description": undefined,
-                        "filePath": "test.ts",
-                        "isOptional": false,
-                        "kind": "String",
-                        "name": "b",
-                        "position": {
-                          "end": {
-                            "column": 51,
-                            "line": 23,
-                          },
-                          "start": {
-                            "column": 42,
-                            "line": 23,
-                          },
-                        },
-                        "type": "string",
-                        "value": undefined,
-                      },
-                    ],
-                    "returnType": "void",
-                    "type": "(a: number, b: string) => void",
-                  },
-                ],
-                "type": "(a: number, b: string) => void",
-              },
-            ],
-            "defaultValue": undefined,
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "Generic",
-            "name": "promiseFunction",
-            "position": {
-              "end": {
-                "column": 62,
-                "line": 23,
-              },
-              "start": {
-                "column": 5,
-                "line": 23,
-              },
-            },
-            "type": "Promise<(a: number, b: string) => void>",
-            "typeName": "Promise",
-          },
-          {
-            "arguments": [
-              {
-                "filePath": "test.ts",
-                "kind": "Object",
-                "name": undefined,
-                "position": {
-                  "end": {
-                    "column": 6,
-                    "line": 18,
-                  },
-                  "start": {
-                    "column": 12,
-                    "line": 15,
-                  },
-                },
-                "properties": [
-                  {
-                    "defaultValue": undefined,
-                    "filePath": "test.ts",
-                    "isOptional": false,
-                    "isReadonly": false,
-                    "kind": "String",
-                    "name": "slug",
-                    "position": {
-                      "end": {
-                        "column": 18,
-                        "line": 16,
-                      },
-                      "start": {
-                        "column": 7,
-                        "line": 16,
-                      },
-                    },
-                    "type": "string",
-                    "value": undefined,
-                  },
-                  {
-                    "defaultValue": undefined,
-                    "filePath": "test.ts",
-                    "isOptional": false,
-                    "isReadonly": false,
-                    "kind": "String",
-                    "name": "filePath",
-                    "position": {
-                      "end": {
-                        "column": 22,
-                        "line": 17,
-                      },
-                      "start": {
-                        "column": 7,
-                        "line": 17,
-                      },
-                    },
-                    "type": "string",
-                    "value": undefined,
-                  },
-                ],
-                "type": "{ slug: string; filePath: string; }",
-              },
-            ],
-            "defaultValue": undefined,
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "Generic",
-            "name": "promiseVariable",
-            "position": {
-              "end": {
-                "column": 45,
-                "line": 24,
-              },
-              "start": {
-                "column": 5,
-                "line": 24,
-              },
-            },
-            "type": "Promise<{ slug: string; filePath: string; }>",
-            "typeName": "Promise",
-          },
-          {
-            "defaultValue": undefined,
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "Union",
-            "members": [
-              {
-                "filePath": "test.ts",
-                "kind": "String",
-                "name": undefined,
-                "position": {
-                  "end": {
-                    "column": 28,
-                    "line": 25,
-                  },
-                  "start": {
-                    "column": 5,
-                    "line": 25,
-                  },
-                },
-                "type": "string",
-                "value": undefined,
-              },
-              {
-                "filePath": "test.ts",
-                "kind": "Number",
-                "name": undefined,
-                "position": {
-                  "end": {
-                    "column": 28,
-                    "line": 25,
-                  },
-                  "start": {
-                    "column": 5,
-                    "line": 25,
-                  },
-                },
-                "type": "number",
-                "value": undefined,
-              },
-            ],
-            "name": "union",
-            "position": {
-              "end": {
-                "column": 28,
-                "line": 25,
-              },
-              "start": {
-                "column": 5,
-                "line": 25,
-              },
-            },
-            "type": "string | number",
-          },
-          {
-            "defaultValue": undefined,
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "Union",
-            "members": [
-              {
-                "filePath": "test.ts",
-                "kind": "String",
-                "name": undefined,
-                "position": {
-                  "end": {
-                    "column": 117,
-                    "line": 26,
-                  },
-                  "start": {
-                    "column": 5,
-                    "line": 26,
-                  },
-                },
-                "type": "string",
-                "value": undefined,
-              },
-              {
-                "filePath": "test.ts",
-                "kind": "Function",
-                "name": undefined,
-                "position": {
-                  "end": {
-                    "column": 117,
-                    "line": 26,
-                  },
-                  "start": {
-                    "column": 5,
-                    "line": 26,
-                  },
-                },
-                "signatures": [
-                  {
-                    "kind": "FunctionSignature",
-                    "modifier": undefined,
-                    "parameters": [
-                      {
-                        "defaultValue": undefined,
-                        "description": undefined,
-                        "filePath": "test.ts",
-                        "isOptional": false,
-                        "kind": "String",
-                        "name": "a",
-                        "position": {
-                          "end": {
-                            "column": 30,
-                            "line": 26,
-                          },
-                          "start": {
-                            "column": 21,
-                            "line": 26,
-                          },
-                        },
-                        "type": "string",
-                        "value": undefined,
-                      },
-                    ],
-                    "returnType": "string | number",
-                    "type": "(a: string) => string | number",
-                  },
-                ],
-                "type": "(a: string) => string | number",
-              },
-              {
-                "filePath": "test.ts",
-                "kind": "Object",
-                "name": undefined,
-                "position": {
-                  "end": {
-                    "column": 117,
-                    "line": 26,
-                  },
-                  "start": {
-                    "column": 5,
-                    "line": 26,
-                  },
-                },
-                "properties": [
-                  {
-                    "defaultValue": undefined,
-                    "filePath": "test.ts",
-                    "isOptional": false,
-                    "isReadonly": false,
-                    "kind": "String",
-                    "name": "a",
-                    "position": {
-                      "end": {
-                        "column": 65,
-                        "line": 26,
-                      },
-                      "start": {
-                        "column": 56,
-                        "line": 26,
-                      },
-                    },
-                    "type": "string",
-                    "value": undefined,
-                  },
-                ],
-                "type": "{ a: string; }",
-              },
-              {
-                "filePath": "test.ts",
-                "kind": "Object",
-                "name": undefined,
-                "position": {
-                  "end": {
-                    "column": 117,
-                    "line": 26,
-                  },
-                  "start": {
-                    "column": 5,
-                    "line": 26,
-                  },
-                },
-                "properties": [
-                  {
-                    "defaultValue": undefined,
-                    "filePath": "test.ts",
-                    "isOptional": false,
-                    "isReadonly": false,
-                    "kind": "Number",
-                    "name": "b",
-                    "position": {
-                      "end": {
-                        "column": 82,
-                        "line": 26,
-                      },
-                      "start": {
-                        "column": 72,
-                        "line": 26,
-                      },
-                    },
-                    "type": "number",
-                    "value": undefined,
-                  },
-                  {
-                    "defaultValue": undefined,
-                    "element": {
-                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                      "kind": "Union",
-                      "members": [
-                        {
-                          "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                          "kind": "String",
-                          "name": undefined,
-                          "position": {
-                            "end": {
-                              "column": 4402,
-                              "line": 4,
-                            },
-                            "start": {
-                              "column": 3482,
-                              "line": 4,
-                            },
-                          },
-                          "type": "string",
-                          "value": undefined,
-                        },
-                        {
-                          "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                          "kind": "Number",
-                          "name": undefined,
-                          "position": {
-                            "end": {
-                              "column": 4943,
-                              "line": 4,
-                            },
-                            "start": {
-                              "column": 4755,
-                              "line": 4,
-                            },
-                          },
-                          "type": "number",
-                          "value": undefined,
-                        },
-                      ],
-                      "name": undefined,
-                      "position": {
-                        "end": {
-                          "column": 14214,
-                          "line": 4,
-                        },
-                        "start": {
-                          "column": 12443,
-                          "line": 4,
-                        },
-                      },
-                      "type": "string | number",
-                    },
-                    "filePath": "test.ts",
-                    "isOptional": false,
-                    "isReadonly": false,
-                    "kind": "Array",
-                    "name": "c",
-                    "position": {
-                      "end": {
-                        "column": 105,
-                        "line": 26,
-                      },
-                      "start": {
-                        "column": 83,
-                        "line": 26,
-                      },
-                    },
-                    "type": "Array<string | number>",
-                  },
-                ],
-                "type": "{ b: number; c: (string | number)[]; }",
-              },
-            ],
-            "name": "complexUnion",
-            "position": {
-              "end": {
-                "column": 117,
-                "line": 26,
-              },
-              "start": {
-                "column": 5,
-                "line": 26,
-              },
-            },
-            "type": "string | ((a: string) => string | number) | { a: string; } | { b: number; c: (string | number)[]; }",
-          },
-          {
-            "defaultValue": undefined,
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "Object",
-            "name": "intersection",
-            "position": {
-              "end": {
-                "column": 49,
-                "line": 27,
-              },
-              "start": {
-                "column": 5,
-                "line": 27,
-              },
-            },
-            "properties": [
-              {
-                "defaultValue": undefined,
-                "filePath": "test.ts",
-                "isOptional": false,
-                "isReadonly": false,
-                "kind": "String",
-                "name": "a",
-                "position": {
-                  "end": {
-                    "column": 30,
-                    "line": 27,
-                  },
-                  "start": {
-                    "column": 21,
-                    "line": 27,
-                  },
-                },
-                "type": "string",
-                "value": undefined,
-              },
-              {
-                "defaultValue": undefined,
-                "filePath": "test.ts",
-                "isOptional": false,
-                "isReadonly": false,
-                "kind": "Number",
-                "name": "b",
-                "position": {
-                  "end": {
-                    "column": 46,
-                    "line": 27,
-                  },
-                  "start": {
-                    "column": 37,
-                    "line": 27,
-                  },
-                },
-                "type": "number",
-                "value": undefined,
-              },
-            ],
-            "type": "{ a: string; } & { b: number; }",
-          },
-          {
-            "defaultValue": undefined,
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "Intersection",
-            "name": "complexIntersection",
-            "position": {
-              "end": {
-                "column": 83,
-                "line": 28,
-              },
-              "start": {
-                "column": 5,
-                "line": 28,
-              },
-            },
-            "properties": [
-              {
-                "arguments": [
-                  {
-                    "filePath": "test.ts",
-                    "kind": "Reference",
-                    "position": {
-                      "end": {
-                        "column": 5,
-                        "line": 5,
-                      },
-                      "start": {
-                        "column": 3,
-                        "line": 2,
-                      },
-                    },
-                    "type": "ExportedType",
-                  },
-                ],
-                "filePath": "test.ts",
-                "kind": "Generic",
-                "name": undefined,
-                "position": {
-                  "end": {
-                    "column": 83,
-                    "line": 28,
-                  },
-                  "start": {
-                    "column": 5,
-                    "line": 28,
-                  },
-                },
-                "type": "Promise<ExportedType>",
-                "typeName": "Promise",
-              },
-              {
-                "defaultValue": undefined,
-                "filePath": "test.ts",
-                "isOptional": false,
-                "isReadonly": false,
-                "kind": "String",
-                "name": "a",
-                "position": {
-                  "end": {
-                    "column": 64,
-                    "line": 28,
-                  },
-                  "start": {
-                    "column": 55,
-                    "line": 28,
-                  },
-                },
-                "type": "string",
-                "value": undefined,
-              },
-              {
-                "defaultValue": undefined,
-                "filePath": "test.ts",
-                "isOptional": false,
-                "isReadonly": false,
-                "kind": "Function",
-                "name": "b",
-                "position": {
-                  "end": {
-                    "column": 80,
-                    "line": 28,
-                  },
-                  "start": {
-                    "column": 71,
-                    "line": 28,
-                  },
-                },
-                "signatures": [
-                  {
-                    "kind": "FunctionSignature",
-                    "modifier": undefined,
-                    "parameters": [],
-                    "returnType": "void",
-                    "type": "() => void",
-                  },
-                ],
-                "type": "() => void",
-              },
-            ],
-            "type": "Promise<ExportedType> & { a: string; } & { b(): void; }",
-          },
-          {
-            "defaultValue": undefined,
-            "elements": [
-              {
-                "filePath": "test.ts",
-                "kind": "String",
-                "name": "a",
-                "position": {
-                  "end": {
-                    "column": 43,
-                    "line": 29,
-                  },
-                  "start": {
-                    "column": 5,
-                    "line": 29,
-                  },
-                },
-                "type": "string",
-                "value": undefined,
-              },
-              {
-                "filePath": "test.ts",
-                "kind": "Number",
-                "name": "b",
-                "position": {
-                  "end": {
-                    "column": 43,
-                    "line": 29,
-                  },
-                  "start": {
-                    "column": 5,
-                    "line": 29,
-                  },
-                },
-                "type": "number",
-                "value": undefined,
-              },
-              {
-                "filePath": "test.ts",
-                "kind": "String",
-                "name": "string",
-                "position": {
-                  "end": {
-                    "column": 43,
-                    "line": 29,
-                  },
-                  "start": {
-                    "column": 5,
-                    "line": 29,
-                  },
-                },
-                "type": "string",
-                "value": undefined,
-              },
-            ],
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "Tuple",
-            "name": "tuple",
-            "position": {
-              "end": {
-                "column": 43,
-                "line": 29,
-              },
-              "start": {
-                "column": 5,
-                "line": 29,
-              },
-            },
-            "type": "[a: string, b: number, string]",
-          },
-          {
+            "context": "property",
             "defaultValue": undefined,
             "filePath": "test.ts",
             "isOptional": false,
             "isReadonly": false,
             "kind": "Function",
-            "name": "function",
+            "name": "method",
             "position": {
               "end": {
-                "column": 28,
-                "line": 30,
+                "column": 72,
+                "line": 8,
               },
               "start": {
-                "column": 5,
-                "line": 30,
+                "column": 7,
+                "line": 8,
               },
             },
             "signatures": [
@@ -934,54 +91,931 @@ describe('processProperties', () => {
                 "modifier": undefined,
                 "parameters": [
                   {
+                    "context": "parameter",
                     "defaultValue": undefined,
                     "description": undefined,
                     "filePath": "test.ts",
                     "isOptional": false,
-                    "kind": "String",
-                    "name": "param1",
+                    "kind": "Object",
+                    "name": "parameterValue",
                     "position": {
                       "end": {
-                        "column": 45,
-                        "line": 12,
+                        "column": 53,
+                        "line": 8,
                       },
                       "start": {
-                        "column": 31,
-                        "line": 12,
+                        "column": 14,
+                        "line": 8,
                       },
                     },
-                    "type": "string",
-                    "value": undefined,
-                  },
-                  {
-                    "defaultValue": undefined,
-                    "description": undefined,
-                    "filePath": "test.ts",
-                    "isOptional": true,
-                    "kind": "Number",
-                    "name": "param2",
-                    "position": {
-                      "end": {
-                        "column": 62,
-                        "line": 12,
+                    "properties": [
+                      {
+                        "context": "property",
+                        "defaultValue": undefined,
+                        "filePath": "test.ts",
+                        "isOptional": false,
+                        "isReadonly": false,
+                        "kind": "Number",
+                        "name": "objectValue",
+                        "position": {
+                          "end": {
+                            "column": 51,
+                            "line": 8,
+                          },
+                          "start": {
+                            "column": 32,
+                            "line": 8,
+                          },
+                        },
+                        "text": "number",
+                        "value": undefined,
                       },
-                      "start": {
-                        "column": 47,
-                        "line": 12,
-                      },
-                    },
-                    "type": "number",
-                    "value": undefined,
+                    ],
+                    "text": "{ objectValue: number; }",
                   },
                 ],
-                "returnType": "Promise<ExportedType>",
-                "type": "(param1: string, param2?: number) => Promise<ExportedType>",
+                "returnType": "Promise<number>",
+                "text": "(parameterValue: { objectValue: number; }) => Promise<number>",
               },
             ],
-            "type": "FunctionType",
+            "text": "(parameterValue: { objectValue: number; }) => Promise<number>",
           },
-        ]
-      `)
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "element": {
+              "filePath": "test.ts",
+              "kind": "Reference",
+              "position": {
+                "end": {
+                  "column": 7,
+                  "line": 5,
+                },
+                "start": {
+                  "column": 5,
+                  "line": 2,
+                },
+              },
+              "text": "ExportedType",
+            },
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "Array",
+            "name": "exportedTypes",
+            "position": {
+              "end": {
+                "column": 42,
+                "line": 9,
+              },
+              "start": {
+                "column": 7,
+                "line": 9,
+              },
+            },
+            "text": "Array<ExportedType>",
+          },
+        ],
+        "text": "ModuleData",
+      }
+    `)
+  })
+
+  test('complex properties', () => {
+    const typeAlias = sourceFile.getTypeAliasOrThrow('ComplexType')
+    const type = typeAlias.getType()
+    const processedProperties = resolveTypeProperties(type)
+
+    expect(processedProperties).toMatchInlineSnapshot(`
+      [
+        {
+          "arguments": [
+            {
+              "context": "parameter",
+              "filePath": "test.ts",
+              "kind": "Reference",
+              "position": {
+                "end": {
+                  "column": 7,
+                  "line": 5,
+                },
+                "start": {
+                  "column": 5,
+                  "line": 2,
+                },
+              },
+              "text": "ExportedType",
+            },
+          ],
+          "context": "property",
+          "defaultValue": undefined,
+          "filePath": "test.ts",
+          "isOptional": true,
+          "isReadonly": false,
+          "kind": "Generic",
+          "name": "promiseObject",
+          "position": {
+            "end": {
+              "column": 45,
+              "line": 22,
+            },
+            "start": {
+              "column": 7,
+              "line": 22,
+            },
+          },
+          "text": "Promise<ExportedType>",
+          "typeName": "Promise",
+        },
+        {
+          "arguments": [
+            {
+              "context": "parameter",
+              "filePath": "test.ts",
+              "kind": "Function",
+              "name": undefined,
+              "position": {
+                "end": {
+                  "column": 62,
+                  "line": 23,
+                },
+                "start": {
+                  "column": 32,
+                  "line": 23,
+                },
+              },
+              "signatures": [
+                {
+                  "kind": "FunctionSignature",
+                  "modifier": undefined,
+                  "parameters": [
+                    {
+                      "context": "parameter",
+                      "defaultValue": undefined,
+                      "description": undefined,
+                      "filePath": "test.ts",
+                      "isOptional": false,
+                      "kind": "Number",
+                      "name": "a",
+                      "position": {
+                        "end": {
+                          "column": 42,
+                          "line": 23,
+                        },
+                        "start": {
+                          "column": 33,
+                          "line": 23,
+                        },
+                      },
+                      "text": "number",
+                      "value": undefined,
+                    },
+                    {
+                      "context": "parameter",
+                      "defaultValue": undefined,
+                      "description": undefined,
+                      "filePath": "test.ts",
+                      "isOptional": false,
+                      "kind": "String",
+                      "name": "b",
+                      "position": {
+                        "end": {
+                          "column": 53,
+                          "line": 23,
+                        },
+                        "start": {
+                          "column": 44,
+                          "line": 23,
+                        },
+                      },
+                      "text": "string",
+                      "value": undefined,
+                    },
+                  ],
+                  "returnType": "void",
+                  "text": "(a: number, b: string) => void",
+                },
+              ],
+              "text": "(a: number, b: string) => void",
+            },
+          ],
+          "context": "property",
+          "defaultValue": undefined,
+          "filePath": "test.ts",
+          "isOptional": false,
+          "isReadonly": false,
+          "kind": "Generic",
+          "name": "promiseFunction",
+          "position": {
+            "end": {
+              "column": 64,
+              "line": 23,
+            },
+            "start": {
+              "column": 7,
+              "line": 23,
+            },
+          },
+          "text": "Promise<(a: number, b: string) => void>",
+          "typeName": "Promise",
+        },
+        {
+          "arguments": [
+            {
+              "context": "parameter",
+              "filePath": "test.ts",
+              "kind": "Object",
+              "name": undefined,
+              "position": {
+                "end": {
+                  "column": 8,
+                  "line": 18,
+                },
+                "start": {
+                  "column": 14,
+                  "line": 15,
+                },
+              },
+              "properties": [
+                {
+                  "context": "property",
+                  "defaultValue": undefined,
+                  "filePath": "test.ts",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "String",
+                  "name": "slug",
+                  "position": {
+                    "end": {
+                      "column": 20,
+                      "line": 16,
+                    },
+                    "start": {
+                      "column": 9,
+                      "line": 16,
+                    },
+                  },
+                  "text": "string",
+                  "value": undefined,
+                },
+                {
+                  "context": "property",
+                  "defaultValue": undefined,
+                  "filePath": "test.ts",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "String",
+                  "name": "filePath",
+                  "position": {
+                    "end": {
+                      "column": 24,
+                      "line": 17,
+                    },
+                    "start": {
+                      "column": 9,
+                      "line": 17,
+                    },
+                  },
+                  "text": "string",
+                  "value": undefined,
+                },
+              ],
+              "text": "{ slug: string; filePath: string; }",
+            },
+          ],
+          "context": "property",
+          "defaultValue": undefined,
+          "filePath": "test.ts",
+          "isOptional": false,
+          "isReadonly": false,
+          "kind": "Generic",
+          "name": "promiseVariable",
+          "position": {
+            "end": {
+              "column": 47,
+              "line": 24,
+            },
+            "start": {
+              "column": 7,
+              "line": 24,
+            },
+          },
+          "text": "Promise<{ slug: string; filePath: string; }>",
+          "typeName": "Promise",
+        },
+        {
+          "context": "property",
+          "defaultValue": undefined,
+          "filePath": "test.ts",
+          "isOptional": false,
+          "isReadonly": false,
+          "kind": "Union",
+          "members": [
+            {
+              "filePath": "test.ts",
+              "kind": "String",
+              "name": undefined,
+              "position": {
+                "end": {
+                  "column": 30,
+                  "line": 25,
+                },
+                "start": {
+                  "column": 7,
+                  "line": 25,
+                },
+              },
+              "text": "string",
+              "value": undefined,
+            },
+            {
+              "filePath": "test.ts",
+              "kind": "Number",
+              "name": undefined,
+              "position": {
+                "end": {
+                  "column": 30,
+                  "line": 25,
+                },
+                "start": {
+                  "column": 7,
+                  "line": 25,
+                },
+              },
+              "text": "number",
+              "value": undefined,
+            },
+          ],
+          "name": "union",
+          "position": {
+            "end": {
+              "column": 30,
+              "line": 25,
+            },
+            "start": {
+              "column": 7,
+              "line": 25,
+            },
+          },
+          "text": "string | number",
+        },
+        {
+          "context": "property",
+          "defaultValue": undefined,
+          "filePath": "test.ts",
+          "isOptional": false,
+          "isReadonly": false,
+          "kind": "Union",
+          "members": [
+            {
+              "filePath": "test.ts",
+              "kind": "String",
+              "name": undefined,
+              "position": {
+                "end": {
+                  "column": 119,
+                  "line": 26,
+                },
+                "start": {
+                  "column": 7,
+                  "line": 26,
+                },
+              },
+              "text": "string",
+              "value": undefined,
+            },
+            {
+              "filePath": "test.ts",
+              "kind": "Function",
+              "name": undefined,
+              "position": {
+                "end": {
+                  "column": 119,
+                  "line": 26,
+                },
+                "start": {
+                  "column": 7,
+                  "line": 26,
+                },
+              },
+              "signatures": [
+                {
+                  "kind": "FunctionSignature",
+                  "modifier": undefined,
+                  "parameters": [
+                    {
+                      "context": "parameter",
+                      "defaultValue": undefined,
+                      "description": undefined,
+                      "filePath": "test.ts",
+                      "isOptional": false,
+                      "kind": "String",
+                      "name": "a",
+                      "position": {
+                        "end": {
+                          "column": 32,
+                          "line": 26,
+                        },
+                        "start": {
+                          "column": 23,
+                          "line": 26,
+                        },
+                      },
+                      "text": "string",
+                      "value": undefined,
+                    },
+                  ],
+                  "returnType": "string | number",
+                  "text": "(a: string) => string | number",
+                },
+              ],
+              "text": "(a: string) => string | number",
+            },
+            {
+              "filePath": "test.ts",
+              "kind": "Object",
+              "name": undefined,
+              "position": {
+                "end": {
+                  "column": 119,
+                  "line": 26,
+                },
+                "start": {
+                  "column": 7,
+                  "line": 26,
+                },
+              },
+              "properties": [
+                {
+                  "context": "property",
+                  "defaultValue": undefined,
+                  "filePath": "test.ts",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "String",
+                  "name": "a",
+                  "position": {
+                    "end": {
+                      "column": 67,
+                      "line": 26,
+                    },
+                    "start": {
+                      "column": 58,
+                      "line": 26,
+                    },
+                  },
+                  "text": "string",
+                  "value": undefined,
+                },
+              ],
+              "text": "{ a: string; }",
+            },
+            {
+              "filePath": "test.ts",
+              "kind": "Object",
+              "name": undefined,
+              "position": {
+                "end": {
+                  "column": 119,
+                  "line": 26,
+                },
+                "start": {
+                  "column": 7,
+                  "line": 26,
+                },
+              },
+              "properties": [
+                {
+                  "context": "property",
+                  "defaultValue": undefined,
+                  "filePath": "test.ts",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "Number",
+                  "name": "b",
+                  "position": {
+                    "end": {
+                      "column": 84,
+                      "line": 26,
+                    },
+                    "start": {
+                      "column": 74,
+                      "line": 26,
+                    },
+                  },
+                  "text": "number",
+                  "value": undefined,
+                },
+                {
+                  "context": "property",
+                  "defaultValue": undefined,
+                  "element": {
+                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                    "kind": "Union",
+                    "members": [
+                      {
+                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                        "kind": "String",
+                        "name": undefined,
+                        "position": {
+                          "end": {
+                            "column": 4402,
+                            "line": 4,
+                          },
+                          "start": {
+                            "column": 3482,
+                            "line": 4,
+                          },
+                        },
+                        "text": "string",
+                        "value": undefined,
+                      },
+                      {
+                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                        "kind": "Number",
+                        "name": undefined,
+                        "position": {
+                          "end": {
+                            "column": 4943,
+                            "line": 4,
+                          },
+                          "start": {
+                            "column": 4755,
+                            "line": 4,
+                          },
+                        },
+                        "text": "number",
+                        "value": undefined,
+                      },
+                    ],
+                    "name": undefined,
+                    "position": {
+                      "end": {
+                        "column": 14214,
+                        "line": 4,
+                      },
+                      "start": {
+                        "column": 12443,
+                        "line": 4,
+                      },
+                    },
+                    "text": "string | number",
+                  },
+                  "filePath": "test.ts",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "Array",
+                  "name": "c",
+                  "position": {
+                    "end": {
+                      "column": 107,
+                      "line": 26,
+                    },
+                    "start": {
+                      "column": 85,
+                      "line": 26,
+                    },
+                  },
+                  "text": "Array<string | number>",
+                },
+              ],
+              "text": "{ b: number; c: (string | number)[]; }",
+            },
+          ],
+          "name": "complexUnion",
+          "position": {
+            "end": {
+              "column": 119,
+              "line": 26,
+            },
+            "start": {
+              "column": 7,
+              "line": 26,
+            },
+          },
+          "text": "string | ((a: string) => string | number) | { a: string; } | { b: number; c: (string | number)[]; }",
+        },
+        {
+          "context": "property",
+          "defaultValue": undefined,
+          "filePath": "test.ts",
+          "isOptional": false,
+          "isReadonly": false,
+          "kind": "Object",
+          "name": "intersection",
+          "position": {
+            "end": {
+              "column": 51,
+              "line": 27,
+            },
+            "start": {
+              "column": 7,
+              "line": 27,
+            },
+          },
+          "properties": [
+            {
+              "context": "property",
+              "defaultValue": undefined,
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "String",
+              "name": "a",
+              "position": {
+                "end": {
+                  "column": 32,
+                  "line": 27,
+                },
+                "start": {
+                  "column": 23,
+                  "line": 27,
+                },
+              },
+              "text": "string",
+              "value": undefined,
+            },
+            {
+              "context": "property",
+              "defaultValue": undefined,
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "Number",
+              "name": "b",
+              "position": {
+                "end": {
+                  "column": 48,
+                  "line": 27,
+                },
+                "start": {
+                  "column": 39,
+                  "line": 27,
+                },
+              },
+              "text": "number",
+              "value": undefined,
+            },
+          ],
+          "text": "{ a: string; } & { b: number; }",
+        },
+        {
+          "context": "property",
+          "defaultValue": undefined,
+          "filePath": "test.ts",
+          "isOptional": false,
+          "isReadonly": false,
+          "kind": "Intersection",
+          "name": "complexIntersection",
+          "position": {
+            "end": {
+              "column": 85,
+              "line": 28,
+            },
+            "start": {
+              "column": 7,
+              "line": 28,
+            },
+          },
+          "properties": [
+            {
+              "arguments": [
+                {
+                  "context": "parameter",
+                  "filePath": "test.ts",
+                  "kind": "Reference",
+                  "position": {
+                    "end": {
+                      "column": 7,
+                      "line": 5,
+                    },
+                    "start": {
+                      "column": 5,
+                      "line": 2,
+                    },
+                  },
+                  "text": "ExportedType",
+                },
+              ],
+              "filePath": "test.ts",
+              "kind": "Generic",
+              "name": undefined,
+              "position": {
+                "end": {
+                  "column": 85,
+                  "line": 28,
+                },
+                "start": {
+                  "column": 7,
+                  "line": 28,
+                },
+              },
+              "text": "Promise<ExportedType>",
+              "typeName": "Promise",
+            },
+            {
+              "context": "property",
+              "defaultValue": undefined,
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "String",
+              "name": "a",
+              "position": {
+                "end": {
+                  "column": 66,
+                  "line": 28,
+                },
+                "start": {
+                  "column": 57,
+                  "line": 28,
+                },
+              },
+              "text": "string",
+              "value": undefined,
+            },
+            {
+              "context": "property",
+              "defaultValue": undefined,
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "Function",
+              "name": "b",
+              "position": {
+                "end": {
+                  "column": 82,
+                  "line": 28,
+                },
+                "start": {
+                  "column": 73,
+                  "line": 28,
+                },
+              },
+              "signatures": [
+                {
+                  "kind": "FunctionSignature",
+                  "modifier": undefined,
+                  "parameters": [],
+                  "returnType": "void",
+                  "text": "() => void",
+                },
+              ],
+              "text": "() => void",
+            },
+          ],
+          "text": "Promise<ExportedType> & { a: string; } & { b(): void; }",
+        },
+        {
+          "context": "property",
+          "defaultValue": undefined,
+          "elements": [
+            {
+              "context": "parameter",
+              "filePath": "test.ts",
+              "kind": "String",
+              "name": "a",
+              "position": {
+                "end": {
+                  "column": 45,
+                  "line": 29,
+                },
+                "start": {
+                  "column": 7,
+                  "line": 29,
+                },
+              },
+              "text": "string",
+              "value": undefined,
+            },
+            {
+              "context": "parameter",
+              "filePath": "test.ts",
+              "kind": "Number",
+              "name": "b",
+              "position": {
+                "end": {
+                  "column": 45,
+                  "line": 29,
+                },
+                "start": {
+                  "column": 7,
+                  "line": 29,
+                },
+              },
+              "text": "number",
+              "value": undefined,
+            },
+            {
+              "context": "parameter",
+              "filePath": "test.ts",
+              "kind": "String",
+              "name": "string",
+              "position": {
+                "end": {
+                  "column": 45,
+                  "line": 29,
+                },
+                "start": {
+                  "column": 7,
+                  "line": 29,
+                },
+              },
+              "text": "string",
+              "value": undefined,
+            },
+          ],
+          "filePath": "test.ts",
+          "isOptional": false,
+          "isReadonly": false,
+          "kind": "Tuple",
+          "name": "tuple",
+          "position": {
+            "end": {
+              "column": 45,
+              "line": 29,
+            },
+            "start": {
+              "column": 7,
+              "line": 29,
+            },
+          },
+          "text": "[a: string, b: number, string]",
+        },
+        {
+          "context": "property",
+          "defaultValue": undefined,
+          "filePath": "test.ts",
+          "isOptional": false,
+          "isReadonly": false,
+          "kind": "Function",
+          "name": "function",
+          "position": {
+            "end": {
+              "column": 30,
+              "line": 30,
+            },
+            "start": {
+              "column": 7,
+              "line": 30,
+            },
+          },
+          "signatures": [
+            {
+              "kind": "FunctionSignature",
+              "modifier": undefined,
+              "parameters": [
+                {
+                  "context": "parameter",
+                  "defaultValue": undefined,
+                  "description": undefined,
+                  "filePath": "test.ts",
+                  "isOptional": false,
+                  "kind": "String",
+                  "name": "param1",
+                  "position": {
+                    "end": {
+                      "column": 47,
+                      "line": 12,
+                    },
+                    "start": {
+                      "column": 33,
+                      "line": 12,
+                    },
+                  },
+                  "text": "string",
+                  "value": undefined,
+                },
+                {
+                  "context": "parameter",
+                  "defaultValue": undefined,
+                  "description": undefined,
+                  "filePath": "test.ts",
+                  "isOptional": true,
+                  "kind": "Number",
+                  "name": "param2",
+                  "position": {
+                    "end": {
+                      "column": 64,
+                      "line": 12,
+                    },
+                    "start": {
+                      "column": 49,
+                      "line": 12,
+                    },
+                  },
+                  "text": "number",
+                  "value": undefined,
+                },
+              ],
+              "returnType": "Promise<ExportedType>",
+              "text": "(param1: string, param2?: number) => Promise<ExportedType>",
+            },
+          ],
+          "text": "FunctionType",
+        },
+      ]
+    `)
   })
 
   test('intersection and union', () => {
@@ -1008,148 +1042,150 @@ describe('processProperties', () => {
     const processedProperties = resolveType(typeAlias.getType())
 
     expect(processedProperties).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Union",
-          "members": [
-            {
-              "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-              "kind": "String",
-              "name": undefined,
-              "position": {
-                "end": {
-                  "column": 4402,
-                  "line": 4,
-                },
-                "start": {
-                  "column": 3482,
-                  "line": 4,
-                },
+      {
+        "filePath": "test.ts",
+        "kind": "Union",
+        "members": [
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "String",
+            "name": undefined,
+            "position": {
+              "end": {
+                "column": 4402,
+                "line": 4,
               },
-              "type": "string",
-              "value": undefined,
-            },
-            {
-              "filePath": "test.ts",
-              "kind": "Intersection",
-              "name": "FillVariant",
-              "position": {
-                "end": {
-                  "column": 22,
-                  "line": 8,
-                },
-                "start": {
-                  "column": 7,
-                  "line": 6,
-                },
+              "start": {
+                "column": 3482,
+                "line": 4,
               },
-              "properties": [
-                {
-                  "defaultValue": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "isReadonly": false,
-                  "kind": "String",
-                  "name": "backgroundColor",
-                  "position": {
-                    "end": {
-                      "column": 33,
-                      "line": 7,
-                    },
-                    "start": {
-                      "column": 9,
-                      "line": 7,
-                    },
-                  },
-                  "type": "string",
-                  "value": undefined,
-                },
-                {
-                  "filePath": "test.ts",
-                  "kind": "Reference",
-                  "position": {
-                    "end": {
-                      "column": 8,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 7,
-                      "line": 2,
-                    },
-                  },
-                  "type": "BaseVariant",
-                },
-              ],
-              "type": "FillVariant",
             },
-            {
-              "filePath": "test.ts",
-              "kind": "Intersection",
-              "name": "OutlineVariant",
-              "position": {
-                "end": {
-                  "column": 22,
-                  "line": 12,
-                },
-                "start": {
-                  "column": 7,
-                  "line": 10,
-                },
-              },
-              "properties": [
-                {
-                  "defaultValue": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "isReadonly": false,
-                  "kind": "String",
-                  "name": "borderColor",
-                  "position": {
-                    "end": {
-                      "column": 29,
-                      "line": 11,
-                    },
-                    "start": {
-                      "column": 9,
-                      "line": 11,
-                    },
-                  },
-                  "type": "string",
-                  "value": undefined,
-                },
-                {
-                  "filePath": "test.ts",
-                  "kind": "Reference",
-                  "position": {
-                    "end": {
-                      "column": 8,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 7,
-                      "line": 2,
-                    },
-                  },
-                  "type": "BaseVariant",
-                },
-              ],
-              "type": "OutlineVariant",
-            },
-          ],
-          "name": "Variant",
-          "position": {
-            "end": {
-              "column": 63,
-              "line": 14,
-            },
-            "start": {
-              "column": 7,
-              "line": 14,
-            },
+            "text": "string",
+            "value": undefined,
           },
-          "type": "Variant<T>",
-        }
-      `)
+          {
+            "filePath": "test.ts",
+            "kind": "Intersection",
+            "name": "FillVariant",
+            "position": {
+              "end": {
+                "column": 24,
+                "line": 8,
+              },
+              "start": {
+                "column": 9,
+                "line": 6,
+              },
+            },
+            "properties": [
+              {
+                "context": "property",
+                "defaultValue": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "isReadonly": false,
+                "kind": "String",
+                "name": "backgroundColor",
+                "position": {
+                  "end": {
+                    "column": 35,
+                    "line": 7,
+                  },
+                  "start": {
+                    "column": 11,
+                    "line": 7,
+                  },
+                },
+                "text": "string",
+                "value": undefined,
+              },
+              {
+                "filePath": "test.ts",
+                "kind": "Reference",
+                "position": {
+                  "end": {
+                    "column": 10,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 9,
+                    "line": 2,
+                  },
+                },
+                "text": "BaseVariant",
+              },
+            ],
+            "text": "FillVariant",
+          },
+          {
+            "filePath": "test.ts",
+            "kind": "Intersection",
+            "name": "OutlineVariant",
+            "position": {
+              "end": {
+                "column": 24,
+                "line": 12,
+              },
+              "start": {
+                "column": 9,
+                "line": 10,
+              },
+            },
+            "properties": [
+              {
+                "context": "property",
+                "defaultValue": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "isReadonly": false,
+                "kind": "String",
+                "name": "borderColor",
+                "position": {
+                  "end": {
+                    "column": 31,
+                    "line": 11,
+                  },
+                  "start": {
+                    "column": 11,
+                    "line": 11,
+                  },
+                },
+                "text": "string",
+                "value": undefined,
+              },
+              {
+                "filePath": "test.ts",
+                "kind": "Reference",
+                "position": {
+                  "end": {
+                    "column": 10,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 9,
+                    "line": 2,
+                  },
+                },
+                "text": "BaseVariant",
+              },
+            ],
+            "text": "OutlineVariant",
+          },
+        ],
+        "name": "Variant",
+        "position": {
+          "end": {
+            "column": 65,
+            "line": 14,
+          },
+          "start": {
+            "column": 9,
+            "line": 14,
+          },
+        },
+        "text": "Variant<T>",
+      }
+    `)
   })
 
   test('primitives', () => {
@@ -1190,93 +1226,134 @@ describe('processProperties', () => {
     const processedProperties = resolveType(typeAlias.getType())
 
     expect(processedProperties).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Object",
-          "name": "Primitives",
-          "position": {
-            "end": {
-              "column": 8,
-              "line": 26,
-            },
-            "start": {
-              "column": 7,
-              "line": 2,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Object",
+        "name": "Primitives",
+        "position": {
+          "end": {
+            "column": 10,
+            "line": 26,
           },
-          "properties": [
-            {
-              "defaultValue": undefined,
-              "description": "a string",
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
+          "start": {
+            "column": 9,
+            "line": 2,
+          },
+        },
+        "properties": [
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "description": "a string",
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "String",
+            "name": "str",
+            "position": {
+              "end": {
+                "column": 23,
+                "line": 4,
+              },
+              "start": {
+                "column": 11,
+                "line": 4,
+              },
+            },
+            "tags": undefined,
+            "text": "string",
+            "value": undefined,
+          },
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "description": "
+      a number",
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "Number",
+            "name": "num",
+            "position": {
+              "end": {
+                "column": 23,
+                "line": 10,
+              },
+              "start": {
+                "column": 11,
+                "line": 10,
+              },
+            },
+            "tags": [
+              {
+                "tagName": "internal",
+                "text": undefined,
+              },
+            ],
+            "text": "number",
+            "value": undefined,
+          },
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "Boolean",
+            "name": "bool",
+            "position": {
+              "end": {
+                "column": 25,
+                "line": 12,
+              },
+              "start": {
+                "column": 11,
+                "line": 12,
+              },
+            },
+            "text": "boolean",
+          },
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "element": {
+              "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
               "kind": "String",
-              "name": "str",
+              "name": undefined,
               "position": {
                 "end": {
-                  "column": 21,
+                  "column": 4402,
                   "line": 4,
                 },
                 "start": {
-                  "column": 9,
+                  "column": 3482,
                   "line": 4,
                 },
               },
-              "tags": undefined,
-              "type": "string",
+              "text": "string",
               "value": undefined,
             },
-            {
-              "defaultValue": undefined,
-              "description": "
-        a number",
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "Number",
-              "name": "num",
-              "position": {
-                "end": {
-                  "column": 21,
-                  "line": 10,
-                },
-                "start": {
-                  "column": 9,
-                  "line": 10,
-                },
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "Array",
+            "name": "arr",
+            "position": {
+              "end": {
+                "column": 25,
+                "line": 14,
               },
-              "tags": [
-                {
-                  "tagName": "internal",
-                  "text": undefined,
-                },
-              ],
-              "type": "number",
-              "value": undefined,
-            },
-            {
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "Boolean",
-              "name": "bool",
-              "position": {
-                "end": {
-                  "column": 23,
-                  "line": 12,
-                },
-                "start": {
-                  "column": 9,
-                  "line": 12,
-                },
+              "start": {
+                "column": 11,
+                "line": 14,
               },
-              "type": "boolean",
             },
-            {
-              "defaultValue": undefined,
-              "element": {
+            "text": "Array<string>",
+          },
+          {
+            "arguments": [
+              {
+                "context": "parameter",
                 "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                 "kind": "String",
                 "name": undefined,
@@ -1290,186 +1367,156 @@ describe('processProperties', () => {
                     "line": 4,
                   },
                 },
-                "type": "string",
+                "text": "string",
                 "value": undefined,
               },
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "Array",
-              "name": "arr",
-              "position": {
-                "end": {
-                  "column": 23,
-                  "line": 14,
-                },
-                "start": {
-                  "column": 9,
-                  "line": 14,
-                },
-              },
-              "type": "Array<string>",
-            },
-            {
-              "arguments": [
-                {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                  "kind": "String",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 4402,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 3482,
-                      "line": 4,
-                    },
+              {
+                "context": "parameter",
+                "filePath": "test.ts",
+                "kind": "Object",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 48,
+                    "line": 17,
                   },
-                  "type": "string",
-                  "value": undefined,
-                },
-                {
-                  "filePath": "test.ts",
-                  "kind": "Object",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 46,
-                      "line": 17,
-                    },
-                    "start": {
-                      "column": 29,
-                      "line": 17,
-                    },
+                  "start": {
+                    "column": 31,
+                    "line": 17,
                   },
-                  "properties": [
-                    {
-                      "defaultValue": undefined,
-                      "filePath": "test.ts",
-                      "isOptional": false,
-                      "isReadonly": false,
-                      "kind": "Number",
-                      "name": "value",
-                      "position": {
-                        "end": {
-                          "column": 44,
-                          "line": 17,
-                        },
-                        "start": {
-                          "column": 31,
-                          "line": 17,
-                        },
+                },
+                "properties": [
+                  {
+                    "context": "property",
+                    "defaultValue": undefined,
+                    "filePath": "test.ts",
+                    "isOptional": false,
+                    "isReadonly": false,
+                    "kind": "Number",
+                    "name": "value",
+                    "position": {
+                      "end": {
+                        "column": 46,
+                        "line": 17,
                       },
-                      "type": "number",
-                      "value": undefined,
-                    },
-                  ],
-                  "type": "{ value: number; }",
-                },
-              ],
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "Generic",
-              "name": "obj",
-              "position": {
-                "end": {
-                  "column": 48,
-                  "line": 17,
-                },
-                "start": {
-                  "column": 9,
-                  "line": 17,
-                },
-              },
-              "type": "Record<string, { value: number; }>",
-              "typeName": "Record",
-            },
-            {
-              "defaultValue": undefined,
-              "description": "Accepts a string",
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "Function",
-              "name": "func",
-              "position": {
-                "end": {
-                  "column": 19,
-                  "line": 23,
-                },
-                "start": {
-                  "column": 9,
-                  "line": 20,
-                },
-              },
-              "signatures": [
-                {
-                  "kind": "FunctionSignature",
-                  "modifier": undefined,
-                  "parameters": [
-                    {
-                      "defaultValue": undefined,
-                      "description": "a string parameter",
-                      "filePath": "test.ts",
-                      "isOptional": false,
-                      "kind": "String",
-                      "name": "a",
-                      "position": {
-                        "end": {
-                          "column": 20,
-                          "line": 22,
-                        },
-                        "start": {
-                          "column": 11,
-                          "line": 22,
-                        },
+                      "start": {
+                        "column": 33,
+                        "line": 17,
                       },
-                      "type": "string",
-                      "value": undefined,
                     },
-                  ],
-                  "returnType": "void",
-                  "type": "(a: string) => void",
-                },
-              ],
-              "tags": undefined,
-              "type": "(a: string) => void",
-            },
-            {
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "Function",
-              "name": "asyncFunc",
-              "position": {
-                "end": {
-                  "column": 31,
-                  "line": 25,
-                },
-                "start": {
-                  "column": 9,
-                  "line": 25,
-                },
+                    "text": "number",
+                    "value": undefined,
+                  },
+                ],
+                "text": "{ value: number; }",
               },
-              "signatures": [
-                {
-                  "kind": "FunctionSignature",
-                  "modifier": "async",
-                  "parameters": [],
-                  "returnType": "Promise<void>",
-                  "type": "function foo(): Promise<void>",
-                },
-              ],
-              "type": "() => Promise<void>",
+            ],
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "Generic",
+            "name": "obj",
+            "position": {
+              "end": {
+                "column": 50,
+                "line": 17,
+              },
+              "start": {
+                "column": 11,
+                "line": 17,
+              },
             },
-          ],
-          "type": "Primitives",
-        }
-      `)
+            "text": "Record<string, { value: number; }>",
+            "typeName": "Record",
+          },
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "description": "Accepts a string",
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "Function",
+            "name": "func",
+            "position": {
+              "end": {
+                "column": 21,
+                "line": 23,
+              },
+              "start": {
+                "column": 11,
+                "line": 20,
+              },
+            },
+            "signatures": [
+              {
+                "kind": "FunctionSignature",
+                "modifier": undefined,
+                "parameters": [
+                  {
+                    "context": "parameter",
+                    "defaultValue": undefined,
+                    "description": "a string parameter",
+                    "filePath": "test.ts",
+                    "isOptional": false,
+                    "kind": "String",
+                    "name": "a",
+                    "position": {
+                      "end": {
+                        "column": 22,
+                        "line": 22,
+                      },
+                      "start": {
+                        "column": 13,
+                        "line": 22,
+                      },
+                    },
+                    "text": "string",
+                    "value": undefined,
+                  },
+                ],
+                "returnType": "void",
+                "text": "(a: string) => void",
+              },
+            ],
+            "tags": undefined,
+            "text": "(a: string) => void",
+          },
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "Function",
+            "name": "asyncFunc",
+            "position": {
+              "end": {
+                "column": 33,
+                "line": 25,
+              },
+              "start": {
+                "column": 11,
+                "line": 25,
+              },
+            },
+            "signatures": [
+              {
+                "kind": "FunctionSignature",
+                "modifier": "async",
+                "parameters": [],
+                "returnType": "Promise<void>",
+                "text": "function foo(): Promise<void>",
+              },
+            ],
+            "text": "() => Promise<void>",
+          },
+        ],
+        "text": "Primitives",
+      }
+    `)
   })
 
   test('variable declarations', () => {
@@ -1498,126 +1545,131 @@ describe('processProperties', () => {
     )
 
     expect(processedProperties).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Object",
-          "name": "a",
-          "position": {
-            "end": {
-              "column": 17,
-              "line": 6,
-            },
-            "start": {
-              "column": 13,
-              "line": 2,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Object",
+        "name": "a",
+        "position": {
+          "end": {
+            "column": 19,
+            "line": 6,
           },
-          "properties": [
-            {
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": true,
-              "kind": "Object",
-              "name": "e",
-              "position": {
-                "end": {
-                  "column": 10,
-                  "line": 11,
-                },
-                "start": {
-                  "column": 9,
-                  "line": 9,
-                },
+          "start": {
+            "column": 15,
+            "line": 2,
+          },
+        },
+        "properties": [
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": true,
+            "kind": "Object",
+            "name": "e",
+            "position": {
+              "end": {
+                "column": 12,
+                "line": 11,
               },
-              "properties": [
-                {
-                  "defaultValue": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "isReadonly": false,
-                  "kind": "Number",
-                  "name": "f",
-                  "position": {
-                    "end": {
-                      "column": 15,
-                      "line": 10,
-                    },
-                    "start": {
-                      "column": 11,
-                      "line": 10,
-                    },
+              "start": {
+                "column": 11,
+                "line": 9,
+              },
+            },
+            "properties": [
+              {
+                "context": "property",
+                "defaultValue": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "isReadonly": false,
+                "kind": "Number",
+                "name": "f",
+                "position": {
+                  "end": {
+                    "column": 17,
+                    "line": 10,
                   },
-                  "type": "number",
-                  "value": undefined,
+                  "start": {
+                    "column": 13,
+                    "line": 10,
+                  },
                 },
-              ],
-              "type": "{ f: number; }",
-            },
-            {
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": true,
-              "kind": "String",
-              "name": "g",
-              "position": {
-                "end": {
-                  "column": 20,
-                  "line": 12,
-                },
-                "start": {
-                  "column": 9,
-                  "line": 12,
-                },
+                "text": "number",
+                "value": undefined,
               },
-              "type": "string",
-              "value": undefined,
-            },
-            {
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": true,
-              "kind": "Number",
-              "name": "b",
-              "position": {
-                "end": {
-                  "column": 13,
-                  "line": 3,
-                },
-                "start": {
-                  "column": 9,
-                  "line": 3,
-                },
+            ],
+            "text": "{ f: number; }",
+          },
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": true,
+            "kind": "String",
+            "name": "g",
+            "position": {
+              "end": {
+                "column": 22,
+                "line": 12,
               },
-              "type": "1",
-              "value": 1,
-            },
-            {
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": true,
-              "kind": "String",
-              "name": "c",
-              "position": {
-                "end": {
-                  "column": 20,
-                  "line": 4,
-                },
-                "start": {
-                  "column": 9,
-                  "line": 4,
-                },
+              "start": {
+                "column": 11,
+                "line": 12,
               },
-              "type": ""string"",
-              "value": "string",
             },
-          ],
-          "type": "{ readonly e: { f: number; }; readonly g: string; readonly b: 1; readonly c: "string"; }",
-        }
-      `)
+            "text": "string",
+            "value": undefined,
+          },
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": true,
+            "kind": "Number",
+            "name": "b",
+            "position": {
+              "end": {
+                "column": 15,
+                "line": 3,
+              },
+              "start": {
+                "column": 11,
+                "line": 3,
+              },
+            },
+            "text": "1",
+            "value": 1,
+          },
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": true,
+            "kind": "String",
+            "name": "c",
+            "position": {
+              "end": {
+                "column": 22,
+                "line": 4,
+              },
+              "start": {
+                "column": 11,
+                "line": 4,
+              },
+            },
+            "text": ""string"",
+            "value": "string",
+          },
+        ],
+        "text": "{ readonly e: { f: number; }; readonly g: string; readonly b: 1; readonly c: "string"; }",
+      }
+    `)
   })
 
   test('recursive types', () => {
@@ -1635,79 +1687,81 @@ describe('processProperties', () => {
     const processedProperties = resolveType(typeAlias.getType())
 
     expect(processedProperties).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Object",
-          "name": "SelfReferencedType",
-          "position": {
-            "end": {
-              "column": 8,
-              "line": 5,
-            },
-            "start": {
-              "column": 7,
-              "line": 2,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Object",
+        "name": "SelfReferencedType",
+        "position": {
+          "end": {
+            "column": 10,
+            "line": 5,
           },
-          "properties": [
-            {
-              "defaultValue": undefined,
+          "start": {
+            "column": 9,
+            "line": 2,
+          },
+        },
+        "properties": [
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "String",
+            "name": "id",
+            "position": {
+              "end": {
+                "column": 22,
+                "line": 3,
+              },
+              "start": {
+                "column": 11,
+                "line": 3,
+              },
+            },
+            "text": "string",
+            "value": undefined,
+          },
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "element": {
               "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "String",
-              "name": "id",
+              "kind": "Reference",
               "position": {
                 "end": {
-                  "column": 20,
-                  "line": 3,
+                  "column": 10,
+                  "line": 5,
                 },
                 "start": {
                   "column": 9,
-                  "line": 3,
+                  "line": 2,
                 },
               },
-              "type": "string",
-              "value": undefined,
+              "text": "SelfReferencedType",
             },
-            {
-              "defaultValue": undefined,
-              "element": {
-                "filePath": "test.ts",
-                "kind": "Reference",
-                "position": {
-                  "end": {
-                    "column": 8,
-                    "line": 5,
-                  },
-                  "start": {
-                    "column": 7,
-                    "line": 2,
-                  },
-                },
-                "type": "SelfReferencedType",
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "Array",
+            "name": "children",
+            "position": {
+              "end": {
+                "column": 42,
+                "line": 4,
               },
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "Array",
-              "name": "children",
-              "position": {
-                "end": {
-                  "column": 40,
-                  "line": 4,
-                },
-                "start": {
-                  "column": 9,
-                  "line": 4,
-                },
+              "start": {
+                "column": 11,
+                "line": 4,
               },
-              "type": "Array<SelfReferencedType>",
             },
-          ],
-          "type": "SelfReferencedType",
-        }
-      `)
+            "text": "Array<SelfReferencedType>",
+          },
+        ],
+        "text": "SelfReferencedType",
+      }
+    `)
   })
 
   test('references property signature types located in node_modules', () => {
@@ -1733,44 +1787,45 @@ describe('processProperties', () => {
     const processedProperties = resolveType(typeAlias.getType(), typeAlias)
 
     expect(processedProperties).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Object",
-          "name": "FileSystem",
-          "position": {
-            "end": {
-              "column": 55,
-              "line": 4,
-            },
-            "start": {
-              "column": 7,
-              "line": 4,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Object",
+        "name": "FileSystem",
+        "position": {
+          "end": {
+            "column": 57,
+            "line": 4,
           },
-          "properties": [
-            {
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "Reference",
-              "name": "readFile",
-              "position": {
-                "end": {
-                  "column": 52,
-                  "line": 4,
-                },
-                "start": {
-                  "column": 27,
-                  "line": 4,
-                },
+          "start": {
+            "column": 9,
+            "line": 4,
+          },
+        },
+        "properties": [
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "Reference",
+            "name": "readFile",
+            "position": {
+              "end": {
+                "column": 54,
+                "line": 4,
               },
-              "type": "(path: string, callback: (err: Error, data: Buffer) => void) => void",
+              "start": {
+                "column": 29,
+                "line": 4,
+              },
             },
-          ],
-          "type": "FileSystem",
-        }
-      `)
+            "text": "(path: string, callback: (err: Error | null, data: Buffer) => void) => void",
+          },
+        ],
+        "text": "FileSystem",
+      }
+    `)
   })
 
   test('avoids analyzing prototype properties and methods', () => {
@@ -1792,85 +1847,88 @@ describe('processProperties', () => {
     const processedProperties = resolveType(typeAlias.getType())
 
     expect(processedProperties).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Object",
-          "name": "AsyncString",
-          "position": {
-            "end": {
-              "column": 2,
-              "line": 7,
-            },
-            "start": {
-              "column": 1,
-              "line": 5,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Object",
+        "name": "AsyncString",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 7,
           },
-          "properties": [
-            {
-              "arguments": [
-                {
-                  "filePath": "test.ts",
-                  "kind": "Object",
-                  "name": "Foo",
-                  "position": {
-                    "end": {
-                      "column": 2,
-                      "line": 3,
-                    },
-                    "start": {
-                      "column": 1,
-                      "line": 1,
-                    },
+          "start": {
+            "column": 1,
+            "line": 5,
+          },
+        },
+        "properties": [
+          {
+            "arguments": [
+              {
+                "context": "parameter",
+                "filePath": "test.ts",
+                "kind": "Object",
+                "name": "Foo",
+                "position": {
+                  "end": {
+                    "column": 2,
+                    "line": 3,
                   },
-                  "properties": [
-                    {
-                      "defaultValue": undefined,
-                      "filePath": "test.ts",
-                      "isOptional": false,
-                      "isReadonly": false,
-                      "kind": "String",
-                      "name": "bar",
-                      "position": {
-                        "end": {
-                          "column": 13,
-                          "line": 2,
-                        },
-                        "start": {
-                          "column": 3,
-                          "line": 2,
-                        },
+                  "start": {
+                    "column": 1,
+                    "line": 1,
+                  },
+                },
+                "properties": [
+                  {
+                    "context": "property",
+                    "defaultValue": undefined,
+                    "filePath": "test.ts",
+                    "isOptional": false,
+                    "isReadonly": false,
+                    "kind": "String",
+                    "name": "bar",
+                    "position": {
+                      "end": {
+                        "column": 13,
+                        "line": 2,
                       },
-                      "type": ""baz"",
-                      "value": "baz",
+                      "start": {
+                        "column": 3,
+                        "line": 2,
+                      },
                     },
-                  ],
-                  "type": "Foo",
-                },
-              ],
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "Generic",
-              "name": "value",
-              "position": {
-                "end": {
-                  "column": 22,
-                  "line": 6,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 6,
-                },
+                    "text": ""baz"",
+                    "value": "baz",
+                  },
+                ],
+                "text": "Foo",
               },
-              "type": "Promise<Foo>",
-              "typeName": "Promise",
+            ],
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "Generic",
+            "name": "value",
+            "position": {
+              "end": {
+                "column": 22,
+                "line": 6,
+              },
+              "start": {
+                "column": 3,
+                "line": 6,
+              },
             },
-          ],
-          "type": "AsyncString",
-        }
-      `)
+            "text": "Promise<Foo>",
+            "typeName": "Promise",
+          },
+        ],
+        "text": "AsyncString",
+      }
+    `)
   })
 
   test('unwraps generic types', () => {
@@ -1909,141 +1967,145 @@ describe('processProperties', () => {
     const processedProperties = resolveType(typeAlias.getType())
 
     expect(processedProperties).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Union",
-          "members": [
-            {
-              "filePath": "test.ts",
-              "kind": "Object",
-              "name": "UnwrapPromisesInMap",
-              "position": {
-                "end": {
-                  "column": 2,
-                  "line": 22,
-                },
-                "start": {
-                  "column": 1,
-                  "line": 20,
-                },
+      {
+        "filePath": "test.ts",
+        "kind": "Union",
+        "members": [
+          {
+            "filePath": "test.ts",
+            "kind": "Object",
+            "name": "UnwrapPromisesInMap",
+            "position": {
+              "end": {
+                "column": 2,
+                "line": 22,
               },
-              "properties": [
-                {
-                  "defaultValue": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "isReadonly": false,
-                  "kind": "Number",
-                  "name": "a",
-                  "position": {
-                    "end": {
-                      "column": 21,
-                      "line": 11,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 11,
-                    },
-                  },
-                  "type": "number",
-                  "value": undefined,
-                },
-                {
-                  "defaultValue": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "isReadonly": false,
-                  "kind": "String",
-                  "name": "url",
-                  "position": {
-                    "end": {
-                      "column": 14,
-                      "line": 6,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 6,
-                    },
-                  },
-                  "type": "string",
-                  "value": undefined,
-                },
-              ],
-              "type": "UnwrapPromisesInMap<Omit<A, "title">>",
-            },
-            {
-              "filePath": "test.ts",
-              "kind": "Object",
-              "name": "UnwrapPromisesInMap",
-              "position": {
-                "end": {
-                  "column": 2,
-                  "line": 22,
-                },
-                "start": {
-                  "column": 1,
-                  "line": 20,
-                },
+              "start": {
+                "column": 1,
+                "line": 20,
               },
-              "properties": [
-                {
-                  "defaultValue": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "isReadonly": false,
-                  "kind": "String",
-                  "name": "url",
-                  "position": {
-                    "end": {
-                      "column": 14,
-                      "line": 6,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 6,
-                    },
+            },
+            "properties": [
+              {
+                "context": "property",
+                "defaultValue": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "isReadonly": false,
+                "kind": "Number",
+                "name": "a",
+                "position": {
+                  "end": {
+                    "column": 21,
+                    "line": 11,
                   },
-                  "type": "string",
-                  "value": undefined,
-                },
-                {
-                  "defaultValue": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "isReadonly": false,
-                  "kind": "Number",
-                  "name": "b",
-                  "position": {
-                    "end": {
-                      "column": 12,
-                      "line": 15,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 15,
-                    },
+                  "start": {
+                    "column": 3,
+                    "line": 11,
                   },
-                  "type": "number",
-                  "value": undefined,
                 },
-              ],
-              "type": "UnwrapPromisesInMap<Omit<B, "title">>",
-            },
-          ],
-          "name": "ExportedType",
-          "position": {
-            "end": {
-              "column": 78,
-              "line": 24,
-            },
-            "start": {
-              "column": 1,
-              "line": 24,
-            },
+                "text": "number",
+                "value": undefined,
+              },
+              {
+                "context": "property",
+                "defaultValue": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "isReadonly": false,
+                "kind": "String",
+                "name": "url",
+                "position": {
+                  "end": {
+                    "column": 14,
+                    "line": 6,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 6,
+                  },
+                },
+                "text": "string",
+                "value": undefined,
+              },
+            ],
+            "text": "UnwrapPromisesInMap<Omit<A, "title">>",
           },
-          "type": "ExportedType",
-        }
-      `)
+          {
+            "filePath": "test.ts",
+            "kind": "Object",
+            "name": "UnwrapPromisesInMap",
+            "position": {
+              "end": {
+                "column": 2,
+                "line": 22,
+              },
+              "start": {
+                "column": 1,
+                "line": 20,
+              },
+            },
+            "properties": [
+              {
+                "context": "property",
+                "defaultValue": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "isReadonly": false,
+                "kind": "String",
+                "name": "url",
+                "position": {
+                  "end": {
+                    "column": 14,
+                    "line": 6,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 6,
+                  },
+                },
+                "text": "string",
+                "value": undefined,
+              },
+              {
+                "context": "property",
+                "defaultValue": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "isReadonly": false,
+                "kind": "Number",
+                "name": "b",
+                "position": {
+                  "end": {
+                    "column": 12,
+                    "line": 15,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 15,
+                  },
+                },
+                "text": "number",
+                "value": undefined,
+              },
+            ],
+            "text": "UnwrapPromisesInMap<Omit<B, "title">>",
+          },
+        ],
+        "name": "ExportedType",
+        "position": {
+          "end": {
+            "column": 78,
+            "line": 24,
+          },
+          "start": {
+            "column": 1,
+            "line": 24,
+          },
+        },
+        "text": "ExportedType",
+      }
+    `)
   })
 
   test('creates reference for external types', () => {
@@ -2072,44 +2134,45 @@ describe('processProperties', () => {
     )
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Object",
-          "name": "TextProps",
-          "position": {
-            "end": {
-              "column": 2,
-              "line": 5,
-            },
-            "start": {
-              "column": 1,
-              "line": 3,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Object",
+        "name": "TextProps",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 5,
           },
-          "properties": [
-            {
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "Reference",
-              "name": "color",
-              "position": {
-                "end": {
-                  "column": 15,
-                  "line": 4,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 4,
-                },
+          "start": {
+            "column": 1,
+            "line": 3,
+          },
+        },
+        "properties": [
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "Reference",
+            "name": "color",
+            "position": {
+              "end": {
+                "column": 15,
+                "line": 4,
               },
-              "type": "Color",
+              "start": {
+                "column": 3,
+                "line": 4,
+              },
             },
-          ],
-          "type": "TextProps",
-        }
-      `)
+            "text": "Color",
+          },
+        ],
+        "text": "TextProps",
+      }
+    `)
   })
 
   test('creates reference for virtual types pointing to node modules', () => {
@@ -2146,99 +2209,101 @@ describe('processProperties', () => {
     )
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Object",
-          "name": "TextProps",
-          "position": {
-            "end": {
-              "column": 38,
-              "line": 13,
-            },
-            "start": {
-              "column": 1,
-              "line": 11,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Object",
+        "name": "TextProps",
+        "position": {
+          "end": {
+            "column": 38,
+            "line": 13,
           },
-          "properties": [
-            {
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": true,
-              "isReadonly": false,
-              "kind": "Union",
-              "members": [
-                {
-                  "filePath": "test.ts",
-                  "kind": "String",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 31,
-                      "line": 12,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 12,
-                    },
+          "start": {
+            "column": 1,
+            "line": 11,
+          },
+        },
+        "properties": [
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": true,
+            "isReadonly": false,
+            "kind": "Union",
+            "members": [
+              {
+                "filePath": "test.ts",
+                "kind": "String",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 31,
+                    "line": 12,
                   },
-                  "type": "string",
-                  "value": undefined,
-                },
-                {
-                  "filePath": "test.ts",
-                  "kind": "Number",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 31,
-                      "line": 12,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 12,
-                    },
+                  "start": {
+                    "column": 3,
+                    "line": 12,
                   },
-                  "type": "number",
-                  "value": undefined,
                 },
-              ],
-              "name": "fontWeight",
-              "position": {
-                "end": {
-                  "column": 31,
-                  "line": 12,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 12,
-                },
+                "text": "string",
+                "value": undefined,
               },
-              "type": "string | number",
-            },
-            {
-              "defaultValue": undefined,
-              "filePath": "node_modules/@types/library/index.d.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "Reference",
-              "name": "color",
-              "position": {
-                "end": {
-                  "column": 46,
-                  "line": 1,
+              {
+                "filePath": "test.ts",
+                "kind": "Number",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 31,
+                    "line": 12,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 12,
+                  },
                 },
-                "start": {
-                  "column": 1,
-                  "line": 1,
-                },
+                "text": "number",
+                "value": undefined,
               },
-              "type": "Color",
+            ],
+            "name": "fontWeight",
+            "position": {
+              "end": {
+                "column": 31,
+                "line": 12,
+              },
+              "start": {
+                "column": 3,
+                "line": 12,
+              },
             },
-          ],
-          "type": "TextProps",
-        }
-      `)
+            "text": "string | number",
+          },
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "node_modules/@types/library/index.d.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "Reference",
+            "name": "color",
+            "position": {
+              "end": {
+                "column": 46,
+                "line": 1,
+              },
+              "start": {
+                "column": 1,
+                "line": 1,
+              },
+            },
+            "text": "Color",
+          },
+        ],
+        "text": "TextProps",
+      }
+    `)
   })
 
   test('simplifies complex generic types', () => {
@@ -2285,115 +2350,117 @@ describe('processProperties', () => {
     )
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Object",
-          "name": "ModuleData",
-          "position": {
-            "end": {
-              "column": 2,
-              "line": 7,
-            },
-            "start": {
-              "column": 1,
-              "line": 5,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Object",
+        "name": "ModuleData",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 7,
           },
-          "properties": [
-            {
-              "defaultValue": undefined,
-              "element": {
-                "filePath": "test.ts",
-                "kind": "Intersection",
-                "name": "ExportedType",
-                "position": {
-                  "end": {
-                    "column": 48,
-                    "line": 3,
-                  },
-                  "start": {
-                    "column": 1,
-                    "line": 3,
-                  },
-                },
-                "properties": [
-                  {
-                    "filePath": "node_modules/@types/library/index.d.ts",
-                    "kind": "Reference",
-                    "position": {
-                      "end": {
-                        "column": 56,
-                        "line": 17,
-                      },
-                      "start": {
-                        "column": 1,
-                        "line": 17,
-                      },
-                    },
-                    "type": "Metadata",
-                  },
-                  {
-                    "filePath": "test.ts",
-                    "kind": "Object",
-                    "name": undefined,
-                    "position": {
-                      "end": {
-                        "column": 48,
-                        "line": 3,
-                      },
-                      "start": {
-                        "column": 32,
-                        "line": 3,
-                      },
-                    },
-                    "properties": [
-                      {
-                        "defaultValue": undefined,
-                        "filePath": "test.ts",
-                        "isOptional": false,
-                        "isReadonly": false,
-                        "kind": "String",
-                        "name": "slug",
-                        "position": {
-                          "end": {
-                            "column": 46,
-                            "line": 3,
-                          },
-                          "start": {
-                            "column": 34,
-                            "line": 3,
-                          },
-                        },
-                        "type": "string",
-                        "value": undefined,
-                      },
-                    ],
-                    "type": "{ slug: string; }",
-                  },
-                ],
-                "type": "ExportedType",
-              },
+          "start": {
+            "column": 1,
+            "line": 5,
+          },
+        },
+        "properties": [
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "element": {
               "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "Array",
-              "name": "exportedTypes",
+              "kind": "Intersection",
+              "name": "ExportedType",
               "position": {
                 "end": {
-                  "column": 37,
-                  "line": 6,
+                  "column": 48,
+                  "line": 3,
                 },
                 "start": {
-                  "column": 3,
-                  "line": 6,
+                  "column": 1,
+                  "line": 3,
                 },
               },
-              "type": "Array<ExportedType>",
+              "properties": [
+                {
+                  "filePath": "node_modules/@types/library/index.d.ts",
+                  "kind": "Reference",
+                  "position": {
+                    "end": {
+                      "column": 56,
+                      "line": 17,
+                    },
+                    "start": {
+                      "column": 1,
+                      "line": 17,
+                    },
+                  },
+                  "text": "Metadata",
+                },
+                {
+                  "filePath": "test.ts",
+                  "kind": "Object",
+                  "name": undefined,
+                  "position": {
+                    "end": {
+                      "column": 48,
+                      "line": 3,
+                    },
+                    "start": {
+                      "column": 32,
+                      "line": 3,
+                    },
+                  },
+                  "properties": [
+                    {
+                      "context": "property",
+                      "defaultValue": undefined,
+                      "filePath": "test.ts",
+                      "isOptional": false,
+                      "isReadonly": false,
+                      "kind": "String",
+                      "name": "slug",
+                      "position": {
+                        "end": {
+                          "column": 46,
+                          "line": 3,
+                        },
+                        "start": {
+                          "column": 34,
+                          "line": 3,
+                        },
+                      },
+                      "text": "string",
+                      "value": undefined,
+                    },
+                  ],
+                  "text": "{ slug: string; }",
+                },
+              ],
+              "text": "ExportedType",
             },
-          ],
-          "type": "ModuleData<Type>",
-        }
-      `)
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "Array",
+            "name": "exportedTypes",
+            "position": {
+              "end": {
+                "column": 37,
+                "line": 6,
+              },
+              "start": {
+                "column": 3,
+                "line": 6,
+              },
+            },
+            "text": "Array<ExportedType>",
+          },
+        ],
+        "text": "ModuleData<Type>",
+      }
+    `)
   })
 
   test('function arguments that reference exported types', () => {
@@ -2419,52 +2486,53 @@ describe('processProperties', () => {
     const processedProperties = resolveType(typeAlias.getType())
 
     expect(processedProperties).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Function",
-          "name": "Text",
-          "position": {
-            "end": {
-              "column": 42,
-              "line": 3,
-            },
-            "start": {
-              "column": 1,
-              "line": 3,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Function",
+        "name": "Text",
+        "position": {
+          "end": {
+            "column": 42,
+            "line": 3,
           },
-          "signatures": [
-            {
-              "kind": "FunctionSignature",
-              "modifier": undefined,
-              "parameters": [
-                {
-                  "defaultValue": undefined,
-                  "description": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "kind": "Reference",
-                  "name": "color",
-                  "position": {
-                    "end": {
-                      "column": 33,
-                      "line": 3,
-                    },
-                    "start": {
-                      "column": 21,
-                      "line": 3,
-                    },
+          "start": {
+            "column": 1,
+            "line": 3,
+          },
+        },
+        "signatures": [
+          {
+            "kind": "FunctionSignature",
+            "modifier": undefined,
+            "parameters": [
+              {
+                "context": "parameter",
+                "defaultValue": undefined,
+                "description": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "kind": "Reference",
+                "name": "color",
+                "position": {
+                  "end": {
+                    "column": 33,
+                    "line": 3,
                   },
-                  "type": "Color",
+                  "start": {
+                    "column": 21,
+                    "line": 3,
+                  },
                 },
-              ],
-              "returnType": "void",
-              "type": "(color: Color) => void",
-            },
-          ],
-          "type": "Text",
-        }
-      `)
+                "text": "Color",
+              },
+            ],
+            "returnType": "void",
+            "text": "(color: Color) => void",
+          },
+        ],
+        "text": "Text",
+      }
+    `)
   })
 
   test('function arguments that reference interfaces', () => {
@@ -2494,71 +2562,73 @@ describe('processProperties', () => {
     const processedProperties = resolveType(typeAlias.getType())
 
     expect(processedProperties).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Component",
-          "name": "Text",
-          "position": {
-            "end": {
-              "column": 43,
-              "line": 7,
-            },
-            "start": {
-              "column": 1,
-              "line": 7,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Component",
+        "name": "Text",
+        "position": {
+          "end": {
+            "column": 43,
+            "line": 7,
           },
-          "signatures": [
-            {
-              "kind": "ComponentSignature",
-              "modifier": undefined,
-              "parameter": {
-                "defaultValue": undefined,
-                "description": undefined,
-                "filePath": "test.ts",
-                "isOptional": true,
-                "kind": "Object",
-                "name": "props",
-                "position": {
-                  "end": {
-                    "column": 39,
-                    "line": 7,
-                  },
-                  "start": {
-                    "column": 22,
-                    "line": 7,
-                  },
+          "start": {
+            "column": 1,
+            "line": 7,
+          },
+        },
+        "signatures": [
+          {
+            "kind": "ComponentSignature",
+            "modifier": undefined,
+            "parameter": {
+              "context": "parameter",
+              "defaultValue": undefined,
+              "description": undefined,
+              "filePath": "test.ts",
+              "isOptional": true,
+              "kind": "Object",
+              "name": "props",
+              "position": {
+                "end": {
+                  "column": 39,
+                  "line": 7,
                 },
-                "properties": [
-                  {
-                    "defaultValue": undefined,
-                    "filePath": "test.ts",
-                    "isOptional": false,
-                    "isReadonly": false,
-                    "kind": "Reference",
-                    "name": "color",
-                    "position": {
-                      "end": {
-                        "column": 16,
-                        "line": 4,
-                      },
-                      "start": {
-                        "column": 3,
-                        "line": 4,
-                      },
-                    },
-                    "type": "Color",
-                  },
-                ],
-                "type": "TextProps",
+                "start": {
+                  "column": 22,
+                  "line": 7,
+                },
               },
-              "returnType": "void",
-              "type": "function Text(props?: TextProps): void",
+              "properties": [
+                {
+                  "context": "property",
+                  "defaultValue": undefined,
+                  "filePath": "test.ts",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "Reference",
+                  "name": "color",
+                  "position": {
+                    "end": {
+                      "column": 16,
+                      "line": 4,
+                    },
+                    "start": {
+                      "column": 3,
+                      "line": 4,
+                    },
+                  },
+                  "text": "Color",
+                },
+              ],
+              "text": "TextProps",
             },
-          ],
-          "type": "(props?: TextProps) => void",
-        }
-      `)
+            "returnType": "void",
+            "text": "function Text(props?: TextProps): void",
+          },
+        ],
+        "text": "(props?: TextProps) => void",
+      }
+    `)
   })
 
   test('function arguments create reference to exported type aliases', () => {
@@ -2589,50 +2659,51 @@ describe('processProperties', () => {
     const processedProperties = resolveType(typeAlias.getType())
 
     expect(processedProperties).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Component",
-          "name": "Text",
-          "position": {
-            "end": {
-              "column": 46,
-              "line": 8,
-            },
-            "start": {
-              "column": 1,
-              "line": 8,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Component",
+        "name": "Text",
+        "position": {
+          "end": {
+            "column": 46,
+            "line": 8,
           },
-          "signatures": [
-            {
-              "kind": "ComponentSignature",
-              "modifier": undefined,
-              "parameter": {
-                "defaultValue": undefined,
-                "description": undefined,
-                "filePath": "test.ts",
-                "isOptional": false,
-                "kind": "Reference",
-                "name": "props",
-                "position": {
-                  "end": {
-                    "column": 37,
-                    "line": 8,
-                  },
-                  "start": {
-                    "column": 21,
-                    "line": 8,
-                  },
+          "start": {
+            "column": 1,
+            "line": 8,
+          },
+        },
+        "signatures": [
+          {
+            "kind": "ComponentSignature",
+            "modifier": undefined,
+            "parameter": {
+              "context": "parameter",
+              "defaultValue": undefined,
+              "description": undefined,
+              "filePath": "test.ts",
+              "isOptional": false,
+              "kind": "Reference",
+              "name": "props",
+              "position": {
+                "end": {
+                  "column": 37,
+                  "line": 8,
                 },
-                "type": "TextProps",
+                "start": {
+                  "column": 21,
+                  "line": 8,
+                },
               },
-              "returnType": "void",
-              "type": "(props: TextProps) => void",
+              "text": "TextProps",
             },
-          ],
-          "type": "Text",
-        }
-      `)
+            "returnType": "void",
+            "text": "(props: TextProps) => void",
+          },
+        ],
+        "text": "Text",
+      }
+    `)
   })
 
   test('default parameter values', () => {
@@ -2652,52 +2723,53 @@ describe('processProperties', () => {
     const processedProperties = resolveType(typeAlias.getType())
 
     expect(processedProperties).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Component",
-          "name": "Text",
-          "position": {
-            "end": {
-              "column": 61,
-              "line": 6,
-            },
-            "start": {
-              "column": 1,
-              "line": 6,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Component",
+        "name": "Text",
+        "position": {
+          "end": {
+            "column": 61,
+            "line": 6,
           },
-          "signatures": [
-            {
-              "kind": "ComponentSignature",
-              "modifier": undefined,
-              "parameter": {
-                "defaultValue": {
-                  "color": "red",
-                },
-                "description": undefined,
-                "filePath": "test.ts",
-                "isOptional": false,
-                "kind": "Reference",
-                "name": "props",
-                "position": {
-                  "end": {
-                    "column": 57,
-                    "line": 6,
-                  },
-                  "start": {
-                    "column": 22,
-                    "line": 6,
-                  },
-                },
-                "type": "TextProps",
+          "start": {
+            "column": 1,
+            "line": 6,
+          },
+        },
+        "signatures": [
+          {
+            "kind": "ComponentSignature",
+            "modifier": undefined,
+            "parameter": {
+              "context": "parameter",
+              "defaultValue": {
+                "color": "red",
               },
-              "returnType": "void",
-              "type": "function Text(props: TextProps): void",
+              "description": undefined,
+              "filePath": "test.ts",
+              "isOptional": false,
+              "kind": "Reference",
+              "name": "props",
+              "position": {
+                "end": {
+                  "column": 57,
+                  "line": 6,
+                },
+                "start": {
+                  "column": 22,
+                  "line": 6,
+                },
+              },
+              "text": "TextProps",
             },
-          ],
-          "type": "(props?: TextProps) => void",
-        }
-      `)
+            "returnType": "void",
+            "text": "function Text(props: TextProps): void",
+          },
+        ],
+        "text": "(props?: TextProps) => void",
+      }
+    `)
   })
 
   test('default object values', () => {
@@ -2720,141 +2792,146 @@ describe('processProperties', () => {
     const processedProperties = resolveType(typeAlias.getType())
 
     expect(processedProperties).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Component",
-          "name": "Text",
-          "position": {
-            "end": {
-              "column": 115,
-              "line": 9,
-            },
-            "start": {
-              "column": 1,
-              "line": 9,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Component",
+        "name": "Text",
+        "position": {
+          "end": {
+            "column": 115,
+            "line": 9,
           },
-          "signatures": [
-            {
-              "kind": "ComponentSignature",
-              "modifier": undefined,
-              "parameter": {
-                "defaultValue": {
-                  "style": {
+          "start": {
+            "column": 1,
+            "line": 9,
+          },
+        },
+        "signatures": [
+          {
+            "kind": "ComponentSignature",
+            "modifier": undefined,
+            "parameter": {
+              "context": "parameter",
+              "defaultValue": {
+                "style": {
+                  "color": "blue",
+                  "fontWeight": 400,
+                },
+              },
+              "description": undefined,
+              "filePath": "test.ts",
+              "isOptional": false,
+              "kind": "Object",
+              "name": undefined,
+              "position": {
+                "end": {
+                  "column": 111,
+                  "line": 9,
+                },
+                "start": {
+                  "column": 22,
+                  "line": 9,
+                },
+              },
+              "properties": [
+                {
+                  "context": "property",
+                  "defaultValue": {
                     "color": "blue",
                     "fontWeight": 400,
                   },
-                },
-                "description": undefined,
-                "filePath": "test.ts",
-                "isOptional": false,
-                "kind": "Object",
-                "name": undefined,
-                "position": {
-                  "end": {
-                    "column": 111,
-                    "line": 9,
-                  },
-                  "start": {
-                    "column": 22,
-                    "line": 9,
-                  },
-                },
-                "properties": [
-                  {
-                    "defaultValue": {
-                      "color": "blue",
-                      "fontWeight": 400,
+                  "filePath": "test.ts",
+                  "isOptional": true,
+                  "isReadonly": false,
+                  "kind": "Object",
+                  "name": "style",
+                  "position": {
+                    "end": {
+                      "column": 5,
+                      "line": 6,
                     },
-                    "filePath": "test.ts",
-                    "isOptional": true,
-                    "isReadonly": false,
-                    "kind": "Object",
-                    "name": "style",
-                    "position": {
-                      "end": {
-                        "column": 5,
-                        "line": 6,
-                      },
-                      "start": {
-                        "column": 3,
-                        "line": 2,
-                      },
+                    "start": {
+                      "column": 3,
+                      "line": 2,
                     },
-                    "properties": [
-                      {
-                        "defaultValue": undefined,
-                        "filePath": "test.ts",
-                        "isOptional": false,
-                        "isReadonly": false,
-                        "kind": "Number",
-                        "name": "fontSize",
-                        "position": {
-                          "end": {
-                            "column": 22,
-                            "line": 3,
-                          },
-                          "start": {
-                            "column": 5,
-                            "line": 3,
-                          },
-                        },
-                        "type": "number",
-                        "value": undefined,
-                      },
-                      {
-                        "defaultValue": 400,
-                        "filePath": "test.ts",
-                        "isOptional": true,
-                        "isReadonly": false,
-                        "kind": "Number",
-                        "name": "fontWeight",
-                        "position": {
-                          "end": {
-                            "column": 24,
-                            "line": 4,
-                          },
-                          "start": {
-                            "column": 5,
-                            "line": 4,
-                          },
-                        },
-                        "type": "number",
-                        "value": undefined,
-                      },
-                      {
-                        "defaultValue": "blue",
-                        "filePath": "test.ts",
-                        "isOptional": true,
-                        "isReadonly": false,
-                        "kind": "String",
-                        "name": "color",
-                        "position": {
-                          "end": {
-                            "column": 20,
-                            "line": 5,
-                          },
-                          "start": {
-                            "column": 5,
-                            "line": 5,
-                          },
-                        },
-                        "type": "string",
-                        "value": undefined,
-                      },
-                    ],
-                    "type": "{ fontSize: number; fontWeight: number; color?: string; }",
                   },
-                ],
-                "type": "TextProps",
-              },
-              "returnType": "void",
-              "type": "function Text(TextProps): void",
+                  "properties": [
+                    {
+                      "context": "property",
+                      "defaultValue": undefined,
+                      "filePath": "test.ts",
+                      "isOptional": false,
+                      "isReadonly": false,
+                      "kind": "Number",
+                      "name": "fontSize",
+                      "position": {
+                        "end": {
+                          "column": 22,
+                          "line": 3,
+                        },
+                        "start": {
+                          "column": 5,
+                          "line": 3,
+                        },
+                      },
+                      "text": "number",
+                      "value": undefined,
+                    },
+                    {
+                      "context": "property",
+                      "defaultValue": 400,
+                      "filePath": "test.ts",
+                      "isOptional": true,
+                      "isReadonly": false,
+                      "kind": "Number",
+                      "name": "fontWeight",
+                      "position": {
+                        "end": {
+                          "column": 24,
+                          "line": 4,
+                        },
+                        "start": {
+                          "column": 5,
+                          "line": 4,
+                        },
+                      },
+                      "text": "number",
+                      "value": undefined,
+                    },
+                    {
+                      "context": "property",
+                      "defaultValue": "blue",
+                      "filePath": "test.ts",
+                      "isOptional": true,
+                      "isReadonly": false,
+                      "kind": "String",
+                      "name": "color",
+                      "position": {
+                        "end": {
+                          "column": 20,
+                          "line": 5,
+                        },
+                        "start": {
+                          "column": 5,
+                          "line": 5,
+                        },
+                      },
+                      "text": "string",
+                      "value": undefined,
+                    },
+                  ],
+                  "text": "{ fontSize: number; fontWeight: number; color?: string; }",
+                },
+              ],
+              "text": "TextProps",
             },
-          ],
-          "type": "({ style: { fontSize, color } }?: TextProps) => void",
-        }
-      `)
+            "returnType": "void",
+            "text": "function Text(TextProps): void",
+          },
+        ],
+        "text": "({ style: { fontSize, color } }?: TextProps) => void",
+      }
+    `)
   })
 
   test('conditional generic', () => {
@@ -2871,169 +2948,175 @@ describe('processProperties', () => {
     const types = resolveType(typeAlias.getType(), typeAlias)
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Union",
-          "members": [
-            {
-              "filePath": "test.ts",
-              "kind": "Object",
-              "name": undefined,
-              "position": {
-                "end": {
-                  "column": 43,
-                  "line": 3,
-                },
-                "start": {
-                  "column": 7,
-                  "line": 3,
-                },
+      {
+        "filePath": "test.ts",
+        "kind": "Union",
+        "members": [
+          {
+            "filePath": "test.ts",
+            "kind": "Object",
+            "name": undefined,
+            "position": {
+              "end": {
+                "column": 43,
+                "line": 3,
               },
-              "properties": [
-                {
-                  "arguments": [
-                    {
-                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                      "kind": "String",
-                      "name": undefined,
-                      "position": {
-                        "end": {
-                          "column": 4402,
-                          "line": 4,
-                        },
-                        "start": {
-                          "column": 3482,
-                          "line": 4,
-                        },
-                      },
-                      "type": "string",
-                      "value": undefined,
-                    },
-                    {
-                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                      "kind": "Primitive",
-                      "position": {
-                        "end": {
-                          "column": 315,
-                          "line": 6,
-                        },
-                        "start": {
-                          "column": 266,
-                          "line": 6,
-                        },
-                      },
-                      "type": "any",
-                    },
-                  ],
-                  "defaultValue": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "isReadonly": false,
-                  "kind": "Generic",
-                  "name": "frontMatter",
-                  "position": {
-                    "end": {
-                      "column": 41,
-                      "line": 3,
-                    },
-                    "start": {
-                      "column": 9,
-                      "line": 3,
-                    },
-                  },
-                  "type": "Record<string, any>",
-                  "typeName": "Record",
-                },
-              ],
-              "type": "{ frontMatter: Record<string, any>; }",
-            },
-            {
-              "filePath": "test.ts",
-              "kind": "Object",
-              "name": undefined,
-              "position": {
-                "end": {
-                  "column": 66,
-                  "line": 1,
-                },
-                "start": {
-                  "column": 30,
-                  "line": 1,
-                },
+              "start": {
+                "column": 7,
+                "line": 3,
               },
-              "properties": [
-                {
-                  "arguments": [
-                    {
-                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                      "kind": "String",
-                      "name": undefined,
-                      "position": {
-                        "end": {
-                          "column": 4402,
-                          "line": 4,
-                        },
-                        "start": {
-                          "column": 3482,
-                          "line": 4,
-                        },
+            },
+            "properties": [
+              {
+                "arguments": [
+                  {
+                    "context": "parameter",
+                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                    "kind": "String",
+                    "name": undefined,
+                    "position": {
+                      "end": {
+                        "column": 4402,
+                        "line": 4,
                       },
-                      "type": "string",
-                      "value": undefined,
-                    },
-                    {
-                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                      "kind": "Primitive",
-                      "position": {
-                        "end": {
-                          "column": 315,
-                          "line": 6,
-                        },
-                        "start": {
-                          "column": 266,
-                          "line": 6,
-                        },
+                      "start": {
+                        "column": 3482,
+                        "line": 4,
                       },
-                      "type": "any",
                     },
-                  ],
-                  "defaultValue": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "isReadonly": false,
-                  "kind": "Generic",
-                  "name": "frontMatter",
-                  "position": {
-                    "end": {
-                      "column": 64,
-                      "line": 1,
-                    },
-                    "start": {
-                      "column": 32,
-                      "line": 1,
-                    },
+                    "text": "string",
+                    "value": undefined,
                   },
-                  "type": "Record<string, any>",
-                  "typeName": "Record",
+                  {
+                    "context": "parameter",
+                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                    "kind": "Primitive",
+                    "position": {
+                      "end": {
+                        "column": 315,
+                        "line": 6,
+                      },
+                      "start": {
+                        "column": 266,
+                        "line": 6,
+                      },
+                    },
+                    "text": "any",
+                  },
+                ],
+                "context": "property",
+                "defaultValue": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "isReadonly": false,
+                "kind": "Generic",
+                "name": "frontMatter",
+                "position": {
+                  "end": {
+                    "column": 41,
+                    "line": 3,
+                  },
+                  "start": {
+                    "column": 9,
+                    "line": 3,
+                  },
                 },
-              ],
-              "type": "{ frontMatter: Record<string, any>; }",
-            },
-          ],
-          "name": undefined,
-          "position": {
-            "end": {
-              "column": 43,
-              "line": 3,
-            },
-            "start": {
-              "column": 1,
-              "line": 1,
-            },
+                "text": "Record<string, any>",
+                "typeName": "Record",
+              },
+            ],
+            "text": "{ frontMatter: Record<string, any>; }",
           },
-          "type": "{ frontMatter: Record<string, any>; } | { frontMatter: Record<string, any>; }",
-        }
-      `)
+          {
+            "filePath": "test.ts",
+            "kind": "Object",
+            "name": undefined,
+            "position": {
+              "end": {
+                "column": 66,
+                "line": 1,
+              },
+              "start": {
+                "column": 30,
+                "line": 1,
+              },
+            },
+            "properties": [
+              {
+                "arguments": [
+                  {
+                    "context": "parameter",
+                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                    "kind": "String",
+                    "name": undefined,
+                    "position": {
+                      "end": {
+                        "column": 4402,
+                        "line": 4,
+                      },
+                      "start": {
+                        "column": 3482,
+                        "line": 4,
+                      },
+                    },
+                    "text": "string",
+                    "value": undefined,
+                  },
+                  {
+                    "context": "parameter",
+                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                    "kind": "Primitive",
+                    "position": {
+                      "end": {
+                        "column": 315,
+                        "line": 6,
+                      },
+                      "start": {
+                        "column": 266,
+                        "line": 6,
+                      },
+                    },
+                    "text": "any",
+                  },
+                ],
+                "context": "property",
+                "defaultValue": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "isReadonly": false,
+                "kind": "Generic",
+                "name": "frontMatter",
+                "position": {
+                  "end": {
+                    "column": 64,
+                    "line": 1,
+                  },
+                  "start": {
+                    "column": 32,
+                    "line": 1,
+                  },
+                },
+                "text": "Record<string, any>",
+                "typeName": "Record",
+              },
+            ],
+            "text": "{ frontMatter: Record<string, any>; }",
+          },
+        ],
+        "name": undefined,
+        "position": {
+          "end": {
+            "column": 43,
+            "line": 3,
+          },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "text": "{ frontMatter: Record<string, any>; } | { frontMatter: Record<string, any>; }",
+      }
+    `)
   })
 
   test('generic function parameters', () => {
@@ -3054,94 +3137,97 @@ describe('processProperties', () => {
     const processedProperties = resolveType(functionDeclaration.getType())
 
     expect(processedProperties).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Function",
-          "name": undefined,
-          "position": {
-            "end": {
-              "column": 79,
-              "line": 2,
-            },
-            "start": {
-              "column": 59,
-              "line": 2,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Function",
+        "name": undefined,
+        "position": {
+          "end": {
+            "column": 79,
+            "line": 2,
           },
-          "signatures": [
-            {
-              "kind": "FunctionSignature",
-              "modifier": undefined,
-              "parameters": [
-                {
-                  "defaultValue": undefined,
-                  "description": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "kind": "Object",
-                  "name": "props",
-                  "position": {
-                    "end": {
-                      "column": 72,
-                      "line": 2,
-                    },
-                    "start": {
-                      "column": 60,
-                      "line": 2,
-                    },
+          "start": {
+            "column": 59,
+            "line": 2,
+          },
+        },
+        "signatures": [
+          {
+            "kind": "FunctionSignature",
+            "modifier": undefined,
+            "parameters": [
+              {
+                "context": "parameter",
+                "defaultValue": undefined,
+                "description": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "kind": "Object",
+                "name": "props",
+                "position": {
+                  "end": {
+                    "column": 72,
+                    "line": 2,
                   },
-                  "properties": [
-                    {
-                      "defaultValue": undefined,
-                      "filePath": "test.ts",
-                      "isOptional": false,
-                      "isReadonly": false,
-                      "kind": "Number",
-                      "name": "columns",
-                      "position": {
-                        "end": {
-                          "column": 36,
-                          "line": 5,
-                        },
-                        "start": {
-                          "column": 20,
-                          "line": 5,
-                        },
-                      },
-                      "type": "number",
-                      "value": undefined,
-                    },
-                    {
-                      "defaultValue": undefined,
-                      "filePath": "test.ts",
-                      "isOptional": false,
-                      "isReadonly": false,
-                      "kind": "Number",
-                      "name": "rows",
-                      "position": {
-                        "end": {
-                          "column": 49,
-                          "line": 5,
-                        },
-                        "start": {
-                          "column": 37,
-                          "line": 5,
-                        },
-                      },
-                      "type": "number",
-                      "value": undefined,
-                    },
-                  ],
-                  "type": "GridProps",
+                  "start": {
+                    "column": 60,
+                    "line": 2,
+                  },
                 },
-              ],
-              "returnType": "void",
-              "type": "(props: GridProps) => void",
-            },
-          ],
-          "type": "(props: GridProps) => void",
-        }
-      `)
+                "properties": [
+                  {
+                    "context": "property",
+                    "defaultValue": undefined,
+                    "filePath": "test.ts",
+                    "isOptional": false,
+                    "isReadonly": false,
+                    "kind": "Number",
+                    "name": "columns",
+                    "position": {
+                      "end": {
+                        "column": 36,
+                        "line": 5,
+                      },
+                      "start": {
+                        "column": 20,
+                        "line": 5,
+                      },
+                    },
+                    "text": "number",
+                    "value": undefined,
+                  },
+                  {
+                    "context": "property",
+                    "defaultValue": undefined,
+                    "filePath": "test.ts",
+                    "isOptional": false,
+                    "isReadonly": false,
+                    "kind": "Number",
+                    "name": "rows",
+                    "position": {
+                      "end": {
+                        "column": 49,
+                        "line": 5,
+                      },
+                      "start": {
+                        "column": 37,
+                        "line": 5,
+                      },
+                    },
+                    "text": "number",
+                    "value": undefined,
+                  },
+                ],
+                "text": "GridProps",
+              },
+            ],
+            "returnType": "void",
+            "text": "(props: GridProps) => void",
+          },
+        ],
+        "text": "(props: GridProps) => void",
+      }
+    `)
   })
 
   test('explicit undefined is a union', () => {
@@ -3163,78 +3249,79 @@ describe('processProperties', () => {
     const processedProperties = resolveType(typeAlias.getType())
 
     expect(processedProperties).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Object",
-          "name": "TextProps",
-          "position": {
-            "end": {
-              "column": 2,
-              "line": 3,
-            },
-            "start": {
-              "column": 1,
-              "line": 1,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Object",
+        "name": "TextProps",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 3,
           },
-          "properties": [
-            {
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "Union",
-              "members": [
-                {
-                  "filePath": "test.ts",
-                  "kind": "Primitive",
-                  "position": {
-                    "end": {
-                      "column": 29,
-                      "line": 2,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 2,
-                    },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "properties": [
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "Union",
+            "members": [
+              {
+                "filePath": "test.ts",
+                "kind": "Primitive",
+                "position": {
+                  "end": {
+                    "column": 29,
+                    "line": 2,
                   },
-                  "type": "undefined",
-                },
-                {
-                  "filePath": "test.ts",
-                  "kind": "String",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 29,
-                      "line": 2,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 2,
-                    },
+                  "start": {
+                    "column": 3,
+                    "line": 2,
                   },
-                  "type": "string",
-                  "value": undefined,
                 },
-              ],
-              "name": "color",
-              "position": {
-                "end": {
-                  "column": 29,
-                  "line": 2,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 2,
-                },
+                "text": "undefined",
               },
-              "type": "string | undefined",
+              {
+                "filePath": "test.ts",
+                "kind": "String",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 29,
+                    "line": 2,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 2,
+                  },
+                },
+                "text": "string",
+                "value": undefined,
+              },
+            ],
+            "name": "color",
+            "position": {
+              "end": {
+                "column": 29,
+                "line": 2,
+              },
+              "start": {
+                "column": 3,
+                "line": 2,
+              },
             },
-          ],
-          "type": "TextProps",
-        }
-      `)
+            "text": "string | undefined",
+          },
+        ],
+        "text": "TextProps",
+      }
+    `)
   })
 
   test('complex library generic types', () => {
@@ -3262,174 +3349,22 @@ describe('processProperties', () => {
     )
 
     expect(processedType).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Intersection",
-          "name": undefined,
-          "position": {
-            "end": {
-              "column": 79,
-              "line": 2,
-            },
-            "start": {
-              "column": 14,
-              "line": 2,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Primitive",
+        "position": {
+          "end": {
+            "column": 79,
+            "line": 2,
           },
-          "properties": [
-            {
-              "filePath": "test.ts",
-              "kind": "Component",
-              "name": "Text",
-              "position": {
-                "end": {
-                  "column": 79,
-                  "line": 2,
-                },
-                "start": {
-                  "column": 14,
-                  "line": 2,
-                },
-              },
-              "signatures": [
-                {
-                  "kind": "ComponentSignature",
-                  "modifier": undefined,
-                  "parameter": {
-                    "defaultValue": undefined,
-                    "description": undefined,
-                    "filePath": "node_modules/styled-components/dist/types.d.ts",
-                    "isOptional": false,
-                    "kind": "Object",
-                    "name": "props",
-                    "position": {
-                      "end": {
-                        "column": 186,
-                        "line": 133,
-                      },
-                      "start": {
-                        "column": 111,
-                        "line": 133,
-                      },
-                    },
-                    "properties": [
-                      {
-                        "defaultValue": undefined,
-                        "filePath": "node_modules/styled-components/dist/types.d.ts",
-                        "isOptional": true,
-                        "isReadonly": false,
-                        "kind": "Reference",
-                        "name": "theme",
-                        "position": {
-                          "end": {
-                            "column": 38,
-                            "line": 71,
-                          },
-                          "start": {
-                            "column": 5,
-                            "line": 71,
-                          },
-                        },
-                        "type": "DefaultTheme",
-                      },
-                    ],
-                    "tags": undefined,
-                    "type": "PolymorphicComponentProps<"web", Substitute<React.DetailedHTMLProps<React.HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, { fontSize: number; fontWeight?: number; }>, AsTarget, ForwardedAsTarget, AsTarget extends KnownTarget ? React.ComponentPropsWithRef<AsTarget> : {}, ForwardedAsTarget extends KnownTarget ? React.ComponentPropsWithRef<ForwardedAsTarget> : {}>",
-                  },
-                  "returnType": "Element",
-                  "type": "<AsTarget, ForwardedAsTarget>(props: PolymorphicComponentProps<"web", Substitute<React.DetailedHTMLProps<React.HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, { fontSize: number; fontWeight?: number; }>, AsTarget, ForwardedAsTarget, AsTarget extends KnownTarget ? React.ComponentPropsWithRef<AsTarget> : {}, ForwardedAsTarget extends KnownTarget ? React.ComponentPropsWithRef<ForwardedAsTarget> : {}>) => Element",
-                },
-                {
-                  "kind": "ComponentSignature",
-                  "modifier": undefined,
-                  "parameter": {
-                    "defaultValue": undefined,
-                    "description": undefined,
-                    "filePath": "node_modules/@types/react/index.d.ts",
-                    "isOptional": false,
-                    "kind": "Object",
-                    "name": "props",
-                    "position": {
-                      "end": {
-                        "column": 18,
-                        "line": 635,
-                      },
-                      "start": {
-                        "column": 10,
-                        "line": 635,
-                      },
-                    },
-                    "properties": [
-                      {
-                        "defaultValue": undefined,
-                        "filePath": "test.ts",
-                        "isOptional": false,
-                        "isReadonly": false,
-                        "kind": "Number",
-                        "name": "fontSize",
-                        "position": {
-                          "end": {
-                            "column": 52,
-                            "line": 2,
-                          },
-                          "start": {
-                            "column": 35,
-                            "line": 2,
-                          },
-                        },
-                        "type": "number",
-                        "value": undefined,
-                      },
-                      {
-                        "defaultValue": undefined,
-                        "filePath": "test.ts",
-                        "isOptional": true,
-                        "isReadonly": false,
-                        "kind": "Number",
-                        "name": "fontWeight",
-                        "position": {
-                          "end": {
-                            "column": 72,
-                            "line": 2,
-                          },
-                          "start": {
-                            "column": 53,
-                            "line": 2,
-                          },
-                        },
-                        "type": "number",
-                        "value": undefined,
-                      },
-                    ],
-                    "type": "Substitute<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, { fontSize: number; fontWeight?: number; }>",
-                  },
-                  "returnType": "ReactNode",
-                  "type": "(props: Substitute<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, { fontSize: number; fontWeight?: number; }>) => ReactNode",
-                },
-              ],
-              "type": "IStyledComponentBase<"web", Substitute<React.DetailedHTMLProps<React.HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, { fontSize: number; fontWeight?: number; }>>",
-            },
-            {
-              "filePath": "test.ts",
-              "kind": "String",
-              "name": "Text",
-              "position": {
-                "end": {
-                  "column": 79,
-                  "line": 2,
-                },
-                "start": {
-                  "column": 14,
-                  "line": 2,
-                },
-              },
-              "type": "string",
-              "value": undefined,
-            },
-          ],
-          "type": "IStyledComponentBase<"web", Substitute<React.DetailedHTMLProps<React.HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, { fontSize: number; fontWeight?: number; }>> & string",
-        }
-      `)
+          "start": {
+            "column": 14,
+            "line": 2,
+          },
+        },
+        "text": "any",
+      }
+    `)
   })
 
   test('enum', () => {
@@ -3448,28 +3383,28 @@ describe('processProperties', () => {
     const processedProperties = resolveType(typeAlias.getType(), typeAlias)
 
     expect(processedProperties).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Enum",
-          "members": {
-            "Blue": "blue",
-            "Green": "green",
-            "Red": "red",
+      {
+        "filePath": "test.ts",
+        "kind": "Enum",
+        "members": {
+          "Blue": "blue",
+          "Green": "green",
+          "Red": "red",
+        },
+        "name": "Color",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 5,
           },
-          "name": "Color",
-          "position": {
-            "end": {
-              "column": 2,
-              "line": 5,
-            },
-            "start": {
-              "column": 1,
-              "line": 1,
-            },
+          "start": {
+            "column": 1,
+            "line": 1,
           },
-          "type": "Color",
-        }
-      `)
+        },
+        "text": "Color",
+      }
+    `)
   })
 
   test('enum property', () => {
@@ -3492,49 +3427,50 @@ describe('processProperties', () => {
     const processedProperties = resolveType(typeAlias.getType(), typeAlias)
 
     expect(processedProperties).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Object",
-          "name": "TextProps",
-          "position": {
-            "end": {
-              "column": 2,
-              "line": 9,
-            },
-            "start": {
-              "column": 1,
-              "line": 7,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Object",
+        "name": "TextProps",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 9,
           },
-          "properties": [
-            {
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "Enum",
-              "members": {
-                "Blue": "blue",
-                "Green": "green",
-                "Red": "red",
-              },
-              "name": "color",
-              "position": {
-                "end": {
-                  "column": 16,
-                  "line": 8,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 8,
-                },
-              },
-              "type": "Color",
+          "start": {
+            "column": 1,
+            "line": 7,
+          },
+        },
+        "properties": [
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "Enum",
+            "members": {
+              "Blue": "blue",
+              "Green": "green",
+              "Red": "red",
             },
-          ],
-          "type": "TextProps",
-        }
-      `)
+            "name": "color",
+            "position": {
+              "end": {
+                "column": 16,
+                "line": 8,
+              },
+              "start": {
+                "column": 3,
+                "line": 8,
+              },
+            },
+            "text": "Color",
+          },
+        ],
+        "text": "TextProps",
+      }
+    `)
   })
 
   test('class', () => {
@@ -3558,85 +3494,86 @@ describe('processProperties', () => {
     )
 
     expect(processedProperties).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Class",
-          "methods": [
-            {
-              "kind": "ClassMethod",
-              "name": "setValue",
-              "scope": undefined,
-              "signatures": [
-                {
-                  "kind": "FunctionSignature",
-                  "modifier": undefined,
-                  "parameters": [
-                    {
-                      "defaultValue": undefined,
-                      "description": undefined,
-                      "filePath": "test.ts",
-                      "isOptional": false,
-                      "kind": "String",
-                      "name": "value",
-                      "position": {
-                        "end": {
-                          "column": 25,
-                          "line": 4,
-                        },
-                        "start": {
-                          "column": 12,
-                          "line": 4,
-                        },
+      {
+        "filePath": "test.ts",
+        "kind": "Class",
+        "methods": [
+          {
+            "kind": "ClassMethod",
+            "name": "setValue",
+            "scope": undefined,
+            "signatures": [
+              {
+                "kind": "FunctionSignature",
+                "modifier": undefined,
+                "parameters": [
+                  {
+                    "context": "parameter",
+                    "defaultValue": undefined,
+                    "description": undefined,
+                    "filePath": "test.ts",
+                    "isOptional": false,
+                    "kind": "String",
+                    "name": "value",
+                    "position": {
+                      "end": {
+                        "column": 25,
+                        "line": 4,
                       },
-                      "type": "string",
-                      "value": undefined,
+                      "start": {
+                        "column": 12,
+                        "line": 4,
+                      },
                     },
-                  ],
-                  "returnType": "void",
-                  "type": "(value: string) => void",
-                },
-              ],
-              "type": "(value: string) => void",
-              "visibility": undefined,
-            },
-          ],
-          "name": "Text",
-          "position": {
-            "end": {
-              "column": 2,
-              "line": 7,
-            },
-            "start": {
-              "column": 1,
-              "line": 1,
-            },
-          },
-          "properties": [
-            {
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isReadonly": false,
-              "kind": "String",
-              "name": "color",
-              "position": {
-                "end": {
-                  "column": 17,
-                  "line": 2,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 2,
-                },
+                    "text": "string",
+                    "value": undefined,
+                  },
+                ],
+                "returnType": "void",
+                "text": "(value: string) => void",
               },
-              "scope": undefined,
-              "type": "string",
-              "value": undefined,
-              "visibility": undefined,
+            ],
+            "text": "(value: string) => void",
+            "visibility": undefined,
+          },
+        ],
+        "name": "Text",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 7,
+          },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "properties": [
+          {
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isReadonly": false,
+            "kind": "String",
+            "name": "color",
+            "position": {
+              "end": {
+                "column": 17,
+                "line": 2,
+              },
+              "start": {
+                "column": 3,
+                "line": 2,
+              },
             },
-          ],
-          "type": "Text",
-        }
-      `)
+            "scope": undefined,
+            "text": "string",
+            "value": undefined,
+            "visibility": undefined,
+          },
+        ],
+        "text": "Text",
+      }
+    `)
   })
 
   test('class as property', () => {
@@ -3657,67 +3594,68 @@ describe('processProperties', () => {
     const processedProperties = resolveType(typeAlias.getType(), typeAlias)
 
     expect(processedProperties).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Object",
-          "name": "CardViewProps",
-          "position": {
-            "end": {
-              "column": 2,
-              "line": 7,
-            },
-            "start": {
-              "column": 1,
-              "line": 5,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Object",
+        "name": "CardViewProps",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 7,
           },
-          "properties": [
-            {
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "Class",
-              "name": "text",
-              "position": {
-                "end": {
-                  "column": 18,
-                  "line": 6,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 6,
-                },
+          "start": {
+            "column": 1,
+            "line": 5,
+          },
+        },
+        "properties": [
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "Class",
+            "name": "text",
+            "position": {
+              "end": {
+                "column": 18,
+                "line": 6,
               },
-              "properties": [
-                {
-                  "defaultValue": "#666",
-                  "filePath": "test.ts",
-                  "isReadonly": false,
-                  "kind": "String",
-                  "name": "color",
-                  "position": {
-                    "end": {
-                      "column": 25,
-                      "line": 2,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 2,
-                    },
-                  },
-                  "scope": undefined,
-                  "type": "string",
-                  "value": undefined,
-                  "visibility": undefined,
-                },
-              ],
-              "type": "TextView",
+              "start": {
+                "column": 3,
+                "line": 6,
+              },
             },
-          ],
-          "type": "CardViewProps",
-        }
-      `)
+            "properties": [
+              {
+                "defaultValue": "#666",
+                "filePath": "test.ts",
+                "isReadonly": false,
+                "kind": "String",
+                "name": "color",
+                "position": {
+                  "end": {
+                    "column": 25,
+                    "line": 2,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 2,
+                  },
+                },
+                "scope": undefined,
+                "text": "string",
+                "value": undefined,
+                "visibility": undefined,
+              },
+            ],
+            "text": "TextView",
+          },
+        ],
+        "text": "CardViewProps",
+      }
+    `)
   })
 
   test('variable declaration', () => {
@@ -3736,24 +3674,24 @@ describe('processProperties', () => {
     )
 
     expect(processedProperties).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "String",
-          "name": "color",
-          "position": {
-            "end": {
-              "column": 21,
-              "line": 1,
-            },
-            "start": {
-              "column": 7,
-              "line": 1,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "String",
+        "name": "color",
+        "position": {
+          "end": {
+            "column": 21,
+            "line": 1,
           },
-          "type": ""blue"",
-          "value": "blue",
-        }
-      `)
+          "start": {
+            "column": 7,
+            "line": 1,
+          },
+        },
+        "text": ""blue"",
+        "value": "blue",
+      }
+    `)
   })
 
   test('frozen objects marked as readonly', () => {
@@ -3772,85 +3710,88 @@ describe('processProperties', () => {
     )
 
     expect(processedProperties).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Object",
-          "name": "color",
-          "position": {
-            "end": {
-              "column": 74,
-              "line": 1,
-            },
-            "start": {
-              "column": 7,
-              "line": 1,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Object",
+        "name": "color",
+        "position": {
+          "end": {
+            "column": 74,
+            "line": 1,
           },
-          "properties": [
-            {
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": true,
-              "kind": "String",
-              "name": "red",
-              "position": {
-                "end": {
-                  "column": 41,
-                  "line": 1,
-                },
-                "start": {
-                  "column": 31,
-                  "line": 1,
-                },
+          "start": {
+            "column": 7,
+            "line": 1,
+          },
+        },
+        "properties": [
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": true,
+            "kind": "String",
+            "name": "red",
+            "position": {
+              "end": {
+                "column": 41,
+                "line": 1,
               },
-              "type": ""red"",
-              "value": "red",
-            },
-            {
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": true,
-              "kind": "String",
-              "name": "blue",
-              "position": {
-                "end": {
-                  "column": 55,
-                  "line": 1,
-                },
-                "start": {
-                  "column": 43,
-                  "line": 1,
-                },
+              "start": {
+                "column": 31,
+                "line": 1,
               },
-              "type": ""blue"",
-              "value": "blue",
             },
-            {
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": true,
-              "kind": "String",
-              "name": "green",
-              "position": {
-                "end": {
-                  "column": 71,
-                  "line": 1,
-                },
-                "start": {
-                  "column": 57,
-                  "line": 1,
-                },
+            "text": ""red"",
+            "value": "red",
+          },
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": true,
+            "kind": "String",
+            "name": "blue",
+            "position": {
+              "end": {
+                "column": 55,
+                "line": 1,
               },
-              "type": ""green"",
-              "value": "green",
+              "start": {
+                "column": 43,
+                "line": 1,
+              },
             },
-          ],
-          "type": "Readonly<{ red: "red"; blue: "blue"; green: "green"; }>",
-        }
-      `)
+            "text": ""blue"",
+            "value": "blue",
+          },
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": true,
+            "kind": "String",
+            "name": "green",
+            "position": {
+              "end": {
+                "column": 71,
+                "line": 1,
+              },
+              "start": {
+                "column": 57,
+                "line": 1,
+              },
+            },
+            "text": ""green"",
+            "value": "green",
+          },
+        ],
+        "text": "Readonly<{ red: "red"; blue: "blue"; green: "green"; }>",
+      }
+    `)
   })
 
   test('computes local generic arguments', () => {
@@ -3871,97 +3812,98 @@ describe('processProperties', () => {
     const processedProperties = resolveType(typeAlias.getType(), typeAlias)
 
     expect(processedProperties).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Object",
-          "name": "TextProps",
-          "position": {
-            "end": {
-              "column": 2,
-              "line": 7,
-            },
-            "start": {
-              "column": 1,
-              "line": 5,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Object",
+        "name": "TextProps",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 7,
           },
-          "properties": [
-            {
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "Union",
-              "members": [
-                {
-                  "filePath": "test.ts",
-                  "kind": "String",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 38,
-                      "line": 6,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 6,
-                    },
+          "start": {
+            "column": 1,
+            "line": 5,
+          },
+        },
+        "properties": [
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "Union",
+            "members": [
+              {
+                "filePath": "test.ts",
+                "kind": "String",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 38,
+                    "line": 6,
                   },
-                  "type": ""red"",
-                  "value": "red",
-                },
-                {
-                  "filePath": "test.ts",
-                  "kind": "String",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 38,
-                      "line": 6,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 6,
-                    },
+                  "start": {
+                    "column": 3,
+                    "line": 6,
                   },
-                  "type": ""blue"",
-                  "value": "blue",
                 },
-                {
-                  "filePath": "test.ts",
-                  "kind": "String",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 38,
-                      "line": 6,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 6,
-                    },
-                  },
-                  "type": ""green"",
-                  "value": "green",
-                },
-              ],
-              "name": "color",
-              "position": {
-                "end": {
-                  "column": 38,
-                  "line": 6,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 6,
-                },
+                "text": ""red"",
+                "value": "red",
               },
-              "type": ""red" | "blue" | "green"",
+              {
+                "filePath": "test.ts",
+                "kind": "String",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 38,
+                    "line": 6,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 6,
+                  },
+                },
+                "text": ""blue"",
+                "value": "blue",
+              },
+              {
+                "filePath": "test.ts",
+                "kind": "String",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 38,
+                    "line": 6,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 6,
+                  },
+                },
+                "text": ""green"",
+                "value": "green",
+              },
+            ],
+            "name": "color",
+            "position": {
+              "end": {
+                "column": 38,
+                "line": 6,
+              },
+              "start": {
+                "column": 3,
+                "line": 6,
+              },
             },
-          ],
-          "type": "TextProps",
-        }
-      `)
+            "text": ""red" | "blue" | "green"",
+          },
+        ],
+        "text": "TextProps",
+      }
+    `)
   })
 
   test('references locally exported generic arguments', () => {
@@ -3982,62 +3924,65 @@ describe('processProperties', () => {
     const processedProperties = resolveType(typeAlias.getType(), typeAlias)
 
     expect(processedProperties).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Object",
-          "name": "TextProps",
-          "position": {
-            "end": {
-              "column": 2,
-              "line": 7,
-            },
-            "start": {
-              "column": 1,
-              "line": 5,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Object",
+        "name": "TextProps",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 7,
           },
-          "properties": [
-            {
-              "arguments": [
-                {
-                  "filePath": "test.ts",
-                  "kind": "Reference",
-                  "position": {
-                    "end": {
-                      "column": 66,
-                      "line": 3,
-                    },
-                    "start": {
-                      "column": 25,
-                      "line": 3,
-                    },
+          "start": {
+            "column": 1,
+            "line": 5,
+          },
+        },
+        "properties": [
+          {
+            "arguments": [
+              {
+                "context": "parameter",
+                "filePath": "test.ts",
+                "kind": "Reference",
+                "position": {
+                  "end": {
+                    "column": 66,
+                    "line": 3,
                   },
-                  "type": "typeof getColor",
+                  "start": {
+                    "column": 25,
+                    "line": 3,
+                  },
                 },
-              ],
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "Generic",
-              "name": "color",
-              "position": {
-                "end": {
-                  "column": 38,
-                  "line": 6,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 6,
-                },
+                "text": "(key: keyof typeof colors) => "red" | "blue" | "green"",
+                "type": "typeof getColor",
               },
-              "type": "ReturnType<typeof getColor>",
-              "typeName": "ReturnType",
+            ],
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "Generic",
+            "name": "color",
+            "position": {
+              "end": {
+                "column": 38,
+                "line": 6,
+              },
+              "start": {
+                "column": 3,
+                "line": 6,
+              },
             },
-          ],
-          "type": "TextProps",
-        }
-      `)
+            "text": "ReturnType<typeof getColor>",
+            "typeName": "ReturnType",
+          },
+        ],
+        "text": "TextProps",
+      }
+    `)
   })
 
   test('references external generic arguments', () => {
@@ -4064,62 +4009,65 @@ describe('processProperties', () => {
     const processedProperties = resolveType(typeAlias.getType(), typeAlias)
 
     expect(processedProperties).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Object",
-          "name": "TextProps",
-          "position": {
-            "end": {
-              "column": 2,
-              "line": 5,
-            },
-            "start": {
-              "column": 1,
-              "line": 3,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Object",
+        "name": "TextProps",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 5,
           },
-          "properties": [
-            {
-              "arguments": [
-                {
-                  "filePath": "node_modules/@types/colors/index.d.ts",
-                  "kind": "Reference",
-                  "position": {
-                    "end": {
-                      "column": 66,
-                      "line": 2,
-                    },
-                    "start": {
-                      "column": 25,
-                      "line": 2,
-                    },
+          "start": {
+            "column": 1,
+            "line": 3,
+          },
+        },
+        "properties": [
+          {
+            "arguments": [
+              {
+                "context": "parameter",
+                "filePath": "node_modules/@types/colors/index.d.ts",
+                "kind": "Reference",
+                "position": {
+                  "end": {
+                    "column": 66,
+                    "line": 2,
                   },
-                  "type": "typeof getColor",
+                  "start": {
+                    "column": 25,
+                    "line": 2,
+                  },
                 },
-              ],
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "Generic",
-              "name": "color",
-              "position": {
-                "end": {
-                  "column": 38,
-                  "line": 4,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 4,
-                },
+                "text": "(key: keyof typeof colors) => "red" | "blue" | "green"",
+                "type": "typeof getColor",
               },
-              "type": "ReturnType<typeof getColor>",
-              "typeName": "ReturnType",
+            ],
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "Generic",
+            "name": "color",
+            "position": {
+              "end": {
+                "column": 38,
+                "line": 4,
+              },
+              "start": {
+                "column": 3,
+                "line": 4,
+              },
             },
-          ],
-          "type": "TextProps",
-        }
-      `)
+            "text": "ReturnType<typeof getColor>",
+            "typeName": "ReturnType",
+          },
+        ],
+        "text": "TextProps",
+      }
+    `)
   })
 
   test('uses immediate generic for type and type name', () => {
@@ -4143,105 +4091,109 @@ describe('processProperties', () => {
     const processedProperties = resolveType(typeAlias.getType(), typeAlias)
 
     expect(processedProperties).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Object",
-          "name": "ComplexType",
-          "position": {
-            "end": {
-              "column": 3,
-              "line": 10,
-            },
-            "start": {
-              "column": 1,
-              "line": 8,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Object",
+        "name": "ComplexType",
+        "position": {
+          "end": {
+            "column": 3,
+            "line": 10,
           },
-          "properties": [
-            {
-              "arguments": [
-                {
-                  "filePath": "test.ts",
-                  "kind": "Object",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 4,
-                      "line": 5,
-                    },
-                    "start": {
-                      "column": 10,
-                      "line": 2,
-                    },
+          "start": {
+            "column": 1,
+            "line": 8,
+          },
+        },
+        "properties": [
+          {
+            "arguments": [
+              {
+                "context": "parameter",
+                "filePath": "test.ts",
+                "kind": "Object",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 4,
+                    "line": 5,
                   },
-                  "properties": [
-                    {
-                      "defaultValue": undefined,
-                      "filePath": "test.ts",
-                      "isOptional": false,
-                      "isReadonly": false,
-                      "kind": "String",
-                      "name": "slug",
-                      "position": {
-                        "end": {
-                          "column": 16,
-                          "line": 3,
-                        },
-                        "start": {
-                          "column": 5,
-                          "line": 3,
-                        },
+                  "start": {
+                    "column": 10,
+                    "line": 2,
+                  },
+                },
+                "properties": [
+                  {
+                    "context": "property",
+                    "defaultValue": undefined,
+                    "filePath": "test.ts",
+                    "isOptional": false,
+                    "isReadonly": false,
+                    "kind": "String",
+                    "name": "slug",
+                    "position": {
+                      "end": {
+                        "column": 16,
+                        "line": 3,
                       },
-                      "type": "string",
-                      "value": undefined,
-                    },
-                    {
-                      "defaultValue": undefined,
-                      "filePath": "test.ts",
-                      "isOptional": false,
-                      "isReadonly": false,
-                      "kind": "String",
-                      "name": "filePath",
-                      "position": {
-                        "end": {
-                          "column": 20,
-                          "line": 4,
-                        },
-                        "start": {
-                          "column": 5,
-                          "line": 4,
-                        },
+                      "start": {
+                        "column": 5,
+                        "line": 3,
                       },
-                      "type": "string",
-                      "value": undefined,
                     },
-                  ],
-                  "type": "{ slug: string; filePath: string; }",
-                },
-              ],
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "Generic",
-              "name": "functionReturn",
-              "position": {
-                "end": {
-                  "column": 42,
-                  "line": 9,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 9,
-                },
+                    "text": "string",
+                    "value": undefined,
+                  },
+                  {
+                    "context": "property",
+                    "defaultValue": undefined,
+                    "filePath": "test.ts",
+                    "isOptional": false,
+                    "isReadonly": false,
+                    "kind": "String",
+                    "name": "filePath",
+                    "position": {
+                      "end": {
+                        "column": 20,
+                        "line": 4,
+                      },
+                      "start": {
+                        "column": 5,
+                        "line": 4,
+                      },
+                    },
+                    "text": "string",
+                    "value": undefined,
+                  },
+                ],
+                "text": "{ slug: string; filePath: string; }",
               },
-              "type": "Promise<{ slug: string; filePath: string; }>",
-              "typeName": "Promise",
+            ],
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "Generic",
+            "name": "functionReturn",
+            "position": {
+              "end": {
+                "column": 42,
+                "line": 9,
+              },
+              "start": {
+                "column": 3,
+                "line": 9,
+              },
             },
-          ],
-          "type": "ComplexType",
-        }
-      `)
+            "text": "Promise<{ slug: string; filePath: string; }>",
+            "typeName": "Promise",
+          },
+        ],
+        "text": "ComplexType",
+      }
+    `)
   })
 
   test('infers component with no parameter from return type', () => {
@@ -4259,32 +4211,32 @@ describe('processProperties', () => {
     const processedProperties = resolveType(typeAlias.getType())
 
     expect(processedProperties).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Component",
-          "name": "Text",
-          "position": {
-            "end": {
-              "column": 2,
-              "line": 4,
-            },
-            "start": {
-              "column": 1,
-              "line": 2,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Component",
+        "name": "Text",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 4,
           },
-          "signatures": [
-            {
-              "kind": "ComponentSignature",
-              "modifier": undefined,
-              "parameter": undefined,
-              "returnType": "ReactNode",
-              "type": "function Text(): ReactNode",
-            },
-          ],
-          "type": "() => ReactNode",
-        }
-      `)
+          "start": {
+            "column": 1,
+            "line": 2,
+          },
+        },
+        "signatures": [
+          {
+            "kind": "ComponentSignature",
+            "modifier": undefined,
+            "parameter": undefined,
+            "returnType": "ReactNode",
+            "text": "function Text(): ReactNode",
+          },
+        ],
+        "text": "() => ReactNode",
+      }
+    `)
   })
 
   test('parses a function with parameters', () => {
@@ -4301,53 +4253,54 @@ describe('processProperties', () => {
     )
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Function",
-          "name": "useCounter",
-          "position": {
-            "end": {
-              "column": 64,
-              "line": 2,
-            },
-            "start": {
-              "column": 1,
-              "line": 1,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Function",
+        "name": "useCounter",
+        "position": {
+          "end": {
+            "column": 64,
+            "line": 2,
           },
-          "signatures": [
-            {
-              "kind": "FunctionSignature",
-              "modifier": undefined,
-              "parameters": [
-                {
-                  "defaultValue": 0,
-                  "description": "Provides the initial count.",
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "kind": "Number",
-                  "name": "initialCount",
-                  "position": {
-                    "end": {
-                      "column": 60,
-                      "line": 2,
-                    },
-                    "start": {
-                      "column": 36,
-                      "line": 2,
-                    },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "signatures": [
+          {
+            "kind": "FunctionSignature",
+            "modifier": undefined,
+            "parameters": [
+              {
+                "context": "parameter",
+                "defaultValue": 0,
+                "description": "Provides the initial count.",
+                "filePath": "test.ts",
+                "isOptional": false,
+                "kind": "Number",
+                "name": "initialCount",
+                "position": {
+                  "end": {
+                    "column": 60,
+                    "line": 2,
                   },
-                  "type": "number",
-                  "value": undefined,
+                  "start": {
+                    "column": 36,
+                    "line": 2,
+                  },
                 },
-              ],
-              "returnType": "void",
-              "type": "function useCounter(initialCount: number): void",
-            },
-          ],
-          "type": "(initialCount?: number) => void",
-        }
-      `)
+                "text": "number",
+                "value": undefined,
+              },
+            ],
+            "returnType": "void",
+            "text": "function useCounter(initialCount: number): void",
+          },
+        ],
+        "text": "(initialCount?: number) => void",
+      }
+    `)
   })
 
   test('parses a function with an object parameter', () => {
@@ -4364,85 +4317,87 @@ describe('processProperties', () => {
     )
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "description": "Provides a counter state. ",
-          "filePath": "test.ts",
-          "kind": "Function",
-          "name": "useCounter",
-          "position": {
-            "end": {
-              "column": 63,
-              "line": 5,
-            },
-            "start": {
-              "column": 1,
-              "line": 4,
-            },
+      {
+        "description": "Provides a counter state. ",
+        "filePath": "test.ts",
+        "kind": "Function",
+        "name": "useCounter",
+        "position": {
+          "end": {
+            "column": 63,
+            "line": 5,
           },
-          "signatures": [
-            {
-              "kind": "FunctionSignature",
-              "modifier": undefined,
-              "parameters": [
-                {
-                  "defaultValue": {
-                    "initialCount": 0,
-                  },
-                  "description": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "kind": "Object",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 59,
-                      "line": 5,
-                    },
-                    "start": {
-                      "column": 21,
-                      "line": 4,
-                    },
-                  },
-                  "properties": [
-                    {
-                      "defaultValue": 0,
-                      "description": "Provides the initial count.",
-                      "filePath": "test.ts",
-                      "isOptional": true,
-                      "isReadonly": false,
-                      "kind": "Number",
-                      "name": "initialCount",
-                      "position": {
-                        "end": {
-                          "column": 57,
-                          "line": 5,
-                        },
-                        "start": {
-                          "column": 36,
-                          "line": 5,
-                        },
-                      },
-                      "tags": undefined,
-                      "type": "number",
-                      "value": undefined,
-                    },
-                  ],
-                  "type": "{ initialCount?: number; }",
+          "start": {
+            "column": 1,
+            "line": 4,
+          },
+        },
+        "signatures": [
+          {
+            "kind": "FunctionSignature",
+            "modifier": undefined,
+            "parameters": [
+              {
+                "context": "parameter",
+                "defaultValue": {
+                  "initialCount": 0,
                 },
-              ],
-              "returnType": "void",
-              "type": "function useCounter({ initialCount?: number; }): void",
-            },
-          ],
-          "tags": [
-            {
-              "tagName": "deprecated",
-              "text": "use \`Counter\` component",
-            },
-          ],
-          "type": "({ initialCount }: {    initialCount?: number;}) => void",
-        }
-      `)
+                "description": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "kind": "Object",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 59,
+                    "line": 5,
+                  },
+                  "start": {
+                    "column": 21,
+                    "line": 4,
+                  },
+                },
+                "properties": [
+                  {
+                    "context": "property",
+                    "defaultValue": 0,
+                    "description": "Provides the initial count.",
+                    "filePath": "test.ts",
+                    "isOptional": true,
+                    "isReadonly": false,
+                    "kind": "Number",
+                    "name": "initialCount",
+                    "position": {
+                      "end": {
+                        "column": 57,
+                        "line": 5,
+                      },
+                      "start": {
+                        "column": 36,
+                        "line": 5,
+                      },
+                    },
+                    "tags": undefined,
+                    "text": "number",
+                    "value": undefined,
+                  },
+                ],
+                "text": "{ initialCount?: number; }",
+              },
+            ],
+            "returnType": "void",
+            "text": "function useCounter({ initialCount?: number; }): void",
+          },
+        ],
+        "tags": [
+          {
+            "tagName": "deprecated",
+            "text": "use \`Counter\` component",
+          },
+        ],
+        "text": "({ initialCount }: { initialCount?: number; }) => void",
+      }
+    `)
   })
 
   test('parses a function with an object parameter with a nested object', () => {
@@ -4458,101 +4413,104 @@ describe('processProperties', () => {
     )
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Function",
-          "name": "useCounter",
-          "position": {
-            "end": {
-              "column": 90,
-              "line": 1,
-            },
-            "start": {
-              "column": 1,
-              "line": 1,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Function",
+        "name": "useCounter",
+        "position": {
+          "end": {
+            "column": 90,
+            "line": 1,
           },
-          "signatures": [
-            {
-              "kind": "FunctionSignature",
-              "modifier": undefined,
-              "parameters": [
-                {
-                  "defaultValue": {
-                    "initial": {
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "signatures": [
+          {
+            "kind": "FunctionSignature",
+            "modifier": undefined,
+            "parameters": [
+              {
+                "context": "parameter",
+                "defaultValue": {
+                  "initial": {
+                    "count": 0,
+                  },
+                },
+                "description": undefined,
+                "filePath": "test.ts",
+                "isOptional": true,
+                "kind": "Object",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 86,
+                    "line": 1,
+                  },
+                  "start": {
+                    "column": 21,
+                    "line": 1,
+                  },
+                },
+                "properties": [
+                  {
+                    "context": "property",
+                    "defaultValue": {
                       "count": 0,
                     },
-                  },
-                  "description": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": true,
-                  "kind": "Object",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 86,
-                      "line": 1,
-                    },
-                    "start": {
-                      "column": 21,
-                      "line": 1,
-                    },
-                  },
-                  "properties": [
-                    {
-                      "defaultValue": {
-                        "count": 0,
+                    "filePath": "test.ts",
+                    "isOptional": true,
+                    "isReadonly": false,
+                    "kind": "Object",
+                    "name": "initial",
+                    "position": {
+                      "end": {
+                        "column": 79,
+                        "line": 1,
                       },
-                      "filePath": "test.ts",
-                      "isOptional": true,
-                      "isReadonly": false,
-                      "kind": "Object",
-                      "name": "initial",
-                      "position": {
-                        "end": {
-                          "column": 79,
-                          "line": 1,
-                        },
-                        "start": {
-                          "column": 52,
-                          "line": 1,
-                        },
+                      "start": {
+                        "column": 52,
+                        "line": 1,
                       },
-                      "properties": [
-                        {
-                          "defaultValue": 0,
-                          "filePath": "test.ts",
-                          "isOptional": false,
-                          "isReadonly": false,
-                          "kind": "Number",
-                          "name": "count",
-                          "position": {
-                            "end": {
-                              "column": 77,
-                              "line": 1,
-                            },
-                            "start": {
-                              "column": 64,
-                              "line": 1,
-                            },
+                    },
+                    "properties": [
+                      {
+                        "context": "property",
+                        "defaultValue": 0,
+                        "filePath": "test.ts",
+                        "isOptional": false,
+                        "isReadonly": false,
+                        "kind": "Number",
+                        "name": "count",
+                        "position": {
+                          "end": {
+                            "column": 77,
+                            "line": 1,
                           },
-                          "type": "number",
-                          "value": undefined,
+                          "start": {
+                            "column": 64,
+                            "line": 1,
+                          },
                         },
-                      ],
-                      "type": "{ count: number; }",
-                    },
-                  ],
-                  "type": "{ initial?: {    count: number;}; }",
-                },
-              ],
-              "returnType": "void",
-              "type": "function useCounter({ initial?: {    count: number;}; }): void",
-            },
-          ],
-          "type": "({ initial }?: {    initial?: {        count: number;    };}) => void",
-        }
-      `)
+                        "text": "number",
+                        "value": undefined,
+                      },
+                    ],
+                    "text": "{ count: number; }",
+                  },
+                ],
+                "text": "{ initial?: { count: number; }; }",
+              },
+            ],
+            "returnType": "void",
+            "text": "function useCounter({ initial?: { count: number; }; }): void",
+          },
+        ],
+        "text": "({ initial }?: { initial?: { count: number; }; }) => void",
+      }
+    `)
   })
 
   test('parses arrow function parameters', () => {
@@ -4569,53 +4527,54 @@ describe('processProperties', () => {
     )
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Function",
-          "name": "useCounter",
-          "position": {
-            "end": {
-              "column": 52,
-              "line": 1,
-            },
-            "start": {
-              "column": 7,
-              "line": 1,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Function",
+        "name": "useCounter",
+        "position": {
+          "end": {
+            "column": 52,
+            "line": 1,
           },
-          "signatures": [
-            {
-              "kind": "FunctionSignature",
-              "modifier": undefined,
-              "parameters": [
-                {
-                  "defaultValue": 0,
-                  "description": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "kind": "Number",
-                  "name": "initialCount",
-                  "position": {
-                    "end": {
-                      "column": 45,
-                      "line": 1,
-                    },
-                    "start": {
-                      "column": 21,
-                      "line": 1,
-                    },
+          "start": {
+            "column": 7,
+            "line": 1,
+          },
+        },
+        "signatures": [
+          {
+            "kind": "FunctionSignature",
+            "modifier": undefined,
+            "parameters": [
+              {
+                "context": "parameter",
+                "defaultValue": 0,
+                "description": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "kind": "Number",
+                "name": "initialCount",
+                "position": {
+                  "end": {
+                    "column": 45,
+                    "line": 1,
                   },
-                  "type": "number",
-                  "value": undefined,
+                  "start": {
+                    "column": 21,
+                    "line": 1,
+                  },
                 },
-              ],
-              "returnType": "void",
-              "type": "(initialCount: number) => void",
-            },
-          ],
-          "type": "(initialCount?: number) => void",
-        }
-      `)
+                "text": "number",
+                "value": undefined,
+              },
+            ],
+            "returnType": "void",
+            "text": "(initialCount: number) => void",
+          },
+        ],
+        "text": "(initialCount?: number) => void",
+      }
+    `)
   })
 
   test('parses function expression parameters', () => {
@@ -4632,53 +4591,54 @@ describe('processProperties', () => {
     )
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Function",
-          "name": "useCounter",
-          "position": {
-            "end": {
-              "column": 58,
-              "line": 1,
-            },
-            "start": {
-              "column": 7,
-              "line": 1,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Function",
+        "name": "useCounter",
+        "position": {
+          "end": {
+            "column": 58,
+            "line": 1,
           },
-          "signatures": [
-            {
-              "kind": "FunctionSignature",
-              "modifier": undefined,
-              "parameters": [
-                {
-                  "defaultValue": 0,
-                  "description": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "kind": "Number",
-                  "name": "initialCount",
-                  "position": {
-                    "end": {
-                      "column": 54,
-                      "line": 1,
-                    },
-                    "start": {
-                      "column": 30,
-                      "line": 1,
-                    },
+          "start": {
+            "column": 7,
+            "line": 1,
+          },
+        },
+        "signatures": [
+          {
+            "kind": "FunctionSignature",
+            "modifier": undefined,
+            "parameters": [
+              {
+                "context": "parameter",
+                "defaultValue": 0,
+                "description": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "kind": "Number",
+                "name": "initialCount",
+                "position": {
+                  "end": {
+                    "column": 54,
+                    "line": 1,
                   },
-                  "type": "number",
-                  "value": undefined,
+                  "start": {
+                    "column": 30,
+                    "line": 1,
+                  },
                 },
-              ],
-              "returnType": "void",
-              "type": "(initialCount: number) => void",
-            },
-          ],
-          "type": "(initialCount?: number) => void",
-        }
-      `)
+                "text": "number",
+                "value": undefined,
+              },
+            ],
+            "returnType": "void",
+            "text": "(initialCount: number) => void",
+          },
+        ],
+        "text": "(initialCount?: number) => void",
+      }
+    `)
   })
 
   test('imported type should not be parsed', () => {
@@ -4698,54 +4658,55 @@ describe('processProperties', () => {
     )
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Function",
-          "name": "useCounter",
-          "position": {
-            "end": {
-              "column": 102,
-              "line": 1,
-            },
-            "start": {
-              "column": 42,
-              "line": 1,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Function",
+        "name": "useCounter",
+        "position": {
+          "end": {
+            "column": 102,
+            "line": 1,
           },
-          "signatures": [
-            {
-              "kind": "FunctionSignature",
-              "modifier": undefined,
-              "parameters": [
-                {
-                  "defaultValue": {
-                    "initialCount": 0,
-                  },
-                  "description": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "kind": "Reference",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 98,
-                      "line": 1,
-                    },
-                    "start": {
-                      "column": 62,
-                      "line": 1,
-                    },
-                  },
-                  "type": "CounterOptions",
+          "start": {
+            "column": 42,
+            "line": 1,
+          },
+        },
+        "signatures": [
+          {
+            "kind": "FunctionSignature",
+            "modifier": undefined,
+            "parameters": [
+              {
+                "context": "parameter",
+                "defaultValue": {
+                  "initialCount": 0,
                 },
-              ],
-              "returnType": "void",
-              "type": "function useCounter(CounterOptions): void",
-            },
-          ],
-          "type": "({ initialCount }: CounterOptions) => void",
-        }
-      `)
+                "description": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "kind": "Reference",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 98,
+                    "line": 1,
+                  },
+                  "start": {
+                    "column": 62,
+                    "line": 1,
+                  },
+                },
+                "text": "CounterOptions",
+              },
+            ],
+            "returnType": "void",
+            "text": "function useCounter(CounterOptions): void",
+          },
+        ],
+        "text": "({ initialCount }: CounterOptions) => void",
+      }
+    `)
   })
 
   test('imported function return types should not be parsed', () => {
@@ -4767,54 +4728,55 @@ describe('processProperties', () => {
     )
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Function",
-          "name": "useCounterOverride",
-          "position": {
-            "end": {
-              "column": 121,
-              "line": 1,
-            },
-            "start": {
-              "column": 38,
-              "line": 1,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Function",
+        "name": "useCounterOverride",
+        "position": {
+          "end": {
+            "column": 121,
+            "line": 1,
           },
-          "signatures": [
-            {
-              "kind": "FunctionSignature",
-              "modifier": undefined,
-              "parameters": [
-                {
-                  "defaultValue": {
-                    "initialCount": 0,
-                  },
-                  "description": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "kind": "Reference",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 117,
-                      "line": 1,
-                    },
-                    "start": {
-                      "column": 66,
-                      "line": 1,
-                    },
-                  },
-                  "type": "{ initialCount: number; }",
+          "start": {
+            "column": 38,
+            "line": 1,
+          },
+        },
+        "signatures": [
+          {
+            "kind": "FunctionSignature",
+            "modifier": undefined,
+            "parameters": [
+              {
+                "context": "parameter",
+                "defaultValue": {
+                  "initialCount": 0,
                 },
-              ],
-              "returnType": "void",
-              "type": "function useCounterOverride({ initialCount: number; }): void",
-            },
-          ],
-          "type": "({ initialCount }: ReturnType<typeof useCounter>) => void",
-        }
-      `)
+                "description": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "kind": "Reference",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 117,
+                    "line": 1,
+                  },
+                  "start": {
+                    "column": 66,
+                    "line": 1,
+                  },
+                },
+                "text": "{ initialCount: number; }",
+              },
+            ],
+            "returnType": "void",
+            "text": "function useCounterOverride({ initialCount: number; }): void",
+          },
+        ],
+        "text": "({ initialCount }: ReturnType<typeof useCounter>) => void",
+      }
+    `)
   })
 
   test('imported function object return types should not be parsed', () => {
@@ -4836,91 +4798,95 @@ describe('processProperties', () => {
     )
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Function",
-          "name": "useCounterOverride",
-          "position": {
-            "end": {
-              "column": 135,
-              "line": 1,
-            },
-            "start": {
-              "column": 38,
-              "line": 1,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Function",
+        "name": "useCounterOverride",
+        "position": {
+          "end": {
+            "column": 135,
+            "line": 1,
           },
-          "signatures": [
-            {
-              "kind": "FunctionSignature",
-              "modifier": undefined,
-              "parameters": [
-                {
-                  "defaultValue": undefined,
-                  "description": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "kind": "Object",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 131,
-                      "line": 1,
-                    },
-                    "start": {
-                      "column": 66,
-                      "line": 1,
-                    },
+          "start": {
+            "column": 38,
+            "line": 1,
+          },
+        },
+        "signatures": [
+          {
+            "kind": "FunctionSignature",
+            "modifier": undefined,
+            "parameters": [
+              {
+                "context": "parameter",
+                "defaultValue": undefined,
+                "description": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "kind": "Object",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 131,
+                    "line": 1,
                   },
-                  "properties": [
-                    {
-                      "arguments": [
-                        {
-                          "filePath": "types.ts",
-                          "kind": "Reference",
-                          "position": {
-                            "end": {
-                              "column": 60,
-                              "line": 1,
-                            },
-                            "start": {
-                              "column": 1,
-                              "line": 1,
-                            },
-                          },
-                          "type": "typeof useCounter",
-                        },
-                      ],
-                      "defaultValue": undefined,
-                      "filePath": "test.ts",
-                      "isOptional": false,
-                      "isReadonly": false,
-                      "kind": "Generic",
-                      "name": "counterState",
-                      "position": {
-                        "end": {
-                          "column": 129,
-                          "line": 1,
-                        },
-                        "start": {
-                          "column": 86,
-                          "line": 1,
-                        },
-                      },
-                      "type": "ReturnType<typeof useCounter>",
-                      "typeName": "ReturnType",
-                    },
-                  ],
-                  "type": "{ counterState: ReturnType<typeof useCounter>; }",
+                  "start": {
+                    "column": 66,
+                    "line": 1,
+                  },
                 },
-              ],
-              "returnType": "void",
-              "type": "function useCounterOverride({ counterState: ReturnType<typeof useCounter>; }): void",
-            },
-          ],
-          "type": "({ counterState }: { counterState: ReturnType<typeof useCounter>; }) => void",
-        }
-      `)
+                "properties": [
+                  {
+                    "arguments": [
+                      {
+                        "context": "parameter",
+                        "filePath": "types.ts",
+                        "kind": "Reference",
+                        "position": {
+                          "end": {
+                            "column": 60,
+                            "line": 1,
+                          },
+                          "start": {
+                            "column": 1,
+                            "line": 1,
+                          },
+                        },
+                        "text": "() => { initialCount: number; }",
+                        "type": "typeof useCounter",
+                      },
+                    ],
+                    "context": "property",
+                    "defaultValue": undefined,
+                    "filePath": "test.ts",
+                    "isOptional": false,
+                    "isReadonly": false,
+                    "kind": "Generic",
+                    "name": "counterState",
+                    "position": {
+                      "end": {
+                        "column": 129,
+                        "line": 1,
+                      },
+                      "start": {
+                        "column": 86,
+                        "line": 1,
+                      },
+                    },
+                    "text": "ReturnType<typeof useCounter>",
+                    "typeName": "ReturnType",
+                  },
+                ],
+                "text": "{ counterState: ReturnType<typeof useCounter>; }",
+              },
+            ],
+            "returnType": "void",
+            "text": "function useCounterOverride({ counterState: ReturnType<typeof useCounter>; }): void",
+          },
+        ],
+        "text": "({ counterState }: { counterState: ReturnType<typeof useCounter>; }) => void",
+      }
+    `)
   })
 
   test('union types', () => {
@@ -4941,168 +4907,173 @@ describe('processProperties', () => {
     )
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Component",
-          "name": "Component",
-          "position": {
-            "end": {
-              "column": 36,
-              "line": 5,
-            },
-            "start": {
-              "column": 1,
-              "line": 5,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Component",
+        "name": "Component",
+        "position": {
+          "end": {
+            "column": 36,
+            "line": 5,
           },
-          "signatures": [
-            {
-              "kind": "ComponentSignature",
-              "modifier": undefined,
-              "parameter": {
-                "defaultValue": undefined,
-                "description": undefined,
-                "filePath": "test.ts",
-                "isOptional": false,
-                "kind": "Union",
-                "members": [
-                  {
-                    "filePath": "test.ts",
-                    "kind": "Object",
-                    "name": undefined,
-                    "position": {
-                      "end": {
-                        "column": 77,
-                        "line": 3,
-                      },
-                      "start": {
-                        "column": 1,
-                        "line": 3,
-                      },
+          "start": {
+            "column": 1,
+            "line": 5,
+          },
+        },
+        "signatures": [
+          {
+            "kind": "ComponentSignature",
+            "modifier": undefined,
+            "parameter": {
+              "context": "parameter",
+              "defaultValue": undefined,
+              "description": undefined,
+              "filePath": "test.ts",
+              "isOptional": false,
+              "kind": "Union",
+              "members": [
+                {
+                  "filePath": "test.ts",
+                  "kind": "Object",
+                  "name": undefined,
+                  "position": {
+                    "end": {
+                      "column": 77,
+                      "line": 3,
                     },
-                    "properties": [
-                      {
-                        "defaultValue": undefined,
-                        "filePath": "test.ts",
-                        "isOptional": false,
-                        "isReadonly": false,
-                        "kind": "String",
-                        "name": "color",
-                        "position": {
-                          "end": {
-                            "column": 33,
-                            "line": 1,
-                          },
-                          "start": {
-                            "column": 20,
-                            "line": 1,
-                          },
-                        },
-                        "type": "string",
-                        "value": undefined,
-                      },
-                      {
-                        "defaultValue": undefined,
-                        "filePath": "test.ts",
-                        "isOptional": false,
-                        "isReadonly": false,
-                        "kind": "String",
-                        "name": "source",
-                        "position": {
-                          "end": {
-                            "column": 42,
-                            "line": 3,
-                          },
-                          "start": {
-                            "column": 28,
-                            "line": 3,
-                          },
-                        },
-                        "type": "string",
-                        "value": undefined,
-                      },
-                    ],
-                    "type": "BaseProps & { source: string; }",
-                  },
-                  {
-                    "filePath": "test.ts",
-                    "kind": "Object",
-                    "name": undefined,
-                    "position": {
-                      "end": {
-                        "column": 77,
-                        "line": 3,
-                      },
-                      "start": {
-                        "column": 1,
-                        "line": 3,
-                      },
+                    "start": {
+                      "column": 1,
+                      "line": 3,
                     },
-                    "properties": [
-                      {
-                        "defaultValue": undefined,
-                        "filePath": "test.ts",
-                        "isOptional": false,
-                        "isReadonly": false,
-                        "kind": "String",
-                        "name": "color",
-                        "position": {
-                          "end": {
-                            "column": 33,
-                            "line": 1,
-                          },
-                          "start": {
-                            "column": 20,
-                            "line": 1,
-                          },
+                  },
+                  "properties": [
+                    {
+                      "context": "property",
+                      "defaultValue": undefined,
+                      "filePath": "test.ts",
+                      "isOptional": false,
+                      "isReadonly": false,
+                      "kind": "String",
+                      "name": "color",
+                      "position": {
+                        "end": {
+                          "column": 33,
+                          "line": 1,
                         },
-                        "type": "string",
-                        "value": undefined,
-                      },
-                      {
-                        "defaultValue": undefined,
-                        "filePath": "test.ts",
-                        "isOptional": false,
-                        "isReadonly": false,
-                        "kind": "String",
-                        "name": "value",
-                        "position": {
-                          "end": {
-                            "column": 74,
-                            "line": 3,
-                          },
-                          "start": {
-                            "column": 61,
-                            "line": 3,
-                          },
+                        "start": {
+                          "column": 20,
+                          "line": 1,
                         },
-                        "type": "string",
-                        "value": undefined,
                       },
-                    ],
-                    "type": "BaseProps & { value: string; }",
-                  },
-                ],
-                "name": "props",
-                "position": {
-                  "end": {
-                    "column": 32,
-                    "line": 5,
-                  },
-                  "start": {
-                    "column": 20,
-                    "line": 5,
-                  },
+                      "text": "string",
+                      "value": undefined,
+                    },
+                    {
+                      "context": "property",
+                      "defaultValue": undefined,
+                      "filePath": "test.ts",
+                      "isOptional": false,
+                      "isReadonly": false,
+                      "kind": "String",
+                      "name": "source",
+                      "position": {
+                        "end": {
+                          "column": 42,
+                          "line": 3,
+                        },
+                        "start": {
+                          "column": 28,
+                          "line": 3,
+                        },
+                      },
+                      "text": "string",
+                      "value": undefined,
+                    },
+                  ],
+                  "text": "BaseProps & { source: string; }",
                 },
-                "type": "Props",
+                {
+                  "filePath": "test.ts",
+                  "kind": "Object",
+                  "name": undefined,
+                  "position": {
+                    "end": {
+                      "column": 77,
+                      "line": 3,
+                    },
+                    "start": {
+                      "column": 1,
+                      "line": 3,
+                    },
+                  },
+                  "properties": [
+                    {
+                      "context": "property",
+                      "defaultValue": undefined,
+                      "filePath": "test.ts",
+                      "isOptional": false,
+                      "isReadonly": false,
+                      "kind": "String",
+                      "name": "color",
+                      "position": {
+                        "end": {
+                          "column": 33,
+                          "line": 1,
+                        },
+                        "start": {
+                          "column": 20,
+                          "line": 1,
+                        },
+                      },
+                      "text": "string",
+                      "value": undefined,
+                    },
+                    {
+                      "context": "property",
+                      "defaultValue": undefined,
+                      "filePath": "test.ts",
+                      "isOptional": false,
+                      "isReadonly": false,
+                      "kind": "String",
+                      "name": "value",
+                      "position": {
+                        "end": {
+                          "column": 74,
+                          "line": 3,
+                        },
+                        "start": {
+                          "column": 61,
+                          "line": 3,
+                        },
+                      },
+                      "text": "string",
+                      "value": undefined,
+                    },
+                  ],
+                  "text": "BaseProps & { value: string; }",
+                },
+              ],
+              "name": "props",
+              "position": {
+                "end": {
+                  "column": 32,
+                  "line": 5,
+                },
+                "start": {
+                  "column": 20,
+                  "line": 5,
+                },
               },
-              "returnType": "void",
-              "type": "function Component(props: Props): void",
+              "text": "Props",
             },
-          ],
-          "type": "(props: Props) => void",
-        }
-      `)
+            "returnType": "void",
+            "text": "function Component(props: Props): void",
+          },
+        ],
+        "text": "(props: Props) => void",
+      }
+    `)
   })
 
   test('union types with primitive types', () => {
@@ -5121,109 +5092,111 @@ describe('processProperties', () => {
     )
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Function",
-          "name": "Component",
-          "position": {
-            "end": {
-              "column": 36,
-              "line": 3,
-            },
-            "start": {
-              "column": 1,
-              "line": 3,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Function",
+        "name": "Component",
+        "position": {
+          "end": {
+            "column": 36,
+            "line": 3,
           },
-          "signatures": [
-            {
-              "kind": "FunctionSignature",
-              "modifier": undefined,
-              "parameters": [
-                {
-                  "defaultValue": undefined,
-                  "description": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "kind": "Union",
-                  "members": [
-                    {
-                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                      "kind": "String",
-                      "name": undefined,
-                      "position": {
-                        "end": {
-                          "column": 4402,
-                          "line": 4,
-                        },
-                        "start": {
-                          "column": 3482,
-                          "line": 4,
-                        },
+          "start": {
+            "column": 1,
+            "line": 3,
+          },
+        },
+        "signatures": [
+          {
+            "kind": "FunctionSignature",
+            "modifier": undefined,
+            "parameters": [
+              {
+                "context": "parameter",
+                "defaultValue": undefined,
+                "description": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "kind": "Union",
+                "members": [
+                  {
+                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                    "kind": "String",
+                    "name": undefined,
+                    "position": {
+                      "end": {
+                        "column": 4402,
+                        "line": 4,
                       },
-                      "type": "string",
-                      "value": undefined,
-                    },
-                    {
-                      "filePath": "test.ts",
-                      "kind": "Object",
-                      "name": undefined,
-                      "position": {
-                        "end": {
-                          "column": 31,
-                          "line": 1,
-                        },
-                        "start": {
-                          "column": 14,
-                          "line": 1,
-                        },
+                      "start": {
+                        "column": 3482,
+                        "line": 4,
                       },
-                      "properties": [
-                        {
-                          "defaultValue": undefined,
-                          "filePath": "test.ts",
-                          "isOptional": false,
-                          "isReadonly": false,
-                          "kind": "String",
-                          "name": "color",
-                          "position": {
-                            "end": {
-                              "column": 29,
-                              "line": 1,
-                            },
-                            "start": {
-                              "column": 16,
-                              "line": 1,
-                            },
-                          },
-                          "type": "string",
-                          "value": undefined,
-                        },
-                      ],
-                      "type": "{ color: string; }",
                     },
-                  ],
-                  "name": "props",
-                  "position": {
-                    "end": {
-                      "column": 32,
-                      "line": 3,
-                    },
-                    "start": {
-                      "column": 20,
-                      "line": 3,
-                    },
+                    "text": "string",
+                    "value": undefined,
                   },
-                  "type": "Props",
+                  {
+                    "filePath": "test.ts",
+                    "kind": "Object",
+                    "name": undefined,
+                    "position": {
+                      "end": {
+                        "column": 31,
+                        "line": 1,
+                      },
+                      "start": {
+                        "column": 14,
+                        "line": 1,
+                      },
+                    },
+                    "properties": [
+                      {
+                        "context": "property",
+                        "defaultValue": undefined,
+                        "filePath": "test.ts",
+                        "isOptional": false,
+                        "isReadonly": false,
+                        "kind": "String",
+                        "name": "color",
+                        "position": {
+                          "end": {
+                            "column": 29,
+                            "line": 1,
+                          },
+                          "start": {
+                            "column": 16,
+                            "line": 1,
+                          },
+                        },
+                        "text": "string",
+                        "value": undefined,
+                      },
+                    ],
+                    "text": "{ color: string; }",
+                  },
+                ],
+                "name": "props",
+                "position": {
+                  "end": {
+                    "column": 32,
+                    "line": 3,
+                  },
+                  "start": {
+                    "column": 20,
+                    "line": 3,
+                  },
                 },
-              ],
-              "returnType": "void",
-              "type": "function Component(props: Props): void",
-            },
-          ],
-          "type": "(props: Props) => void",
-        }
-      `)
+                "text": "Props",
+              },
+            ],
+            "returnType": "void",
+            "text": "function Component(props: Props): void",
+          },
+        ],
+        "text": "(props: Props) => void",
+      }
+    `)
   })
 
   test('union types with external types', () => {
@@ -5251,160 +5224,163 @@ describe('processProperties', () => {
     )
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Function",
-          "name": "Component",
-          "position": {
-            "end": {
-              "column": 36,
-              "line": 5,
-            },
-            "start": {
-              "column": 1,
-              "line": 5,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Function",
+        "name": "Component",
+        "position": {
+          "end": {
+            "column": 36,
+            "line": 5,
           },
-          "signatures": [
-            {
-              "kind": "FunctionSignature",
-              "modifier": undefined,
-              "parameters": [
-                {
-                  "defaultValue": undefined,
-                  "description": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "kind": "Union",
-                  "members": [
-                    {
-                      "filePath": "test.ts",
-                      "kind": "Intersection",
-                      "name": undefined,
-                      "position": {
-                        "end": {
-                          "column": 77,
-                          "line": 3,
-                        },
-                        "start": {
-                          "column": 1,
-                          "line": 3,
-                        },
+          "start": {
+            "column": 1,
+            "line": 5,
+          },
+        },
+        "signatures": [
+          {
+            "kind": "FunctionSignature",
+            "modifier": undefined,
+            "parameters": [
+              {
+                "context": "parameter",
+                "defaultValue": undefined,
+                "description": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "kind": "Union",
+                "members": [
+                  {
+                    "filePath": "test.ts",
+                    "kind": "Intersection",
+                    "name": undefined,
+                    "position": {
+                      "end": {
+                        "column": 77,
+                        "line": 3,
                       },
-                      "properties": [
-                        {
-                          "filePath": "types.ts",
-                          "kind": "Reference",
-                          "position": {
-                            "end": {
-                              "column": 42,
-                              "line": 1,
-                            },
-                            "start": {
-                              "column": 1,
-                              "line": 1,
-                            },
-                          },
-                          "type": "BaseProps",
-                        },
-                        {
-                          "defaultValue": undefined,
-                          "filePath": "test.ts",
-                          "isOptional": false,
-                          "isReadonly": false,
-                          "kind": "String",
-                          "name": "source",
-                          "position": {
-                            "end": {
-                              "column": 42,
-                              "line": 3,
-                            },
-                            "start": {
-                              "column": 28,
-                              "line": 3,
-                            },
-                          },
-                          "type": "string",
-                          "value": undefined,
-                        },
-                      ],
-                      "type": "BaseProps & { source: string; }",
-                    },
-                    {
-                      "filePath": "test.ts",
-                      "kind": "Intersection",
-                      "name": undefined,
-                      "position": {
-                        "end": {
-                          "column": 77,
-                          "line": 3,
-                        },
-                        "start": {
-                          "column": 1,
-                          "line": 3,
-                        },
+                      "start": {
+                        "column": 1,
+                        "line": 3,
                       },
-                      "properties": [
-                        {
-                          "filePath": "types.ts",
-                          "kind": "Reference",
-                          "position": {
-                            "end": {
-                              "column": 42,
-                              "line": 1,
-                            },
-                            "start": {
-                              "column": 1,
-                              "line": 1,
-                            },
+                    },
+                    "properties": [
+                      {
+                        "filePath": "types.ts",
+                        "kind": "Reference",
+                        "position": {
+                          "end": {
+                            "column": 42,
+                            "line": 1,
                           },
-                          "type": "BaseProps",
-                        },
-                        {
-                          "defaultValue": undefined,
-                          "filePath": "test.ts",
-                          "isOptional": false,
-                          "isReadonly": false,
-                          "kind": "String",
-                          "name": "value",
-                          "position": {
-                            "end": {
-                              "column": 74,
-                              "line": 3,
-                            },
-                            "start": {
-                              "column": 61,
-                              "line": 3,
-                            },
+                          "start": {
+                            "column": 1,
+                            "line": 1,
                           },
-                          "type": "string",
-                          "value": undefined,
                         },
-                      ],
-                      "type": "BaseProps & { value: string; }",
-                    },
-                  ],
-                  "name": "props",
-                  "position": {
-                    "end": {
-                      "column": 32,
-                      "line": 5,
-                    },
-                    "start": {
-                      "column": 20,
-                      "line": 5,
-                    },
+                        "text": "BaseProps",
+                      },
+                      {
+                        "context": "property",
+                        "defaultValue": undefined,
+                        "filePath": "test.ts",
+                        "isOptional": false,
+                        "isReadonly": false,
+                        "kind": "String",
+                        "name": "source",
+                        "position": {
+                          "end": {
+                            "column": 42,
+                            "line": 3,
+                          },
+                          "start": {
+                            "column": 28,
+                            "line": 3,
+                          },
+                        },
+                        "text": "string",
+                        "value": undefined,
+                      },
+                    ],
+                    "text": "BaseProps & { source: string; }",
                   },
-                  "type": "Props",
+                  {
+                    "filePath": "test.ts",
+                    "kind": "Intersection",
+                    "name": undefined,
+                    "position": {
+                      "end": {
+                        "column": 77,
+                        "line": 3,
+                      },
+                      "start": {
+                        "column": 1,
+                        "line": 3,
+                      },
+                    },
+                    "properties": [
+                      {
+                        "filePath": "types.ts",
+                        "kind": "Reference",
+                        "position": {
+                          "end": {
+                            "column": 42,
+                            "line": 1,
+                          },
+                          "start": {
+                            "column": 1,
+                            "line": 1,
+                          },
+                        },
+                        "text": "BaseProps",
+                      },
+                      {
+                        "context": "property",
+                        "defaultValue": undefined,
+                        "filePath": "test.ts",
+                        "isOptional": false,
+                        "isReadonly": false,
+                        "kind": "String",
+                        "name": "value",
+                        "position": {
+                          "end": {
+                            "column": 74,
+                            "line": 3,
+                          },
+                          "start": {
+                            "column": 61,
+                            "line": 3,
+                          },
+                        },
+                        "text": "string",
+                        "value": undefined,
+                      },
+                    ],
+                    "text": "BaseProps & { value: string; }",
+                  },
+                ],
+                "name": "props",
+                "position": {
+                  "end": {
+                    "column": 32,
+                    "line": 5,
+                  },
+                  "start": {
+                    "column": 20,
+                    "line": 5,
+                  },
                 },
-              ],
-              "returnType": "void",
-              "type": "function Component(props: Props): void",
-            },
-          ],
-          "type": "(props: Props) => void",
-        }
-      `)
+                "text": "Props",
+              },
+            ],
+            "returnType": "void",
+            "text": "function Component(props: Props): void",
+          },
+        ],
+        "text": "(props: Props) => void",
+      }
+    `)
   })
 
   test('mapped types without declarations', () => {
@@ -5453,52 +5429,53 @@ describe('processProperties', () => {
     )
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Component",
-          "name": "Text",
-          "position": {
-            "end": {
-              "column": 2,
-              "line": 29,
-            },
-            "start": {
-              "column": 14,
-              "line": 21,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Component",
+        "name": "Text",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 29,
           },
-          "signatures": [
-            {
-              "kind": "ComponentSignature",
-              "modifier": undefined,
-              "parameter": {
-                "defaultValue": {
-                  "variant": "body1",
-                },
-                "description": undefined,
-                "filePath": "test.ts",
-                "isOptional": false,
-                "kind": "Reference",
-                "name": "props",
-                "position": {
-                  "end": {
-                    "column": 38,
-                    "line": 21,
-                  },
-                  "start": {
-                    "column": 22,
-                    "line": 21,
-                  },
-                },
-                "type": "TextProps",
+          "start": {
+            "column": 14,
+            "line": 21,
+          },
+        },
+        "signatures": [
+          {
+            "kind": "ComponentSignature",
+            "modifier": undefined,
+            "parameter": {
+              "context": "parameter",
+              "defaultValue": {
+                "variant": "body1",
               },
-              "returnType": "void",
-              "type": "(props: TextProps) => void",
+              "description": undefined,
+              "filePath": "test.ts",
+              "isOptional": false,
+              "kind": "Reference",
+              "name": "props",
+              "position": {
+                "end": {
+                  "column": 38,
+                  "line": 21,
+                },
+                "start": {
+                  "column": 22,
+                  "line": 21,
+                },
+              },
+              "text": "TextProps",
             },
-          ],
-          "type": "(props: TextProps) => void",
-        }
-      `)
+            "returnType": "void",
+            "text": "(props: TextProps) => void",
+          },
+        ],
+        "text": "(props: TextProps) => void",
+      }
+    `)
   })
 
   test('library call expression generic types', () => {
@@ -5530,127 +5507,22 @@ describe('processProperties', () => {
     )
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Intersection",
-          "name": undefined,
-          "position": {
-            "end": {
-              "column": 4,
-              "line": 12,
-            },
-            "start": {
-              "column": 14,
-              "line": 8,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Primitive",
+        "position": {
+          "end": {
+            "column": 4,
+            "line": 12,
           },
-          "properties": [
-            {
-              "filePath": "test.ts",
-              "kind": "Component",
-              "name": "Grid",
-              "position": {
-                "end": {
-                  "column": 4,
-                  "line": 12,
-                },
-                "start": {
-                  "column": 14,
-                  "line": 8,
-                },
-              },
-              "signatures": [
-                {
-                  "kind": "ComponentSignature",
-                  "modifier": undefined,
-                  "parameter": {
-                    "defaultValue": undefined,
-                    "description": undefined,
-                    "filePath": "node_modules/@types/react/index.d.ts",
-                    "isOptional": false,
-                    "kind": "Object",
-                    "name": "props",
-                    "position": {
-                      "end": {
-                        "column": 18,
-                        "line": 635,
-                      },
-                      "start": {
-                        "column": 10,
-                        "line": 635,
-                      },
-                    },
-                    "properties": [
-                      {
-                        "defaultValue": undefined,
-                        "filePath": "test.ts",
-                        "isOptional": false,
-                        "isReadonly": false,
-                        "kind": "String",
-                        "name": "gridTemplateColumns",
-                        "position": {
-                          "end": {
-                            "column": 30,
-                            "line": 4,
-                          },
-                          "start": {
-                            "column": 3,
-                            "line": 4,
-                          },
-                        },
-                        "type": "string",
-                        "value": undefined,
-                      },
-                      {
-                        "defaultValue": undefined,
-                        "filePath": "test.ts",
-                        "isOptional": true,
-                        "isReadonly": false,
-                        "kind": "String",
-                        "name": "gridTemplateRows",
-                        "position": {
-                          "end": {
-                            "column": 28,
-                            "line": 5,
-                          },
-                          "start": {
-                            "column": 3,
-                            "line": 5,
-                          },
-                        },
-                        "type": "string",
-                        "value": undefined,
-                      },
-                    ],
-                    "type": "Substitute<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, GridProps>",
-                  },
-                  "returnType": "ReactNode",
-                  "type": "(props: Substitute<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, GridProps>) => ReactNode",
-                },
-              ],
-              "type": "IStyledComponentBase<"web", Substitute<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, GridProps>>",
-            },
-            {
-              "filePath": "test.ts",
-              "kind": "String",
-              "name": "Grid",
-              "position": {
-                "end": {
-                  "column": 4,
-                  "line": 12,
-                },
-                "start": {
-                  "column": 14,
-                  "line": 8,
-                },
-              },
-              "type": "string",
-              "value": undefined,
-            },
-          ],
-          "type": "IStyledComponentBase<"web", Substitute<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, GridProps>> & string",
-        }
-      `)
+          "start": {
+            "column": 14,
+            "line": 8,
+          },
+        },
+        "text": "any",
+      }
+    `)
   })
 
   test('library tagged template literal generic types', () => {
@@ -5679,127 +5551,22 @@ describe('processProperties', () => {
     )
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Intersection",
-          "name": undefined,
-          "position": {
-            "end": {
-              "column": 2,
-              "line": 11,
-            },
-            "start": {
-              "column": 14,
-              "line": 4,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Primitive",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 11,
           },
-          "properties": [
-            {
-              "filePath": "test.ts",
-              "kind": "Component",
-              "name": "Grid",
-              "position": {
-                "end": {
-                  "column": 2,
-                  "line": 11,
-                },
-                "start": {
-                  "column": 14,
-                  "line": 4,
-                },
-              },
-              "signatures": [
-                {
-                  "kind": "ComponentSignature",
-                  "modifier": undefined,
-                  "parameter": {
-                    "defaultValue": undefined,
-                    "description": undefined,
-                    "filePath": "node_modules/@types/react/index.d.ts",
-                    "isOptional": false,
-                    "kind": "Object",
-                    "name": "props",
-                    "position": {
-                      "end": {
-                        "column": 18,
-                        "line": 635,
-                      },
-                      "start": {
-                        "column": 10,
-                        "line": 635,
-                      },
-                    },
-                    "properties": [
-                      {
-                        "defaultValue": undefined,
-                        "filePath": "test.ts",
-                        "isOptional": false,
-                        "isReadonly": false,
-                        "kind": "String",
-                        "name": "$gridTemplateColumns",
-                        "position": {
-                          "end": {
-                            "column": 31,
-                            "line": 5,
-                          },
-                          "start": {
-                            "column": 3,
-                            "line": 5,
-                          },
-                        },
-                        "type": "string",
-                        "value": undefined,
-                      },
-                      {
-                        "defaultValue": undefined,
-                        "filePath": "test.ts",
-                        "isOptional": false,
-                        "isReadonly": false,
-                        "kind": "String",
-                        "name": "$gridTemplateRows",
-                        "position": {
-                          "end": {
-                            "column": 28,
-                            "line": 6,
-                          },
-                          "start": {
-                            "column": 3,
-                            "line": 6,
-                          },
-                        },
-                        "type": "string",
-                        "value": undefined,
-                      },
-                    ],
-                    "type": "Substitute<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, { $gridTemplateColumns: string; $gridTemplateRows: string; }>",
-                  },
-                  "returnType": "ReactNode",
-                  "type": "(props: Substitute<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, { $gridTemplateColumns: string; $gridTemplateRows: string; }>) => ReactNode",
-                },
-              ],
-              "type": "IStyledComponentBase<"web", Substitute<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, { $gridTemplateColumns: string; $gridTemplateRows: string; }>>",
-            },
-            {
-              "filePath": "test.ts",
-              "kind": "String",
-              "name": "Grid",
-              "position": {
-                "end": {
-                  "column": 2,
-                  "line": 11,
-                },
-                "start": {
-                  "column": 14,
-                  "line": 4,
-                },
-              },
-              "type": "string",
-              "value": undefined,
-            },
-          ],
-          "type": "IStyledComponentBase<"web", Substitute<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, { $gridTemplateColumns: string; $gridTemplateRows: string; }>> & string",
-        }
-      `)
+          "start": {
+            "column": 14,
+            "line": 4,
+          },
+        },
+        "text": "any",
+      }
+    `)
   })
 
   test('type aliases', () => {
@@ -5817,186 +5584,188 @@ describe('processProperties', () => {
     const types = resolveType(typeAlias.getType(), typeAlias)
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Object",
-          "name": "Props",
-          "position": {
-            "end": {
-              "column": 2,
-              "line": 4,
-            },
-            "start": {
-              "column": 1,
-              "line": 1,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Object",
+        "name": "Props",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 4,
           },
-          "properties": [
-            {
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "Union",
-              "members": [
-                {
-                  "filePath": "test.ts",
-                  "kind": "String",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 68,
-                      "line": 2,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 2,
-                    },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "properties": [
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "Union",
+            "members": [
+              {
+                "filePath": "test.ts",
+                "kind": "String",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 68,
+                    "line": 2,
                   },
-                  "type": ""heading1"",
-                  "value": "heading1",
-                },
-                {
-                  "filePath": "test.ts",
-                  "kind": "String",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 68,
-                      "line": 2,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 2,
-                    },
+                  "start": {
+                    "column": 3,
+                    "line": 2,
                   },
-                  "type": ""heading2"",
-                  "value": "heading2",
                 },
-                {
-                  "filePath": "test.ts",
-                  "kind": "String",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 68,
-                      "line": 2,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 2,
-                    },
-                  },
-                  "type": ""heading3"",
-                  "value": "heading3",
-                },
-                {
-                  "filePath": "test.ts",
-                  "kind": "String",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 68,
-                      "line": 2,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 2,
-                    },
-                  },
-                  "type": ""body1"",
-                  "value": "body1",
-                },
-                {
-                  "filePath": "test.ts",
-                  "kind": "String",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 68,
-                      "line": 2,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 2,
-                    },
-                  },
-                  "type": ""body2"",
-                  "value": "body2",
-                },
-              ],
-              "name": "variant",
-              "position": {
-                "end": {
-                  "column": 68,
-                  "line": 2,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 2,
-                },
+                "text": ""heading1"",
+                "value": "heading1",
               },
-              "type": ""heading1" | "heading2" | "heading3" | "body1" | "body2"",
-            },
-            {
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": true,
-              "isReadonly": false,
-              "kind": "Union",
-              "members": [
-                {
-                  "filePath": "test.ts",
-                  "kind": "String",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 26,
-                      "line": 3,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 3,
-                    },
+              {
+                "filePath": "test.ts",
+                "kind": "String",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 68,
+                    "line": 2,
                   },
-                  "type": "string",
-                  "value": undefined,
-                },
-                {
-                  "filePath": "test.ts",
-                  "kind": "Number",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 26,
-                      "line": 3,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 3,
-                    },
+                  "start": {
+                    "column": 3,
+                    "line": 2,
                   },
-                  "type": "number",
-                  "value": undefined,
                 },
-              ],
-              "name": "width",
-              "position": {
-                "end": {
-                  "column": 26,
-                  "line": 3,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 3,
-                },
+                "text": ""heading2"",
+                "value": "heading2",
               },
-              "type": "string | number",
+              {
+                "filePath": "test.ts",
+                "kind": "String",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 68,
+                    "line": 2,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 2,
+                  },
+                },
+                "text": ""heading3"",
+                "value": "heading3",
+              },
+              {
+                "filePath": "test.ts",
+                "kind": "String",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 68,
+                    "line": 2,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 2,
+                  },
+                },
+                "text": ""body1"",
+                "value": "body1",
+              },
+              {
+                "filePath": "test.ts",
+                "kind": "String",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 68,
+                    "line": 2,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 2,
+                  },
+                },
+                "text": ""body2"",
+                "value": "body2",
+              },
+            ],
+            "name": "variant",
+            "position": {
+              "end": {
+                "column": 68,
+                "line": 2,
+              },
+              "start": {
+                "column": 3,
+                "line": 2,
+              },
             },
-          ],
-          "type": "Props",
-        }
-      `)
+            "text": ""heading1" | "heading2" | "heading3" | "body1" | "body2"",
+          },
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": true,
+            "isReadonly": false,
+            "kind": "Union",
+            "members": [
+              {
+                "filePath": "test.ts",
+                "kind": "String",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 26,
+                    "line": 3,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 3,
+                  },
+                },
+                "text": "string",
+                "value": undefined,
+              },
+              {
+                "filePath": "test.ts",
+                "kind": "Number",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 26,
+                    "line": 3,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 3,
+                  },
+                },
+                "text": "number",
+                "value": undefined,
+              },
+            ],
+            "name": "width",
+            "position": {
+              "end": {
+                "column": 26,
+                "line": 3,
+              },
+              "start": {
+                "column": 3,
+                "line": 3,
+              },
+            },
+            "text": "string | number",
+          },
+        ],
+        "text": "Props",
+      }
+    `)
   })
 
   test('interface declarations', () => {
@@ -6020,206 +5789,209 @@ describe('processProperties', () => {
     )
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Object",
-          "name": "Props",
-          "position": {
-            "end": {
-              "column": 2,
-              "line": 7,
-            },
-            "start": {
-              "column": 1,
-              "line": 4,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Object",
+        "name": "Props",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 7,
           },
-          "properties": [
-            {
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "Union",
-              "members": [
-                {
-                  "filePath": "test.ts",
-                  "kind": "String",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 68,
-                      "line": 5,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 5,
-                    },
+          "start": {
+            "column": 1,
+            "line": 4,
+          },
+        },
+        "properties": [
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "Union",
+            "members": [
+              {
+                "filePath": "test.ts",
+                "kind": "String",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 68,
+                    "line": 5,
                   },
-                  "type": ""heading1"",
-                  "value": "heading1",
-                },
-                {
-                  "filePath": "test.ts",
-                  "kind": "String",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 68,
-                      "line": 5,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 5,
-                    },
+                  "start": {
+                    "column": 3,
+                    "line": 5,
                   },
-                  "type": ""heading2"",
-                  "value": "heading2",
                 },
-                {
-                  "filePath": "test.ts",
-                  "kind": "String",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 68,
-                      "line": 5,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 5,
-                    },
-                  },
-                  "type": ""heading3"",
-                  "value": "heading3",
-                },
-                {
-                  "filePath": "test.ts",
-                  "kind": "String",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 68,
-                      "line": 5,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 5,
-                    },
-                  },
-                  "type": ""body1"",
-                  "value": "body1",
-                },
-                {
-                  "filePath": "test.ts",
-                  "kind": "String",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 68,
-                      "line": 5,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 5,
-                    },
-                  },
-                  "type": ""body2"",
-                  "value": "body2",
-                },
-              ],
-              "name": "variant",
-              "position": {
-                "end": {
-                  "column": 68,
-                  "line": 5,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 5,
-                },
+                "text": ""heading1"",
+                "value": "heading1",
               },
-              "type": ""heading1" | "heading2" | "heading3" | "body1" | "body2"",
-            },
-            {
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": true,
-              "isReadonly": false,
-              "kind": "Union",
-              "members": [
-                {
-                  "filePath": "test.ts",
-                  "kind": "String",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 26,
-                      "line": 6,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 6,
-                    },
+              {
+                "filePath": "test.ts",
+                "kind": "String",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 68,
+                    "line": 5,
                   },
-                  "type": "string",
-                  "value": undefined,
-                },
-                {
-                  "filePath": "test.ts",
-                  "kind": "Number",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 26,
-                      "line": 6,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 6,
-                    },
+                  "start": {
+                    "column": 3,
+                    "line": 5,
                   },
-                  "type": "number",
-                  "value": undefined,
                 },
-              ],
-              "name": "width",
-              "position": {
-                "end": {
-                  "column": 26,
-                  "line": 6,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 6,
-                },
+                "text": ""heading2"",
+                "value": "heading2",
               },
-              "type": "string | number",
-            },
-            {
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "String",
-              "name": "color",
-              "position": {
-                "end": {
-                  "column": 16,
-                  "line": 2,
+              {
+                "filePath": "test.ts",
+                "kind": "String",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 68,
+                    "line": 5,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 5,
+                  },
                 },
-                "start": {
-                  "column": 3,
-                  "line": 2,
-                },
+                "text": ""heading3"",
+                "value": "heading3",
               },
-              "type": "string",
-              "value": undefined,
+              {
+                "filePath": "test.ts",
+                "kind": "String",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 68,
+                    "line": 5,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 5,
+                  },
+                },
+                "text": ""body1"",
+                "value": "body1",
+              },
+              {
+                "filePath": "test.ts",
+                "kind": "String",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 68,
+                    "line": 5,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 5,
+                  },
+                },
+                "text": ""body2"",
+                "value": "body2",
+              },
+            ],
+            "name": "variant",
+            "position": {
+              "end": {
+                "column": 68,
+                "line": 5,
+              },
+              "start": {
+                "column": 3,
+                "line": 5,
+              },
             },
-          ],
-          "type": "Props",
-        }
-      `)
+            "text": ""heading1" | "heading2" | "heading3" | "body1" | "body2"",
+          },
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": true,
+            "isReadonly": false,
+            "kind": "Union",
+            "members": [
+              {
+                "filePath": "test.ts",
+                "kind": "String",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 26,
+                    "line": 6,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 6,
+                  },
+                },
+                "text": "string",
+                "value": undefined,
+              },
+              {
+                "filePath": "test.ts",
+                "kind": "Number",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 26,
+                    "line": 6,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 6,
+                  },
+                },
+                "text": "number",
+                "value": undefined,
+              },
+            ],
+            "name": "width",
+            "position": {
+              "end": {
+                "column": 26,
+                "line": 6,
+              },
+              "start": {
+                "column": 3,
+                "line": 6,
+              },
+            },
+            "text": "string | number",
+          },
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "String",
+            "name": "color",
+            "position": {
+              "end": {
+                "column": 16,
+                "line": 2,
+              },
+              "start": {
+                "column": 3,
+                "line": 2,
+              },
+            },
+            "text": "string",
+            "value": undefined,
+          },
+        ],
+        "text": "Props",
+      }
+    `)
   })
 
   test('enum declarations', () => {
@@ -6236,28 +6008,28 @@ describe('processProperties', () => {
     const types = resolveType(enumDeclaration.getType(), enumDeclaration)
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Enum",
-          "members": {
-            "Blue": "BLUE",
-            "Green": "GREEN",
-            "Red": "RED",
+      {
+        "filePath": "test.ts",
+        "kind": "Enum",
+        "members": {
+          "Blue": "BLUE",
+          "Green": "GREEN",
+          "Red": "RED",
+        },
+        "name": "Colors",
+        "position": {
+          "end": {
+            "column": 10,
+            "line": 5,
           },
-          "name": "Colors",
-          "position": {
-            "end": {
-              "column": 8,
-              "line": 5,
-            },
-            "start": {
-              "column": 1,
-              "line": 1,
-            },
+          "start": {
+            "column": 1,
+            "line": 1,
           },
-          "type": "Colors",
-        }
-      `)
+        },
+        "text": "Colors",
+      }
+    `)
   })
 
   test('class declarations', () => {
@@ -6314,233 +6086,236 @@ describe('processProperties', () => {
     const types = resolveType(classDeclaration.getType(), classDeclaration)
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "accessors": [
-            {
-              "description": "Sets the count.",
-              "kind": "ClassSetAccessor",
-              "modifier": undefined,
-              "name": "accessorCount",
-              "parameters": [
-                {
-                  "defaultValue": undefined,
-                  "description": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "kind": "Number",
-                  "name": "value",
-                  "position": {
-                    "end": {
-                      "column": 34,
-                      "line": 26,
-                    },
-                    "start": {
-                      "column": 21,
-                      "line": 26,
-                    },
+      {
+        "accessors": [
+          {
+            "description": "Sets the count.",
+            "kind": "ClassSetAccessor",
+            "modifier": undefined,
+            "name": "accessorCount",
+            "parameters": [
+              {
+                "context": "parameter",
+                "defaultValue": undefined,
+                "description": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "kind": "Number",
+                "name": "value",
+                "position": {
+                  "end": {
+                    "column": 34,
+                    "line": 26,
                   },
-                  "type": "number",
-                  "value": undefined,
-                },
-              ],
-              "returnType": "void",
-              "scope": undefined,
-              "tags": undefined,
-              "type": "number",
-              "visibility": undefined,
-            },
-            {
-              "description": "Returns the current count.",
-              "kind": "ClassGetAccessor",
-              "name": "accessorCount",
-              "scope": undefined,
-              "tags": undefined,
-              "type": "number",
-              "visibility": undefined,
-            },
-          ],
-          "constructors": [
-            {
-              "kind": "FunctionSignature",
-              "modifier": undefined,
-              "parameters": [
-                {
-                  "defaultValue": 0,
-                  "description": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "kind": "Number",
-                  "name": "initialCount",
-                  "position": {
-                    "end": {
-                      "column": 39,
-                      "line": 9,
-                    },
-                    "start": {
-                      "column": 15,
-                      "line": 9,
-                    },
+                  "start": {
+                    "column": 21,
+                    "line": 26,
                   },
-                  "type": "number",
-                  "value": undefined,
                 },
-              ],
-              "returnType": "Counter",
-              "type": "(initialCount: number) => Counter",
-            },
-          ],
-          "filePath": "test.ts",
-          "kind": "Class",
-          "methods": [
-            {
-              "description": "Increments the count.",
-              "kind": "ClassMethod",
-              "name": "increment",
-              "scope": undefined,
-              "signatures": [
-                {
-                  "kind": "FunctionSignature",
-                  "modifier": undefined,
-                  "parameters": [],
-                  "returnType": "void",
-                  "type": "() => void",
-                },
-              ],
-              "tags": undefined,
-              "type": "() => void",
-              "visibility": undefined,
-            },
-            {
-              "description": "Decrements the count.",
-              "kind": "ClassMethod",
-              "name": "decrement",
-              "scope": undefined,
-              "signatures": [
-                {
-                  "kind": "FunctionSignature",
-                  "modifier": undefined,
-                  "parameters": [],
-                  "returnType": "void",
-                  "type": "() => void",
-                },
-              ],
-              "tags": undefined,
-              "type": "() => void",
-              "visibility": undefined,
-            },
-            {
-              "description": "Returns the current count.",
-              "kind": "ClassMethod",
-              "name": "getCount",
-              "scope": undefined,
-              "signatures": [
-                {
-                  "kind": "FunctionSignature",
-                  "modifier": undefined,
-                  "parameters": [
-                    {
-                      "defaultValue": true,
-                      "description": undefined,
-                      "filePath": "test.ts",
-                      "isOptional": true,
-                      "kind": "Boolean",
-                      "name": "isFloored",
-                      "position": {
-                        "end": {
-                          "column": 45,
-                          "line": 36,
-                        },
-                        "start": {
-                          "column": 19,
-                          "line": 36,
-                        },
-                      },
-                      "type": "boolean",
-                    },
-                  ],
-                  "returnType": "number",
-                  "type": "(isFloored?: boolean) => number",
-                },
-              ],
-              "tags": undefined,
-              "type": "(isFloored?: boolean) => number",
-              "visibility": "public",
-            },
-            {
-              "kind": "ClassMethod",
-              "name": "getStaticCount",
-              "scope": "static",
-              "signatures": [
-                {
-                  "kind": "FunctionSignature",
-                  "modifier": undefined,
-                  "parameters": [],
-                  "returnType": "number",
-                  "type": "() => number",
-                },
-              ],
-              "type": "() => number",
-              "visibility": undefined,
-            },
-          ],
-          "name": "Counter",
-          "position": {
-            "end": {
-              "column": 2,
-              "line": 43,
-            },
-            "start": {
-              "column": 1,
-              "line": 1,
-            },
+                "text": "number",
+                "value": undefined,
+              },
+            ],
+            "returnType": "void",
+            "scope": undefined,
+            "tags": undefined,
+            "text": "number",
+            "visibility": undefined,
           },
-          "properties": [
-            {
-              "defaultValue": 0,
-              "filePath": "test.ts",
-              "isReadonly": false,
-              "kind": "Number",
-              "name": "initialCount",
-              "position": {
-                "end": {
-                  "column": 28,
-                  "line": 2,
+          {
+            "description": "Returns the current count.",
+            "kind": "ClassGetAccessor",
+            "name": "accessorCount",
+            "scope": undefined,
+            "tags": undefined,
+            "text": "number",
+            "visibility": undefined,
+          },
+        ],
+        "constructors": [
+          {
+            "kind": "FunctionSignature",
+            "modifier": undefined,
+            "parameters": [
+              {
+                "context": "parameter",
+                "defaultValue": 0,
+                "description": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "kind": "Number",
+                "name": "initialCount",
+                "position": {
+                  "end": {
+                    "column": 39,
+                    "line": 9,
+                  },
+                  "start": {
+                    "column": 15,
+                    "line": 9,
+                  },
                 },
-                "start": {
-                  "column": 3,
-                  "line": 2,
-                },
+                "text": "number",
+                "value": undefined,
               },
-              "scope": undefined,
-              "type": "number",
-              "value": undefined,
-              "visibility": undefined,
-            },
-            {
-              "defaultValue": 0,
-              "filePath": "test.ts",
-              "isReadonly": false,
-              "kind": "Number",
-              "name": "staticCount",
-              "position": {
-                "end": {
-                  "column": 34,
-                  "line": 6,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 6,
-                },
+            ],
+            "returnType": "Counter",
+            "text": "(initialCount: number) => Counter",
+          },
+        ],
+        "filePath": "test.ts",
+        "kind": "Class",
+        "methods": [
+          {
+            "description": "Increments the count.",
+            "kind": "ClassMethod",
+            "name": "increment",
+            "scope": undefined,
+            "signatures": [
+              {
+                "kind": "FunctionSignature",
+                "modifier": undefined,
+                "parameters": [],
+                "returnType": "void",
+                "text": "() => void",
               },
-              "scope": "static",
-              "type": "number",
-              "value": undefined,
-              "visibility": undefined,
+            ],
+            "tags": undefined,
+            "text": "() => void",
+            "visibility": undefined,
+          },
+          {
+            "description": "Decrements the count.",
+            "kind": "ClassMethod",
+            "name": "decrement",
+            "scope": undefined,
+            "signatures": [
+              {
+                "kind": "FunctionSignature",
+                "modifier": undefined,
+                "parameters": [],
+                "returnType": "void",
+                "text": "() => void",
+              },
+            ],
+            "tags": undefined,
+            "text": "() => void",
+            "visibility": undefined,
+          },
+          {
+            "description": "Returns the current count.",
+            "kind": "ClassMethod",
+            "name": "getCount",
+            "scope": undefined,
+            "signatures": [
+              {
+                "kind": "FunctionSignature",
+                "modifier": undefined,
+                "parameters": [
+                  {
+                    "context": "parameter",
+                    "defaultValue": true,
+                    "description": undefined,
+                    "filePath": "test.ts",
+                    "isOptional": true,
+                    "kind": "Boolean",
+                    "name": "isFloored",
+                    "position": {
+                      "end": {
+                        "column": 45,
+                        "line": 36,
+                      },
+                      "start": {
+                        "column": 19,
+                        "line": 36,
+                      },
+                    },
+                    "text": "boolean",
+                  },
+                ],
+                "returnType": "number",
+                "text": "(isFloored?: boolean) => number",
+              },
+            ],
+            "tags": undefined,
+            "text": "(isFloored?: boolean) => number",
+            "visibility": "public",
+          },
+          {
+            "kind": "ClassMethod",
+            "name": "getStaticCount",
+            "scope": "static",
+            "signatures": [
+              {
+                "kind": "FunctionSignature",
+                "modifier": undefined,
+                "parameters": [],
+                "returnType": "number",
+                "text": "() => number",
+              },
+            ],
+            "text": "() => number",
+            "visibility": undefined,
+          },
+        ],
+        "name": "Counter",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 43,
+          },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "properties": [
+          {
+            "defaultValue": 0,
+            "filePath": "test.ts",
+            "isReadonly": false,
+            "kind": "Number",
+            "name": "initialCount",
+            "position": {
+              "end": {
+                "column": 28,
+                "line": 2,
+              },
+              "start": {
+                "column": 3,
+                "line": 2,
+              },
             },
-          ],
-          "type": "Counter",
-        }
-      `)
+            "scope": undefined,
+            "text": "number",
+            "value": undefined,
+            "visibility": undefined,
+          },
+          {
+            "defaultValue": 0,
+            "filePath": "test.ts",
+            "isReadonly": false,
+            "kind": "Number",
+            "name": "staticCount",
+            "position": {
+              "end": {
+                "column": 34,
+                "line": 6,
+              },
+              "start": {
+                "column": 3,
+                "line": 6,
+              },
+            },
+            "scope": "static",
+            "text": "number",
+            "value": undefined,
+            "visibility": undefined,
+          },
+        ],
+        "text": "Counter",
+      }
+    `)
   })
 
   test('renamed property default values', () => {
@@ -6556,76 +6331,78 @@ describe('processProperties', () => {
     )
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Function",
-          "name": "useCounter",
-          "position": {
-            "end": {
-              "column": 97,
-              "line": 1,
-            },
-            "start": {
-              "column": 1,
-              "line": 1,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Function",
+        "name": "useCounter",
+        "position": {
+          "end": {
+            "column": 97,
+            "line": 1,
           },
-          "signatures": [
-            {
-              "kind": "FunctionSignature",
-              "modifier": undefined,
-              "parameters": [
-                {
-                  "defaultValue": {
-                    "initialCount": 0,
-                  },
-                  "description": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "kind": "Object",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 93,
-                      "line": 1,
-                    },
-                    "start": {
-                      "column": 21,
-                      "line": 1,
-                    },
-                  },
-                  "properties": [
-                    {
-                      "defaultValue": 0,
-                      "filePath": "test.ts",
-                      "isOptional": false,
-                      "isReadonly": false,
-                      "kind": "Number",
-                      "name": "initialCount",
-                      "position": {
-                        "end": {
-                          "column": 86,
-                          "line": 1,
-                        },
-                        "start": {
-                          "column": 66,
-                          "line": 1,
-                        },
-                      },
-                      "type": "number",
-                      "value": undefined,
-                    },
-                  ],
-                  "type": "{ initialCount: number; }",
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "signatures": [
+          {
+            "kind": "FunctionSignature",
+            "modifier": undefined,
+            "parameters": [
+              {
+                "context": "parameter",
+                "defaultValue": {
+                  "initialCount": 0,
                 },
-              ],
-              "returnType": "void",
-              "type": "function useCounter({ initialCount: number; }): void",
-            },
-          ],
-          "type": "({ initialCount: renamedInitialCount }?: {    initialCount: number;}) => void",
-        }
-      `)
+                "description": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "kind": "Object",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 93,
+                    "line": 1,
+                  },
+                  "start": {
+                    "column": 21,
+                    "line": 1,
+                  },
+                },
+                "properties": [
+                  {
+                    "context": "property",
+                    "defaultValue": 0,
+                    "filePath": "test.ts",
+                    "isOptional": false,
+                    "isReadonly": false,
+                    "kind": "Number",
+                    "name": "initialCount",
+                    "position": {
+                      "end": {
+                        "column": 86,
+                        "line": 1,
+                      },
+                      "start": {
+                        "column": 66,
+                        "line": 1,
+                      },
+                    },
+                    "text": "number",
+                    "value": undefined,
+                  },
+                ],
+                "text": "{ initialCount: number; }",
+              },
+            ],
+            "returnType": "void",
+            "text": "function useCounter({ initialCount: number; }): void",
+          },
+        ],
+        "text": "({ initialCount: renamedInitialCount }?: { initialCount: number; }) => void",
+      }
+    `)
   })
 
   test('multiple arguments', () => {
@@ -6641,73 +6418,75 @@ describe('processProperties', () => {
     )
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Function",
-          "name": "add",
-          "position": {
-            "end": {
-              "column": 64,
-              "line": 1,
-            },
-            "start": {
-              "column": 1,
-              "line": 1,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Function",
+        "name": "add",
+        "position": {
+          "end": {
+            "column": 64,
+            "line": 1,
           },
-          "signatures": [
-            {
-              "kind": "FunctionSignature",
-              "modifier": undefined,
-              "parameters": [
-                {
-                  "defaultValue": undefined,
-                  "description": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "kind": "Number",
-                  "name": "a",
-                  "position": {
-                    "end": {
-                      "column": 23,
-                      "line": 1,
-                    },
-                    "start": {
-                      "column": 14,
-                      "line": 1,
-                    },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "signatures": [
+          {
+            "kind": "FunctionSignature",
+            "modifier": undefined,
+            "parameters": [
+              {
+                "context": "parameter",
+                "defaultValue": undefined,
+                "description": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "kind": "Number",
+                "name": "a",
+                "position": {
+                  "end": {
+                    "column": 23,
+                    "line": 1,
                   },
-                  "type": "number",
-                  "value": undefined,
-                },
-                {
-                  "defaultValue": 0,
-                  "description": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "kind": "Number",
-                  "name": "b",
-                  "position": {
-                    "end": {
-                      "column": 38,
-                      "line": 1,
-                    },
-                    "start": {
-                      "column": 25,
-                      "line": 1,
-                    },
+                  "start": {
+                    "column": 14,
+                    "line": 1,
                   },
-                  "type": "number",
-                  "value": undefined,
                 },
-              ],
-              "returnType": "number",
-              "type": "function add(a: number, b: number): number",
-            },
-          ],
-          "type": "(a: number, b?: number) => number",
-        }
-      `)
+                "text": "number",
+                "value": undefined,
+              },
+              {
+                "context": "parameter",
+                "defaultValue": 0,
+                "description": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "kind": "Number",
+                "name": "b",
+                "position": {
+                  "end": {
+                    "column": 38,
+                    "line": 1,
+                  },
+                  "start": {
+                    "column": 25,
+                    "line": 1,
+                  },
+                },
+                "text": "number",
+                "value": undefined,
+              },
+            ],
+            "returnType": "number",
+            "text": "function add(a: number, b: number): number",
+          },
+        ],
+        "text": "(a: number, b?: number) => number",
+      }
+    `)
   })
 
   test('type with union', () => {
@@ -6722,157 +6501,160 @@ describe('processProperties', () => {
     const types = resolveType(typeAlias.getType(), typeAlias)
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Intersection",
-          "name": "ButtonVariants",
-          "position": {
-            "end": {
-              "column": 97,
-              "line": 1,
-            },
-            "start": {
-              "column": 1,
-              "line": 1,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Intersection",
+        "name": "ButtonVariants",
+        "position": {
+          "end": {
+            "column": 97,
+            "line": 1,
           },
-          "properties": [
-            {
-              "filePath": "test.ts",
-              "kind": "Object",
-              "name": undefined,
-              "position": {
-                "end": {
-                  "column": 39,
-                  "line": 1,
-                },
-                "start": {
-                  "column": 23,
-                  "line": 1,
-                },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "properties": [
+          {
+            "filePath": "test.ts",
+            "kind": "Object",
+            "name": undefined,
+            "position": {
+              "end": {
+                "column": 39,
+                "line": 1,
               },
-              "properties": [
-                {
-                  "defaultValue": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "isReadonly": false,
-                  "kind": "String",
-                  "name": "color",
-                  "position": {
-                    "end": {
-                      "column": 37,
-                      "line": 1,
-                    },
-                    "start": {
-                      "column": 25,
-                      "line": 1,
-                    },
-                  },
-                  "type": "string",
-                  "value": undefined,
-                },
-              ],
-              "type": "{ color: string; }",
-            },
-            {
-              "filePath": "test.ts",
-              "kind": "Union",
-              "members": [
-                {
-                  "filePath": "test.ts",
-                  "kind": "Object",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 70,
-                      "line": 1,
-                    },
-                    "start": {
-                      "column": 43,
-                      "line": 1,
-                    },
-                  },
-                  "properties": [
-                    {
-                      "defaultValue": undefined,
-                      "filePath": "test.ts",
-                      "isOptional": false,
-                      "isReadonly": false,
-                      "kind": "String",
-                      "name": "backgroundColor",
-                      "position": {
-                        "end": {
-                          "column": 68,
-                          "line": 1,
-                        },
-                        "start": {
-                          "column": 45,
-                          "line": 1,
-                        },
-                      },
-                      "type": "string",
-                      "value": undefined,
-                    },
-                  ],
-                  "type": "{ backgroundColor: string; }",
-                },
-                {
-                  "filePath": "test.ts",
-                  "kind": "Object",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 96,
-                      "line": 1,
-                    },
-                    "start": {
-                      "column": 73,
-                      "line": 1,
-                    },
-                  },
-                  "properties": [
-                    {
-                      "defaultValue": undefined,
-                      "filePath": "test.ts",
-                      "isOptional": false,
-                      "isReadonly": false,
-                      "kind": "String",
-                      "name": "borderColor",
-                      "position": {
-                        "end": {
-                          "column": 94,
-                          "line": 1,
-                        },
-                        "start": {
-                          "column": 75,
-                          "line": 1,
-                        },
-                      },
-                      "type": "string",
-                      "value": undefined,
-                    },
-                  ],
-                  "type": "{ borderColor: string; }",
-                },
-              ],
-              "name": undefined,
-              "position": {
-                "end": {
-                  "column": 97,
-                  "line": 1,
-                },
-                "start": {
-                  "column": 42,
-                  "line": 1,
-                },
+              "start": {
+                "column": 23,
+                "line": 1,
               },
-              "type": "{ backgroundColor: string; } | { borderColor: string; }",
             },
-          ],
-          "type": "ButtonVariants",
-        }
-      `)
+            "properties": [
+              {
+                "context": "property",
+                "defaultValue": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "isReadonly": false,
+                "kind": "String",
+                "name": "color",
+                "position": {
+                  "end": {
+                    "column": 37,
+                    "line": 1,
+                  },
+                  "start": {
+                    "column": 25,
+                    "line": 1,
+                  },
+                },
+                "text": "string",
+                "value": undefined,
+              },
+            ],
+            "text": "{ color: string; }",
+          },
+          {
+            "filePath": "test.ts",
+            "kind": "Union",
+            "members": [
+              {
+                "filePath": "test.ts",
+                "kind": "Object",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 70,
+                    "line": 1,
+                  },
+                  "start": {
+                    "column": 43,
+                    "line": 1,
+                  },
+                },
+                "properties": [
+                  {
+                    "context": "property",
+                    "defaultValue": undefined,
+                    "filePath": "test.ts",
+                    "isOptional": false,
+                    "isReadonly": false,
+                    "kind": "String",
+                    "name": "backgroundColor",
+                    "position": {
+                      "end": {
+                        "column": 68,
+                        "line": 1,
+                      },
+                      "start": {
+                        "column": 45,
+                        "line": 1,
+                      },
+                    },
+                    "text": "string",
+                    "value": undefined,
+                  },
+                ],
+                "text": "{ backgroundColor: string; }",
+              },
+              {
+                "filePath": "test.ts",
+                "kind": "Object",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 96,
+                    "line": 1,
+                  },
+                  "start": {
+                    "column": 73,
+                    "line": 1,
+                  },
+                },
+                "properties": [
+                  {
+                    "context": "property",
+                    "defaultValue": undefined,
+                    "filePath": "test.ts",
+                    "isOptional": false,
+                    "isReadonly": false,
+                    "kind": "String",
+                    "name": "borderColor",
+                    "position": {
+                      "end": {
+                        "column": 94,
+                        "line": 1,
+                      },
+                      "start": {
+                        "column": 75,
+                        "line": 1,
+                      },
+                    },
+                    "text": "string",
+                    "value": undefined,
+                  },
+                ],
+                "text": "{ borderColor: string; }",
+              },
+            ],
+            "name": undefined,
+            "position": {
+              "end": {
+                "column": 97,
+                "line": 1,
+              },
+              "start": {
+                "column": 42,
+                "line": 1,
+              },
+            },
+            "text": "{ backgroundColor: string; } | { borderColor: string; }",
+          },
+        ],
+        "text": "ButtonVariants",
+      }
+    `)
   })
 
   test('property with union', () => {
@@ -6898,202 +6680,209 @@ describe('processProperties', () => {
     const types = resolveType(typeAlias.getType(), typeAlias)
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Object",
-          "name": "Config",
-          "position": {
-            "end": {
-              "column": 2,
-              "line": 11,
-            },
-            "start": {
-              "column": 1,
-              "line": 1,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Object",
+        "name": "Config",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 11,
           },
-          "properties": [
-            {
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "String",
-              "name": "siteName",
-              "position": {
-                "end": {
-                  "column": 19,
-                  "line": 2,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 2,
-                },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "properties": [
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "String",
+            "name": "siteName",
+            "position": {
+              "end": {
+                "column": 19,
+                "line": 2,
               },
-              "type": "string",
-              "value": undefined,
-            },
-            {
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "Union",
-              "members": [
-                {
-                  "filePath": "test.ts",
-                  "kind": "Object",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 5,
-                      "line": 10,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 3,
-                    },
-                  },
-                  "properties": [
-                    {
-                      "defaultValue": undefined,
-                      "filePath": "test.ts",
-                      "isOptional": false,
-                      "isReadonly": false,
-                      "kind": "String",
-                      "name": "apiEndpoint",
-                      "position": {
-                        "end": {
-                          "column": 25,
-                          "line": 4,
-                        },
-                        "start": {
-                          "column": 5,
-                          "line": 4,
-                        },
-                      },
-                      "type": "string",
-                      "value": undefined,
-                    },
-                    {
-                      "defaultValue": undefined,
-                      "filePath": "test.ts",
-                      "isOptional": false,
-                      "isReadonly": false,
-                      "kind": "String",
-                      "name": "apiKey",
-                      "position": {
-                        "end": {
-                          "column": 20,
-                          "line": 5,
-                        },
-                        "start": {
-                          "column": 5,
-                          "line": 5,
-                        },
-                      },
-                      "type": "string",
-                      "value": undefined,
-                    },
-                  ],
-                  "type": "{ apiEndpoint: string; apiKey: string; }",
-                },
-                {
-                  "filePath": "test.ts",
-                  "kind": "Object",
-                  "name": undefined,
-                  "position": {
-                    "end": {
-                      "column": 5,
-                      "line": 10,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 3,
-                    },
-                  },
-                  "properties": [
-                    {
-                      "defaultValue": undefined,
-                      "filePath": "test.ts",
-                      "isOptional": false,
-                      "isReadonly": false,
-                      "kind": "String",
-                      "name": "dbHost",
-                      "position": {
-                        "end": {
-                          "column": 20,
-                          "line": 7,
-                        },
-                        "start": {
-                          "column": 5,
-                          "line": 7,
-                        },
-                      },
-                      "type": "string",
-                      "value": undefined,
-                    },
-                    {
-                      "defaultValue": undefined,
-                      "filePath": "test.ts",
-                      "isOptional": false,
-                      "isReadonly": false,
-                      "kind": "Number",
-                      "name": "dbPort",
-                      "position": {
-                        "end": {
-                          "column": 20,
-                          "line": 8,
-                        },
-                        "start": {
-                          "column": 5,
-                          "line": 8,
-                        },
-                      },
-                      "type": "number",
-                      "value": undefined,
-                    },
-                    {
-                      "defaultValue": undefined,
-                      "filePath": "test.ts",
-                      "isOptional": false,
-                      "isReadonly": false,
-                      "kind": "String",
-                      "name": "dbName",
-                      "position": {
-                        "end": {
-                          "column": 20,
-                          "line": 9,
-                        },
-                        "start": {
-                          "column": 5,
-                          "line": 9,
-                        },
-                      },
-                      "type": "string",
-                      "value": undefined,
-                    },
-                  ],
-                  "type": "{ dbHost: string; dbPort: number; dbName: string; }",
-                },
-              ],
-              "name": "settings",
-              "position": {
-                "end": {
-                  "column": 5,
-                  "line": 10,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 3,
-                },
+              "start": {
+                "column": 3,
+                "line": 2,
               },
-              "type": "{ apiEndpoint: string; apiKey: string; } | { dbHost: string; dbPort: number; dbName: string; }",
             },
-          ],
-          "type": "Config",
-        }
-      `)
+            "text": "string",
+            "value": undefined,
+          },
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "Union",
+            "members": [
+              {
+                "filePath": "test.ts",
+                "kind": "Object",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 5,
+                    "line": 10,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 3,
+                  },
+                },
+                "properties": [
+                  {
+                    "context": "property",
+                    "defaultValue": undefined,
+                    "filePath": "test.ts",
+                    "isOptional": false,
+                    "isReadonly": false,
+                    "kind": "String",
+                    "name": "apiEndpoint",
+                    "position": {
+                      "end": {
+                        "column": 25,
+                        "line": 4,
+                      },
+                      "start": {
+                        "column": 5,
+                        "line": 4,
+                      },
+                    },
+                    "text": "string",
+                    "value": undefined,
+                  },
+                  {
+                    "context": "property",
+                    "defaultValue": undefined,
+                    "filePath": "test.ts",
+                    "isOptional": false,
+                    "isReadonly": false,
+                    "kind": "String",
+                    "name": "apiKey",
+                    "position": {
+                      "end": {
+                        "column": 20,
+                        "line": 5,
+                      },
+                      "start": {
+                        "column": 5,
+                        "line": 5,
+                      },
+                    },
+                    "text": "string",
+                    "value": undefined,
+                  },
+                ],
+                "text": "{ apiEndpoint: string; apiKey: string; }",
+              },
+              {
+                "filePath": "test.ts",
+                "kind": "Object",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 5,
+                    "line": 10,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 3,
+                  },
+                },
+                "properties": [
+                  {
+                    "context": "property",
+                    "defaultValue": undefined,
+                    "filePath": "test.ts",
+                    "isOptional": false,
+                    "isReadonly": false,
+                    "kind": "String",
+                    "name": "dbHost",
+                    "position": {
+                      "end": {
+                        "column": 20,
+                        "line": 7,
+                      },
+                      "start": {
+                        "column": 5,
+                        "line": 7,
+                      },
+                    },
+                    "text": "string",
+                    "value": undefined,
+                  },
+                  {
+                    "context": "property",
+                    "defaultValue": undefined,
+                    "filePath": "test.ts",
+                    "isOptional": false,
+                    "isReadonly": false,
+                    "kind": "Number",
+                    "name": "dbPort",
+                    "position": {
+                      "end": {
+                        "column": 20,
+                        "line": 8,
+                      },
+                      "start": {
+                        "column": 5,
+                        "line": 8,
+                      },
+                    },
+                    "text": "number",
+                    "value": undefined,
+                  },
+                  {
+                    "context": "property",
+                    "defaultValue": undefined,
+                    "filePath": "test.ts",
+                    "isOptional": false,
+                    "isReadonly": false,
+                    "kind": "String",
+                    "name": "dbName",
+                    "position": {
+                      "end": {
+                        "column": 20,
+                        "line": 9,
+                      },
+                      "start": {
+                        "column": 5,
+                        "line": 9,
+                      },
+                    },
+                    "text": "string",
+                    "value": undefined,
+                  },
+                ],
+                "text": "{ dbHost: string; dbPort: number; dbName: string; }",
+              },
+            ],
+            "name": "settings",
+            "position": {
+              "end": {
+                "column": 5,
+                "line": 10,
+              },
+              "start": {
+                "column": 3,
+                "line": 3,
+              },
+            },
+            "text": "{ apiEndpoint: string; apiKey: string; } | { dbHost: string; dbPort: number; dbName: string; }",
+          },
+        ],
+        "text": "Config",
+      }
+    `)
   })
 
   test('argument with union', () => {
@@ -7114,190 +6903,196 @@ describe('processProperties', () => {
     )
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Function",
-          "name": "useCounter",
-          "position": {
-            "end": {
-              "column": 5,
-              "line": 3,
-            },
-            "start": {
-              "column": 1,
-              "line": 1,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Function",
+        "name": "useCounter",
+        "position": {
+          "end": {
+            "column": 5,
+            "line": 3,
           },
-          "signatures": [
-            {
-              "kind": "FunctionSignature",
-              "modifier": undefined,
-              "parameters": [
-                {
-                  "defaultValue": undefined,
-                  "description": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "kind": "Union",
-                  "members": [
-                    {
-                      "filePath": "test.ts",
-                      "kind": "Object",
-                      "name": undefined,
-                      "position": {
-                        "end": {
-                          "column": 107,
-                          "line": 2,
-                        },
-                        "start": {
-                          "column": 3,
-                          "line": 2,
-                        },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "signatures": [
+          {
+            "kind": "FunctionSignature",
+            "modifier": undefined,
+            "parameters": [
+              {
+                "context": "parameter",
+                "defaultValue": undefined,
+                "description": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "kind": "Union",
+                "members": [
+                  {
+                    "filePath": "test.ts",
+                    "kind": "Object",
+                    "name": undefined,
+                    "position": {
+                      "end": {
+                        "column": 107,
+                        "line": 2,
                       },
-                      "properties": [
-                        {
-                          "defaultValue": undefined,
-                          "filePath": "test.ts",
-                          "isOptional": false,
-                          "isReadonly": false,
-                          "kind": "String",
-                          "name": "apiEndpoint",
-                          "position": {
-                            "end": {
-                              "column": 35,
-                              "line": 2,
-                            },
-                            "start": {
-                              "column": 15,
-                              "line": 2,
-                            },
-                          },
-                          "type": "string",
-                          "value": undefined,
-                        },
-                        {
-                          "defaultValue": undefined,
-                          "filePath": "test.ts",
-                          "isOptional": false,
-                          "isReadonly": false,
-                          "kind": "String",
-                          "name": "apiKey",
-                          "position": {
-                            "end": {
-                              "column": 51,
-                              "line": 2,
-                            },
-                            "start": {
-                              "column": 36,
-                              "line": 2,
-                            },
-                          },
-                          "type": "string",
-                          "value": undefined,
-                        },
-                      ],
-                      "type": "{ apiEndpoint: string; apiKey: string; }",
-                    },
-                    {
-                      "filePath": "test.ts",
-                      "kind": "Object",
-                      "name": undefined,
-                      "position": {
-                        "end": {
-                          "column": 107,
-                          "line": 2,
-                        },
-                        "start": {
-                          "column": 3,
-                          "line": 2,
-                        },
+                      "start": {
+                        "column": 3,
+                        "line": 2,
                       },
-                      "properties": [
-                        {
-                          "defaultValue": undefined,
-                          "filePath": "test.ts",
-                          "isOptional": false,
-                          "isReadonly": false,
-                          "kind": "String",
-                          "name": "dbHost",
-                          "position": {
-                            "end": {
-                              "column": 73,
-                              "line": 2,
-                            },
-                            "start": {
-                              "column": 58,
-                              "line": 2,
-                            },
-                          },
-                          "type": "string",
-                          "value": undefined,
-                        },
-                        {
-                          "defaultValue": undefined,
-                          "filePath": "test.ts",
-                          "isOptional": false,
-                          "isReadonly": false,
-                          "kind": "Number",
-                          "name": "dbPort",
-                          "position": {
-                            "end": {
-                              "column": 89,
-                              "line": 2,
-                            },
-                            "start": {
-                              "column": 74,
-                              "line": 2,
-                            },
-                          },
-                          "type": "number",
-                          "value": undefined,
-                        },
-                        {
-                          "defaultValue": undefined,
-                          "filePath": "test.ts",
-                          "isOptional": false,
-                          "isReadonly": false,
-                          "kind": "String",
-                          "name": "dbName",
-                          "position": {
-                            "end": {
-                              "column": 105,
-                              "line": 2,
-                            },
-                            "start": {
-                              "column": 90,
-                              "line": 2,
-                            },
-                          },
-                          "type": "string",
-                          "value": undefined,
-                        },
-                      ],
-                      "type": "{ dbHost: string; dbPort: number; dbName: string; }",
                     },
-                  ],
-                  "name": "settings",
-                  "position": {
-                    "end": {
-                      "column": 107,
-                      "line": 2,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 2,
-                    },
+                    "properties": [
+                      {
+                        "context": "property",
+                        "defaultValue": undefined,
+                        "filePath": "test.ts",
+                        "isOptional": false,
+                        "isReadonly": false,
+                        "kind": "String",
+                        "name": "apiEndpoint",
+                        "position": {
+                          "end": {
+                            "column": 35,
+                            "line": 2,
+                          },
+                          "start": {
+                            "column": 15,
+                            "line": 2,
+                          },
+                        },
+                        "text": "string",
+                        "value": undefined,
+                      },
+                      {
+                        "context": "property",
+                        "defaultValue": undefined,
+                        "filePath": "test.ts",
+                        "isOptional": false,
+                        "isReadonly": false,
+                        "kind": "String",
+                        "name": "apiKey",
+                        "position": {
+                          "end": {
+                            "column": 51,
+                            "line": 2,
+                          },
+                          "start": {
+                            "column": 36,
+                            "line": 2,
+                          },
+                        },
+                        "text": "string",
+                        "value": undefined,
+                      },
+                    ],
+                    "text": "{ apiEndpoint: string; apiKey: string; }",
                   },
-                  "type": "{ apiEndpoint: string; apiKey: string; } | { dbHost: string; dbPort: number; dbName: string; }",
+                  {
+                    "filePath": "test.ts",
+                    "kind": "Object",
+                    "name": undefined,
+                    "position": {
+                      "end": {
+                        "column": 107,
+                        "line": 2,
+                      },
+                      "start": {
+                        "column": 3,
+                        "line": 2,
+                      },
+                    },
+                    "properties": [
+                      {
+                        "context": "property",
+                        "defaultValue": undefined,
+                        "filePath": "test.ts",
+                        "isOptional": false,
+                        "isReadonly": false,
+                        "kind": "String",
+                        "name": "dbHost",
+                        "position": {
+                          "end": {
+                            "column": 73,
+                            "line": 2,
+                          },
+                          "start": {
+                            "column": 58,
+                            "line": 2,
+                          },
+                        },
+                        "text": "string",
+                        "value": undefined,
+                      },
+                      {
+                        "context": "property",
+                        "defaultValue": undefined,
+                        "filePath": "test.ts",
+                        "isOptional": false,
+                        "isReadonly": false,
+                        "kind": "Number",
+                        "name": "dbPort",
+                        "position": {
+                          "end": {
+                            "column": 89,
+                            "line": 2,
+                          },
+                          "start": {
+                            "column": 74,
+                            "line": 2,
+                          },
+                        },
+                        "text": "number",
+                        "value": undefined,
+                      },
+                      {
+                        "context": "property",
+                        "defaultValue": undefined,
+                        "filePath": "test.ts",
+                        "isOptional": false,
+                        "isReadonly": false,
+                        "kind": "String",
+                        "name": "dbName",
+                        "position": {
+                          "end": {
+                            "column": 105,
+                            "line": 2,
+                          },
+                          "start": {
+                            "column": 90,
+                            "line": 2,
+                          },
+                        },
+                        "text": "string",
+                        "value": undefined,
+                      },
+                    ],
+                    "text": "{ dbHost: string; dbPort: number; dbName: string; }",
+                  },
+                ],
+                "name": "settings",
+                "position": {
+                  "end": {
+                    "column": 107,
+                    "line": 2,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 2,
+                  },
                 },
-              ],
-              "returnType": "void",
-              "type": "function useCounter(settings: { apiEndpoint: string; apiKey: string; } | { dbHost: string; dbPort: number; dbName: string; }): void",
-            },
-          ],
-          "type": "(settings: {    apiEndpoint: string;    apiKey: string;} | {    dbHost: string;    dbPort: number;    dbName: string;}) => void",
-        }
-      `)
+                "text": "{ apiEndpoint: string; apiKey: string; } | { dbHost: string; dbPort: number; dbName: string; }",
+              },
+            ],
+            "returnType": "void",
+            "text": "function useCounter(settings: { apiEndpoint: string; apiKey: string; } | { dbHost: string; dbPort: number; dbName: string; }): void",
+          },
+        ],
+        "text": "(settings: { apiEndpoint: string; apiKey: string; } | { dbHost: string; dbPort: number; dbName: string; }) => void",
+      }
+    `)
   })
 
   test('allows filtering specific node module types', () => {
@@ -7332,144 +7127,147 @@ describe('processProperties', () => {
     )
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.tsx",
-          "kind": "Component",
-          "name": "Button",
-          "position": {
-            "end": {
-              "column": 2,
-              "line": 11,
-            },
-            "start": {
-              "column": 14,
-              "line": 9,
-            },
+      {
+        "filePath": "test.tsx",
+        "kind": "Component",
+        "name": "Button",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 11,
           },
-          "signatures": [
-            {
-              "kind": "ComponentSignature",
-              "modifier": undefined,
-              "parameter": {
-                "defaultValue": undefined,
-                "description": undefined,
-                "filePath": "test.tsx",
-                "isOptional": false,
-                "kind": "Object",
-                "name": "props",
-                "position": {
-                  "end": {
-                    "column": 42,
-                    "line": 9,
-                  },
-                  "start": {
-                    "column": 24,
-                    "line": 9,
-                  },
+          "start": {
+            "column": 14,
+            "line": 9,
+          },
+        },
+        "signatures": [
+          {
+            "kind": "ComponentSignature",
+            "modifier": undefined,
+            "parameter": {
+              "context": "parameter",
+              "defaultValue": undefined,
+              "description": undefined,
+              "filePath": "test.tsx",
+              "isOptional": false,
+              "kind": "Object",
+              "name": "props",
+              "position": {
+                "end": {
+                  "column": 42,
+                  "line": 9,
                 },
-                "properties": [
-                  {
-                    "defaultValue": undefined,
-                    "filePath": "test.tsx",
-                    "isOptional": true,
-                    "isReadonly": false,
-                    "kind": "Union",
-                    "members": [
-                      {
-                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                        "kind": "String",
-                        "name": undefined,
-                        "position": {
-                          "end": {
-                            "column": 4402,
-                            "line": 4,
-                          },
-                          "start": {
-                            "column": 3482,
-                            "line": 4,
-                          },
-                        },
-                        "type": ""primary"",
-                        "value": "primary",
-                      },
-                      {
-                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                        "kind": "String",
-                        "name": undefined,
-                        "position": {
-                          "end": {
-                            "column": 4402,
-                            "line": 4,
-                          },
-                          "start": {
-                            "column": 3482,
-                            "line": 4,
-                          },
-                        },
-                        "type": ""secondary"",
-                        "value": "secondary",
-                      },
-                      {
-                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                        "kind": "String",
-                        "name": undefined,
-                        "position": {
-                          "end": {
-                            "column": 4402,
-                            "line": 4,
-                          },
-                          "start": {
-                            "column": 3482,
-                            "line": 4,
-                          },
-                        },
-                        "type": ""danger"",
-                        "value": "danger",
-                      },
-                    ],
-                    "name": "variant",
-                    "position": {
-                      "end": {
-                        "column": 27,
-                        "line": 6,
-                      },
-                      "start": {
-                        "column": 3,
-                        "line": 6,
-                      },
-                    },
-                    "type": "ButtonVariant",
-                  },
-                  {
-                    "defaultValue": undefined,
-                    "filePath": "node_modules/@types/react/index.d.ts",
-                    "isOptional": true,
-                    "isReadonly": false,
-                    "kind": "Function",
-                    "name": "onClick",
-                    "position": {
-                      "end": {
-                        "column": 52,
-                        "line": 2489,
-                      },
-                      "start": {
-                        "column": 9,
-                        "line": 2489,
-                      },
-                    },
-                    "signatures": [],
-                    "type": "MouseEventHandler<HTMLButtonElement>",
-                  },
-                ],
-                "type": "ButtonProps",
+                "start": {
+                  "column": 24,
+                  "line": 9,
+                },
               },
-              "returnType": "Element",
-              "type": "(props: ButtonProps) => Element",
+              "properties": [
+                {
+                  "context": "property",
+                  "defaultValue": undefined,
+                  "filePath": "test.tsx",
+                  "isOptional": true,
+                  "isReadonly": false,
+                  "kind": "Union",
+                  "members": [
+                    {
+                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                      "kind": "String",
+                      "name": undefined,
+                      "position": {
+                        "end": {
+                          "column": 4402,
+                          "line": 4,
+                        },
+                        "start": {
+                          "column": 3482,
+                          "line": 4,
+                        },
+                      },
+                      "text": ""primary"",
+                      "value": "primary",
+                    },
+                    {
+                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                      "kind": "String",
+                      "name": undefined,
+                      "position": {
+                        "end": {
+                          "column": 4402,
+                          "line": 4,
+                        },
+                        "start": {
+                          "column": 3482,
+                          "line": 4,
+                        },
+                      },
+                      "text": ""secondary"",
+                      "value": "secondary",
+                    },
+                    {
+                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                      "kind": "String",
+                      "name": undefined,
+                      "position": {
+                        "end": {
+                          "column": 4402,
+                          "line": 4,
+                        },
+                        "start": {
+                          "column": 3482,
+                          "line": 4,
+                        },
+                      },
+                      "text": ""danger"",
+                      "value": "danger",
+                    },
+                  ],
+                  "name": "variant",
+                  "position": {
+                    "end": {
+                      "column": 27,
+                      "line": 6,
+                    },
+                    "start": {
+                      "column": 3,
+                      "line": 6,
+                    },
+                  },
+                  "text": "ButtonVariant",
+                },
+                {
+                  "context": "property",
+                  "defaultValue": undefined,
+                  "filePath": "node_modules/@types/react/index.d.ts",
+                  "isOptional": true,
+                  "isReadonly": false,
+                  "kind": "Function",
+                  "name": "onClick",
+                  "position": {
+                    "end": {
+                      "column": 52,
+                      "line": 2489,
+                    },
+                    "start": {
+                      "column": 9,
+                      "line": 2489,
+                    },
+                  },
+                  "signatures": [],
+                  "text": "MouseEventHandler<HTMLButtonElement>",
+                },
+              ],
+              "text": "ButtonProps",
             },
-          ],
-          "type": "(props: ButtonProps) => React.JSX.Element",
-        }
-      `)
+            "returnType": "Element",
+            "text": "(props: ButtonProps) => Element",
+          },
+        ],
+        "text": "(props: ButtonProps) => React.JSX.Element",
+      }
+    `)
   })
 
   test('function types', () => {
@@ -7512,364 +7310,376 @@ describe('processProperties', () => {
     )
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Component",
-          "name": "ExportedTypes",
-          "position": {
-            "end": {
-              "column": 60,
-              "line": 26,
-            },
-            "start": {
-              "column": 1,
-              "line": 26,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Component",
+        "name": "ExportedTypes",
+        "position": {
+          "end": {
+            "column": 60,
+            "line": 26,
           },
-          "signatures": [
-            {
-              "kind": "ComponentSignature",
-              "modifier": undefined,
-              "parameter": {
-                "defaultValue": undefined,
-                "description": undefined,
-                "filePath": "test.ts",
-                "isOptional": false,
-                "kind": "Union",
-                "members": [
-                  {
-                    "filePath": "test.ts",
-                    "kind": "Object",
-                    "name": undefined,
-                    "position": {
-                      "end": {
-                        "column": 67,
-                        "line": 24,
-                      },
-                      "start": {
-                        "column": 1,
-                        "line": 22,
-                      },
+          "start": {
+            "column": 1,
+            "line": 26,
+          },
+        },
+        "signatures": [
+          {
+            "kind": "ComponentSignature",
+            "modifier": undefined,
+            "parameter": {
+              "context": "parameter",
+              "defaultValue": undefined,
+              "description": undefined,
+              "filePath": "test.ts",
+              "isOptional": false,
+              "kind": "Union",
+              "members": [
+                {
+                  "filePath": "test.ts",
+                  "kind": "Object",
+                  "name": undefined,
+                  "position": {
+                    "end": {
+                      "column": 67,
+                      "line": 24,
                     },
-                    "properties": [
-                      {
-                        "defaultValue": undefined,
-                        "filePath": "test.ts",
-                        "isOptional": false,
-                        "isReadonly": false,
-                        "kind": "String",
-                        "name": "source",
-                        "position": {
-                          "end": {
-                            "column": 22,
-                            "line": 23,
-                          },
-                          "start": {
-                            "column": 8,
-                            "line": 23,
-                          },
+                    "start": {
+                      "column": 1,
+                      "line": 22,
+                    },
+                  },
+                  "properties": [
+                    {
+                      "context": "property",
+                      "defaultValue": undefined,
+                      "filePath": "test.ts",
+                      "isOptional": false,
+                      "isReadonly": false,
+                      "kind": "String",
+                      "name": "source",
+                      "position": {
+                        "end": {
+                          "column": 22,
+                          "line": 23,
                         },
-                        "type": "string",
-                        "value": undefined,
+                        "start": {
+                          "column": 8,
+                          "line": 23,
+                        },
                       },
-                      {
-                        "defaultValue": undefined,
-                        "description": "Controls how types are rendered.",
-                        "filePath": "test.ts",
-                        "isOptional": true,
-                        "isReadonly": false,
-                        "kind": "Function",
-                        "name": "children",
-                        "position": {
-                          "end": {
-                            "column": 23,
-                            "line": 19,
-                          },
-                          "start": {
-                            "column": 3,
-                            "line": 17,
-                          },
+                      "text": "string",
+                      "value": undefined,
+                    },
+                    {
+                      "context": "property",
+                      "defaultValue": undefined,
+                      "description": "Controls how types are rendered.",
+                      "filePath": "test.ts",
+                      "isOptional": true,
+                      "isReadonly": false,
+                      "kind": "Function",
+                      "name": "children",
+                      "position": {
+                        "end": {
+                          "column": 23,
+                          "line": 19,
                         },
-                        "signatures": [
-                          {
-                            "kind": "FunctionSignature",
-                            "modifier": undefined,
-                            "parameters": [
-                              {
-                                "defaultValue": undefined,
-                                "description": undefined,
-                                "element": {
-                                  "filePath": "test.ts",
-                                  "kind": "Object",
-                                  "name": undefined,
-                                  "position": {
-                                    "end": {
-                                      "column": 6,
-                                      "line": 11,
-                                    },
-                                    "start": {
-                                      "column": 5,
-                                      "line": 5,
-                                    },
-                                  },
-                                  "properties": [
-                                    {
-                                      "defaultValue": undefined,
-                                      "filePath": "test.ts",
-                                      "isOptional": false,
-                                      "isReadonly": false,
-                                      "kind": "String",
-                                      "name": "name",
-                                      "position": {
-                                        "end": {
-                                          "column": 21,
-                                          "line": 7,
-                                        },
-                                        "start": {
-                                          "column": 7,
-                                          "line": 7,
-                                        },
-                                      },
-                                      "type": "string",
-                                      "value": undefined,
-                                    },
-                                    {
-                                      "defaultValue": undefined,
-                                      "filePath": "test.ts",
-                                      "isOptional": false,
-                                      "isReadonly": false,
-                                      "kind": "String",
-                                      "name": "description",
-                                      "position": {
-                                        "end": {
-                                          "column": 40,
-                                          "line": 10,
-                                        },
-                                        "start": {
-                                          "column": 7,
-                                          "line": 10,
-                                        },
-                                      },
-                                      "type": "string",
-                                      "value": undefined,
-                                    },
-                                  ],
-                                  "type": "{ name: string; description: string; }",
-                                },
+                        "start": {
+                          "column": 3,
+                          "line": 17,
+                        },
+                      },
+                      "signatures": [
+                        {
+                          "kind": "FunctionSignature",
+                          "modifier": undefined,
+                          "parameters": [
+                            {
+                              "context": "parameter",
+                              "defaultValue": undefined,
+                              "description": undefined,
+                              "element": {
                                 "filePath": "test.ts",
-                                "isOptional": false,
-                                "kind": "Array",
-                                "name": "exportedTypes",
+                                "kind": "Object",
+                                "name": undefined,
                                 "position": {
                                   "end": {
-                                    "column": 55,
-                                    "line": 18,
+                                    "column": 6,
+                                    "line": 11,
                                   },
                                   "start": {
                                     "column": 5,
-                                    "line": 18,
+                                    "line": 5,
                                   },
                                 },
-                                "type": "Array<{ name: string; description: string; }>",
+                                "properties": [
+                                  {
+                                    "context": "property",
+                                    "defaultValue": undefined,
+                                    "filePath": "test.ts",
+                                    "isOptional": false,
+                                    "isReadonly": false,
+                                    "kind": "String",
+                                    "name": "name",
+                                    "position": {
+                                      "end": {
+                                        "column": 21,
+                                        "line": 7,
+                                      },
+                                      "start": {
+                                        "column": 7,
+                                        "line": 7,
+                                      },
+                                    },
+                                    "text": "string",
+                                    "value": undefined,
+                                  },
+                                  {
+                                    "context": "property",
+                                    "defaultValue": undefined,
+                                    "filePath": "test.ts",
+                                    "isOptional": false,
+                                    "isReadonly": false,
+                                    "kind": "String",
+                                    "name": "description",
+                                    "position": {
+                                      "end": {
+                                        "column": 40,
+                                        "line": 10,
+                                      },
+                                      "start": {
+                                        "column": 7,
+                                        "line": 10,
+                                      },
+                                    },
+                                    "text": "string",
+                                    "value": undefined,
+                                  },
+                                ],
+                                "text": "{ name: string; description: string; }",
                               },
-                            ],
-                            "returnType": "ReactNode",
-                            "type": "(exportedTypes: Array<{ name: string; description: string; }>) => ReactNode",
-                          },
-                        ],
-                        "tags": undefined,
-                        "type": "(exportedTypes: ReturnType<typeof getExportedTypes>) => React.ReactNode",
-                      },
-                    ],
-                    "type": "{ source: string; } & BaseExportedTypesProps",
-                  },
-                  {
-                    "filePath": "test.ts",
-                    "kind": "Object",
-                    "name": undefined,
-                    "position": {
-                      "end": {
-                        "column": 67,
-                        "line": 24,
-                      },
-                      "start": {
-                        "column": 1,
-                        "line": 22,
-                      },
+                              "filePath": "test.ts",
+                              "isOptional": false,
+                              "kind": "Array",
+                              "name": "exportedTypes",
+                              "position": {
+                                "end": {
+                                  "column": 55,
+                                  "line": 18,
+                                },
+                                "start": {
+                                  "column": 5,
+                                  "line": 18,
+                                },
+                              },
+                              "text": "Array<{ name: string; description: string; }>",
+                            },
+                          ],
+                          "returnType": "ReactNode",
+                          "text": "(exportedTypes: Array<{ name: string; description: string; }>) => ReactNode",
+                        },
+                      ],
+                      "tags": undefined,
+                      "text": "(exportedTypes: ReturnType<typeof getExportedTypes>) => React.ReactNode",
                     },
-                    "properties": [
-                      {
-                        "defaultValue": undefined,
-                        "filePath": "test.ts",
-                        "isOptional": false,
-                        "isReadonly": false,
-                        "kind": "String",
-                        "name": "filename",
-                        "position": {
-                          "end": {
-                            "column": 25,
-                            "line": 24,
-                          },
-                          "start": {
-                            "column": 8,
-                            "line": 24,
-                          },
-                        },
-                        "type": "string",
-                        "value": undefined,
-                      },
-                      {
-                        "defaultValue": undefined,
-                        "filePath": "test.ts",
-                        "isOptional": false,
-                        "isReadonly": false,
-                        "kind": "String",
-                        "name": "value",
-                        "position": {
-                          "end": {
-                            "column": 39,
-                            "line": 24,
-                          },
-                          "start": {
-                            "column": 26,
-                            "line": 24,
-                          },
-                        },
-                        "type": "string",
-                        "value": undefined,
-                      },
-                      {
-                        "defaultValue": undefined,
-                        "description": "Controls how types are rendered.",
-                        "filePath": "test.ts",
-                        "isOptional": true,
-                        "isReadonly": false,
-                        "kind": "Function",
-                        "name": "children",
-                        "position": {
-                          "end": {
-                            "column": 23,
-                            "line": 19,
-                          },
-                          "start": {
-                            "column": 3,
-                            "line": 17,
-                          },
-                        },
-                        "signatures": [
-                          {
-                            "kind": "FunctionSignature",
-                            "modifier": undefined,
-                            "parameters": [
-                              {
-                                "defaultValue": undefined,
-                                "description": undefined,
-                                "element": {
-                                  "filePath": "test.ts",
-                                  "kind": "Object",
-                                  "name": undefined,
-                                  "position": {
-                                    "end": {
-                                      "column": 6,
-                                      "line": 11,
-                                    },
-                                    "start": {
-                                      "column": 5,
-                                      "line": 5,
-                                    },
-                                  },
-                                  "properties": [
-                                    {
-                                      "defaultValue": undefined,
-                                      "filePath": "test.ts",
-                                      "isOptional": false,
-                                      "isReadonly": false,
-                                      "kind": "String",
-                                      "name": "name",
-                                      "position": {
-                                        "end": {
-                                          "column": 21,
-                                          "line": 7,
-                                        },
-                                        "start": {
-                                          "column": 7,
-                                          "line": 7,
-                                        },
-                                      },
-                                      "type": "string",
-                                      "value": undefined,
-                                    },
-                                    {
-                                      "defaultValue": undefined,
-                                      "filePath": "test.ts",
-                                      "isOptional": false,
-                                      "isReadonly": false,
-                                      "kind": "String",
-                                      "name": "description",
-                                      "position": {
-                                        "end": {
-                                          "column": 40,
-                                          "line": 10,
-                                        },
-                                        "start": {
-                                          "column": 7,
-                                          "line": 10,
-                                        },
-                                      },
-                                      "type": "string",
-                                      "value": undefined,
-                                    },
-                                  ],
-                                  "type": "{ name: string; description: string; }",
-                                },
-                                "filePath": "test.ts",
-                                "isOptional": false,
-                                "kind": "Array",
-                                "name": "exportedTypes",
-                                "position": {
-                                  "end": {
-                                    "column": 55,
-                                    "line": 18,
-                                  },
-                                  "start": {
-                                    "column": 5,
-                                    "line": 18,
-                                  },
-                                },
-                                "type": "Array<{ name: string; description: string; }>",
-                              },
-                            ],
-                            "returnType": "ReactNode",
-                            "type": "(exportedTypes: Array<{ name: string; description: string; }>) => ReactNode",
-                          },
-                        ],
-                        "tags": undefined,
-                        "type": "(exportedTypes: ReturnType<typeof getExportedTypes>) => React.ReactNode",
-                      },
-                    ],
-                    "type": "{ filename: string; value: string; } & BaseExportedTypesProps",
-                  },
-                ],
-                "name": undefined,
-                "position": {
-                  "end": {
-                    "column": 56,
-                    "line": 26,
-                  },
-                  "start": {
-                    "column": 24,
-                    "line": 26,
-                  },
+                  ],
+                  "text": "{ source: string; } & BaseExportedTypesProps",
                 },
-                "type": "ExportedTypesProps",
+                {
+                  "filePath": "test.ts",
+                  "kind": "Object",
+                  "name": undefined,
+                  "position": {
+                    "end": {
+                      "column": 67,
+                      "line": 24,
+                    },
+                    "start": {
+                      "column": 1,
+                      "line": 22,
+                    },
+                  },
+                  "properties": [
+                    {
+                      "context": "property",
+                      "defaultValue": undefined,
+                      "filePath": "test.ts",
+                      "isOptional": false,
+                      "isReadonly": false,
+                      "kind": "String",
+                      "name": "filename",
+                      "position": {
+                        "end": {
+                          "column": 25,
+                          "line": 24,
+                        },
+                        "start": {
+                          "column": 8,
+                          "line": 24,
+                        },
+                      },
+                      "text": "string",
+                      "value": undefined,
+                    },
+                    {
+                      "context": "property",
+                      "defaultValue": undefined,
+                      "filePath": "test.ts",
+                      "isOptional": false,
+                      "isReadonly": false,
+                      "kind": "String",
+                      "name": "value",
+                      "position": {
+                        "end": {
+                          "column": 39,
+                          "line": 24,
+                        },
+                        "start": {
+                          "column": 26,
+                          "line": 24,
+                        },
+                      },
+                      "text": "string",
+                      "value": undefined,
+                    },
+                    {
+                      "context": "property",
+                      "defaultValue": undefined,
+                      "description": "Controls how types are rendered.",
+                      "filePath": "test.ts",
+                      "isOptional": true,
+                      "isReadonly": false,
+                      "kind": "Function",
+                      "name": "children",
+                      "position": {
+                        "end": {
+                          "column": 23,
+                          "line": 19,
+                        },
+                        "start": {
+                          "column": 3,
+                          "line": 17,
+                        },
+                      },
+                      "signatures": [
+                        {
+                          "kind": "FunctionSignature",
+                          "modifier": undefined,
+                          "parameters": [
+                            {
+                              "context": "parameter",
+                              "defaultValue": undefined,
+                              "description": undefined,
+                              "element": {
+                                "filePath": "test.ts",
+                                "kind": "Object",
+                                "name": undefined,
+                                "position": {
+                                  "end": {
+                                    "column": 6,
+                                    "line": 11,
+                                  },
+                                  "start": {
+                                    "column": 5,
+                                    "line": 5,
+                                  },
+                                },
+                                "properties": [
+                                  {
+                                    "context": "property",
+                                    "defaultValue": undefined,
+                                    "filePath": "test.ts",
+                                    "isOptional": false,
+                                    "isReadonly": false,
+                                    "kind": "String",
+                                    "name": "name",
+                                    "position": {
+                                      "end": {
+                                        "column": 21,
+                                        "line": 7,
+                                      },
+                                      "start": {
+                                        "column": 7,
+                                        "line": 7,
+                                      },
+                                    },
+                                    "text": "string",
+                                    "value": undefined,
+                                  },
+                                  {
+                                    "context": "property",
+                                    "defaultValue": undefined,
+                                    "filePath": "test.ts",
+                                    "isOptional": false,
+                                    "isReadonly": false,
+                                    "kind": "String",
+                                    "name": "description",
+                                    "position": {
+                                      "end": {
+                                        "column": 40,
+                                        "line": 10,
+                                      },
+                                      "start": {
+                                        "column": 7,
+                                        "line": 10,
+                                      },
+                                    },
+                                    "text": "string",
+                                    "value": undefined,
+                                  },
+                                ],
+                                "text": "{ name: string; description: string; }",
+                              },
+                              "filePath": "test.ts",
+                              "isOptional": false,
+                              "kind": "Array",
+                              "name": "exportedTypes",
+                              "position": {
+                                "end": {
+                                  "column": 55,
+                                  "line": 18,
+                                },
+                                "start": {
+                                  "column": 5,
+                                  "line": 18,
+                                },
+                              },
+                              "text": "Array<{ name: string; description: string; }>",
+                            },
+                          ],
+                          "returnType": "ReactNode",
+                          "text": "(exportedTypes: Array<{ name: string; description: string; }>) => ReactNode",
+                        },
+                      ],
+                      "tags": undefined,
+                      "text": "(exportedTypes: ReturnType<typeof getExportedTypes>) => React.ReactNode",
+                    },
+                  ],
+                  "text": "{ filename: string; value: string; } & BaseExportedTypesProps",
+                },
+              ],
+              "name": undefined,
+              "position": {
+                "end": {
+                  "column": 56,
+                  "line": 26,
+                },
+                "start": {
+                  "column": 24,
+                  "line": 26,
+                },
               },
-              "returnType": "void",
-              "type": "function ExportedTypes(ExportedTypesProps): void",
+              "text": "ExportedTypesProps",
             },
-          ],
-          "type": "({ children }: ExportedTypesProps) => void",
-        }
-      `)
+            "returnType": "void",
+            "text": "function ExportedTypes(ExportedTypesProps): void",
+          },
+        ],
+        "text": "({ children }: ExportedTypesProps) => void",
+      }
+    `)
   })
 
   test('accepts mixed types', () => {
@@ -7943,98 +7753,100 @@ describe('processProperties', () => {
     )
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Union",
-          "members": [
-            {
-              "filePath": "node_modules/library/index.d.ts",
-              "kind": "Reference",
-              "position": {
-                "end": {
-                  "column": 2,
-                  "line": 4,
-                },
-                "start": {
-                  "column": 1,
-                  "line": 1,
-                },
+      {
+        "filePath": "test.ts",
+        "kind": "Union",
+        "members": [
+          {
+            "filePath": "node_modules/library/index.d.ts",
+            "kind": "Reference",
+            "position": {
+              "end": {
+                "column": 2,
+                "line": 4,
               },
-              "type": "InterfaceMetadata",
-            },
-            {
-              "filePath": "test.ts",
-              "kind": "Object",
-              "name": "TypeAliasMetadata",
-              "position": {
-                "end": {
-                  "column": 2,
-                  "line": 6,
-                },
-                "start": {
-                  "column": 1,
-                  "line": 3,
-                },
+              "start": {
+                "column": 1,
+                "line": 1,
               },
-              "properties": [
-                {
-                  "defaultValue": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "isReadonly": false,
-                  "kind": "String",
-                  "name": "kind",
-                  "position": {
-                    "end": {
-                      "column": 20,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 4,
-                    },
-                  },
-                  "type": ""TypeAlias"",
-                  "value": "TypeAlias",
-                },
-                {
-                  "defaultValue": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "isReadonly": false,
-                  "kind": "String",
-                  "name": "name",
-                  "position": {
-                    "end": {
-                      "column": 15,
-                      "line": 5,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 5,
-                    },
-                  },
-                  "type": "string",
-                  "value": undefined,
-                },
-              ],
-              "type": "TypeAliasMetadata",
             },
-          ],
-          "name": "AllMetadata",
-          "position": {
-            "end": {
-              "column": 57,
-              "line": 8,
-            },
-            "start": {
-              "column": 1,
-              "line": 8,
-            },
+            "text": "InterfaceMetadata",
           },
-          "type": "AllMetadata",
-        }
-      `)
+          {
+            "filePath": "test.ts",
+            "kind": "Object",
+            "name": "TypeAliasMetadata",
+            "position": {
+              "end": {
+                "column": 2,
+                "line": 6,
+              },
+              "start": {
+                "column": 1,
+                "line": 3,
+              },
+            },
+            "properties": [
+              {
+                "context": "property",
+                "defaultValue": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "isReadonly": false,
+                "kind": "String",
+                "name": "kind",
+                "position": {
+                  "end": {
+                    "column": 20,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 4,
+                  },
+                },
+                "text": ""TypeAlias"",
+                "value": "TypeAlias",
+              },
+              {
+                "context": "property",
+                "defaultValue": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "isReadonly": false,
+                "kind": "String",
+                "name": "name",
+                "position": {
+                  "end": {
+                    "column": 15,
+                    "line": 5,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 5,
+                  },
+                },
+                "text": "string",
+                "value": undefined,
+              },
+            ],
+            "text": "TypeAliasMetadata",
+          },
+        ],
+        "name": "AllMetadata",
+        "position": {
+          "end": {
+            "column": 57,
+            "line": 8,
+          },
+          "start": {
+            "column": 1,
+            "line": 8,
+          },
+        },
+        "text": "AllMetadata",
+      }
+    `)
   })
 
   test('variable declaration with primitive value', () => {
@@ -8057,32 +7869,32 @@ describe('processProperties', () => {
     )
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "description": "
-        The initial count of the counter.",
-          "filePath": "test.ts",
-          "kind": "Number",
-          "name": "initialCount",
-          "position": {
-            "end": {
-              "column": 30,
-              "line": 5,
-            },
-            "start": {
-              "column": 14,
-              "line": 5,
-            },
+      {
+        "description": "
+      The initial count of the counter.",
+        "filePath": "test.ts",
+        "kind": "Number",
+        "name": "initialCount",
+        "position": {
+          "end": {
+            "column": 30,
+            "line": 5,
           },
-          "tags": [
-            {
-              "tagName": "internal",
-              "text": "only for internal use",
-            },
-          ],
-          "type": "0",
-          "value": 0,
-        }
-      `)
+          "start": {
+            "column": 14,
+            "line": 5,
+          },
+        },
+        "tags": [
+          {
+            "tagName": "internal",
+            "text": "only for internal use",
+          },
+        ],
+        "text": "0",
+        "value": 0,
+      }
+    `)
   })
 
   test('variable declaration with "as const" object', () => {
@@ -8105,85 +7917,88 @@ describe('processProperties', () => {
     )
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Object",
-          "name": "colors",
-          "position": {
-            "end": {
-              "column": 11,
-              "line": 5,
-            },
-            "start": {
-              "column": 14,
-              "line": 1,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Object",
+        "name": "colors",
+        "position": {
+          "end": {
+            "column": 11,
+            "line": 5,
           },
-          "properties": [
-            {
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": true,
-              "kind": "String",
-              "name": "primary",
-              "position": {
-                "end": {
-                  "column": 21,
-                  "line": 2,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 2,
-                },
+          "start": {
+            "column": 14,
+            "line": 1,
+          },
+        },
+        "properties": [
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": true,
+            "kind": "String",
+            "name": "primary",
+            "position": {
+              "end": {
+                "column": 21,
+                "line": 2,
               },
-              "type": ""#ff0000"",
-              "value": "#ff0000",
-            },
-            {
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": true,
-              "kind": "String",
-              "name": "secondary",
-              "position": {
-                "end": {
-                  "column": 23,
-                  "line": 3,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 3,
-                },
+              "start": {
+                "column": 3,
+                "line": 2,
               },
-              "type": ""#00ff00"",
-              "value": "#00ff00",
             },
-            {
-              "defaultValue": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": true,
-              "kind": "String",
-              "name": "tertiary",
-              "position": {
-                "end": {
-                  "column": 22,
-                  "line": 4,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 4,
-                },
+            "text": ""#ff0000"",
+            "value": "#ff0000",
+          },
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": true,
+            "kind": "String",
+            "name": "secondary",
+            "position": {
+              "end": {
+                "column": 23,
+                "line": 3,
               },
-              "type": ""#0000ff"",
-              "value": "#0000ff",
+              "start": {
+                "column": 3,
+                "line": 3,
+              },
             },
-          ],
-          "type": "{ readonly primary: "#ff0000"; readonly secondary: "#00ff00"; readonly tertiary: "#0000ff"; }",
-        }
-      `)
+            "text": ""#00ff00"",
+            "value": "#00ff00",
+          },
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": true,
+            "kind": "String",
+            "name": "tertiary",
+            "position": {
+              "end": {
+                "column": 22,
+                "line": 4,
+              },
+              "start": {
+                "column": 3,
+                "line": 4,
+              },
+            },
+            "text": ""#0000ff"",
+            "value": "#0000ff",
+          },
+        ],
+        "text": "{ readonly primary: "#ff0000"; readonly secondary: "#00ff00"; readonly tertiary: "#0000ff"; }",
+      }
+    `)
   })
 
   test('unknown initializers', () => {
@@ -8211,119 +8026,120 @@ describe('processProperties', () => {
     const awaitedTypes = resolveType(awaitedVariable.getType(), awaitedVariable)
 
     expect({ counterTypes, promiseTypes, awaitedTypes }).toMatchInlineSnapshot(`
-        {
-          "awaitedTypes": {
-            "filePath": "test.ts",
-            "kind": "Number",
-            "name": "awaited",
-            "position": {
-              "end": {
-                "column": 30,
-                "line": 10,
-              },
-              "start": {
-                "column": 7,
-                "line": 10,
-              },
+      {
+        "awaitedTypes": {
+          "filePath": "test.ts",
+          "kind": "Number",
+          "name": "awaited",
+          "position": {
+            "end": {
+              "column": 30,
+              "line": 10,
             },
-            "type": "number",
-            "value": undefined,
+            "start": {
+              "column": 7,
+              "line": 10,
+            },
           },
-          "counterTypes": {
-            "filePath": "test.ts",
-            "kind": "Class",
-            "methods": [
-              {
-                "kind": "ClassMethod",
-                "name": "increment",
-                "scope": undefined,
-                "signatures": [
-                  {
-                    "kind": "FunctionSignature",
-                    "modifier": undefined,
-                    "parameters": [],
-                    "returnType": "void",
-                    "type": "() => void",
-                  },
-                ],
-                "type": "() => void",
-                "visibility": undefined,
-              },
-            ],
-            "name": "counter",
-            "position": {
-              "end": {
-                "column": 30,
-                "line": 8,
-              },
-              "start": {
-                "column": 7,
-                "line": 8,
-              },
-            },
-            "properties": [
-              {
-                "defaultValue": 0,
-                "filePath": "test.ts",
-                "isReadonly": false,
-                "kind": "Number",
-                "name": "count",
-                "position": {
-                  "end": {
-                    "column": 21,
-                    "line": 2,
-                  },
-                  "start": {
-                    "column": 3,
-                    "line": 2,
-                  },
+          "text": "number",
+          "value": undefined,
+        },
+        "counterTypes": {
+          "filePath": "test.ts",
+          "kind": "Class",
+          "methods": [
+            {
+              "kind": "ClassMethod",
+              "name": "increment",
+              "scope": undefined,
+              "signatures": [
+                {
+                  "kind": "FunctionSignature",
+                  "modifier": undefined,
+                  "parameters": [],
+                  "returnType": "void",
+                  "text": "() => void",
                 },
-                "scope": undefined,
-                "type": "number",
-                "value": undefined,
-                "visibility": undefined,
-              },
-            ],
-            "type": "Counter",
-          },
-          "promiseTypes": {
-            "arguments": [
-              {
-                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                "kind": "Number",
-                "name": undefined,
-                "position": {
-                  "end": {
-                    "column": 4943,
-                    "line": 4,
-                  },
-                  "start": {
-                    "column": 4755,
-                    "line": 4,
-                  },
-                },
-                "type": "number",
-                "value": undefined,
-              },
-            ],
-            "filePath": "test.ts",
-            "kind": "Generic",
-            "name": "promise",
-            "position": {
-              "end": {
-                "column": 61,
-                "line": 9,
-              },
-              "start": {
-                "column": 7,
-                "line": 9,
-              },
+              ],
+              "text": "() => void",
+              "visibility": undefined,
             },
-            "type": "Promise<number>",
-            "typeName": "Promise",
+          ],
+          "name": "counter",
+          "position": {
+            "end": {
+              "column": 30,
+              "line": 8,
+            },
+            "start": {
+              "column": 7,
+              "line": 8,
+            },
           },
-        }
-      `)
+          "properties": [
+            {
+              "defaultValue": 0,
+              "filePath": "test.ts",
+              "isReadonly": false,
+              "kind": "Number",
+              "name": "count",
+              "position": {
+                "end": {
+                  "column": 21,
+                  "line": 2,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 2,
+                },
+              },
+              "scope": undefined,
+              "text": "number",
+              "value": undefined,
+              "visibility": undefined,
+            },
+          ],
+          "text": "Counter",
+        },
+        "promiseTypes": {
+          "arguments": [
+            {
+              "context": "parameter",
+              "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+              "kind": "Number",
+              "name": undefined,
+              "position": {
+                "end": {
+                  "column": 4943,
+                  "line": 4,
+                },
+                "start": {
+                  "column": 4755,
+                  "line": 4,
+                },
+              },
+              "text": "number",
+              "value": undefined,
+            },
+          ],
+          "filePath": "test.ts",
+          "kind": "Generic",
+          "name": "promise",
+          "position": {
+            "end": {
+              "column": 61,
+              "line": 9,
+            },
+            "start": {
+              "column": 7,
+              "line": 9,
+            },
+          },
+          "text": "Promise<number>",
+          "typeName": "Promise",
+        },
+      }
+    `)
   })
 
   test('avoids printing primitives in computed-like generics', () => {
@@ -8378,139 +8194,141 @@ describe('processProperties', () => {
     const types = resolveType(typeAlias.getType(), typeAlias)
 
     expect(types).toMatchInlineSnapshot(`
-        {
-          "filePath": "test.ts",
-          "kind": "Intersection",
-          "name": "Foo",
-          "position": {
-            "end": {
-              "column": 80,
-              "line": 11,
-            },
-            "start": {
-              "column": 1,
-              "line": 11,
-            },
+      {
+        "filePath": "test.ts",
+        "kind": "Intersection",
+        "name": "Foo",
+        "position": {
+          "end": {
+            "column": 80,
+            "line": 11,
           },
-          "properties": [
-            {
-              "filePath": "test.ts",
-              "kind": "Reference",
-              "position": {
-                "end": {
-                  "column": 48,
-                  "line": 9,
-                },
-                "start": {
-                  "column": 1,
-                  "line": 9,
-                },
+          "start": {
+            "column": 1,
+            "line": 11,
+          },
+        },
+        "properties": [
+          {
+            "filePath": "test.ts",
+            "kind": "Reference",
+            "position": {
+              "end": {
+                "column": 48,
+                "line": 9,
               },
-              "type": "AllTypes",
-            },
-            {
-              "filePath": "test.ts",
-              "kind": "Object",
-              "name": undefined,
-              "position": {
-                "end": {
-                  "column": 80,
-                  "line": 11,
-                },
-                "start": {
-                  "column": 23,
-                  "line": 11,
-                },
+              "start": {
+                "column": 1,
+                "line": 9,
               },
-              "properties": [
-                {
-                  "defaultValue": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "isReadonly": false,
-                  "kind": "Union",
-                  "members": [
-                    {
-                      "filePath": "test.ts",
-                      "kind": "String",
-                      "name": undefined,
-                      "position": {
-                        "end": {
-                          "column": 49,
-                          "line": 11,
-                        },
-                        "start": {
-                          "column": 25,
-                          "line": 11,
-                        },
-                      },
-                      "type": "string",
-                      "value": undefined,
-                    },
-                    {
-                      "filePath": "test.ts",
-                      "kind": "Boolean",
-                      "name": undefined,
-                      "position": {
-                        "end": {
-                          "column": 49,
-                          "line": 11,
-                        },
-                        "start": {
-                          "column": 25,
-                          "line": 11,
-                        },
-                      },
-                      "type": "boolean",
-                    },
-                  ],
-                  "name": "value",
-                  "position": {
-                    "end": {
-                      "column": 49,
-                      "line": 11,
-                    },
-                    "start": {
-                      "column": 25,
-                      "line": 11,
-                    },
-                  },
-                  "type": "string | boolean",
-                },
-                {
-                  "defaultValue": undefined,
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "isReadonly": false,
-                  "kind": "Function",
-                  "name": "getValue",
-                  "position": {
-                    "end": {
-                      "column": 78,
-                      "line": 11,
-                    },
-                    "start": {
-                      "column": 50,
-                      "line": 11,
-                    },
-                  },
-                  "signatures": [
-                    {
-                      "kind": "FunctionSignature",
-                      "modifier": undefined,
-                      "parameters": [],
-                      "returnType": "string | boolean",
-                      "type": "() => string | boolean",
-                    },
-                  ],
-                  "type": "() => string | boolean",
-                },
-              ],
-              "type": "{ value: string | boolean; getValue(): string | boolean; }",
             },
-          ],
-          "type": "Foo",
-        }
-      `)
+            "text": "AllTypes",
+          },
+          {
+            "filePath": "test.ts",
+            "kind": "Object",
+            "name": undefined,
+            "position": {
+              "end": {
+                "column": 80,
+                "line": 11,
+              },
+              "start": {
+                "column": 23,
+                "line": 11,
+              },
+            },
+            "properties": [
+              {
+                "context": "property",
+                "defaultValue": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "isReadonly": false,
+                "kind": "Union",
+                "members": [
+                  {
+                    "filePath": "test.ts",
+                    "kind": "String",
+                    "name": undefined,
+                    "position": {
+                      "end": {
+                        "column": 49,
+                        "line": 11,
+                      },
+                      "start": {
+                        "column": 25,
+                        "line": 11,
+                      },
+                    },
+                    "text": "string",
+                    "value": undefined,
+                  },
+                  {
+                    "filePath": "test.ts",
+                    "kind": "Boolean",
+                    "name": undefined,
+                    "position": {
+                      "end": {
+                        "column": 49,
+                        "line": 11,
+                      },
+                      "start": {
+                        "column": 25,
+                        "line": 11,
+                      },
+                    },
+                    "text": "boolean",
+                  },
+                ],
+                "name": "value",
+                "position": {
+                  "end": {
+                    "column": 49,
+                    "line": 11,
+                  },
+                  "start": {
+                    "column": 25,
+                    "line": 11,
+                  },
+                },
+                "text": "string | boolean",
+              },
+              {
+                "context": "property",
+                "defaultValue": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "isReadonly": false,
+                "kind": "Function",
+                "name": "getValue",
+                "position": {
+                  "end": {
+                    "column": 78,
+                    "line": 11,
+                  },
+                  "start": {
+                    "column": 50,
+                    "line": 11,
+                  },
+                },
+                "signatures": [
+                  {
+                    "kind": "FunctionSignature",
+                    "modifier": undefined,
+                    "parameters": [],
+                    "returnType": "string | boolean",
+                    "text": "() => string | boolean",
+                  },
+                ],
+                "text": "() => string | boolean",
+              },
+            ],
+            "text": "{ value: string | boolean; getValue(): string | boolean; }",
+          },
+        ],
+        "text": "Foo",
+      }
+    `)
   })
 })
