@@ -17,11 +17,11 @@ import {
   type TypeNode,
 } from 'ts-morph'
 import {
-  getJsDocMetadata,
   getPropertyDefaultValueKey,
   getPropertyDefaultValue,
 } from '@tsxmod/utils'
 
+import { getJsDocMetadata } from './get-js-doc-metadata'
 import { getSymbolDescription } from './get-symbol-description'
 
 export interface BaseType {
