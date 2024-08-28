@@ -820,7 +820,7 @@ You can fix this error by taking one of the following actions:
 
 You can fix this error by ensuring the following:
   
-  - The ".mdxts" directory was successfully created and your tsconfig.json file aliases "mdxts" to ".mdxts/index.js" correctly.
+  - The ".mdxts" directory was successfully created and your tsconfig.json file aliases "mdxts/*" to ".mdxts/*.ts" correctly.
   - The file pattern is formatted correctly and targeting files that exist.
   - Try refreshing the page or restarting server.
   - If you continue to see this error, please file an issue: https://github.com/souporserious/mdxts/issues`
@@ -1077,7 +1077,7 @@ class Collection<AllExports extends FileExports>
 
 /**
  * Creates a collection of sources based on a specified file pattern.
- * Note, an import getter for each file extension will be generated at the root of the project in a `.mdxts/index.js` file.
+ * Note, an import getter for each file extension will be generated at the root of the project in a `.mdxts/collections.ts` file.
  *
  * @param filePattern - A pattern to match a set of source files (e.g., "*.ts", "*.mdx").
  * @param options - Optional settings for the collection, including base directory, base path, TypeScript config file path, and a custom sort function.
