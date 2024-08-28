@@ -1,4 +1,4 @@
-import { CodeBlock, Tokens } from 'mdxts/components'
+import { APIReference, CodeBlock, Tokens } from 'mdxts/components'
 import {
   createCollection,
   type MDXContent,
@@ -80,11 +80,7 @@ export default async function Component({
         {componentSource.getExports().map((exportSource) => (
           <div key={exportSource.getName()}>
             <h3>{exportSource.getName()}</h3>
-            <CodeBlock
-              allowErrors
-              value={exportSource.getText()}
-              language="tsx"
-            />
+            <APIReference source={exportSource} />
           </div>
         ))}
       </div>

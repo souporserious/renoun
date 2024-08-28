@@ -28,7 +28,7 @@ export interface BaseType {
   kind?: unknown
 
   /** Whether the type is a function/method parameter or a object/class/interface property. */
-  member?: 'parameter' | 'property'
+  context?: 'parameter' | 'property'
 
   /** The name of the symbol or declaration if it exists. */
   name?: string
@@ -54,7 +54,7 @@ export interface BaseType {
 
 export interface ParameterType extends BaseType {
   /** Whether the type is a function/method parameter. */
-  member: 'parameter'
+  context: 'parameter'
 
   /** The default value assigned to the property parsed as a literal value if possible. */
   defaultValue?: unknown
@@ -69,7 +69,7 @@ export type CreateParameterType<Type> = Type extends any
 
 export interface PropertyType extends BaseType {
   /** Whether the type is a object/class/interface property. */
-  member: 'property'
+  context: 'property'
 
   /** The default value assigned to the property parsed as a literal value if possible. */
   defaultValue?: unknown
@@ -355,7 +355,7 @@ export function resolveType(
               typeName: typeName!,
               arguments: resolvedTypeArguments.map((type) => ({
                 ...type,
-                member: 'parameter',
+                context: 'parameter',
               })),
               ...declarationLocation,
             } satisfies GenericType
@@ -532,7 +532,7 @@ export function resolveType(
           typeName: genericTypeName,
           arguments: resolvedTypeArguments.map((type) => ({
             ...type,
-            member: 'parameter',
+            context: 'parameter',
           })),
           ...declarationLocation,
         } satisfies GenericType
@@ -671,7 +671,7 @@ export function resolveType(
           text: typeText,
           properties: properties.map((property) => ({
             ...property,
-            member: 'property',
+            context: 'property',
           })),
         } satisfies ObjectType
       } else {
@@ -771,7 +771,7 @@ export function resolveType(
             typeName: typeName!,
             arguments: resolvedTypeArguments.map((type) => ({
               ...type,
-              member: 'parameter',
+              context: 'parameter',
             })),
           } satisfies GenericType
         } else if (properties.length === 0) {
@@ -784,7 +784,7 @@ export function resolveType(
             text: typeText,
             properties: properties.map((property) => ({
               ...property,
-              member: 'property',
+              context: 'property',
             })),
           } satisfies ObjectType
         }
@@ -883,7 +883,7 @@ export function resolveSignature(
 
           return {
             ...resolvedType,
-            member: 'parameter',
+            context: 'parameter',
             name,
             defaultValue,
             isOptional: isOptional ?? Boolean(defaultValue),
@@ -999,7 +999,7 @@ export function resolveTypeProperties(
           return {
             ...resolvedProperty,
             ...getJsDocMetadata(declaration),
-            member: 'property',
+            context: 'property',
             name,
             defaultValue,
             isOptional,
@@ -1042,7 +1042,7 @@ function resolveTypeTupleElements(
       if (resolvedType) {
         return {
           ...resolvedType,
-          member: 'parameter',
+          context: 'parameter',
           name: tupleNames[index],
         } satisfies ResolvedType
       }
@@ -1533,9 +1533,9 @@ export function isComponent(
 export function isParameterType(
   property: AllTypes
 ): property is ParameterTypes {
-  return property.member === 'parameter'
+  return property.context === 'parameter'
 }
 
 export function isPropertyType(property: AllTypes): property is PropertyTypes {
-  return property.member === 'property'
+  return property.context === 'property'
 }

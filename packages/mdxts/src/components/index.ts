@@ -1,3 +1,4 @@
+export { APIReference } from './APIReference'
 export {
   CodeBlock,
   CopyButton,
