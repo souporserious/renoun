@@ -41,10 +41,10 @@ export function createServer() {
     }
 
     /* Update all collection import maps when files change. */
-    generateCollectionImportMap(filename)
-
-    /* Notify the client to refresh when files change. */
-    server.sendNotification({ type: 'refresh' })
+    generateCollectionImportMap(filename).then(() => {
+      /* Notify the client to refresh when files change. */
+      server.sendNotification({ type: 'refresh' })
+    })
   })
 
   server.registerMethod(

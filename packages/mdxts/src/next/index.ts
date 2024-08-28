@@ -1,6 +1,5 @@
 import webpack from 'webpack'
 import { NextConfig } from 'next'
-import { PHASE_DEVELOPMENT_SERVER } from 'next/constants'
 import { resolve } from 'node:path'
 import createMdxPlugin from '@next/mdx'
 import type { bundledThemes } from 'shiki/bundle/web'
@@ -34,7 +33,7 @@ type PluginOptions = {
 }
 
 /** Immediately generate the initial collection import map. */
-generateCollectionImportMap()
+const importMapPromise = generateCollectionImportMap()
 
 /** A Next.js plugin to configure MDXTS theming, `rehype` and `remark` markdown plugins. */
 export function createMdxtsPlugin(pluginOptions: PluginOptions) {
@@ -57,7 +56,9 @@ export function createMdxtsPlugin(pluginOptions: PluginOptions) {
     const getWebpackConfig = nextConfig.webpack
     let startedRenumberFilenameWatcher = false
 
-    return async (phase: typeof PHASE_DEVELOPMENT_SERVER) => {
+    return async () => {
+      await importMapPromise
+
       const plugins = await getMdxPlugins({ gitSource, gitBranch, gitProvider })
       const withMdx = createMdxPlugin({
         options: plugins,

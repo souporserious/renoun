@@ -12,48 +12,53 @@ if (firstArgument === 'help') {
   process.exit(0)
 }
 
-generateCollectionImportMap()
-
 /* Disable the buffer util for WebSocket. */
 process.env.WS_NO_BUFFER_UTIL = 'true'
 
-if (firstArgument === 'next' || firstArgument === 'waku') {
-  const isDev = secondArgument === undefined || secondArgument === 'dev'
+/* Generate the initial import maps for all collections and then start the server. */
+generateCollectionImportMap().then(() => {
+  start()
+})
 
-  if (process.env.NODE_ENV === undefined) {
-    // @ts-expect-error
-    process.env.NODE_ENV = isDev ? 'development' : 'production'
+function start() {
+  if (firstArgument === 'next' || firstArgument === 'waku') {
+    const isDev = secondArgument === undefined || secondArgument === 'dev'
+
+    if (process.env.NODE_ENV === undefined) {
+      // @ts-expect-error
+      process.env.NODE_ENV = isDev ? 'development' : 'production'
+    }
+
+    const runSubProcess = () => {
+      const subProcess = spawn(
+        firstArgument,
+        [secondArgument, ...restArguments],
+        {
+          stdio: 'inherit',
+          shell: true,
+          env: {
+            ...process.env,
+            MDXTS_SERVER: 'true',
+          },
+        }
+      )
+
+      subProcess.on('close', (code) => {
+        if (!isDev) {
+          server.cleanup()
+          process.exit(code)
+        }
+      })
+    }
+    const server = createServer()
+
+    runSubProcess()
+  } else if (firstArgument === 'watch') {
+    if (process.env.NODE_ENV === undefined) {
+      // @ts-expect-error
+      process.env.NODE_ENV = 'development'
+    }
+
+    createServer()
   }
-
-  const runSubProcess = () => {
-    const subProcess = spawn(
-      firstArgument,
-      [secondArgument, ...restArguments],
-      {
-        stdio: 'inherit',
-        shell: true,
-        env: {
-          ...process.env,
-          MDXTS_SERVER: 'true',
-        },
-      }
-    )
-
-    subProcess.on('close', (code) => {
-      if (!isDev) {
-        server.cleanup()
-        process.exit(code)
-      }
-    })
-  }
-  const server = createServer()
-
-  runSubProcess()
-} else if (firstArgument === 'watch') {
-  if (process.env.NODE_ENV === undefined) {
-    // @ts-expect-error
-    process.env.NODE_ENV = 'development'
-  }
-
-  createServer()
 }
