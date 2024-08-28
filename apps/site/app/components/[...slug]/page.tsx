@@ -53,7 +53,9 @@ export default async function Component({
       ? examplesSources.flatMap((source) => source.getExports())
       : examplesSource.getExports()
     : []
-  const sourceExports = componentSource.getExports()
+  const sourceExports = isExamplesPage
+    ? undefined
+    : componentSource.getExports()
   const updatedAt = await componentSource.getUpdatedAt()
   const editPath = componentSource.getEditPath()
   const [previousSource, nextSource] = await componentSource.getSiblings({
