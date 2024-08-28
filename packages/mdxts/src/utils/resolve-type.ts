@@ -27,6 +27,9 @@ export interface BaseType {
   /** Distinguishs between different kinds of types, such as primitives, objects, classes, functions, etc. */
   kind?: unknown
 
+  /** Whether the type is a function/method parameter or a object/class/interface property. */
+  member?: 'parameter' | 'property'
+
   /** The name of the symbol or declaration if it exists. */
   name?: string
 
@@ -50,6 +53,9 @@ export interface BaseType {
 }
 
 export interface ParameterType extends BaseType {
+  /** Whether the type is a function/method parameter. */
+  member: 'parameter'
+
   /** The default value assigned to the property parsed as a literal value if possible. */
   defaultValue?: unknown
 
@@ -62,6 +68,9 @@ export type CreateParameterType<Type> = Type extends any
   : never
 
 export interface PropertyType extends BaseType {
+  /** Whether the type is a object/class/interface property. */
+  member: 'property'
+
   /** The default value assigned to the property parsed as a literal value if possible. */
   defaultValue?: unknown
 
@@ -344,7 +353,10 @@ export function resolveType(
               kind: 'Generic',
               text: typeText,
               typeName: typeName!,
-              arguments: resolvedTypeArguments,
+              arguments: resolvedTypeArguments.map((type) => ({
+                ...type,
+                member: 'parameter',
+              })),
               ...declarationLocation,
             } satisfies GenericType
           } else {
@@ -518,7 +530,10 @@ export function resolveType(
           kind: 'Generic',
           text: genericTypeText,
           typeName: genericTypeName,
-          arguments: resolvedTypeArguments,
+          arguments: resolvedTypeArguments.map((type) => ({
+            ...type,
+            member: 'parameter',
+          })),
           ...declarationLocation,
         } satisfies GenericType
       }
@@ -654,7 +669,10 @@ export function resolveType(
           kind: 'Object',
           name: symbolMetadata.name,
           text: typeText,
-          properties,
+          properties: properties.map((property) => ({
+            ...property,
+            member: 'property',
+          })),
         } satisfies ObjectType
       } else {
         resolvedType = {
@@ -751,7 +769,10 @@ export function resolveType(
             name: symbolMetadata.name,
             text: typeText,
             typeName: typeName!,
-            arguments: resolvedTypeArguments,
+            arguments: resolvedTypeArguments.map((type) => ({
+              ...type,
+              member: 'parameter',
+            })),
           } satisfies GenericType
         } else if (properties.length === 0) {
           typeReferences.delete(type)
@@ -761,7 +782,10 @@ export function resolveType(
             kind: 'Object',
             name: symbolMetadata.name,
             text: typeText,
-            properties,
+            properties: properties.map((property) => ({
+              ...property,
+              member: 'property',
+            })),
           } satisfies ObjectType
         }
       } else {
@@ -859,6 +883,7 @@ export function resolveSignature(
 
           return {
             ...resolvedType,
+            member: 'parameter',
             name,
             defaultValue,
             isOptional: isOptional ?? Boolean(defaultValue),
@@ -974,6 +999,7 @@ export function resolveTypeProperties(
           return {
             ...resolvedProperty,
             ...getJsDocMetadata(declaration),
+            member: 'property',
             name,
             defaultValue,
             isOptional,
@@ -1016,6 +1042,7 @@ function resolveTypeTupleElements(
       if (resolvedType) {
         return {
           ...resolvedType,
+          member: 'parameter',
           name: tupleNames[index],
         } satisfies ResolvedType
       }
@@ -1501,4 +1528,14 @@ export function isComponent(
       }
     }
   })
+}
+
+export function isParameterType(
+  property: AllTypes
+): property is ParameterTypes {
+  return property.member === 'parameter'
+}
+
+export function isPropertyType(property: AllTypes): property is PropertyTypes {
+  return property.member === 'property'
 }
