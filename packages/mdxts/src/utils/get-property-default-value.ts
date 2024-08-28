@@ -12,8 +12,8 @@ import {
 import {
   resolveLiteralExpression,
   isLiteralExpressionValue,
-  LiteralExpressionValue,
-} from '../expressions'
+  type LiteralExpressionValue,
+} from './resolve-expressions'
 
 /** Gets the key for a default value property. */
 export function getPropertyDefaultValueKey(
