@@ -101,6 +101,7 @@ function TypeChildren({
           flexDirection: 'column',
           marginTop: '1.5rem',
           gap: '1.2rem',
+          minWidth: 0,
           ...cssProp,
         }}
       >
@@ -144,6 +145,7 @@ function TypeChildren({
           flexDirection: 'column',
           marginTop: '1.5rem',
           gap: '1.2rem',
+          minWidth: 0,
           ...cssProp,
         }}
       >
@@ -184,6 +186,7 @@ function TypeChildren({
           flexDirection: 'column',
           marginTop: '1.5rem',
           gap: '1.2rem',
+          minWidth: 0,
           ...cssProp,
         }}
       >
@@ -233,6 +236,7 @@ function TypeProperties({
           flexDirection: 'column',
           marginTop: '1.5rem',
           gap: '1.2rem',
+          minWidth: 0,
           ...cssProp,
         }}
       >
@@ -259,6 +263,7 @@ function TypeProperties({
           flexDirection: 'column',
           marginTop: '1.5rem',
           gap: '1.2rem',
+          minWidth: 0,
           ...cssProp,
         }}
       >
@@ -300,6 +305,7 @@ function TypeValue({
         flexDirection: 'column',
         padding: '1.5rem 0',
         gap: '0.8rem',
+        minWidth: 0,
         ...cssProp,
       }}
     >
@@ -332,6 +338,7 @@ function TypeValue({
             display: 'flex',
             alignItems: 'center',
             gap: '0.25rem',
+            minWidth: 0,
           }}
         >
           {isNameSameAsType ? null : (
@@ -350,6 +357,7 @@ function TypeValue({
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.25rem',
+                minWidth: 0,
               }}
             >
               ={' '}
