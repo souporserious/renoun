@@ -76,7 +76,12 @@ function TypeChildren({
   type: ResolvedType
   css: CSSObject
 }) {
-  if (type.kind === 'Enum') {
+  if (
+    type.kind === 'Enum' ||
+    type.kind === 'Generic' ||
+    type.kind === 'Symbol' ||
+    type.kind === 'Reference'
+  ) {
     return <CodeInline value={type.text} language="typescript" />
   }
 
