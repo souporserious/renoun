@@ -37,7 +37,7 @@ export interface BaseType {
   tags?: { tagName: string; text?: string }[]
 
   /** A stringified representation of the type. */
-  type: string
+  text: string
 
   /** The path to the file where the symbol declaration is located. */
   path?: string
@@ -342,7 +342,7 @@ export function resolveType(
 
             return {
               kind: 'Generic',
-              type: typeText,
+              text: typeText,
               typeName: typeName!,
               arguments: resolvedTypeArguments,
               ...declarationLocation,
@@ -355,7 +355,7 @@ export function resolveType(
             }
             return {
               kind: 'Reference',
-              type: typeText,
+              text: typeText,
               ...declarationLocation,
             } satisfies ReferenceType
           }
@@ -422,7 +422,7 @@ export function resolveType(
 
         if (isObject) {
           const referenceId = getReferenceId({
-            type: typeText,
+            text: typeText,
             ...declarationLocation,
           })
           objectReferences.add(referenceId)
@@ -431,7 +431,7 @@ export function resolveType(
 
       return {
         kind: 'Reference',
-        type: typeText,
+        text: typeText,
         ...declarationLocation,
       } satisfies ReferenceType
     }
@@ -444,34 +444,34 @@ export function resolveType(
 
   let resolvedType: ResolvedType = {
     kind: 'Unknown',
-    type: typeText,
+    text: typeText,
   } satisfies UnknownType
 
   if (type.isBoolean() || type.isBooleanLiteral()) {
     resolvedType = {
       kind: 'Boolean',
       name: symbolMetadata.name,
-      type: typeText,
+      text: typeText,
     } satisfies BooleanType
   } else if (type.isNumber() || type.isNumberLiteral()) {
     resolvedType = {
       kind: 'Number',
       name: symbolMetadata.name,
-      type: typeText,
+      text: typeText,
       value: type.getLiteralValue() as number,
     } satisfies NumberType
   } else if (type.isString() || type.isStringLiteral()) {
     resolvedType = {
       kind: 'String',
       name: symbolMetadata.name,
-      type: typeText,
+      text: typeText,
       value: type.getLiteralValue() as string,
     } satisfies StringType
   } else if (isSymbol(type)) {
     resolvedType = {
       kind: 'Symbol',
       name: symbolMetadata.name,
-      type: typeText,
+      text: typeText,
     } satisfies SymbolType
   } else if (type.isArray()) {
     const elementType = type.getArrayElementTypeOrThrow()
@@ -485,7 +485,7 @@ export function resolveType(
       resolvedType = {
         kind: 'Array',
         name: symbolMetadata.name,
-        type: typeText,
+        text: typeText,
         element: resolvedElementType,
       } satisfies ArrayType
     } else {
@@ -516,7 +516,7 @@ export function resolveType(
 
         return {
           kind: 'Generic',
-          type: genericTypeText,
+          text: genericTypeText,
           typeName: genericTypeName,
           arguments: resolvedTypeArguments,
           ...declarationLocation,
@@ -540,7 +540,7 @@ export function resolveType(
         resolvedType = {
           kind: 'Enum',
           name: symbolMetadata.name,
-          type: typeText,
+          text: typeText,
           members: Object.fromEntries(
             symbolDeclaration
               .getMembers()
@@ -574,7 +574,7 @@ export function resolveType(
         resolvedType = {
           kind: 'Intersection',
           name: symbolMetadata.name,
-          type: typeText,
+          text: typeText,
           properties: resolvedIntersectionTypes,
         } satisfies IntersectionType
       } else {
@@ -598,7 +598,7 @@ export function resolveType(
               previousProperty?.kind === 'Boolean'
             ) {
               resolvedUnionTypes.pop()
-              resolvedType.type = 'boolean'
+              resolvedType.text = 'boolean'
             }
 
             resolvedUnionTypes.push(resolvedType)
@@ -613,7 +613,7 @@ export function resolveType(
         resolvedType = {
           kind: 'Union',
           name: symbolMetadata.name,
-          type: typeText,
+          text: typeText,
           members: resolvedUnionTypes,
         } satisfies UnionType
       }
@@ -653,14 +653,14 @@ export function resolveType(
         resolvedType = {
           kind: 'Object',
           name: symbolMetadata.name,
-          type: typeText,
+          text: typeText,
           properties,
         } satisfies ObjectType
       } else {
         resolvedType = {
           kind: 'Intersection',
           name: symbolMetadata.name,
-          type: typeText,
+          text: typeText,
           properties,
         } satisfies IntersectionType
       }
@@ -680,7 +680,7 @@ export function resolveType(
       resolvedType = {
         kind: 'Tuple',
         name: symbolMetadata.name,
-        type: typeText,
+        text: typeText,
         elements,
       } satisfies TupleType
     } else {
@@ -698,7 +698,7 @@ export function resolveType(
           resolvedType = {
             kind: 'Component',
             name: symbolMetadata.name,
-            type: typeText,
+            text: typeText,
             signatures: resolvedCallSignatures.map(
               ({ parameters, ...resolvedCallSignature }) => {
                 return {
@@ -716,14 +716,14 @@ export function resolveType(
           resolvedType = {
             kind: 'Function',
             name: symbolMetadata.name,
-            type: typeText,
+            text: typeText,
             signatures: resolvedCallSignatures,
           } satisfies FunctionType
         }
       } else if (isPrimitive) {
         resolvedType = {
           kind: 'Primitive',
-          type: typeText,
+          text: typeText,
         } satisfies PrimitiveType
       } else if (type.isObject()) {
         const properties = resolveTypeProperties(
@@ -749,7 +749,7 @@ export function resolveType(
           resolvedType = {
             kind: 'Generic',
             name: symbolMetadata.name,
-            type: typeText,
+            text: typeText,
             typeName: typeName!,
             arguments: resolvedTypeArguments,
           } satisfies GenericType
@@ -760,7 +760,7 @@ export function resolveType(
           resolvedType = {
             kind: 'Object',
             name: symbolMetadata.name,
-            type: typeText,
+            text: typeText,
             properties,
           } satisfies ObjectType
         }
@@ -889,8 +889,8 @@ export function resolveSignature(
     .map((parameter) => {
       const questionMark = parameter.isOptional ? '?' : ''
       return parameter.name
-        ? `${parameter.name}${questionMark}: ${parameter.type}`
-        : parameter.type
+        ? `${parameter.name}${questionMark}: ${parameter.text}`
+        : parameter.text
     })
     .join(', ')
   let simplifiedTypeText: string
@@ -909,7 +909,7 @@ export function resolveSignature(
 
   return {
     kind: 'FunctionSignature',
-    type: simplifiedTypeText,
+    text: simplifiedTypeText,
     parameters: resolvedParameters,
     modifier,
     returnType,
@@ -1286,7 +1286,7 @@ export function resolveClass(
   const classMetadata: ClassType = {
     kind: 'Class',
     name: classDeclaration.getName(),
-    type: classDeclaration
+    text: classDeclaration
       .getType()
       .getText(classDeclaration, TYPE_FORMAT_FLAGS),
     ...getJsDocMetadata(classDeclaration),
@@ -1344,7 +1344,7 @@ function resolveClassAccessor(
     name: accessor.getName(),
     scope: getScope(accessor),
     visibility: getVisibility(accessor),
-    type: accessor.getType().getText(accessor, TYPE_FORMAT_FLAGS),
+    text: accessor.getType().getText(accessor, TYPE_FORMAT_FLAGS),
     ...getJsDocMetadata(accessor),
   }
 
@@ -1360,7 +1360,7 @@ function resolveClassAccessor(
         ...resolvedSignature,
         ...sharedMetadata,
         kind: 'ClassSetAccessor',
-        type: accessor.getType().getText(accessor, TYPE_FORMAT_FLAGS),
+        text: accessor.getType().getText(accessor, TYPE_FORMAT_FLAGS),
       } satisfies ClassSetAccessorType
     }
 
@@ -1388,7 +1388,7 @@ function resolveClassMethod(
     scope: getScope(method),
     visibility: getVisibility(method),
     signatures: resolveCallSignatures(callSignatures, method, filter),
-    type: method.getType().getText(method, TYPE_FORMAT_FLAGS),
+    text: method.getType().getText(method, TYPE_FORMAT_FLAGS),
     ...getJsDocMetadata(method),
   } satisfies ClassMethodType
 }
@@ -1454,7 +1454,7 @@ function isTypeReadonly(type: Type, enclosingNode: Node | undefined) {
 /** Generate an id based on the type metadata. */
 function getReferenceId(typeMetadata: BaseType) {
   return (
-    typeMetadata.type +
+    typeMetadata.text +
     typeMetadata.path +
     typeMetadata.position?.start.line +
     typeMetadata.position?.start.column
