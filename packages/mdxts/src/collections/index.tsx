@@ -15,6 +15,7 @@ import parseTitle from 'title'
 import { createSlug } from '../utils/create-slug'
 import { filePathToPathname } from '../utils/file-path-to-pathname'
 import { getExportedDeclaration } from '../utils/get-exported-declaration'
+import { resolveType } from '../utils/resolve-type'
 import {
   getDeclarationLocation,
   type DeclarationPosition,
@@ -90,6 +91,9 @@ export interface ExportSource<Value> extends BaseSource {
   /** The name formatted as a title. */
   getTitle(): string
 
+  /** The resolved type of the exported source based on the TypeScript type if it exists. */
+  getType(): Promise<ReturnType<typeof resolveType>>
+
   /** The description of the exported source based on the JSDoc comment if it exists. */
   getDescription(): string | undefined
 
@@ -117,7 +121,7 @@ export interface ExportSource<Value> extends BaseSource {
   >
 
   /** Whether the export is considered the main export of the file based on the name matching the file name or directory name. */
-  isMainExport(): boolean
+  isMainExports(): boolean
 }
 
 /** @internal */
@@ -237,7 +241,7 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
 
   abstract getName(): string
 
-  isMainExport(): boolean {
+  isMainExports(): boolean {
     const mainExport = this.source.getMainExport()
     return mainExport ? this === mainExport : false
   }
@@ -258,6 +262,18 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
     }
 
     return this.exportDeclaration.getText()
+  }
+
+  async getType() {
+    if (!this.exportDeclaration) {
+      throw new Error(
+        `[mdxts] Export could not be statically analyzed from source file at "${this.source.getPath()}".`
+      )
+    }
+
+    // TODO: move type processing to web socket server
+
+    return resolveType(this.exportDeclaration.getType(), this.exportDeclaration)
   }
 
   getDescription() {
