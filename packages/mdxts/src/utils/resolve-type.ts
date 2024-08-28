@@ -1477,7 +1477,10 @@ export function isComponent(
   }
 
   return callSignatures.every((signature) => {
-    if (signature.returnType === 'ReactNode') {
+    if (
+      signature.returnType === 'ReactNode' ||
+      signature.returnType.endsWith('Element')
+    ) {
       return true
     } else if (signature.parameters.length === 1) {
       const firstParameter = signature.parameters.at(0)!
