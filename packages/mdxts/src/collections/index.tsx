@@ -28,20 +28,16 @@ import { getSourceFilesOrderMap } from './get-source-files-sort-order'
 import { getImportMap, setImportMap } from './import-maps'
 import { resolveTsConfigPath } from './resolve-ts-config-path'
 
-/** @internal */
 export type { MDXContent }
 
-/** @internal */
 export type FilePatterns<Extension extends string = string> =
   | `${string}${Extension}`
   | `${string}${Extension}${string}`
 
-/** @internal */
 export interface FileExports {
   [key: string]: any
 }
 
-/** @internal */
 export interface BaseSource {
   /**
    * The full path to the source formatted to be URL-friendly, taking the
@@ -68,7 +64,6 @@ type PositiveIntegerOrInfinity<Type extends number> = `${Type}` extends
   ? never
   : Type
 
-/** @internal */
 export interface BaseSourceWithGetters<Exports extends FileExports>
   extends BaseSource {
   /** Retrieves a source in the immediate directory or sub-directory by its path. */
@@ -83,7 +78,6 @@ export interface BaseSourceWithGetters<Exports extends FileExports>
   }): Promise<FileSystemSource<Exports>[]>
 }
 
-/** @internal */
 export interface ExportSource<Value> extends BaseSource {
   /** The name of the exported source. If the default export name cannot be derived, the file name will be used. */
   getName(): string
@@ -124,7 +118,6 @@ export interface ExportSource<Value> extends BaseSource {
   isMainExports(): boolean
 }
 
-/** @internal */
 export interface FileSystemSource<Exports extends FileExports>
   extends BaseSourceWithGetters<Exports> {
   /** The base file name or directory name. */
@@ -176,13 +169,11 @@ export interface FileSystemSource<Exports extends FileExports>
   isDirectory(): boolean
 }
 
-/** @internal */
 export type CollectionSource<Exports extends FileExports> = {
   /** Get the configured collection title. */
   getTitle(): string | undefined
 } & Omit<BaseSourceWithGetters<Exports>, 'getEditPath' | 'getPathSegments'>
 
-/** @internal */
 export interface CollectionOptions<Exports extends FileExports> {
   /** The title used for the collection when rendered for a page. */
   title?: string
@@ -1070,7 +1061,6 @@ class Collection<AllExports extends FileExports>
  * Creates a collection of sources based on a specified file pattern.
  * Note, an import getter for each file extension will be generated at the root of the project in a `.mdxts/index.js` file.
  *
- * @internal
  * @param filePattern - A pattern to match a set of source files (e.g., "*.ts", "*.mdx").
  * @param options - Optional settings for the collection, including base directory, base path, TypeScript config file path, and a custom sort function.
  * @returns A collection object that provides methods to retrieve individual sources or all sources matching the pattern.
