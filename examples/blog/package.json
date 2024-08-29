@@ -2,8 +2,8 @@
   "private": true,
   "name": "@examples/blog",
   "scripts": {
-    "dev": "next",
-    "build": "next build",
+    "dev": "mdxts next",
+    "build": "node ../../packages/mdxts/dist/cjs/src/cli/index.js && next build",
     "start": "next start"
   },
   "dependencies": {

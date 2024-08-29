@@ -25,7 +25,6 @@ function start() {
     const isDev = secondArgument === undefined || secondArgument === 'dev'
 
     if (process.env.NODE_ENV === undefined) {
-      // @ts-expect-error
       process.env.NODE_ENV = isDev ? 'development' : 'production'
     }
 
@@ -55,7 +54,6 @@ function start() {
     runSubProcess()
   } else if (firstArgument === 'watch') {
     if (process.env.NODE_ENV === undefined) {
-      // @ts-expect-error
       process.env.NODE_ENV = 'development'
     }
 
