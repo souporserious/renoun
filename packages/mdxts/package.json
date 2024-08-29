@@ -57,16 +57,6 @@
       "import": "./dist/esm/core.js",
       "require": "./dist/cjs/src/core.js"
     },
-    "./mdx-plugins": {
-      "types": "./dist/types/mdx-plugins/index.d.ts",
-      "import": "./dist/esm/mdx-plugins/index.js",
-      "require": "./dist/cjs/src/mdx-plugins/index.js"
-    },
-    "./next": {
-      "types": "./dist/types/next/index.d.ts",
-      "import": "./dist/cjs/src/next/index.js",
-      "require": "./dist/cjs/src/next/index.js"
-    },
     "./project": {
       "types": "./dist/types/project/index.d.ts",
       "import": "./dist/esm/project/index.js",
@@ -103,10 +93,8 @@
     "test": "jest"
   },
   "peerDependencies": {
-    "next": ">=13.0.0",
     "react": ">=18.0.0",
-    "react-dom": ">=18.0.0",
-    "typescript": ">=5.0.0"
+    "react-dom": ">=18.0.0"
   },
   "devDependencies": {
     "@swc/cli": "^0.4.0",
@@ -119,8 +107,7 @@
     "@types/ws": "^8.5.12",
     "dedent": "^1.5.3",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "typescript": "^5.5.4"
+    "react-dom": "^18.3.1"
   },
   "dependencies": {
     "@manypkg/find-root": "^2.2.3",

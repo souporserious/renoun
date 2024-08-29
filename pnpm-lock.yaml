@@ -245,9 +245,6 @@ importers:
       glob-parent:
         specifier: ^6.0.2
         version: 6.0.2
-      next:
-        specifier: '>=13.0.0'
-        version: 14.2.5(@babel/core@7.24.6)(react-dom@18.3.1)(react@18.3.1)
       restyle:
         specifier: ^2.1.0
         version: 2.1.0(react@18.3.1)
@@ -300,9 +297,6 @@ importers:
       react-dom:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
-      typescript:
-        specifier: ^5.5.4
-        version: 5.5.4
 
 packages:
 
