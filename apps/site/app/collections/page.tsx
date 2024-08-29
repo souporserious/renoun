@@ -7,13 +7,19 @@ export default async function Page() {
   const sourceExports = source.getExports()
 
   return (
-    <div>
-      <h1>Collections</h1>
+    <div
+      css={{
+        display: 'flex',
+        flexDirection: 'column',
+        padding: '4rem 0',
+        gap: '4rem',
+      }}
+    >
+      <h1 css={{ fontSize: '3rem', margin: 0 }}>Collections</h1>
       <div
         css={{
           display: 'grid',
           gridTemplateColumns: 'minmax(0, 1fr)',
-          padding: '4rem 2rem',
           gap: '2rem',
           '@media (min-width: 768px)': {
             gridTemplateColumns: 'minmax(0, 1fr) 12rem',
@@ -25,10 +31,7 @@ export default async function Page() {
             API Reference
           </h2>
           {sourceExports.map((exportSource) => (
-            <div key={exportSource.getPath()}>
-              <h2>{exportSource.getName()}</h2>
-              <APIReference source={exportSource} />
-            </div>
+            <APIReference key={exportSource.getSlug()} source={exportSource} />
           ))}
         </div>
 

@@ -18,9 +18,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>
+      <body css={{ padding: '2rem' }}>
         <nav css={{ display: 'flex', gap: '1rem' }}>
-          <Link href="/">Home</Link>
+          <Link href="/">Omnidoc</Link>
           <Link href="/collections">Collections</Link>
           <Link href="/components">Components</Link>
         </nav>

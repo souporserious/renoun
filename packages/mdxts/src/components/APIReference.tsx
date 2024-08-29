@@ -46,7 +46,7 @@ export async function APIReference({ source }: { source: ExportSource<any> }) {
         >
           <h3
             id={type.name ? createSlug(type.name) : undefined}
-            css={{ flexShrink: 0, fontWeight: 500, margin: 0 }}
+            css={{ flexShrink: 0, margin: 0 }}
           >
             {type.name}
           </h3>
@@ -156,7 +156,9 @@ function TypeChildren({
           ...cssProp,
         }}
       >
-        <h4 css={{ margin: 0, marginBottom: '1rem' }}>Signatures</h4>
+        {type.signatures.length > 1 ? (
+          <h4 css={{ margin: 0, marginBottom: '1rem' }}>Signatures</h4>
+        ) : null}
         {type.signatures.map((signature, index) => {
           return (
             <Fragment key={index}>
@@ -166,7 +168,11 @@ function TypeChildren({
                   {signature.parameter.kind === 'Object' ? (
                     <TypeProperties type={signature.parameter} />
                   ) : signature.parameter.kind === 'Reference' ? (
-                    signature.parameter.text
+                    <CodeInline
+                      value={signature.parameter.text}
+                      language="typescript"
+                      css={{ display: 'inline-block', marginTop: '1.5rem' }}
+                    />
                   ) : (
                     <TypeValue type={signature.parameter} />
                   )}
@@ -197,7 +203,9 @@ function TypeChildren({
           ...cssProp,
         }}
       >
-        <h4 css={{ margin: 0, marginBottom: '1rem' }}>Signatures</h4>
+        {type.signatures.length > 1 ? (
+          <h4 css={{ margin: 0, marginBottom: '1rem' }}>Signatures</h4>
+        ) : null}
         {type.signatures.map((signature, index) => {
           return (
             <Fragment key={index}>

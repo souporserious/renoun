@@ -65,204 +65,209 @@ export default async function Component({
   return (
     <div
       css={{
-        display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1fr)',
-        padding: '4rem 2rem',
-        gap: '2rem',
-        '@media (min-width: 768px)': {
-          gridTemplateColumns: 'minmax(0, 1fr) 12rem',
-        },
+        display: 'flex',
+        flexDirection: 'column',
+        padding: '4rem 0',
+        gap: '4rem',
       }}
     >
-      <div
-        css={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '4rem',
-        }}
-      >
-        <div>
-          <h1 css={{ fontSize: '3rem', margin: 0 }}>
-            {componentSource.getName()} {isExamplesPage ? 'Examples' : ''}
-          </h1>
-          {Readme ? <Readme /> : null}
-        </div>
-
-        {examplesExports.length ? (
-          <div>
-            <h2 id="examples" css={{ margin: '0 0 2rem' }}>
-              Examples
-            </h2>
-            <ul
-              css={{
-                listStyle: 'none',
-                display: 'grid',
-                padding: 0,
-                margin: 0,
-                gap: '2rem',
-              }}
-            >
-              {examplesExports.map((exportSource) => (
-                <li key={exportSource.getName()}>
-                  <Preview source={exportSource} />
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-
-        {sourceExports ? (
-          <div>
-            <h2 id="api-reference" css={{ margin: '0 0 2rem' }}>
-              API Reference
-            </h2>
-            {sourceExports.map((exportSource) => (
-              <section key={exportSource.getName()} id={exportSource.getSlug()}>
-                <h3>{exportSource.getName()}</h3>
-                <APIReference source={exportSource} />
-              </section>
-            ))}
-          </div>
-        ) : null}
-
-        <div>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              padding: '1rem',
-            }}
-          >
-            {updatedAt ? (
-              <div style={{ gridColumn: 1, textAlign: 'left' }}>
-                Last updated: {new Date(updatedAt).toLocaleString()}
-              </div>
-            ) : null}
-
-            {editPath ? (
-              <a href={editPath} style={{ gridColumn: 2, textAlign: 'right' }}>
-                Edit this page
-              </a>
-            ) : null}
-          </div>
-
-          <nav
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              padding: '1rem',
-            }}
-          >
-            {previousSource ? (
-              <SiblingLink source={previousSource} direction="previous" />
-            ) : null}
-            {nextSource ? (
-              <SiblingLink source={nextSource} direction="next" />
-            ) : null}
-          </nav>
-        </div>
+      <div>
+        <h1 css={{ fontSize: '3rem', margin: 0 }}>
+          {componentSource.getName()} {isExamplesPage ? 'Examples' : ''}
+        </h1>
+        {Readme ? <Readme /> : null}
       </div>
 
-      <aside
+      <div
         css={{
-          alignSelf: 'start',
-          position: 'sticky',
-          top: '1rem',
-          '@media (max-width: 767px)': {
-            display: 'none',
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1fr)',
+          gap: '2rem',
+          '@media (min-width: 768px)': {
+            gridTemplateColumns: 'minmax(0, 1fr) 12rem',
           },
         }}
       >
-        <nav
+        <div>
+          {examplesExports.length ? (
+            <div>
+              <h2 id="examples" css={{ margin: '0 0 2rem' }}>
+                Examples
+              </h2>
+              <ul
+                css={{
+                  listStyle: 'none',
+                  display: 'grid',
+                  padding: 0,
+                  margin: 0,
+                  gap: '2rem',
+                }}
+              >
+                {examplesExports.map((exportSource) => (
+                  <li key={exportSource.getName()}>
+                    <Preview source={exportSource} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {sourceExports ? (
+            <div>
+              <h2 id="api-reference" css={{ margin: '0 0 2rem' }}>
+                API Reference
+              </h2>
+              {sourceExports.map((exportSource) => (
+                <APIReference
+                  key={exportSource.getSlug()}
+                  source={exportSource}
+                />
+              ))}
+            </div>
+          ) : null}
+
+          <div>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                padding: '1rem',
+              }}
+            >
+              {updatedAt ? (
+                <div style={{ gridColumn: 1, textAlign: 'left' }}>
+                  Last updated: {new Date(updatedAt).toLocaleString()}
+                </div>
+              ) : null}
+
+              {editPath ? (
+                <a
+                  href={editPath}
+                  style={{ gridColumn: 2, textAlign: 'right' }}
+                >
+                  Edit this page
+                </a>
+              ) : null}
+            </div>
+
+            <nav
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                padding: '1rem',
+              }}
+            >
+              {previousSource ? (
+                <SiblingLink source={previousSource} direction="previous" />
+              ) : null}
+              {nextSource ? (
+                <SiblingLink source={nextSource} direction="next" />
+              ) : null}
+            </nav>
+          </div>
+        </div>
+
+        <aside
           css={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '1rem',
+            alignSelf: 'start',
+            position: 'sticky',
+            top: '1rem',
+            '@media (max-width: 767px)': {
+              display: 'none',
+            },
           }}
         >
-          <h3 css={{ margin: 0 }}>On this page</h3>
-          <ul
+          <nav
             css={{
-              listStyle: 'none',
-              padding: 0,
-              margin: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1rem',
             }}
           >
-            {examplesExports.length ? (
-              <li>
-                <a
-                  href="#examples"
-                  css={{
-                    display: 'block',
-                    padding: '0.25rem 0',
-                  }}
-                >
-                  Examples
-                </a>
-                {examplesExports.map((source) => (
-                  <ul
-                    key={source.getPath()}
+            <h3 css={{ margin: 0 }}>On this page</h3>
+            <ul
+              css={{
+                listStyle: 'none',
+                padding: 0,
+                margin: 0,
+              }}
+            >
+              {examplesExports.length ? (
+                <li>
+                  <a
+                    href="#examples"
                     css={{
-                      listStyle: 'none',
-                      padding: 0,
-                      margin: 0,
+                      display: 'block',
+                      padding: '0.25rem 0',
                     }}
                   >
-                    <li>
-                      <a
-                        href={`#${source.getSlug()}`}
-                        css={{
-                          display: 'block',
-                          padding: '0.25rem 0',
-                          paddingLeft: '1rem',
-                        }}
-                      >
-                        {source.getName()}
-                      </a>
-                    </li>
-                  </ul>
-                ))}
-              </li>
-            ) : null}
-            {sourceExports ? (
-              <li>
-                <a
-                  href="#api-reference"
-                  css={{
-                    display: 'block',
-                    padding: '0.25rem 0',
-                  }}
-                >
-                  API Reference
-                </a>
-                {sourceExports.map((source) => (
-                  <ul
-                    key={source.getPath()}
+                    Examples
+                  </a>
+                  {examplesExports.map((source) => (
+                    <ul
+                      key={source.getPath()}
+                      css={{
+                        listStyle: 'none',
+                        padding: 0,
+                        margin: 0,
+                      }}
+                    >
+                      <li>
+                        <a
+                          href={`#${source.getSlug()}`}
+                          css={{
+                            display: 'block',
+                            padding: '0.25rem 0',
+                            paddingLeft: '1rem',
+                          }}
+                        >
+                          {source.getName()}
+                        </a>
+                      </li>
+                    </ul>
+                  ))}
+                </li>
+              ) : null}
+              {sourceExports ? (
+                <li>
+                  <a
+                    href="#api-reference"
                     css={{
-                      listStyle: 'none',
-                      padding: 0,
-                      margin: 0,
+                      display: 'block',
+                      padding: '0.25rem 0',
                     }}
                   >
-                    <li>
-                      <a
-                        href={`#${source.getSlug()}`}
-                        css={{
-                          display: 'block',
-                          padding: '0.25rem 0',
-                          paddingLeft: '1rem',
-                        }}
-                      >
-                        {source.getName()}
-                      </a>
-                    </li>
-                  </ul>
-                ))}
-              </li>
-            ) : null}
-          </ul>
-        </nav>
-      </aside>
+                    API Reference
+                  </a>
+                  {sourceExports.map((source) => (
+                    <ul
+                      key={source.getPath()}
+                      css={{
+                        listStyle: 'none',
+                        padding: 0,
+                        margin: 0,
+                      }}
+                    >
+                      <li>
+                        <a
+                          href={`#${source.getSlug()}`}
+                          css={{
+                            display: 'block',
+                            padding: '0.25rem 0',
+                            paddingLeft: '1rem',
+                          }}
+                        >
+                          {source.getName()}
+                        </a>
+                      </li>
+                    </ul>
+                  ))}
+                </li>
+              ) : null}
+            </ul>
+          </nav>
+        </aside>
+      </div>
     </div>
   )
 }
