@@ -21,6 +21,7 @@ export default function RootLayout({
       <body>
         <nav css={{ display: 'flex', gap: '1rem' }}>
           <Link href="/">Home</Link>
+          <Link href="/collections">Collections</Link>
           <Link href="/components">Components</Link>
         </nav>
         {children}
