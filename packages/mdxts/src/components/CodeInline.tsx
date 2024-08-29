@@ -1,5 +1,5 @@
 import React, { Fragment, Suspense } from 'react'
-import { css, type CSSObject } from 'restyle'
+import { css, styled, type CSSObject } from 'restyle'
 import 'server-only'
 
 import { analyzeSourceText } from '../project'
@@ -70,9 +70,11 @@ async function CodeInlineAsync({
   })
   const theme = await getThemeColors()
   const [classNames, Styles] = css({
+    display: allowCopy ? 'inline-flex' : 'inline-block',
+    alignItems: allowCopy ? 'center' : undefined,
+    verticalAlign: 'text-bottom',
     padding: `${paddingY} ${paddingX} 0`,
-    paddingRight: allowCopy ? `calc(1ch + 1lh + ${paddingX})` : undefined,
-    gap: '1ch',
+    gap: allowCopy ? '1ch' : undefined,
     color: theme.editor.foreground,
     backgroundColor: theme.editor.background,
     boxShadow: `0 0 0 1px ${theme.panel.border}`,
@@ -94,6 +96,14 @@ async function CodeInlineAsync({
     },
     ...cssProp,
   })
+  const children = tokens.map((line, lineIndex) => (
+    <Fragment key={lineIndex}>
+      {line.map((token, tokenIndex) => (
+        <Token key={tokenIndex} token={token} />
+      ))}
+      {lineIndex === tokens.length - 1 ? null : '\n'}
+    </Fragment>
+  ))
 
   return (
     <>
@@ -101,22 +111,11 @@ async function CodeInlineAsync({
         className={className ? `${classNames} ${className}` : classNames}
         style={style}
       >
-        {tokens.map((line, lineIndex) => (
-          <Fragment key={lineIndex}>
-            {line.map((token, tokenIndex) => (
-              <Token key={tokenIndex} token={token} />
-            ))}
-            {lineIndex === tokens.length - 1 ? null : '\n'}
-          </Fragment>
-        ))}
+        {allowCopy ? <span>{children}</span> : children}
         {allowCopy ? (
           <CopyButton
             value={value}
-            style={{
-              right: paddingX,
-              position: 'absolute',
-              color: theme.activityBar.foreground,
-            }}
+            css={{ color: theme.activityBar.foreground }}
           />
         ) : null}
       </code>
@@ -124,6 +123,14 @@ async function CodeInlineAsync({
     </>
   )
 }
+
+const CodeFallback = styled('code', {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '1ch',
+  whiteSpace: 'nowrap',
+  overflowX: 'scroll',
+})
 
 /** Renders an inline `code` element with optional syntax highlighting and copy button. */
 export async function CodeInline({
@@ -135,13 +142,16 @@ export async function CodeInline({
     <Suspense
       fallback={
         'value' in props && props.value ? (
-          <code
-            style={{
+          <CodeFallback
+            css={{
               padding: `${paddingY} ${paddingX} 0`,
+              paddingRight: props.allowCopy
+                ? `calc(1ch + 1lh + ${paddingX})`
+                : undefined,
             }}
           >
             {props.value}
-          </code>
+          </CodeFallback>
         ) : null
       }
     >
