@@ -11,7 +11,7 @@ export function getGitFileUrl(
 ): string {
   if (gitSource.length === 0) {
     throw new Error(
-      '[mdxts] A git source is required to construct a source file URL. Received an empty string. Please configure the mdxts/next "gitSource" plugin option or set the `MDXTS_GIT_SOURCE` environment variable manually.'
+      '[mdxts] A git source is required to construct a source file URL. Received an empty string. Configure the `gitSource` option at `.mdxts/config.json`.'
     )
   }
 

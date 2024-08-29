@@ -1,0 +1,44 @@
+:root {
+  --color-background: #f8f8f8;
+  --color-foreground: #333;
+  --font-size-heading: 3rem;
+  --font-size-body: 1.6rem;
+  --font-size-code: 1rem;
+  --line-height-body: 1.4;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background: #000000;
+    --color-foreground: #f8f8f8;
+  }
+}
+
+@media (min-width: 40rem) {
+  :root {
+    --font-size-heading: 3.6rem;
+    --font-size-body: 2rem;
+    --font-size-code: 1.2rem;
+    --line-height-body: 1.4;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: sans-serif;
+  display: grid;
+  grid-template-columns: 1fr minmax(0, 60rem) 1fr;
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+}
+
+body > * {
+  grid-column: 2;
+}
+
+a {
+  color: inherit;
+}

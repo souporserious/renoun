@@ -7,10 +7,15 @@ import {
   SourceFile,
   type ExportedDeclarations,
 } from 'ts-morph'
-import { getSymbolDescription } from '@tsxmod/utils'
+import { dirname, resolve } from 'node:path'
 import globParent from 'glob-parent'
 import parseTitle from 'title'
 
+import { createSlug } from '../utils/create-slug'
+import { filePathToPathname } from '../utils/file-path-to-pathname'
+import { getSymbolDescription } from '../utils/get-symbol-description'
+import { getExportedDeclaration } from '../utils/get-exported-declaration'
+import { resolveType } from '../utils/resolve-type'
 import {
   getDeclarationLocation,
   type DeclarationPosition,
@@ -23,20 +28,16 @@ import { getSourceFilesOrderMap } from './get-source-files-sort-order'
 import { getImportMap, setImportMap } from './import-maps'
 import { resolveTsConfigPath } from './resolve-ts-config-path'
 
-/** @internal */
 export type { MDXContent }
 
-/** @internal */
 export type FilePatterns<Extension extends string = string> =
   | `${string}${Extension}`
   | `${string}${Extension}${string}`
 
-/** @internal */
 export interface FileExports {
   [key: string]: any
 }
 
-/** @internal */
 export interface BaseSource {
   /**
    * The full path to the source formatted to be URL-friendly, taking the
@@ -63,11 +64,10 @@ type PositiveIntegerOrInfinity<Type extends number> = `${Type}` extends
   ? never
   : Type
 
-/** @internal */
 export interface BaseSourceWithGetters<Exports extends FileExports>
   extends BaseSource {
   /** Retrieves a source in the immediate directory or sub-directory by its path. */
-  getSource(path: string | string[]): FileSystemSource<Exports> | undefined
+  getSource(path?: string | string[]): FileSystemSource<Exports> | undefined
 
   /**
    * Retrieves sources in the immediate directory and possibly sub-directories based on the provided `depth`.
@@ -78,7 +78,6 @@ export interface BaseSourceWithGetters<Exports extends FileExports>
   }): Promise<FileSystemSource<Exports>[]>
 }
 
-/** @internal */
 export interface ExportSource<Value> extends BaseSource {
   /** The name of the exported source. If the default export name cannot be derived, the file name will be used. */
   getName(): string
@@ -86,13 +85,22 @@ export interface ExportSource<Value> extends BaseSource {
   /** The name formatted as a title. */
   getTitle(): string
 
+  /** The resolved type of the exported source based on the TypeScript type if it exists. */
+  getType(): Promise<ReturnType<typeof resolveType>>
+
   /** The description of the exported source based on the JSDoc comment if it exists. */
   getDescription(): string | undefined
+
+  /** The URL-friendly slug of the export name. */
+  getSlug(): string
 
   /** A text representation of the exported source if it is statically analyzable. */
   getText(): string
 
-  /** The runtime value of the export. */
+  /**
+   * The runtime value of the export loaded from a dynamic import map generated in the `.mdxts` directory at the root of the project.
+   * Note, any side-effects in modules of targeted files will be run.
+   */
   getValue(): Promise<Value>
 
   /** The execution environment of the export source. */
@@ -100,9 +108,16 @@ export interface ExportSource<Value> extends BaseSource {
 
   /** The lines and columns where the export starts and ends. */
   getPosition(): DeclarationPosition
+
+  /** The previous and next export sources within the same file. */
+  getSiblings(): Promise<
+    [previous?: ExportSource<Value>, next?: ExportSource<Value>]
+  >
+
+  /** Whether the export is considered the main export of the file based on the name matching the file name or directory name. */
+  isMainExport(): boolean
 }
 
-/** @internal */
 export interface FileSystemSource<Exports extends FileExports>
   extends BaseSourceWithGetters<Exports> {
   /** The base file name or directory name. */
@@ -141,6 +156,9 @@ export interface FileSystemSource<Exports extends FileExports>
     name: Name
   ): ExportSource<Exports[Name]>
 
+  /** The main export source of the file based on the file name or directory name. */
+  getMainExport(): ExportSource<Exports[keyof Exports]> | undefined
+
   /** All exported sources of the file. */
   getExports(): ExportSource<Exports[keyof Exports]>[]
 
@@ -151,13 +169,11 @@ export interface FileSystemSource<Exports extends FileExports>
   isDirectory(): boolean
 }
 
-/** @internal */
 export type CollectionSource<Exports extends FileExports> = {
   /** Get the configured collection title. */
   getTitle(): string | undefined
 } & Omit<BaseSourceWithGetters<Exports>, 'getEditPath' | 'getPathSegments'>
 
-/** @internal */
 export interface CollectionOptions<Exports extends FileExports> {
   /** The title used for the collection when rendered for a page. */
   title?: string
@@ -216,6 +232,11 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
 
   abstract getName(): string
 
+  isMainExport(): boolean {
+    const mainExport = this.source.getMainExport()
+    return mainExport ? this === mainExport : false
+  }
+
   getTitle() {
     return parseTitle(this.getName())
   }
@@ -232,6 +253,18 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
     }
 
     return this.exportDeclaration.getText()
+  }
+
+  async getType() {
+    if (!this.exportDeclaration) {
+      throw new Error(
+        `[mdxts] Export could not be statically analyzed from source file at "${this.source.getPath()}".`
+      )
+    }
+
+    // TODO: move type processing to web socket server
+
+    return resolveType(this.exportDeclaration.getType(), this.exportDeclaration)
   }
 
   getDescription() {
@@ -268,11 +301,21 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
     return 'isomorphic'
   }
 
-  getPath() {
-    const path = this.source.getPath()
-    const name = this.getName()
+  getSlug() {
+    return createSlug(this.getName())
+  }
 
-    return name ? `${path}/${name}` : path
+  getPath() {
+    const collection = this.source.getCollection()
+    const filePath = this.exportDeclaration
+      ? this.exportDeclaration.getSourceFile().getFilePath()
+      : this.source.getSourceFile().getFilePath()
+
+    return filePathToPathname(
+      filePath,
+      collection.options.baseDirectory,
+      collection.options.basePath
+    )
   }
 
   getPathSegments(): string[] {
@@ -321,7 +364,9 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
         } catch (error) {
           if (error instanceof Error) {
             throw new Error(
-              `[mdxts] Failed to parse export "${name}" using schema for file "${this.source.getPath()}" \n\n${error.message}`,
+              `[mdxts] Failed to parse export "${name}" using schema for file "${this.source.getPath()}" \n\n${
+                error.message
+              }`,
               { cause: error }
             )
           }
@@ -354,6 +399,27 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
 
     return exportValue as Value
   }
+
+  async getSiblings(): Promise<
+    [previous?: Export<Value, AllExports>, next?: Export<Value, AllExports>]
+  > {
+    const sourceExports = this.source.getExports()
+    const currentIndex = sourceExports.findIndex(
+      (exportItem) => exportItem.getName() === this.getName()
+    )
+
+    if (currentIndex === -1) {
+      return [undefined, undefined]
+    }
+
+    const previousExport = sourceExports[currentIndex - 1]
+    const nextExport = sourceExports[currentIndex + 1]
+
+    return [
+      previousExport as Export<Value, AllExports> | undefined,
+      nextExport as Export<Value, AllExports> | undefined,
+    ]
+  }
 }
 
 class DefaultExport<AllExports extends FileExports>
@@ -383,7 +449,7 @@ class DefaultExport<AllExports extends FileExports>
 
 class NamedExport<
     AllExports extends FileExports,
-    Name extends Exclude<keyof AllExports, 'default'>,
+    Name extends Exclude<keyof AllExports, 'default'>
   >
   extends Export<AllExports[Name], AllExports>
   implements ExportSource<AllExports[Name]>
@@ -445,7 +511,7 @@ class Source<AllExports extends FileExports>
         .replace(/^\d+\./, '')
     }
 
-    return name
+    return name.split('.').at(0)!
   }
 
   getTitle() {
@@ -461,7 +527,9 @@ class Source<AllExports extends FileExports>
 
     if (!calculatedPath) {
       throw new Error(
-        `[mdxts] Could not calculate depth. Source path not found for file path "${this.#sourcePath}".`
+        `[mdxts] Could not calculate depth. Source path not found for file path "${
+          this.#sourcePath
+        }".`
       )
     }
 
@@ -503,7 +571,9 @@ class Source<AllExports extends FileExports>
 
     if (order === undefined) {
       throw new Error(
-        `[mdxts] Source file order not found for file path "${this.#sourcePath}". If you see this error, please file an issue.`
+        `[mdxts] Source file order not found for file path "${
+          this.#sourcePath
+        }". If you see this error, please file an issue.`
       )
     }
 
@@ -566,7 +636,7 @@ class Source<AllExports extends FileExports>
   } = {}): Promise<
     [
       previous?: FileSystemSource<AllExports> | undefined,
-      next?: FileSystemSource<AllExports> | undefined,
+      next?: FileSystemSource<AllExports> | undefined
     ]
   > {
     if (!isValidDepth(depth)) {
@@ -577,11 +647,17 @@ class Source<AllExports extends FileExports>
 
     const minDepth = this.collection.getDepth()
     const maxDepth = depth === Infinity ? Infinity : this.getDepth() + depth
+    const seenPaths = new Set<string>()
     const filteredSources = (
       await this.collection.getFileSystemSources()
     ).filter((source) => {
-      const sourceDepth = source.getDepth()
+      const sourcePath = source.getPath()
+      if (seenPaths.has(sourcePath)) {
+        return false
+      }
+      seenPaths.add(sourcePath)
 
+      const sourceDepth = source.getDepth()
       return sourceDepth >= minDepth && sourceDepth <= maxDepth
     })
     const currentIndex = filteredSources.findIndex(
@@ -613,7 +689,9 @@ You can fix this error by taking one of the following actions:
     Before calling "getDefaultExport", check if the source is a directory by using "isDirectory".
   
   - Add an index or README file to the "${baseName}" directory:
-    . Ensure the file has a valid extension based on the targeted file patterns of this collection: ${validExtensions.join(', ')}
+    . Ensure the file has a valid extension based on the targeted file patterns of this collection: ${validExtensions.join(
+      ', '
+    )}
     . Define a default export in the file or ensure the default export exists if compiled.
     
   - Handle the error:
@@ -647,7 +725,9 @@ You can fix this error by taking one of the following actions:
     Before calling "getNamedExport", check if the source is a directory by using "isDirectory".
   
   - Add an index or README file to the "${baseName}" directory:
-    . Ensure the file has a valid extension based on the targeted file patterns of this collection: ${validExtensions.join(', ')}
+    . Ensure the file has a valid extension based on the targeted file patterns of this collection: ${validExtensions.join(
+      ', '
+    )}
     . Define a named export of "${name.toString()}" in the file or ensure the named export exists if compiled.
     
   - Handle the error:
@@ -661,6 +741,17 @@ You can fix this error by taking one of the following actions:
     )
 
     return new NamedExport<AllExports, Name>(this, name, exportDeclaration)
+  }
+
+  getMainExport() {
+    const baseName = this.getSourceFile().getBaseNameWithoutExtension()
+
+    return this.getExports().find((exportSource) => {
+      return (
+        exportSource.getName() === baseName ||
+        exportSource.getSlug() === baseName
+      )
+    })
   }
 
   getExports() {
@@ -684,7 +775,9 @@ You can fix this error by taking one of the following actions:
     Before calling "getExports", check if the source is a directory by using "isDirectory" e.g. (await <collection>.getSources()).filter(source => !source.isDirectory()).
   
   - Add an index or README file to the "${baseName}" directory:
-    . Ensure the file has a valid extension based on the targeted file patterns of this collection: ${validExtensions.join(', ')}
+    . Ensure the file has a valid extension based on the targeted file patterns of this collection: ${validExtensions.join(
+      ', '
+    )}
     
   - Handle the error:
     Catch and manage this error in your code to prevent it from causing a failure.`
@@ -707,7 +800,9 @@ You can fix this error by taking one of the following actions:
       return this.sourceFileOrDirectory
     }
     throw new Error(
-      `[mdxts] Expected a source file but got a directory at "${this.#sourcePath}".`
+      `[mdxts] Expected a source file but got a directory at "${
+        this.#sourcePath
+      }".`
     )
   }
 
@@ -719,11 +814,13 @@ You can fix this error by taking one of the following actions:
 
     if (!getImport) {
       throw new Error(
-        `[mdxts] No source found for path "${this.getPath()}" at file pattern "${this.collection.filePattern}":
+        `[mdxts] No source found for path "${this.getPath()}" at file pattern "${
+          this.collection.filePattern
+        }":
 
 You can fix this error by ensuring the following:
   
-  - The ".mdxts" directory was successfully created and your tsconfig.json file aliases "mdxts" to ".mdxts/index.js" correctly.
+  - The ".mdxts" directory was successfully created and your tsconfig.json file aliases "mdxts/*" to ".mdxts/*.ts" correctly.
   - The file pattern is formatted correctly and targeting files that exist.
   - Try refreshing the page or restarting server.
   - If you continue to see this error, please file an issue: https://github.com/souporserious/mdxts/issues`
@@ -759,8 +856,8 @@ class Collection<AllExports extends FileExports>
 
     const compilerOptions = this.project.getCompilerOptions()
     const tsConfigFilePath = String(compilerOptions.configFilePath)
-
-    this.absoluteGlobPattern =
+    const tsConfigDirectory = dirname(tsConfigFilePath)
+    const resolvedGlobPattern =
       compilerOptions.baseUrl && compilerOptions.paths
         ? resolveTsConfigPath(
             tsConfigFilePath,
@@ -769,6 +866,7 @@ class Collection<AllExports extends FileExports>
             filePattern
           )
         : filePattern
+    this.absoluteGlobPattern = resolve(tsConfigDirectory, resolvedGlobPattern)
     this.absoluteBaseGlobPattern = globParent(this.absoluteGlobPattern)
 
     const fileSystemSources = getSourceFilesAndDirectories(
@@ -858,7 +956,9 @@ class Collection<AllExports extends FileExports>
         const badge = '[mdxts] '
         if (error instanceof Error && error.message.includes(badge)) {
           throw new Error(
-            `[mdxts] Error occurred while sorting sources for collection with file pattern "${this.filePattern}". \n\n${error.message.slice(badge.length)}`
+            `[mdxts] Error occurred while sorting sources for collection with file pattern "${
+              this.filePattern
+            }". \n\n${error.message.slice(badge.length)}`
           )
         }
         throw error
@@ -890,7 +990,9 @@ class Collection<AllExports extends FileExports>
     return this.options.basePath ? getPathDepth(this.options.basePath) : -1
   }
 
-  getSource(path: string | string[]): FileSystemSource<AllExports> | undefined {
+  getSource(
+    path: string | string[] = 'index'
+  ): FileSystemSource<AllExports> | undefined {
     let pathString = Array.isArray(path) ? path.join('/') : path
 
     if (this.#sources.has(pathString)) {
@@ -944,8 +1046,15 @@ class Collection<AllExports extends FileExports>
     const minDepth = this.getDepth()
     const maxDepth = depth === Infinity ? Infinity : minDepth + depth
     const sources = await this.getFileSystemSources()
+    const seenPaths = new Set<string>()
 
     return sources.filter((source) => {
+      const sourcePath = source.getPath()
+      if (seenPaths.has(sourcePath)) {
+        return false
+      }
+      seenPaths.add(sourcePath)
+
       if (source) {
         const descendantDepth = source.getDepth()
         return descendantDepth > minDepth && descendantDepth <= maxDepth
@@ -968,16 +1077,15 @@ class Collection<AllExports extends FileExports>
 
 /**
  * Creates a collection of sources based on a specified file pattern.
- * Note, an import getter for each file extension will be generated at the root of the project in a `.mdxts/index.js` file.
+ * Note, an import getter for each file extension will be generated at the root of the project in a `.mdxts/collections.ts` file.
  *
- * @internal
  * @param filePattern - A pattern to match a set of source files (e.g., "*.ts", "*.mdx").
  * @param options - Optional settings for the collection, including base directory, base path, TypeScript config file path, and a custom sort function.
  * @returns A collection object that provides methods to retrieve individual sources or all sources matching the pattern.
  */
 export function createCollection<
   AllExports extends { [key: string]: any } = { [key: string]: any },
-  FilePattern extends FilePatterns = string,
+  FilePattern extends FilePatterns = string
 >(
   filePattern: FilePattern,
   options?: CollectionOptions<AllExports>
@@ -986,7 +1094,7 @@ export function createCollection<
 }
 
 /**
- * Sets the import maps for a collection's file patterns.
+ * Sets the import map of dynamic imports for all collection file patterns.
  * @internal
  */
 createCollection.setImportMap = setImportMap
@@ -1042,31 +1150,6 @@ function getDeclarationName(declaration: Node) {
   } else if (Node.isClassDeclaration(declaration)) {
     return declaration.getName()
   }
-}
-
-/** Unwraps exported declarations from a source file. */
-function getExportedDeclaration(
-  exportedDeclarations: ReadonlyMap<string, ExportedDeclarations[]>,
-  name: string
-) {
-  const exportDeclarations = exportedDeclarations.get(name)
-
-  if (!exportDeclarations) {
-    return undefined
-  }
-
-  if (exportDeclarations.length > 1) {
-    const filePath = exportDeclarations[0]
-      .getSourceFile()
-      .getFilePath()
-      .replace(process.cwd(), '')
-
-    throw new Error(
-      `[mdxts] Multiple declarations found for export in source file at ${filePath}. Only one export declaration is currently allowed. Please file an issue for support.`
-    )
-  }
-
-  return exportDeclarations[0]
 }
 
 /** Whether a depth value is zero, a positive integer, or Infinity. */

@@ -3,6 +3,7 @@
 .turbo
 .vercel
 .mdxts
+!.mdxts/config.json
 dist
 node_modules
 out

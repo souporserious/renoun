@@ -194,7 +194,7 @@ async function Preview({
               padding: '0.5lh',
               margin: 0,
               overflow: 'auto',
-              backgroundColor: '#2e3440',
+              backgroundColor: '#09121b',
             }}
           >
             <Tokens />

@@ -1,11 +1,10 @@
 import type { bundledLanguages, bundledThemes } from 'shiki/bundle/web'
 import type { SourceFile, Diagnostic, ts, Project } from 'ts-morph'
 import { Node, SyntaxKind } from 'ts-morph'
-import { getDiagnosticMessageText } from '@tsxmod/utils'
 import { join, posix } from 'node:path'
 import { findRoot } from '@manypkg/find-root'
-import chalk from 'chalk'
 
+import { getDiagnosticMessageText } from './get-diagnostic-message'
 import { getThemeColors } from './get-theme-colors'
 import { isJsxOnly } from './is-jsx-only'
 import { generatedFilenames } from './parse-source-text-metadata'
@@ -414,37 +413,6 @@ function getFontStyle(fontStyle: number) {
   return style
 }
 
-/** Converts tokens to a colored text block. */
-function tokensToHighlightedText(tokens: Token[][]) {
-  let styledOutput = ''
-  let lineNumber = 1
-
-  for (const line of tokens) {
-    let lineContent = ''
-
-    for (const token of line) {
-      let tokenStyle
-      if (token.color) {
-        tokenStyle = chalk.hex(token.color)
-      } else {
-        tokenStyle = chalk.reset
-      }
-
-      if (token.diagnostics && token.diagnostics.length > 0) {
-        tokenStyle = tokenStyle.underline.red
-      }
-
-      lineContent += tokenStyle(token.value)
-    }
-
-    const paddedLineNumber = String(lineNumber).padStart(2, ' ')
-    styledOutput += `${chalk.dim(paddedLineNumber)} ${lineContent}\n`
-    lineNumber++
-  }
-
-  return styledOutput
-}
-
 /** Converts tokens to plain text. */
 function tokensToPlainText(tokens: Token[][]) {
   const lineNumberPadding = 4
@@ -516,31 +484,20 @@ function throwDiagnosticErrors(
     const start = diagnostic.getStart()
     const code = diagnostic.getCode()
 
-    if (process.env.MDXTS_HIGHLIGHT_ERRORS === 'true') {
-      if (!start) {
-        return `${chalk.red(' ⓧ')} ${message} ${chalk.dim(`ts(${code})`)}`
-      }
-      const startLineAndCol = sourceFile.getLineAndColumnAtPos(start)
-      return `${chalk.red(' ⓧ')} ${message} ${chalk.dim(`ts(${code}) [Ln ${startLineAndCol.line}, Col ${startLineAndCol.column}]`)}`
-    }
-
     if (!start) {
       return ` ⓧ ${message} ts(${code})`
     }
+
     const startLineAndCol = sourceFile.getLineAndColumnAtPos(start)
+
     return ` ⓧ ${message} ts(${code}) [Ln ${startLineAndCol.line}, Col ${startLineAndCol.column}]`
   })
   const formattedErrors = errorMessages.join('\n')
+  const errorMessage = `${formattedErrors}\n\n${tokensToPlainText(tokens)}`
 
-  if (process.env.MDXTS_HIGHLIGHT_ERRORS === 'true') {
-    const errorMessage = `${formattedErrors}\n\n${tokensToHighlightedText(tokens)}`
-    throw new Error(
-      `[mdxts] ${chalk.bold(componentName)} type errors found ${sourcePath ? `at ${chalk.bold(`"${sourcePath}"`)} ` : ''}${chalk.bold(formattedPath)}\n\n${errorMessage}\n\n`
-    )
-  } else {
-    const errorMessage = `${formattedErrors}\n\n${tokensToPlainText(tokens)}`
-    throw new Error(
-      `[mdxts] ${componentName} type errors found ${sourcePath ? `at "${sourcePath}" ` : ''}${formattedPath}\n\n${errorMessage}\n\n`
-    )
-  }
+  throw new Error(
+    `[mdxts] ${componentName} type errors found ${
+      sourcePath ? `at "${sourcePath}" ` : ''
+    }${formattedPath}\n\n${errorMessage}\n\n`
+  )
 }

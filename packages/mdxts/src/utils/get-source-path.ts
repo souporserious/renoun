@@ -3,6 +3,7 @@ import { findRootSync } from '@manypkg/find-root'
 
 import { getEditorPath } from './get-editor-path'
 import { getGitFileUrl } from './get-git-file-url'
+import { loadConfig } from './load-config'
 
 const warned = new Set<string>()
 let rootDirectory: string | null = null
@@ -14,10 +15,24 @@ export function getSourcePath(
   path: string,
   line?: number,
   column?: number,
-  gitSource: string | undefined = process.env.MDXTS_GIT_SOURCE,
-  gitBranch: string | undefined = process.env.MDXTS_GIT_BRANCH,
-  gitProvider: string | undefined = process.env.MDXTS_GIT_PROVIDER
+  gitSource?: string,
+  gitBranch?: string,
+  gitProvider?: string
 ) {
+  const config = loadConfig()
+
+  if (gitSource === undefined) {
+    gitSource = config.gitSource
+  }
+
+  if (gitBranch === undefined) {
+    gitBranch = config.gitBranch
+  }
+
+  if (gitProvider === undefined) {
+    gitProvider = config.gitProvider
+  }
+
   if (process.env.NODE_ENV === 'development') {
     return getEditorPath({ path, line, column })
   }
@@ -32,7 +47,7 @@ export function getSourcePath(
     if (gitSource === undefined) {
       if (!warned.has(relativeFilePath)) {
         console.warn(
-          `[mdxts] \`getSourcePath\` could not determine the source path for "${relativeFilePath}". Ensure \`MDXTS_GIT_SOURCE\` is set in production.`
+          `[mdxts] \`getSourcePath\` could not determine the git source path for \`${relativeFilePath}\`. Configure the \`gitSource\` option at \`.mdxts/config.json\`.`
         )
         warned.add(relativeFilePath)
       }

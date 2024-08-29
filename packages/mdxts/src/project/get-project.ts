@@ -1,5 +1,5 @@
 import type { Project, ProjectOptions as TsMorphProjectOptions } from 'ts-morph'
-import { join, dirname, extname } from 'node:path'
+import { join, dirname, extname, resolve } from 'node:path'
 import { existsSync, watch, statSync } from 'node:fs'
 
 import { ProjectOptions } from './types'
@@ -42,7 +42,7 @@ export async function getProject(options?: ProjectOptions) {
     ...options,
   })
   const projectDirectory = options?.tsConfigFilePath
-    ? dirname(options.tsConfigFilePath)
+    ? resolve(dirname(options.tsConfigFilePath))
     : process.cwd()
 
   if (process.env.NODE_ENV === 'development') {
@@ -70,17 +70,17 @@ export async function getProject(options?: ProjectOptions) {
         if (eventType === 'rename') {
           if (existsSync(filePath)) {
             if (isDirectory) {
-              project.addDirectoryAtPath(filename)
+              project.addDirectoryAtPath(filePath)
             } else {
-              project.addSourceFileAtPath(filename)
+              project.addSourceFileAtPath(filePath)
             }
           } else if (isDirectory) {
-            const removedDirectory = project.getDirectory(filename)
+            const removedDirectory = project.getDirectory(filePath)
             if (removedDirectory) {
               removedDirectory.delete()
             }
           } else {
-            const removedSourceFile = project.getSourceFile(filename)
+            const removedSourceFile = project.getSourceFile(filePath)
             if (removedSourceFile) {
               removedSourceFile.delete()
             }
@@ -88,12 +88,11 @@ export async function getProject(options?: ProjectOptions) {
         }
         // The file contents were changed
         else if (eventType === 'change') {
-          const previousSourceFile = project.getSourceFile(filename)
-
+          const previousSourceFile = project.getSourceFile(filePath)
           if (previousSourceFile) {
             previousSourceFile.refreshFromFileSystem()
           } else {
-            project.addSourceFileAtPath(filename)
+            project.addSourceFileAtPath(filePath)
           }
         }
       }

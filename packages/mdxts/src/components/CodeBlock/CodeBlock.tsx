@@ -93,11 +93,11 @@ export type CodeBlockProps =
       /** Path to the source file on disk to highlight. */
       source: string
 
-      /** The working directory for the `source`. Added automatically when using `mdxts/loader`. */
+      /** The working directory for the `source`. */
       workingDirectory?: string
     } & BaseCodeBlockProps)
 
-export async function CodeBlockAsync({
+async function CodeBlockAsync({
   filename,
   language,
   highlightedLines,
@@ -120,7 +120,15 @@ export async function CodeBlockAsync({
     options.value = props.value
   } else if (hasSource) {
     options.source = props.source
-    options.workingDirectory = props.workingDirectory
+
+    if (props.workingDirectory) {
+      if (URL.canParse(props.workingDirectory)) {
+        const { pathname } = new URL(props.workingDirectory)
+        options.workingDirectory = pathname.slice(0, pathname.lastIndexOf('/'))
+      } else {
+        options.workingDirectory = props.workingDirectory
+      }
+    }
   }
 
   const { tokens, value, label } = await analyzeSourceText({
