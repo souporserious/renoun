@@ -1,5 +1,260 @@
 # mdxts
 
+## 2.0.0
+
+### Major Changes
+
+- 98c68a3: Removes `mdxts/next` package export. This is an effort to simplify the core package and reduce the number of dependencies. This functionality will be available in a separate package in the future.
+
+  ### Breaking Changes
+
+  If using Next.js, this is a breaking change for users who are importing `mdxts/next` directly. The following configuration can be used to enable MDX support and silence warnings from the `ts-morph` dependency:
+
+  ```ts
+  import createMDXPlugin from '@next/mdx'
+  import remarkFrontmatter from 'remark-frontmatter'
+  import remarkMdxFrontmatter from 'remark-mdx-frontmatter'
+  import webpack from 'webpack'
+
+  const withMDX = createMDXPlugin({
+    extension: /\.mdx?$/,
+    options: {
+      remarkPlugins: [remarkFrontmatter, remarkMdxFrontmatter],
+    },
+  })
+
+  export default withMDX({
+    pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
+    webpack(config) {
+      config.plugins.push(
+        new webpack.ContextReplacementPlugin(
+          /\/(@ts-morph\/common)\//,
+          (data) => {
+            for (const dependency of data.dependencies) {
+              delete dependency.critical
+            }
+            return data
+          }
+        )
+      )
+
+      return config
+    },
+  })
+  ```
+
+  Then add or update the `mdx-components.tsx` file in the root of the project to set up the code components:
+
+  ```tsx
+  import { MDXComponents } from 'mdx/types'
+  import { CodeBlock, CodeInline } from 'mdxts/components'
+
+  export function useMDXComponents() {
+    return {
+      code: (props) => {
+        return (
+          <CodeInline value={props.children as string} language="typescript" />
+        )
+      },
+      pre: (props) => {
+        const { value, language } = CodeBlock.parsePreProps(props)
+        return <CodeBlock allowErrors value={value} language={language} />
+      },
+    } satisfies MDXComponents
+  }
+  ```
+
+- 98c68a3: Removes `createSource` in favor of using `createCollection` from `mdxts/collections`.
+
+  ### Breaking Changes
+
+  Use `createCollection` to generate sources:
+
+  ```tsx
+  import { createCollection, type FileSystemSource } from 'mdxts/collections'
+
+  type ComponentSchema = Record<string, React.ComponentType>
+
+  export type ComponentSource = FileSystemSource<ComponentSchema>
+
+  export const ComponentsCollection = createCollection<ComponentSchema>(
+    'src/components/**/*.{ts,tsx}',
+    {
+      baseDirectory: 'components',
+      basePath: 'components',
+      tsConfigFilePath: '../../packages/mdxts/tsconfig.json',
+    }
+  )
+  ```
+
+- 98c68a3: Removes `Navigation` component in favor of using `createCollection` directly.
+
+  ### Breaking Changes
+
+  Use `createCollection` to generate navigations:
+
+  #### List Navigation
+
+  Use `getSources` to render a list of the immediate sources in the collection:
+
+  ```tsx filename="app/posts/page.tsx"
+  export default async function Page() {
+    return (
+      <>
+        <h1>All Posts</h1>
+        <ul>
+          {PostsCollection.getSources().map((source) => (
+            <Post key={source.getPath()} source={source} />
+          ))}
+        </ul>
+      </>
+    )
+  }
+  ```
+
+  #### Tree Navigation
+
+  Similar to list navigation, we can use `getSources` recursively to render a tree of links:
+
+  ```tsx filename="app/posts/layout.tsx"
+  import { PostsCollection } from '@/collections'
+
+  export default async function Layout() {
+    return (
+      <nav>
+        <ul>
+          <TreeNavigation Source={PostsCollection} />
+        </ul>
+      </nav>
+    )
+  }
+
+  async function TreeNavigation({ source }: { source: PostSource }) {
+    const sources = source.getSources({ depth: 1 })
+    const path = source.getPath()
+    const depth = source.getDepth()
+    const frontmatter = await source.getNamedExport('frontmatter').getValue()
+
+    if (sources.length === 0) {
+      return (
+        <li style={{ paddingLeft: `${depth}rem` }}>
+          <Link href={path} style={{ color: 'white' }}>
+            {frontmatter.title}
+          </Link>
+        </li>
+      )
+    }
+
+    const childrenSources = sources.map((childSource) => (
+      <TreeNavigation key={childSource.getPath()} source={childSource} />
+    ))
+
+    if (depth > 0) {
+      return (
+        <li style={{ paddingLeft: `${depth}rem` }}>
+          <Link href={path} style={{ color: 'white' }}>
+            {frontmatter.title}
+          </Link>
+          <ul>{childrenSources}</ul>
+        </li>
+      )
+    }
+
+    return <ul>{childrenSources}</ul>
+  }
+  ```
+
+  #### Sibling Navigation
+
+  Use `getSiblings` to get the previous and next sources in the collection:
+
+  ```tsx filename="app/posts/[slug]/page.tsx"
+  export default async function Page({ params }) {
+    const postSource = Posts.getSource(params.slug)
+
+    if (!postSource) notFound()
+
+    const Post = await postSource.getDefaultExport().getValue()
+    const frontmatter = await postSource
+      .getNamedExport('frontmatter')
+      .getValue()
+    const [previous, next] = postSource.getSiblings()
+
+    return (
+      <>
+        <h1>{frontmatter.title}</h1>
+        <p>{frontmatter.description}</p>
+        <Post />
+        {previous ? <Sibling source={previous} direction="previous" /> : null}
+        {next ? <Sibling source={next} direction="next" /> : null}
+      </>
+    )
+  }
+
+  function Sibling({
+    source,
+    direction,
+  }: {
+    source: ReturnType<typeof Posts.getSource>
+    direction: 'previous' | 'next'
+  }) {
+    const frontmatter = await source.getNamedExport('frontmatter').getValue()
+    return (
+      <a href={source.getPath()}>
+        <span>{direction === 'previous' ? 'Previous' : 'Next'}</span>
+        {frontmatter.title}
+      </a>
+    )
+  }
+  ```
+
+### Minor Changes
+
+- 98c68a3: Adds remaining configuration options from `next/plugin` to JSON config.
+- 98c68a3: Adds `getSiblings` method to collection export source.
+- 98c68a3: Adds `getType` method to collection export source for retrieving type metadata for an export.
+- 98c68a3: Adds `APIReference` component. This replaces the previous `ExportedTypes` component and is used to document the API of module exports using collections:
+
+  ```tsx
+  import { APIReference } from 'mdxts/components'
+  import { createCollection } from 'mdxts/collections'
+
+  const ComponentsCollection = createCollection('components/**/*.{ts,tsx}', {
+    baseDirectory: 'components',
+    basePath: 'components',
+  })
+
+  export default function Component({ params }) {
+    return ComponentsCollection.getSource(params.slug)
+      .getExports()
+      .map((exportSource) => (
+        <APIReference key={exportSource.name} source={exportSource} />
+      ))
+  }
+  ```
+
+- 98c68a3: `CodeBlock` now tries to parse `workingDirectory` as a `URL` and gets the pathname directory. This allows using `import.meta.url` directly in the `workingDirectory` prop:
+
+  ```tsx
+  <CodeBlock
+    source="./counter/useCounter.ts"
+    workingDirectory={import.meta.url}
+  />
+  ```
+
+- 98c68a3: Adds `getMainExport` for file system source and `isMainExport` for export source.
+
+### Patch Changes
+
+- 98c68a3: Fixes collection file system source name parsing not accounting for filename segments.
+- 98c68a3: Fixes missing bottom padding in `CodeInline`.
+- 98c68a3: Fixes syncing project files during development.
+- 98c68a3: Fixes import map generation race condition causing imports to not be found during production builds.
+- 98c68a3: Fixes export source `getPath` to construct the url path from the file system.
+- 98c68a3: Defaults collection `getSource` to return `index` source if it exists.
+- 98c68a3: Fixes file patterns based on relative tsconfig directory.
+- 98c68a3: Fixes duplicate sources returned from collection `getSources` and file system source `getSiblings`.
+
 ## 1.8.0
 
 ### Minor Changes
