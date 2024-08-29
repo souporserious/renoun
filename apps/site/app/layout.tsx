@@ -3,8 +3,8 @@ import Link from 'next/link'
 import './layout.css'
 
 export const metadata: Metadata = {
-  title: 'Design System',
-  description: 'Design system documentation built with MDXTS and Next.js.',
+  title: 'Omnidoc',
+  description: 'The toolkit to build docs as great as your product.',
   robots: {
     index: false,
     follow: false,

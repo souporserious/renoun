@@ -1,12 +1,23 @@
 :root {
   --color-background: #f8f8f8;
   --color-foreground: #333;
+  --font-size-heading: 3rem;
+  --font-size-body: 1.6rem;
+  --line-height-body: 1.4;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --color-background: #000000;
     --color-foreground: #f8f8f8;
+  }
+}
+
+@media (min-width: 40rem) {
+  :root {
+    --font-size-heading: 4rem;
+    --font-size-body: 2rem;
+    --line-height-body: 1.4;
   }
 }
 
