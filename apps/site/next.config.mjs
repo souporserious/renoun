@@ -1,7 +1,7 @@
 import createMDXPlugin from '@next/mdx'
-import webpack from 'webpack'
 import remarkFrontmatter from 'remark-frontmatter'
 import remarkMdxFrontmatter from 'remark-mdx-frontmatter'
+import webpack from 'webpack'
 
 const withMDX = createMDXPlugin({
   extension: /\.mdx?$/,
@@ -23,10 +23,7 @@ export default withMDX({
           }
           return data
         }
-      ),
-      new webpack.IgnorePlugin({
-        resourceRegExp: /^perf_hooks$/,
-      })
+      )
     )
     return config
   },
