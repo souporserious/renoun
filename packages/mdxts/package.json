@@ -21,8 +21,7 @@
     "documentation",
     "docgen",
     "react",
-    "design",
-    "systems"
+    "design systems"
   ],
   "files": [
     "dist/*"
