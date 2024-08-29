@@ -106,28 +106,35 @@ function TypeChildren({
         }}
       >
         {type.accessors && type.accessors.length > 0 ? (
-          <div css={{ marginTop: '1rem' }}>
-            <h4>Accessors</h4>
+          <div>
+            <h4 css={{ margin: 0 }}>Accessors</h4>
             {type.accessors.map((accessor, index) => (
               <TypeValue key={index} type={accessor} />
             ))}
           </div>
         ) : null}
-        <h4>Constructors</h4>
-        {type.constructors?.map((constructor, index) => (
-          <TypeValue key={index} type={constructor} />
-        ))}
+
+        {type.constructors && type.constructors.length > 0 ? (
+          <div>
+            <h4 css={{ margin: 0 }}>Constructors</h4>
+            {type.constructors.map((constructor, index) => (
+              <TypeValue key={index} type={constructor} />
+            ))}
+          </div>
+        ) : null}
+
         {type.methods && type.methods.length > 0 ? (
-          <div css={{ marginTop: '1rem' }}>
-            <h4>Methods</h4>
+          <div>
+            <h4 css={{ margin: 0 }}>Methods</h4>
             {type.methods.map((method, index) => (
               <TypeValue key={index} type={method} />
             ))}
           </div>
         ) : null}
+
         {type.properties && type.properties.length > 0 ? (
-          <div css={{ marginTop: '1rem' }}>
-            <h4>Properties</h4>
+          <div>
+            <h4 css={{ margin: 0 }}>Properties</h4>
             {type.properties.map((property, index) => (
               <TypeValue key={index} type={property} />
             ))}
@@ -149,13 +156,13 @@ function TypeChildren({
           ...cssProp,
         }}
       >
-        <h4 css={{ margin: 0 }}>Signatures</h4>
+        <h4 css={{ margin: 0, marginBottom: '1rem' }}>Signatures</h4>
         {type.signatures.map((signature, index) => {
           return (
             <Fragment key={index}>
               {signature.parameter ? (
-                <div css={{ marginTop: '1rem' }}>
-                  <h5 css={{ margin: '0 0 1rem' }}>Parameters</h5>
+                <div>
+                  <h5 css={{ margin: '0' }}>Parameters</h5>
                   {signature.parameter.kind === 'Object' ? (
                     <TypeProperties type={signature.parameter} />
                   ) : signature.parameter.kind === 'Reference' ? (
@@ -167,7 +174,7 @@ function TypeChildren({
               ) : null}
               {signature.returnType ? (
                 <div>
-                  <h5>Return</h5>
+                  <h5 css={{ margin: 0, marginBottom: '1.5rem' }}>Return</h5>
                   {signature.returnType}
                 </div>
               ) : null}
@@ -190,12 +197,12 @@ function TypeChildren({
           ...cssProp,
         }}
       >
-        <h4 css={{ margin: 0 }}>Signatures</h4>
+        <h4 css={{ margin: 0, marginBottom: '1rem' }}>Signatures</h4>
         {type.signatures.map((signature, index) => {
           return (
             <Fragment key={index}>
               {signature.parameters.length > 0 ? (
-                <div css={{ marginTop: '1rem' }}>
+                <div>
                   <h5 css={{ margin: 0 }}>Parameters</h5>
                   {signature.parameters.map((parameter, index) => (
                     <TypeValue key={index} type={parameter} />
@@ -203,8 +210,8 @@ function TypeChildren({
                 </div>
               ) : null}
               {signature.returnType ? (
-                <div css={{ marginTop: '1rem' }}>
-                  <h5>Return</h5>
+                <div>
+                  <h5 css={{ margin: 0, marginBottom: '1.5rem' }}>Return</h5>
                   {signature.returnType}
                 </div>
               ) : null}
@@ -267,7 +274,7 @@ function TypeProperties({
           ...cssProp,
         }}
       >
-        <h4>Properties</h4>
+        <h4 css={{ margin: 0 }}>Properties</h4>
         {type.properties.map((propertyType, index) => (
           <TypeValue key={index} type={propertyType} />
         ))}
