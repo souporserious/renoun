@@ -1,7 +1,8 @@
-import { findRootSync } from '@manypkg/find-root'
 import { exec } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+
+import { getRootDirectory } from '../utils/get-root-directory'
 
 let isGitRepository: null | boolean = null
 let hasCheckedIfShallow = false
@@ -22,7 +23,7 @@ export async function getGitMetadata(filePath: string): Promise<GitMetadata> {
   }
 
   if (isGitRepository === null) {
-    const rootDirectory = findRootSync(process.cwd()).rootDir
+    const rootDirectory = getRootDirectory()
     isGitRepository = existsSync(join(rootDirectory, '.git'))
   }
 

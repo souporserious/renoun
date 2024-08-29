@@ -2,9 +2,9 @@ import type { bundledLanguages, bundledThemes } from 'shiki/bundle/web'
 import type { SourceFile, Diagnostic, ts, Project } from 'ts-morph'
 import { Node, SyntaxKind } from 'ts-morph'
 import { join, posix } from 'node:path'
-import { findRoot } from '@manypkg/find-root'
 
 import { getDiagnosticMessageText } from './get-diagnostic-message'
+import { getRootDirectory } from './get-root-directory'
 import { getThemeColors } from './get-theme-colors'
 import { isJsxOnly } from './is-jsx-only'
 import { generatedFilenames } from './parse-source-text-metadata'
@@ -169,7 +169,7 @@ export async function getTokens(
         end: node.getEnd(),
       }
     })
-  const rootDirectory = (await findRoot(process.cwd())).rootDir
+  const rootDirectory = getRootDirectory()
   const baseDirectory = process.cwd().replace(rootDirectory, '')
   let previousTokenStart = 0
   let parsedTokens = tokens.map((line) => {

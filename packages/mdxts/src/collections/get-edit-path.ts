@@ -1,6 +1,6 @@
 import { join, posix } from 'node:path'
-import { findRootSync } from '@manypkg/find-root'
 
+import { getRootDirectory } from '../utils/get-root-directory'
 import { getEditorPath } from '../utils/get-editor-path'
 import { getGitFileUrl } from '../utils/get-git-file-url'
 import { loadConfig } from '../utils/load-config'
@@ -37,7 +37,7 @@ export function getEditPath(
 
   if (process.env.NODE_ENV === 'production' && gitSource !== undefined) {
     if (rootDirectory === null) {
-      rootDirectory = findRootSync(process.cwd()).rootDir
+      rootDirectory = getRootDirectory()
     }
 
     const relativeFilePath = path.replace(join(rootDirectory, posix.sep), '')
