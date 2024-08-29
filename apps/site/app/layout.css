@@ -15,7 +15,7 @@
 
 @media (min-width: 40rem) {
   :root {
-    --font-size-heading: 4rem;
+    --font-size-heading: 3.6rem;
     --font-size-body: 2rem;
     --line-height-body: 1.4;
   }
