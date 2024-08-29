@@ -23,26 +23,30 @@ MDXTS is a collection of components and utilities for rendering <br /><a href="h
 
 ## Getting Started
 
-Using MDXTS in [Next.js](https://nextjs.org/) is currently the easiest way to get started. Follow the [manual setup](https://www.mdxts.dev/docs/getting-started#manual-setup) or use the CLI in a Next.js project to automate the [plugin](https://www.mdxts.dev/packages/next) configuration:
-
 ```bash
-npm create mdxts
+npm install mdxts
 ```
 
-After installing the package and required dependencies, you can start creating content or documentation using MDX. Simply render MDX as pages or use the `createSource` function to create a source for rendering a collection of MDX files:
+After installing the package and required dependencies, you can start creating content or documentation using any framework that supports React Server Components.
+
+To get started, use the `createCollection` function to render a collection of files from the file system:
 
 ```tsx
-import { createSource } from 'mdxts'
+import { createCollection } from 'mdxts/collections'
 
-const posts = createSource('docs/*.mdx')
+const posts = createCollection('docs/*.mdx')
 
 export default async function Page({ params }) {
-  const { Content } = await posts.get(params.slug)
+  const Content = await posts
+    .getSource(params.slug)
+    .getDefaultExport()
+    .getValue()
+
   return <Content />
 }
 ```
 
-Visit the [Getting Started](https://mdxts.dev/docs/getting-started) guide to view the full documentation and learn more about the features and capabilities of MDXTS.
+There are many different components to help facilitate writing technical content. Visit the [Getting Started](https://mdxts.dev/docs/getting-started) guide to view the full documentation and learn more about the features and capabilities of MDXTS.
 
 ## License
 
