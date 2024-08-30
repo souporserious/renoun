@@ -39,6 +39,7 @@ export async function MDXContent({
     rehypePlugins,
     remarkPlugins,
     outputFormat: 'function-body',
+    development: process.env.NODE_ENV === 'development',
   })
 
   const { default: Content } = await run(code.value, {
