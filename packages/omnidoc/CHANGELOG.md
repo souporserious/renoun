@@ -1,5 +1,12 @@
 # mdxts
 
+## 3.0.1
+
+### Patch Changes
+
+- d964f0f: Fixes `getRootDirectory` not accounting for non-monorepos and returns the first directory where a `package.json` file was found.
+- d50ff0d: Reverts `fixMissingImports` as it is causing incorrect imports to be added.
+
 ## 3.0.0
 
 ### Major Changes
