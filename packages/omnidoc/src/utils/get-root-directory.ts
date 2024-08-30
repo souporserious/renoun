@@ -11,6 +11,7 @@ export function getRootDirectory(startDirectory: string = cwd()): string {
   }
 
   let currentDirectory = resolve(startDirectory)
+  let packageJsonDirectory: string | null = null
 
   while (true) {
     const pnpmWorkspacePath = join(currentDirectory, 'pnpm-workspace.yaml')
@@ -33,6 +34,8 @@ export function getRootDirectory(startDirectory: string = cwd()): string {
       ) {
         rootDirectoryCache.set(startDirectory, currentDirectory)
         return currentDirectory
+      } else {
+        packageJsonDirectory = currentDirectory
       }
     } catch (error) {
       if (
@@ -55,5 +58,11 @@ export function getRootDirectory(startDirectory: string = cwd()): string {
     currentDirectory = parentDirectory
   }
 
-  throw new Error('[omnidoc] Workspace root directory not found')
+  // If no monorepo root workspace was found, return the directory containing the last package.json found
+  if (packageJsonDirectory) {
+    rootDirectoryCache.set(startDirectory, packageJsonDirectory)
+    return packageJsonDirectory
+  }
+
+  throw new Error('[omnidoc] Workspace root directory could not be found')
 }
