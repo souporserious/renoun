@@ -1,5 +1,15 @@
 # mdxts
 
+## 2.0.1
+
+### Patch Changes
+
+- 39be366: Fixes `MDXContent` component causing `_jsx is not a function` during development.
+- 5504a76: Replaces `@manypkg/find-root` with simplified utility for getting the root directory.
+- b7b664c: Adds `allowErrors` prop to `CodeInline`.
+- 31e00c5: Trims empty export from copy value.
+- 08d47ec: Fix imports in `CodeBlock` to capture correct types.
+
 ## 2.0.0
 
 ### Major Changes
