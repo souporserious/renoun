@@ -7,8 +7,15 @@ export default async function Components() {
   const sources = await ComponentsCollection.getSources({ depth: 1 })
 
   return (
-    <main css={{ display: 'grid', padding: '4rem 0', gap: '1rem' }}>
-      <h1 css={{ margin: 0 }}>Components</h1>
+    <main css={{ display: 'grid', padding: '4rem 0', gap: '4rem' }}>
+      <h1
+        css={{
+          fontSize: 'var(--font-size-heading)',
+          margin: 0,
+        }}
+      >
+        Components
+      </h1>
       <ul
         css={{
           listStyle: 'none',
@@ -24,7 +31,11 @@ export default async function Components() {
   )
 }
 
-const StyledLink = styled(Link, { display: 'block', padding: '1rem' })
+const StyledLink = styled(Link, {
+  display: 'block',
+  padding: '1rem',
+  margin: '0 -1rem',
+})
 
 async function ComponentItem({ source }: { source: ComponentSource }) {
   return (

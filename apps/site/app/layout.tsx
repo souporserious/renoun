@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 
 import './layout.css'
+import { GitProviderLink } from 'omnidoc/components'
 
 export const metadata: Metadata = {
   title: 'Omnidoc',
@@ -34,6 +35,7 @@ export default function RootLayout({
           <nav css={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <Link href="/collections">Collections</Link>
             <Link href="/components">Components</Link>
+            <GitProviderLink />
           </nav>
         </header>
         {children}
