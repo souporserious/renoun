@@ -299,7 +299,11 @@ async function CodeBlockAsync({
                 color: theme.activityBar.foreground,
                 borderRadius: 5,
               }}
-              value={value}
+              value={
+                value.includes('export { }')
+                  ? value.split('\n').slice(0, -2).join('\n')
+                  : value
+              }
             />
           ) : null}
         </Pre>
