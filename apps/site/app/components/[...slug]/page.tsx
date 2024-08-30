@@ -88,7 +88,7 @@ export default async function Component({
           },
         }}
       >
-        <div>
+        <div css={{ display: 'flex', flexDirection: 'column', gap: '4rem' }}>
           {examplesExports.length ? (
             <div>
               <h2 id="examples" css={{ margin: '0 0 2rem' }}>
