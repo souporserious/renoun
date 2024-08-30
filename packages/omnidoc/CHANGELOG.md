@@ -1,5 +1,11 @@
 # mdxts
 
+## 3.0.0
+
+### Major Changes
+
+- eb8d77e: Renames the package from `mdxts` to `omnidoc`.
+
 ## 2.0.1
 
 ### Patch Changes
