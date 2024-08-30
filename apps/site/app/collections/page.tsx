@@ -1,4 +1,4 @@
-import { APIReference } from 'mdxts/components'
+import { APIReference } from 'omnidoc/components'
 
 import { CollectionsCollection } from '@/collections'
 

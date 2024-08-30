@@ -2,8 +2,8 @@
   "private": true,
   "name": "@examples/blog",
   "scripts": {
-    "dev": "mdxts next",
-    "build": "node ../../packages/mdxts/dist/cjs/src/cli/index.js && next build",
+    "dev": "omnidoc next",
+    "build": "node ../../packages/omnidoc/dist/cjs/src/cli/index.js && next build",
     "start": "next start"
   },
   "dependencies": {
@@ -13,7 +13,7 @@
     "@types/mdx": "^2.0.13",
     "@types/react": "^18.3.4",
     "@types/react-dom": "^18.3.0",
-    "mdxts": "workspace:*",
+    "omnidoc": "workspace:*",
     "next": "14.2.7",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

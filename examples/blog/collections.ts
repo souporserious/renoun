@@ -1,4 +1,4 @@
-import { createCollection, type MDXContent } from 'mdxts/collections'
+import { createCollection, type MDXContent } from 'omnidoc/collections'
 import { z } from 'zod'
 
 const frontmatterSchema = z.object({

@@ -1,4 +1,4 @@
-import { createCollection, type FileSystemSource } from 'mdxts/collections'
+import { createCollection, type FileSystemSource } from 'omnidoc/collections'
 
 type CollectionsSchema = Record<string, React.ComponentType>
 
@@ -9,7 +9,7 @@ export const CollectionsCollection = createCollection<CollectionsSchema>(
   {
     baseDirectory: 'collections',
     basePath: 'collections',
-    tsConfigFilePath: '../../packages/mdxts/tsconfig.json',
+    tsConfigFilePath: '../../packages/omnidoc/tsconfig.json',
   }
 )
 
@@ -22,6 +22,6 @@ export const ComponentsCollection = createCollection<ComponentSchema>(
   {
     baseDirectory: 'components',
     basePath: 'components',
-    tsConfigFilePath: '../../packages/mdxts/tsconfig.json',
+    tsConfigFilePath: '../../packages/omnidoc/tsconfig.json',
   }
 )

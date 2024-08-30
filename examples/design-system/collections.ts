@@ -1,4 +1,4 @@
-import { createCollection, type FileSystemSource } from 'mdxts/collections'
+import { createCollection, type FileSystemSource } from 'omnidoc/collections'
 
 type ComponentSchema = Record<string, React.ComponentType>
 

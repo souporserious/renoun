@@ -2,8 +2,8 @@
 .next
 .turbo
 .vercel
-.mdxts
-!.mdxts/config.json
+.omnidoc
+!.omnidoc/config.json
 dist
 node_modules
 out

@@ -3,7 +3,7 @@ import './layout.css'
 
 export const metadata: Metadata = {
   title: 'Blog',
-  description: 'A blog built with MDXTS and Next.js.',
+  description: 'A blog built with Omnidoc and Next.js.',
   robots: {
     index: false,
     follow: false,

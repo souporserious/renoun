@@ -47,4 +47,4 @@ jobs:
         run: pnpm install
 
       - name: Run Jest tests
-        run: pnpm --filter=mdxts test
+        run: pnpm --filter=omnidoc test
