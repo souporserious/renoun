@@ -40,7 +40,7 @@ function getFilePathRelativeToProject(declaration: Node) {
     )
   }
 
-  return trimmedFilePath.slice(1)
+  return trimmedFilePath
 }
 
 const rootFilePaths = new WeakMap<Project, string>()
