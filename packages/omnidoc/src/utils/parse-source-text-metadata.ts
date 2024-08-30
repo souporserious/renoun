@@ -157,11 +157,9 @@ export async function parseSourceTextMetadata({
   // Create a ts-morph source file to type-check JavaScript and TypeScript code blocks.
   if (isJavaScriptLikeLanguage) {
     try {
-      sourceFile = project
-        .createSourceFile(filename, finalValue, {
-          overwrite: true,
-        })
-        .fixMissingImports()
+      sourceFile = project.createSourceFile(filename, finalValue, {
+        overwrite: true,
+      })
 
       if (!isInline) {
         // If no imports or exports add an empty export declaration to coerce TypeScript to treat the file as a module
