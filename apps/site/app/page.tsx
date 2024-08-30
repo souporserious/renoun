@@ -1,4 +1,4 @@
-import { CodeInline } from 'mdxts/components'
+import { CodeInline } from 'omnidoc/components'
 
 export default function Page() {
   return (

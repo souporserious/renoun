@@ -1,1 +1,1 @@
-packages/mdxts/README.md
+packages/omnidoc/README.md

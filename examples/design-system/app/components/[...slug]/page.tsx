@@ -1,9 +1,9 @@
-import { CodeBlock, Tokens } from 'mdxts/components'
+import { CodeBlock, Tokens } from 'omnidoc/components'
 import {
   createCollection,
   type MDXContent,
   type ExportSource,
-} from 'mdxts/collections'
+} from 'omnidoc/collections'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 

@@ -1,9 +1,9 @@
-import { APIReference, CodeBlock, Tokens } from 'mdxts/components'
+import { APIReference, CodeBlock, Tokens } from 'omnidoc/components'
 import {
   createCollection,
   type MDXContent,
   type ExportSource,
-} from 'mdxts/collections'
+} from 'omnidoc/collections'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
@@ -49,10 +49,10 @@ export default async function Component({
   const examplesExports = isExamplesPage
     ? componentSource.getExports()
     : examplesSource
-    ? examplesSources?.length
-      ? examplesSources.flatMap((source) => source.getExports())
-      : examplesSource.getExports()
-    : []
+      ? examplesSources?.length
+        ? examplesSources.flatMap((source) => source.getExports())
+        : examplesSource.getExports()
+      : []
   const sourceExports = isExamplesPage
     ? undefined
     : componentSource.getExports()
