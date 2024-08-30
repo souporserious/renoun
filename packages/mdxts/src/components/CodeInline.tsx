@@ -31,6 +31,9 @@ export type CodeInlineProps = {
 
   /** Style to apply to the wrapping element. */
   style?: React.CSSProperties
+
+  /** Whether or not to allow errors. Accepts a boolean or comma-separated list of allowed error codes. */
+  allowErrors?: boolean | string
 }
 
 function Token({ token }: { token: Token }) {
@@ -62,11 +65,13 @@ async function CodeInlineAsync({
   css: cssProp,
   className,
   style,
+  allowErrors,
 }: CodeInlineProps) {
   const { tokens } = await analyzeSourceText({
     isInline: true,
     value,
     language,
+    allowErrors,
   })
   const theme = await getThemeColors()
   const [classNames, Styles] = css({
