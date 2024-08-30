@@ -15,7 +15,7 @@ let client: WebSocketClient | undefined
 
 if (
   process.env.NODE_ENV === 'development' ||
-  process.env.Omnidoc_SERVER === 'true'
+  process.env.OMNIDOC_SERVER === 'true'
 ) {
   client = new WebSocketClient()
 }

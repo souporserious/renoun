@@ -22,9 +22,9 @@ type ConfigurationOptions = {
 const configPath = resolve(process.cwd(), '.omnidoc/config.json')
 const defaultConfig = {
   theme: 'nord',
-  gitBranch: process.env.Omnidoc_GIT_BRANCH || 'main',
-  gitSource: process.env.Omnidoc_GIT_SOURCE,
-  gitProvider: process.env.Omnidoc_GIT_PROVIDER as any,
+  gitBranch: process.env.OMNIDOC_GIT_BRANCH || 'main',
+  gitSource: process.env.OMNIDOC_GIT_SOURCE,
+  gitProvider: process.env.OMNIDOC_GIT_PROVIDER as any,
 } satisfies ConfigurationOptions
 
 /** Load config from `.omnidoc/config.json`. */

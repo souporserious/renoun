@@ -21,7 +21,7 @@ export async function getTheme() {
 
   if (themePath === undefined) {
     throw new Error(
-      '[omnidoc] The theme is undefined. Either create a config at ".omnidoc/config.json" that defines a valid theme or set "process.env.Omnidoc_THEME_PATH" to a valid theme.'
+      '[omnidoc] The theme is undefined. Either create a config at ".omnidoc/config.json" that defines a valid theme or set "process.env.OMNIDOC_THEME_PATH" to a valid theme.'
     )
   }
 

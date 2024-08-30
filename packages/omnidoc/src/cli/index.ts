@@ -37,7 +37,7 @@ function start() {
           shell: true,
           env: {
             ...process.env,
-            Omnidoc_SERVER: 'true',
+            OMNIDOC_SERVER: 'true',
           },
         }
       )

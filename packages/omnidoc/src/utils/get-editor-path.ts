@@ -21,7 +21,7 @@ export function getEditorPath({
   line = 0,
   column = 0,
 }: EditorLinkOptions) {
-  const editor = process.env.Omnidoc_EDITOR || 'vscode'
+  const editor = process.env.OMNIDOC_EDITOR || 'vscode'
 
   switch (editor) {
     case 'sublime':
