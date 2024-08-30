@@ -354,7 +354,7 @@ async function SiblingLink({
       }}
     >
       <div>{direction === 'previous' ? 'Previous' : 'Next'}</div>
-      {source.getTitle()}
+      {source.getName()}
     </Link>
   )
 }

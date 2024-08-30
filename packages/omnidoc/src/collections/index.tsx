@@ -9,7 +9,6 @@ import {
 } from 'ts-morph'
 import { dirname, resolve } from 'node:path'
 import globParent from 'glob-parent'
-import parseTitle from 'title'
 
 import { createSlug } from '../utils/create-slug'
 import { filePathToPathname } from '../utils/file-path-to-pathname'
@@ -82,9 +81,6 @@ export interface ExportSource<Value> extends BaseSource {
   /** The name of the exported source. If the default export name cannot be derived, the file name will be used. */
   getName(): string
 
-  /** The name formatted as a title. */
-  getTitle(): string
-
   /** The resolved type of the exported source based on the TypeScript type if it exists. */
   getType(): Promise<ReturnType<typeof resolveType>>
 
@@ -122,9 +118,6 @@ export interface FileSystemSource<Exports extends FileExports>
   extends BaseSourceWithGetters<Exports> {
   /** The base file name or directory name. */
   getName(): string
-
-  /** The name formatted as a title. */
-  getTitle(): string
 
   /** Order of the source in the collection based on its position in the file system. */
   getOrder(): string
@@ -169,10 +162,10 @@ export interface FileSystemSource<Exports extends FileExports>
   isDirectory(): boolean
 }
 
-export type CollectionSource<Exports extends FileExports> = {
-  /** Get the configured collection title. */
-  getTitle(): string | undefined
-} & Omit<BaseSourceWithGetters<Exports>, 'getEditPath' | 'getPathSegments'>
+export type CollectionSource<Exports extends FileExports> = Omit<
+  BaseSourceWithGetters<Exports>,
+  'getEditPath' | 'getPathSegments'
+>
 
 export interface CollectionOptions<Exports extends FileExports> {
   /** The title used for the collection when rendered for a page. */
@@ -235,10 +228,6 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
   isMainExport(): boolean {
     const mainExport = this.source.getMainExport()
     return mainExport ? this === mainExport : false
-  }
-
-  getTitle() {
-    return parseTitle(this.getName())
   }
 
   getText() {
@@ -512,14 +501,6 @@ class Source<AllExports extends FileExports>
     }
 
     return name.split('.').at(0)!
-  }
-
-  getTitle() {
-    return (
-      parseTitle(this.getName())
-        // remove hyphens e.g. my-component -> my component
-        .replace(/-/g, ' ')
-    )
   }
 
   getPath() {
@@ -966,15 +947,6 @@ class Collection<AllExports extends FileExports>
     }
 
     return sources
-  }
-
-  getTitle() {
-    if (!this.options.title) {
-      throw new Error(
-        `[omnidoc] No title provided for collection with file pattern "${this.filePattern}".`
-      )
-    }
-    return parseTitle(this.options.title)
   }
 
   getPath() {

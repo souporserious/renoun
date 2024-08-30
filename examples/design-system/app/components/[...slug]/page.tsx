@@ -62,7 +62,7 @@ export default async function Component({
       }}
     >
       <div>
-        <h1>{componentSource.getTitle()}</h1>
+        <h1>{componentSource.getName()}</h1>
         {Readme ? <Readme /> : null}
       </div>
 
@@ -221,7 +221,7 @@ async function SiblingLink({
       }}
     >
       <div>{direction === 'previous' ? 'Previous' : 'Next'}</div>
-      {source.getTitle()}
+      {source.getName()}
     </Link>
   )
 }

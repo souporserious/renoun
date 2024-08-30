@@ -30,7 +30,7 @@ async function ComponentItem({ source }: { source: ComponentSource }) {
   return (
     <li>
       <StyledLink href={source.getPath()}>
-        <h2 css={{ margin: 0 }}>{source.getTitle()}</h2>
+        <h2 css={{ margin: 0 }}>{source.getName()}</h2>
       </StyledLink>
     </li>
   )
