@@ -8,10 +8,12 @@
 The `CodeBlock` component can be styled using the `className` and `style` props to target specific descendant elements.
 
 ```tsx
-import { CodeBlock as MdxtsCodeBlock, Tokens } from 'omnidoc/components'
+import { CodeBlock as OmnidocCodeBlock, Tokens } from 'omnidoc/components'
 import styles from './CodeBlock.module.css'
 
-export function CodeBlock(props: React.ComponentProps<typeof MdxtsCodeBlock>) {
+export function CodeBlock(
+  props: React.ComponentProps<typeof OmnidocCodeBlock>
+) {
   return (
     <CodeBlock
       source="./counter/useCounter.ts"
@@ -41,11 +43,13 @@ export function CodeBlock(props: React.ComponentProps<typeof MdxtsCodeBlock>) {
 If you need more customization, the `CodeBlock` component can be fully overridden by importing it from `omnidoc/components` and extending it:
 
 ```tsx filename="CodeBlock.tsx"
-import { CodeBlock as MdxtsCodeBlock, Tokens } from 'omnidoc/components'
+import { CodeBlock as OmnidocCodeBlock, Tokens } from 'omnidoc/components'
 
-export function CodeBlock(props: React.ComponentProps<typeof MdxtsCodeBlock>) {
+export function CodeBlock(
+  props: React.ComponentProps<typeof OmnidocCodeBlock>
+) {
   return (
-    <MdxtsCodeBlock {...props}>
+    <OmnidocCodeBlock {...props}>
       <pre
         style={{
           whiteSpace: 'pre',
@@ -55,7 +59,7 @@ export function CodeBlock(props: React.ComponentProps<typeof MdxtsCodeBlock>) {
       >
         <Tokens />
       </pre>
-    </MdxtsCodeBlock>
+    </OmnidocCodeBlock>
   )
 }
 ```
