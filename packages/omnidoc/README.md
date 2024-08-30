@@ -2,7 +2,7 @@
   <a href="https://omnidoc.dev">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="/packages/omnidoc/images/logo-dark.png">
-      <img src="/packages/omnidoc/images/logo-light.png" alt="Omnidoc" width="164"/>
+      <img src="/packages/omnidoc/images/logo-light.png" alt="Omnidoc" width="320"/>
     </picture>
   </a>
   <h2>Documentation That Matches the Quality of Your Product</h2>
