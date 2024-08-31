@@ -12,7 +12,7 @@ import globParent from 'glob-parent'
 
 import { createSlug } from '../utils/create-slug'
 import { filePathToPathname } from '../utils/file-path-to-pathname'
-import { getSymbolDescription } from '../utils/get-symbol-description'
+import { getJsDocMetadata } from '../utils/get-js-doc-metadata'
 import { getExportedDeclaration } from '../utils/get-exported-declaration'
 import { resolveType } from '../utils/resolve-type'
 import { formatNameAsTitle } from './format-name-as-title'
@@ -90,6 +90,9 @@ export interface ExportSource<Value> extends BaseSource {
 
   /** The description of the exported source based on the JSDoc comment if it exists. */
   getDescription(): string | undefined
+
+  /** The tags of the exported source based on the JSDoc comment if it exists. */
+  getTags(): { tagName: string; text?: string }[] | undefined
 
   /** The URL-friendly slug of the export name. */
   getSlug(): string
@@ -224,6 +227,8 @@ function resolveProject(tsConfigFilePath: string): Project {
 abstract class Export<Value, AllExports extends FileExports = FileExports>
   implements ExportSource<Value>
 {
+  #jsDocMetadata: ReturnType<typeof getJsDocMetadata> | null = null
+
   constructor(
     protected source: Source<AllExports>,
     protected exportDeclaration: ExportedDeclarations | undefined,
@@ -274,11 +279,25 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
       )
     }
 
-    const symbol = this.exportDeclaration.getSymbol()
-
-    if (symbol) {
-      return getSymbolDescription(symbol) ?? undefined
+    if (this.#jsDocMetadata === null) {
+      this.#jsDocMetadata = getJsDocMetadata(this.exportDeclaration)
     }
+
+    return this.#jsDocMetadata?.description
+  }
+
+  getTags() {
+    if (!this.exportDeclaration) {
+      throw new Error(
+        `[omnidoc] Export could not be statically analyzed from source file at "${this.source.getPath()}".`
+      )
+    }
+
+    if (this.#jsDocMetadata === null) {
+      this.#jsDocMetadata = getJsDocMetadata(this.exportDeclaration)
+    }
+
+    return this.#jsDocMetadata?.tags
   }
 
   getEnvironment() {
