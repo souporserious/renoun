@@ -3,7 +3,9 @@ import { Fragment } from 'react'
 import type { CSSObject } from 'restyle'
 
 import type { ExportSource } from '../collections'
-import { CodeInline, MDXComponents, MDXContent } from '.'
+import { CodeInline } from './CodeInline'
+import { MDXContent } from './MDXContent'
+import { MDXComponents } from './MDXComponents'
 import { createSlug } from '../utils/create-slug'
 import type { AllTypes, ResolvedType, TypeOfKind } from '../utils/resolve-type'
 import { isParameterType, isPropertyType } from '../utils/resolve-type'
@@ -13,6 +15,7 @@ const mdxComponents = {
   code: (props) => <MDXComponents.code {...props} paddingY="0" />,
 } satisfies MDXComponents
 
+/** Displays type documentation for all types related to a collection export source. */
 export async function APIReference({ source }: { source: ExportSource<any> }) {
   const type = await source.getType()
 
