@@ -1,5 +1,21 @@
 # mdxts
 
+## 3.1.0
+
+### Minor Changes
+
+- 4c29cdc: Removes `getTitle` method for collection source.
+- 9b4fe41: Adds `getTags` method to collection export source that returns the relative JS Doc tags if they exist.
+
+### Patch Changes
+
+- ac6ce1c: Always clean up sub-process in close event when using cli.
+- 365a2c3: The `getText` method for a collection export source now includes the full context of everything used within the export.
+- 1b6d65a: Adds better title parsing for file system and export source names.
+- 43e379c: Adds `.git` to default ignored list for projects.
+- 1a4888b: Removes the `sourcePath` prop from the `CodeBlock` component which was previously only used with the MDX plugins and Webpack loader.
+- 0b00c1a: Fixes `getEditPath` not trimming the working directory in production.
+
 ## 3.0.1
 
 ### Patch Changes
