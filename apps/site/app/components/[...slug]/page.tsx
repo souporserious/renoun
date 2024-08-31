@@ -293,9 +293,14 @@ async function Preview({
       css={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}
     >
       <header>
-        <Stack flexDirection="row" alignItems="baseline" gap="0.5rem">
+        <Stack
+          flexDirection="row"
+          alignItems="baseline"
+          justifyContent="space-between"
+          gap="0.5rem"
+        >
           <h3 css={{ margin: 0 }}>{title}</h3>{' '}
-          <a href={editPath}>Edit example</a>
+          <a href={editPath}>View Source</a>
         </Stack>
         {description ? <p>{description}</p> : null}
       </header>
