@@ -27,6 +27,7 @@ import { getSourcePathMap } from './get-source-files-path-map'
 import { getSourceFilesOrderMap } from './get-source-files-sort-order'
 import { getImportMap, setImportMap } from './import-maps'
 import { resolveTsConfigPath } from './resolve-ts-config-path'
+import { extractExportByIdentifier } from '../utils/extract-export-by-identifier'
 
 export type { MDXContent }
 
@@ -249,11 +250,10 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
       )
     }
 
-    if (Node.isVariableDeclaration(this.exportDeclaration)) {
-      return this.exportDeclaration.getParentOrThrow().getText()
-    }
-
-    return this.exportDeclaration.getText()
+    return extractExportByIdentifier(
+      this.exportDeclaration.getSourceFile(),
+      this.getName()
+    )
   }
 
   async getType() {
@@ -1161,4 +1161,32 @@ function getDeclarationName(declaration: Node) {
 /** Whether a depth value is zero, a positive integer, or Infinity. */
 function isValidDepth(depth: number) {
   return (depth >= 0 && Number.isInteger(depth)) || depth === Infinity
+}
+
+export function isExportSource(source: unknown): source is ExportSource<any> {
+  return source instanceof Export
+}
+
+export function isNamedExportSource(
+  source: unknown
+): source is ExportSource<any> {
+  return source instanceof NamedExport
+}
+
+export function isDefaultExportSource(
+  source: unknown
+): source is ExportSource<any> {
+  return source instanceof DefaultExport
+}
+
+export function isFileSystemSource(
+  source: unknown
+): source is FileSystemSource<any> {
+  return source instanceof Source
+}
+
+export function isCollectionSource(
+  source: unknown
+): source is CollectionSource<any> {
+  return source instanceof Collection
 }
