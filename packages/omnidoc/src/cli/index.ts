@@ -28,7 +28,7 @@ function start() {
       process.env.NODE_ENV = isDev ? 'development' : 'production'
     }
 
-    const runSubProcess = () => {
+    function runSubProcess() {
       const subProcess = spawn(
         firstArgument,
         [secondArgument, ...restArguments],
@@ -43,14 +43,12 @@ function start() {
       )
 
       subProcess.on('close', (code) => {
-        if (!isDev) {
-          server.cleanup()
-          process.exit(code)
-        }
+        server.cleanup()
+        process.exit(code)
       })
     }
-    const server = createServer()
 
+    const server = createServer()
     runSubProcess()
   } else if (firstArgument === 'watch') {
     if (process.env.NODE_ENV === undefined) {
