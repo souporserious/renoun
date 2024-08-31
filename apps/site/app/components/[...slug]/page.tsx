@@ -104,7 +104,7 @@ export default async function Component({
                 }}
               >
                 {examplesExports.map((exportSource) => (
-                  <li key={exportSource.getName()}>
+                  <li key={exportSource.getSlug()}>
                     <Preview source={exportSource} />
                   </li>
                 ))}
@@ -221,7 +221,7 @@ export default async function Component({
                             paddingLeft: '1rem',
                           }}
                         >
-                          {source.getName()}
+                          {source.getTitle()}
                         </a>
                       </li>
                     </ul>
@@ -278,7 +278,9 @@ async function Preview({
   source: ExportSource<React.ComponentType>
 }) {
   const name = source.getName()
+  const title = source.getTitle()
   const description = source.getDescription()
+  const slug = source.getSlug()
   const editPath = source.getEditPath()
   const Value = await source.getValue()
   const isUppercase = name[0] === name[0].toUpperCase()
@@ -286,13 +288,13 @@ async function Preview({
 
   return (
     <section
-      key={name}
-      id={source.getSlug()}
+      key={slug}
+      id={slug}
       css={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}
     >
       <header>
         <Stack flexDirection="row" alignItems="baseline" gap="0.5rem">
-          <h3 css={{ margin: 0 }}>{name}</h3>{' '}
+          <h3 css={{ margin: 0 }}>{title}</h3>{' '}
           <a href={editPath}>Edit example</a>
         </Stack>
         {description ? <p>{description}</p> : null}

@@ -113,7 +113,6 @@
     "restyle": "catalog:",
     "server-only": "0.0.1",
     "shiki": "^1.15.1",
-    "title": "^3.5.3",
     "ts-morph": "^23.0.0",
     "ws": "^8.18.0"
   }

@@ -15,6 +15,7 @@ import { filePathToPathname } from '../utils/file-path-to-pathname'
 import { getSymbolDescription } from '../utils/get-symbol-description'
 import { getExportedDeclaration } from '../utils/get-exported-declaration'
 import { resolveType } from '../utils/resolve-type'
+import { formatNameAsTitle } from './format-name-as-title'
 import {
   getDeclarationLocation,
   type DeclarationPosition,
@@ -84,6 +85,9 @@ export interface ExportSource<Value> extends BaseSource {
   /** The resolved type of the exported source based on the TypeScript type if it exists. */
   getType(): Promise<ReturnType<typeof resolveType>>
 
+  /** The name of the exported source formatted as a title. */
+  getTitle(): string
+
   /** The description of the exported source based on the JSDoc comment if it exists. */
   getDescription(): string | undefined
 
@@ -118,6 +122,9 @@ export interface FileSystemSource<Exports extends FileExports>
   extends BaseSourceWithGetters<Exports> {
   /** The base file name or directory name. */
   getName(): string
+
+  /** The file name formatted as a title. */
+  getTitle(): string
 
   /** Order of the source in the collection based on its position in the file system. */
   getOrder(): string
@@ -254,6 +261,10 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
     // TODO: move type processing to web socket server
 
     return resolveType(this.exportDeclaration.getType(), this.exportDeclaration)
+  }
+
+  getTitle() {
+    return formatNameAsTitle(this.getName())
   }
 
   getDescription() {
@@ -501,6 +512,10 @@ class Source<AllExports extends FileExports>
     }
 
     return name.split('.').at(0)!
+  }
+
+  getTitle() {
+    return formatNameAsTitle(this.getName())
   }
 
   getPath() {
