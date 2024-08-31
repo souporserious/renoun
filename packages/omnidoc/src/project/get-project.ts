@@ -7,12 +7,14 @@ import { ProjectOptions } from './types'
 const projects = new Map<string, Project>()
 
 const DEFAULT_IGNORED_PATHS = [
-  'node_modules',
-  'dist',
-  'out',
+  '.git',
   '.omnidoc',
   '.next',
   '.turbo',
+  'build',
+  'dist',
+  'node_modules',
+  'out',
 ]
 const DEFAULT_PROJECT_OPTIONS = {
   compilerOptions: {
