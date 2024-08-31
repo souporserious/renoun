@@ -6,14 +6,7 @@ import { getContext } from '../../utils/context'
 import type { getTokens } from '../../utils/get-tokens'
 import { Context } from './Context'
 
-/** Renders line numbers for the `CodeBlock` component. */
-export async function LineNumbers({
-  tokens: tokensProp,
-  highlightRanges: highlightRangesProp,
-  css,
-  className,
-  style,
-}: {
+export interface LineNumbersProps {
   /** Tokens to render from `getTokens`. */
   tokens?: Awaited<ReturnType<typeof getTokens>>
 
@@ -28,7 +21,15 @@ export async function LineNumbers({
 
   /** Style to apply to the line numbers container. */
   style?: React.CSSProperties
-}) {
+}
+
+async function LineNumbersAsync({
+  tokens: tokensProp,
+  highlightRanges: highlightRangesProp,
+  css,
+  className,
+  style,
+}: LineNumbersProps) {
   const context = getContext(Context)
   const tokens = tokensProp || context?.tokens
 
@@ -67,6 +68,11 @@ export async function LineNumbers({
       })}
     </Container>
   )
+}
+
+/** Renders line numbers for the `CodeBlock` component. */
+export function LineNumbers(props: LineNumbersProps) {
+  return <LineNumbersAsync {...props} />
 }
 
 const Container = styled('span', {

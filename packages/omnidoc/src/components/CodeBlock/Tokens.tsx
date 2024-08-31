@@ -9,7 +9,7 @@ import { QuickInfo } from './QuickInfo'
 import { QuickInfoProvider } from './QuickInfoProvider'
 import { Symbol } from './Symbol'
 
-export type TokensProps = {
+export interface TokensProps {
   /** Syntax highlighted tokens from `getTokens` to render. */
   tokens?: Awaited<ReturnType<GetTokens>>
 
@@ -39,8 +39,7 @@ export type TokensProps = {
   }) => React.ReactNode
 }
 
-/** Renders syntax highlighted tokens for the `CodeBlock` component. */
-export async function Tokens({
+async function TokensAsync({
   tokens: tokensProp,
   renderLine,
   css: cssProp = {},
@@ -159,4 +158,9 @@ export async function Tokens({
       })}
     </QuickInfoProvider>
   )
+}
+
+/** Renders syntax highlighted tokens for the `CodeBlock` component. */
+export function Tokens(props: TokensProps) {
+  return <TokensAsync {...props} />
 }

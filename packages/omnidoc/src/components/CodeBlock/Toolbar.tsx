@@ -6,7 +6,7 @@ import { getContext } from '../../utils/context'
 import { CopyButton } from './CopyButton'
 import { Context } from './Context'
 
-export type ToolbarProps = {
+export interface ToolbarProps {
   /** The value of the code block. */
   value?: string
 
@@ -26,8 +26,7 @@ export type ToolbarProps = {
   children?: React.ReactNode
 }
 
-/** A toolbar for the `CodeBlock` component that displays the filename, a source link, and copy button. */
-export async function Toolbar({
+async function ToolbarAsync({
   value: valueProp,
   allowCopy,
   css,
@@ -64,6 +63,11 @@ export async function Toolbar({
       ) : null}
     </Container>
   )
+}
+
+/** A toolbar for the `CodeBlock` component that displays the filename, a source link, and copy button. */
+export function Toolbar(props: ToolbarProps) {
+  return <ToolbarAsync {...props} />
 }
 
 const Container = styled('div', {
