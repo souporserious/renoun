@@ -6,7 +6,6 @@ export type ContextValue = {
   value: string
   tokens: Awaited<ReturnType<typeof getTokens>>
   filenameLabel?: string
-  sourcePath?: string | false
   highlightedLines?: string
   padding?: CSSProperties['padding']
 } | null

@@ -50,9 +50,6 @@ export type BaseCodeBlockProps = {
   /** Show or hide the toolbar. */
   showToolbar?: boolean
 
-  /** Path to the source file on disk in development and the git provider source in production. */
-  sourcePath?: string | false
-
   /** CSS styles to apply to code block elements. */
   css?: {
     container?: CSSObject
@@ -108,7 +105,6 @@ async function CodeBlockAsync({
   showErrors,
   showLineNumbers,
   showToolbar,
-  sourcePath,
   ...props
 }: CodeBlockProps) {
   const padding = props.style?.container?.padding ?? '0.5lh'
@@ -132,8 +128,6 @@ async function CodeBlockAsync({
   }
 
   const { tokens, value, label } = await analyzeSourceText({
-    // Simplify the path for more legibile error messages.
-    sourcePath: sourcePath ? sourcePath.split(process.cwd()).at(1) : undefined,
     filename,
     language,
     allowErrors,
@@ -145,7 +139,6 @@ async function CodeBlockAsync({
     value,
     highlightedLines,
     padding,
-    sourcePath,
     tokens,
   } satisfies ContextValue
 

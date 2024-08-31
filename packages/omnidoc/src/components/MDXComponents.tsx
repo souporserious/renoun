@@ -27,7 +27,6 @@ export const MDXComponents = {
     focusedLines,
     unfocusedLinesOpacity,
     filename,
-    sourcePath,
     value,
     language,
     className,
@@ -44,7 +43,6 @@ export const MDXComponents = {
         focusedLines={focusedLines}
         unfocusedLinesOpacity={unfocusedLinesOpacity}
         filename={filename}
-        sourcePath={sourcePath}
         value={value}
         language={language}
         className={className}
