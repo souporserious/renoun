@@ -11,12 +11,14 @@ import { getProject } from './get-project'
 import { ProjectOptions } from './types'
 
 const DEFAULT_IGNORED_PATHS = [
-  'node_modules',
-  'dist',
-  'out',
+  '.git',
   '.omnidoc',
   '.next',
   '.turbo',
+  'build',
+  'dist',
+  'node_modules',
+  'out',
 ]
 let currentHighlighter: Highlighter | null = null
 
