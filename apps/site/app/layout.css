@@ -2,6 +2,7 @@
   --color-background: #f8f8f8;
   --color-foreground: #333;
   --font-size-heading: 3rem;
+  --font-size-subheading: 2.4rem;
   --font-size-body: 1.6rem;
   --font-size-code: 1rem;
   --line-height-body: 1.4;
@@ -17,6 +18,7 @@
 @media (min-width: 40rem) {
   :root {
     --font-size-heading: 3.6rem;
+    --font-size-subheading: 2.8rem;
     --font-size-body: 2rem;
     --font-size-code: 1.2rem;
     --line-height-body: 1.4;
