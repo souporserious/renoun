@@ -1,5 +1,11 @@
 # mdxts
 
+## 3.1.1
+
+### Patch Changes
+
+- 622c1c4: Use newer version of pnpm to fix catalog on publish.
+
 ## 3.1.0
 
 ### Minor Changes
