@@ -72,14 +72,6 @@ export default function Page() {
           >
             Stay Updated
           </h2>
-          <p
-            css={{
-              fontSize: 'var(--font-size-body)',
-              margin: 0,
-            }}
-          >
-            Get Notified When Omnidoc is ready
-          </p>
         </div>
         <SignupForm />
       </div>
