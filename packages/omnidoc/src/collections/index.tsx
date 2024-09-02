@@ -937,7 +937,22 @@ class Collection<AllExports extends FileExports>
 
         return this.getFileSystemSource(fileSystemSource)
       })
-      .filter(Boolean) as FileSystemSource<AllExports>[]
+      .filter((source) => {
+        try {
+          const sourceExports = source?.getExports()
+          const allInternal = sourceExports?.every((exportSource) =>
+            exportSource.getTags()?.every((tag) => tag.tagName === 'internal')
+          )
+
+          if (allInternal) {
+            return false
+          }
+        } catch (error) {
+          // ignore directory errors
+        }
+
+        return Boolean(source)
+      }) as FileSystemSource<AllExports>[]
 
     sources.sort((a, b) => a.getOrder().localeCompare(b.getOrder()))
 
