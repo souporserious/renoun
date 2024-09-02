@@ -1,4 +1,5 @@
 import { APIReference } from 'omnidoc/components'
+import Guide from './guide.mdx'
 
 import { CollectionsCollection } from '@/collections'
 
@@ -27,6 +28,8 @@ export default async function Page() {
         }}
       >
         <div>
+          <Guide />
+          <div css={{ height: '6rem' }} />
           <h2 id="api-reference" css={{ margin: '0 0 2rem' }}>
             API Reference
           </h2>
