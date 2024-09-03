@@ -200,7 +200,10 @@ export interface CollectionOptions<Exports extends FileExports> {
   /** The path to the TypeScript config file. */
   tsConfigFilePath?: string
 
-  /** A custom sort function for ordering sources. */
+  /** A filter function to only include specific file system sources. */
+  filter?: (source: FileSystemSource<Exports>) => boolean
+
+  /** A custom sort function for ordering file system sources. */
   sort?: (
     a: FileSystemSource<Exports>,
     b: FileSystemSource<Exports>
@@ -938,20 +941,13 @@ class Collection<AllExports extends FileExports>
         return this.getFileSystemSource(fileSystemSource)
       })
       .filter((source) => {
-        try {
-          const sourceExports = source?.getExports()
-          const allInternal = sourceExports?.every((exportSource) =>
-            exportSource.getTags()?.every((tag) => tag.tagName === 'internal')
-          )
-
-          if (allInternal) {
-            return false
+        if (source) {
+          if (this.options.filter) {
+            return this.options.filter(source)
           }
-        } catch (error) {
-          // ignore directory errors
+          return true
         }
-
-        return Boolean(source)
+        return false
       }) as FileSystemSource<AllExports>[]
 
     sources.sort((a, b) => a.getOrder().localeCompare(b.getOrder()))

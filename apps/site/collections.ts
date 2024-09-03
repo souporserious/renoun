@@ -22,6 +22,20 @@ export const ComponentsCollection = createCollection<ComponentSchema>(
   {
     baseDirectory: 'components',
     basePath: 'components',
+    filter: (source) => {
+      if (source.isFile()) {
+        const allInternal = source
+          .getExports()
+          .every((exportSource) =>
+            exportSource.getTags()?.every((tag) => tag.tagName === 'internal')
+          )
+
+        if (allInternal) {
+          return false
+        }
+      }
+      return true
+    },
     tsConfigFilePath: '../../packages/omnidoc/tsconfig.json',
   }
 )
