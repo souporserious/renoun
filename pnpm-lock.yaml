@@ -4,6 +4,39 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+catalogs:
+  default:
+    '@mdx-js/loader':
+      specifier: 3.0.1
+      version: 3.0.1
+    '@mdx-js/react':
+      specifier: 3.0.1
+      version: 3.0.1
+    '@next/mdx':
+      specifier: 14.2.7
+      version: 14.2.7
+    '@types/mdx':
+      specifier: 2.0.13
+      version: 2.0.13
+    '@types/react':
+      specifier: 18.3.4
+      version: 18.3.4
+    '@types/react-dom':
+      specifier: 18.3.0
+      version: 18.3.0
+    next:
+      specifier: 14.2.7
+      version: 14.2.7
+    react:
+      specifier: 18.3.1
+      version: 18.3.1
+    react-dom:
+      specifier: 18.3.1
+      version: 18.3.1
+    restyle:
+      specifier: 2.2.0
+      version: 2.2.0
+
 importers:
 
   .:
@@ -88,7 +121,7 @@ importers:
         version: 5.0.0
       restyle:
         specifier: 'catalog:'
-        version: 2.1.0(react@18.3.1)
+        version: 2.2.0(react@18.3.1)
       webpack:
         specifier: 5.94.0
         version: 5.94.0(@swc/core@1.7.22(@swc/helpers@0.5.5))(esbuild@0.23.1)
@@ -133,7 +166,7 @@ importers:
         version: 5.0.0
       restyle:
         specifier: 'catalog:'
-        version: 2.1.0(react@18.3.1)
+        version: 2.2.0(react@18.3.1)
       webpack:
         specifier: 5.94.0
         version: 5.94.0(@swc/core@1.7.22(@swc/helpers@0.5.5))(esbuild@0.23.1)
@@ -181,7 +214,7 @@ importers:
         version: 5.0.0
       restyle:
         specifier: 'catalog:'
-        version: 2.1.0(react@18.3.1)
+        version: 2.2.0(react@18.3.1)
       webpack:
         specifier: 5.94.0
         version: 5.94.0(@swc/core@1.7.22(@swc/helpers@0.5.5))(esbuild@0.23.1)
@@ -199,7 +232,7 @@ importers:
         version: 6.0.2
       restyle:
         specifier: 'catalog:'
-        version: 2.1.0(react@18.3.1)
+        version: 2.2.0(react@18.3.1)
       server-only:
         specifier: 0.0.1
         version: 0.0.1
@@ -2774,8 +2807,8 @@ packages:
   responselike@2.0.1:
     resolution: {integrity: sha512-4gl03wn3hj1HP3yzgdI7d3lCkF95F21Pz4BPGvKHinyQzALR5CapwC8yIi0Rh58DEMQ/SguC03wFj2k0M/mHhw==}
 
-  restyle@2.1.0:
-    resolution: {integrity: sha512-thUjdV9Q6xq5+vKgVUV5kdEnD3Gwb31zdt20wekV7IYqgFH+r8Bd09PfcI94GavJ7sGVcuN+7sjKMG7xnHyIUA==}
+  restyle@2.2.0:
+    resolution: {integrity: sha512-eaDztpZtupnS+EkrIbDQ4hdRmyORklCkC4O78MHRkn1kdkgPnBMbwCQktRIP9riCl66yvF4f2PFJbAblfylNKw==}
     peerDependencies:
       react: ^18.0.0
 
@@ -3316,39 +3349,6 @@ packages:
 
   zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
-
-catalogs:
-  default:
-    '@mdx-js/loader':
-      specifier: 3.0.1
-      version: 3.0.1
-    '@mdx-js/react':
-      specifier: 3.0.1
-      version: 3.0.1
-    '@next/mdx':
-      specifier: 14.2.7
-      version: 14.2.7
-    '@types/mdx':
-      specifier: 2.0.13
-      version: 2.0.13
-    '@types/react':
-      specifier: 18.3.4
-      version: 18.3.4
-    '@types/react-dom':
-      specifier: 18.3.0
-      version: 18.3.0
-    next:
-      specifier: 14.2.7
-      version: 14.2.7
-    react:
-      specifier: 18.3.1
-      version: 18.3.1
-    react-dom:
-      specifier: 18.3.1
-      version: 18.3.1
-    restyle:
-      specifier: 2.1.0
-      version: 2.1.0
 
 snapshots:
 
@@ -6460,7 +6460,7 @@ snapshots:
     dependencies:
       lowercase-keys: 2.0.0
 
-  restyle@2.1.0(react@18.3.1):
+  restyle@2.2.0(react@18.3.1):
     dependencies:
       react: 18.3.1
 
