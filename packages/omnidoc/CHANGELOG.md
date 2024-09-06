@@ -1,5 +1,16 @@
 # mdxts
 
+## 3.2.0
+
+### Minor Changes
+
+- c017f16: Adds `@omnidoc/mdx-plugins` package that includes pre-configured and custom `remark` and `rehype` plugins.
+- a2f85cb: Adds `filter` option to `createCollection` for filtering by specific file system sources.
+
+### Patch Changes
+
+- 8267207: Adds better error handling when trying to update the project based on a file system change.
+
 ## 3.1.1
 
 ### Patch Changes
