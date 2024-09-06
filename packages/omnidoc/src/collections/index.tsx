@@ -894,7 +894,13 @@ class Collection<AllExports extends FileExports>
 
     if (fileSystemSources.length === 0) {
       throw new Error(
-        `[omnidoc] No source files or directories were found for the file pattern: ${filePattern}`
+        `[omnidoc] No source files or directories were found for the file pattern: ${filePattern}
+
+You can fix this error by ensuring the following:
+  
+  - The file pattern is formatted correctly and targeting files that exist.
+  - If using a relative path, ensure the "tsConfigFilePath" option is targeting the correct workspace.
+  - If you continue to see this error, please file an issue: https://github.com/souporserious/omnidoc/issues`
       )
     }
 

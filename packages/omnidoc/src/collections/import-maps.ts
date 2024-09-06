@@ -82,9 +82,15 @@ async function writeImportMap(
           : resolve(tsConfigDirectory, filePattern)
       const filePaths = await glob(absoluteGlobPattern)
 
-      if (filePaths.length === 0) {
+      if (process.env.NODE_ENV === 'production' && filePaths.length === 0) {
         throw new Error(
-          `[omnidoc] No source files found for collection file pattern: ${filePattern}`
+          `[omnidoc] No source files found for collection while attempting to generate import map for file pattern: ${filePattern}
+  
+  You can fix this error by ensuring the following:
+    
+    - The file pattern is formatted correctly and targeting files that exist.
+    - If using a relative path, ensure the "tsConfigFilePath" option is targeting the correct workspace.
+    - If you continue to see this error, please file an issue: https://github.com/souporserious/omnidoc/issues`
         )
       }
 
