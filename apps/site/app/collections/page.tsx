@@ -1,7 +1,7 @@
 import { APIReference } from 'omnidoc/components'
-import Guide from './guide.mdx'
 
 import { CollectionsCollection } from '@/collections'
+import Guide, { headings } from './guide.mdx'
 
 export default async function Page() {
   const source = CollectionsCollection.getSource()!
@@ -63,6 +63,20 @@ export default async function Page() {
                 margin: 0,
               }}
             >
+              {headings.map((heading) => (
+                <li key={heading.id}>
+                  <a
+                    href={`#${heading.id}`}
+                    css={{
+                      display: 'block',
+                      padding: '0.25rem 0',
+                      paddingLeft: `${heading.depth - 2}rem`,
+                    }}
+                  >
+                    {heading.text}
+                  </a>
+                </li>
+              ))}
               {sourceExports ? (
                 <li>
                   <a

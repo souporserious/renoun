@@ -1,12 +1,12 @@
 import createMDXPlugin from '@next/mdx'
-import remarkFrontmatter from 'remark-frontmatter'
-import remarkMdxFrontmatter from 'remark-mdx-frontmatter'
+import { remarkPlugins, rehypePlugins } from '@omnidoc/mdx-plugins'
 import webpack from 'webpack'
 
 const withMDX = createMDXPlugin({
   extension: /\.mdx?$/,
   options: {
-    remarkPlugins: [remarkFrontmatter, remarkMdxFrontmatter],
+    remarkPlugins,
+    rehypePlugins,
   },
 })
 
