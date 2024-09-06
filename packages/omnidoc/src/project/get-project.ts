@@ -68,33 +68,42 @@ export async function getProject(options?: ProjectOptions) {
           ? statSync(filePath).isDirectory()
           : extname(filename) === ''
 
-        // The file was added, removed, or renamed
-        if (eventType === 'rename') {
-          if (existsSync(filePath)) {
-            if (isDirectory) {
-              project.addDirectoryAtPath(filePath)
+        try {
+          // The file was added, removed, or renamed
+          if (eventType === 'rename') {
+            if (existsSync(filePath)) {
+              if (isDirectory) {
+                project.addDirectoryAtPath(filePath)
+              } else {
+                project.addSourceFileAtPath(filePath)
+              }
+            } else if (isDirectory) {
+              const removedDirectory = project.getDirectory(filePath)
+              if (removedDirectory) {
+                removedDirectory.delete()
+              }
+            } else {
+              const removedSourceFile = project.getSourceFile(filePath)
+              if (removedSourceFile) {
+                removedSourceFile.delete()
+              }
+            }
+          }
+          // The file contents were changed
+          else if (eventType === 'change') {
+            const previousSourceFile = project.getSourceFile(filePath)
+            if (previousSourceFile) {
+              previousSourceFile.refreshFromFileSystem()
             } else {
               project.addSourceFileAtPath(filePath)
             }
-          } else if (isDirectory) {
-            const removedDirectory = project.getDirectory(filePath)
-            if (removedDirectory) {
-              removedDirectory.delete()
-            }
-          } else {
-            const removedSourceFile = project.getSourceFile(filePath)
-            if (removedSourceFile) {
-              removedSourceFile.delete()
-            }
           }
-        }
-        // The file contents were changed
-        else if (eventType === 'change') {
-          const previousSourceFile = project.getSourceFile(filePath)
-          if (previousSourceFile) {
-            previousSourceFile.refreshFromFileSystem()
-          } else {
-            project.addSourceFileAtPath(filePath)
+        } catch (error) {
+          if (error instanceof Error) {
+            throw new Error(
+              `[omnidoc] An error occurred while trying to update the project based on a change to the file system for: ${filename}`,
+              { cause: error }
+            )
           }
         }
       }
