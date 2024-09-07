@@ -8,10 +8,6 @@ import { GitProviderLink } from 'omnidoc/components'
 export const metadata: Metadata = {
   title: 'Omnidoc',
   description: 'The toolkit to build docs as great as your product.',
-  robots: {
-    index: false,
-    follow: false,
-  },
 }
 
 export default function RootLayout({
