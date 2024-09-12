@@ -13,6 +13,8 @@ import { addHeadings } from './remark/add-headings.js'
 import { removeParagraphs } from './remark/remove-paragraphs.js'
 import { transformRelativeLinks } from './remark/transform-relative-links.js'
 
+export type { Headings } from './remark/add-headings.js'
+
 export const remarkPlugins = [
   remarkFrontmatter,
   remarkMdxFrontmatter as any,

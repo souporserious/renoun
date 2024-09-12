@@ -2,7 +2,7 @@
 
 export type DistributiveOmit<
   Type,
-  Key extends keyof Type
+  Key extends keyof Type,
 > = Type extends unknown ? Omit<Type, Key> : never
 
 export type ExcludeOtherKeys<MemberType, UnionType> = MemberType & {
@@ -11,5 +11,5 @@ export type ExcludeOtherKeys<MemberType, UnionType> = MemberType & {
 
 export type ExclusiveUnion<
   UnionType,
-  AllMembers = UnionType
+  AllMembers = UnionType,
 > = UnionType extends any ? ExcludeOtherKeys<UnionType, AllMembers> : never

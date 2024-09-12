@@ -9,7 +9,7 @@ declare module 'mdast' {
   }
 }
 
-type Headings = {
+export type Headings = {
   id: any
   text: string
   depth: number
