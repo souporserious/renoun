@@ -703,8 +703,10 @@ class Source<AllExports extends FileExports>
         `[omnidoc] "getDefaultExport" was called for the directory "${baseName}" which does not have an associated index or readme file.
 
 You can fix this error by taking one of the following actions:
-  - Filter the source:
-    Before calling "getDefaultExport", check if the source is a directory by using "isDirectory".
+  - Filter out the directory before calling "getDefaultExport":
+    . Check if the source is a file using "<source>.isFile()"
+    . Check if the source is a directory using "<source>.isDirectory()"
+    . For example: (await <collection>.getSources()).filter(source => !source.isDirectory())
   
   - Add an index or README file to the "${baseName}" directory:
     . Ensure the file has a valid extension based on the targeted file patterns of this collection: ${validExtensions.join(
@@ -739,8 +741,10 @@ You can fix this error by taking one of the following actions:
         `[omnidoc] "getNamedExport('${name.toString()}')" was called for the directory "${baseName}" which does not have an associated index or readme file.
 
 You can fix this error by taking one of the following actions:
-  - Filter the source:
-    Before calling "getNamedExport", check if the source is a directory by using "isDirectory".
+  - Filter out the directory before calling "getNamedExport":
+    . Check if the source is a file using "<source>.isFile()"
+    . Check if the source is a directory using "<source>.isDirectory()"
+    . For example: (await <collection>.getSources()).filter(source => !source.isDirectory())
   
   - Add an index or README file to the "${baseName}" directory:
     . Ensure the file has a valid extension based on the targeted file patterns of this collection: ${validExtensions.join(
@@ -789,8 +793,10 @@ You can fix this error by taking one of the following actions:
         `[omnidoc] Directory "${baseName}" at path "${this.getPath()}" does not have an associated source file.
 
 You can fix this error by taking one of the following actions:
-  - Filter the source:
-    Before calling "getExports", check if the source is a directory by using "isDirectory" e.g. (await <collection>.getSources()).filter(source => !source.isDirectory()).
+  - Filter out the directory before calling "getExports":
+    . Check if the source is a file using "<source>.isFile()"
+    . Check if the source is a directory using "<source>.isDirectory()"
+    . For example: (await <collection>.getSources()).filter(source => !source.isDirectory())
   
   - Add an index or README file to the "${baseName}" directory:
     . Ensure the file has a valid extension based on the targeted file patterns of this collection: ${validExtensions.join(
