@@ -1,6 +1,6 @@
 {
   "name": "@omnidoc/mdx-plugins",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MDX plugins for Omnidoc",
   "author": "Travis Arnold",
   "license": "MIT",

@@ -1,5 +1,12 @@
 # mdxts
 
+## 3.2.1
+
+### Patch Changes
+
+- 677d117: Clean up formatting for source export errors.
+- 830724b: Prevents exiting the process in development when the collection does not target valid directories or source files to allow fixing without restarting the server.
+
 ## 3.2.0
 
 ### Minor Changes
