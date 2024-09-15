@@ -1,0 +1,136 @@
+export const metadata = {
+  title: 'Getting Started',
+}
+
+omnidoc is a powerful toolkit for building documentation sites. This guide will help you set up and start using omnidoc in your project.
+
+## Installation
+
+First, install omnidoc using your preferred package manager:
+
+```bash
+npm install omnidoc
+```
+
+## Configuration
+
+The omnidoc CLI can be used alongside your framework. For example, when using Next.js, prepend the CLI to your Next.js `dev` and `build` commands in your project's `package.json`:
+
+```json
+{
+  "scripts": {
+    "dev": "omnidoc next dev",
+    "build": "omnidoc next build"
+  }
+}
+```
+
+Then start the development server:
+
+```bash
+npm run dev
+```
+
+Prepending the omnidoc CLI ensures that the omnidoc process starts before your framework's server. The CLI starts a web socket server that will watch for changes to the file system and communicates with omnidoc components.
+
+## Creating a Collection
+
+The `createCollection` utility is a core concept in omnidoc. This allows you to render a collection of files from the file system:
+
+```tsx
+import { createCollection } from 'omnidoc/collections'
+
+const posts = createCollection('docs/.mdx')
+
+export default async function Page({ params }: { params: { slug: string } }) {
+  const Content = await posts
+    .getSource(params.slug)
+    .getDefaultExport()
+    .getValue()
+
+  return <Content />
+}
+```
+
+This will creates a collection of all MDX files in the `docs` directory and render them based on the provided slug. Collections are not limited to MDX files and can be used with any file type.
+
+When creating a collection for the first time, a `.omnidoc` directory will be generated in the root of your project. This directory contains `collections.ts` file that is aliased in your project's `tsconfig.json`. This file is used to generate the dynamic imports for each collection.
+
+## Authoring Content
+
+omnidoc helps with authoring MDX using the `@omnidoc/mdx-plugins` package, allowing you to write content with a mix of Markdown and React components. It is not required, but provides a set of useful defaults.
+
+Here's an example of how you might structure a blog post:
+
+````mdx
+---
+title: Build a Button Component in React
+date: 2024-03-01
+summary: Learn how to build a reusable Button component in React that can be used across your application.
+tags:
+  - react
+  - design systems
+---
+
+In modern web development, creating reusable UI components is a must for efficiency and scalability. React, with its component-based architecture, allows developers to build encapsulated components that manage their own state and can be reused throughout applications.
+
+## Building the Button Component
+
+Let's start by creating our Button component:
+
+```tsx
+import React from 'react'
+
+export function Button({ label, onClick, className }) {
+  return (1
+    <button className={className} onClick={onClick}>
+      {label}
+    </button>
+  )
+}
+```
+````
+
+## Validating Exports
+
+Omnidoc provides a way to validate module exports using schemas. This ensures that your module exports stay consistent and are correctly documented. Here's an example of how you might validate a module export.
+
+In our Button component example, we can validate the front matter of the MDX file at the call site of our collection using a schema:
+
+```tsx
+import { createCollection, type MDXContent } from 'omnidoc/collections'
+import { z } from 'zod'
+
+const frontmatterSchema = z.object({
+  title: z.string(),
+  date: z.coerce.date(),
+  summary: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+})
+
+export const PostsCollection = createCollection<{
+  default: MDXContent
+  frontmatter: z.infer<typeof frontmatterSchema>
+}>('posts/*.mdx', {
+  baseDirectory: 'posts',
+  schema: {
+    frontmatter: frontmatterSchema.parse,
+  },
+})
+```
+
+Here we define a schema for the front matter of our MDX files and use it to validate the front matter of each file in our collection. This ensures that each file adheres to the schema and provides type safety when accessing the front matter.
+
+## Enhancing with Components
+
+omnidoc provides several built-in components to enhance your documentation. For example, you can use the `PackageInstall` component to display installation instructions for a package:
+
+```tsx
+<PackageInstall packages={['omnidoc']} />
+```
+
+This will render an interactive component showing installation commands for different package managers. Explore more [components](/components) to enhance your documentation.
+
+## Conclusion
+
+By following this guide, you should now have a basic setup running omnidoc in your project. You can now start writing documentation and building your site with omnidoc's powerful toolkit.

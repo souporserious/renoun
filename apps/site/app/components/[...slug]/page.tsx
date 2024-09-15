@@ -1,14 +1,9 @@
 import { APIReference, CodeBlock, Tokens } from 'omnidoc/components'
-import {
-  createCollection,
-  type MDXContent,
-  type ExportSource,
-} from 'omnidoc/collections'
+import { type ExportSource } from 'omnidoc/collections'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
 import { ComponentsCollection, type ComponentSource } from '@/collections'
-import { Stack } from '@/components'
 
 export async function generateStaticParams() {
   const sources = await ComponentsCollection.getSources()
@@ -17,14 +12,6 @@ export async function generateStaticParams() {
     .filter((source) => source.isFile())
     .map((source) => ({ slug: source.getPathSegments() }))
 }
-
-const ComponentsReadmeCollection = createCollection<{ default: MDXContent }>(
-  '@/components/**/README.mdx',
-  {
-    baseDirectory: 'components',
-    basePath: 'components',
-  }
-)
 
 export default async function Component({
   params,
@@ -38,11 +25,6 @@ export default async function Component({
     notFound()
   }
 
-  const readmeSource = ComponentsReadmeCollection.getSource([
-    ...componentsPathname,
-    'readme',
-  ])
-  const Readme = await readmeSource?.getDefaultExport().getValue()
   const examplesSource = componentSource.getSource('examples')
   const examplesSources = await examplesSource?.getSources()
   const isExamplesPage = params.slug.at(-1) === 'examples'
@@ -71,12 +53,9 @@ export default async function Component({
         gap: '4rem',
       }}
     >
-      <div>
-        <h1 css={{ fontSize: '3rem', margin: 0 }}>
-          {componentSource.getName()} {isExamplesPage ? 'Examples' : ''}
-        </h1>
-        {Readme ? <Readme /> : null}
-      </div>
+      <h1 css={{ fontSize: '3rem', margin: 0 }}>
+        {componentSource.getName()} {isExamplesPage ? 'Examples' : ''}
+      </h1>
 
       <div
         css={{
@@ -293,15 +272,17 @@ async function Preview({
       css={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}
     >
       <header>
-        <Stack
-          flexDirection="row"
-          alignItems="baseline"
-          justifyContent="space-between"
-          gap="0.5rem"
+        <div
+          css={{
+            flexDirection: 'row',
+            alignItems: 'baseline',
+            justifyContent: 'space-between',
+            gap: '0.5rem',
+          }}
         >
           <h3 css={{ margin: 0 }}>{title}</h3>{' '}
           <a href={editPath}>View Source</a>
-        </Stack>
+        </div>
         {description ? <p>{description}</p> : null}
       </header>
 

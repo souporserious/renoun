@@ -1,4 +1,25 @@
-import { createCollection, type FileSystemSource } from 'omnidoc/collections'
+import {
+  createCollection,
+  type FileSystemSource,
+  type MDXContent,
+} from 'omnidoc/collections'
+import type { Headings } from '@omnidoc/mdx-plugins'
+
+type DocsSchema = {
+  default: MDXContent
+  headings: Headings
+  metadata: {
+    title: string
+    description: string
+  }
+}
+
+export type DocsSource = FileSystemSource<DocsSchema>
+
+export const DocsCollection = createCollection<DocsSchema>('docs/**/*.mdx', {
+  baseDirectory: 'docs',
+  basePath: 'docs',
+})
 
 type CollectionsSchema = Record<string, React.ComponentType>
 

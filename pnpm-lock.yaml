@@ -92,6 +92,9 @@ importers:
       '@omnidoc/mdx-plugins':
         specifier: workspace:*
         version: link:../../packages/mdx-plugins
+      '@preact/signals-core':
+        specifier: ^1.8.0
+        version: 1.8.0
       '@types/mdx':
         specifier: 'catalog:'
         version: 2.0.13
@@ -104,6 +107,9 @@ importers:
       '@vercel/analytics':
         specifier: ^1.3.1
         version: 1.3.1(next@14.2.7(@babel/core@7.24.6)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)
+      geist:
+        specifier: ^1.3.1
+        version: 1.3.1(next@14.2.7(@babel/core@7.24.6)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
       next:
         specifier: 'catalog:'
         version: 14.2.7(@babel/core@7.24.6)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -927,6 +933,9 @@ packages:
   '@pkgjs/parseargs@0.11.0':
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
     engines: {node: '>=14'}
+
+  '@preact/signals-core@1.8.0':
+    resolution: {integrity: sha512-OBvUsRZqNmjzCZXWLxkZfhcgT+Fk8DDcT/8vD6a1xhDemodyy87UJRJfASMuSD8FaAIeGgGm85ydXhm7lr4fyA==}
 
   '@rollup/rollup-android-arm-eabi@4.21.0':
     resolution: {integrity: sha512-WTWD8PfoSAJ+qL87lE7votj3syLavxunWhzCnx3XFxFiI/BA/r3X7MUM8dVrH8rb2r4AiO8jJsr3ZjdaftmnfA==}
@@ -1935,6 +1944,11 @@ packages:
 
   function-bind@1.1.2:
     resolution: {integrity: sha512-7XHNxH7qX9xG5mIwxkhumTox/MIRNcOgDrxWsMt2pAr23WHp6MrRlN7FBSFpCpr+oVO0F744iUgR82nJMfG2SA==}
+
+  geist@1.3.1:
+    resolution: {integrity: sha512-Q4gC1pBVPN+D579pBaz0TRRnGA4p9UK6elDY/xizXdFk/g4EKR5g0I+4p/Kj6gM0SajDBZ/0FvDV9ey9ud7BWw==}
+    peerDependencies:
+      next: '>=13.2.0'
 
   gensync@1.0.0-beta.2:
     resolution: {integrity: sha512-3hN7NaskYvMDLQY55gnW3NQ+mesEAepTqlg+VEbj7zzqEMBVNhzcGYYeqFo/TlYz6eQiFcp1HcsCZO+nGgS8zg==}
@@ -4475,6 +4489,8 @@ snapshots:
   '@pkgjs/parseargs@0.11.0':
     optional: true
 
+  '@preact/signals-core@1.8.0': {}
+
   '@rollup/rollup-android-arm-eabi@4.21.0':
     optional: true
 
@@ -5504,6 +5520,10 @@ snapshots:
     optional: true
 
   function-bind@1.1.2: {}
+
+  geist@1.3.1(next@14.2.7(@babel/core@7.24.6)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)):
+    dependencies:
+      next: 14.2.7(@babel/core@7.24.6)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
 
   gensync@1.0.0-beta.2: {}
 
