@@ -847,7 +847,7 @@ You can fix this error by ensuring the following:
   - The ".omnidoc" directory was successfully created and your tsconfig.json file aliases "omnidoc/*" to ".omnidoc/*.ts" correctly.
   - The file pattern is formatted correctly and targeting files that exist.
   - Try refreshing the page or restarting server.
-  - If you continue to see this error, please file an issue: https://github.com/souporserious/omnidoc/issues`
+  - If you continue to see this error, please file an issue: https://github.com/souporserious/omnidoc/issues\n`
       )
     }
 
@@ -906,7 +906,7 @@ You can fix this error by ensuring the following:
   
   - The file pattern is formatted correctly and targeting files that exist.
   - If using a relative path, ensure the "tsConfigFilePath" option is targeting the correct workspace.
-  - If you continue to see this error, please file an issue: https://github.com/souporserious/omnidoc/issues`
+  - If you continue to see this error, please file an issue: https://github.com/souporserious/omnidoc/issues\n`
       )
     }
 

@@ -90,7 +90,7 @@ async function writeImportMap(
     
     - The file pattern is formatted correctly and targeting files that exist.
     - If using a relative path, ensure the "tsConfigFilePath" option is targeting the correct workspace.
-    - If you continue to see this error, please file an issue: https://github.com/souporserious/omnidoc/issues`
+    - If you continue to see this error, please file an issue: https://github.com/souporserious/omnidoc/issues\n`
         )
       }
 
