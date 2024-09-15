@@ -1,9 +1,9 @@
-import { CodeBlock, Tokens } from 'omnidoc/components'
+import { CodeBlock, Tokens } from 'renoun/components'
 import {
   createCollection,
   type MDXContent,
   type ExportSource,
-} from 'omnidoc/collections'
+} from 'renoun/collections'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 

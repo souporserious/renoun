@@ -1,5 +1,5 @@
 'use client'
-import type { Headings } from '@omnidoc/mdx-plugins'
+import type { Headings } from '@renoun/mdx-plugins'
 
 import { useSectionObserver } from 'hooks/use-section-observer'
 import { ViewSource } from './ViewSource'

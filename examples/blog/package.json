@@ -2,8 +2,8 @@
   "private": true,
   "name": "@examples/blog",
   "scripts": {
-    "dev": "omnidoc next",
-    "build": "node ../../packages/omnidoc/dist/cjs/src/cli/index.js && next build",
+    "dev": "renoun next",
+    "build": "node ../../packages/renoun/dist/cjs/src/cli/index.js && next build",
     "start": "next start"
   },
   "dependencies": {
@@ -13,7 +13,7 @@
     "@types/mdx": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "omnidoc": "workspace:*",
+    "renoun": "workspace:*",
     "next": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",

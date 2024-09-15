@@ -1,5 +1,5 @@
 import { MDXComponents } from 'mdx/types'
-import { CodeBlock, CodeInline } from 'omnidoc/components'
+import { CodeBlock, CodeInline } from 'renoun/components'
 
 export function useMDXComponents() {
   return {

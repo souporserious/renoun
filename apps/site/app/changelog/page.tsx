@@ -1,6 +1,6 @@
-import { MDXComponents } from 'omnidoc/components'
+import { MDXComponents } from 'renoun/components'
 
-import Changelog from '../../../../packages/omnidoc/CHANGELOG.md'
+import Changelog from '../../../../packages/renoun/CHANGELOG.md'
 
 export default function Page() {
   return (

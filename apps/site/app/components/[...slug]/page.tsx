@@ -1,5 +1,5 @@
-import { APIReference, CodeBlock, Tokens } from 'omnidoc/components'
-import { type ExportSource } from 'omnidoc/collections'
+import { APIReference, CodeBlock, Tokens } from 'renoun/components'
+import { type ExportSource } from 'renoun/collections'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 

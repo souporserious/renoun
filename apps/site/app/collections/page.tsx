@@ -1,4 +1,4 @@
-import { APIReference } from 'omnidoc/components'
+import { APIReference } from 'renoun/components'
 
 import { CollectionsCollection } from '@/collections'
 import Guide, { headings } from './guide.mdx'

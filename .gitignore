@@ -2,8 +2,8 @@
 .next
 .turbo
 .vercel
-.omnidoc
-!.omnidoc/config.json
+.renoun
+!.renoun/config.json
 dist
 node_modules
 out

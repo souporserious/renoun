@@ -1,13 +1,13 @@
 # Blog
 
-This example shows how to build a blog with Omnidoc and Next.js.
+This example shows how to build a blog with Renoun and Next.js.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/souporserious/omnidoc/tree/main/examples/blog&project-name=omnidoc-blog&repository-name=omnidoc-blog)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/souporserious/renoun/tree/main/examples/blog&project-name=renoun-blog&repository-name=renoun-blog)
 
 ## How to use
 
-Use the [`create-omnidoc`](https://github.com/souporserious/omnidoc/tree/main/packages/create-omnidoc) CLI with [npx](https://docs.npmjs.com/cli/v10/commands/npx) to copy this example to your machine:
+Use the [`create-renoun`](https://github.com/souporserious/renoun/tree/main/packages/create-renoun) CLI with [npx](https://docs.npmjs.com/cli/v10/commands/npx) to copy this example to your machine:
 
 ```bash
-npx create-omnidoc --example blog
+npx create-renoun --example blog
 ```
