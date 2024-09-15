@@ -13,12 +13,12 @@
     "@types/mdx": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "renoun": "workspace:*",
     "next": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "remark-frontmatter": "^5.0.0",
     "remark-mdx-frontmatter": "^5.0.0",
+    "renoun": "workspace:*",
     "restyle": "catalog:",
     "webpack": "5.94.0",
     "zod": "^3.23.8"
