@@ -3,7 +3,7 @@
   "name": "@examples/blog",
   "scripts": {
     "dev": "renoun next",
-    "build": "node ../../packages/renoun/dist/cjs/src/cli/index.js && next build",
+    "build": "node ../../packages/renoun/dist/cli/index.js && next build",
     "start": "next start"
   },
   "dependencies": {

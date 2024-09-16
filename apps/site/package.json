@@ -3,7 +3,7 @@
   "name": "@apps/site",
   "scripts": {
     "dev": "renoun next dev",
-    "build": "node ../../packages/renoun/dist/cjs/src/cli/index.js next build",
+    "build": "node ../../packages/renoun/dist/cli/index.js next build",
     "start": "next start"
   },
   "dependencies": {
