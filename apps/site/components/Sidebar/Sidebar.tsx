@@ -1,5 +1,5 @@
-import type { CollectionSource, FileSystemSource } from 'omnidoc/collections'
-import { GitProviderLink } from 'omnidoc/components'
+import type { CollectionSource, FileSystemSource } from 'renoun/collections'
+import { GitProviderLink } from 'renoun/components'
 import Link from 'next/link'
 
 import { DocsCollection } from 'collections'

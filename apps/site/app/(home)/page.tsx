@@ -1,4 +1,4 @@
-import { CodeInline } from 'omnidoc/components'
+import { CodeInline } from 'renoun/components'
 
 import { SignupForm } from '../SignupForm'
 
@@ -36,7 +36,7 @@ export default function Page() {
         </p>
         <CodeInline
           allowCopy
-          value={`npm install omnidoc`}
+          value={`npm install renoun`}
           language="bash"
           paddingX="0.8em"
           paddingY="0.5em"

@@ -1,5 +1,5 @@
-import { GitProviderLink } from 'omnidoc/components'
-import { OmnidocLogo } from 'omnidoc/assets'
+import { GitProviderLink } from 'renoun/components'
+import { RenounLogo } from 'renoun/assets'
 
 import { NavigationLink } from './NavigationLink'
 
@@ -44,7 +44,7 @@ export function SiteLayout({
             marginRight: 'auto',
           }}
         >
-          <OmnidocLogo
+          <RenounLogo
             style={{
               width: 'unset',
               height: 'var(--font-size-body-1)',

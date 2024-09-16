@@ -1,1 +1,1 @@
-packages/omnidoc/README.md
+packages/renoun/README.md

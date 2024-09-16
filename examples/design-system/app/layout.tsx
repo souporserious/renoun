@@ -4,7 +4,7 @@ import './layout.css'
 
 export const metadata: Metadata = {
   title: 'Design System',
-  description: 'Design system documentation built with Omnidoc and Next.js.',
+  description: 'Design system documentation built with Renoun and Next.js.',
   robots: {
     index: false,
     follow: false,

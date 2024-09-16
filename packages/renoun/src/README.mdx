@@ -1,0 +1,11 @@
+# renoun
+
+The primary package for Renoun that provides a utility for working with a collection of module imports.
+
+```ts filename="data.ts"
+import { createSource } from 'renoun'
+
+export const allDocs = createSource('docs/**/*.mdx', {
+  baseDirectory: 'docs',
+})
+```

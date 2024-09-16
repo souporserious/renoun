@@ -47,4 +47,4 @@ jobs:
         run: pnpm install
 
       - name: Run Jest tests
-        run: pnpm --filter=omnidoc test
+        run: pnpm --filter=renoun test

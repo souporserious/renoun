@@ -1,4 +1,4 @@
-import { createCollection, type FileSystemSource } from 'omnidoc/collections'
+import { createCollection, type FileSystemSource } from 'renoun/collections'
 
 type ComponentSchema = Record<string, React.ComponentType>
 

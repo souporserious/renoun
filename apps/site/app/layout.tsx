@@ -5,7 +5,7 @@ import { GeistSans } from 'geist/font/sans'
 import './layout.css'
 
 export const metadata = {
-  title: 'Omnidoc',
+  title: 'Renoun',
   description: 'The toolkit to build docs as great as your product.',
 } satisfies Metadata
 

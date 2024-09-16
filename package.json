@@ -1,5 +1,5 @@
 {
-  "name": "omnidoc",
+  "name": "renoun",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "scripts": {
@@ -7,8 +7,8 @@
     "build:site": "pnpm build --filter=@apps/site",
     "build:examples": "pnpm build --filter=@examples/*",
     "dev": "turbo run dev",
-    "dev:site": "pnpm dev --filter=omnidoc --filter=@apps/site",
-    "dev:examples": "pnpm dev --filter=omnidoc --filter=@examples/*",
+    "dev:site": "pnpm dev --filter=renoun --filter=@apps/site",
+    "dev:examples": "pnpm dev --filter=renoun --filter=@examples/*",
     "test": "turbo run test",
     "format": "prettier --write '**/**/*.{js,ts,tsx,json,css}'",
     "ci:version": "pnpm changeset version && pnpm install --no-frozen-lockfile && git add .",

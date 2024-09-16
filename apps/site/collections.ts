@@ -2,8 +2,8 @@ import {
   createCollection,
   type FileSystemSource,
   type MDXContent,
-} from 'omnidoc/collections'
-import type { Headings } from '@omnidoc/mdx-plugins'
+} from 'renoun/collections'
+import type { Headings } from '@renoun/mdx-plugins'
 
 type DocsSchema = {
   default: MDXContent
@@ -30,7 +30,7 @@ export const CollectionsCollection = createCollection<CollectionsSchema>(
   {
     baseDirectory: 'collections',
     basePath: 'collections',
-    tsConfigFilePath: '../../packages/omnidoc/tsconfig.json',
+    tsConfigFilePath: '../../packages/renoun/tsconfig.json',
   }
 )
 
@@ -57,6 +57,6 @@ export const ComponentsCollection = createCollection<ComponentSchema>(
       }
       return true
     },
-    tsConfigFilePath: '../../packages/omnidoc/tsconfig.json',
+    tsConfigFilePath: '../../packages/renoun/tsconfig.json',
   }
 )
