@@ -14,10 +14,6 @@ export default withMDX({
   output: 'export',
   pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
   webpack(config) {
-    config.resolve.extensionAlias = {
-      '.js': ['.ts', '.tsx', '.js'],
-    }
-
     config.plugins.push(
       new webpack.ContextReplacementPlugin(
         /\/(@ts-morph\/common)\//,
