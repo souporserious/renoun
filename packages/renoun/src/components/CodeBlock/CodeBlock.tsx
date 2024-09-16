@@ -191,6 +191,8 @@ async function CodeBlockAsync({
         ) : null}
         <Pre
           css={{
+            WebkitTextSizeAdjust: 'none',
+            textSizeAdjust: 'none',
             position: 'relative',
             whiteSpace: 'pre',
             wordWrap: 'break-word',
