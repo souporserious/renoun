@@ -1,6 +1,7 @@
+import { describe, test, expect, beforeEach } from 'vitest'
 import { Project, type Directory } from 'ts-morph'
 
-import { getSourceFilesOrderMap } from './get-source-files-sort-order'
+import { getSourceFilesOrderMap } from './get-source-files-sort-order.js'
 
 describe('getSourceFilesOrderMap', () => {
   let project: Project

@@ -1,3 +1,4 @@
+import { describe, test, expect } from 'vitest'
 import {
   Project,
   SyntaxKind,
@@ -6,7 +7,7 @@ import {
 } from 'ts-morph'
 import dedent from 'dedent'
 
-import { resolveTypeProperties, resolveType } from './resolve-type'
+import { resolveTypeProperties, resolveType } from './resolve-type.js'
 
 const project = new Project()
 
@@ -7248,11 +7249,11 @@ describe('processProperties', () => {
                   "position": {
                     "end": {
                       "column": 52,
-                      "line": 2489,
+                      "line": 2495,
                     },
                     "start": {
                       "column": 9,
-                      "line": 2489,
+                      "line": 2495,
                     },
                   },
                   "signatures": [],

@@ -1,7 +1,8 @@
+import { describe, test, expect } from 'vitest'
 import dedent from 'dedent'
 import { Project, SyntaxKind } from 'ts-morph'
 
-import { getPropertyDefaultValue } from './get-property-default-value'
+import { getPropertyDefaultValue } from './get-property-default-value.js'
 
 describe('getParameterDefaultValue', () => {
   const project = new Project()

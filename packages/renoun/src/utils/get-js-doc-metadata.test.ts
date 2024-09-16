@@ -1,6 +1,7 @@
+import { describe, test, expect } from 'vitest'
 import { Project } from 'ts-morph'
 
-import { getJsDocMetadata } from './get-js-doc-metadata'
+import { getJsDocMetadata } from './get-js-doc-metadata.js'
 
 describe('getJsDocMetadata', () => {
   const project = new Project()

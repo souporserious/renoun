@@ -1,5 +1,7 @@
+import { describe, test, expect } from 'vitest'
 import { Project, SyntaxKind } from 'ts-morph'
-import { getSymbolDescription } from './get-symbol-description'
+
+import { getSymbolDescription } from './get-symbol-description.js'
 
 describe('getSymbolDescription', () => {
   const project = new Project()

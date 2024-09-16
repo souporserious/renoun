@@ -1,4 +1,6 @@
-import { splitTokenByRanges } from './split-tokens-by-ranges'
+import { describe, test, expect } from 'vitest'
+
+import { splitTokenByRanges } from './split-tokens-by-ranges.js'
 
 describe('splitTokenByRanges', () => {
   test('multiple symbols in a token', () => {

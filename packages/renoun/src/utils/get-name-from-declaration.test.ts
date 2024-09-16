@@ -1,10 +1,12 @@
+import { describe, test, expect } from 'vitest'
 import { Project } from 'ts-morph'
-import { getNameFromDeclaration } from './get-name-from-declaration'
+
+import { getNameFromDeclaration } from './get-name-from-declaration.js'
 
 describe('getMainExportDeclaration', () => {
   const project = new Project()
 
-  it('gets name from function declaration', () => {
+  test('gets name from function declaration', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       `export function Foo() {}`,
@@ -16,7 +18,7 @@ describe('getMainExportDeclaration', () => {
     expect(name).toBe('Foo')
   })
 
-  it('gets name from variable declaration', () => {
+  test('gets name from variable declaration', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       `export const Foo = () => {}`,
@@ -28,7 +30,7 @@ describe('getMainExportDeclaration', () => {
     expect(name).toBe('Foo')
   })
 
-  it('gets name from class declaration', () => {
+  test('gets name from class declaration', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       `export class Foo {}`,

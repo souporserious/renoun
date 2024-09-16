@@ -1,12 +1,13 @@
+import { describe, test, expect } from 'vitest'
 import { Project } from 'ts-morph'
 import dedent from 'dedent'
 
-import { getDiagnosticMessageText } from './get-diagnostic-message'
+import { getDiagnosticMessageText } from './get-diagnostic-message.js'
 
 describe('getDiagnosticMessageText', () => {
   const project = new Project()
 
-  it('returns a formatted message for simple diagnostics', () => {
+  test('returns a formatted message for simple diagnostics', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       `const addNumbers = (a: number, b: number) => a + b; addNumbers(5, "5");`
@@ -20,7 +21,7 @@ describe('getDiagnosticMessageText', () => {
     )
   })
 
-  it('returns a formatted message for chained diagnostics', () => {
+  test('returns a formatted message for chained diagnostics', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       dedent`

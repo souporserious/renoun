@@ -1,8 +1,9 @@
-import { getGitFileUrl } from './get-git-file-url'
+import { describe, test, expect } from 'vitest'
+import { getGitFileUrl } from './get-git-file-url.js'
 
 describe('getGitFileUrl', () => {
   describe('github tests', () => {
-    it('simple w/ starting slash for the filePath', () => {
+    test('simple w/ starting slash for the filePath', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         undefined,
@@ -16,7 +17,7 @@ describe('getGitFileUrl', () => {
       expect(generated).toEqual(expected)
     })
 
-    it('simple w/o starting slash for the filePath', () => {
+    test('simple w/o starting slash for the filePath', () => {
       const generated = getGitFileUrl(
         'directory-name/file-name',
         undefined,
@@ -30,7 +31,7 @@ describe('getGitFileUrl', () => {
       expect(generated).toEqual(expected)
     })
 
-    it('simple w/ line and w/o column', () => {
+    test('simple w/ line and w/o column', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         10,
@@ -44,7 +45,7 @@ describe('getGitFileUrl', () => {
       expect(generated).toEqual(expected)
     })
 
-    it('simple w/o line and w/ column', () => {
+    test('simple w/o line and w/ column', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         undefined,
@@ -58,7 +59,7 @@ describe('getGitFileUrl', () => {
       expect(generated).toEqual(expected)
     })
 
-    it('simple w/ line and column', () => {
+    test('simple w/ line and column', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         10,
@@ -74,7 +75,7 @@ describe('getGitFileUrl', () => {
   })
 
   describe('gitlab tests', () => {
-    it('simple w/ starting slash for the filePath', () => {
+    test('simple w/ starting slash for the filePath', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         undefined,
@@ -88,7 +89,7 @@ describe('getGitFileUrl', () => {
       expect(generated).toEqual(expected)
     })
 
-    it('simple w/o starting slash for the filePath', () => {
+    test('simple w/o starting slash for the filePath', () => {
       const generated = getGitFileUrl(
         'directory-name/file-name',
         undefined,
@@ -102,7 +103,7 @@ describe('getGitFileUrl', () => {
       expect(generated).toEqual(expected)
     })
 
-    it('simple w/ line and w/o column', () => {
+    test('simple w/ line and w/o column', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         10,
@@ -116,7 +117,7 @@ describe('getGitFileUrl', () => {
       expect(generated).toEqual(expected)
     })
 
-    it('simple w/o line and w/ column', () => {
+    test('simple w/o line and w/ column', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         undefined,
@@ -130,7 +131,7 @@ describe('getGitFileUrl', () => {
       expect(generated).toEqual(expected)
     })
 
-    it('simple w/ line and column', () => {
+    test('simple w/ line and column', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         10,
@@ -146,7 +147,7 @@ describe('getGitFileUrl', () => {
   })
 
   describe('bitbucket tests', () => {
-    it('simple w/ starting slash for the filePath', () => {
+    test('simple w/ starting slash for the filePath', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         undefined,
@@ -160,7 +161,7 @@ describe('getGitFileUrl', () => {
       expect(generated).toEqual(expected)
     })
 
-    it('simple w/o starting slash for the filePath', () => {
+    test('simple w/o starting slash for the filePath', () => {
       const generated = getGitFileUrl(
         'directory-name/file-name',
         undefined,
@@ -174,7 +175,7 @@ describe('getGitFileUrl', () => {
       expect(generated).toEqual(expected)
     })
 
-    it('simple w/ line and w/o column', () => {
+    test('simple w/ line and w/o column', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         10,
@@ -188,7 +189,7 @@ describe('getGitFileUrl', () => {
       expect(generated).toEqual(expected)
     })
 
-    it('simple w/o line and w/ column', () => {
+    test('simple w/o line and w/ column', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         undefined,
@@ -202,7 +203,7 @@ describe('getGitFileUrl', () => {
       expect(generated).toEqual(expected)
     })
 
-    it('simple w/ line and column', () => {
+    test('simple w/ line and column', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         10,
@@ -218,7 +219,7 @@ describe('getGitFileUrl', () => {
   })
 
   describe('Self-hosted', () => {
-    it('github', () => {
+    test('github', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         undefined,
@@ -234,7 +235,7 @@ describe('getGitFileUrl', () => {
       expect(generated).toEqual(expected)
     })
 
-    it('gitlab', () => {
+    test('gitlab', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         undefined,
@@ -250,7 +251,7 @@ describe('getGitFileUrl', () => {
       expect(generated).toEqual(expected)
     })
 
-    it('bitbucket', () => {
+    test('bitbucket', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         undefined,
