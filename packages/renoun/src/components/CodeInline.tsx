@@ -149,11 +149,31 @@ export async function CodeInline({
         'value' in props && props.value ? (
           <CodeFallback
             css={{
+              display: props.allowCopy ? 'inline-flex' : 'inline-block',
+              alignItems: props.allowCopy ? 'center' : undefined,
+              verticalAlign: 'text-bottom',
               padding: `${paddingY} ${paddingX} 0`,
               paddingRight: props.allowCopy
                 ? `calc(1ch + 1lh + ${paddingX})`
                 : undefined,
+              gap: props.allowCopy ? '1ch' : undefined,
+              borderRadius: 5,
+              whiteSpace: 'nowrap',
+              overflowX: 'scroll',
+              position: 'relative',
+              '::-webkit-scrollbar': {
+                height: paddingY,
+              },
+              '::-webkit-scrollbar-thumb': {
+                backgroundColor: 'rgba(0, 0, 0, 0)',
+              },
+              '@-moz-document url-prefix()': {
+                paddingBottom: paddingY,
+              },
+              ...props.css,
             }}
+            className={props.className}
+            style={props.style}
           >
             {props.value}
           </CodeFallback>
