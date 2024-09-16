@@ -1,5 +1,11 @@
 # mdxts
 
+## 4.0.0
+
+### Major Changes
+
+- 8e1a7e1: Renames the package from `omnidoc` to `renoun`.
+
 ## 3.2.1
 
 ### Patch Changes
