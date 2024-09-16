@@ -1,4 +1,4 @@
-import { getTheme } from './get-theme'
+import { getTheme } from './get-theme.js'
 
 let themeColors: Record<string, any> | null = null
 

@@ -3,14 +3,14 @@ import type { SourceFile, Diagnostic, ts, Project } from 'ts-morph'
 import { Node, SyntaxKind } from 'ts-morph'
 import { join, posix } from 'node:path'
 
-import { getDiagnosticMessageText } from './get-diagnostic-message'
-import { getRootDirectory } from './get-root-directory'
-import { getThemeColors } from './get-theme-colors'
-import { isJsxOnly } from './is-jsx-only'
-import { generatedFilenames } from './parse-source-text-metadata'
-import type { Highlighter } from './create-highlighter'
-import { getTrimmedSourceFileText } from './get-trimmed-source-file-text'
-import { splitTokenByRanges } from './split-tokens-by-ranges'
+import { getDiagnosticMessageText } from './get-diagnostic-message.js'
+import { getRootDirectory } from './get-root-directory.js'
+import { getThemeColors } from './get-theme-colors.js'
+import { isJsxOnly } from './is-jsx-only.js'
+import { generatedFilenames } from './parse-source-text-metadata.js'
+import type { Highlighter } from './create-highlighter.js'
+import { getTrimmedSourceFileText } from './get-trimmed-source-file-text.js'
+import { splitTokenByRanges } from './split-tokens-by-ranges.js'
 
 export const languageMap = {
   mjs: 'js',

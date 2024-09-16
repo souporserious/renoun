@@ -17,12 +17,12 @@ import {
   type TypeNode,
 } from 'ts-morph'
 
-import { getJsDocMetadata } from './get-js-doc-metadata'
+import { getJsDocMetadata } from './get-js-doc-metadata.js'
 import {
   getPropertyDefaultValueKey,
   getPropertyDefaultValue,
-} from './get-property-default-value'
-import { getSymbolDescription } from './get-symbol-description'
+} from './get-property-default-value.js'
+import { getSymbolDescription } from './get-symbol-description.js'
 
 export interface BaseType {
   /** Distinguishs between different kinds of types, such as primitives, objects, classes, functions, etc. */

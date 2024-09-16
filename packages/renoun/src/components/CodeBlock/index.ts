@@ -2,8 +2,8 @@ export {
   CodeBlock,
   type BaseCodeBlockProps,
   type CodeBlockProps,
-} from './CodeBlock'
-export { CopyButton } from './CopyButton'
-export { LineNumbers, type LineNumbersProps } from './LineNumbers'
-export { Tokens, type TokensProps } from './Tokens'
-export { Toolbar, type ToolbarProps } from './Toolbar'
+} from './CodeBlock.js'
+export { CopyButton } from './CopyButton.js'
+export { LineNumbers, type LineNumbersProps } from './LineNumbers.js'
+export { Tokens, type TokensProps } from './Tokens.js'
+export { Toolbar, type ToolbarProps } from './Toolbar.js'

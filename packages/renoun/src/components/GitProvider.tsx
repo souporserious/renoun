@@ -1,7 +1,7 @@
 import React from 'react'
 import { css, type CSSObject } from 'restyle'
 
-import { loadConfig } from '../utils/load-config'
+import { loadConfig } from '../utils/load-config.js'
 
 function getGitProviderFromUrl(gitSource: string) {
   const url = new URL(gitSource)

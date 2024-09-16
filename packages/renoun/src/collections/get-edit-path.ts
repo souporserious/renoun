@@ -1,9 +1,9 @@
 import { join, posix } from 'node:path'
 
-import { getRootDirectory } from '../utils/get-root-directory'
-import { getEditorPath } from '../utils/get-editor-path'
-import { getGitFileUrl } from '../utils/get-git-file-url'
-import { loadConfig } from '../utils/load-config'
+import { getRootDirectory } from '../utils/get-root-directory.js'
+import { getEditorPath } from '../utils/get-editor-path.js'
+import { getGitFileUrl } from '../utils/get-git-file-url.js'
+import { loadConfig } from '../utils/load-config.js'
 
 const warned = new Set<string>()
 let rootDirectory: string | null = null

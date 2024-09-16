@@ -3,21 +3,21 @@ import { type CSSObject, styled } from 'restyle'
 import type { MDXComponents } from 'mdx/types'
 import 'server-only'
 
-import { analyzeSourceText } from '../../project'
-import { getThemeColors } from '../../utils/get-theme-colors'
-import { CopyButton } from './CopyButton'
-import { Tokens } from './Tokens'
-import type { Languages } from '../../utils/get-tokens'
-import type { ContextValue } from './Context'
-import { Context } from './Context'
-import { CopyButtonContextProvider } from './contexts'
-import { LineNumbers } from './LineNumbers'
-import { Pre } from './Pre'
-import { Toolbar } from './Toolbar'
+import { analyzeSourceText } from '../../project/index.js'
+import { getThemeColors } from '../../utils/get-theme-colors.js'
+import { CopyButton } from './CopyButton.js'
+import { Tokens } from './Tokens.js'
+import type { Languages } from '../../utils/get-tokens.js'
+import type { ContextValue } from './Context.js'
+import { Context } from './Context.js'
+import { CopyButtonContextProvider } from './contexts.js'
+import { LineNumbers } from './LineNumbers.js'
+import { Pre } from './Pre.js'
+import { Toolbar } from './Toolbar.js'
 import {
   generateFocusedLinesGradient,
   generateHighlightedLinesGradient,
-} from './utils'
+} from './utils.js'
 
 export type BaseCodeBlockProps = {
   /** Name or path of the code block. Ordered filenames will be stripped from the name e.g. `01.index.tsx` becomes `index.tsx`. */

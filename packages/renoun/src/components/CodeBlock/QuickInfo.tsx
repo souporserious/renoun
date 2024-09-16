@@ -1,11 +1,11 @@
 import React, { Fragment } from 'react'
 import { styled, type CSSObject } from 'restyle'
 
-import { getThemeColors } from '../../utils/get-theme-colors'
-import { analyzeSourceText } from '../../project'
-import { MDXContent } from '../MDXContent'
-import { QuickInfoPopover } from './QuickInfoPopover'
-import type { Token, TokenDiagnostic } from '../../utils/get-tokens'
+import { getThemeColors } from '../../utils/get-theme-colors.js'
+import { analyzeSourceText } from '../../project/index.js'
+import { MDXContent } from '../MDXContent.js'
+import { QuickInfoPopover } from './QuickInfoPopover.js'
+import type { Token, TokenDiagnostic } from '../../utils/get-tokens.js'
 
 export async function QuickInfo({
   diagnostics,

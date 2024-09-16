@@ -10,24 +10,24 @@ import {
 import { dirname, resolve } from 'node:path'
 import globParent from 'glob-parent'
 
-import { createSlug } from '../utils/create-slug'
-import { filePathToPathname } from '../utils/file-path-to-pathname'
-import { getJsDocMetadata } from '../utils/get-js-doc-metadata'
-import { getExportedDeclaration } from '../utils/get-exported-declaration'
-import { resolveType } from '../utils/resolve-type'
-import { formatNameAsTitle } from './format-name-as-title'
+import { createSlug } from '../utils/create-slug.js'
+import { filePathToPathname } from '../utils/file-path-to-pathname.js'
+import { getJsDocMetadata } from '../utils/get-js-doc-metadata.js'
+import { getExportedDeclaration } from '../utils/get-exported-declaration.js'
+import { resolveType } from '../utils/resolve-type.js'
+import { formatNameAsTitle } from './format-name-as-title.js'
 import {
   getDeclarationLocation,
   type DeclarationPosition,
-} from './get-declaration-location'
-import { getDirectorySourceFile } from './get-directory-source-file'
-import { getEditPath } from './get-edit-path'
-import { getGitMetadata } from './get-git-metadata'
-import { getSourcePathMap } from './get-source-files-path-map'
-import { getSourceFilesOrderMap } from './get-source-files-sort-order'
-import { getImportMap, setImportMap } from './import-maps'
-import { resolveTsConfigPath } from './resolve-ts-config-path'
-import { extractExportByIdentifier } from '../utils/extract-export-by-identifier'
+} from './get-declaration-location.js'
+import { getDirectorySourceFile } from './get-directory-source-file.js'
+import { getEditPath } from './get-edit-path.js'
+import { getGitMetadata } from './get-git-metadata.js'
+import { getSourcePathMap } from './get-source-files-path-map.js'
+import { getSourceFilesOrderMap } from './get-source-files-sort-order.js'
+import { getImportMap, setImportMap } from './import-maps.js'
+import { resolveTsConfigPath } from './resolve-ts-config-path.js'
+import { extractExportByIdentifier } from '../utils/extract-export-by-identifier.js'
 
 export type { MDXContent }
 
@@ -405,7 +405,7 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
       if (isReactComponent) {
         const Component = exportValue as React.ComponentType
         const WrappedComponent = async (props: Record<string, unknown>) => {
-          const { Refresh } = await import('./Refresh')
+          const { Refresh } = await import('./Refresh.js')
 
           return (
             <>

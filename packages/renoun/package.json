@@ -28,68 +28,62 @@
   ],
   "sideEffects": false,
   "bin": {
-    "renoun": "./dist/cjs/src/cli/index.js"
+    "renoun": "./dist/cli/index.js"
   },
+  "type": "module",
   "exports": {
     "./assets": {
-      "types": "./dist/types/assets/index.d.ts",
-      "import": "./dist/esm/assets/index.js",
-      "require": "./dist/cjs/src/assets/index.js"
+      "types": "./dist/assets/index.d.ts",
+      "import": "./dist/assets/index.js"
     },
     "./collections": {
-      "types": "./dist/types/collections/index.d.ts",
-      "import": "./dist/esm/collections/index.js",
-      "require": "./dist/cjs/src/collections/index.js"
+      "types": "./dist/collections/index.d.ts",
+      "import": "./dist/collections/index.js"
     },
     "./components": {
-      "types": "./dist/types/components/index.d.ts",
-      "import": "./dist/esm/components/index.js",
-      "require": "./dist/cjs/src/components/index.js"
+      "types": "./dist/components/index.d.ts",
+      "import": "./dist/components/index.js"
     },
     "./components/*": {
-      "types": "./dist/types/components/*.d.ts",
-      "import": "./dist/esm/components/*.js",
-      "require": "./dist/cjs/src/components/*.js"
+      "types": "./dist/components/*.d.ts",
+      "import": "./dist/components/*.js"
     },
     "./core": {
-      "types": "./dist/types/core.d.ts",
-      "import": "./dist/esm/core.js",
-      "require": "./dist/cjs/src/core.js"
+      "types": "./dist/core.d.ts",
+      "import": "./dist/core.js"
     },
     "./project": {
-      "types": "./dist/types/project/index.d.ts",
-      "import": "./dist/esm/project/index.js",
-      "require": "./dist/cjs/src/project/index.js"
+      "types": "./dist/project/index.d.ts",
+      "import": "./dist/project/index.js"
     }
   },
   "typesVersions": {
     "*": {
       "assets": [
-        "./dist/types/assets/index.d.ts"
+        "./dist/assets/index.d.ts"
       ],
       "collections": [
-        "./dist/types/collections/index.d.ts"
+        "./dist/collections/index.d.ts"
       ],
       "components": [
-        "./dist/types/components/index.d.ts"
+        "./dist/components/index.d.ts"
       ],
       "components/*": [
-        "./dist/types/components/*.d.ts"
+        "./dist/components/*.d.ts"
       ],
       "core": [
-        "./dist/types/core.d.ts"
+        "./dist/core.d.ts"
       ],
       "project": [
-        "./dist/types/project/index.d.ts"
+        "./dist/project/index.d.ts"
       ]
     }
   },
   "scripts": {
-    "build": "pnpm build:esm && pnpm build:cjs",
-    "build:esm": "tsc --outDir dist/esm --declaration true --declarationDir dist/types",
-    "build:cjs": "swc src --out-dir dist/cjs --ignore **/*.test.ts --ignore **/*.examples.tsx --config-file .swcrc-cjs",
-    "dev": "concurrently \"pnpm build:esm --watch\" \"pnpm build:cjs --watch\"",
-    "test": "jest"
+    "build": "tsc",
+    "dev": "tsc -w",
+    "test": "jest",
+    "postinstall": "pnpm build"
   },
   "peerDependencies": {
     "react": ">=18.0.0",

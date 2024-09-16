@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { loadConfig } from './load-config'
+import { loadConfig } from './load-config.js'
 
 let theme: Record<string, any> | null = null
 

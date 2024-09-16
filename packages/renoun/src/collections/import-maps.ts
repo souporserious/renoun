@@ -2,11 +2,11 @@ import { Project } from 'ts-morph'
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import { extname, resolve, join, dirname, relative } from 'node:path'
 import globParent from 'glob-parent'
-import { glob } from 'fast-glob'
+import fastGlob from 'fast-glob'
 
-import { getCollectionConfigurations } from './get-collection-configurations'
-import { getProject } from '../project/get-project'
-import { resolveTsConfigPath } from './resolve-ts-config-path'
+import { getCollectionConfigurations } from './get-collection-configurations.js'
+import { getProject } from '../project/get-project.js'
+import { resolveTsConfigPath } from './resolve-ts-config-path.js'
 
 export const PACKAGE_NAME = 'renoun/core'
 export const PACKAGE_DIRECTORY = '.renoun'
@@ -80,7 +80,7 @@ async function writeImportMap(
               filePattern
             )
           : resolve(tsConfigDirectory, filePattern)
-      const filePaths = await glob(absoluteGlobPattern)
+      const filePaths = await fastGlob.glob(absoluteGlobPattern)
 
       if (process.env.NODE_ENV === 'production' && filePaths.length === 0) {
         throw new Error(

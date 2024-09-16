@@ -1,5 +1,7 @@
 import WebSocket from 'ws'
 
+WebSocket.WebSocketServer
+
 export interface WebSocketRequest {
   method: string
   params: any
@@ -18,15 +20,20 @@ export interface WebSocketNotification {
 }
 
 export class WebSocketServer {
-  #server: WebSocket.Server
+  #server!: WebSocket.Server
 
   #sockets: Set<WebSocket> = new Set()
 
   #handlers: { [key: string]: (params: any) => Promise<any> | any } = {}
 
   constructor() {
-    this.#server = new WebSocket.Server({ port: 5996 })
+    import('ws').then((ws) => {
+      this.#server = new ws.WebSocketServer({ port: 5996 })
+      this.init()
+    })
+  }
 
+  init() {
     this.#server.on('error', (error: NodeJS.ErrnoException) => {
       let message = '[renoun] WebSocket server error'
 

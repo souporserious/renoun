@@ -1,10 +1,10 @@
 import * as React from 'react'
 import type { MDXComponents as MDXComponentsType } from 'mdx/types'
 
-import type { BaseCodeBlockProps } from './CodeBlock/CodeBlock'
-import { CodeBlock } from './CodeBlock/CodeBlock'
-import type { CodeInlineProps } from './CodeInline'
-import { CodeInline } from './CodeInline'
+import type { BaseCodeBlockProps } from './CodeBlock/CodeBlock.js'
+import { CodeBlock } from './CodeBlock/CodeBlock.js'
+import type { CodeInlineProps } from './CodeInline.js'
+import { CodeInline } from './CodeInline.js'
 
 type RenounComponentsType = Omit<MDXComponentsType, 'pre' | 'code'> & {
   pre?: (props: BaseCodeBlockProps & { value: string }) => React.ReactElement

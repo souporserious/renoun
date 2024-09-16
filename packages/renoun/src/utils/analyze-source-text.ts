@@ -1,8 +1,8 @@
 import type { Project } from 'ts-morph'
-import { getTokens } from './get-tokens'
-import type { createHighlighter } from './create-highlighter'
-import type { ParseMetadataOptions } from './parse-source-text-metadata'
-import { parseSourceTextMetadata } from './parse-source-text-metadata'
+import { getTokens } from './get-tokens.js'
+import type { createHighlighter } from './create-highlighter.js'
+import type { ParseMetadataOptions } from './parse-source-text-metadata.js'
+import { parseSourceTextMetadata } from './parse-source-text-metadata.js'
 
 export type AnalyzeSourceTextOptions = ParseMetadataOptions & {
   project: Project

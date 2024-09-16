@@ -1,10 +1,10 @@
 import React from 'react'
 import { styled, type CSSObject } from 'restyle'
 
-import { getThemeColors } from '../../utils/get-theme-colors'
-import { getContext } from '../../utils/context'
-import { CopyButton } from './CopyButton'
-import { Context } from './Context'
+import { getThemeColors } from '../../utils/get-theme-colors.js'
+import { getContext } from '../../utils/context.js'
+import { CopyButton } from './CopyButton.js'
+import { Context } from './Context.js'
 
 export interface ToolbarProps {
   /** The value of the code block. */

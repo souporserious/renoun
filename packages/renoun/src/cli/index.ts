@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
 
-import { generateCollectionImportMap } from '../collections/import-maps'
-import { createServer } from '../project/server'
+import { generateCollectionImportMap } from '../collections/import-maps.js'
+import { createServer } from '../project/server.js'
 
 const [firstArgument, secondArgument, ...restArguments] = process.argv.slice(2)
 

@@ -3,9 +3,9 @@ import { join, posix, isAbsolute } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import { Project, SourceFile } from 'ts-morph'
 
-import { getLanguage, type Languages } from './get-language'
-import { isJsxOnly } from './is-jsx-only'
-import type { ExclusiveUnion } from '../types'
+import { getLanguage, type Languages } from './get-language.js'
+import { isJsxOnly } from './is-jsx-only.js'
+import type { ExclusiveUnion } from '../types.js'
 
 type BaseParseMetadataOptions = {
   project: Project

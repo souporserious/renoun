@@ -1,6 +1,6 @@
 import { resolve } from 'path'
 
-import { getPackageMetadata } from './get-package-metadata'
+import { getPackageMetadata } from './get-package-metadata.js'
 
 const extensionPatterns = [
   '.{js,jsx,ts,tsx}',

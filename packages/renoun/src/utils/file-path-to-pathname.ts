@@ -1,6 +1,6 @@
 import { resolve, posix } from 'node:path'
 
-import { createSlug } from './create-slug'
+import { createSlug } from './create-slug.js'
 
 /** Converts a file system path to a URL-friendly pathname. */
 export function filePathToPathname(

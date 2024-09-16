@@ -1,8 +1,8 @@
 'use client'
 import React, { useEffect, useId, useRef } from 'react'
 
-import { useQuickInfoContext } from './QuickInfoProvider'
-import { getClosestViewport } from './utils'
+import { useQuickInfoContext } from './QuickInfoProvider.js'
+import { getClosestViewport } from './utils.js'
 
 export function Symbol({
   popover,

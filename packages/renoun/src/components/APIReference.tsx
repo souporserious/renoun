@@ -2,13 +2,17 @@
 import { Fragment } from 'react'
 import type { CSSObject } from 'restyle'
 
-import type { ExportSource } from '../collections'
-import { CodeInline } from './CodeInline'
-import { MDXContent } from './MDXContent'
-import { MDXComponents } from './MDXComponents'
-import { createSlug } from '../utils/create-slug'
-import type { AllTypes, ResolvedType, TypeOfKind } from '../utils/resolve-type'
-import { isParameterType, isPropertyType } from '../utils/resolve-type'
+import type { ExportSource } from '../collections/index.js'
+import { CodeInline } from './CodeInline.js'
+import { MDXContent } from './MDXContent.js'
+import { MDXComponents } from './MDXComponents.js'
+import { createSlug } from '../utils/create-slug.js'
+import type {
+  AllTypes,
+  ResolvedType,
+  TypeOfKind,
+} from '../utils/resolve-type.js'
+import { isParameterType, isPropertyType } from '../utils/resolve-type.js'
 
 const mdxComponents = {
   p: (props) => <p {...props} css={{ margin: 0 }} />,

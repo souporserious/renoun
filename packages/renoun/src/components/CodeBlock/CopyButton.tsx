@@ -2,8 +2,8 @@
 import React, { useContext, useState } from 'react'
 import { css, type CSSObject } from 'restyle'
 
-import { PreActiveContext } from './Pre'
-import { CopyButtonContext } from './contexts'
+import { PreActiveContext } from './Pre.js'
+import { CopyButtonContext } from './contexts.js'
 
 /** Copies a value to the user's clipboard. */
 export function CopyButton({

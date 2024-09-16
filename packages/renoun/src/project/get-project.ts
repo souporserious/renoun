@@ -2,7 +2,7 @@ import type { Project, ProjectOptions as TsMorphProjectOptions } from 'ts-morph'
 import { join, dirname, extname, resolve } from 'node:path'
 import { existsSync, watch, statSync } from 'node:fs'
 
-import { ProjectOptions } from './types'
+import { ProjectOptions } from './types.js'
 
 const projects = new Map<string, Project>()
 

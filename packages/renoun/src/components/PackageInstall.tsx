@@ -1,10 +1,10 @@
 import React from 'react'
 
-import { getThemeColors } from '../utils/get-theme-colors'
-import { CopyButton } from './CodeBlock/CopyButton'
-import { CodeBlock } from './CodeBlock/CodeBlock'
-import { Tokens } from './CodeBlock/Tokens'
-import { PackageInstallClient } from './PackageInstallClient'
+import { getThemeColors } from '../utils/get-theme-colors.js'
+import { CopyButton } from './CodeBlock/CopyButton.js'
+import { CodeBlock } from './CodeBlock/CodeBlock.js'
+import { Tokens } from './CodeBlock/Tokens.js'
+import { PackageInstallClient } from './PackageInstallClient.js'
 
 const stateKey = 'package-manager'
 const defaultPackageManager = 'npm'

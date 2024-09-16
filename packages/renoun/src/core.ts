@@ -1,1 +1,1 @@
-export * from './collections'
+export * from './collections/index.js'

@@ -1,10 +1,10 @@
 import React, { Fragment } from 'react'
 import { styled, type CSSObject } from 'restyle'
 
-import { getThemeColors } from '../../utils/get-theme-colors'
-import { getContext } from '../../utils/context'
-import type { getTokens } from '../../utils/get-tokens'
-import { Context } from './Context'
+import { getThemeColors } from '../../utils/get-theme-colors.js'
+import { getContext } from '../../utils/context.js'
+import type { getTokens } from '../../utils/get-tokens.js'
+import { Context } from './Context.js'
 
 export interface LineNumbersProps {
   /** Tokens to render from `getTokens`. */

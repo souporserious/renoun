@@ -4,7 +4,7 @@ import * as jsxDevRuntime from 'react/jsx-dev-runtime'
 import type { CompileOptions } from '@mdx-js/mdx'
 import 'server-only'
 
-import type { MDXComponents } from './MDXComponents'
+import type { MDXComponents } from './MDXComponents.js'
 
 /** Compiles and renders a string of MDX content. */
 export async function MDXContent({

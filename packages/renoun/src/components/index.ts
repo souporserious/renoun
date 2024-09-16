@@ -1,4 +1,4 @@
-export { APIReference } from './APIReference'
+export { APIReference } from './APIReference.js'
 export {
   CodeBlock,
   CopyButton,
@@ -9,10 +9,10 @@ export {
   type CodeBlockProps,
   type TokensProps,
   type ToolbarProps,
-} from './CodeBlock'
-export { CodeInline, type CodeInlineProps } from './CodeInline'
-export { Copyright } from './Copyright'
-export { GitProviderLogo, GitProviderLink } from './GitProvider'
-export { MDXContent } from './MDXContent'
-export { MDXComponents } from './MDXComponents'
-export { RenderedHTML } from './RenderedHTML'
+} from './CodeBlock/index.js'
+export { CodeInline, type CodeInlineProps } from './CodeInline.js'
+export { Copyright } from './Copyright.js'
+export { GitProviderLogo, GitProviderLink } from './GitProvider.js'
+export { MDXContent } from './MDXContent.js'
+export { MDXComponents } from './MDXComponents.js'
+export { RenderedHTML } from './RenderedHTML.js'

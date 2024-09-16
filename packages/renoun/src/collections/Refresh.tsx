@@ -1,5 +1,5 @@
 'use client'
-import type { WebSocketNotification } from '../project/rpc/server'
+import type { WebSocketNotification } from '../project/rpc/server.js'
 
 let startedWatching = false
 

@@ -1,14 +1,14 @@
 import { watch } from 'node:fs'
 
-import { generateCollectionImportMap } from '../collections/import-maps'
-import { analyzeSourceText } from '../utils/analyze-source-text'
+import { generateCollectionImportMap } from '../collections/import-maps.js'
+import { analyzeSourceText } from '../utils/analyze-source-text.js'
 import {
   createHighlighter,
   type Highlighter,
-} from '../utils/create-highlighter'
-import { WebSocketServer } from './rpc/server'
-import { getProject } from './get-project'
-import { ProjectOptions } from './types'
+} from '../utils/create-highlighter.js'
+import { WebSocketServer } from './rpc/server.js'
+import { getProject } from './get-project.js'
+import { ProjectOptions } from './types.js'
 
 const DEFAULT_IGNORED_PATHS = [
   '.git',

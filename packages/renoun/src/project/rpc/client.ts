@@ -1,6 +1,6 @@
 import type WebSocket from 'ws'
 
-import type { WebSocketRequest, WebSocketResponse } from './server'
+import type { WebSocketRequest, WebSocketResponse } from './server.js'
 
 type Request = {
   resolve: (value?: any) => void

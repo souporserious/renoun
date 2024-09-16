@@ -1,15 +1,15 @@
 import type {
   AnalyzeSourceTextOptions,
   AnalyzeSourceTextResult,
-} from '../utils/analyze-source-text'
+} from '../utils/analyze-source-text.js'
 import {
   createHighlighter,
   type Highlighter,
-} from '../utils/create-highlighter'
-import type { DistributiveOmit } from '../types'
-import { WebSocketClient } from './rpc/client'
-import { getProject } from './get-project'
-import type { ProjectOptions } from './types'
+} from '../utils/create-highlighter.js'
+import type { DistributiveOmit } from '../types.js'
+import { WebSocketClient } from './rpc/client.js'
+import { getProject } from './get-project.js'
+import type { ProjectOptions } from './types.js'
 
 let client: WebSocketClient | undefined
 
@@ -52,7 +52,7 @@ export async function analyzeSourceText(
 
   await untilHighlighterLoaded()
 
-  return import('../utils/analyze-source-text').then(
+  return import('../utils/analyze-source-text.js').then(
     ({ analyzeSourceText }) => {
       if (currentHighlighter.current === null) {
         throw new Error(

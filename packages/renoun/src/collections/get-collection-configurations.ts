@@ -4,8 +4,8 @@ import { Node, SyntaxKind } from 'ts-morph'
 import {
   resolveObjectLiteralExpression,
   isLiteralExpressionValue,
-} from '../utils/resolve-expressions'
-import type { CollectionOptions } from './index'
+} from '../utils/resolve-expressions.js'
+import type { CollectionOptions } from './index.js'
 
 /** Finds all `createCollection` configurations. */
 export function getCollectionConfigurations(project: Project) {

@@ -1,7 +1,7 @@
 import React from 'react'
 
-import type { CodeBlockProps } from './CodeBlock'
-import { CodeBlock } from './CodeBlock'
+import type { CodeBlockProps } from './CodeBlock/index.js'
+import { CodeBlock } from './CodeBlock/index.js'
 
 /** Renders `children` as HTML within a `CodeBlock` component. */
 export async function RenderedHTML({
