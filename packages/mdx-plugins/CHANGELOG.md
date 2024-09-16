@@ -1,5 +1,11 @@
 # @renoun/mdx-plugins
 
+## 1.0.0
+
+### Major Changes
+
+- 52b18ed: Renames the package from `@omnidoc/mdx-plugins` to `@renoun/mdx-plugins`.
+
 ## 0.1.1
 
 ### Patch Changes
