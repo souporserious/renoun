@@ -106,7 +106,7 @@
     "glob-parent": "^6.0.2",
     "restyle": "catalog:",
     "server-only": "0.0.1",
-    "shiki": "^1.15.1",
+    "shiki": "^1.17.7",
     "ts-morph": "^23.0.0",
     "ws": "^8.18.0"
   }

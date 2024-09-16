@@ -6,11 +6,11 @@ packages:
 catalog:
   '@mdx-js/loader': 3.0.1
   '@mdx-js/react': 3.0.1
-  '@next/mdx': 14.2.7
+  '@next/mdx': 14.2.11
   '@types/mdx': 2.0.13
-  '@types/react': 18.3.4
+  '@types/react': 18.3.6
   '@types/react-dom': 18.3.0
-  'next': 14.2.7
+  'next': 14.2.11
   'react': 18.3.1
   'react-dom': 18.3.1
-  'restyle': 2.2.0
+  'restyle': 2.2.1
