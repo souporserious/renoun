@@ -3,7 +3,6 @@
 .turbo
 .vercel
 .renoun
-!.renoun/config.json
 dist
 node_modules
 out
