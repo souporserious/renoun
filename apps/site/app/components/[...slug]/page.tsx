@@ -114,8 +114,26 @@ export default async function Component({
               }}
             >
               {updatedAt ? (
-                <div style={{ gridColumn: 1, textAlign: 'left' }}>
-                  Last updated: {new Date(updatedAt).toLocaleString()}
+                <div
+                  style={{
+                    gridColumn: 1,
+                    fontSize: 'var(--font-size-body-3)',
+                    color: 'var(--color-foreground-secondary)',
+                    textAlign: 'left',
+                  }}
+                >
+                  Last updated{' '}
+                  <time
+                    dateTime={updatedAt.toString()}
+                    itemProp="dateModified"
+                    style={{ fontWeight: 600 }}
+                  >
+                    {updatedAt.toLocaleString('en', {
+                      year: '2-digit',
+                      month: '2-digit',
+                      day: '2-digit',
+                    })}
+                  </time>
                 </div>
               ) : null}
 
