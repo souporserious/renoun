@@ -1,0 +1,87 @@
+export const metadata = {
+  title: 'Next.js',
+  description:
+    'Renoun enhances the Next.js framework with powerful content and documentation features.',
+  tags: ['next', 'next.js', 'framework'],
+}
+
+To use Renoun with Next.js, start by modifying your `next` scripts in `package.json` to use the Renoun CLI. This will ensure that the Renoun process starts before your Next.js server:
+
+```json
+{
+  "scripts": {
+    "dev": "renoun next dev",
+    "build": "renoun next build"
+  }
+}
+```
+
+Next, include the `@next/mdx` plugin to enable writing MDX if desired. This plugin allows you to use MDX files in your Next.js project and ships pre-configured plugins with reasonable defaults.
+
+First, install the next plugin for MDX and the Renoun MDX plugins:
+
+```bash
+npm install @next/mdx @renoun/mdx-plugins
+```
+
+Now, add the plugin to your `next.config.js` file while optionally including the pre-configured `remarkPlugins` and `rehypePlugins` from Renoun:
+
+```js
+import createMDXPlugin from '@next/mdx'
+import { remarkPlugins, rehypePlugins } from '@renoun/mdx-plugins'
+import webpack from 'webpack'
+
+const withMDX = createMDXPlugin({
+  extension: /\.mdx?$/,
+  options: {
+    remarkPlugins,
+    rehypePlugins,
+  },
+})
+
+export default withMDX({
+  pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
+})
+```
+
+Finally, we need to silence critical dependency warnings for `@ts-morph/common` in the Webpack configuration. This is necessary to prevent warnings from appearing in the console:
+
+```js
+import createMDXPlugin from '@next/mdx'
+import { remarkPlugins, rehypePlugins } from '@renoun/mdx-plugins'
+import webpack from 'webpack'
+
+const withMDX = createMDXPlugin({
+  extension: /\.mdx?$/,
+  options: {
+    remarkPlugins,
+    rehypePlugins,
+  },
+})
+
+export default withMDX({
+  output: 'export',
+  pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
+  webpack(config) {
+    /* Silence critical dependency warnings for @ts-morph/common */
+    config.plugins.push(
+      new webpack.ContextReplacementPlugin(
+        /\/(@ts-morph\/common)\//,
+        (data) => {
+          for (const dependency of data.dependencies) {
+            delete dependency.critical
+          }
+          return data
+        }
+      )
+    )
+    return config
+  },
+})
+```
+
+Now you can start your Next.js server with Renoun enabled:
+
+```bash
+npm run dev
+```
