@@ -1,0 +1,67 @@
+export const metadata = {
+  title: 'Configuration',
+}
+
+This guide will help you configure renoun in your project.
+
+## renoun.json
+
+The `renoun.json` file is used to globally configure components and utilities for `the entire` project. This file should be placed in the root of your project:
+
+```json
+{
+  "$schema": "https://renoun.dev/schema.json",
+  "git": {
+    "source": "https://github.com/souporserious/renoun"
+  },
+  "site": "https://renoun.dev",
+  "theme": "theme.json"
+}
+```
+
+## Git Information
+
+Renoun provides a simple way to integrate with Git. This allows you to view the commit history of your documentation site and see the changes made to each file:
+
+```json
+{
+  "git": {
+    "source": "https://github.com/souporserious/renoun",
+    "branch": "main",
+    "provider": "github"
+  }
+}
+```
+
+## Site
+
+The `site` property is used to define the URL of your documentation site. This is used to generate the canonical URL for each page:
+
+```json
+{
+  "site": "https://renoun.dev"
+}
+```
+
+## Themes
+
+Themes are powered by <a href="https://shiki.style" target="_blank" rel="noopener">shiki</a> and are used to define the themes used to highlight syntax in code blocks. You can create your own theme or use a pre-built theme:
+
+```json
+{
+  "theme": "theme.json"
+}
+```
+
+Use an object to define multiple themes:
+
+```json
+{
+  "theme": {
+    "dark": "themes/dark.json",
+    "light": "themes/light.json"
+  }
+}
+```
+
+<Note>The first theme in the array will be used as the default theme.</Note>

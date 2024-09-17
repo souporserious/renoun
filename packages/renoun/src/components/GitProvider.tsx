@@ -20,13 +20,13 @@ export function GitProviderLogo({
   ...props
 }: React.SVGProps<SVGSVGElement>) {
   const config = loadConfig()
-  const gitSource = config.gitSource
+  const gitSource = config.git?.source
 
   if (!gitSource) {
     throwGitSourceError('GitProviderLogo')
   }
 
-  const gitProvider = config.gitProvider ?? getGitProviderFromUrl(gitSource!)
+  const gitProvider = config.git?.provider ?? getGitProviderFromUrl(gitSource!)
   const sharedProps = {
     width: '24',
     height: '24',
@@ -116,8 +116,9 @@ export function GitProviderLink({
   children?: React.ReactNode
 }) {
   const config = loadConfig()
+  const gitSource = config.git?.source
 
-  if (!config.gitSource) {
+  if (!gitSource) {
     throwGitSourceError('GitProviderLink')
   }
 
@@ -133,7 +134,7 @@ export function GitProviderLink({
 
   return (
     <a
-      href={config.gitSource}
+      href={gitSource}
       rel="noopener"
       target="_blank"
       className={className ? `${className} ${classNames}` : classNames}

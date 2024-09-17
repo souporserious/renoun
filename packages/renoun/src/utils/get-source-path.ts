@@ -22,15 +22,15 @@ export function getSourcePath(
   const config = loadConfig()
 
   if (gitSource === undefined) {
-    gitSource = config.gitSource
+    gitSource = config.git?.source
   }
 
   if (gitBranch === undefined) {
-    gitBranch = config.gitBranch
+    gitBranch = config.git?.branch
   }
 
   if (gitProvider === undefined) {
-    gitProvider = config.gitProvider
+    gitProvider = config.git?.provider
   }
 
   if (process.env.NODE_ENV === 'development') {
