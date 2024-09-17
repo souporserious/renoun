@@ -52,65 +52,59 @@ export default async function Doc({ params }: { params: { slug: string[] } }) {
           <Content />
         </div>
 
-        <div css={{ display: 'flex', flexDirection: 'column', gap: '4rem' }}>
-          <div>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                padding: '1rem',
-              }}
-            >
-              {updatedAt ? (
-                <div
-                  style={{
-                    gridColumn: 1,
-                    fontSize: 'var(--font-size-body-3)',
-                    color: 'var(--color-foreground-secondary)',
-                    textAlign: 'left',
-                  }}
+        <div css={{ display: 'flex', flexDirection: 'column' }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              padding: '1rem',
+            }}
+          >
+            {updatedAt ? (
+              <div
+                style={{
+                  gridColumn: 1,
+                  fontSize: 'var(--font-size-body-3)',
+                  color: 'var(--color-foreground-secondary)',
+                  textAlign: 'left',
+                }}
+              >
+                Last updated{' '}
+                <time
+                  dateTime={updatedAt.toString()}
+                  itemProp="dateModified"
+                  style={{ fontWeight: 600 }}
                 >
-                  Last updated{' '}
-                  <time
-                    dateTime={updatedAt.toString()}
-                    itemProp="dateModified"
-                    style={{ fontWeight: 600 }}
-                  >
-                    {updatedAt.toLocaleString('en', {
-                      year: '2-digit',
-                      month: '2-digit',
-                      day: '2-digit',
-                    })}
-                  </time>
-                </div>
-              ) : null}
+                  {updatedAt.toLocaleString('en', {
+                    year: '2-digit',
+                    month: '2-digit',
+                    day: '2-digit',
+                  })}
+                </time>
+              </div>
+            ) : null}
 
-              {editPath ? (
-                <a
-                  href={editPath}
-                  style={{ gridColumn: 2, textAlign: 'right' }}
-                >
-                  Edit this page
-                </a>
-              ) : null}
-            </div>
-
-            <nav
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                padding: '1rem',
-                gap: '2rem',
-              }}
-            >
-              {previousSource ? (
-                <SiblingLink source={previousSource} direction="previous" />
-              ) : null}
-              {nextSource ? (
-                <SiblingLink source={nextSource} direction="next" />
-              ) : null}
-            </nav>
+            {editPath ? (
+              <a href={editPath} style={{ gridColumn: 2, textAlign: 'right' }}>
+                Edit this page
+              </a>
+            ) : null}
           </div>
+
+          <nav
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '2rem',
+            }}
+          >
+            {previousSource ? (
+              <SiblingLink source={previousSource} direction="previous" />
+            ) : null}
+            {nextSource ? (
+              <SiblingLink source={nextSource} direction="next" />
+            ) : null}
+          </nav>
         </div>
       </div>
 
@@ -125,7 +119,7 @@ const StyledLink = styled(Link, {
   fontSize: 'var(--font-size-body-2)',
   display: 'grid',
   gridTemplateRows: 'auto auto',
-  padding: '1rem 1rem',
+  padding: '1.5rem 1rem',
   gap: '0.5rem',
   borderRadius: '0.25rem',
   backgroundColor: 'var(--color-surface-2)',
