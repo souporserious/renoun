@@ -36,6 +36,9 @@ catalogs:
     restyle:
       specifier: 2.2.1
       version: 2.2.1
+    shiki:
+      specifier: 1.17.7
+      version: 1.17.7
 
 importers:
 
@@ -119,9 +122,18 @@ importers:
       restyle:
         specifier: 'catalog:'
         version: 2.2.1(react@18.3.1)
+      shiki:
+        specifier: 'catalog:'
+        version: 1.17.7
       webpack:
         specifier: 5.94.0
         version: 5.94.0(@swc/core@1.7.26(@swc/helpers@0.5.5))(esbuild@0.23.1)
+      zod:
+        specifier: 3.23.8
+        version: 3.23.8
+      zod-to-json-schema:
+        specifier: 3.23.3
+        version: 3.23.3(zod@3.23.8)
 
   examples/blog:
     dependencies:
@@ -298,7 +310,7 @@ importers:
         specifier: 0.0.1
         version: 0.0.1
       shiki:
-        specifier: ^1.17.7
+        specifier: 'catalog:'
         version: 1.17.7
       ts-morph:
         specifier: ^23.0.0
@@ -2953,6 +2965,11 @@ packages:
   yargs@17.7.2:
     resolution: {integrity: sha512-7dSzzRQ++CKnNI/krKnYRV7JKKPUXMEh61soaHKg9mrWEhzFWhFnxPxGl+69cD1Ou63C13NUPCnmIcrvqCuM6w==}
     engines: {node: '>=12'}
+
+  zod-to-json-schema@3.23.3:
+    resolution: {integrity: sha512-TYWChTxKQbRJp5ST22o/Irt9KC5nj7CdBKYB/AosCRdj/wxEMvv4NNaj9XVUHDOIp53ZxArGhnw5HMZziPFjog==}
+    peerDependencies:
+      zod: ^3.23.3
 
   zod@3.23.8:
     resolution: {integrity: sha512-XBx9AXhXktjUqnepgTiE5flcKIYWi/rme0Eaj+5Y0lftuGBq+jyRu/md4WnuxqgP1ubdpNCsYEYPxrzVHD8d6g==}
@@ -5951,6 +5968,10 @@ snapshots:
       string-width: 4.2.3
       y18n: 5.0.8
       yargs-parser: 21.1.1
+
+  zod-to-json-schema@3.23.3(zod@3.23.8):
+    dependencies:
+      zod: 3.23.8
 
   zod@3.23.8: {}
 

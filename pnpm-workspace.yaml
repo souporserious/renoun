@@ -14,3 +14,4 @@ catalog:
   'react': 18.3.1
   'react-dom': 18.3.1
   'restyle': 2.2.1
+  'shiki': 1.17.7
