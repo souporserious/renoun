@@ -107,7 +107,8 @@ async function CodeBlockAsync({
   showToolbar,
   ...props
 }: CodeBlockProps) {
-  const padding = props.style?.container?.padding ?? '0.5lh'
+  const padding =
+    props.css?.container?.padding ?? props.style?.container?.padding ?? '0.5lh'
   const hasValue = 'value' in props
   const hasSource = 'source' in props
   const options: any = {}
