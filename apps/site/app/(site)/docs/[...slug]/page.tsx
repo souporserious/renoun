@@ -54,7 +54,7 @@ export default async function Doc({ params }: { params: { slug: string[] } }) {
 
         <div css={{ display: 'flex', flexDirection: 'column' }}>
           <div
-            style={{
+            css={{
               display: 'grid',
               gridTemplateColumns: '1fr 1fr',
               padding: '1rem',
@@ -62,7 +62,7 @@ export default async function Doc({ params }: { params: { slug: string[] } }) {
           >
             {updatedAt ? (
               <div
-                style={{
+                css={{
                   gridColumn: 1,
                   fontSize: 'var(--font-size-body-3)',
                   color: 'var(--color-foreground-secondary)',
@@ -73,7 +73,7 @@ export default async function Doc({ params }: { params: { slug: string[] } }) {
                 <time
                   dateTime={updatedAt.toString()}
                   itemProp="dateModified"
-                  style={{ fontWeight: 600 }}
+                  css={{ fontWeight: 600 }}
                 >
                   {updatedAt.toLocaleString('en', {
                     year: '2-digit',
@@ -85,14 +85,14 @@ export default async function Doc({ params }: { params: { slug: string[] } }) {
             ) : null}
 
             {editPath ? (
-              <a href={editPath} style={{ gridColumn: 2, textAlign: 'right' }}>
+              <a href={editPath} css={{ gridColumn: 2, textAlign: 'right' }}>
                 Edit this page
               </a>
             ) : null}
           </div>
 
           <nav
-            style={{
+            css={{
               display: 'grid',
               gridTemplateColumns: '1fr 1fr',
               gap: '2rem',
@@ -120,7 +120,7 @@ const StyledLink = styled(Link, {
   display: 'grid',
   gridTemplateRows: 'auto auto',
   padding: '1.5rem 1rem',
-  gap: '0.5rem',
+  gap: '0.25rem',
   borderRadius: '0.25rem',
   backgroundColor: 'var(--color-surface-2)',
   ':hover': {
@@ -172,7 +172,7 @@ async function SiblingLink({
           <svg
             viewBox="0 0 24 24"
             fill="none"
-            style={{
+            css={{
               width: 'var(--font-size-body-2)',
               height: 'var(--font-size-body-2)',
             }}
@@ -191,7 +191,7 @@ async function SiblingLink({
           <svg
             viewBox="0 0 24 24"
             fill="none"
-            style={{
+            css={{
               width: 'var(--font-size-body-2)',
               height: 'var(--font-size-body-2)',
             }}
