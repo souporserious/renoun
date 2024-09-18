@@ -1,13 +1,19 @@
+import type { CSSObject } from 'restyle'
 import type { CollectionSource, FileSystemSource } from 'renoun/collections'
 import { GitProviderLink } from 'renoun/components'
-import Link from 'next/link'
 
 import { DocsCollection } from 'collections'
 import { NavigationBoundary } from './NavigationBoundary'
 import { NavigationToggle } from './NavigationToggle'
 import { SidebarLink } from './SidebarLink'
 
-async function TreeNavigation({ source }: { source: FileSystemSource<any> }) {
+async function TreeNavigation({
+  source,
+  variant = 'title',
+}: {
+  source: FileSystemSource<any>
+  variant?: 'name' | 'title'
+}) {
   const sources = await source.getSources({ depth: 1 })
   const depth = source.getDepth()
   const path = source.getPath()
@@ -15,89 +21,87 @@ async function TreeNavigation({ source }: { source: FileSystemSource<any> }) {
 
   if (sources.length === 0) {
     return (
-      <li css={{ paddingLeft: `${depth}rem` }}>
-        <Link
-          href={path}
-          style={{
-            display: 'grid',
-            color: 'white',
-          }}
-        >
-          {metadata?.title || source.getTitle()}
-        </Link>
+      <li>
+        <SidebarLink
+          pathname={path}
+          label={
+            variant === 'title'
+              ? metadata?.title || source.getTitle()
+              : source.getName()
+          }
+        />
       </li>
     )
   }
 
   const childrenSources = sources.map((childSource) => (
-    <TreeNavigation key={childSource.getPath()} source={childSource} />
+    <TreeNavigation
+      key={childSource.getPath()}
+      source={childSource}
+      variant={variant}
+    />
   ))
 
+  const listStyles: CSSObject = {
+    fontSize: 'var(--font-size-body-2)',
+    display: 'flex',
+    flexDirection: 'column',
+    listStyle: 'none',
+    paddingLeft: 0,
+  }
+
   if (depth > 0) {
+    if (depth === 1) {
+      listStyles.paddingLeft = '0.8rem'
+      listStyles.marginLeft = '0.05rem'
+      listStyles.borderLeft = '1px solid var(--color-separator)'
+    } else {
+      listStyles.paddingLeft = depth * 0.4 + 'rem'
+    }
+
     return (
-      <li
-        css={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '1rem',
-          paddingLeft: `${depth}rem`,
-        }}
-      >
-        <Link href={path} style={{ color: 'white' }}>
-          {metadata?.title || source.getTitle()}
-        </Link>
-        <ul
-          css={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '1rem',
-            listStyle: 'none',
-            padding: 0,
-            margin: 0,
-          }}
-        >
-          {childrenSources}
-        </ul>
+      <li>
+        <SidebarLink
+          pathname={path}
+          label={
+            variant === 'title'
+              ? metadata?.title || source.getTitle()
+              : source.getName()
+          }
+        />
+        <ul css={listStyles}>{childrenSources}</ul>
       </li>
     )
   }
 
-  return (
-    <ul
-      css={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '1rem',
-        listStyle: 'none',
-        padding: 0,
-        margin: 0,
-      }}
-    >
-      {childrenSources}
-    </ul>
-  )
+  return <ul css={listStyles}>{childrenSources}</ul>
 }
 
 async function Navigation({
   collection,
+  variant,
 }: {
   collection: CollectionSource<any>
+  variant?: 'name' | 'title'
 }) {
   const sources = await collection.getSources({ depth: 1 })
 
   return (
     <ul
       css={{
+        fontSize: 'var(--font-size-body-2)',
         display: 'flex',
         flexDirection: 'column',
-        gap: '1rem',
         listStyle: 'none',
-        padding: 0,
-        margin: 0,
+        paddingLeft: 0,
       }}
     >
       {sources.map((source) => (
-        <TreeNavigation key={source.getPath()} source={source} />
+        <TreeNavigation
+          key={source.getPath()}
+          source={source}
+          variant={variant}
+        />
       ))}
     </ul>
   )
@@ -121,7 +125,7 @@ export function Sidebar() {
       }}
     >
       <div
-        style={{
+        css={{
           gridArea: '1 / 1',
           display: 'flex',
           justifyContent: 'space-between',
@@ -134,9 +138,9 @@ export function Sidebar() {
       <NavigationBoundary>
         <Navigation collection={DocsCollection} />
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div css={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div
-            style={{
+            css={{
               display: 'flex',
               alignItems: 'center',
               gap: '0.8rem',
@@ -155,11 +159,11 @@ export function Sidebar() {
               href="https://x.com/mdxts_"
               rel="noopener"
               target="_blank"
-              style={{ display: 'flex' }}
+              css={{ display: 'flex' }}
             >
               <svg
                 viewBox="0 0 16 16"
-                style={{
+                css={{
                   width: 'var(--font-size-body-2)',
                   height: 'var(--font-size-body-2)',
                   fill: 'var(--color-foreground-interactive)',
@@ -174,7 +178,7 @@ export function Sidebar() {
           </div>
 
           <span
-            style={{
+            css={{
               fontSize: 'var(--font-size-body-3)',
               color: 'var(--color-foreground-secondary)',
             }}
@@ -188,45 +192,5 @@ export function Sidebar() {
         </div>
       </NavigationBoundary>
     </aside>
-  )
-}
-
-function renderList(props: any) {
-  const styles: React.CSSProperties = {
-    fontSize: 'var(--font-size-body-2)',
-    display: 'flex',
-    flexDirection: 'column',
-    listStyle: 'none',
-    paddingLeft: 0,
-  }
-
-  if (props.depth === 0) {
-    styles.gap = '1.5rem'
-  } else if (props.depth === 1) {
-    styles.paddingLeft = '0.8rem'
-    styles.marginLeft = '0.05rem'
-    styles.borderLeft = '1px solid var(--color-separator)'
-  } else {
-    styles.paddingLeft = props.depth * 0.4 + 'rem'
-  }
-
-  return <ul style={styles}>{props.children}</ul>
-}
-
-function renderItem(props: any) {
-  return (
-    <li key={props.label}>
-      {props.depth === 0 ? (
-        <div
-          className="title"
-          style={{ padding: '0.25rem 0px', marginBottom: '0.5rem' }}
-        >
-          {props.label}
-        </div>
-      ) : (
-        <SidebarLink pathname={props.pathname} name={props.label} />
-      )}
-      {props.children}
-    </li>
   )
 }

@@ -2,6 +2,7 @@
   --color-foreground: #fff;
   --color-foreground-secondary: #cdedff;
   --color-foreground-interactive: hsl(200deg 20% 62%);
+  --color-foreground-interactive-highlighted: hsl(196deg 26% 80%);
   --color-background: hsl(215deg 46.96% 6.59%);
   --color-surface-1: hsl(210deg 50% 7%);
   --color-surface-2: hsl(218deg 42% 10%);
@@ -79,16 +80,12 @@ body {
 }
 
 a {
-  color: var(--color-foreground-interactive);
   text-decoration: none;
-}
-
-a:hover :not(.title) {
-  text-decoration: underline;
-}
-
-button {
   color: var(--color-foreground-interactive);
+
+  :hover {
+    color: var(--color-foreground-interactive-highlighted);
+  }
 }
 
 .prose {
@@ -166,30 +163,15 @@ button {
 
   li {
     text-wrap: pretty;
+
+    :where(h1, h2, h3, pre) {
+      margin: 1.4rem 0;
+    }
   }
 
-  li :where(h1, h2, h3, pre) {
-    margin: 1.4rem 0;
+  a:hover {
+    text-decoration: underline;
   }
-}
-
-main {
-  padding: 2rem;
-}
-
-@media screen and (min-width: 60rem) {
-  main {
-    padding: 2rem;
-  }
-}
-
-.link {
-  color: var(--color-foreground-interactive);
-  text-decoration: none;
-}
-
-.link:hover {
-  text-decoration: underline;
 }
 
 .title {
@@ -198,4 +180,13 @@ main {
   text-transform: uppercase;
   letter-spacing: 0.1rem;
   color: var(--color-foreground);
+}
+
+.link {
+  color: var(--color-foreground-interactive);
+
+  &:hover {
+    color: var(--color-foreground-interactive-highlighted);
+    text-decoration: underline;
+  }
 }

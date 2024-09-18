@@ -23,18 +23,23 @@ export function NavigationLink({
   const isActive = activePathnames
     ? activePathnames.find((pathname) => activePathname.startsWith(pathname))
     : activePathname.startsWith(href)
+  const styles: CSSObject = {
+    display: 'block',
+    padding: '0.25rem 0',
+  }
+
+  if (isActive) {
+    styles.fontWeight = 600
+    styles.color = 'var(--color-foreground)'
+  } else {
+    styles.color = 'var(--color-foreground-interactive)'
+    styles[':hover'] = {
+      color: 'var(--color-foreground-interactive-highlighted)',
+    }
+  }
 
   return (
-    <StyledLink
-      href={href}
-      css={{
-        fontWeight: isActive ? 600 : undefined,
-        color: isActive
-          ? 'var(--color-foreground)'
-          : 'var(--color-foreground-interactive)',
-        ...css,
-      }}
-    >
+    <StyledLink href={href} css={{ ...styles, ...css }}>
       {children}
     </StyledLink>
   )

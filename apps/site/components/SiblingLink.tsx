@@ -10,11 +10,12 @@ const StyledLink = styled(Link, {
   gap: '0.25rem',
   borderRadius: '0.25rem',
   backgroundColor: 'var(--color-surface-2)',
+  color: 'var(--color-foreground-interactive)',
+  stroke: 'var(--color-foreground-interactive)',
   ':hover': {
     backgroundColor: 'var(--color-surface-interactive)',
-  },
-  ':hover span': {
-    textDecoration: 'none',
+    color: 'var(--color-foreground-interactive-highlighted)',
+    stroke: 'var(--color-foreground-interactive-highlighted)',
   },
 })
 
@@ -68,7 +69,7 @@ export async function SiblingLink({
           >
             <path
               d="M14 6L8 12L14 18"
-              stroke="var(--color-foreground-interactive)"
+              stroke="inherit"
               strokeWidth="1.5"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -89,7 +90,7 @@ export async function SiblingLink({
           >
             <path
               d="M10 18L16 12L10 6"
-              stroke="var(--color-foreground-interactive)"
+              stroke="inherit"
               strokeWidth="1.5"
               strokeLinecap="round"
               strokeLinejoin="round"

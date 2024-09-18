@@ -1,4 +1,5 @@
 'use client'
+import type { CSSObject } from 'restyle'
 import type { Headings } from '@renoun/mdx-plugins'
 
 import { useSectionObserver } from 'hooks/use-section-observer'
@@ -86,6 +87,16 @@ function Link({
   sectionObserver: ReturnType<typeof useSectionObserver>
 }) {
   const isActive = sectionObserver.useActiveSection(id)
+  const styles: CSSObject = {}
+
+  if (isActive) {
+    styles.color = 'white'
+  } else {
+    styles.color = 'var(--color-foreground-interactive)'
+    styles[':hover'] = {
+      color: 'var(--color-foreground-interactive-highlighted)',
+    }
+  }
 
   return (
     <a
@@ -94,9 +105,7 @@ function Link({
         event.preventDefault()
         sectionObserver.scrollToSection(id)
       }}
-      css={{
-        color: isActive ? 'white' : 'var(--color-foreground-interactive)',
-      }}
+      css={styles}
     >
       {children}
     </a>

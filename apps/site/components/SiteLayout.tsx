@@ -23,6 +23,7 @@ export function SiteLayout({
         [`@media screen and (min-width: 60rem)`]: {
           gridTemplateColumns: 'auto minmax(0, 1fr)',
           gridTemplateRows: 'min-content 1fr',
+          columnGap: '2rem',
         },
       }}
     >
@@ -111,6 +112,7 @@ export function SiteLayout({
         css={{
           gridColumn: '2 / 3',
           gridRow: '2 / 3',
+          padding: '2rem 0',
         }}
       >
         {children}

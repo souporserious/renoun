@@ -10,29 +10,32 @@ const StyledLink = styled(Link, {
 
 export function SidebarLink({
   pathname,
-  name,
+  label,
   css,
 }: {
   pathname: string
-  name: string
+  label: string
   css?: CSSObject
 }) {
   const activePathname = usePathname()
   const isActive = pathname === activePathname
+  const styles: CSSObject = {
+    display: 'block',
+    padding: '0.25rem 0',
+  }
+
+  if (isActive) {
+    styles.color = 'var(--color-foreground)'
+  } else {
+    styles.color = 'var(--color-foreground-interactive)'
+    styles[':hover'] = {
+      color: 'var(--color-foreground-interactive-highlighted)',
+    }
+  }
 
   return (
-    <StyledLink
-      href={pathname}
-      css={{
-        display: 'block',
-        padding: '0.25rem 0',
-        color: isActive
-          ? 'var(--color-foreground)'
-          : 'var(--color-foreground-interactive)',
-        ...css,
-      }}
-    >
-      {name}
+    <StyledLink href={pathname} css={{ ...styles, ...css }}>
+      {label}
     </StyledLink>
   )
 }
