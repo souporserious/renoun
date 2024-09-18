@@ -1,4 +1,7 @@
-/** Get the closest scrollable viewport of a node. */
+/**
+ * Get the closest scrollable viewport of a node.
+ * @internal
+ */
 export function getClosestViewport(node: HTMLElement) {
   let scrollableNode: ParentNode | null = node.parentNode
 
@@ -21,7 +24,10 @@ export function getClosestViewport(node: HTMLElement) {
   return document.body
 }
 
-/** Get the closest scrollable viewport rect of a node. */
+/**
+ * Get the closest scrollable viewport rect of a node.
+ * @internal
+ */
 function getClosestViewportRect(node: HTMLElement) {
   const viewport = getClosestViewport(node)
   const isViewportBody = viewport === document.body
@@ -33,7 +39,10 @@ function getClosestViewportRect(node: HTMLElement) {
   return { width, height, top, left, bottom: top + height, right: left + width }
 }
 
-/** Get the rect of an element including the scroll. */
+/**
+ * Get the rect of an element including the scroll.
+ * @internal
+ */
 function getRectWithScroll(
   node: HTMLElement,
   scrollX: number,
@@ -50,7 +59,10 @@ function getRectWithScroll(
   }
 }
 
-/** Adjust the element's position including potential flipping. */
+/**
+ * Adjust the element's position including potential flipping.
+ * @internal
+ */
 export function keepElementInView(
   popoverNode: HTMLElement,
   anchorNode: HTMLElement
@@ -96,13 +108,17 @@ export function keepElementInView(
   return styles
 }
 
+/** @internal */
 export type HighlightBlock = {
   start: number
   end: number
   height: number
 }
 
-/** Parses a string of comma separated line ranges into an array of highlight blocks. */
+/**
+ * Parses a string of comma separated line ranges into an array of highlight blocks.
+ * @internal
+ */
 export function getHighlights(ranges: string): HighlightBlock[] {
   return ranges.split(',').map((range) => {
     const [start, end] = range.split('-')
@@ -117,7 +133,10 @@ export function getHighlights(ranges: string): HighlightBlock[] {
   })
 }
 
-/** Generates a CSS linear gradient to highlight the provided lines. */
+/**
+ * Generates a CSS linear gradient to highlight the provided lines.
+ * @internal
+ */
 export function generateHighlightedLinesGradient(highlightedLines: string) {
   const blocks = getHighlights(highlightedLines)
   let highlights = []
@@ -157,7 +176,10 @@ export function generateHighlightedLinesGradient(highlightedLines: string) {
   return `linear-gradient(to bottom, ${highlights.join(', ')})`
 }
 
-/** Generates a CSS linear gradient mask to focus highlighted lines. */
+/**
+ * Generates a CSS linear gradient mask to focus highlighted lines.
+ * @internal
+ */
 export function generateFocusedLinesGradient(highlightedLines: string) {
   const blocks = getHighlights(highlightedLines)
   let maskPieces: string[] = []

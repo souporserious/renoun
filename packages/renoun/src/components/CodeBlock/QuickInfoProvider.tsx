@@ -13,6 +13,10 @@ type QuickInfo = {
   popover: React.ReactNode | null
 } | null
 
+/**
+ * Context for managing quick info popovers.
+ * @internal
+ */
 export const QuickInfoContext = createContext<{
   quickInfo: QuickInfo
   setQuickInfo: (info: QuickInfo) => void
@@ -20,6 +24,10 @@ export const QuickInfoContext = createContext<{
   clearTimeouts: () => void
 } | null>(null)
 
+/**
+ * Hook to access the quick info context.
+ * @internal
+ */
 export function useQuickInfoContext() {
   const context = React.useContext(QuickInfoContext)
   if (!context) {
@@ -30,6 +38,10 @@ export function useQuickInfoContext() {
 
 let closeTimeoutId: ReturnType<typeof setTimeout> | null = null
 
+/**
+ * Provider for managing quick info popovers.
+ * @internal
+ */
 export function QuickInfoProvider({
   children,
   openDelay = 800,

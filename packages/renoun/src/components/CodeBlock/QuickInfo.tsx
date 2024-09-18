@@ -1,12 +1,16 @@
 import React, { Fragment } from 'react'
 import { styled, type CSSObject } from 'restyle'
 
-import { getThemeColors } from '../../utils/get-theme-colors.js'
 import { analyzeSourceText } from '../../project/index.js'
+import { getThemeColors } from '../../utils/get-theme-colors.js'
+import type { Token, TokenDiagnostic } from '../../utils/get-tokens.js'
 import { MDXContent } from '../MDXContent.js'
 import { QuickInfoPopover } from './QuickInfoPopover.js'
-import type { Token, TokenDiagnostic } from '../../utils/get-tokens.js'
 
+/**
+ * A quick info popover that displays diagnostics and documentation.
+ * @internal
+ */
 export async function QuickInfo({
   diagnostics,
   quickInfo,

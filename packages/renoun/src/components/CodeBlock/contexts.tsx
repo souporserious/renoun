@@ -1,8 +1,10 @@
 'use client'
 import React, { createContext } from 'react'
 
+/** @internal */
 export const CopyButtonContext = createContext<string | null>(null)
 
+/** @internal */
 export function CopyButtonContextProvider({
   value,
   children,

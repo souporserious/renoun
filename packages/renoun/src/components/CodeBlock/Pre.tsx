@@ -2,6 +2,7 @@
 import React, { createContext, useState } from 'react'
 import { styled } from 'restyle'
 
+/** @internal */
 export const PreActiveContext = createContext<boolean | null>(null)
 
 function isTargetValid(event: React.PointerEvent<HTMLPreElement>) {
@@ -23,6 +24,10 @@ function isTargetValid(event: React.PointerEvent<HTMLPreElement>) {
   return true
 }
 
+/**
+ * A pre element that can be focused and hovered.
+ * @internal
+ */
 export const Pre = styled(
   ({ children, ...props }: React.ComponentProps<'pre'>) => {
     const [active, setActive] = useState(false)

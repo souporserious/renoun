@@ -4,6 +4,10 @@ import React from 'react'
 import { keepElementInView } from './utils.js'
 import { useQuickInfoContext } from './QuickInfoProvider.js'
 
+/**
+ * A popover that displays quick info.
+ * @internal
+ */
 export function QuickInfoPopover({ children }: { children: React.ReactNode }) {
   const ref = React.useRef<HTMLDivElement>(null)
   const { quickInfo, resetQuickInfo, clearTimeouts } = useQuickInfoContext()

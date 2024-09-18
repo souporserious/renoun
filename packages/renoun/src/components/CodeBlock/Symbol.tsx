@@ -4,6 +4,10 @@ import React, { useEffect, useId, useRef } from 'react'
 import { useQuickInfoContext } from './QuickInfoProvider.js'
 import { getClosestViewport } from './utils.js'
 
+/**
+ * A symbol that can display a popover when hovered.
+ * @internal
+ */
 export function Symbol({
   popover,
   children,
