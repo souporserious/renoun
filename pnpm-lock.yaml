@@ -34,8 +34,8 @@ catalogs:
       specifier: 18.3.1
       version: 18.3.1
     restyle:
-      specifier: 2.2.1
-      version: 2.2.1
+      specifier: 2.3.0
+      version: 2.3.0
     shiki:
       specifier: 1.17.7
       version: 1.17.7
@@ -121,7 +121,7 @@ importers:
         version: link:../../packages/renoun
       restyle:
         specifier: 'catalog:'
-        version: 2.2.1(react@18.3.1)
+        version: 2.3.0(react@18.3.1)
       shiki:
         specifier: 'catalog:'
         version: 1.17.7
@@ -175,7 +175,7 @@ importers:
         version: link:../../packages/renoun
       restyle:
         specifier: 'catalog:'
-        version: 2.2.1(react@18.3.1)
+        version: 2.3.0(react@18.3.1)
       webpack:
         specifier: 5.94.0
         version: 5.94.0(@swc/core@1.7.26(@swc/helpers@0.5.5))(esbuild@0.23.1)
@@ -223,7 +223,7 @@ importers:
         version: link:../../packages/renoun
       restyle:
         specifier: 'catalog:'
-        version: 2.2.1(react@18.3.1)
+        version: 2.3.0(react@18.3.1)
       webpack:
         specifier: 5.94.0
         version: 5.94.0(@swc/core@1.7.26(@swc/helpers@0.5.5))(esbuild@0.23.1)
@@ -305,7 +305,7 @@ importers:
         version: 6.0.2
       restyle:
         specifier: 'catalog:'
-        version: 2.2.1(react@18.3.1)
+        version: 2.3.0(react@18.3.1)
       server-only:
         specifier: 0.0.1
         version: 0.0.1
@@ -2362,8 +2362,8 @@ packages:
     resolution: {integrity: sha512-qYg9KP24dD5qka9J47d0aVky0N+b4fTU89LN9iDnjB5waksiC49rvMB0PrUJQGoTmH50XPiqOvAjDfaijGxYZw==}
     engines: {node: '>=8'}
 
-  restyle@2.2.1:
-    resolution: {integrity: sha512-EqPghE5LFhkTKcgfN/C9OqiKp7zkUzHMpjnOsumUZEa9hvis9G0LwYdt0Wf+X3ukyWGKwJqQ8zKCTFTITfgBqQ==}
+  restyle@2.3.0:
+    resolution: {integrity: sha512-3h0vdrkMBx8QVS2q2rznmKpxAHTXGoTzfXrJdCAJbbS3m80Krz6TlJDCeHkAcgj9K0+HLjYOCmjWrDpC2dnE9A==}
     peerDependencies:
       react: ^18.0.0
 
@@ -5319,7 +5319,7 @@ snapshots:
 
   resolve-from@5.0.0: {}
 
-  restyle@2.2.1(react@18.3.1):
+  restyle@2.3.0(react@18.3.1):
     dependencies:
       react: 18.3.1
 

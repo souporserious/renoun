@@ -1,5 +1,6 @@
 import React, { Fragment } from 'react'
-import { css, type CSSObject } from 'restyle/css'
+import type { CSSObject } from 'restyle'
+import { css } from 'restyle/css'
 
 import { getThemeColors } from '../../utils/get-theme-colors.js'
 import { getContext } from '../../utils/context.js'
