@@ -1,7 +1,5 @@
 import { SiteLayout } from '@/components/SiteLayout'
 
-import '../layout.css'
-
 export default function RootLayout({
   children,
 }: {
