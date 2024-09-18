@@ -5,7 +5,7 @@ import {
   type FileSystemSource,
   type MDXContent,
 } from 'renoun/collections'
-import type { Headings } from '@renoun/mdx-plugins'
+import type { Headings } from '@renoun/mdx'
 
 type DocsSchema = {
   default: MDXContent

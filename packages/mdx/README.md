@@ -1,13 +1,13 @@
-# @renoun/mdx-plugins
+# @renoun/mdx
 
 A set of opinionated MDX plugins for `remark` and `rehype`.
 
 ## Installation
 
-First, install `@renoun/mdx-plugins` using your preferred package manager:
+First, install `@renoun/mdx` using your preferred package manager:
 
 ```bash
-npm install @renoun/mdx-plugins
+npm install @renoun/mdx
 ```
 
 ## Usage
@@ -16,7 +16,7 @@ To use the plugins, you can add them to your MDX configuration. For example, in 
 
 ```js
 import createMDXPlugin from '@next/mdx'
-import { remarkPlugins, rehypePlugins } from '@renoun/mdx-plugins'
+import { remarkPlugins, rehypePlugins } from '@renoun/mdx'
 
 const withMDX = createMDXPlugin({
   extension: /\.mdx?$/,

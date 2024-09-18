@@ -1,6 +1,6 @@
 'use client'
 import type { CSSObject } from 'restyle'
-import type { Headings } from '@renoun/mdx-plugins'
+import type { Headings } from '@renoun/mdx'
 
 import { useSectionObserver } from 'hooks/use-section-observer'
 import { ViewSource } from './ViewSource'

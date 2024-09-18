@@ -83,9 +83,9 @@ importers:
       '@preact/signals-core':
         specifier: ^1.8.0
         version: 1.8.0
-      '@renoun/mdx-plugins':
+      '@renoun/mdx':
         specifier: workspace:*
-        version: link:../../packages/mdx-plugins
+        version: link:../../packages/mdx
       '@types/mdx':
         specifier: 'catalog:'
         version: 2.0.13
@@ -228,7 +228,7 @@ importers:
         specifier: 5.94.0
         version: 5.94.0(@swc/core@1.7.26(@swc/helpers@0.5.5))(esbuild@0.23.1)
 
-  packages/mdx-plugins:
+  packages/mdx:
     dependencies:
       estree-util-value-to-estree:
         specifier: ^3.1.2
@@ -4924,7 +4924,7 @@ snapshots:
   micromark@4.0.0:
     dependencies:
       '@types/debug': 4.1.12
-      debug: 4.3.5
+      debug: 4.3.7
       decode-named-character-reference: 1.0.2
       devlop: 1.1.0
       micromark-core-commonmark: 2.0.1

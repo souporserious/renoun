@@ -5,7 +5,17 @@ export const metadata = {
   tags: ['next', 'next.js', 'framework'],
 }
 
-To use Renoun with Next.js, start by modifying your `next` scripts in `package.json` to use the Renoun CLI. This will ensure that the Renoun process starts before your Next.js server:
+## Install
+
+To use Renoun with Next.js, start with a Next.js project. If you don't have a project yet, you can create one with the following command:
+
+```bash
+npx create-next-app@latest
+```
+
+## Setup
+
+Next, modify the `next` scripts located in the project's `package.json` file to use the Renoun CLI. This will ensure that the Renoun process starts before your Next.js server:
 
 ```json
 {
@@ -16,19 +26,34 @@ To use Renoun with Next.js, start by modifying your `next` scripts in `package.j
 }
 ```
 
-Next, include the `@next/mdx` plugin to enable writing MDX if desired. This plugin allows you to use MDX files in your Next.js project and ships pre-configured plugins with reasonable defaults.
+<Note>
+  This command is necessary to enable Renoun features in your Next.js project.
+  The `renoun` CLI starts a WebSocket server that communicates with components
+  and utilities in your project to provide performant syntax highlighting and
+  code analysis.
+</Note>
 
-First, install the next plugin for MDX and the Renoun MDX plugins:
+## MDX (Optional)
+
+To enable writing MDX content in your Next.js application, we will use the `@next/mdx` and `@renoun/mdx` packages. These packages allow you to author MDX content in your Next.js project and ship with pre-configured plugins that include reasonable defaults.
+
+<Note>
+  This step is optional and only necessary if you plan to use MDX in your
+  project. Additionaly, you can skip adding the `@renoun/mdx` package if you
+  want to configure your own MDX plugins.
+</Note>
+
+First, install the Next.js MDX plugin and the Renoun MDX plugins:
 
 ```bash
-npm install @next/mdx @renoun/mdx-plugins
+npm install @next/mdx @renoun/mdx
 ```
 
-Now, add the plugin to your `next.config.js` file while optionally including the pre-configured `remarkPlugins` and `rehypePlugins` from Renoun:
+Now, add the plugin to your `next.config.js` file while optionally including the pre-configured `remarkPlugins` and `rehypePlugins` from `@renoun/mdx`:
 
 ```js
 import createMDXPlugin from '@next/mdx'
-import { remarkPlugins, rehypePlugins } from '@renoun/mdx-plugins'
+import { remarkPlugins, rehypePlugins } from '@renoun/mdx'
 import webpack from 'webpack'
 
 const withMDX = createMDXPlugin({
@@ -44,11 +69,13 @@ export default withMDX({
 })
 ```
 
-Finally, we need to silence critical dependency warnings for `@ts-morph/common` in the Webpack configuration. This is necessary to prevent warnings from appearing in the console:
+## Webpack Configuration
+
+Finally, we need to alias `js` files since `renoun` is an ESM package. We also need to silence critical dependency warnings for `@ts-morph/common` as these come from the `ts-morph` package `renoun` depends on. This is necessary to prevent warnings from appearing in the console:
 
 ```js
 import createMDXPlugin from '@next/mdx'
-import { remarkPlugins, rehypePlugins } from '@renoun/mdx-plugins'
+import { remarkPlugins, rehypePlugins } from '@renoun/mdx'
 import webpack from 'webpack'
 
 const withMDX = createMDXPlugin({
@@ -63,6 +90,11 @@ export default withMDX({
   output: 'export',
   pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
   webpack(config) {
+    /* Resolve .js files to .ts and .tsx */
+    config.resolve.extensionAlias = {
+      '.js': ['.ts', '.tsx', '.js'],
+    }
+
     /* Silence critical dependency warnings for @ts-morph/common */
     config.plugins.push(
       new webpack.ContextReplacementPlugin(
@@ -79,6 +111,8 @@ export default withMDX({
   },
 })
 ```
+
+## Start
 
 Now you can start your Next.js server with Renoun enabled:
 

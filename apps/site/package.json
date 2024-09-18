@@ -11,7 +11,7 @@
     "@mdx-js/react": "catalog:",
     "@next/mdx": "catalog:",
     "@preact/signals-core": "^1.8.0",
-    "@renoun/mdx-plugins": "workspace:*",
+    "@renoun/mdx": "workspace:*",
     "@types/mdx": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",

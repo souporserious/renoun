@@ -17,7 +17,7 @@
 
 ### Minor Changes
 
-- c017f16: Adds `@renoun/mdx-plugins` package that includes pre-configured and custom `remark` and `rehype` plugins.
+- c017f16: Adds `@renoun/mdx` package that includes pre-configured and custom `remark` and `rehype` plugins.
 - a2f85cb: Adds `filter` option to `createCollection` for filtering by specific file system sources.
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
-  "name": "@renoun/mdx-plugins",
-  "version": "1.0.0",
+  "name": "@renoun/mdx",
+  "version": "0.0.0",
   "description": "MDX plugins for Renoun",
   "author": "Travis Arnold",
   "license": "MIT",
