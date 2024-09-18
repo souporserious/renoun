@@ -156,7 +156,7 @@ export function Sidebar() {
 
             <a
               aria-label="X formerly known as Twitter"
-              href="https://x.com/mdxts_"
+              href="https://x.com/renoun_dev"
               rel="noopener"
               target="_blank"
               css={{ display: 'flex' }}
