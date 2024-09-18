@@ -33,7 +33,7 @@ export default async function Doc({ params }: { params: { slug: string[] } }) {
       css={{
         display: 'grid',
         gridTemplateColumns: 'minmax(0, 1fr)',
-        gap: '2rem',
+        gap: '4rem',
         '@media (min-width: 768px)': {
           gridTemplateColumns: 'minmax(0, 1fr) 12rem',
         },
@@ -51,38 +51,28 @@ export default async function Doc({ params }: { params: { slug: string[] } }) {
           <Content />
         </div>
 
-        <div css={{ display: 'flex', flexDirection: 'column' }}>
-          <div
-            css={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              padding: '1rem',
-            }}
-          >
-            {updatedAt ? (
-              <div
-                css={{
-                  gridColumn: 1,
-                  fontSize: 'var(--font-size-body-3)',
-                  color: 'var(--color-foreground-secondary)',
-                  textAlign: 'left',
-                }}
+        <div css={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+          {updatedAt ? (
+            <div
+              css={{
+                fontSize: 'var(--font-size-body-3)',
+                color: 'var(--color-foreground-secondary)',
+              }}
+            >
+              Last updated{' '}
+              <time
+                dateTime={updatedAt.toString()}
+                itemProp="dateModified"
+                css={{ fontWeight: 600 }}
               >
-                Last updated{' '}
-                <time
-                  dateTime={updatedAt.toString()}
-                  itemProp="dateModified"
-                  css={{ fontWeight: 600 }}
-                >
-                  {updatedAt.toLocaleString('en', {
-                    year: '2-digit',
-                    month: '2-digit',
-                    day: '2-digit',
-                  })}
-                </time>
-              </div>
-            ) : null}
-          </div>
+                {updatedAt.toLocaleString('en', {
+                  year: '2-digit',
+                  month: '2-digit',
+                  day: '2-digit',
+                })}
+              </time>
+            </div>
+          ) : null}
 
           <nav
             css={{

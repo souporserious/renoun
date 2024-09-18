@@ -131,38 +131,28 @@ export default async function Component({
           </div>
         ) : null}
 
-        <div>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              padding: '1rem',
-            }}
-          >
-            {updatedAt ? (
-              <div
-                style={{
-                  gridColumn: 1,
-                  fontSize: 'var(--font-size-body-3)',
-                  color: 'var(--color-foreground-secondary)',
-                  textAlign: 'left',
-                }}
+        <div css={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+          {updatedAt ? (
+            <div
+              css={{
+                fontSize: 'var(--font-size-body-3)',
+                color: 'var(--color-foreground-secondary)',
+              }}
+            >
+              Last updated{' '}
+              <time
+                dateTime={updatedAt.toString()}
+                itemProp="dateModified"
+                css={{ fontWeight: 600 }}
               >
-                Last updated{' '}
-                <time
-                  dateTime={updatedAt.toString()}
-                  itemProp="dateModified"
-                  style={{ fontWeight: 600 }}
-                >
-                  {updatedAt.toLocaleString('en', {
-                    year: '2-digit',
-                    month: '2-digit',
-                    day: '2-digit',
-                  })}
-                </time>
-              </div>
-            ) : null}
-          </div>
+                {updatedAt.toLocaleString('en', {
+                  year: '2-digit',
+                  month: '2-digit',
+                  day: '2-digit',
+                })}
+              </time>
+            </div>
+          ) : null}
 
           <nav
             style={{
