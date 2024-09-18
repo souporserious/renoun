@@ -230,7 +230,6 @@ async function Preview({
               padding: '4rem',
               margin: 'auto',
               overflow: 'auto',
-              borderBottom: '1px solid var(--color-separator)',
             }}
           >
             <Value />
@@ -247,6 +246,9 @@ async function Preview({
               padding: '0.75rem 1rem',
               overflow: 'auto',
               backgroundColor: 'var(--color-surface-secondary)',
+              borderTop: isComponent
+                ? '1px solid var(--color-separator)'
+                : undefined,
             }}
             className={GeistMono.className}
           >
