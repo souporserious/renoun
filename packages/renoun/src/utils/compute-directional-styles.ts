@@ -16,9 +16,20 @@ export function computeDirectionalStyles(
   }
 
   return {
-    all: `${styles.top} ${styles.right} ${styles.bottom} ${styles.left}`,
-    horizontal: `${styles.left} ${styles.right}`,
-    vertical: `${styles.top} ${styles.bottom}`,
+    all:
+      styles.top === styles.right &&
+      styles.right === styles.bottom &&
+      styles.bottom === styles.left
+        ? styles.top
+        : `${styles.top} ${styles.right} ${styles.bottom} ${styles.left}`,
+    horizontal:
+      styles.left === styles.right
+        ? styles.left
+        : `${styles.left} ${styles.right}`,
+    vertical:
+      styles.top === styles.bottom
+        ? styles.top
+        : `${styles.top} ${styles.bottom}`,
     ...styles,
   }
 }

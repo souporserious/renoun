@@ -216,7 +216,7 @@ async function CodeBlockAsync({
               ? {
                   '--h0': `rgba(0, 0, 0, 0)`,
                   '--h1': theme.editor.rangeHighlightBackground,
-                  backgroundPosition: `0 ${containerPadding.vertical}`,
+                  backgroundPosition: `0 ${containerPadding.top}`,
                   backgroundImage: highlightedLinesGradient,
                 }
               : {}),
@@ -224,7 +224,7 @@ async function CodeBlockAsync({
               ? {
                   '--m0': `rgba(0, 0, 0, ${unfocusedLinesOpacity})`,
                   '--m1': 'rgba(0, 0, 0, 1)',
-                  maskPosition: `0 ${containerPadding.vertical}`,
+                  maskPosition: `0 ${containerPadding.top}`,
                   maskImage: focusedLinesGradient,
                 }
               : {}),
@@ -397,7 +397,7 @@ const Code = styled('code', {
   gridRow: '1 / -1',
   display: 'block',
   width: 'max-content',
-  backgroundColor: 'inherit',
+  backgroundColor: 'transparent',
 })
 
 const FallbackPre = styled('pre', {
