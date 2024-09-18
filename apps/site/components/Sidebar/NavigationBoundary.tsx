@@ -27,7 +27,7 @@ export function NavigationBoundary({
         gridArea: '1 / 1',
         display: 'flex',
         flexDirection: 'column',
-        gap: '4rem',
+        gap: '2rem',
         '&[data-open="false"]': {
           display: 'none',
         },

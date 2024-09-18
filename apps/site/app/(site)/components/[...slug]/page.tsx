@@ -2,6 +2,7 @@ import { APIReference, CodeBlock, Tokens } from 'renoun/components'
 import type { Headings } from '@renoun/mdx-plugins'
 import type { ExportSource } from 'renoun/collections'
 import { notFound } from 'next/navigation'
+import { GeistMono } from 'geist/font/mono'
 
 import { ComponentsCollection } from '@/collections'
 import { SiblingLink } from '@/components/SiblingLink'
@@ -219,7 +220,7 @@ async function Preview({
           display: 'grid',
           gridTemplateRows: isComponent ? 'minmax(16rem, 1fr) auto' : undefined,
           borderRadius: 5,
-          boxShadow: '0 0 0 1px #3b4252',
+          boxShadow: '0 0 0 1px var(--color-separator)',
           overflow: 'clip',
         }}
       >
@@ -229,6 +230,7 @@ async function Preview({
               padding: '4rem',
               margin: 'auto',
               overflow: 'auto',
+              borderBottom: '1px solid var(--color-separator)',
             }}
           >
             <Value />
@@ -240,11 +242,13 @@ async function Preview({
               position: 'relative',
               whiteSpace: 'pre',
               wordWrap: 'break-word',
-              padding: '0.5lh',
-              margin: 0,
+              fontSize: 'var(--font-size-code)',
+              lineHeight: 'var(--line-height-code)',
+              padding: '0.75rem 1rem',
               overflow: 'auto',
-              backgroundColor: '#09121b',
+              backgroundColor: 'var(--color-surface-secondary)',
             }}
+            className={GeistMono.className}
           >
             <Tokens />
           </pre>

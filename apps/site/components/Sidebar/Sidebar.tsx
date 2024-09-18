@@ -2,7 +2,7 @@ import type { CSSObject } from 'restyle'
 import type { CollectionSource, FileSystemSource } from 'renoun/collections'
 import { GitProviderLink } from 'renoun/components'
 
-import { DocsCollection } from 'collections'
+import { DocsCollection, ComponentsCollection } from '@/collections'
 import { NavigationBoundary } from './NavigationBoundary'
 import { NavigationToggle } from './NavigationToggle'
 import { SidebarLink } from './SidebarLink'
@@ -136,7 +136,27 @@ export function Sidebar() {
       </div>
 
       <NavigationBoundary>
-        <Navigation collection={DocsCollection} />
+        <div
+          css={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.5rem',
+          }}
+        >
+          <h3 className="title">Docs</h3>
+          <Navigation collection={DocsCollection} />
+        </div>
+
+        <div
+          css={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.5rem',
+          }}
+        >
+          <h3 className="title">Components</h3>
+          <Navigation collection={ComponentsCollection} variant="name" />
+        </div>
 
         <div css={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div
