@@ -81,8 +81,20 @@ export function Custom() {
       source="./counter/Counter.tsx"
       workingDirectory={import.meta.url}
     >
-      <div style={{ fontSize: '1rem' }}>
-        <Toolbar allowCopy style={{ padding: '0.5lh' }} />
+      <div
+        style={{
+          fontSize: '1rem',
+          borderRadius: '0.25rem',
+          boxShadow: '0 0 0 1px var(--color-separator)',
+        }}
+      >
+        <Toolbar
+          allowCopy
+          css={{
+            padding: '0.5lh',
+            boxShadow: 'inset 0 -1px 0 0 var(--color-separator)',
+          }}
+        />
         <pre
           style={{
             display: 'grid',
@@ -94,7 +106,12 @@ export function Custom() {
             overflow: 'auto',
           }}
         >
-          <LineNumbers style={{ padding: '0 0.5lh' }} />
+          <LineNumbers
+            css={{
+              padding: '0 0.5lh',
+              backgroundColor: 'var(--color-background)',
+            }}
+          />
           <code style={{ paddingRight: '0.5lh' }}>
             <Tokens />
           </code>
