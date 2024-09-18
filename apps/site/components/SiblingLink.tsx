@@ -9,11 +9,11 @@ const StyledLink = styled(Link, {
   padding: '1.5rem 1rem',
   gap: '0.25rem',
   borderRadius: '0.25rem',
-  backgroundColor: 'var(--color-surface-2)',
+  backgroundColor: 'var(--color-surface-interactive)',
   color: 'var(--color-foreground-interactive)',
   stroke: 'var(--color-foreground-interactive)',
   ':hover': {
-    backgroundColor: 'var(--color-surface-interactive)',
+    backgroundColor: 'var(--color-surface-interactive-highlighted)',
     color: 'var(--color-foreground-interactive-highlighted)',
     stroke: 'var(--color-foreground-interactive-highlighted)',
   },
