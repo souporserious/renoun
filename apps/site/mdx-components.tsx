@@ -44,11 +44,11 @@ export function useMDXComponents() {
               fontSize: 'var(--font-size-code)',
               lineHeight: 'var(--line-height-code)',
               width: 'calc(100% + 2rem)',
-              padding: '1rem',
+              padding: '0.75rem 1rem',
               margin: '0 -1rem',
             },
             toolbar: {
-              padding: '0.8rem 1rem',
+              padding: '0.75rem 1rem',
             },
           }}
           className={{
