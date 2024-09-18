@@ -22,11 +22,11 @@ export function useMDXComponents() {
       return (
         <CodeInline
           value={props.children as string}
-          language="typescript"
           paddingY="0"
           css={{
             lineHeight: 1.2,
             overflowX: 'auto',
+            color: '#82AAFF',
           }}
           className={GeistMono.className}
         />
