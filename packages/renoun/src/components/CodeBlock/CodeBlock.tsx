@@ -4,15 +4,16 @@ import type { MDXComponents } from 'mdx/types'
 import 'server-only'
 
 import { analyzeSourceText } from '../../project/index.js'
+import { computeDirectionalStyles } from '../../utils/compute-directional-styles.js'
 import { getThemeColors } from '../../utils/get-theme-colors.js'
-import { CopyButton } from './CopyButton.js'
-import { Tokens } from './Tokens.js'
 import type { Languages } from '../../utils/get-tokens.js'
 import type { ContextValue } from './Context.js'
 import { Context } from './Context.js'
 import { CopyButtonContextProvider } from './contexts.js'
+import { CopyButton } from './CopyButton.js'
 import { LineNumbers } from './LineNumbers.js'
 import { Pre } from './Pre.js'
+import { Tokens } from './Tokens.js'
 import { Toolbar } from './Toolbar.js'
 import {
   generateFocusedLinesGradient,
@@ -107,8 +108,12 @@ async function CodeBlockAsync({
   showToolbar,
   ...props
 }: CodeBlockProps) {
-  const padding =
-    props.css?.container?.padding ?? props.style?.container?.padding ?? '0.5lh'
+  const containerPadding = computeDirectionalStyles(
+    'padding',
+    '0.5lh',
+    props.css,
+    props.style
+  )
   const hasValue = 'value' in props
   const hasSource = 'source' in props
   const options: any = {}
@@ -137,9 +142,9 @@ async function CodeBlockAsync({
   })
   const contextValue = {
     filenameLabel: filename || hasSource ? label : undefined,
+    padding: containerPadding.all,
     value,
     highlightedLines,
-    padding,
     tokens,
   } satisfies ContextValue
 
@@ -185,7 +190,7 @@ async function CodeBlockAsync({
         {shouldRenderToolbar ? (
           <Toolbar
             allowCopy={allowCopy === undefined ? Boolean(filename) : allowCopy}
-            css={{ padding, ...props.css?.toolbar }}
+            css={{ padding: containerPadding.all, ...props.css?.toolbar }}
             className={props.className?.toolbar}
             style={props.style?.toolbar}
           />
@@ -211,7 +216,7 @@ async function CodeBlockAsync({
               ? {
                   '--h0': `rgba(0, 0, 0, 0)`,
                   '--h1': theme.editor.rangeHighlightBackground,
-                  backgroundPosition: `0 ${padding}`,
+                  backgroundPosition: `0 ${containerPadding.vertical}`,
                   backgroundImage: highlightedLinesGradient,
                 }
               : {}),
@@ -219,7 +224,7 @@ async function CodeBlockAsync({
               ? {
                   '--m0': `rgba(0, 0, 0, ${unfocusedLinesOpacity})`,
                   '--m1': 'rgba(0, 0, 0, 1)',
-                  maskPosition: `0 ${padding}`,
+                  maskPosition: `0 ${containerPadding.vertical}`,
                   maskImage: focusedLinesGradient,
                 }
               : {}),
@@ -236,7 +241,7 @@ async function CodeBlockAsync({
               <LineNumbers
                 className={props.className?.lineNumbers}
                 css={{
-                  padding,
+                  padding: containerPadding.all,
                   gridColumn: 1,
                   gridRow: '1 / -1',
                   width: '4ch',
@@ -246,7 +251,13 @@ async function CodeBlockAsync({
                 }}
                 style={props.style?.lineNumbers}
               />
-              <Code css={{ padding, gridColumn: 2, paddingLeft: 0 }}>
+              <Code
+                css={{
+                  padding: containerPadding.all,
+                  gridColumn: 2,
+                  paddingLeft: 0,
+                }}
+              >
                 <Tokens
                   css={{
                     token: props.css?.token,
@@ -264,7 +275,7 @@ async function CodeBlockAsync({
               </Code>
             </>
           ) : (
-            <Code css={{ padding, gridColumn: 1 }}>
+            <Code css={{ padding: containerPadding.all, gridColumn: 1 }}>
               <Tokens
                 css={{
                   token: props.css?.token,
@@ -288,8 +299,8 @@ async function CodeBlockAsync({
                 gridColumn: showLineNumbers ? 2 : 1,
                 gridRow: '1 / -1',
                 position: 'sticky',
-                top: padding,
-                right: padding,
+                top: containerPadding.top,
+                right: containerPadding.right,
                 boxShadow: `0 0 0 1px ${theme.panel.border}`,
                 backgroundColor: theme.activityBar.background,
                 color: theme.activityBar.foreground,
