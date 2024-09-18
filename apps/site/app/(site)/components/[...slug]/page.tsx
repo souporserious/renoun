@@ -227,6 +227,8 @@ async function Preview({
         {isComponent ? (
           <div
             css={{
+              fontSize: '1rem',
+              lineHeight: '1.35',
               maxWidth: '-webkit-fill-available',
               padding: '4rem',
               margin: 'auto',
