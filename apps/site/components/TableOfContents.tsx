@@ -6,10 +6,10 @@ import { ViewSource } from './ViewSource'
 
 export function TableOfContents({
   headings,
-  sourcePath,
+  editPath,
 }: {
   headings: Headings
-  sourcePath?: string
+  editPath?: string
 }) {
   const sectionObserver = useSectionObserver()
 
@@ -53,7 +53,7 @@ export function TableOfContents({
             </li>
           ) : null
         )}
-        {sourcePath ? (
+        {editPath ? (
           <>
             <li css={{ margin: '0.8rem 0' }}>
               <hr
@@ -65,7 +65,7 @@ export function TableOfContents({
               />
             </li>
             <li>
-              <ViewSource href={sourcePath} />
+              <ViewSource href={editPath} />
             </li>
           </>
         ) : null}

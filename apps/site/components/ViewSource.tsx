@@ -1,21 +1,17 @@
-export function ViewSource({
-  href,
-  style,
-}: {
-  href: string
-  style?: React.CSSProperties
-}) {
+import type { CSSObject } from 'restyle'
+
+export function ViewSource({ href, css }: { href: string; css?: CSSObject }) {
   return (
     <a
       href={href}
       target="_blank"
       rel="noreferrer"
-      style={{
+      css={{
         display: 'flex',
         alignItems: 'center',
         gap: '0.5rem',
         fontSize: 'var(--font-size-body-3)',
-        ...style,
+        ...css,
       }}
     >
       View Source{' '}
@@ -28,7 +24,7 @@ export function ViewSource({
         strokeLinejoin="round"
         strokeWidth="1.5"
         viewBox="0 0 24 24"
-        style={{ position: 'relative', top: '-0.08rem' }}
+        css={{ position: 'relative', top: '-0.08rem' }}
       >
         <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"></path>
         <path d="M15 3h6v6"></path>

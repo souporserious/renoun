@@ -83,12 +83,6 @@ export default async function Doc({ params }: { params: { slug: string[] } }) {
                 </time>
               </div>
             ) : null}
-
-            {editPath ? (
-              <a href={editPath} css={{ gridColumn: 2, textAlign: 'right' }}>
-                Edit this page
-              </a>
-            ) : null}
           </div>
 
           <nav
@@ -109,7 +103,7 @@ export default async function Doc({ params }: { params: { slug: string[] } }) {
       </div>
 
       <aside>
-        <TableOfContents headings={headings} />
+        <TableOfContents headings={headings} editPath={editPath} />
       </aside>
     </div>
   )
