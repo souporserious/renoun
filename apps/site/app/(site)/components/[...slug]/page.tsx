@@ -81,115 +81,107 @@ export default async function Component({
   return (
     <div
       css={{
-        display: 'flex',
-        flexDirection: 'column',
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 1fr)',
         gap: '4rem',
+        '@media (min-width: 768px)': {
+          gridTemplateColumns: 'minmax(0, 1fr) 12rem',
+        },
       }}
     >
-      <h1 css={{ fontSize: '3rem', margin: 0 }}>
-        {componentSource.getName()} {isExamplesPage ? 'Examples' : ''}
-      </h1>
+      <div css={{ display: 'flex', flexDirection: 'column', gap: '4rem' }}>
+        <h1 css={{ fontSize: '3rem', margin: 0 }}>
+          {componentSource.getName()} {isExamplesPage ? 'Examples' : ''}
+        </h1>
 
-      <div
-        css={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1fr)',
-          gap: '2rem',
-          '@media (min-width: 768px)': {
-            gridTemplateColumns: 'minmax(0, 1fr) 12rem',
-          },
-        }}
-      >
-        <div css={{ display: 'flex', flexDirection: 'column', gap: '4rem' }}>
-          {examplesExports.length ? (
-            <div>
-              <h2 id="examples" css={{ margin: '0 0 2rem' }}>
-                Examples
-              </h2>
-              <ul
-                css={{
-                  listStyle: 'none',
-                  display: 'grid',
-                  padding: 0,
-                  margin: 0,
-                  gap: '2rem',
-                }}
-              >
-                {examplesExports.map((exportSource) => (
-                  <li key={exportSource.getSlug()}>
-                    <Preview source={exportSource} />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-
-          {sourceExports ? (
-            <div>
-              <h2 id="api-reference" css={{ margin: '0 0 2rem' }}>
-                API Reference
-              </h2>
-              {sourceExports.map((exportSource) => (
-                <APIReference
-                  key={exportSource.getSlug()}
-                  source={exportSource}
-                />
-              ))}
-            </div>
-          ) : null}
-
+        {examplesExports.length ? (
           <div>
-            <div
-              style={{
+            <h2 id="examples" css={{ margin: '0 0 2rem' }}>
+              Examples
+            </h2>
+            <ul
+              css={{
+                listStyle: 'none',
                 display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                padding: '1rem',
-              }}
-            >
-              {updatedAt ? (
-                <div
-                  style={{
-                    gridColumn: 1,
-                    fontSize: 'var(--font-size-body-3)',
-                    color: 'var(--color-foreground-secondary)',
-                    textAlign: 'left',
-                  }}
-                >
-                  Last updated{' '}
-                  <time
-                    dateTime={updatedAt.toString()}
-                    itemProp="dateModified"
-                    style={{ fontWeight: 600 }}
-                  >
-                    {updatedAt.toLocaleString('en', {
-                      year: '2-digit',
-                      month: '2-digit',
-                      day: '2-digit',
-                    })}
-                  </time>
-                </div>
-              ) : null}
-            </div>
-
-            <nav
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
+                padding: 0,
+                margin: 0,
                 gap: '2rem',
               }}
             >
-              {previousSource ? (
-                <SiblingLink source={previousSource} direction="previous" />
-              ) : null}
-              {nextSource ? (
-                <SiblingLink source={nextSource} direction="next" />
-              ) : null}
-            </nav>
+              {examplesExports.map((exportSource) => (
+                <li key={exportSource.getSlug()}>
+                  <Preview source={exportSource} />
+                </li>
+              ))}
+            </ul>
           </div>
-        </div>
+        ) : null}
 
-        <TableOfContents headings={headings} editPath={editPath} />
+        {sourceExports ? (
+          <div>
+            <h2 id="api-reference" css={{ margin: '0 0 2rem' }}>
+              API Reference
+            </h2>
+            {sourceExports.map((exportSource) => (
+              <APIReference
+                key={exportSource.getSlug()}
+                source={exportSource}
+              />
+            ))}
+          </div>
+        ) : null}
+
+        <div>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              padding: '1rem',
+            }}
+          >
+            {updatedAt ? (
+              <div
+                style={{
+                  gridColumn: 1,
+                  fontSize: 'var(--font-size-body-3)',
+                  color: 'var(--color-foreground-secondary)',
+                  textAlign: 'left',
+                }}
+              >
+                Last updated{' '}
+                <time
+                  dateTime={updatedAt.toString()}
+                  itemProp="dateModified"
+                  style={{ fontWeight: 600 }}
+                >
+                  {updatedAt.toLocaleString('en', {
+                    year: '2-digit',
+                    month: '2-digit',
+                    day: '2-digit',
+                  })}
+                </time>
+              </div>
+            ) : null}
+          </div>
+
+          <nav
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '2rem',
+            }}
+          >
+            {previousSource ? (
+              <SiblingLink source={previousSource} direction="previous" />
+            ) : null}
+            {nextSource ? (
+              <SiblingLink source={nextSource} direction="next" />
+            ) : null}
+          </nav>
+        </div>
       </div>
+
+      <TableOfContents headings={headings} editPath={editPath} />
     </div>
   )
 }
@@ -217,6 +209,7 @@ async function Preview({
       <header>
         <div
           css={{
+            display: 'flex',
             flexDirection: 'row',
             alignItems: 'baseline',
             justifyContent: 'space-between',
@@ -224,7 +217,9 @@ async function Preview({
           }}
         >
           <h3 css={{ margin: 0 }}>{title}</h3>{' '}
-          <a href={editPath}>View Source</a>
+          <a href={editPath} css={{ fontSize: 'var(--font-size-body-3)' }}>
+            View Source
+          </a>
         </div>
         {description ? <p>{description}</p> : null}
       </header>
