@@ -1,9 +1,11 @@
 import { APIReference, CodeBlock, Tokens } from 'renoun/components'
-import { type ExportSource } from 'renoun/collections'
-import Link from 'next/link'
+import type { Headings } from '@renoun/mdx-plugins'
+import type { ExportSource } from 'renoun/collections'
 import { notFound } from 'next/navigation'
 
-import { ComponentsCollection, type ComponentSource } from '@/collections'
+import { ComponentsCollection } from '@/collections'
+import { SiblingLink } from '@/components/SiblingLink'
+import { TableOfContents } from '@/components/TableOfContents'
 
 export async function generateStaticParams() {
   const sources = await ComponentsCollection.getSources()
@@ -43,13 +45,44 @@ export default async function Component({
   const [previousSource, nextSource] = await componentSource.getSiblings({
     depth: 0,
   })
+  let headings: Headings = []
+
+  if (examplesExports.length) {
+    headings = [
+      {
+        id: 'examples',
+        text: 'Examples',
+        depth: 2,
+      },
+      ...examplesExports.map((source) => ({
+        id: source.getSlug(),
+        text: source.getTitle(),
+        depth: 3,
+      })),
+    ]
+  }
+
+  if (sourceExports) {
+    headings = [
+      ...headings,
+      {
+        id: 'api-reference',
+        text: 'API Reference',
+        depth: 2,
+      },
+      ...sourceExports.map((source) => ({
+        id: source.getSlug(),
+        text: source.getName(),
+        depth: 3,
+      })),
+    ]
+  }
 
   return (
     <div
       css={{
         display: 'flex',
         flexDirection: 'column',
-        padding: '4rem 0',
         gap: '4rem',
       }}
     >
@@ -136,22 +169,13 @@ export default async function Component({
                   </time>
                 </div>
               ) : null}
-
-              {editPath ? (
-                <a
-                  href={editPath}
-                  style={{ gridColumn: 2, textAlign: 'right' }}
-                >
-                  Edit this page
-                </a>
-              ) : null}
             </div>
 
             <nav
               style={{
                 display: 'grid',
                 gridTemplateColumns: '1fr 1fr',
-                padding: '1rem',
+                gap: '2rem',
               }}
             >
               {previousSource ? (
@@ -164,106 +188,7 @@ export default async function Component({
           </div>
         </div>
 
-        <aside
-          css={{
-            alignSelf: 'start',
-            position: 'sticky',
-            top: '1rem',
-            '@media (max-width: 767px)': {
-              display: 'none',
-            },
-          }}
-        >
-          <nav
-            css={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '1rem',
-            }}
-          >
-            <h3 css={{ margin: 0 }}>On this page</h3>
-            <ul
-              css={{
-                listStyle: 'none',
-                padding: 0,
-                margin: 0,
-              }}
-            >
-              {examplesExports.length ? (
-                <li>
-                  <a
-                    href="#examples"
-                    css={{
-                      display: 'block',
-                      padding: '0.25rem 0',
-                    }}
-                  >
-                    Examples
-                  </a>
-                  {examplesExports.map((source) => (
-                    <ul
-                      key={source.getPath()}
-                      css={{
-                        listStyle: 'none',
-                        padding: 0,
-                        margin: 0,
-                      }}
-                    >
-                      <li>
-                        <a
-                          href={`#${source.getSlug()}`}
-                          css={{
-                            display: 'block',
-                            padding: '0.25rem 0',
-                            paddingLeft: '1rem',
-                          }}
-                        >
-                          {source.getTitle()}
-                        </a>
-                      </li>
-                    </ul>
-                  ))}
-                </li>
-              ) : null}
-              {sourceExports ? (
-                <li>
-                  <a
-                    href="#api-reference"
-                    css={{
-                      display: 'block',
-                      padding: '0.25rem 0',
-                    }}
-                  >
-                    API Reference
-                  </a>
-                  {sourceExports.map((source) => (
-                    <ul
-                      key={source.getPath()}
-                      css={{
-                        listStyle: 'none',
-                        padding: 0,
-                        margin: 0,
-                      }}
-                    >
-                      <li>
-                        <a
-                          href={`#${source.getSlug()}`}
-                          css={{
-                            display: 'block',
-                            padding: '0.25rem 0',
-                            paddingLeft: '1rem',
-                          }}
-                        >
-                          {source.getName()}
-                        </a>
-                      </li>
-                    </ul>
-                  ))}
-                </li>
-              ) : null}
-            </ul>
-          </nav>
-        </aside>
+        <TableOfContents headings={headings} editPath={editPath} />
       </div>
     </div>
   )
@@ -341,26 +266,5 @@ async function Preview({
         </CodeBlock>
       </div>
     </section>
-  )
-}
-
-async function SiblingLink({
-  source,
-  direction,
-}: {
-  source: ComponentSource
-  direction: 'previous' | 'next'
-}) {
-  return (
-    <Link
-      href={source.getPath()}
-      style={{
-        gridColumn: direction === 'previous' ? 1 : 2,
-        textAlign: direction === 'previous' ? 'left' : 'right',
-      }}
-    >
-      <div>{direction === 'previous' ? 'Previous' : 'Next'}</div>
-      {source.getName()}
-    </Link>
   )
 }

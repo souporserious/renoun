@@ -2,20 +2,16 @@ import { styled } from 'restyle'
 import Link from 'next/link'
 
 import { ComponentsCollection, type ComponentSource } from '@/collections'
+import { Text } from '@/components/Text'
 
 export default async function Components() {
   const sources = await ComponentsCollection.getSources({ depth: 1 })
 
   return (
-    <main css={{ display: 'grid', padding: '4rem 0', gap: '4rem' }}>
-      <h1
-        css={{
-          fontSize: 'var(--font-size-heading)',
-          margin: 0,
-        }}
-      >
+    <>
+      <Text variant="heading-1" css={{ marginBottom: '4rem' }}>
         Components
-      </h1>
+      </Text>
       <ul
         css={{
           listStyle: 'none',
@@ -27,7 +23,7 @@ export default async function Components() {
           <ComponentItem key={source.getPath()} source={source} />
         ))}
       </ul>
-    </main>
+    </>
   )
 }
 
