@@ -205,7 +205,7 @@ export interface CollectionOptions<Exports extends FileExports> {
    * A filter function to only include specific file system sources. If `tsConfigFilePath` is defined,
    * all files matching paths in `ignore` will always be filtered out.
    */
-  filter?: (source: FileSystemSource<Exports>) => boolean
+  filter?: (source: FileSystemSource<Exports> | ExportSource<any>) => boolean
 
   /** A custom sort function for ordering file system sources. */
   sort?: (
@@ -812,15 +812,25 @@ You can fix this error by taking one of the following actions:
       )
     }
 
-    return sourceFile.getExportSymbols().map((symbol) => {
-      const name = symbol.getName()
+    const filter = this.getCollection().options.filter
 
-      if (name === 'default') {
-        return this.getDefaultExport()
-      }
+    return sourceFile
+      .getExportSymbols()
+      .map((symbol) => {
+        const name = symbol.getName()
 
-      return this.getNamedExport(name as Exclude<keyof AllExports, 'default'>)
-    })
+        if (name === 'default') {
+          return this.getDefaultExport()
+        }
+
+        return this.getNamedExport(name as Exclude<keyof AllExports, 'default'>)
+      })
+      .filter((source) => {
+        if (filter) {
+          return filter(source)
+        }
+        return true
+      }) as ExportSource<AllExports[keyof AllExports]>[]
   }
 
   getSourceFile() {

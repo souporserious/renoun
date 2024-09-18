@@ -1,5 +1,7 @@
 import {
   createCollection,
+  isExportSource,
+  isFileSystemSource,
   type FileSystemSource,
   type MDXContent,
 } from 'renoun/collections'
@@ -44,17 +46,26 @@ export const ComponentsCollection = createCollection<ComponentSchema>(
     baseDirectory: 'components',
     basePath: 'components',
     filter: (source) => {
-      if (source.isFile()) {
-        const allInternal = source
-          .getExports()
-          .every((exportSource) =>
-            exportSource.getTags()?.every((tag) => tag.tagName === 'internal')
-          )
+      if (isFileSystemSource(source)) {
+        if (source.isFile()) {
+          const allInternal = source
+            .getExports()
+            .every((exportSource) =>
+              exportSource.getTags()?.every((tag) => tag.tagName === 'internal')
+            )
 
-        if (allInternal) {
+          if (allInternal) {
+            return false
+          }
+        }
+      }
+
+      if (isExportSource(source)) {
+        if (source.getTags()?.find((tag) => tag.tagName === 'internal')) {
           return false
         }
       }
+
       return true
     },
     tsConfigFilePath: '../../packages/renoun/tsconfig.json',
