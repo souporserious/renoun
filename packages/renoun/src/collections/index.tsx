@@ -9,6 +9,7 @@ import {
 } from 'ts-morph'
 import { dirname, resolve } from 'node:path'
 import globParent from 'glob-parent'
+import { minimatch } from 'minimatch'
 
 import { createSlug } from '../utils/create-slug.js'
 import { filePathToPathname } from '../utils/file-path-to-pathname.js'
@@ -200,7 +201,10 @@ export interface CollectionOptions<Exports extends FileExports> {
   /** The path to the TypeScript config file. */
   tsConfigFilePath?: string
 
-  /** A filter function to only include specific file system sources. */
+  /**
+   * A filter function to only include specific file system sources. If `tsConfigFilePath` is defined,
+   * all files matching paths in `ignore` will always be filtered out.
+   */
   filter?: (source: FileSystemSource<Exports>) => boolean
 
   /** A custom sort function for ordering file system sources. */
@@ -939,6 +943,17 @@ You can fix this error by ensuring the following:
   }
 
   async getFileSystemSources() {
+    const tsConfig = this.project.getCompilerOptions()
+    const tsConfigDirectory = dirname(tsConfig.configFilePath as string)
+    let exclude: string[] = []
+
+    if (typeof tsConfig.configFilePath === 'string') {
+      const tsConfigJson = JSON.parse(
+        this.project.addSourceFileAtPath(tsConfig.configFilePath).getText()
+      )
+      exclude = tsConfigJson.exclude
+    }
+
     const sources = this.fileSystemSources
       .map((fileSystemSource) => {
         // Filter out directories that have an index or readme file
@@ -954,9 +969,28 @@ You can fix this error by ensuring the following:
       })
       .filter((source) => {
         if (source) {
+          // filter based on ignored files in tsconfig
+          if (tsConfig) {
+            const filePath = getFileSystemSourcePath(
+              // @ts-expect-error - private property
+              source.sourceFileOrDirectory
+            )
+            const trimmedFilePath = filePath.replace(
+              tsConfigDirectory + '/',
+              ''
+            )
+
+            for (const pattern of exclude) {
+              if (minimatch(trimmedFilePath, pattern)) {
+                return false
+              }
+            }
+          }
+
           if (this.options.filter) {
             return this.options.filter(source)
           }
+
           return true
         }
         return false

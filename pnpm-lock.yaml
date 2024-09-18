@@ -303,6 +303,9 @@ importers:
       glob-parent:
         specifier: ^6.0.2
         version: 6.0.2
+      minimatch:
+        specifier: ^9.0.4
+        version: 9.0.4
       restyle:
         specifier: 'catalog:'
         version: 2.3.0(react@18.3.1)
