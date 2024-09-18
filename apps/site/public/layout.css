@@ -1,0 +1,201 @@
+:root {
+  --color-foreground: #fff;
+  --color-foreground-secondary: #cdedff;
+  --color-foreground-interactive: hsl(200deg 20% 62%);
+  --color-background: hsl(215deg 46.96% 6.59%);
+  --color-surface-1: hsl(210deg 50% 7%);
+  --color-surface-2: hsl(218deg 42% 10%);
+  --color-surface-interactive: hsl(218deg 42% 12%);
+  --color-separator: hsl(206deg, 56%, 16%);
+  --color-separator-secondary: hsl(210deg 48% 24%);
+  --color-separator-interactive: hsl(200deg 20% 62%);
+  --font-size-heading-1: 4rem;
+  --font-size-heading-2-marketing: 3.4rem;
+  --font-size-heading-2: 3rem;
+  --font-size-heading-3: 2rem;
+  --font-size-body-1: 2rem;
+  --font-size-body-2: 1.6rem;
+  --font-size-body-3: 1.2rem;
+  --font-size-title: 0.875rem;
+  --font-size-code: 1rem;
+  --line-height-heading-1: 4rem;
+  --line-height-heading-2: 3.4rem;
+  --line-height-heading-3: 2.4rem;
+  --line-height-body-1: 2.625rem;
+  --line-height-body-2: 2.2rem;
+  --line-height-code: 1.2rem;
+  --font-weight-heading: 700;
+  --font-weight-body: 400;
+  --letter-spacing-body: 0.01em;
+}
+
+@media screen and (min-width: 60rem) {
+  :root {
+    --font-size-heading-1: 3.4rem;
+    --font-size-heading-2: 1.8rem;
+    --font-size-heading-2-marketing: 3rem;
+    --font-size-heading-3: 1.5rem;
+    --font-size-body-1: 1.2rem;
+    --font-size-body-2: 1rem;
+    --font-size-body-3: 0.875rem;
+    --font-size-title: 0.65rem;
+    --font-size-code: 1rem;
+    --line-height-heading-1: 3rem;
+    --line-height-heading-2: 2.4rem;
+    --line-height-heading-3: 1.8rem;
+    --line-height-body-1: 1.65rem;
+    --line-height-body-2: 1.4rem;
+    --line-height-code: 1.4rem;
+  }
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  min-width: 0;
+}
+
+html {
+  color-scheme: dark;
+  font-size: 2.5vw;
+}
+
+@media (min-width: 60rem) {
+  html {
+    font-size: min(18px, 1.2vw);
+  }
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-size: var(--font-size-body-1);
+  letter-spacing: var(--letter-spacing-body);
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+}
+
+a {
+  color: var(--color-foreground-interactive);
+  text-decoration: none;
+}
+
+a:hover :not(.title) {
+  text-decoration: underline;
+}
+
+button {
+  color: var(--color-foreground-interactive);
+}
+
+.prose {
+  display: flex;
+  flex-direction: column;
+  gap: 1.6rem;
+
+  :where(h1, h2, h3) {
+    letter-spacing: normal;
+    text-wrap: balance;
+  }
+
+  :where(h1, h2, h3)::before,
+  :where(h1, h2, h3)::after {
+    content: '';
+    display: table;
+  }
+
+  h1 {
+    font-size: var(--font-size-heading-1);
+    line-height: var(--line-height-heading-1);
+    font-weight: var(--font-weight-heading);
+  }
+
+  h1::before {
+    margin-bottom: -0.08em;
+  }
+
+  h1::after {
+    margin-top: -0.0825em;
+  }
+
+  h2 {
+    font-size: var(--font-size-heading-2);
+    line-height: var(--line-height-heading-2);
+    font-weight: var(--font-weight-heading);
+    margin-block-start: 1.6rem;
+  }
+
+  h2::before,
+  h2::after {
+    margin-top: -0.3em;
+  }
+
+  h2 + h3 {
+    margin-block-start: 0;
+  }
+
+  h3::before {
+    margin-bottom: -0.25em;
+  }
+
+  h3::after {
+    margin-top: -0.29em;
+  }
+
+  h3 {
+    font-size: var(--font-size-heading-3);
+    line-height: var(--line-height-heading-3);
+    font-weight: var(--font-weight-heading);
+  }
+
+  p {
+    font-size: var(--font-size-body-1);
+    font-weight: var(--font-weight-body);
+    line-height: var(--line-height-body-1);
+    text-wrap: pretty;
+  }
+
+  > p:first-of-type {
+    font-size: var(--font-size-heading-3);
+    line-height: var(--line-height-heading-3);
+    text-wrap: pretty;
+  }
+
+  li {
+    text-wrap: pretty;
+  }
+
+  li :where(h1, h2, h3, pre) {
+    margin: 1.4rem 0;
+  }
+}
+
+main {
+  padding: 2rem;
+}
+
+@media screen and (min-width: 60rem) {
+  main {
+    padding: 2rem;
+  }
+}
+
+.link {
+  color: var(--color-foreground-interactive);
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.title {
+  font-size: var(--font-size-title);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1rem;
+  color: var(--color-foreground);
+}
