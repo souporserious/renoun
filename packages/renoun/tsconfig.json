@@ -15,5 +15,11 @@
     "declaration": true
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
-  "exclude": ["src/**/*.examples.tsx", "**/*.test.ts", "dist", "node_modules"]
+  "exclude": [
+    "src/**/*.examples.tsx",
+    "src/**/examples/**/*",
+    "**/*.test.ts",
+    "dist",
+    "node_modules"
+  ]
 }
