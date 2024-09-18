@@ -73,7 +73,7 @@ export function LineHighlightAndFocus() {
   )
 }
 
-export function Custom() {
+export function CustomStyles() {
   return (
     <CodeBlock
       allowErrors="2307"
