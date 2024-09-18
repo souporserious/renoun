@@ -61,12 +61,8 @@ export function SiteLayout({
               gap: '1rem',
             }}
           >
-            <NavigationLink
-              href="/docs/getting-started"
-              activePathnames={['/docs', '/packages']}
-            >
-              Docs
-            </NavigationLink>
+            <NavigationLink href="/docs/getting-started">Docs</NavigationLink>
+            <NavigationLink href="/components">Components</NavigationLink>
             <NavigationLink href="/changelog">Changelog</NavigationLink>
           </div>
 
