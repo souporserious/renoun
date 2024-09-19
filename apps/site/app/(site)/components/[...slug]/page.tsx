@@ -4,7 +4,7 @@ import type { ExportSource } from 'renoun/collections'
 import { notFound } from 'next/navigation'
 import { GeistMono } from 'geist/font/mono'
 
-import { ComponentsCollection } from '@/collections'
+import { ComponentsCollection, ComponentsMDXCollection } from '@/collections'
 import { SiblingLink } from '@/components/SiblingLink'
 import { TableOfContents } from '@/components/TableOfContents'
 
@@ -28,6 +28,8 @@ export default async function Component({
     notFound()
   }
 
+  const mdxSource = ComponentsMDXCollection.getSource(componentsPathname)
+  const MDXContent = await mdxSource?.getDefaultExport().getValue()
   const examplesSource = componentSource.getSource('examples')
   const examplesSources = await examplesSource?.getSources()
   const isExamplesPage = params.slug.at(-1) === 'examples'
@@ -95,6 +97,12 @@ export default async function Component({
         <h1 css={{ fontSize: '3rem', margin: 0 }}>
           {componentSource.getName()} {isExamplesPage ? 'Examples' : ''}
         </h1>
+
+        {MDXContent ? (
+          <div className="prose">
+            <MDXContent />
+          </div>
+        ) : null}
 
         {examplesExports.length ? (
           <div>

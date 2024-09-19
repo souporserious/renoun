@@ -71,3 +71,11 @@ export const ComponentsCollection = createCollection<ComponentSchema>(
     tsConfigFilePath: '../../packages/renoun/tsconfig.json',
   }
 )
+
+export const ComponentsMDXCollection = createCollection<{
+  default: MDXContent
+}>('src/components/**/*.mdx', {
+  baseDirectory: 'components',
+  basePath: 'components',
+  tsConfigFilePath: '../../packages/renoun/tsconfig.json',
+})
