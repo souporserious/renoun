@@ -62,7 +62,7 @@ export function SiteLayout({
             }}
           >
             <NavigationLink
-              href="/docs/getting-started"
+              href="/docs/introduction"
               activePathnames={['/docs']}
             >
               Docs
