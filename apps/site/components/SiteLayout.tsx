@@ -42,7 +42,7 @@ export function SiteLayout({
             borderBottom: '1px solid var(--color-separator)',
 
             '@media screen and (min-width: 60rem)': {
-              padding: '4rem 2rem 2rem',
+              padding: '1rem 2rem',
             },
           }}
         >
@@ -64,8 +64,9 @@ export function SiteLayout({
 
           <div
             css={{
-              display: 'none',
-
+              '@media screen and (max-width: calc(60rem - 1px))': {
+                display: 'none',
+              },
               '@media screen and (min-width: 60rem)': {
                 display: 'flex',
                 gap: '1rem',
@@ -87,10 +88,11 @@ export function SiteLayout({
               display: 'flex',
               flexDirection: 'row',
               alignItems: 'center',
-              gap: '1.5rem',
-
+              '@media screen and (max-width: calc(60rem - 1px))': {
+                gap: '1.5rem',
+              },
               '@media screen and (min-width: 60rem)': {
-                gap: '0.5rem',
+                gap: '1rem',
               },
             }}
           >
@@ -141,7 +143,7 @@ export function SiteLayout({
           '@media screen and (min-width: 60rem)': {
             gridColumn: '2 / 3',
             gridRow: '2',
-            padding: '2rem 0',
+            padding: '6rem 0',
           },
         }}
       >

@@ -121,6 +121,7 @@ export function Sidebar() {
           '@media screen and (min-width: 60rem)': {
             gridColumn: '1 / 2',
             gridRow: '2 / 3',
+            padding: '6rem 2rem',
           },
         }}
       >
