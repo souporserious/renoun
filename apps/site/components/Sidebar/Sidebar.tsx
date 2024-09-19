@@ -52,7 +52,7 @@ async function TreeNavigation({
   if (depth > 0) {
     if (depth === 1) {
       listStyles.paddingLeft = '0.8rem'
-      listStyles.marginLeft = '0.05rem'
+      listStyles.marginLeft = '0.25rem'
       listStyles.borderLeft = '1px solid var(--color-separator)'
     } else {
       listStyles.paddingLeft = depth * 0.4 + 'rem'
