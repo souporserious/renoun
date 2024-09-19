@@ -26,9 +26,10 @@ export function useMDXComponents() {
             css={{
               flexShrink: 0,
               display: 'flex',
-              height: '2lh',
-              width: '2lh',
-              padding: '0.75rem',
+              height: '1.5lh',
+              width: '1.5lh',
+              padding: '0.35lh',
+              marginTop: '0.15lh',
               borderRadius: '100%',
               backgroundColor: '#1f3a5a',
             }}
