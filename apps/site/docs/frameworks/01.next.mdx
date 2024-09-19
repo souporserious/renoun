@@ -7,7 +7,7 @@ export const metadata = {
 
 ## Install
 
-To use Renoun with Next.js, start with a Next.js project. If you don't have a project yet, you can create one with the following command:
+To use Renoun with Next.js, start with an existing or new Next.js project. If you don't have a project yet, you can create one using the Next.js create command:
 
 ```bash
 npx create-next-app@latest
@@ -15,7 +15,7 @@ npx create-next-app@latest
 
 ## Setup
 
-Next, modify the `next` scripts located in the project's `package.json` file to use the Renoun CLI. This will ensure that the Renoun process starts before your Next.js server:
+Modify the `next` scripts located in the project's `package.json` file to use the `renoun` CLI. This will ensure that the Renoun process starts before your Next.js server:
 
 ```json
 {
@@ -71,7 +71,7 @@ export default withMDX({
 
 ## Webpack Configuration
 
-Finally, we need to alias `js` files since `renoun` is an ESM package. We also need to silence critical dependency warnings for `@ts-morph/common` as these come from the `ts-morph` package `renoun` depends on. This is necessary to prevent warnings from appearing in the console:
+Finally, we need to configure Webpack and alias `js` files since `renoun` is an ESM package and will otherwise error. We also need to silence critical dependency warnings for `@ts-morph/common` as these come from the `ts-morph` package `renoun` depends on. This is necessary to prevent warnings from appearing in the console:
 
 ```js
 import createMDXPlugin from '@next/mdx'
@@ -119,3 +119,5 @@ Now you can start your Next.js server with Renoun enabled:
 ```bash
 npm run dev
 ```
+
+Congratulations, you've successfully set up Renoun with Next.js! You can now create [collections](/collections) or use one of the many [components](/components) available to enhance your content and documentation.
