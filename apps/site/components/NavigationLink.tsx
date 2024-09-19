@@ -10,11 +10,13 @@ const StyledLink = styled(Link, {
 
 export function NavigationLink({
   href,
+  activeColor = 'var(--color-foreground)',
   activePathnames,
   css,
   children,
 }: {
   href: string
+  activeColor?: string
   activePathnames?: string[]
   css?: CSSObject
   children: React.ReactNode
@@ -30,11 +32,12 @@ export function NavigationLink({
 
   if (isActive) {
     styles.fontWeight = 600
-    styles.color = 'var(--color-foreground)'
+    styles.color = activeColor
   } else {
-    styles.color = 'var(--color-foreground-interactive)'
+    styles.color = css?.color ?? 'var(--color-foreground-interactive)'
     styles[':hover'] = {
       color: 'var(--color-foreground-interactive-highlighted)',
+      ...css?.[':hover'],
     }
   }
 

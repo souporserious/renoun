@@ -81,6 +81,20 @@ export function SiteLayout({
             </NavigationLink>
             <NavigationLink href="/components">Components</NavigationLink>
             <NavigationLink href="/changelog">Changelog</NavigationLink>
+            <NavigationLink
+              href="/sponsors"
+              css={{
+                paddingInline: '0.5rem',
+                borderRadius: '0.25rem',
+                boxShadow: '0 0 0 1px #db61a2',
+                color: '#f588c2',
+                ':hover': {
+                  color: 'white',
+                },
+              }}
+            >
+              Sponsors
+            </NavigationLink>
           </div>
 
           <div
