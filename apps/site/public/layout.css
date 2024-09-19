@@ -133,7 +133,7 @@ a {
   }
 
   h2 + h3 {
-    margin-block-start: 0;
+    margin-block-start: 1.6rem;
   }
 
   h3::before {

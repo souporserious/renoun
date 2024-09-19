@@ -140,7 +140,7 @@ export function Sidebar() {
           css={{
             display: 'flex',
             flexDirection: 'column',
-            gap: '0.5rem',
+            gap: '1rem',
           }}
         >
           <h3 className="title">Components</h3>
