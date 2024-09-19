@@ -1,10 +1,10 @@
 import { MDXComponents } from 'renoun/components'
 
-import Changelog from '../../../../packages/renoun/CHANGELOG.md'
+import Changelog from '../../../../../packages/renoun/CHANGELOG.md'
 
 export default function Page() {
   return (
-    <div className="prose">
+    <main className="prose">
       <Changelog
         components={{
           pre: (props) => (
@@ -22,6 +22,6 @@ export default function Page() {
           ),
         }}
       />
-    </div>
+    </main>
   )
 }
