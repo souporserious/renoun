@@ -111,8 +111,8 @@ async function CodeBlockAsync({
   const containerPadding = computeDirectionalStyles(
     'padding',
     '0.5lh',
-    props.css,
-    props.style
+    props.css?.container,
+    props.style?.container
   )
   const hasValue = 'value' in props
   const hasSource = 'source' in props
