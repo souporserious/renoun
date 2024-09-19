@@ -1,9 +1,44 @@
-.DS_Store
-.next
-.turbo
-.vercel
-.renoun
-dist
+# dependencies
 node_modules
+.pnp
+.yalc
+.pnp.js
+.yarn/install-state.gz
+
+# testing
+coverage
+
+# next.js
+.next
 out
-tsconfig.tsbuildinfo
+
+# turbo
+.turbo
+
+# renoun
+.renoun
+
+# production
+build
+dist
+
+# misc
+.DS_Store
+*.pem
+yalc.lock
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# local env files
+.env
+.env.local
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
