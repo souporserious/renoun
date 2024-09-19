@@ -1,15 +1,12 @@
 'use client'
 import { useEffect, useRef } from 'react'
 import { usePathname } from 'next/navigation'
+import type { CSSObject } from 'restyle'
 
 import { useSignalValue } from 'hooks/use-signal-value'
 import { isNavigationOpenSignal } from './NavigationToggle'
 
-export function NavigationBoundary({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+function useIsNavigationOpen() {
   const pathname = usePathname()
   const previousPathname = useRef<string>()
   const isNavigationOpen = useSignalValue(isNavigationOpenSignal)
@@ -21,21 +18,28 @@ export function NavigationBoundary({
     previousPathname.current = pathname
   }, [pathname])
 
+  return isNavigationOpen
+}
+
+export function NavigationBoundary({
+  css,
+  children,
+}: {
+  css?: CSSObject
+  children: React.ReactNode
+}) {
+  const isNavigationOpen = useIsNavigationOpen()
+
   return (
     <div
       css={{
-        gridArea: '1 / 1',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '2rem',
-        '&[data-open="false"]': {
-          display: 'none',
-        },
-        '@media screen and (min-width: 60rem)': {
-          '&[data-open="false"]': {
-            display: 'flex',
+        display: 'contents',
+        '@media screen and (max-width: calc(60rem - 1px))': {
+          '&[data-open=false]': {
+            display: 'none',
           },
         },
+        ...css,
       }}
       data-open={isNavigationOpen}
     >

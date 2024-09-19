@@ -4,7 +4,6 @@ import { GitProviderLink } from 'renoun/components'
 
 import { DocsCollection, ComponentsCollection } from '@/collections'
 import { NavigationBoundary } from './NavigationBoundary'
-import { NavigationToggle } from './NavigationToggle'
 import { SidebarLink } from './SidebarLink'
 
 async function TreeNavigation({
@@ -109,38 +108,27 @@ async function Navigation({
 
 export function Sidebar() {
   return (
-    <aside
-      css={{
-        display: 'grid',
-        gridAutoRows: 'min-content',
-        alignItems: 'start',
-        padding: '3rem 2rem',
-
-        '@media screen and (min-width: 60rem)': {
-          gridTemplateRows: '1fr min-content',
-          height: 'fit-content',
-          minHeight: '100dvh',
-          padding: '2rem',
-        },
-      }}
-    >
-      <div
+    <NavigationBoundary>
+      <aside
         css={{
-          gridArea: '1 / 1',
+          gridColumn: '-1 / 1',
+          gridRow: '2',
           display: 'flex',
-          justifyContent: 'space-between',
+          flexDirection: 'column',
+          padding: '2rem',
           gap: '2rem',
+
+          '@media screen and (min-width: 60rem)': {
+            gridColumn: '1 / 2',
+            gridRow: '2 / 3',
+          },
         }}
       >
-        <NavigationToggle />
-      </div>
-
-      <NavigationBoundary>
         <div
           css={{
             display: 'flex',
             flexDirection: 'column',
-            gap: '0.5rem',
+            gap: '1rem',
           }}
         >
           <h3 className="title">Docs</h3>
@@ -210,7 +198,7 @@ export function Sidebar() {
             </a>
           </span>
         </div>
-      </NavigationBoundary>
-    </aside>
+      </aside>
+    </NavigationBoundary>
   )
 }

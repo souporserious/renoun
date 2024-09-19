@@ -2,6 +2,7 @@ import { GitProviderLink } from 'renoun/components'
 import { RenounLogo } from 'renoun/assets'
 
 import { NavigationLink } from './NavigationLink'
+import { NavigationToggle } from './Sidebar/NavigationToggle'
 
 export function SiteLayout({
   sidebar,
@@ -20,7 +21,8 @@ export function SiteLayout({
         gridTemplateColumns: 'auto minmax(0, 1fr)',
         gridTemplateRows: 'min-content 1fr',
         maxWidth: '72rem',
-        [`@media screen and (min-width: 60rem)`]: {
+
+        '@media screen and (min-width: 60rem)': {
           gridTemplateColumns: 'auto minmax(0, 1fr)',
           gridTemplateRows: 'min-content 1fr',
           columnGap: '2rem',
@@ -33,10 +35,15 @@ export function SiteLayout({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'end',
-            padding: '4rem 2rem 2rem',
+            padding: '2rem',
             gap: '1.5rem',
             gridColumn: '1 / -1',
             gridRow: '1 / 2',
+            borderBottom: '1px solid var(--color-separator)',
+
+            '@media screen and (min-width: 60rem)': {
+              padding: '4rem 2rem 2rem',
+            },
           }}
         >
           <a
@@ -57,8 +64,12 @@ export function SiteLayout({
 
           <div
             css={{
-              display: 'flex',
-              gap: '1rem',
+              display: 'none',
+
+              '@media screen and (min-width: 60rem)': {
+                display: 'flex',
+                gap: '1rem',
+              },
             }}
           >
             <NavigationLink
@@ -75,7 +86,12 @@ export function SiteLayout({
             css={{
               display: 'flex',
               flexDirection: 'row',
-              gap: '0.5rem',
+              alignItems: 'center',
+              gap: '1.5rem',
+
+              '@media screen and (min-width: 60rem)': {
+                gap: '0.5rem',
+              },
             }}
           >
             <a
@@ -101,7 +117,13 @@ export function SiteLayout({
                 width: 'var(--font-size-body-1)',
                 height: 'var(--font-size-body-1)',
                 fill: 'var(--color-foreground-interactive)',
-                marginLeft: '0.5rem',
+              }}
+            />
+            <NavigationToggle
+              css={{
+                '@media screen and (min-width: 60rem)': {
+                  display: 'none',
+                },
               }}
             />
           </div>
@@ -112,9 +134,15 @@ export function SiteLayout({
 
       <main
         css={{
-          gridColumn: '2 / 3',
-          gridRow: '2 / 3',
-          padding: '2rem 0',
+          gridColumn: '-1 / 1',
+          gridRow: '4',
+          padding: '4rem 2rem',
+
+          '@media screen and (min-width: 60rem)': {
+            gridColumn: '2 / 3',
+            gridRow: '2',
+            padding: '2rem 0',
+          },
         }}
       >
         {children}

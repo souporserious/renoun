@@ -85,7 +85,8 @@ export default async function Component({
         display: 'grid',
         gridTemplateColumns: 'minmax(0, 1fr)',
         gap: '4rem',
-        '@media (min-width: 768px)': {
+
+        '@media screen and (min-width: 60rem)': {
           gridTemplateColumns: 'minmax(0, 1fr) 12rem',
         },
       }}

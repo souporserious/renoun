@@ -2,24 +2,27 @@
 import { signal } from '@preact/signals-core'
 
 import { useSignalValue } from 'hooks/use-signal-value'
+import type { CSSObject } from 'restyle'
 
 export const isNavigationOpenSignal = signal(false)
 
-export function NavigationToggle() {
+export function NavigationToggle({ css }: { css?: CSSObject }) {
   const isNavigationOpen = useSignalValue(isNavigationOpenSignal)
+
   return (
     <button
       css={{
-        width: '24px',
-        height: '24px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 'var(--font-size-body-1)',
+        height: 'var(--font-size-body-1)',
         padding: 0,
         marginLeft: 'auto',
         background: 'none',
         border: 'none',
         color: 'white',
-        '@media screen and (min-width: 60rem)': {
-          display: 'none',
-        },
+        ...css,
       }}
       onClick={() => {
         isNavigationOpenSignal.value = !isNavigationOpenSignal.value
@@ -39,7 +42,7 @@ function CloseIcon() {
       strokeLinejoin="round"
       strokeWidth="1.5"
       viewBox="0 0 24 24"
-      style={{
+      css={{
         width: 'var(--font-size-body-1)',
         height: 'var(--font-size-body-1)',
       }}
@@ -59,7 +62,7 @@ function MenuIcon() {
       strokeLinejoin="round"
       strokeWidth="1.5"
       viewBox="0 0 24 24"
-      style={{
+      css={{
         width: 'var(--font-size-body-1)',
         height: 'var(--font-size-body-1)',
       }}
