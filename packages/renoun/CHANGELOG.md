@@ -1,5 +1,76 @@
 # renoun
 
+## 4.1.0
+
+### Minor Changes
+
+- 9f6c0f2: Moves config from `.renoun/config.json` to `renoun.json`. See [configuration docs](https://www.renoun.dev/docs/getting-started) for more information.
+- 1a71061: Moves `renoun` package to ESM only. To upgrade in Next.js projects, modify the `next.config.js` file to include the following in the webpack `extensionAlias` configuration:
+
+  ```js
+  export default {
+    webpack(config) {
+      config.resolve.extensionAlias = {
+        '.js': ['.ts', '.tsx', '.js'],
+      }
+
+      // ...
+
+      return config
+    },
+  }
+  ```
+
+- 3c78b3e: Adds the ability to filter export sources when creating a collection:
+
+  ```tsx
+  import {
+    createCollection,
+    isFileSystemSource,
+    isExportSource,
+  } from 'renoun/collections'
+
+  export const ComponentsCollection = createCollection<
+    Record<string, React.ComponentType>
+  >('src/components/**/*.{ts,tsx}', {
+    baseDirectory: 'components',
+    basePath: 'components',
+    filter: (source) => {
+      if (isFileSystemSource(source)) {
+        if (source.isFile()) {
+          const allInternal = source
+            .getExports()
+            .every((exportSource) =>
+              exportSource.getTags()?.every((tag) => tag.tagName === 'internal')
+            )
+
+          if (allInternal) {
+            return false
+          }
+        }
+      }
+
+      if (isExportSource(source)) {
+        if (source.getTags()?.find((tag) => tag.tagName === 'internal')) {
+          return false
+        }
+      }
+
+      return true
+    },
+  })
+  ```
+
+### Patch Changes
+
+- aaf965c: Collections now respect the tsconfig `ignore` field if defined and will filter out sources that should be ignored.
+- e40258a: Fixes large font sizes on mobile devices. See [this article](https://maxleiter.com/blog/mobile-browsers-resizing-font) for more info.
+- bf684ca: Fixes svg warning for logo asset.
+- af07785: Uses css container padding for `CodeBlock` internal padding if defined.
+- d207ecc: Fixes `CodeBlock` `highlightedLines` regression.
+- cb3843c: Fixes suspense fallback layout shift during local development.
+- 700969a: Normalizes custom `CodeBlock` padding values to offset `CopyButton` correctly.
+
 ## 4.0.0
 
 ### Major Changes
