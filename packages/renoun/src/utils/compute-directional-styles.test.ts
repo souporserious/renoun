@@ -10,9 +10,9 @@ describe('computeDirectionalStyles', () => {
       right: '10px',
       bottom: '10px',
       left: '10px',
-      all: '10px 10px 10px 10px',
-      horizontal: '10px 10px',
-      vertical: '10px 10px',
+      all: '10px',
+      horizontal: '10px',
+      vertical: '10px',
     })
   })
 
@@ -67,9 +67,9 @@ describe('computeDirectionalStyles', () => {
       right: '5px',
       bottom: '5px',
       left: '5px',
-      all: '5px 5px 5px 5px',
-      horizontal: '5px 5px',
-      vertical: '5px 5px',
+      all: '5px',
+      horizontal: '5px',
+      vertical: '5px',
     })
   })
 
@@ -82,8 +82,8 @@ describe('computeDirectionalStyles', () => {
       bottom: '5px',
       left: '10px',
       all: '5px 10px 5px 10px',
-      horizontal: '10px 10px',
-      vertical: '5px 5px',
+      horizontal: '10px',
+      vertical: '5px',
     })
   })
 
@@ -96,7 +96,7 @@ describe('computeDirectionalStyles', () => {
       bottom: '15px',
       left: '10px',
       all: '5px 10px 15px 10px',
-      horizontal: '10px 10px',
+      horizontal: '10px',
       vertical: '5px 15px',
     })
   })
@@ -122,9 +122,9 @@ describe('computeDirectionalStyles', () => {
       right: '12px',
       bottom: '12px',
       left: '12px',
-      all: '12px 12px 12px 12px',
-      horizontal: '12px 12px',
-      vertical: '12px 12px',
+      all: '12px',
+      horizontal: '12px',
+      vertical: '12px',
     })
   })
 })
