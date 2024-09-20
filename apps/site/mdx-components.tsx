@@ -1,9 +1,47 @@
 import { MDXComponents } from 'mdx/types'
-import { CodeBlock, CodeInline } from 'renoun/components'
+import { CodeBlock, CodeInline, PackageInstall } from 'renoun/components'
 import { GeistMono } from 'geist/font/mono'
 
 export function useMDXComponents() {
   return {
+    Preview: ({ children }: { children: React.ReactNode }) => {
+      return (
+        <div
+          css={{
+            display: 'grid',
+            padding: '3rem',
+            borderRadius: 5,
+            boxShadow: '0 0 0 1px var(--color-separator)',
+            backgroundColor: 'var(--color-background)',
+            backgroundSize: '1rem 1rem',
+            backgroundImage: `radial-gradient(circle, var(--color-separator) 1px, transparent 1px)`,
+          }}
+        >
+          {children}
+        </div>
+      )
+    },
+    PackageInstall: ({ packages }: { packages: string[] }) => {
+      return (
+        <PackageInstall
+          packages={packages}
+          css={{
+            container: {
+              fontSize: 'var(--font-size-code)',
+              lineHeight: 'var(--line-height-code)',
+              width: 'calc(100% + 2rem)',
+              margin: '0 -1rem',
+            },
+            tabPanel: {
+              padding: '0.75rem 1rem',
+            },
+          }}
+          className={{
+            container: GeistMono.className,
+          }}
+        />
+      )
+    },
     Note: (props) => {
       return (
         <div

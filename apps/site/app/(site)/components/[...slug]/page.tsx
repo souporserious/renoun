@@ -94,15 +94,17 @@ export default async function Component({
       }}
     >
       <div css={{ display: 'flex', flexDirection: 'column', gap: '4rem' }}>
-        <h1 css={{ fontSize: '3rem', margin: 0 }}>
-          {componentSource.getName()} {isExamplesPage ? 'Examples' : ''}
-        </h1>
+        <div css={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <h1 css={{ fontSize: '3rem', margin: 0 }}>
+            {componentSource.getName()} {isExamplesPage ? 'Examples' : ''}
+          </h1>
 
-        {MDXContent ? (
-          <div className="prose">
-            <MDXContent />
-          </div>
-        ) : null}
+          {MDXContent ? (
+            <div className="prose">
+              <MDXContent />
+            </div>
+          ) : null}
+        </div>
 
         {examplesExports.length ? (
           <div>

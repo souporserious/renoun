@@ -1,6 +1,7 @@
 import { Analytics } from '@vercel/analytics/react'
 import type { Metadata } from 'next'
 import { GeistSans } from 'geist/font/sans'
+import { PackageInstallScript } from 'renoun/components'
 
 export const metadata = {
   title: 'Renoun',
@@ -31,6 +32,7 @@ export default function RootLayout({
         precedence="medium"
       />
       <body className={GeistSans.className}>
+        <PackageInstallScript />
         {children}
         <Analytics />
       </body>

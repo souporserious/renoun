@@ -12,9 +12,11 @@ export function CopyButton({
   className,
   ...props
 }: {
-  value?: string
+  value?:
+    | string
+    | ((event: React.MouseEvent<HTMLButtonElement, MouseEvent>) => string)
   css?: CSSObject
-} & React.ComponentProps<'button'>) {
+} & Omit<React.ComponentProps<'button'>, 'value'>) {
   const contextValue = useContext(CopyButtonContext)
   const value = valueProp || contextValue
 
@@ -48,9 +50,11 @@ export function CopyButton({
   return (
     <button
       title="Copy code to clipboard"
-      onClick={() => {
+      onClick={(event) => {
+        const resolvedValue = typeof value === 'string' ? value : value(event)
+
         navigator.clipboard
-          .writeText(value!)
+          .writeText(resolvedValue)
           .then(() => {
             setState('copied')
           })
