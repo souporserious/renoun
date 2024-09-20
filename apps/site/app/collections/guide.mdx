@@ -237,6 +237,78 @@ function Sibling({
 }
 ```
 
+## Metadata
+
+### Generating Metadata
+
+To generate metadata for each page, we can export a `metadata` constant that returns an object with the metadata properties:
+
+```tsx filename="components/Button.tsx"
+export const metadata = {
+  title: 'Button',
+  description: 'A button component',
+}
+```
+
+### Using Metadata
+
+To use the metadata, we can get the value of the `metadata` constant and use it to set the page title and description:
+
+```tsx filename="components/[slug]/page.tsx"
+import { createCollection } from 'mdxts'
+
+export const Components = createCollection('@/components/**/index.{ts,tsx}')
+
+export default async function Page({ params }) {
+  const Component = Components.getSource(params.slug)
+
+  if (!Component) notFound()
+
+  const metadata = await Component.getNamedExport('metadata').getValue()
+
+  return (
+    <>
+      <h1>{metadata.title}</h1>
+      <p>{metadata.description}</p>
+    </>
+  )
+}
+```
+
+### Generating Metadata for Collections
+
+To generate metadata for collections, we can use root directory in the targeted file pattern to set the metadata:
+
+```tsx filename="components/index.ts"
+export const metadata = {
+  title: 'Components',
+  description: 'A collection of components',
+}
+```
+
+### Using Metadata for Collections
+
+Similar to above, we can get the value of the `metadata` constant for a collection and use it to set the page title and description:
+
+```tsx filename="components/page.tsx"
+import { Components } from '@/collections'
+
+export default async function Page() {
+  const metadata = await Components.getSource()
+    .getNamedExport('metadata')
+    .getValue()
+
+  return (
+    <>
+      <h1>{metadata.title}</h1>
+      <p>{metadata.description}</p>
+    </>
+  )
+}
+```
+
+This works by finding the index file related to the root directory we're targeting in the component's collection and extracting the metadata from it.
+
 ## Blogs
 
 ### blog/[slug]/page.tsx
