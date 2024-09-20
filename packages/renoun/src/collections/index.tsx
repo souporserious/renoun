@@ -180,12 +180,6 @@ export type CollectionSource<Exports extends FileExports> = Omit<
 >
 
 export interface CollectionOptions<Exports extends FileExports> {
-  /** The title used for the collection when rendered for a page. */
-  title?: string
-
-  /** The label used for the collection when rendered as a navigation item. Defaults to the title. */
-  label?: string
-
   /**
    * The base directory used when calculating source paths. This is useful in monorepos where
    * source files can be located outside of the workspace.
