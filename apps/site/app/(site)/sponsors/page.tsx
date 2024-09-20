@@ -1,7 +1,7 @@
 import { TableOfContents } from '@/components/TableOfContents'
 import Sponsors, { headings } from './sponsors.mdx'
 
-export default function Layout() {
+export default function Page() {
   return (
     <div
       css={{
