@@ -7,6 +7,7 @@ const withMDX = createMDXPlugin({
   options: {
     remarkPlugins,
     rehypePlugins,
+    jsxImportSource: 'restyle',
   },
 })
 

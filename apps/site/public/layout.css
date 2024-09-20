@@ -6,9 +6,9 @@
   --color-background: hsl(215deg 46.96% 6.59%);
   --color-surface: hsl(210deg 50% 7%);
   --color-surface-primary: hsl(208.65deg 77.51% 42.83%);
-  --color-surface-secondary: hsl(218deg 38% 9%);
+  --color-surface-secondary: hsla(0, 0%, 100%, 0.06);
   --color-surface-interactive: hsl(218deg 42% 12%);
-  --color-surface-interactive-highlighted: hsl(218deg 42% 12%);
+  --color-surface-interactive-highlighted: hsl(212deg 40.8% 15.37%);
   --color-separator: hsl(206deg, 56%, 16%);
   --color-separator-secondary: hsl(210deg 48% 24%);
   --color-separator-interactive: hsl(200deg 20% 62%);
