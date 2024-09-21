@@ -234,7 +234,10 @@ window.setPackageManager = (packageManager) => {
       element.tabIndex = isSelected ? 0 : -1;
       element.setAttribute('aria-selected', isSelected);
       if (shouldFocus && isSelected) {
+        const x = window.scrollX;
+        const y = window.scrollY;
         element.focus();
+        window.scrollTo(x, y);
       }
     }
 
