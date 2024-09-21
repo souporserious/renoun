@@ -157,6 +157,12 @@ export function Sidebar() {
               <SidebarLink pathname="/collections" label="createCollection" />
             </li>
             <li>
+              <SidebarLink
+                pathname="/collections/schema-validation"
+                label="Schema Validation"
+              />
+            </li>
+            <li>
               <SidebarLink pathname="/collections/recipes" label="Recipes" />
             </li>
           </ul>
