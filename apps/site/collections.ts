@@ -3,6 +3,7 @@ import {
   isExportSource,
   isFileSystemSource,
   type FileSystemSource,
+  type ExportSource,
   type MDXContent,
 } from 'renoun/collections'
 import type { Headings } from '@renoun/mdx'
@@ -23,15 +24,42 @@ export const DocsCollection = createCollection<DocsSchema>('docs/**/*.mdx', {
   basePath: 'docs',
 })
 
+function filterInternalSources(
+  source: ExportSource<any> | FileSystemSource<ComponentSchema>
+) {
+  if (isFileSystemSource(source)) {
+    if (source.isFile()) {
+      const allInternal = source
+        .getExports()
+        .every((exportSource) =>
+          exportSource.getTags()?.every((tag) => tag.tagName === 'internal')
+        )
+
+      if (allInternal) {
+        return false
+      }
+    }
+  }
+
+  if (isExportSource(source)) {
+    if (source.getTags()?.find((tag) => tag.tagName === 'internal')) {
+      return false
+    }
+  }
+
+  return true
+}
+
 type CollectionsSchema = Record<string, React.ComponentType>
 
 export type CollectionsSource = FileSystemSource<CollectionsSchema>
 
 export const CollectionsCollection = createCollection<CollectionsSchema>(
-  'src/collections/**/*.{ts,tsx}',
+  'src/collections/*.tsx',
   {
     baseDirectory: 'collections',
     basePath: 'collections',
+    filter: filterInternalSources,
     tsConfigFilePath: '../../packages/renoun/tsconfig.json',
   }
 )
@@ -45,29 +73,7 @@ export const ComponentsCollection = createCollection<ComponentSchema>(
   {
     baseDirectory: 'components',
     basePath: 'components',
-    filter: (source) => {
-      if (isFileSystemSource(source)) {
-        if (source.isFile()) {
-          const allInternal = source
-            .getExports()
-            .every((exportSource) =>
-              exportSource.getTags()?.every((tag) => tag.tagName === 'internal')
-            )
-
-          if (allInternal) {
-            return false
-          }
-        }
-      }
-
-      if (isExportSource(source)) {
-        if (source.getTags()?.find((tag) => tag.tagName === 'internal')) {
-          return false
-        }
-      }
-
-      return true
-    },
+    filter: filterInternalSources,
     tsConfigFilePath: '../../packages/renoun/tsconfig.json',
   }
 )

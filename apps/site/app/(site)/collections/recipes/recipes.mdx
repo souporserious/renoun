@@ -1,4 +1,12 @@
-Collections are a way to group and organize related files. They can be used to generate static pages, create navigations, and more. At their core, they abstract directories and files into a `Source`, allowing you to analyze and render them programmatically.
+export default function Layout({ children }) {
+  return <div className="prose">{children}</div>
+}
+
+# Collection Recipes
+
+In this guide, we’ll explore the power and flexibility of collections, demonstrating how to query information from files, directories, and module exports in various contexts.
+
+By organizing content into structured collections, we can easily generate static pages and manage complex routing and navigations. The following will walk through the process of setting up collections, rendering pages, and building various navigations like lists, paginated views, and hierarchical trees.
 
 ## Routing
 
@@ -7,16 +15,14 @@ Collections are a way to group and organize related files. They can be used to g
 A collection is created by calling `createCollection` with a glob pattern and optional options:
 
 ```ts filename="@/collections.ts"
-import { createCollection, type SourceOf } from 'mdxts'
+import { createCollection, type SourceOf } from 'renoun'
 
 export const PostsCollection = createCollection<{
   frontmatter: {
     title: string
     description: string
   }
-}>('@/posts/*.mdx', {
-  tsConfigFilePath: 'tsconfig.json',
-})
+}>('@/posts/*.mdx')
 
 export type PostSource = SourceOf<typeof Posts>
 ```
@@ -54,11 +60,13 @@ To loop through each `Source` use the `getSources` method and return an object w
 import { PostsCollection } from '@/collections'
 
 export function generateStaticParams() {
-  return PostsCollection.getSources().map((Source) => ({
-    path: Source.getPath(),
+  return PostsCollection.getSources().map((source) => ({
+    path: source.getPath(),
   }))
 }
 ```
+
+## Navigation
 
 ### Generating Navigations
 
@@ -74,8 +82,8 @@ export default async function Page() {
     <>
       <h1>All Posts</h1>
       <ul>
-        {PostsCollection.getSources().map((Source) => (
-          <Post key={Source.getPath()} Source={Source} />
+        {PostsCollection.getSources().map((source) => (
+          <Post key={source.getPath()} source={source} />
         ))}
       </ul>
     </>
@@ -156,19 +164,19 @@ export default async function Layout() {
   return (
     <nav>
       <ul>
-        <TreeNavigation Source={PostsCollection} />
+        <TreeNavigation source={PostsCollection} />
       </ul>
     </nav>
   )
 }
 
-async function TreeNavigation({ Source }: { Source: PostSource }) {
-  const Sources = Source.getSources()
-  const path = Source.getPath()
-  const depth = Source.getDepth()
-  const frontmatter = await Source.getNamedExport('frontmatter').getValue()
+async function TreeNavigation({ source }: { source: PostSource }) {
+  const sources = source.getSources()
+  const path = source.getPath()
+  const depth = source.getDepth()
+  const frontmatter = await source.getNamedExport('frontmatter').getValue()
 
-  if (Sources.length === 0) {
+  if (sources.length === 0) {
     return (
       <li style={{ paddingLeft: `${depth}rem` }}>
         <Link href={path} style={{ color: 'white' }}>
@@ -178,8 +186,8 @@ async function TreeNavigation({ Source }: { Source: PostSource }) {
     )
   }
 
-  const childrenSources = Sources.map((ChildSource) => (
-    <TreeNavigation key={ChildSource.getPath()} Source={ChildSource} />
+  const childrenSources = sources.map((childSource) => (
+    <TreeNavigation key={childSource.getPath()} source={childSource} />
   ))
 
   if (depth > 0) {
@@ -200,36 +208,39 @@ async function TreeNavigation({ Source }: { Source: PostSource }) {
 ### Sibling Navigation
 
 ```tsx filename="app/posts/[slug]/page.tsx"
+import { PostsCollection, type PostsSource } from '@/collections'
+
 export default async function Page({ params }) {
-  const PostFile = Posts.getSource(params.slug)
+  const source = PostsCollection.getSource(params.slug)
 
-  if (!PostFile) notFound()
+  if (!source) notFound()
 
-  const Post = await PostFile.getDefaultExport().getValue()
-  const frontmatter = await PostFile.getNamedExport('frontmatter').getValue()
-  const [Previous, Next] = PostFile.getSiblings()
+  const Post = await source.getDefaultExport().getValue()
+  const frontmatter = await source.getNamedExport('frontmatter').getValue()
+  const [previous, next] = source.getSiblings()
 
   return (
     <>
       <h1>{frontmatter.title}</h1>
       <p>{frontmatter.description}</p>
       <Post />
-      {Previous ? <Sibling Source={Previous} direction="previous" /> : null}
-      {Next ? <Sibling Source={Next} direction="next" /> : null}
+      {previous ? <Sibling source={previous} direction="previous" /> : null}
+      {next ? <Sibling source={next} direction="next" /> : null}
     </>
   )
 }
 
 function Sibling({
-  Source,
+  source,
   direction,
 }: {
-  Source: ReturnType<typeof Posts.getSource>
+  source: PostsSource
   direction: 'previous' | 'next'
 }) {
-  const frontmatter = await Source.getNamedExport('frontmatter').getValue()
+  const frontmatter = await source.getNamedExport('frontmatter').getValue()
+
   return (
-    <a href={Source.getPath()}>
+    <a href={source.getPath()}>
       <span>{direction === 'previous' ? 'Previous' : 'Next'}</span>
       {frontmatter.title}
     </a>
@@ -241,7 +252,7 @@ function Sibling({
 
 ### Generating Metadata
 
-To generate metadata for each page, we can export a `metadata` constant that returns an object with the metadata properties:
+To generate metadata for file, export a `metadata` constant that returns an object with the any metadata properties you want to include:
 
 ```tsx filename="components/Button.tsx"
 export const metadata = {
@@ -252,19 +263,28 @@ export const metadata = {
 
 ### Using Metadata
 
-To use the metadata, we can get the value of the `metadata` constant and use it to set the page title and description:
+To use the metadata, we can get the value of the `metadata` constant from the file and use it to set the page title and description:
 
 ```tsx filename="components/[slug]/page.tsx"
-import { createCollection } from 'mdxts'
+import { createCollection } from 'renoun'
 
-export const Components = createCollection('@/components/**/index.{ts,tsx}')
+type Schema = {
+  metadata: {
+    title: string
+    description: string
+  }
+}
+
+export const Components = createCollection<Schema>(
+  '@/components/**/index.{ts,tsx}'
+)
 
 export default async function Page({ params }) {
-  const Component = Components.getSource(params.slug)
+  const source = Components.getSource(params.slug)
 
-  if (!Component) notFound()
+  if (!source) notFound()
 
-  const metadata = await Component.getNamedExport('metadata').getValue()
+  const metadata = await source.getNamedExport('metadata').getValue()
 
   return (
     <>
@@ -277,7 +297,7 @@ export default async function Page({ params }) {
 
 ### Generating Metadata for Collections
 
-To generate metadata for collections, we can use root directory in the targeted file pattern to set the metadata:
+To generate metadata for collections, we can use the root directory in the targeted file pattern to set the metadata:
 
 ```tsx filename="components/index.ts"
 export const metadata = {
@@ -314,8 +334,8 @@ This works by finding the index file related to the root directory we're targeti
 ### blog/[slug]/page.tsx
 
 ```tsx
-import type { MDXContent, SourceOf } from 'mdxts'
-import { createCollection } from 'mdxts'
+import type { MDXContent, SourceOf } from 'renoun'
+import { createCollection } from 'renoun'
 import { getSiteMetadata } from '@/utils'
 
 export const Posts = createCollection<{
@@ -324,21 +344,19 @@ export const Posts = createCollection<{
     title: string
     description: string
   }
-}>('@/posts/*.mdx', {
-  tsConfigFilePath: 'tsconfig.json',
-})
+}>('@/posts/*.mdx')
 
 export type PostSource = SourceOf<typeof Posts>
 
 export function generateStaticParams() {
-  return Posts.getSources().map((Source) => ({
-    slug: Source.getPath(),
+  return Posts.getSources().map((source) => ({
+    slug: source.getPath(),
   }))
 }
 
 export async function generateMetadata({ params }) {
-  const Post = Posts.getSource(params.slug)
-  const frontmatter = await Post.getNamedExport('frontmatter').getValue()
+  const source = Posts.getSource(params.slug)
+  const frontmatter = await source.getNamedExport('frontmatter').getValue()
 
   return getSiteMetadata({
     title: `${frontmatter.title} - MDXTS`,
@@ -347,12 +365,12 @@ export async function generateMetadata({ params }) {
 }
 
 export default async function Page({ params }) {
-  const Post = await Posts.getSource(params.slug)
+  const source = await Posts.getSource(params.slug)
 
-  if (!Post) notFound()
+  if (!source) notFound()
 
-  const Content = await Post.getDefaultExport().getValue()
-  const frontmatter = await Post.getNamedExport('frontmatter').getValue()
+  const Content = await source.getDefaultExport().getValue()
+  const frontmatter = await source.getNamedExport('frontmatter').getValue()
 
   return (
     <>
@@ -369,17 +387,17 @@ export default async function Page({ params }) {
 ```tsx
 import { Posts, type PostSource } from './[slug]/page'
 
-function Navigation({ Source }: { Source: PostSource }) {
-  const Sources = Source.getSources()
+function Navigation({ source }: { source: PostSource }) {
+  const sources = await source.getSources()
 
-  if (Sources.length === 0) return null
+  if (sources.length === 0) return null
 
   return (
     <ul>
-      {Sources.map((SourceItem) => (
-        <li key={SourceItem.getPath()}>
-          {SourceItem.getPath()}
-          <Navigation Source={SourceItem} />
+      {sources.map((sourceItem) => (
+        <li key={sourceItem.getPath()}>
+          {sourceItem.getPath()}
+          <Navigation source={sourceItem} />
         </li>
       ))}
     </ul>
@@ -395,7 +413,7 @@ export default function BlogLayout({
     <div>
       <aside>
         <h2>Posts</h2>
-        <Navigation Source={Posts} />
+        <Navigation source={Posts} />
       </aside>
       <main>{children}</main>
     </div>
@@ -413,20 +431,20 @@ export default async function BlogPage() {
     <>
       <h1>All Posts</h1>
       <ul>
-        {Posts.getSources().map((Source) => (
-          <BlogPost key={Source.getPath()} Source={Source} />
+        {Posts.getSources().map((source) => (
+          <BlogPost key={source.getPath()} source={source} />
         ))}
       </ul>
     </>
   )
 }
 
-async function BlogPost({ Source }: { Source: PostSource }) {
-  const frontmatter = await Source.getNamedExport('frontmatter').getValue()
+async function BlogPost({ source }: { source: PostSource }) {
+  const frontmatter = await source.getNamedExport('frontmatter').getValue()
 
   return (
     <li>
-      <a href={Source.getPath()}>
+      <a href={source.getPath()}>
         <h2>{frontmatter.title}</h2>
         <p>{frontmatter.description}</p>
       </a>
@@ -440,7 +458,7 @@ async function BlogPost({ Source }: { Source: PostSource }) {
 ### components/[slug]/page.tsx
 
 ```tsx
-import { createCollection } from 'mdxts'
+import { createCollection } from 'renoun'
 
 export const Components = createCollection('@/components/**/index.{ts,tsx}')
 
@@ -475,7 +493,7 @@ export default async function Page({ params }) {
 ### components/[slug]/[example]/page.tsx
 
 ```tsx
-import { createCollection, Tokens } from 'mdxts'
+import { createCollection, Tokens } from 'renoun'
 
 export const ComponentExamples = createCollection<
   Record<string, React.ComponentType>
@@ -486,6 +504,7 @@ export const ComponentExamples = createCollection<
 export function generateStaticParams() {
   return ComponentExamples.getSources().map((Component) => {
     const componentPath = Component.getPath()
+
     return Component.getNamedExports().map(([exportName]) => ({
       component: componentPath,
       example: exportName,
@@ -534,7 +553,7 @@ export default async function Page({
 }
 ```
 
-## Custom TypeScript Configuration
+## TypeScript Configuration
 
 ### packages/[slug]/page.tsx
 
@@ -573,53 +592,6 @@ export default async function Page({ params }) {
         <APIReference />
       </PackageFile>
     </>
-  )
-}
-```
-
-## Navigation
-
-### post/[slug].tsx
-
-```tsx
-import { createCollection } from 'mdxts'
-
-const Posts = createCollection('@/posts/*.mdx')
-
-export default async function Page({ params }) {
-  const PostFile = Posts.getSource(params.slug)
-
-  if (!PostFile) notFound()
-
-  const frontmatter = await PostFile.getNamedExport('frontmatter').getValue()
-  const Post = await PostFile.getDefaultExport().getValue()
-  const [Previous, Next] = PostFile.getSiblings()
-
-  return (
-    <>
-      <h1>{frontmatter.title}</h1>
-      <p>{frontmatter.description}</p>
-      <Post />
-      {Previous ? <Sibling Source={Previous} direction="previous" /> : null}
-      {Next ? <Sibling Source={Next} direction="next" /> : null}
-    </>
-  )
-}
-
-function Sibling({
-  Source,
-  direction,
-}: {
-  Source: ReturnType<typeof Posts.getSource>
-  direction: 'previous' | 'next'
-}) {
-  const frontmatter = await Source.getNamedExport('frontmatter').getValue()
-
-  return (
-    <a href={Source.getPath()}>
-      <span>{direction === 'previous' ? 'Previous' : 'Next'}</span>
-      {frontmatter.title}
-    </a>
   )
 }
 ```

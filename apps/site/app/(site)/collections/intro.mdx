@@ -1,0 +1,80 @@
+Collections are a way to organize and query file-system data in Renoun. They are a powerful tool that allows you to define a schema for file exports and query those exports using a simple API.
+
+## Creating a Collection
+
+Let's look at an example of how to create a collection for a blog. We'll define a collection that queries all `mdx` files in a `posts` directory:
+
+```tsx filename="collections.ts"
+import {
+  createCollection,
+  type FileSystemSource,
+  type MDXContent,
+} from 'renoun/collections'
+
+type PostsSchema = {
+  default: MDXContent
+  frontmatter: {
+    title: string
+    description: string
+  }
+}
+
+export type PostsSource = FileSystemSource<PostsSchema>
+
+export const PostsCollection = createCollection<PostsSchema>('posts/*.mdx', {
+  baseDirectory: 'posts',
+  basePath: 'posts',
+})
+```
+
+In this example, we define a `PostsCollection` that will query all `mdx` files in the `posts` directory. The `PostsSchema` defines the shape of the file exports, and the `PostsSource` is the type of the source that will be queried.
+
+We can now query the `PostsCollection` in our application. For example, using a framework like Next.js, we can create a page that lists all the posts in the `posts` directory:
+
+```tsx filename="app/posts/page.tsx"
+import { PostsCollection } from '@/collections'
+
+export default async function Page() {
+  const sources = await PostsCollection.getSources()
+
+  return (
+    <>
+      <h1>All Posts</h1>
+      <ul>
+        {sources.map((source) => (
+          <li key={source.getPath()}>
+            <a href={source.getPath()}>{source.getPath()}</a>
+          </li>
+        ))}
+      </ul>
+    </>
+  )
+}
+```
+
+To render the content of a post, we can use the `source` object:
+
+```tsx filename="app/posts/[slug].tsx"
+import { PostsCollection } from '@/collections'
+
+export default async function Page({ params }) {
+  const source = await PostsCollection.getSource(params.slug)
+
+  if (!source) notFound()
+
+  const frontmatter = await source.getNamedExport('frontmatter').getValue()
+  const Content = await source.getDefaultExport().getValue()
+
+  return (
+    <>
+      <h1>{frontmatter.title}</h1>
+      <p>{frontmatter.description}</p>
+      <Content />
+    </>
+  )
+}
+```
+
+Collections can be used to generate static pages, create navigations, and much more. At their core, they abstract files and directories into either a `CollectionSource`, `FileSystemSource`, or `ExportSource` allowing you to analyze and render them programmatically.
+
+Learn more at the [recipes](/collections/recipes) page.

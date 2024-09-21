@@ -143,6 +143,32 @@ export function Sidebar() {
             gap: '1rem',
           }}
         >
+          <h3 className="title">Collections</h3>
+          <ul
+            css={{
+              fontSize: 'var(--font-size-body-2)',
+              display: 'flex',
+              flexDirection: 'column',
+              listStyle: 'none',
+              paddingLeft: 0,
+            }}
+          >
+            <li>
+              <SidebarLink pathname="/collections" label="createCollection" />
+            </li>
+            <li>
+              <SidebarLink pathname="/collections/recipes" label="Recipes" />
+            </li>
+          </ul>
+        </div>
+
+        <div
+          css={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1rem',
+          }}
+        >
           <h3 className="title">Components</h3>
           <Navigation collection={ComponentsCollection} variant="name" />
         </div>

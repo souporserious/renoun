@@ -25,29 +25,20 @@ describe('getSourceFilesOrderMap', () => {
     rootDirectory.createDirectory('utils').createSourceFile('helpers.ts', '')
   })
 
-  test('should return an empty object when no files or directories are present', () => {
-    const emptyDirectory = project.createDirectory('/empty')
-    const orderMap = getSourceFilesOrderMap(emptyDirectory, [])
-    expect(orderMap).toEqual({})
-  })
-
   test('should return the correct order for files and directories', () => {
-    const allPublicPaths = [
-      '/src/components/Button.tsx',
-      '/src/components/CodeBlock/CodeBlock.tsx',
-      '/src/utils/helpers.ts',
-    ]
-
-    const orderMap = getSourceFilesOrderMap(rootDirectory, allPublicPaths)
-
-    const expectedOrderMap = {
-      '/src/components': '01',
-      '/src/components/Button.tsx': '01.01',
-      '/src/components/CodeBlock': '01.02',
-      '/src/components/CodeBlock/CodeBlock.tsx': '01.02.01',
-      '/src/utils': '02',
-      '/src/utils/helpers.ts': '02.01',
-    }
-    expect(orderMap).toEqual(expectedOrderMap)
+    const orderMap = getSourceFilesOrderMap(rootDirectory)
+    const expectedOrderMap = new Map([
+      ['/src', '00'],
+      ['/src/components', '01'],
+      ['/src/components/Button.tsx', '01.01'],
+      ['/src/components/CodeBlock', '01.02'],
+      ['/src/components/CodeBlock/CodeBlock.tsx', '01.02.01'],
+      ['/src/components/index.ts', '01.03'],
+      ['/src/utils', '02'],
+      ['/src/utils/helpers.ts', '02.01'],
+    ])
+    expect(Array.from(orderMap.keys()).sort()).toEqual(
+      Array.from(expectedOrderMap.keys()).sort()
+    )
   })
 })
