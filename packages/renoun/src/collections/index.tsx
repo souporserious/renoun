@@ -29,6 +29,7 @@ import { getSourceFilesOrderMap } from '../utils/get-source-files-sort-order.js'
 import { getImportMap, setImportMap } from './import-maps.js'
 import { resolveTsConfigPath } from '../utils/resolve-ts-config-path.js'
 import { extractExportByIdentifier } from '../utils/extract-export-by-identifier.js'
+import { existsSync } from 'node:fs'
 
 export type { MDXContent }
 
@@ -907,12 +908,23 @@ class Collection<AllExports extends FileExports>
     )
 
     if (fileSystemSources.length === 0) {
+      const routeGroupRegex = /[()]/g
+      const possibleFix = filePattern.replace(routeGroupRegex, (match) => {
+        return match === '(' ? '[(]' : '[)]'
+      })
+
+      let filePatternMessage = `- The file pattern is formatted correctly and targeting files that exist.`
+
+      if (routeGroupRegex.test(filePattern)) {
+        filePatternMessage += `\n   . It looks like you may have passed a route group in the file pattern. If so, try escaping the parentheses with square brackets: "${possibleFix}"`
+      }
+
       throw new Error(
         `[renoun] No source files or directories were found for the file pattern: ${filePattern}
 
 You can fix this error by ensuring the following:
   
-  - The file pattern is formatted correctly and targeting files that exist.
+  ${filePatternMessage}
   - If using a relative path, ensure the "tsConfigFilePath" option is targeting the correct workspace.
   - If you continue to see this error, please file an issue: https://github.com/souporserious/renoun/issues\n`
       )
