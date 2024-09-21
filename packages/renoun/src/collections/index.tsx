@@ -16,18 +16,18 @@ import { filePathToPathname } from '../utils/file-path-to-pathname.js'
 import { getJsDocMetadata } from '../utils/get-js-doc-metadata.js'
 import { getExportedDeclaration } from '../utils/get-exported-declaration.js'
 import { resolveType } from '../utils/resolve-type.js'
-import { formatNameAsTitle } from './format-name-as-title.js'
+import { formatNameAsTitle } from '../utils/format-name-as-title.js'
 import {
   getDeclarationLocation,
   type DeclarationPosition,
-} from './get-declaration-location.js'
-import { getDirectorySourceFile } from './get-directory-source-file.js'
-import { getEditPath } from './get-edit-path.js'
-import { getGitMetadata } from './get-git-metadata.js'
-import { getSourcePathMap } from './get-source-files-path-map.js'
-import { getSourceFilesOrderMap } from './get-source-files-sort-order.js'
+} from '../utils/get-declaration-location.js'
+import { getDirectorySourceFile } from '../utils/get-directory-source-file.js'
+import { getEditPath } from '../utils/get-edit-path.js'
+import { getGitMetadata } from '../utils/get-git-metadata.js'
+import { getSourcePathMap } from '../utils/get-source-files-path-map.js'
+import { getSourceFilesOrderMap } from '../utils/get-source-files-sort-order.js'
 import { getImportMap, setImportMap } from './import-maps.js'
-import { resolveTsConfigPath } from './resolve-ts-config-path.js'
+import { resolveTsConfigPath } from '../utils/resolve-ts-config-path.js'
 import { extractExportByIdentifier } from '../utils/extract-export-by-identifier.js'
 
 export type { MDXContent }

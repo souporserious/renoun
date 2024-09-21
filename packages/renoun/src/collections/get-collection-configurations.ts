@@ -7,7 +7,10 @@ import {
 } from '../utils/resolve-expressions.js'
 import type { CollectionOptions } from './index.js'
 
-/** Finds all `createCollection` configurations. */
+/**
+ * Finds all `createCollection` configurations.
+ * @internal
+ */
 export function getCollectionConfigurations(project: Project) {
   const collectionConfigurations = new Map<
     string,

@@ -1,15 +1,27 @@
-import { execSync } from 'node:child_process'
+import { exec } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { getRootDirectory } from './get-root-directory.js'
+import { getRootDirectory } from '../utils/get-root-directory.js'
 
 let isGitRepository: null | boolean = null
 let hasCheckedIfShallow = false
 let hadGitError = false
 
-/** Returns aggregated metadata about multiple files from git history. */
-export function getGitMetadata(filePaths: string[]) {
+interface GitMetadata {
+  authors: string[]
+  createdAt: string | undefined
+  updatedAt: string | undefined
+}
+
+const cache = new Map<string, GitMetadata>()
+
+/** Returns aggregated metadata about a file from git history. */
+export async function getGitMetadata(filePath: string): Promise<GitMetadata> {
+  if (cache.has(filePath)) {
+    return cache.get(filePath)!
+  }
+
   if (isGitRepository === null) {
     const rootDirectory = getRootDirectory()
     isGitRepository = existsSync(join(rootDirectory, '.git'))
@@ -17,9 +29,15 @@ export function getGitMetadata(filePaths: string[]) {
 
   if (isGitRepository && !hasCheckedIfShallow) {
     try {
-      const isShallow = execSync('git rev-parse --is-shallow-repository')
-        .toString()
-        .trim()
+      const isShallow = await new Promise<string>((resolve, reject) => {
+        exec('git rev-parse --is-shallow-repository', (error, stdout) => {
+          if (error) {
+            reject(error)
+          } else {
+            resolve(stdout.toString().trim())
+          }
+        })
+      })
 
       if (isShallow === 'true') {
         const message = `[renoun] This repository is shallow cloned so the createdAt and updatedAt dates cannot be calculated correctly.`
@@ -42,11 +60,13 @@ export function getGitMetadata(filePaths: string[]) {
   }
 
   if (!isGitRepository || hadGitError) {
-    return {
+    const result = {
       authors: [],
       createdAt: undefined,
       updatedAt: undefined,
     }
+    cache.set(filePath, result)
+    return result
   }
 
   const authorContributions = new Map<
@@ -56,43 +76,45 @@ export function getGitMetadata(filePaths: string[]) {
   let firstCommitDate: Date | undefined = undefined
   let lastCommitDate: Date | undefined = undefined
 
-  for (
-    let filePathIndex = 0;
-    filePathIndex < filePaths.length;
-    filePathIndex++
-  ) {
-    const filePath = filePaths[filePathIndex]
-    const stdout = execSync(
-      `git log --all --follow --format="%aN|%aE|%cD" -- "${filePath}"`
-    )
-    const lines = stdout.toString().trim().split('\n').filter(Boolean)
-
-    for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-      const line = lines[lineIndex]
-      const [name, email, dateString] = line.split('|')
-      const date = new Date(dateString)
-
-      if (!authorContributions.has(email)) {
-        authorContributions.set(email, {
-          name,
-          commitCount: 1,
-          lastCommitDate: date,
-        })
-      } else {
-        const author = authorContributions.get(email)!
-        author.commitCount += 1
-        if (author.lastCommitDate < date) {
-          author.lastCommitDate = date
-          author.name = name
+  const stdout = await new Promise<string>((resolve, reject) => {
+    exec(
+      `git log --all --follow --format="%aN|%aE|%cD" -- "${filePath}"`,
+      (error, stdout) => {
+        if (error) {
+          reject(error)
+        } else {
+          resolve(stdout.toString().trim())
         }
       }
+    )
+  })
+  const lines = stdout.split('\n').filter(Boolean)
 
-      if (firstCommitDate === undefined || date < firstCommitDate) {
-        firstCommitDate = date
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const line = lines[lineIndex]
+    const [name, email, dateString] = line.split('|')
+    const date = new Date(dateString)
+
+    if (!authorContributions.has(email)) {
+      authorContributions.set(email, {
+        name,
+        commitCount: 1,
+        lastCommitDate: date,
+      })
+    } else {
+      const author = authorContributions.get(email)!
+      author.commitCount += 1
+      if (author.lastCommitDate < date) {
+        author.lastCommitDate = date
+        author.name = name
       }
-      if (lastCommitDate === undefined || date > lastCommitDate) {
-        lastCommitDate = date
-      }
+    }
+
+    if (firstCommitDate === undefined || date < firstCommitDate) {
+      firstCommitDate = date
+    }
+    if (lastCommitDate === undefined || date > lastCommitDate) {
+      lastCommitDate = date
     }
   }
 
@@ -102,9 +124,13 @@ export function getGitMetadata(filePaths: string[]) {
       b.lastCommitDate.getTime() - a.lastCommitDate.getTime()
   )
 
-  return {
+  const result = {
     authors: sortedAuthors.map((author) => author.name),
     createdAt: firstCommitDate?.toISOString(),
     updatedAt: lastCommitDate?.toISOString(),
-  }
+  } satisfies GitMetadata
+
+  cache.set(filePath, result)
+
+  return result
 }

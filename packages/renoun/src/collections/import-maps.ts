@@ -4,13 +4,20 @@ import { extname, resolve, join, dirname, relative } from 'node:path'
 import globParent from 'glob-parent'
 import fastGlob from 'fast-glob'
 
-import { getCollectionConfigurations } from './get-collection-configurations.js'
 import { getProject } from '../project/get-project.js'
-import { resolveTsConfigPath } from './resolve-ts-config-path.js'
+import { resolveTsConfigPath } from '../utils/resolve-ts-config-path.js'
+import { getCollectionConfigurations } from './get-collection-configurations.js'
 
+/** @internal */
 export const PACKAGE_NAME = 'renoun/core'
+
+/** @internal */
 export const PACKAGE_DIRECTORY = '.renoun'
+
+/** @internal */
 export const FILENAME = 'collections.ts'
+
+/** @internal */
 export const FILE_PATH = `${PACKAGE_DIRECTORY}/${FILENAME}`
 
 type GetImport<Exports extends unknown = unknown> = (
