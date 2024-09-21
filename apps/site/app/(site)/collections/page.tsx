@@ -15,7 +15,7 @@ export default async function Page() {
         gridTemplateColumns: 'minmax(0, 1fr)',
         gap: '4rem',
 
-        '@media (min-width: 768px)': {
+        '@media (min-width: 60rem)': {
           gridTemplateColumns: 'minmax(0, 1fr) 12rem',
         },
       }}
