@@ -1,0 +1,155 @@
+export const metadata = {
+  title: 'MDX',
+}
+
+This guide will help you understand how to use MDX with Renoun.
+
+## What is MDX?
+
+[MDX](https://mdxjs.com/) is a format that allows you to write JSX directly within Markdown documents. This lets you embed React components and JSX elements inside your Markdown files, creating interactive and dynamic content. MDX works seamlessly with Renoun, making it a powerful tool for your documentation needs.
+
+## `MDXContent` component
+
+The easiest way to get started using MDX with Renoun is with the `MDXContent` component:
+
+```tsx
+import { MDXContent } from 'renoun/components'
+
+const content = `
+---
+title: Hello, world!
+---
+
+# Hello, world!
+
+This is an MDX file.
+`
+
+export default function Page() {
+  return <MDXContent value={content} />
+}
+```
+
+In this example, the `MDXContent` component renders a string of MDX content within your React components. It parses the MDX and converts it into React components that can be rendered in your application.
+
+## MDX with Next.js
+
+If you're working with Next.js, configuring MDX with Renoun is straightforward. We have a dedicated guide that walks you through the process of setting it up with your Next.js project.
+
+To learn how to configure MDX with Next.js, check out the [Next.js Guide](/docs/frameworks/next).
+
+## Pre-configured Plugins
+
+The `@renoun/mdx` package includes pre-configured plugins for both [remark](https://remark.js.org/) and [rehype](https://unifiedjs.com/), which are part the MDX process that parses and transforms MDX content.
+
+To install the package, run the following command:
+
+<PackageInstall packages={['@renoun/mdx']} />
+
+You can import these respective collections of plugins and add them to your MDX configuration to extend the functionality of your MDX content.
+
+```ts
+import { remarkPlugins, rehypePlugins } from '@renoun/mdx'
+```
+
+Here's a list of the plugins and their effects:
+
+### Community Plugins
+
+#### [`remark-gfm`](https://www.npmjs.com/package/remark-gfm)
+
+Adds support for GitHub Flavored Markdown (GFM) to MDX.
+
+- Enables strikethrough, tables, task lists, and URLs directly in MDX.
+- Enhances the readability and functionality of markdown content.
+
+#### [`remark-frontmatter`](https://www.npmjs.com/package/remark-frontmatter)
+
+Parses front matter from MDX files which is useful for adding metadata to your documents.
+
+#### [`remark-mdx-frontmatter`](https://www.npmjs.com/package/remark-mdx-frontmatter)
+
+Converts the parsed front matter from `remark-frontmatter` to an exported `frontmatter` variable.
+
+#### [`remark-smartypants`](https://www.npmjs.com/package/remark-smartypants)
+
+Transforms punctuation in MDX to typographically correct symbols using [SmartyPants](https://daringfireball.net/projects/smartypants/).
+
+- Straight quotes (`"` and `'`) into "curly" quote HTML entities
+- Dashes (`--` and `---`) into en- (--) and em-dash (---) entities
+- Three consecutive dots (`...`) into an ellipsis entity ...
+
+#### [`remark-strip-badges`](https://www.npmjs.com/package/remark-strip-badges)
+
+Strips out badges, which are often used in README files.
+
+#### [`remark-squeeze-paragraphs`](https://www.npmjs.com/package/remark-squeeze-paragraphs)
+
+Cleans up the document by removing unnecessary empty paragraphs which can be caused by packages like `remark-strip-badges`.
+
+#### [`remark-unwrap-images`](https://www.npmjs.com/package/remark-unwrap-images)
+
+Ensures that images are not wrapped in paragraph tags.
+
+#### [`rehype-infer-reading-time-meta`](https://www.npmjs.com/package/rehype-infer-reading-time-meta)
+
+Infers reading time metadata for MDX content.
+
+### Renoun plugins
+
+In addition to the community plugins listed above, Renoun adds specific custom plugins to further extend the capabilities of MDX content.
+
+#### remark `add-headings`
+
+Adds an `id` to all headings and exports a `headings` variable.
+
+#### remark `remove-paragraphs`
+
+Removes paragraph elements added around list items and component children.
+
+#### remark `transform-relative-links`
+
+Reformats all relative links that use ordered numbers and extensions. For example, `./01.introduction.mdx` will be transformed to `./introduction`.
+
+#### rehype `add-code-meta-props`
+
+Parses `CodeBlock` and `CodeInline` props and adds them to `pre` and `code` element properties respectively.
+
+#### rehype `add-reading-time`
+
+Exports the reading time metadata added by `rehype-infer-reading-time-meta` as a `readingTime` variable.
+
+## Applying plugins
+
+After installing the package, you can import and apply the plugins to the `MDXContent` component or any other MDX configuration in your application.
+
+We'll use the example from before and add the renoun MDX plugins to the `MDXContent` component:
+
+```tsx
+import { MDXContent } from 'renoun/components'
+import { remarkPlugins, rehypePlugins } from '@renoun/mdx'
+
+const content = `
+---
+title: Hello, world!
+---
+
+# Hello, world!
+
+This is an MDX file.
+`
+
+export default function Page() {
+  return (
+    <MDXContent remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins}>
+      {content}
+    </MDXContent>
+  )
+}
+```
+
+By adding `remarkPlugins` and `rehypePlugins`, you can modify how MDX is parsed and rendered, enabling additional functionality in your components.
+
+## Conclusion
+
+MDX is a powerful tool that can be used to create interactive and dynamic content in your documentation. By using the `MDXContent` component and custom plugins, you can easily render MDX content in your components and extend the functionality of the MDX rendering process.
