@@ -43,6 +43,11 @@ export function filePathToPathname(
 
     // Remove the base directory from the file path
     ;[, baseFilePath] = normalizedFilePath.split(normalizedBaseDirectory)
+
+    // Default to an empty string if the base directory is not found
+    if (!baseFilePath) {
+      baseFilePath = ''
+    }
   } else {
     baseFilePath = baseFilePath.replace(process.cwd(), '')
   }
