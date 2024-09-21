@@ -2,6 +2,7 @@ import type { Parent } from 'unist'
 import type { VFile } from 'vfile'
 import { valueToEstree } from 'estree-util-value-to-estree'
 
+/** Exports the reading time as a variable. */
 export function addReadingTime() {
   return (tree: Parent, file: VFile) => {
     const readingTime = file.data.meta?.readingTime
