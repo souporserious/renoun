@@ -19,7 +19,7 @@ export const remarkPlugins = [
   remarkFrontmatter,
   remarkMdxFrontmatter as any,
   remarkGfm,
-  remarkSmartyPants as any,
+  [remarkSmartyPants, { dashes: 'oldschool' }] as any,
   remarkStripBadges,
   remarkSqueezeParagraphs,
   remarkUnwrapImages,
