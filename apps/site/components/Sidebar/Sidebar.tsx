@@ -117,9 +117,12 @@ export function Sidebar() {
           flexDirection: 'column',
           padding: '2rem',
           gap: '2rem',
+          alignSelf: 'start',
+          position: 'sticky',
+          top: '-4rem',
 
           '@media screen and (min-width: 60rem)': {
-            gridColumn: '1 / 2',
+            gridColumn: '2 / 3',
             gridRow: '2 / 3',
             padding: '6rem 2rem',
           },

@@ -19,12 +19,15 @@ const ButtonLink = styled(Link, {
 
 export default function Page() {
   return (
-    <main
+    <div
       css={{
         display: 'flex',
         flexDirection: 'column',
-        padding: '4rem 0',
         gap: '4rem',
+
+        '@media (min-width: 60rem)': {
+          padding: '4rem 8rem',
+        },
       }}
     >
       <div className="prose" css={{ maxWidth: '45rem' }}>
@@ -87,6 +90,6 @@ export default function Page() {
         </div>
         <SignupForm />
       </div>
-    </main>
+    </div>
   )
 }

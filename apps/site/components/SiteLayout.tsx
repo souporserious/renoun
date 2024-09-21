@@ -16,30 +16,47 @@ export function SiteLayout({
       css={{
         display: 'grid',
         width: '100%',
-        margin: '0 auto',
         flex: 1,
-        gridTemplateColumns: 'auto minmax(0, 1fr)',
+        gridTemplateColumns: '1fr 16rem minmax(0, 60rem) 16rem 1fr',
         gridTemplateRows: 'min-content 1fr',
-        maxWidth: '72rem',
 
         '@media screen and (min-width: 60rem)': {
-          gridTemplateColumns: 'auto minmax(0, 1fr)',
-          gridTemplateRows: 'min-content 1fr',
           columnGap: '2rem',
         },
       }}
     >
-      <header css={{ display: 'contents' }}>
+      {sidebar ? (
+        <div
+          css={{
+            gridRow: '1 / -1',
+            gridColumn: '1 / 3',
+            backgroundColor: 'var(--color-surface-secondary)',
+
+            '@media screen and (max-width: calc(60rem - 1px))': {
+              display: 'none',
+            },
+          }}
+        />
+      ) : null}
+
+      <header
+        css={{
+          gridColumn: '1 / -1',
+          gridRow: '1 / 2',
+          display: 'flex',
+          justifyContent: 'center',
+          borderBottom: '1px solid var(--color-separator)',
+        }}
+      >
         <nav
           css={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'end',
+            width: '100%',
+            maxWidth: '80rem',
             padding: '2rem',
             gap: '1.5rem',
-            gridColumn: '1 / -1',
-            gridRow: '1 / 2',
-            borderBottom: '1px solid var(--color-separator)',
 
             '@media screen and (min-width: 60rem)': {
               padding: '1rem 2rem',
@@ -79,8 +96,8 @@ export function SiteLayout({
             >
               Docs
             </NavigationLink>
+            <NavigationLink href="/collections">Collections</NavigationLink>
             <NavigationLink href="/components">Components</NavigationLink>
-            <NavigationLink href="/changelog">Changelog</NavigationLink>
             <NavigationLink
               href="/sponsors"
               css={{
@@ -155,7 +172,7 @@ export function SiteLayout({
           padding: '4rem 2rem',
 
           '@media screen and (min-width: 60rem)': {
-            gridColumn: '2 / 3',
+            gridColumn: sidebar ? '3 / -2' : '2 / -2',
             gridRow: '2',
             padding: '6rem 0',
           },
