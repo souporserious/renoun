@@ -17,11 +17,11 @@ export function SiteLayout({
         display: 'grid',
         width: '100%',
         flex: 1,
-        gridTemplateColumns: '1fr 16rem minmax(0, 60rem) 16rem 1fr',
+        gridTemplateColumns: '1fr 12rem minmax(0, 60rem) 12rem 1fr',
         gridTemplateRows: 'min-content 1fr',
 
         '@media screen and (min-width: 60rem)': {
-          columnGap: '2rem',
+          columnGap: '4rem',
         },
       }}
     >
@@ -54,7 +54,7 @@ export function SiteLayout({
             alignItems: 'center',
             justifyContent: 'end',
             width: '100%',
-            maxWidth: '80rem',
+            maxWidth: '76rem',
             padding: '2rem',
             gap: '1.5rem',
 
