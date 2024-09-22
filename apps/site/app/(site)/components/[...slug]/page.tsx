@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation'
 import { GeistMono } from 'geist/font/mono'
 
 import { ComponentsCollection, ComponentsMDXCollection } from '@/collections'
+import { MDXContent } from '@/components/MDXContent'
 import { SiblingLink } from '@/components/SiblingLink'
 import { TableOfContents } from '@/components/TableOfContents'
 
@@ -29,8 +30,8 @@ export default async function Component({
   }
 
   const mdxSource = ComponentsMDXCollection.getSource(componentsPathname)
-  const MDXContent = await mdxSource?.getDefaultExport().getValue()
   const mdxHeadings = await mdxSource?.getNamedExport('headings').getValue()
+  const Content = await mdxSource?.getDefaultExport().getValue()
   const examplesSource = componentSource.getSource('examples')
   const examplesSources = await examplesSource?.getSources()
   const isExamplesPage = params.slug.at(-1) === 'examples'
@@ -44,6 +45,8 @@ export default async function Component({
   const sourceExports = isExamplesPage
     ? undefined
     : componentSource.getExports()
+  const mainExport = componentSource.getMainExport()
+  const description = mainExport?.getDescription()
   const updatedAt = await componentSource.getUpdatedAt()
   const editPath = componentSource.getEditPath()
   const [previousSource, nextSource] = await componentSource.getSiblings({
@@ -103,9 +106,10 @@ export default async function Component({
             {componentSource.getName()} {isExamplesPage ? 'Examples' : ''}
           </h1>
 
-          {MDXContent ? (
+          {description || Content ? (
             <div className="prose">
-              <MDXContent />
+              {description ? <MDXContent value={description} /> : null}
+              {Content ? <Content /> : null}
             </div>
           ) : null}
         </div>
