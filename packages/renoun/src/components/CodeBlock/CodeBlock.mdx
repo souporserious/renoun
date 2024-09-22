@@ -1,9 +1,4 @@
-<Note>
-  This component is automatically set up to override the `pre` element when
-  using the [Next.js plugin](/packages/next).
-</Note>
-
-## Styling
+## Style Overrides
 
 The `CodeBlock` component can be styled using the `className` and `style` props to target specific descendant elements.
 
@@ -32,18 +27,23 @@ export function CodeBlock(props: React.ComponentProps<typeof RenounCodeBlock>) {
 ```
 
 <Note>
-  Not every element can be styled using the `className` and `style` props. See
-  the following section for fully customizing the `CodeBlock` component.
+  Not every component can be styled using the `css`, `className`, and `style`
+  props. See the following section for fully customizing the rendering of the
+  `CodeBlock` component.
 </Note>
 
-## Overrides
+## Component Overrides
 
 If you need more customization, the `CodeBlock` component can be fully overridden by importing it from `renoun/components` and extending it:
 
 ```tsx filename="CodeBlock.tsx"
-import { CodeBlock as RenounCodeBlock, Tokens } from 'renoun/components'
+import {
+  type CodeBlockProps,
+  CodeBlock as RenounCodeBlock,
+  Tokens,
+} from 'renoun/components'
 
-export function CodeBlock(props: React.ComponentProps<typeof RenounCodeBlock>) {
+export function CodeBlock(props: CodeBlockProps) {
   return (
     <RenounCodeBlock {...props}>
       <pre
@@ -65,7 +65,21 @@ export function CodeBlock(props: React.ComponentProps<typeof RenounCodeBlock>) {
   like `LineNumbers` and `Toolbar` to render the other parts of the code block.
 </Note>
 
-Now import the `CodeBlock` component in your `mdx-components.tsx` file and override the `pre` component to use it instead of the default `CodeBlock` component:
+## Next.js MDX Code Blocks
+
+If you are using the `@renoun/mdx` package, you can also use the `MDXComponents` export to override the `pre` and `code` components in your project's `mdx-components.tsx` file:
+
+```tsx filename="02.mdx-components.tsx"
+import { MDXComponents } from 'renoun/components'
+
+export function useMDXComponents() {
+  return MDXComponents
+}
+```
+
+This forwards the meta information added from the `@renoun/mdx` rehype plugin to the `CodeBlock` component.
+
+Alternatively, you can use the extended `CodeBlock` component from above to only override the `pre` component:
 
 ```tsx filename="02.mdx-components.tsx"
 import { MDXComponents } from 'renoun/components'
