@@ -17,7 +17,7 @@ export function SiteLayout({
         display: 'grid',
         width: '100%',
         flex: 1,
-        gridTemplateColumns: '1fr 12rem minmax(0, 60rem) 12rem 1fr',
+        gridTemplateColumns: '1fr 14rem minmax(0, 60rem) 14rem 1fr',
         gridTemplateRows: 'min-content 1fr',
 
         '@media screen and (min-width: 60rem)': {
