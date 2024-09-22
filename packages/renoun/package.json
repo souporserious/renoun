@@ -82,8 +82,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc -w",
-    "test": "vitest run",
-    "postinstall": "pnpm build"
+    "test": "vitest run"
   },
   "peerDependencies": {
     "react": ">=18.0.0",
