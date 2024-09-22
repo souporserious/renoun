@@ -30,6 +30,7 @@ export default async function Component({
 
   const mdxSource = ComponentsMDXCollection.getSource(componentsPathname)
   const MDXContent = await mdxSource?.getDefaultExport().getValue()
+  const mdxHeadings = await mdxSource?.getNamedExport('headings').getValue()
   const examplesSource = componentSource.getSource('examples')
   const examplesSources = await examplesSource?.getSources()
   const isExamplesPage = params.slug.at(-1) === 'examples'
@@ -50,8 +51,12 @@ export default async function Component({
   })
   let headings: Headings = []
 
+  if (mdxHeadings) {
+    headings.push(...mdxHeadings)
+  }
+
   if (examplesExports.length) {
-    headings = [
+    headings.push(
       {
         id: 'examples',
         text: 'Examples',
@@ -61,13 +66,12 @@ export default async function Component({
         id: source.getSlug(),
         text: source.getTitle(),
         depth: 3,
-      })),
-    ]
+      }))
+    )
   }
 
   if (sourceExports) {
-    headings = [
-      ...headings,
+    headings.push(
       {
         id: 'api-reference',
         text: 'API Reference',
@@ -77,8 +81,8 @@ export default async function Component({
         id: source.getSlug(),
         text: source.getName(),
         depth: 3,
-      })),
-    ]
+      }))
+    )
   }
 
   return (

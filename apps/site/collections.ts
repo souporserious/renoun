@@ -80,6 +80,7 @@ export const ComponentsCollection = createCollection<ComponentSchema>(
 
 export const ComponentsMDXCollection = createCollection<{
   default: MDXContent
+  headings: Headings
 }>('src/components/**/*.mdx', {
   baseDirectory: 'components',
   basePath: 'components',
