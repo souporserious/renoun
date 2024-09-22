@@ -1,5 +1,17 @@
 # renoun
 
+## 4.2.0
+
+### Minor Changes
+
+- 2d64da1: Adds a `PackageInstall` component for displaying a list of package manager install commands that can be copied.
+
+### Patch Changes
+
+- 2ad1db1: Removes unused `createCollection` `title` and `label` options.
+- 779df0a: Adds better error when trying to create a collection within a route group file pattern that needs to be escaped properly.
+- 170d382: Fixes error when collection `baseDirectory` does not have any additional segments after normalizing file paths.
+
 ## 4.1.0
 
 ### Minor Changes
