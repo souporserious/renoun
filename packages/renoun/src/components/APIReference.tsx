@@ -1,4 +1,5 @@
 /** @jsxImportSource restyle */
+/** @jsxRuntime automatic */
 import { Fragment } from 'react'
 import type { CSSObject } from 'restyle'
 
