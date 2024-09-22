@@ -1,4 +1,13 @@
-<Note>
-  This component is automatically set up to override the `code` element when
-  using the [Next.js plugin](/packages/next).
-</Note>
+## Next.js MDX Inline Code
+
+If you are using the `@renoun/mdx` package, you can also use the `MDXComponents` export to override the `pre` and `code` components in your project's `mdx-components.tsx` file:
+
+```tsx filename="02.mdx-components.tsx"
+import { MDXComponents } from 'renoun/components'
+
+export function useMDXComponents() {
+  return MDXComponents
+}
+```
+
+This properly forwards the MDX component props from the `code` component to the `CodeInline` component.

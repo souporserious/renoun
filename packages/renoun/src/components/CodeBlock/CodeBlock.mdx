@@ -1,6 +1,6 @@
 ## Style Overrides
 
-The `CodeBlock` component can be styled using the `className` and `style` props to target specific descendant elements.
+The `CodeBlock` component can be styled using the, `css`, `className`, and `style` props to target specific descendant components.
 
 ```tsx
 import { CodeBlock as RenounCodeBlock, Tokens } from 'renoun/components'
@@ -27,9 +27,8 @@ export function CodeBlock(props: React.ComponentProps<typeof RenounCodeBlock>) {
 ```
 
 <Note>
-  Not every component can be styled using the `css`, `className`, and `style`
-  props. See the following section for fully customizing the rendering of the
-  `CodeBlock` component.
+  Not every component's styles can be overridden. See the following section for
+  fully customizing the rendering of the `CodeBlock` component.
 </Note>
 
 ## Component Overrides
