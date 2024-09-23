@@ -967,7 +967,9 @@ You can fix this error by ensuring the following:
       const tsConfigJson = JSON.parse(
         this.project.addSourceFileAtPath(tsConfig.configFilePath).getText()
       )
-      exclude = tsConfigJson.exclude
+      if (tsConfigJson.exclude) {
+        exclude = tsConfigJson.exclude
+      }
     }
 
     const sources = this.fileSystemSources
