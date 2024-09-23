@@ -1,4 +1,4 @@
-import { Directory } from 'ts-morph'
+import type { Directory } from 'ts-morph'
 
 /** Returns a map of source file paths to their sort order. */
 export function getSourceFilesOrderMap(

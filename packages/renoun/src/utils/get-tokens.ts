@@ -1,6 +1,4 @@
 import type { bundledLanguages, bundledThemes } from 'shiki/bundle/web'
-import type { SourceFile, Diagnostic, ts, Project } from 'ts-morph'
-import { Node, SyntaxKind } from 'ts-morph'
 import { join, posix } from 'node:path'
 
 import { getDiagnosticMessageText } from './get-diagnostic-message.js'
@@ -11,6 +9,9 @@ import { generatedFilenames } from './parse-source-text-metadata.js'
 import type { Highlighter } from './create-highlighter.js'
 import { getTrimmedSourceFileText } from './get-trimmed-source-file-text.js'
 import { splitTokenByRanges } from './split-tokens-by-ranges.js'
+import type { Diagnostic, Project, SourceFile, ts } from "ts-morph";
+import tsMorph from "ts-morph";
+const { Node, SyntaxKind } = tsMorph;
 
 export const languageMap = {
   mjs: 'js',

@@ -1,4 +1,5 @@
-import { Project } from 'ts-morph'
+import type { Project } from 'ts-morph'
+import tsMorph from 'ts-morph'
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import { extname, resolve, join, dirname, relative } from 'node:path'
 import globParent from 'glob-parent'
@@ -176,7 +177,7 @@ let project: Project
 export async function generateCollectionImportMap(filename?: string) {
   /* Use a default project to find all collection configurations and generate the collection import map. */
   if (!project) {
-    project = new Project({ tsConfigFilePath: 'tsconfig.json' })
+    project = new tsMorph.Project({ tsConfigFilePath: 'tsconfig.json' })
   }
 
   /* Refresh source file if the contents changed. */

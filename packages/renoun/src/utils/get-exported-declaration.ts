@@ -1,5 +1,6 @@
-import type { ExportedDeclarations } from 'ts-morph'
-import { Node } from 'ts-morph'
+import type { ExportedDeclarations } from "ts-morph";
+import tsMorph from "ts-morph";
+const { Node } = tsMorph;
 
 /** Unwraps exported declarations from a source file. */
 export function getExportedDeclaration(

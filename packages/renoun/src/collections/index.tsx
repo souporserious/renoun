@@ -1,12 +1,13 @@
 import * as React from 'react'
 import type { MDXContent } from 'mdx/types'
-import {
+import type {
   Project,
   Directory,
   Node,
   SourceFile,
-  type ExportedDeclarations,
+  ExportedDeclarations,
 } from 'ts-morph'
+import tsMorph from 'ts-morph'
 import { dirname, resolve } from 'node:path'
 import globParent from 'glob-parent'
 import { minimatch } from 'minimatch'
@@ -29,7 +30,6 @@ import { getSourceFilesOrderMap } from '../utils/get-source-files-sort-order.js'
 import { getImportMap, setImportMap } from './import-maps.js'
 import { resolveTsConfigPath } from '../utils/resolve-ts-config-path.js'
 import { extractExportByIdentifier } from '../utils/extract-export-by-identifier.js'
-import { existsSync } from 'node:fs'
 
 export type { MDXContent }
 
@@ -218,7 +218,7 @@ const projectCache = new Map<string, Project>()
 
 function resolveProject(tsConfigFilePath: string): Project {
   if (!projectCache.has(tsConfigFilePath)) {
-    const project = new Project({
+    const project = new tsMorph.Project({
       skipAddingFilesFromTsConfig: true,
       tsConfigFilePath,
     })
@@ -501,11 +501,11 @@ class Source<AllExports extends FileExports>
   }
 
   isFile() {
-    return this.sourceFileOrDirectory instanceof SourceFile
+    return this.sourceFileOrDirectory instanceof tsMorph.SourceFile
   }
 
   isDirectory() {
-    return this.sourceFileOrDirectory instanceof Directory
+    return this.sourceFileOrDirectory instanceof tsMorph.Directory
   }
 
   getCollection() {
@@ -514,7 +514,7 @@ class Source<AllExports extends FileExports>
 
   getName() {
     const baseName =
-      this.sourceFileOrDirectory instanceof Directory
+      this.sourceFileOrDirectory instanceof tsMorph.Directory
         ? this.sourceFileOrDirectory.getBaseName()
         : this.sourceFileOrDirectory.getBaseNameWithoutExtension()
     let name = baseName
@@ -523,7 +523,7 @@ class Source<AllExports extends FileExports>
 
     if (
       (name === 'index' || name === 'readme') &&
-      this.sourceFileOrDirectory instanceof SourceFile
+      this.sourceFileOrDirectory instanceof tsMorph.SourceFile
     ) {
       name = this.sourceFileOrDirectory
         .getDirectory()
@@ -694,7 +694,7 @@ class Source<AllExports extends FileExports>
   getDefaultExport(): ExportSource<AllExports['default']> {
     const sourceFile = this.sourceFileOrDirectory
 
-    if (sourceFile instanceof Directory) {
+    if (sourceFile instanceof tsMorph.Directory) {
       const baseName = sourceFile.getBaseName()
       const validExtensions = Array.from(this.collection.validExtensions)
 
@@ -732,7 +732,7 @@ You can fix this error by taking one of the following actions:
     const exportName = name as string
     const sourceFile = this.sourceFileOrDirectory
 
-    if (sourceFile instanceof Directory) {
+    if (sourceFile instanceof tsMorph.Directory) {
       const baseName = sourceFile.getBaseName()
       const validExtensions = Array.from(this.collection.validExtensions)
 
@@ -778,7 +778,7 @@ You can fix this error by taking one of the following actions:
   getExports() {
     let sourceFile: SourceFile
 
-    if (this.sourceFileOrDirectory instanceof Directory) {
+    if (this.sourceFileOrDirectory instanceof tsMorph.Directory) {
       sourceFile = getDirectorySourceFile(this.sourceFileOrDirectory)!
     } else {
       sourceFile = this.sourceFileOrDirectory
@@ -829,7 +829,7 @@ You can fix this error by taking one of the following actions:
   }
 
   getSourceFile() {
-    if (this.sourceFileOrDirectory instanceof SourceFile) {
+    if (this.sourceFileOrDirectory instanceof tsMorph.SourceFile) {
       return this.sourceFileOrDirectory
     }
     throw new Error(
@@ -934,7 +934,7 @@ You can fix this error by ensuring the following:
     this.validExtensions = new Set(
       fileSystemSources
         .map((source) => {
-          if (source instanceof SourceFile) {
+          if (source instanceof tsMorph.SourceFile) {
             return source.getExtension().slice(1)
           }
         })
@@ -975,7 +975,7 @@ You can fix this error by ensuring the following:
     const sources = this.fileSystemSources
       .map((fileSystemSource) => {
         // Filter out directories that have an index or readme file
-        if (fileSystemSource instanceof Directory) {
+        if (fileSystemSource instanceof tsMorph.Directory) {
           const directorySourceFile = getDirectorySourceFile(fileSystemSource)
 
           if (directorySourceFile) {
@@ -1098,7 +1098,7 @@ You can fix this error by ensuring the following:
       return sourcePath === pathString
     })
 
-    if (sourceFileOrDirectory instanceof Directory) {
+    if (sourceFileOrDirectory instanceof tsMorph.Directory) {
       const directorySourceFile = getDirectorySourceFile(sourceFileOrDirectory)
 
       if (directorySourceFile) {
@@ -1205,7 +1205,7 @@ function getSourceFilesAndDirectories(
 
 /** Get the path of a source file or directory. */
 function getFileSystemSourcePath(source: SourceFile | Directory) {
-  if (source instanceof SourceFile) {
+  if (source instanceof tsMorph.SourceFile) {
     return source.getFilePath()
   }
   return source.getPath()
@@ -1224,11 +1224,11 @@ function getPathDepth(path: string, basePath?: string) {
 
 /** Get the name of a declaration. */
 function getDeclarationName(declaration: Node) {
-  if (Node.isVariableDeclaration(declaration)) {
+  if (tsMorph.Node.isVariableDeclaration(declaration)) {
     return declaration.getNameNode().getText()
-  } else if (Node.isFunctionDeclaration(declaration)) {
+  } else if (tsMorph.Node.isFunctionDeclaration(declaration)) {
     return declaration.getName()
-  } else if (Node.isClassDeclaration(declaration)) {
+  } else if (tsMorph.Node.isClassDeclaration(declaration)) {
     return declaration.getName()
   }
 }

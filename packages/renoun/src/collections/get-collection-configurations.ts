@@ -1,11 +1,11 @@
-import type { Project } from 'ts-morph'
-import { Node, SyntaxKind } from 'ts-morph'
-
 import {
   resolveObjectLiteralExpression,
   isLiteralExpressionValue,
 } from '../utils/resolve-expressions.js'
 import type { CollectionOptions } from './index.js'
+import type { Project } from "ts-morph";
+import tsMorph from "ts-morph";
+const { Node, SyntaxKind } = tsMorph;
 
 /**
  * Finds all `createCollection` configurations.

@@ -1,13 +1,13 @@
-import {
+import type {
   Expression,
-  Node,
   ParameterDeclaration,
   VariableDeclaration,
-  type BindingElement,
-  type ObjectBindingPattern,
-  type PropertyDeclaration,
-  type PropertySignature,
+  BindingElement,
+  ObjectBindingPattern,
+  PropertyDeclaration,
+  PropertySignature,
 } from 'ts-morph'
+import tsMorph from 'ts-morph'
 
 import {
   resolveLiteralExpression,
@@ -24,7 +24,7 @@ export function getPropertyDefaultValueKey(
     | PropertySignature
 ) {
   /* Handle renamed properties */
-  if (Node.isBindingElement(property)) {
+  if (tsMorph.Node.isBindingElement(property)) {
     const propertyNameNode = property.getPropertyNameNode()
 
     if (propertyNameNode) {
@@ -39,7 +39,10 @@ export function getPropertyDefaultValueKey(
 export function getPropertyDefaultValue(
   property: ParameterDeclaration | PropertyDeclaration | PropertySignature
 ): LiteralExpressionValue {
-  if (Node.isSpreadAssignment(property) || Node.isMethodSignature(property)) {
+  if (
+    tsMorph.Node.isSpreadAssignment(property) ||
+    tsMorph.Node.isMethodSignature(property)
+  ) {
     return
   }
 
@@ -67,22 +70,22 @@ export function getPropertyDefaultValue(
     defaultValue = getInitializerValue(initializer)
   }
 
-  if (Node.isObjectBindingPattern(nameNode)) {
+  if (tsMorph.Node.isObjectBindingPattern(nameNode)) {
     defaultValue = getObjectBindingPatternDefaultValue(nameNode, defaultValue)
   }
 
-  if (Node.isIdentifier(nameNode)) {
+  if (tsMorph.Node.isIdentifier(nameNode)) {
     const references = property
       .findReferencesAsNodes()
       .map((reference) => reference.getParentOrThrow())
       .filter((reference) =>
-        Node.isVariableDeclaration(reference)
+        tsMorph.Node.isVariableDeclaration(reference)
       ) as VariableDeclaration[]
 
     references.forEach((reference) => {
       const referenceNameNode = reference.getNameNode()
 
-      if (Node.isObjectBindingPattern(referenceNameNode)) {
+      if (tsMorph.Node.isObjectBindingPattern(referenceNameNode)) {
         defaultValue = getObjectBindingPatternDefaultValue(
           referenceNameNode,
           defaultValue

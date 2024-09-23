@@ -1,4 +1,4 @@
-import type { SourceFile } from 'ts-morph'
+import type { SourceFile } from "ts-morph";
 
 /** Trims empty export statements added when coercing source text into module. */
 export function getTrimmedSourceFileText(sourceFile: SourceFile) {

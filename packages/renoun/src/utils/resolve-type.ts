@@ -1,28 +1,27 @@
-import {
-  Node,
-  Type,
-  TypeFormatFlags,
-  SyntaxKind,
-  type ClassDeclaration,
-  type FunctionDeclaration,
-  type ParameterDeclaration,
-  type Project,
-  type PropertyDeclaration,
-  type PropertySignature,
-  type MethodDeclaration,
-  type SetAccessorDeclaration,
-  type GetAccessorDeclaration,
-  type Signature,
-  type Symbol,
-  type TypeNode,
-} from 'ts-morph'
-
 import { getJsDocMetadata } from './get-js-doc-metadata.js'
 import {
   getPropertyDefaultValueKey,
   getPropertyDefaultValue,
 } from './get-property-default-value.js'
 import { getSymbolDescription } from './get-symbol-description.js'
+import type {
+  ClassDeclaration,
+  FunctionDeclaration,
+  GetAccessorDeclaration,
+  MethodDeclaration,
+  ParameterDeclaration,
+  Project,
+  PropertyDeclaration,
+  PropertySignature,
+  SetAccessorDeclaration,
+  Signature,
+  Symbol,
+  TypeNode,
+  Type,
+  Node,
+} from 'ts-morph'
+import tsMorph from 'ts-morph'
+const { SyntaxKind, TypeFormatFlags } = tsMorph
 
 export interface BaseType {
   /** Distinguishs between different kinds of types, such as primitives, objects, classes, functions, etc. */
@@ -290,15 +289,15 @@ export function resolveType(
   if (declaration) {
     /* Use the enclosing node's location if it is a member. */
     const isMember =
-      Node.isVariableDeclaration(enclosingNode) ||
-      Node.isPropertyAssignment(enclosingNode) ||
-      Node.isPropertySignature(enclosingNode) ||
-      Node.isMethodSignature(enclosingNode) ||
-      Node.isParameterDeclaration(enclosingNode) ||
-      Node.isPropertyDeclaration(enclosingNode) ||
-      Node.isMethodDeclaration(enclosingNode) ||
-      Node.isGetAccessorDeclaration(enclosingNode) ||
-      Node.isSetAccessorDeclaration(enclosingNode)
+      tsMorph.Node.isVariableDeclaration(enclosingNode) ||
+      tsMorph.Node.isPropertyAssignment(enclosingNode) ||
+      tsMorph.Node.isPropertySignature(enclosingNode) ||
+      tsMorph.Node.isMethodSignature(enclosingNode) ||
+      tsMorph.Node.isParameterDeclaration(enclosingNode) ||
+      tsMorph.Node.isPropertyDeclaration(enclosingNode) ||
+      tsMorph.Node.isMethodDeclaration(enclosingNode) ||
+      tsMorph.Node.isGetAccessorDeclaration(enclosingNode) ||
+      tsMorph.Node.isSetAccessorDeclaration(enclosingNode)
 
     declarationLocation = getDeclarationLocation(
       isMember ? enclosingNode : declaration
@@ -312,12 +311,12 @@ export function resolveType(
 
   if (
     typeArguments.length === 0 &&
-    (Node.isTypeAliasDeclaration(enclosingNode) ||
-      Node.isPropertySignature(enclosingNode))
+    (tsMorph.Node.isTypeAliasDeclaration(enclosingNode) ||
+      tsMorph.Node.isPropertySignature(enclosingNode))
   ) {
     const typeNode = enclosingNode.getTypeNode()
 
-    if (Node.isTypeReference(typeNode)) {
+    if (tsMorph.Node.isTypeReference(typeNode)) {
       genericTypeArguments = typeNode.getTypeArguments()
       genericTypeName = typeNode.getTypeName().getText()
       genericTypeText = typeNode.getText()
@@ -541,7 +540,7 @@ export function resolveType(
     }
 
     if (type.isClass()) {
-      if (Node.isClassDeclaration(symbolDeclaration)) {
+      if (tsMorph.Node.isClassDeclaration(symbolDeclaration)) {
         resolvedType = resolveClass(symbolDeclaration, filter)
         if (symbolMetadata.name) {
           resolvedType.name = symbolMetadata.name
@@ -552,7 +551,7 @@ export function resolveType(
         )
       }
     } else if (type.isEnum()) {
-      if (Node.isEnumDeclaration(symbolDeclaration)) {
+      if (tsMorph.Node.isEnumDeclaration(symbolDeclaration)) {
         resolvedType = {
           kind: 'Enum',
           name: symbolMetadata.name,
@@ -569,12 +568,12 @@ export function resolveType(
         )
       }
     } else if (type.isUnion()) {
-      const typeNode = Node.isTypeAliasDeclaration(symbolDeclaration)
+      const typeNode = tsMorph.Node.isTypeAliasDeclaration(symbolDeclaration)
         ? symbolDeclaration.getTypeNode()
         : undefined
 
       /* type.isIntersection() will be `false` when mixed with unions so we resolve the type nodes individually instead. */
-      if (Node.isIntersectionTypeNode(typeNode)) {
+      if (tsMorph.Node.isIntersectionTypeNode(typeNode)) {
         const resolvedIntersectionTypes = typeNode
           .getTypeNodes()
           .map((typeNode) =>
@@ -813,7 +812,7 @@ export function resolveType(
   let metadataDeclaration = declaration
 
   /* If the type is a variable declaration, use the parent statement to retrieve jsdoc metadata. */
-  if (Node.isVariableDeclaration(enclosingNode)) {
+  if (tsMorph.Node.isVariableDeclaration(enclosingNode)) {
     metadataDeclaration = enclosingNode
   }
 
@@ -921,15 +920,15 @@ export function resolveSignature(
     .join(', ')
   let simplifiedTypeText: string
 
-  if (Node.isFunctionDeclaration(signatureDeclaration)) {
+  if (tsMorph.Node.isFunctionDeclaration(signatureDeclaration)) {
     simplifiedTypeText = `function ${signatureDeclaration.getName()}${genericsText}(${parametersText}): ${returnType}`
   } else {
     simplifiedTypeText = `${genericsText}(${parametersText}) => ${returnType}`
   }
 
   const modifier: ReturnType<typeof getModifier> =
-    Node.isFunctionDeclaration(signatureDeclaration) ||
-    Node.isMethodDeclaration(signatureDeclaration)
+    tsMorph.Node.isFunctionDeclaration(signatureDeclaration) ||
+    tsMorph.Node.isMethodDeclaration(signatureDeclaration)
       ? getModifier(signatureDeclaration)
       : undefined
 
@@ -1146,12 +1145,12 @@ function getSymbolMetadata(
 
   if (
     // If the symbol value declaration is a variable use the name from the enclosing node if provided
-    Node.isVariableDeclaration(symbol.getValueDeclaration()) ||
+    tsMorph.Node.isVariableDeclaration(symbol.getValueDeclaration()) ||
     // Otherwise, use the enclosing node if it is a variable declaration
-    Node.isVariableDeclaration(enclosingNode)
+    tsMorph.Node.isVariableDeclaration(enclosingNode)
   ) {
     if (
-      Node.isVariableDeclaration(enclosingNode) &&
+      tsMorph.Node.isVariableDeclaration(enclosingNode) &&
       declaration !== enclosingNode
     ) {
       name = enclosingNode.getName()
@@ -1176,7 +1175,7 @@ function getSymbolMetadata(
     } else {
       // alternatively, check if the declaration's parent is an exported variable declaration
       const variableDeclaration = declaration.getParent()
-      if (Node.isVariableDeclaration(variableDeclaration)) {
+      if (tsMorph.Node.isVariableDeclaration(variableDeclaration)) {
         isExported = variableDeclaration.isExported()
       }
     }
@@ -1334,8 +1333,8 @@ export function resolveClass(
 
   classDeclaration.getMembers().forEach((member) => {
     if (
-      Node.isGetAccessorDeclaration(member) ||
-      Node.isSetAccessorDeclaration(member)
+      tsMorph.Node.isGetAccessorDeclaration(member) ||
+      tsMorph.Node.isSetAccessorDeclaration(member)
     ) {
       if (!member.hasModifier(SyntaxKind.PrivateKeyword)) {
         if (!classMetadata.accessors) {
@@ -1343,14 +1342,14 @@ export function resolveClass(
         }
         classMetadata.accessors.push(resolveClassAccessor(member, filter))
       }
-    } else if (Node.isMethodDeclaration(member)) {
+    } else if (tsMorph.Node.isMethodDeclaration(member)) {
       if (!member.hasModifier(SyntaxKind.PrivateKeyword)) {
         if (!classMetadata.methods) {
           classMetadata.methods = []
         }
         classMetadata.methods.push(resolveClassMethod(member, filter))
       }
-    } else if (Node.isPropertyDeclaration(member)) {
+    } else if (tsMorph.Node.isPropertyDeclaration(member)) {
       if (!member.hasModifier(SyntaxKind.PrivateKeyword)) {
         if (!classMetadata.properties) {
           classMetadata.properties = []
@@ -1376,7 +1375,7 @@ function resolveClassAccessor(
     ...getJsDocMetadata(accessor),
   }
 
-  if (Node.isSetAccessorDeclaration(accessor)) {
+  if (tsMorph.Node.isSetAccessorDeclaration(accessor)) {
     const resolvedSignature = resolveSignature(
       accessor.getSignature(),
       accessor,
@@ -1464,10 +1463,13 @@ function isTypeReadonly(type: Type, enclosingNode: Node | undefined) {
   }
 
   /** Alternatively, check for const assertion. */
-  if (isReadonly === false && Node.isVariableDeclaration(enclosingNode)) {
+  if (
+    isReadonly === false &&
+    tsMorph.Node.isVariableDeclaration(enclosingNode)
+  ) {
     const initializer = enclosingNode.getInitializer()
 
-    if (Node.isAsExpression(initializer)) {
+    if (tsMorph.Node.isAsExpression(initializer)) {
       const typeNode = initializer.getTypeNode()
 
       if (typeNode) {

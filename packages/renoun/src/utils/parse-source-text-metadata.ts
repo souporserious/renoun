@@ -1,7 +1,7 @@
 import crypto from 'node:crypto'
 import { join, posix, isAbsolute } from 'node:path'
 import { readFile } from 'node:fs/promises'
-import { Project, SourceFile } from 'ts-morph'
+import type { Project, SourceFile } from 'ts-morph'
 
 import { getLanguage, type Languages } from './get-language.js'
 import { isJsxOnly } from './is-jsx-only.js'

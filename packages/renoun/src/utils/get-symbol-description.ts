@@ -1,15 +1,17 @@
-import { Symbol, Node } from 'ts-morph'
+import type { Symbol } from 'ts-morph'
+import tsMorph from 'ts-morph'
 
 /** Gets the description from a symbol's JSDoc or leading comment range. */
 export function getSymbolDescription(symbol: Symbol) {
   const declarations = symbol.getDeclarations().map((declaration) => {
-    if (Node.isVariableDeclaration(declaration)) {
+    if (tsMorph.Node.isVariableDeclaration(declaration)) {
       const ancestor = declaration.getFirstAncestor((node) => {
-        if (Node.isSourceFile(node)) {
+        if (tsMorph.Node.isSourceFile(node)) {
           return false
         }
         return (
-          Node.isJSDocable(node) || node.getLeadingCommentRanges().length > 0
+          tsMorph.Node.isJSDocable(node) ||
+          node.getLeadingCommentRanges().length > 0
         )
       })
       if (ancestor) {
@@ -21,7 +23,7 @@ export function getSymbolDescription(symbol: Symbol) {
 
   const description = declarations
     .map((declaration) => {
-      if (Node.isJSDocable(declaration)) {
+      if (tsMorph.Node.isJSDocable(declaration)) {
         return declaration
           .getJsDocs()
           .map((doc) => doc.getComment())

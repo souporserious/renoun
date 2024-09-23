@@ -1,5 +1,5 @@
-import type { ProjectOptions as TsMorphProjectOptions } from 'ts-morph'
 import type { bundledThemes } from 'shiki/bundle/web'
+import type { ProjectOptions as TsMorphProjectOptions } from 'ts-morph'
 
 export type ProjectOptions = {
   /** Path to the VS Code compatible theme used for syntax highlighting the `CodeBlock`, `CodeInline`, and `Tokens` components. */

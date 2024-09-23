@@ -1,4 +1,5 @@
-import { Node } from 'ts-morph'
+import type { Node } from 'ts-morph'
+import tsMorph from 'ts-morph'
 
 /** Gets the description and tags from a JSDoc comment for a node. */
 export function getJsDocMetadata(node: Node): {
@@ -8,13 +9,13 @@ export function getJsDocMetadata(node: Node): {
     text?: string
   }[]
 } | null {
-  if (Node.isVariableDeclaration(node)) {
+  if (tsMorph.Node.isVariableDeclaration(node)) {
     const declarationList = node.getParent()
 
-    if (Node.isVariableDeclarationList(declarationList)) {
+    if (tsMorph.Node.isVariableDeclarationList(declarationList)) {
       const statement = declarationList.getParent()
 
-      if (Node.isVariableStatement(statement)) {
+      if (tsMorph.Node.isVariableStatement(statement)) {
         if (statement.getDeclarations().length > 1) {
           throw new Error(
             'Multiple declarations not supported in `getJsDocMetadata`.'
@@ -26,7 +27,7 @@ export function getJsDocMetadata(node: Node): {
     }
   }
 
-  if (Node.isJSDocable(node)) {
+  if (tsMorph.Node.isJSDocable(node)) {
     const jsDocs = node.getJsDocs()
     const tags: { tagName: string; text?: string }[] = []
     let description = ''
