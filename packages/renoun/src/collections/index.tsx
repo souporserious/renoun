@@ -847,15 +847,16 @@ You can fix this error by taking one of the following actions:
 
     if (!getImport) {
       throw new Error(
-        `[renoun] No source found for path "${this.getPath()}" at file pattern "${
+        `[renoun] No module export found for path "${this.getPath()}" at file pattern "${
           this.collection.filePattern
         }":
 
 You can fix this error by ensuring the following:
   
-  - The ".renoun" directory was successfully created and your tsconfig.json file aliases "renoun/*" to ".renoun/*.ts" correctly.
-  - The file pattern is formatted correctly and targeting files that exist.
-  - Try refreshing the page or restarting server.
+  - The ".renoun" directory was successfully created and your package.json and tsconfig.json files alias "#renoun/*" to ".renoun/*.ts" correctly.
+  - You are importing from "#renoun/collections" and not "renoun/collections" if this workspace is a module (e.g. { type: "module" } in package.json).
+  - The "createCollection" file pattern is formatted correctly and targeting files that exist.
+  - You've tried refreshing the page or restarting the server.
   - If you continue to see this error, please file an issue: https://github.com/souporserious/renoun/issues\n`
       )
     }

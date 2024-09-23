@@ -3,9 +3,10 @@ import {
   isLiteralExpressionValue,
 } from '../utils/resolve-expressions.js'
 import type { CollectionOptions } from './index.js'
-import type { Project } from "ts-morph";
-import tsMorph from "ts-morph";
-const { Node, SyntaxKind } = tsMorph;
+import type { Project } from 'ts-morph'
+import tsMorph from 'ts-morph'
+
+const { Node, SyntaxKind } = tsMorph
 
 /**
  * Finds all `createCollection` configurations.
@@ -16,13 +17,12 @@ export function getCollectionConfigurations(project: Project) {
     string,
     Omit<CollectionOptions<any>, 'sort'> | undefined
   >()
+  const createCollectionSourceFile = project.createSourceFile(
+    '__createCollection.ts',
+    `import { createCollection } from 'renoun/collections';`
+  )
 
-  project
-    .createSourceFile(
-      '__createCollection.ts',
-      `import { createCollection } from 'renoun/collections';`,
-      { overwrite: true }
-    )
+  createCollectionSourceFile
     .getFirstDescendantByKindOrThrow(SyntaxKind.Identifier)
     .findReferencesAsNodes()
     .forEach((node) => {
@@ -58,6 +58,8 @@ export function getCollectionConfigurations(project: Project) {
         collectionConfigurations.set(filePattern!, options)
       }
     })
+
+  createCollectionSourceFile.delete()
 
   return collectionConfigurations
 }
