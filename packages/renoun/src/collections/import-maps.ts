@@ -150,6 +150,10 @@ function codemodTsConfigPaths(project: Project) {
       tsconfigJson.compilerOptions = {}
     }
 
+    if (!tsconfigJson.compilerOptions.baseUrl) {
+      tsconfigJson.compilerOptions.baseUrl = '.'
+    }
+
     if (!tsconfigJson.compilerOptions.paths) {
       tsconfigJson.compilerOptions.paths = {}
     }
