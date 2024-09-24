@@ -19,12 +19,12 @@ export async function generateStaticParams() {
 }
 
 const ComponentsReadmeCollection = createCollection<{ default: MDXContent }>(
-  '@/components/**/README.mdx',
   {
     baseDirectory: 'components',
     basePath: 'components',
-    importMap: [(slug) => import(`components/${slug}.mdx`)]
-  }
+    filePattern: '@/components/**/README.mdx',
+  },
+  (slug) => import(`components/${slug}`)
 )
 
 export default async function Component({

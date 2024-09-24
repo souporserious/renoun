@@ -19,11 +19,15 @@ type DocsSchema = {
 
 export type DocsSource = FileSystemSource<DocsSchema>
 
-export const DocsCollection = createCollection<DocsSchema>('docs/**/*.mdx', {
-  baseDirectory: 'docs',
-  basePath: 'docs',
-  importMap: [(slug) => import(`docs/${slug}.mdx`)],
-})
+export const DocsCollection = createCollection<DocsSchema>(
+  {
+    baseDirectory: 'docs',
+    basePath: 'docs',
+    importMap: [(slug) => import(`docs/${slug}.mdx`)],
+    filePattern: 'docs/**/*.mdx'
+  },
+  (slug) => import(`docs/${slug}`)
+)
 
 function filterInternalSources(
   source: ExportSource<any> | FileSystemSource<ComponentSchema>
@@ -56,7 +60,7 @@ type CollectionsSchema = Record<string, React.ComponentType>
 export type CollectionsSource = FileSystemSource<CollectionsSchema>
 
 export const CollectionsCollection = createCollection<CollectionsSchema>(
-  'src/collections/*.tsx',
+
   {
     baseDirectory: 'collections',
     basePath: 'collections',
@@ -65,7 +69,10 @@ export const CollectionsCollection = createCollection<CollectionsSchema>(
     importMap: [
       (slug) => import(`../../packages/renoun/src/collections/${slug}.tsx`),
     ],
-  }
+    filePattern: 'src/collections/*.tsx'
+  },
+  (slug) => import(`../../packages/renoun/src/collections/${slug}`)
+
 )
 
 type ComponentSchema = Record<string, React.ComponentType>
@@ -73,7 +80,7 @@ type ComponentSchema = Record<string, React.ComponentType>
 export type ComponentSource = FileSystemSource<ComponentSchema>
 
 export const ComponentsCollection = createCollection<ComponentSchema>(
-  'src/components/**/*.{ts,tsx}',
+
   {
     baseDirectory: 'components',
     basePath: 'components',
@@ -83,17 +90,24 @@ export const ComponentsCollection = createCollection<ComponentSchema>(
       (slug) => import(`../../packages/renoun/src/components/${slug}.ts`),
       (slug) => import(`../../packages/renoun/src/components/${slug}.tsx`),
     ],
-  }
+    filePattern: 'src/components/**/*.{ts,tsx}'
+  },
+  (slug) => import(`../../packages/renoun/src/components/${slug}`)
+
 )
 
 export const ComponentsMDXCollection = createCollection<{
   default: MDXContent
   headings: Headings
-}>('src/components/**/*.mdx', {
-  baseDirectory: 'components',
-  basePath: 'components',
-  tsConfigFilePath: '../../packages/renoun/tsconfig.json',
-  importMap: [
-    (slug) => import(`../../packages/renoun/src/components/${slug}.mdx`),
-  ],
-})
+}>(
+  {
+    baseDirectory: 'components',
+    basePath: 'components',
+    tsConfigFilePath: '../../packages/renoun/tsconfig.json',
+    importMap: [
+      (slug) => import(`../../packages/renoun/src/components/${slug}.mdx`),
+    ],
+    filePattern: 'src/components/**/*.mdx'
+  },
+  (slug) => import(`../../packages/renoun/src/components/${slug}`)
+)

@@ -11,20 +11,23 @@ const frontmatterSchema = z.object({
 export const PostsCollection = createCollection<{
   default: MDXContent
   frontmatter: z.infer<typeof frontmatterSchema>
-}>('posts/*.mdx', {
-  baseDirectory: 'posts',
-  schema: {
-    frontmatter: frontmatterSchema.parse,
-  },
-  sort: async (a, b) => {
-    if (a.isDirectory() || b.isDirectory()) {
-      return 0
-    }
+}>(
+  {
+    filePattern: 'posts/*.mdx',
+    baseDirectory: 'posts',
+    schema: {
+      frontmatter: frontmatterSchema.parse,
+    },
+    sort: async (a, b) => {
+      if (a.isDirectory() || b.isDirectory()) {
+        return 0
+      }
 
-    const aFrontmatter = await a.getNamedExport('frontmatter').getValue()
-    const bFrontmatter = await b.getNamedExport('frontmatter').getValue()
+      const aFrontmatter = await a.getNamedExport('frontmatter').getValue()
+      const bFrontmatter = await b.getNamedExport('frontmatter').getValue()
 
-    return bFrontmatter.date.getTime() - aFrontmatter.date.getTime()
+      return bFrontmatter.date.getTime() - aFrontmatter.date.getTime()
+    },
   },
-  importMap: [(slug) => import(`posts/${slug}.mdx`)],
-})
+  (slug) => import(`posts/${slug}`)
+)
