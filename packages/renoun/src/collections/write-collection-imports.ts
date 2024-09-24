@@ -16,8 +16,8 @@ import type { CollectionOptions } from './index.js'
 
 let project: Project
 
-/** Initializes an import map at the root of the project based on all `createCollection` configurations. */
-export async function writeCollectionImportMaps(filename?: string) {
+/** Inserts a dynamic import getter for each collection e.g. `(slug) => import(`${slug}.mdx`)`. */
+export async function writeCollectionImports(filename?: string) {
   /* Use a default project to find all collection configurations and generate the collection import map. */
   if (!project) {
     project = new tsMorph.Project({
