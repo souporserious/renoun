@@ -14,7 +14,29 @@ import { getCollectionCallExpressions } from './get-collection-call-expressions.
 import { getDynamicImportString } from './get-dynamic-import-string.js'
 import type { CollectionOptions } from './index.js'
 
-export async function writeCollectionImportMaps(project: Project) {
+let project: Project
+
+/** Initializes an import map at the root of the project based on all `createCollection` configurations. */
+export async function writeCollectionImportMaps(filename?: string) {
+  /* Use a default project to find all collection configurations and generate the collection import map. */
+  if (!project) {
+    project = new tsMorph.Project({
+      tsConfigFilePath: 'tsconfig.json',
+      manipulationSettings: {
+        indentationText: tsMorph.IndentationText.TwoSpaces,
+      },
+    })
+  }
+
+  /* Refresh source file if the contents changed. */
+  if (filename) {
+    const sourceFile = project.getSourceFile(filename)
+
+    if (sourceFile) {
+      await sourceFile.refreshFromFileSystem()
+    }
+  }
+
   const collectionExpressions = getCollectionCallExpressions(project)
 
   // Update old collections API if it is being used

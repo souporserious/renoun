@@ -1,6 +1,6 @@
 import { watch } from 'node:fs'
 
-import { generateCollectionImportMap } from '../collections/import-maps.js'
+import { writeCollectionImportMaps } from '../collections/write-collection-import-maps.js'
 import { analyzeSourceText } from '../utils/analyze-source-text.js'
 import {
   createHighlighter,
@@ -43,7 +43,7 @@ export function createServer() {
     }
 
     /* Update all collection import maps when files change. */
-    generateCollectionImportMap(filename).then(() => {
+    writeCollectionImportMaps(filename).then(() => {
       /* Notify the client to refresh when files change. */
       server.sendNotification({ type: 'refresh' })
     })
