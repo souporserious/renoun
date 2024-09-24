@@ -23,6 +23,7 @@ const ComponentsReadmeCollection = createCollection<{ default: MDXContent }>(
   {
     baseDirectory: 'components',
     basePath: 'components',
+    importMap: [(slug) => import(`components/${slug}.mdx`)]
   }
 )
 

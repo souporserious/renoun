@@ -17,6 +17,7 @@ const DocsCollection = createCollection<{
       description: z.string(),
     }).parse,
   },
+  importMap: [(slug) => import(`app/${slug}.mdx`)]
 })
 
 export async function generateStaticParams() {

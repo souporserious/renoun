@@ -22,6 +22,7 @@ export type DocsSource = FileSystemSource<DocsSchema>
 export const DocsCollection = createCollection<DocsSchema>('docs/**/*.mdx', {
   baseDirectory: 'docs',
   basePath: 'docs',
+  importMap: [(slug) => import(`docs/${slug}.mdx`)],
 })
 
 function filterInternalSources(
@@ -61,6 +62,9 @@ export const CollectionsCollection = createCollection<CollectionsSchema>(
     basePath: 'collections',
     filter: filterInternalSources,
     tsConfigFilePath: '../../packages/renoun/tsconfig.json',
+    importMap: [
+      (slug) => import(`../../packages/renoun/src/collections/${slug}.tsx`),
+    ],
   }
 )
 
@@ -75,6 +79,10 @@ export const ComponentsCollection = createCollection<ComponentSchema>(
     basePath: 'components',
     filter: filterInternalSources,
     tsConfigFilePath: '../../packages/renoun/tsconfig.json',
+    importMap: [
+      (slug) => import(`../../packages/renoun/src/components/${slug}.ts`),
+      (slug) => import(`../../packages/renoun/src/components/${slug}.tsx`),
+    ],
   }
 )
 
@@ -85,4 +93,7 @@ export const ComponentsMDXCollection = createCollection<{
   baseDirectory: 'components',
   basePath: 'components',
   tsConfigFilePath: '../../packages/renoun/tsconfig.json',
+  importMap: [
+    (slug) => import(`../../packages/renoun/src/components/${slug}.mdx`),
+  ],
 })

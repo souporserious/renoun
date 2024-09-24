@@ -27,9 +27,10 @@ import { getEditPath } from '../utils/get-edit-path.js'
 import { getGitMetadata } from '../utils/get-git-metadata.js'
 import { getSourcePathMap } from '../utils/get-source-files-path-map.js'
 import { getSourceFilesOrderMap } from '../utils/get-source-files-sort-order.js'
-import { getImportMap, setImportMap } from './import-maps.js'
+import { getImportMap } from './import-maps.js'
 import { resolveTsConfigPath } from '../utils/resolve-ts-config-path.js'
 import { extractExportByIdentifier } from '../utils/extract-export-by-identifier.js'
+import { getFilePaths } from './parse-import-maps.js'
 
 export type { MDXContent }
 
@@ -212,6 +213,9 @@ export interface CollectionOptions<Exports extends FileExports> {
   schema?: {
     [Name in keyof Exports]?: (value: Exports[Name]) => Exports[Name]
   }
+
+  /** An array of automatically generated dynamic import maps based the file pattern. */
+  importMap?: ((slug: string) => Promise<any>)[]
 }
 
 const projectCache = new Map<string, Project>()
@@ -696,7 +700,7 @@ class Source<AllExports extends FileExports>
 
     if (sourceFile instanceof tsMorph.Directory) {
       const baseName = sourceFile.getBaseName()
-      const validExtensions = Array.from(this.collection.validExtensions)
+      const validExtensions = this.collection.validExtensions
 
       throw new Error(
         `[renoun] "getDefaultExport" was called for the directory "${baseName}" which does not have an associated index or readme file.
@@ -734,7 +738,7 @@ You can fix this error by taking one of the following actions:
 
     if (sourceFile instanceof tsMorph.Directory) {
       const baseName = sourceFile.getBaseName()
-      const validExtensions = Array.from(this.collection.validExtensions)
+      const validExtensions = this.collection.validExtensions
 
       throw new Error(
         `[renoun] "getNamedExport('${name.toString()}')" was called for the directory "${baseName}" which does not have an associated index or readme file.
@@ -786,7 +790,7 @@ You can fix this error by taking one of the following actions:
 
     if (!sourceFile) {
       const baseName = this.sourceFileOrDirectory.getBaseName()
-      const validExtensions = Array.from(this.collection.validExtensions)
+      const validExtensions = this.collection.validExtensions
 
       throw new Error(
         `[renoun] Directory "${baseName}" at path "${this.getPath()}" does not have an associated source file.
@@ -842,8 +846,10 @@ You can fix this error by taking one of the following actions:
   async getModuleExports() {
     const sourceFile = this.getSourceFile()
     const slugExtension = sourceFile.getExtension().slice(1)
-    const importKey = `${slugExtension}:${this.collection.filePattern}`
-    const getImport = getImportMap<AllExports>(importKey)
+    const importIndex = this.collection.validExtensions.findIndex(
+      (extension) => extension === slugExtension
+    )
+    const getImport = this.collection.options.importMap?.[importIndex]
 
     if (!getImport) {
       throw new Error(
@@ -876,7 +882,7 @@ class Collection<AllExports extends FileExports>
   public fileSystemSources: (SourceFile | Directory)[]
   public sourceFilesOrderMap: Map<string, string>
   public sourcePathMap: Map<string, string>
-  public validExtensions: Set<string> = new Set()
+  public validExtensions: string[] = []
 
   #sources = new Map<string, Source<AllExports>>()
 
@@ -932,14 +938,18 @@ You can fix this error by ensuring the following:
     }
 
     this.fileSystemSources = fileSystemSources
-    this.validExtensions = new Set(
-      fileSystemSources
-        .map((source) => {
-          if (source instanceof tsMorph.SourceFile) {
-            return source.getExtension().slice(1)
-          }
-        })
-        .filter(Boolean) as string[]
+    this.validExtensions = Array.from(
+      new Set(
+        (
+          fileSystemSources
+            .map((source) => {
+              if (source instanceof tsMorph.SourceFile) {
+                return source.getExtension().slice(1)
+              }
+            })
+            .filter(Boolean) as string[]
+        ).sort()
+      )
     )
 
     const baseDirectory = this.project.getDirectoryOrThrow(
@@ -1174,12 +1184,6 @@ export function createCollection<
 ): CollectionSource<AllExports> {
   return new Collection<AllExports>(filePattern, options)
 }
-
-/**
- * Sets the import map of dynamic imports for all collection file patterns.
- * @internal
- */
-createCollection.setImportMap = setImportMap
 
 /** Get all sources for a file pattern. */
 function getSourceFilesAndDirectories(

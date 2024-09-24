@@ -9,5 +9,6 @@ export const ComponentsCollection = createCollection<ComponentSchema>(
   {
     baseDirectory: 'components',
     basePath: 'components',
+    importMap: [(slug) => import(`components/${slug}.ts`), (slug) => import(`components/${slug}.tsx`)]
   }
 )
