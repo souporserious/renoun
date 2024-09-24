@@ -23,8 +23,7 @@ export const DocsCollection = createCollection<DocsSchema>(
   {
     baseDirectory: 'docs',
     basePath: 'docs',
-    importMap: [(slug) => import(`docs/${slug}.mdx`)],
-    filePattern: 'docs/**/*.mdx'
+    filePattern: 'docs/**/*.mdx',
   },
   (slug) => import(`docs/${slug}`)
 )
@@ -60,19 +59,14 @@ type CollectionsSchema = Record<string, React.ComponentType>
 export type CollectionsSource = FileSystemSource<CollectionsSchema>
 
 export const CollectionsCollection = createCollection<CollectionsSchema>(
-
   {
     baseDirectory: 'collections',
     basePath: 'collections',
     filter: filterInternalSources,
     tsConfigFilePath: '../../packages/renoun/tsconfig.json',
-    importMap: [
-      (slug) => import(`../../packages/renoun/src/collections/${slug}.tsx`),
-    ],
-    filePattern: 'src/collections/*.tsx'
+    filePattern: 'src/collections/*.tsx',
   },
   (slug) => import(`../../packages/renoun/src/collections/${slug}`)
-
 )
 
 type ComponentSchema = Record<string, React.ComponentType>
@@ -80,20 +74,14 @@ type ComponentSchema = Record<string, React.ComponentType>
 export type ComponentSource = FileSystemSource<ComponentSchema>
 
 export const ComponentsCollection = createCollection<ComponentSchema>(
-
   {
     baseDirectory: 'components',
     basePath: 'components',
     filter: filterInternalSources,
     tsConfigFilePath: '../../packages/renoun/tsconfig.json',
-    importMap: [
-      (slug) => import(`../../packages/renoun/src/components/${slug}.ts`),
-      (slug) => import(`../../packages/renoun/src/components/${slug}.tsx`),
-    ],
-    filePattern: 'src/components/**/*.{ts,tsx}'
+    filePattern: 'src/components/**/*.{ts,tsx}',
   },
   (slug) => import(`../../packages/renoun/src/components/${slug}`)
-
 )
 
 export const ComponentsMDXCollection = createCollection<{
@@ -104,10 +92,7 @@ export const ComponentsMDXCollection = createCollection<{
     baseDirectory: 'components',
     basePath: 'components',
     tsConfigFilePath: '../../packages/renoun/tsconfig.json',
-    importMap: [
-      (slug) => import(`../../packages/renoun/src/components/${slug}.mdx`),
-    ],
-    filePattern: 'src/components/**/*.mdx'
+    filePattern: 'src/components/**/*.mdx',
   },
   (slug) => import(`../../packages/renoun/src/components/${slug}`)
 )

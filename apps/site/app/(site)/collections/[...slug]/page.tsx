@@ -11,6 +11,7 @@ const DocsCollection = createCollection<{
   headings: Headings
 }>(
   {
+    filePattern: 'app/[(]site[)]/collections/docs/*.mdx',
     baseDirectory: 'app/(site)/collections/docs',
     schema: {
       metadata: z.object({
@@ -18,8 +19,6 @@ const DocsCollection = createCollection<{
         description: z.string(),
       }).parse,
     },
-    importMap: [(slug) => import(`app/${slug}.mdx`)],
-    filePattern: 'app/[(]site[)]/collections/docs/*.mdx'
   },
   (slug) => import(`app/${slug}`)
 )
