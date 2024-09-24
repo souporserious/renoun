@@ -11,7 +11,12 @@ export async function getDynamicImportString(
     filePattern,
     tsConfigFilePath
   )
-  const relativeGlobPattern = relative(process.cwd(), absoluteGlobPattern)
+  let relativeGlobPattern = relative(process.cwd(), absoluteGlobPattern)
+
+  if (!relativeGlobPattern.startsWith('.')) {
+    relativeGlobPattern = `./${relativeGlobPattern}`
+  }
+
   const baseGlobPattern = globParent(relativeGlobPattern)
 
   return `(slug) => import(\`${baseGlobPattern}/\${slug}\`)`
