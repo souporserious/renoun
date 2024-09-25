@@ -1,0 +1,48 @@
+export const metadata = {
+  title: 'Waku',
+  description:
+    'Renoun integrates seamlessly with Waku, adding powerful content generation and documentation tools.',
+  tags: ['waku', 'framework'],
+}
+
+Renoun enhances [Waku](https://waku.gg/) by providing features like collections, syntax highlighting, and type documentation, making it easier to create accurate and engaging content for blogs, documentation, and design systems.
+
+## Install
+
+To use Renoun with Waku, you’ll need a Waku project. If you don't have a project yet, you can create one using Waku's `npm create waku` command:
+
+```bash
+npm create waku@latest
+```
+
+Now in your Waku project, let's install Renoun:
+
+<PackageInstall packages={['renoun']} />
+
+## Setup
+
+Modify the `waku` scripts located in the `package.json` file to integrate Renoun into your Waku project. This ensures the Renoun process starts alongside your Waku server, enabling the full functionality of Renoun:
+
+```json
+{
+  "scripts": {
+    "dev": "renoun waku dev",
+    "build": "renoun waku build"
+  }
+}
+```
+
+<Note>
+  The `renoun` CLI needs to be part of the `dev` and `build` scripts to ensure
+  features like collections and syntax highlighting work in your Waku app.
+</Note>
+
+## Start
+
+Now you can start your Waku server with Renoun integrated:
+
+```bash
+npm run dev
+```
+
+Congratulations! You’ve successfully set up Renoun with Waku. You can now use Renoun's powerful features like [/collections] and [/components] to enhance your Waku project.
