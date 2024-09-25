@@ -30,8 +30,8 @@ export default async function Component({
   }
 
   const mdxSource = ComponentsMDXCollection.getSource(componentsPathname)
-  const mdxHeadings = await mdxSource?.getNamedExport('headings').getValue()
-  const Content = await mdxSource?.getDefaultExport().getValue()
+  const mdxHeadings = await mdxSource?.getExport('headings').getValue()
+  const Content = await mdxSource?.getExport('default').getValue()
   const examplesSource = componentSource.getSource('examples')
   const examplesSources = await examplesSource?.getSources()
   const isExamplesPage = params.slug.at(-1) === 'examples'

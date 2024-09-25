@@ -11,9 +11,9 @@ export async function DocumentSource<
     headings: Headings
   }>,
 >({ source }: { source: Source }) {
-  const Content = await source.getDefaultExport().getValue()
-  const metadata = await source.getNamedExport('metadata').getValue()
-  const headings = await source.getNamedExport('headings').getValue()
+  const Content = await source.getExport('default').getValue()
+  const metadata = await source.getExport('metadata').getValue()
+  const headings = await source.getExport('headings').getValue()
   const updatedAt = await source.getUpdatedAt()
   const editPath = source.getEditPath()
   const [previousSource, nextSource] = await source.getSiblings({

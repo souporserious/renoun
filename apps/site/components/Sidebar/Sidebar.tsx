@@ -16,7 +16,7 @@ async function TreeNavigation({
   const sources = await source.getSources({ depth: 1 })
   const depth = source.getDepth()
   const path = source.getPath()
-  const metadata = await source.getNamedExport('metadata').getValue()
+  const metadata = await source.getExport('metadata').getValue()
 
   if (sources.length === 0) {
     return (
