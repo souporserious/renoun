@@ -28,6 +28,8 @@ export async function SiblingLink({
   direction: 'previous' | 'next'
   variant?: 'name' | 'title'
 }) {
+  const metadata = await source.getExport('metadata').getValue()
+
   return (
     <StyledLink
       href={source.getPath()}
@@ -77,7 +79,9 @@ export async function SiblingLink({
           </svg>
         ) : null}
         <span>
-          {variant === 'title' ? source.getTitle() : source.getName()}
+          {variant === 'title'
+            ? metadata?.label || metadata?.title || source.getTitle()
+            : source.getName()}
         </span>
         {direction === 'next' ? (
           <svg
