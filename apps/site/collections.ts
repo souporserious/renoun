@@ -7,6 +7,7 @@ import {
   type MDXContent,
 } from 'renoun/collections'
 import type { Headings } from '@renoun/mdx'
+import { z } from 'zod'
 
 type DocsSchema = {
   default: MDXContent
@@ -67,6 +68,30 @@ export const CollectionsCollection = collection<CollectionsSchema>(
     tsConfigFilePath: '../../packages/renoun/tsconfig.json',
   },
   (slug) => import(`../../packages/renoun/src/collections/${slug}.tsx`)
+)
+
+const metadataSchema = z.object({
+  title: z.string(),
+  description: z.string(),
+})
+
+type CollectionsDocsSchema = {
+  default: MDXContent
+  metadata: z.infer<typeof metadataSchema>
+  headings: Headings
+}
+
+export const CollectionsDocsCollection = collection<CollectionsDocsSchema>(
+  {
+    filePattern: 'src/collections/docs/*.mdx',
+    baseDirectory: 'src/collections/docs',
+    basePath: 'collections',
+    schema: {
+      metadata: metadataSchema.parse,
+    },
+    tsConfigFilePath: '../../packages/renoun/tsconfig.json',
+  },
+  (slug) => import(`../../packages/renoun/src/collections/docs/${slug}.mdx`)
 )
 
 type ComponentSchema = Record<string, React.ComponentType>

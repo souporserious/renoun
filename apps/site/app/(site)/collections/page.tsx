@@ -1,12 +1,14 @@
 import { APIReference } from 'renoun/components'
 
-import { CollectionsCollection } from '@/collections'
+import { CollectionsCollection, CollectionsDocsCollection } from '@/collections'
 import { TableOfContents } from '@/components/TableOfContents'
-import Introduction, { headings } from './introduction.mdx'
 
 export default async function Page() {
   const source = CollectionsCollection.getSource()!
   const sourceExports = source.getExports()
+  const docSource = CollectionsDocsCollection.getSource()!
+  const Content = await docSource.getExport('default').getValue()
+  const headings = await docSource.getExport('headings').getValue()
 
   return (
     <div
@@ -36,7 +38,7 @@ export default async function Page() {
           className="prose"
         >
           <h1 css={{ fontSize: '3rem', margin: 0 }}>Collections</h1>
-          <Introduction />
+          <Content />
         </div>
         <div>
           <h2

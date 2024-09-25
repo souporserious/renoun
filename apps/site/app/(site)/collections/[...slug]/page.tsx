@@ -1,42 +1,26 @@
-import { collection, type MDXContent } from 'renoun/collections'
-import type { Headings } from '@renoun/mdx'
 import { notFound } from 'next/navigation'
-import { z } from 'zod'
 
+import { CollectionsDocsCollection } from '@/collections'
 import { DocumentSource } from '@/components/DocumentSource'
 
-const DocsCollection = collection<{
-  default: MDXContent
-  metadata: { title: string; description: string }
-  headings: Headings
-}>(
-  {
-    filePattern: 'app/[(]site[)]/collections/docs/*.mdx',
-    baseDirectory: 'app/(site)/collections/docs',
-    schema: {
-      metadata: z.object({
-        title: z.string(),
-        description: z.string(),
-      }).parse,
-    },
-  },
-  (slug) => import(`../../../${slug}.mdx`)
-)
-
 export async function generateStaticParams() {
-  const sources = await DocsCollection.getSources()
+  const sources = await CollectionsDocsCollection.getSources()
 
   return sources
     .filter((source) => source.isFile())
     .map((source) => ({ slug: source.getPathSegments() }))
 }
 
-export default async function Doc({ params }: { params: { slug: string[] } }) {
-  const docSource = DocsCollection.getSource(params.slug)
+export default async function Document({
+  params,
+}: {
+  params: { slug: string[] }
+}) {
+  const source = CollectionsDocsCollection.getSource(params.slug)
 
-  if (!docSource) {
+  if (!source) {
     notFound()
   }
 
-  return <DocumentSource source={docSource} />
+  return <DocumentSource source={source} />
 }
