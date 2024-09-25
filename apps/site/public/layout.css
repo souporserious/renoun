@@ -168,6 +168,7 @@ a {
   > p:first-of-type {
     font-size: var(--font-size-heading-3);
     line-height: var(--line-height-heading-3);
+    color: var(--color-foreground-secondary);
     text-wrap: pretty;
   }
 

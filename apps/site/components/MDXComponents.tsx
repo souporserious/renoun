@@ -1,8 +1,62 @@
 import { MDXComponents as MDXComponentsType } from 'mdx/types'
 import { CodeBlock, CodeInline, PackageInstall } from 'renoun/components'
+import { styled } from 'restyle'
 import { GeistMono } from 'geist/font/mono'
+import Link from 'next/link'
+
+const CardLink = styled(Link, {
+  display: 'block',
+  padding: '1.5rem',
+  borderRadius: 5,
+  boxShadow: '0 0 0 1px var(--color-separator)',
+  backgroundColor: 'var(--color-surface-interactive)',
+  textDecoration: 'none',
+  color: 'var(--color-foreground)',
+  transition: 'background-color 0.2s',
+  '&:hover': {
+    backgroundColor: 'var(--color-surface-interactive-highlighted)',
+  },
+})
 
 export const MDXComponents = {
+  Row: ({
+    children,
+    gap = '1rem',
+  }: {
+    children: React.ReactNode
+    gap: string | number
+  }) => {
+    return (
+      <div
+        css={{
+          display: 'grid',
+          gridAutoFlow: 'column',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap,
+        }}
+      >
+        {children}
+      </div>
+    )
+  },
+  Card: ({ label, href }: { label: React.ReactNode; href: string }) => {
+    if (href) {
+      return <CardLink href={href}>{label}</CardLink>
+    }
+
+    return (
+      <div
+        css={{
+          padding: '1.5rem',
+          borderRadius: 5,
+          boxShadow: '0 0 0 1px var(--color-separator)',
+          backgroundColor: 'var(--color-background)',
+        }}
+      >
+        {label}
+      </div>
+    )
+  },
   Preview: ({ children }: { children: React.ReactNode }) => {
     return (
       <div

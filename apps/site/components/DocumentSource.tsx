@@ -41,6 +41,7 @@ export async function DocumentSource<
       >
         <div className="prose">
           <h1 css={{ fontSize: '3rem', margin: 0 }}>{metadata.title}</h1>
+          {metadata.description ? <p>{metadata.description}</p> : null}
           <Content />
         </div>
 
