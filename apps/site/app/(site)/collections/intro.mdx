@@ -6,7 +6,7 @@ Let's look at an example of how to create a collection for a blog. We'll define 
 
 ```tsx filename="collections.ts"
 import {
-  createCollection,
+  collection,
   type FileSystemSource,
   type MDXContent,
 } from 'renoun/collections'
@@ -21,7 +21,8 @@ type PostsSchema = {
 
 export type PostsSource = FileSystemSource<PostsSchema>
 
-export const PostsCollection = createCollection<PostsSchema>('posts/*.mdx', {
+export const PostsCollection = collection<PostsSchema>({
+  filePattern: 'posts/*.mdx',
   baseDirectory: 'posts',
   basePath: 'posts',
 })

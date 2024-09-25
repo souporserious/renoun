@@ -75,7 +75,7 @@ export async function writeCollectionImports(filename?: string) {
           options = optionsLiteral as Omit<CollectionOptions<any>, 'sort'>
         } else {
           throw new Error(
-            `[renoun] Expected the first argument to "createCollection" to be an object literal`
+            `[renoun] Expected the first argument to the "collection" function to be an object literal`
           )
         }
 

@@ -855,7 +855,7 @@ You can fix this error by taking one of the following actions:
 
     You can fix this error by ensuring the following:
 
-      - The second argument to "createCollection" is present with the correct dynamic import function matching the base file pattern.
+      - The second argument to the "collection" function is present with the correct dynamic import function matching the base file pattern.
       - You've tried refreshing the page or restarting the server.
       - If you continue to see this error, please file an issue: https://github.com/souporserious/renoun/issues\n`
       )
@@ -1183,7 +1183,7 @@ You can fix this error by ensuring the following:
  * @param options - Optional settings for the collection, including base directory, base path, TypeScript config file path, and a custom sort function.
  * @returns A collection object that provides methods to retrieve individual sources or all sources matching the pattern.
  */
-export function createCollection<
+export function collection<
   AllExports extends { [key: string]: any } = { [key: string]: any },
 >(
   options: CollectionOptions<AllExports>,

@@ -2,13 +2,13 @@ import type { Project, CallExpression } from 'ts-morph'
 import tsMorph from 'ts-morph'
 
 export function getCollectionCallExpressions(project: Project) {
-  const createCollectionSourceFile = project.createSourceFile(
-    '__createCollection.ts',
-    `import { createCollection } from 'renoun/collections';`
+  const collectionSourceFile = project.createSourceFile(
+    '__collection.ts',
+    `import { collection } from 'renoun/collections';`
   )
   const allCollections: CallExpression[] = []
 
-  createCollectionSourceFile
+  collectionSourceFile
     .getFirstDescendantByKindOrThrow(tsMorph.SyntaxKind.Identifier)
     .findReferencesAsNodes()
     .forEach((node) => {
@@ -19,7 +19,7 @@ export function getCollectionCallExpressions(project: Project) {
       }
     })
 
-  createCollectionSourceFile.delete()
+  collectionSourceFile.delete()
 
   return allCollections
 }

@@ -37,10 +37,10 @@ const frontmatterSchema = z.object({
 
 ### Apply to Collection
 
-We can now apply the Zod `frontmatterSchema` to your collection using the `schema` option in the `createCollection` utility:
+We can now apply the Zod `frontmatterSchema` to your collection using the `schema` option in the `collection` utility:
 
 ```ts
-import { createCollection } from 'renoun/collections'
+import { collection } from 'renoun/collections'
 import { z } from 'zod'
 
 const frontmatterSchema = z.object({
@@ -50,7 +50,7 @@ const frontmatterSchema = z.object({
   tags: z.array(z.string()).optional(),
 })
 
-export const PostsCollection = createCollection<{
+export const PostsCollection = collection<{
   default: MDXContent
   frontmatter: z.infer<typeof frontmatterSchema>
 }>('posts/.mdx', {
@@ -91,10 +91,10 @@ const frontmatterSchema = v.object({
 
 ### Apply to Collection
 
-We can now apply the Valibot `frontmatterSchema` to your collection using the `schema` option in the `createCollection` utility:
+We can now apply the Valibot `frontmatterSchema` to your collection using the `schema` option in the `collection` utility:
 
 ```ts
-import { createCollection } from 'renoun/collections'
+import { collection } from 'renoun/collections'
 import * as v from 'valibot'
 
 const frontmatterSchema = v.object({
@@ -104,7 +104,7 @@ const frontmatterSchema = v.object({
   tags: v.optional(v.array(v.string())),
 })
 
-export const PostsCollection = createCollection<{
+export const PostsCollection = collection<{
   default: MDXContent
   frontmatter: v.InferInput<typeof frontmatterSchema>
 }>('posts/.mdx', {

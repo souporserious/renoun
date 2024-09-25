@@ -157,7 +157,7 @@ export function Sidebar() {
             }}
           >
             <li>
-              <SidebarLink pathname="/collections" label="createCollection" />
+              <SidebarLink pathname="/collections" label="collection" />
             </li>
             <li>
               <SidebarLink

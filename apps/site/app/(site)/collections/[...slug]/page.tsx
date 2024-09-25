@@ -1,11 +1,11 @@
-import { createCollection, type MDXContent } from 'renoun/collections'
+import { collection, type MDXContent } from 'renoun/collections'
 import type { Headings } from '@renoun/mdx'
 import { notFound } from 'next/navigation'
 import { z } from 'zod'
 
 import { DocumentSource } from '@/components/DocumentSource'
 
-const DocsCollection = createCollection<{
+const DocsCollection = collection<{
   default: MDXContent
   metadata: { title: string; description: string }
   headings: Headings

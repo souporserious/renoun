@@ -29,17 +29,17 @@ npm install renoun
 
 After installing the package and required dependencies, you can start creating content or documentation using any framework that supports React Server Components.
 
-To get started, use the `createCollection` function to render a collection of files from the file system:
+To get started, use the `collection` function to render a collection of files from the file system:
 
 ```tsx
-import { createCollection } from 'renoun/collections'
+import { collection } from 'renoun/collections'
 
-const posts = createCollection('docs/*.mdx')
+const posts = collection('docs/*.mdx')
 
 export default async function Page({ params }) {
   const Content = await posts
     .getSource(params.slug)
-    .getDefaultExport()
+    .getExport('default')
     .getValue()
 
   return <Content />

@@ -12,17 +12,17 @@ By organizing content into structured collections, we can easily generate static
 
 ### Creating a `Collection`
 
-A collection is created by calling `createCollection` with a glob pattern and optional options:
+A collection is created by calling the `collection` function with a glob pattern and optional options:
 
 ```ts filename="@/collections.ts"
-import { createCollection, type SourceOf } from 'renoun'
+import { collection, type SourceOf } from 'renoun'
 
-export const PostsCollection = createCollection<{
+export const PostsCollection = collection<{
   frontmatter: {
     title: string
     description: string
   }
-}>('@/posts/*.mdx')
+}>({ filePattern: '@/posts/*.mdx' })
 
 export type PostSource = SourceOf<typeof Posts>
 ```
@@ -266,7 +266,7 @@ export const metadata = {
 To use the metadata, we can get the value of the `metadata` constant from the file and use it to set the page title and description:
 
 ```tsx filename="components/[slug]/page.tsx"
-import { createCollection } from 'renoun'
+import { collection } from 'renoun'
 
 type Schema = {
   metadata: {
@@ -275,9 +275,9 @@ type Schema = {
   }
 }
 
-export const Components = createCollection<Schema>(
-  '@/components/**/index.{ts,tsx}'
-)
+export const Components = collection<Schema>({
+  filePattern: '@/components/**/index.{ts,tsx}',
+})
 
 export default async function Page({ params }) {
   const source = Components.getSource(params.slug)
@@ -335,16 +335,16 @@ This works by finding the index file related to the root directory we're targeti
 
 ```tsx
 import type { MDXContent, SourceOf } from 'renoun'
-import { createCollection } from 'renoun'
+import { collection } from 'renoun'
 import { getSiteMetadata } from '@/utils'
 
-export const Posts = createCollection<{
+export const Posts = collection<{
   default: MDXContent
   frontmatter: {
     title: string
     description: string
   }
-}>('@/posts/*.mdx')
+}>({ filePattern: '@/posts/*.mdx' })
 
 export type PostSource = SourceOf<typeof Posts>
 
@@ -458,11 +458,11 @@ async function BlogPost({ source }: { source: PostSource }) {
 ### components/[slug]/page.tsx
 
 ```tsx
-import { createCollection } from 'renoun'
+import { collection } from 'renoun'
 
-export const Components = createCollection('@/components/**/index.{ts,tsx}')
+export const Components = collection('@/components/**/index.{ts,tsx}')
 
-export const ComponentsMDX = createCollection('@/components/**/README.mdx')
+export const ComponentsMDX = collection('@/components/**/README.mdx')
 
 export function generateStaticParams() {
   return Components.getSources().map((Component) => ({
@@ -493,12 +493,12 @@ export default async function Page({ params }) {
 ### components/[slug]/[example]/page.tsx
 
 ```tsx
-import { createCollection, Tokens } from 'renoun'
+import { collection, Tokens } from 'renoun'
 
-export const ComponentExamples = createCollection<
+export const ComponentExamples = collection<
   Record<string, React.ComponentType>
->('@/components/**/*.examples.tsx', {
-  resolveBasePathname: (pathname) => pathname.replace('.examples', ''),
+>({
+  filePattern: '@/components/**/*.examples.tsx',
 })
 
 export function generateStaticParams() {
@@ -558,15 +558,15 @@ export default async function Page({
 ### packages/[slug]/page.tsx
 
 ```tsx
-import { APIReference, createCollection, type CollectionOptions } from '#mdxts'
+import { APIReference, collection, type CollectionOptions } from '#mdxts'
 
 const sharedOptions = {
   tsConfigFilePath: '../packages/mdxts/tsconfig.json',
 } satisfies CollectionOptions
 
-export const Packages = createCollection('src/**/index.{ts,tsx}', sharedOptions)
+export const Packages = collection('src/**/index.{ts,tsx}', sharedOptions)
 
-export const PackagesMDX = createCollection('src/**/README.mdx', sharedOptions)
+export const PackagesMDX = collection('src/**/README.mdx', sharedOptions)
 
 export function generateStaticParams() {
   return Packages.getSources().map((file) => ({
