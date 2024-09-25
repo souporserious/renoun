@@ -48,10 +48,6 @@
       "types": "./dist/components/*.d.ts",
       "import": "./dist/components/*.js"
     },
-    "./core": {
-      "types": "./dist/core.d.ts",
-      "import": "./dist/core.js"
-    },
     "./project": {
       "types": "./dist/project/index.d.ts",
       "import": "./dist/project/index.js"
@@ -70,9 +66,6 @@
       ],
       "components/*": [
         "./dist/components/*.d.ts"
-      ],
-      "core": [
-        "./dist/core.d.ts"
       ],
       "project": [
         "./dist/project/index.d.ts"
