@@ -2,7 +2,7 @@ import { APIReference } from 'renoun/components'
 
 import { CollectionsCollection } from '@/collections'
 import { TableOfContents } from '@/components/TableOfContents'
-import Intro from './intro.mdx'
+import Introduction, { headings } from './introduction.mdx'
 
 export default async function Page() {
   const source = CollectionsCollection.getSource()!
@@ -26,14 +26,34 @@ export default async function Page() {
           flexDirection: 'column',
           gap: '1.6rem',
         }}
-        className="prose"
       >
-        <h1 css={{ fontSize: '3rem', margin: 0 }}>Collections</h1>
-        <Intro />
-        <h2 id="api-reference">API Reference</h2>
-        {sourceExports.map((exportSource) => (
-          <APIReference key={exportSource.getSlug()} source={exportSource} />
-        ))}
+        <div
+          css={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1.6rem',
+          }}
+          className="prose"
+        >
+          <h1 css={{ fontSize: '3rem', margin: 0 }}>Collections</h1>
+          <Introduction />
+        </div>
+        <div>
+          <h2
+            id="api-reference"
+            css={{
+              fontSize: 'var(--font-size-heading-2)',
+              lineHeight: 'var(--line-height-heading-2)',
+              fontWeight: 'var(--font-weight-heading)',
+              marginBlockStart: '1.6rem',
+            }}
+          >
+            API Reference
+          </h2>
+          {sourceExports.map((exportSource) => (
+            <APIReference key={exportSource.getSlug()} source={exportSource} />
+          ))}
+        </div>
       </div>
 
       <aside
@@ -48,6 +68,7 @@ export default async function Page() {
       >
         <TableOfContents
           headings={[
+            ...headings,
             {
               id: 'api-reference',
               text: 'API Reference',
