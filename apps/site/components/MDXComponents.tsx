@@ -19,20 +19,14 @@ const CardLink = styled(Link, {
 })
 
 export const MDXComponents = {
-  Row: ({
-    children,
-    gap = '1rem',
-  }: {
-    children: React.ReactNode
-    gap: string | number
-  }) => {
+  Row: ({ children }: { children: React.ReactNode }) => {
     return (
       <div
         css={{
           display: 'grid',
           gridAutoFlow: 'column',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap,
+          gridTemplateColumns: `repeat(auto-fill, minmax(12rem, 1fr))`,
+          gap: '1rem',
         }}
       >
         {children}
