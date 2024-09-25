@@ -80,9 +80,13 @@ export async function writeCollectionImports(filename?: string) {
         }
 
         const importArgument = args.at(1) as ArrowFunction | undefined
+        const workingDirectory = callExpression
+          .getSourceFile()
+          .getDirectoryPath()
         const dynamicImportString = await getDynamicImportString(
           options.filePattern,
-          options?.tsConfigFilePath
+          options?.tsConfigFilePath,
+          workingDirectory
         )
         const parsedDynamicImportString = Array.isArray(dynamicImportString)
           ? dynamicImportString.length > 1

@@ -1,4 +1,4 @@
-import { extname, resolve, dirname, relative } from 'node:path'
+import { extname, relative } from 'node:path'
 import globParent from 'glob-parent'
 import fastGlob from 'fast-glob'
 
@@ -6,7 +6,8 @@ import { getAbsoluteGlobPattern } from './get-absolute-glob-pattern.js'
 
 export async function getDynamicImportString(
   filePattern: string,
-  tsConfigFilePath: string = 'tsconfig.json'
+  tsConfigFilePath: string = 'tsconfig.json',
+  workingDirectory: string = process.cwd()
 ) {
   const absoluteGlobPattern = await getAbsoluteGlobPattern(
     filePattern,
@@ -26,7 +27,7 @@ export async function getDynamicImportString(
     )
   }
 
-  let relativeGlobPattern = relative(process.cwd(), absoluteGlobPattern)
+  let relativeGlobPattern = relative(workingDirectory, absoluteGlobPattern)
 
   if (!relativeGlobPattern.startsWith('.')) {
     relativeGlobPattern = `./${relativeGlobPattern}`
@@ -38,12 +39,4 @@ export async function getDynamicImportString(
   return allExtensions.map((extension) => {
     return `(slug) => import(\`${baseGlobPattern}/\${slug}${extension}\`)`
   })
-}
-
-async function getFilePaths(filePattern: string, tsConfigFilePath: string) {
-  const absoluteGlobPattern = await getAbsoluteGlobPattern(
-    filePattern,
-    tsConfigFilePath
-  )
-  return fastGlob.glob(absoluteGlobPattern)
 }
