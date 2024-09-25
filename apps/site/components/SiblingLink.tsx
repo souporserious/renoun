@@ -28,6 +28,10 @@ export async function SiblingLink({
   direction: 'previous' | 'next'
   variant?: 'name' | 'title'
 }) {
+  if (source.isDirectory()) {
+    return null
+  }
+
   const metadata = await source.getExport('metadata').getValue()
 
   return (
