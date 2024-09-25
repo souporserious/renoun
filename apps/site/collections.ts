@@ -19,10 +19,14 @@ type DocsSchema = {
 
 export type DocsSource = FileSystemSource<DocsSchema>
 
-export const DocsCollection = createCollection<DocsSchema>('docs/**/*.mdx', {
-  baseDirectory: 'docs',
-  basePath: 'docs',
-})
+export const DocsCollection = createCollection<DocsSchema>(
+  {
+    baseDirectory: 'docs',
+    basePath: 'docs',
+    filePattern: 'docs/**/*.mdx',
+  },
+  (slug) => import(`./docs/${slug}.mdx`)
+)
 
 function filterInternalSources(
   source: ExportSource<any> | FileSystemSource<ComponentSchema>
@@ -55,13 +59,14 @@ type CollectionsSchema = Record<string, React.ComponentType>
 export type CollectionsSource = FileSystemSource<CollectionsSchema>
 
 export const CollectionsCollection = createCollection<CollectionsSchema>(
-  'src/collections/*.tsx',
   {
     baseDirectory: 'collections',
     basePath: 'collections',
     filter: filterInternalSources,
     tsConfigFilePath: '../../packages/renoun/tsconfig.json',
-  }
+    filePattern: 'src/collections/*.tsx',
+  },
+  (slug) => import(`../../packages/renoun/src/collections/${slug}.tsx`)
 )
 
 type ComponentSchema = Record<string, React.ComponentType>
@@ -69,20 +74,28 @@ type ComponentSchema = Record<string, React.ComponentType>
 export type ComponentSource = FileSystemSource<ComponentSchema>
 
 export const ComponentsCollection = createCollection<ComponentSchema>(
-  'src/components/**/*.{ts,tsx}',
   {
     baseDirectory: 'components',
     basePath: 'components',
     filter: filterInternalSources,
     tsConfigFilePath: '../../packages/renoun/tsconfig.json',
-  }
+    filePattern: 'src/components/**/*.{ts,tsx}',
+  },
+  [
+    (slug) => import(`../../packages/renoun/src/components/${slug}.ts`),
+    (slug) => import(`../../packages/renoun/src/components/${slug}.tsx`),
+  ]
 )
 
 export const ComponentsMDXCollection = createCollection<{
   default: MDXContent
   headings: Headings
-}>('src/components/**/*.mdx', {
-  baseDirectory: 'components',
-  basePath: 'components',
-  tsConfigFilePath: '../../packages/renoun/tsconfig.json',
-})
+}>(
+  {
+    baseDirectory: 'components',
+    basePath: 'components',
+    tsConfigFilePath: '../../packages/renoun/tsconfig.json',
+    filePattern: 'src/components/**/*.mdx',
+  },
+  (slug) => import(`../../packages/renoun/src/components/${slug}.mdx`)
+)

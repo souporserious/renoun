@@ -9,15 +9,19 @@ const DocsCollection = createCollection<{
   default: MDXContent
   metadata: { title: string; description: string }
   headings: Headings
-}>('app/[(]site[)]/collections/docs/*.mdx', {
-  baseDirectory: 'app/(site)/collections/docs',
-  schema: {
-    metadata: z.object({
-      title: z.string(),
-      description: z.string(),
-    }).parse,
+}>(
+  {
+    filePattern: 'app/[(]site[)]/collections/docs/*.mdx',
+    baseDirectory: 'app/(site)/collections/docs',
+    schema: {
+      metadata: z.object({
+        title: z.string(),
+        description: z.string(),
+      }).parse,
+    },
   },
-})
+  (slug) => import(`../../../${slug}.mdx`)
+)
 
 export async function generateStaticParams() {
   const sources = await DocsCollection.getSources()

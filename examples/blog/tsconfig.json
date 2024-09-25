@@ -19,8 +19,7 @@
     ],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["*"],
-      "renoun/*": [".renoun/*.ts"]
+      "@/*": ["*"]
     }
   },
   "include": ["next-env.d.ts", ".next/types/**/*.ts", "**/*.ts", "**/*.tsx"],

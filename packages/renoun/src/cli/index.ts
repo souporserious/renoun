@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
 
-import { generateCollectionImportMap } from '../collections/import-maps.js'
+import { writeCollectionImports } from '../collections/write-collection-imports.js'
 import { createServer } from '../project/server.js'
 
 const [firstArgument, secondArgument, ...restArguments] = process.argv.slice(2)
@@ -15,8 +15,8 @@ if (firstArgument === 'help') {
 /* Disable the buffer util for WebSocket. */
 process.env.WS_NO_BUFFER_UTIL = 'true'
 
-/* Generate the initial import maps for all collections and then start the server. */
-generateCollectionImportMap().then(() => {
+/* Generate the initial imports for all collections and then start the server. */
+writeCollectionImports().then(() => {
   start()
 })
 

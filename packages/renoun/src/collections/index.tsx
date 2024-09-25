@@ -27,11 +27,12 @@ import { getEditPath } from '../utils/get-edit-path.js'
 import { getGitMetadata } from '../utils/get-git-metadata.js'
 import { getSourcePathMap } from '../utils/get-source-files-path-map.js'
 import { getSourceFilesOrderMap } from '../utils/get-source-files-sort-order.js'
-import { getImportMap, setImportMap } from './import-maps.js'
 import { resolveTsConfigPath } from '../utils/resolve-ts-config-path.js'
 import { extractExportByIdentifier } from '../utils/extract-export-by-identifier.js'
 
 export type { MDXContent }
+
+type GetImport = (slug: string) => Promise<any>
 
 export type FilePatterns<Extension extends string = string> =
   | `${string}${Extension}`
@@ -181,6 +182,9 @@ export type CollectionSource<Exports extends FileExports> = Omit<
 >
 
 export interface CollectionOptions<Exports extends FileExports> {
+  /** The file pattern used to match source files. */
+  filePattern: FilePatterns
+
   /**
    * The base directory used when calculating source paths. This is useful in monorepos where
    * source files can be located outside of the workspace.
@@ -696,7 +700,7 @@ class Source<AllExports extends FileExports>
 
     if (sourceFile instanceof tsMorph.Directory) {
       const baseName = sourceFile.getBaseName()
-      const validExtensions = Array.from(this.collection.validExtensions)
+      const validExtensions = this.collection.validExtensions
 
       throw new Error(
         `[renoun] "getDefaultExport" was called for the directory "${baseName}" which does not have an associated index or readme file.
@@ -734,7 +738,7 @@ You can fix this error by taking one of the following actions:
 
     if (sourceFile instanceof tsMorph.Directory) {
       const baseName = sourceFile.getBaseName()
-      const validExtensions = Array.from(this.collection.validExtensions)
+      const validExtensions = this.collection.validExtensions
 
       throw new Error(
         `[renoun] "getNamedExport('${name.toString()}')" was called for the directory "${baseName}" which does not have an associated index or readme file.
@@ -786,7 +790,7 @@ You can fix this error by taking one of the following actions:
 
     if (!sourceFile) {
       const baseName = this.sourceFileOrDirectory.getBaseName()
-      const validExtensions = Array.from(this.collection.validExtensions)
+      const validExtensions = this.collection.validExtensions
 
       throw new Error(
         `[renoun] Directory "${baseName}" at path "${this.getPath()}" does not have an associated source file.
@@ -842,50 +846,59 @@ You can fix this error by taking one of the following actions:
   async getModuleExports() {
     const sourceFile = this.getSourceFile()
     const slugExtension = sourceFile.getExtension().slice(1)
-    const importKey = `${slugExtension}:${this.collection.filePattern}`
-    const getImport = getImportMap<AllExports>(importKey)
 
-    if (!getImport) {
+    if (!this.collection.getImport) {
       throw new Error(
         `[renoun] No module export found for path "${this.getPath()}" at file pattern "${
-          this.collection.filePattern
+          this.collection.options.filePattern
         }":
 
-You can fix this error by ensuring the following:
-  
-  - The ".renoun" directory was successfully created and your package.json and tsconfig.json files alias "#renoun/*" to ".renoun/*.ts" correctly.
-  - You are importing from "#renoun/collections" and not "renoun/collections" if this workspace is a module (e.g. { type: "module" } in package.json).
-  - The "createCollection" file pattern is formatted correctly and targeting files that exist.
-  - You've tried refreshing the page or restarting the server.
-  - If you continue to see this error, please file an issue: https://github.com/souporserious/renoun/issues\n`
+    You can fix this error by ensuring the following:
+
+      - The second argument to "createCollection" is present with the correct dynamic import function matching the base file pattern.
+      - You've tried refreshing the page or restarting the server.
+      - If you continue to see this error, please file an issue: https://github.com/souporserious/renoun/issues\n`
       )
     }
 
-    return getImport(this.collection.getImportSlug(sourceFile))
+    let getImport: GetImport
+
+    if (Array.isArray(this.collection.getImport)) {
+      const importIndex = this.collection.validExtensions.findIndex(
+        (extension) => extension === slugExtension
+      )
+      getImport = this.collection.getImport[importIndex]
+    } else {
+      getImport = this.collection.getImport
+    }
+
+    const slug = this.collection.getImportSlug(sourceFile)
+
+    return getImport(slug)
   }
 }
 
 class Collection<AllExports extends FileExports>
   implements CollectionSource<AllExports>
 {
-  public filePattern: string
   public options: CollectionOptions<AllExports>
+  public getImport: GetImport | GetImport[]
   public project: Project
   public absoluteGlobPattern: string
   public absoluteBaseGlobPattern: string
   public fileSystemSources: (SourceFile | Directory)[]
   public sourceFilesOrderMap: Map<string, string>
   public sourcePathMap: Map<string, string>
-  public validExtensions: Set<string> = new Set()
+  public validExtensions: string[] = []
 
   #sources = new Map<string, Source<AllExports>>()
 
   constructor(
-    filePattern: string,
-    options: CollectionOptions<AllExports> = {}
+    options: CollectionOptions<AllExports>,
+    getImport?: GetImport | GetImport[]
   ) {
-    this.filePattern = filePattern
     this.options = options
+    this.getImport = getImport!
     this.project = resolveProject(options.tsConfigFilePath ?? 'tsconfig.json')
 
     const compilerOptions = this.project.getCompilerOptions()
@@ -897,9 +910,9 @@ class Collection<AllExports extends FileExports>
             tsConfigFilePath,
             compilerOptions.baseUrl,
             compilerOptions.paths,
-            filePattern
+            options.filePattern
           )
-        : filePattern
+        : options.filePattern
     this.absoluteGlobPattern = resolve(tsConfigDirectory, resolvedGlobPattern)
     this.absoluteBaseGlobPattern = globParent(this.absoluteGlobPattern)
 
@@ -910,18 +923,19 @@ class Collection<AllExports extends FileExports>
 
     if (fileSystemSources.length === 0) {
       const routeGroupRegex = /[()]/g
-      const possibleFix = filePattern.replace(routeGroupRegex, (match) => {
-        return match === '(' ? '[(]' : '[)]'
-      })
+      const possibleFix = options.filePattern.replace(
+        routeGroupRegex,
+        (match) => (match === '(' ? '[(]' : '[)]')
+      )
 
       let filePatternMessage = `- The file pattern is formatted correctly and targeting files that exist.`
 
-      if (routeGroupRegex.test(filePattern)) {
+      if (routeGroupRegex.test(options.filePattern)) {
         filePatternMessage += `\n   . It looks like you may have passed a route group in the file pattern. If so, try escaping the parentheses with square brackets: "${possibleFix}"`
       }
 
       throw new Error(
-        `[renoun] No source files or directories were found for the file pattern: ${filePattern}
+        `[renoun] No source files or directories were found for the file pattern: ${options.filePattern}
 
 You can fix this error by ensuring the following:
   
@@ -932,14 +946,18 @@ You can fix this error by ensuring the following:
     }
 
     this.fileSystemSources = fileSystemSources
-    this.validExtensions = new Set(
-      fileSystemSources
-        .map((source) => {
-          if (source instanceof tsMorph.SourceFile) {
-            return source.getExtension().slice(1)
-          }
-        })
-        .filter(Boolean) as string[]
+    this.validExtensions = Array.from(
+      new Set(
+        (
+          fileSystemSources
+            .map((source) => {
+              if (source instanceof tsMorph.SourceFile) {
+                return source.getExtension().slice(1)
+              }
+            })
+            .filter(Boolean) as string[]
+        ).sort()
+      )
     )
 
     const baseDirectory = this.project.getDirectoryOrThrow(
@@ -1048,7 +1066,7 @@ You can fix this error by ensuring the following:
         if (error instanceof Error && error.message.includes(badge)) {
           throw new Error(
             `[renoun] Error occurred while sorting sources for collection with file pattern "${
-              this.filePattern
+              this.options.filePattern
             }". \n\n${error.message.slice(badge.length)}`
           )
         }
@@ -1121,7 +1139,7 @@ You can fix this error by ensuring the following:
   async getSources({ depth = Infinity }: { depth?: number } = {}) {
     if (!isValidDepth(depth)) {
       throw new Error(
-        `[renoun] Invalid depth "${depth}" provided for collection with file pattern "${this.filePattern}". Depth must be a positive integer or Infinity.`
+        `[renoun] Invalid depth "${depth}" provided for collection with file pattern "${this.options.filePattern}". Depth must be a positive integer or Infinity.`
       )
     }
 
@@ -1167,19 +1185,12 @@ You can fix this error by ensuring the following:
  */
 export function createCollection<
   AllExports extends { [key: string]: any } = { [key: string]: any },
-  FilePattern extends FilePatterns = string,
 >(
-  filePattern: FilePattern,
-  options?: CollectionOptions<AllExports>
+  options: CollectionOptions<AllExports>,
+  getImport?: GetImport | GetImport[]
 ): CollectionSource<AllExports> {
-  return new Collection<AllExports>(filePattern, options)
+  return new Collection<AllExports>(options, getImport)
 }
-
-/**
- * Sets the import map of dynamic imports for all collection file patterns.
- * @internal
- */
-createCollection.setImportMap = setImportMap
 
 /** Get all sources for a file pattern. */
 function getSourceFilesAndDirectories(

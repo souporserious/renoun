@@ -82,7 +82,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc -w",
-    "test": "vitest run"
+    "test": "vitest"
   },
   "peerDependencies": {
     "react": ">=18.0.0",
