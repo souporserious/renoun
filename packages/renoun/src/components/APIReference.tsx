@@ -188,7 +188,7 @@ function TypeChildren({
               ) : null}
               {signature.returnType ? (
                 <div>
-                  <h5 css={{ margin: 0, marginBottom: '1.5rem' }}>Return</h5>
+                  <h5 css={{ margin: 0, marginBottom: '1.5rem' }}>Returns</h5>
                   {signature.returnType}
                 </div>
               ) : null}
@@ -227,7 +227,7 @@ function TypeChildren({
               ) : null}
               {signature.returnType ? (
                 <div>
-                  <h5 css={{ margin: 0, marginBottom: '1.5rem' }}>Return</h5>
+                  <h5 css={{ margin: 0, marginBottom: '1.5rem' }}>Returns</h5>
                   {signature.returnType}
                 </div>
               ) : null}
