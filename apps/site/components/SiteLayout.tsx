@@ -43,18 +43,18 @@ export function SiteLayout({
         css={{
           gridColumn: '1 / -1',
           gridRow: '1 / 2',
-          display: 'flex',
+          display: 'grid',
+          gridTemplateColumns: 'subgrid',
           justifyContent: 'center',
           borderBottom: '1px solid var(--color-separator)',
         }}
       >
         <nav
           css={{
+            gridColumn: '2 / -2',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'end',
-            width: '100%',
-            maxWidth: '76rem',
             padding: '2rem',
             gap: '1.5rem',
 
