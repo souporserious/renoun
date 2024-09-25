@@ -39,8 +39,8 @@ export default async function Page({ params }: { params: { slug: string } }) {
 
   if (!Post) notFound()
 
-  const frontmatter = await Post.getNamedExport('frontmatter').getValue()
-  const Content = await Post.getDefaultExport().getValue()
+  const frontmatter = await Post.getExport('frontmatter').getValue()
+  const Content = await Post.getExport('default').getValue()
 
   return (
     <>
@@ -109,7 +109,7 @@ export default async function Page({
   // Retrieve the frontmatter for sorting
   const sourcesWithfrontmatter = await Promise.all(
     allSources.map(async (source) => {
-      const frontmatter = await source.getNamedExport('frontmatter').getValue()
+      const frontmatter = await source.getExport('frontmatter').getValue()
       return { source, frontmatter }
     })
   )
@@ -174,7 +174,7 @@ async function TreeNavigation({ source }: { source: PostSource }) {
   const sources = source.getSources()
   const path = source.getPath()
   const depth = source.getDepth()
-  const frontmatter = await source.getNamedExport('frontmatter').getValue()
+  const frontmatter = await source.getExport('frontmatter').getValue()
 
   if (sources.length === 0) {
     return (
@@ -215,8 +215,8 @@ export default async function Page({ params }) {
 
   if (!source) notFound()
 
-  const Post = await source.getDefaultExport().getValue()
-  const frontmatter = await source.getNamedExport('frontmatter').getValue()
+  const frontmatter = await source.getExport('frontmatter').getValue()
+  const Post = await source.getExport('default').getValue()
   const [previous, next] = source.getSiblings()
 
   return (
@@ -237,7 +237,7 @@ function Sibling({
   source: PostsSource
   direction: 'previous' | 'next'
 }) {
-  const frontmatter = await source.getNamedExport('frontmatter').getValue()
+  const frontmatter = await source.getExport('frontmatter').getValue()
 
   return (
     <a href={source.getPath()}>
@@ -284,7 +284,7 @@ export default async function Page({ params }) {
 
   if (!source) notFound()
 
-  const metadata = await source.getNamedExport('metadata').getValue()
+  const metadata = await source.getExport('metadata').getValue()
 
   return (
     <>
@@ -314,9 +314,7 @@ Similar to above, we can get the value of the `metadata` constant for a collecti
 import { Components } from '@/collections'
 
 export default async function Page() {
-  const metadata = await Components.getSource()
-    .getNamedExport('metadata')
-    .getValue()
+  const metadata = await Components.getSource().getExport('metadata').getValue()
 
   return (
     <>
@@ -356,7 +354,7 @@ export function generateStaticParams() {
 
 export async function generateMetadata({ params }) {
   const source = Posts.getSource(params.slug)
-  const frontmatter = await source.getNamedExport('frontmatter').getValue()
+  const frontmatter = await source.getExport('frontmatter').getValue()
 
   return getSiteMetadata({
     title: `${frontmatter.title} - MDXTS`,
@@ -369,8 +367,8 @@ export default async function Page({ params }) {
 
   if (!source) notFound()
 
-  const Content = await source.getDefaultExport().getValue()
-  const frontmatter = await source.getNamedExport('frontmatter').getValue()
+  const frontmatter = await source.getExport('frontmatter').getValue()
+  const Content = await source.getExport('default').getValue()
 
   return (
     <>
@@ -440,7 +438,7 @@ export default async function BlogPage() {
 }
 
 async function BlogPost({ source }: { source: PostSource }) {
-  const frontmatter = await source.getNamedExport('frontmatter').getValue()
+  const frontmatter = await source.getExport('frontmatter').getValue()
 
   return (
     <li>
@@ -476,7 +474,7 @@ export default async function Page({ params }) {
 
   if (!Component && !ComponentMDX) notFound()
 
-  const Content = await ComponentMDX.getDefaultExport().getValue()
+  const Content = await ComponentMDX.getExport('default').getValue()
 
   return (
     <>
@@ -505,7 +503,7 @@ export function generateStaticParams() {
   return ComponentExamples.getSources().map((Component) => {
     const componentPath = Component.getPath()
 
-    return Component.getNamedExports().map(([exportName]) => ({
+    return Component.getExports().map(([exportName]) => ({
       component: componentPath,
       example: exportName,
     }))
@@ -521,7 +519,7 @@ export default async function Page({
 
   if (!ExampleSource) notFound()
 
-  const ExportedSource = ExampleSource.getNamedExport(params.example)
+  const ExportedSource = ExampleSource.getExport(params.example)
 
   if (!ExportedSource) notFound()
 
@@ -582,7 +580,7 @@ export default async function Page({ params }) {
 
   if (!PackageFile && !PackageMDXFile) notFound()
 
-  const PackageDocs = await PackageMDXFile.getDefaultExport().getValue()
+  const PackageDocs = await PackageMDXFile.getExport('default').getValue()
 
   return (
     <>

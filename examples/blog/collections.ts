@@ -23,8 +23,8 @@ export const PostsCollection = collection<{
         return 0
       }
 
-      const aFrontmatter = await a.getNamedExport('frontmatter').getValue()
-      const bFrontmatter = await b.getNamedExport('frontmatter').getValue()
+      const aFrontmatter = await a.getExport('frontmatter').getValue()
+      const bFrontmatter = await b.getExport('frontmatter').getValue()
 
       return bFrontmatter.date.getTime() - aFrontmatter.date.getTime()
     },

@@ -155,13 +155,8 @@ export interface FileSystemSource<Exports extends FileExports>
     [previous?: FileSystemSource<Exports>, next?: FileSystemSource<Exports>]
   >
 
-  /** The default export source. */
-  getDefaultExport(): ExportSource<Exports['default']>
-
   /** A single named export source of the file. */
-  getNamedExport<Name extends Exclude<keyof Exports, 'default'>>(
-    name: Name
-  ): ExportSource<Exports[Name]>
+  getExport<Name extends keyof Exports>(name: Name): ExportSource<Exports[Name]>
 
   /** The main export source of the file based on the file name or directory name. */
   getMainExport(): ExportSource<Exports[keyof Exports]> | undefined
@@ -231,18 +226,33 @@ function resolveProject(tsConfigFilePath: string): Project {
   return projectCache.get(tsConfigFilePath)!
 }
 
-abstract class Export<Value, AllExports extends FileExports = FileExports>
+class Export<Value, AllExports extends FileExports = FileExports>
   implements ExportSource<Value>
 {
   #jsDocMetadata: ReturnType<typeof getJsDocMetadata> | null = null
 
   constructor(
-    protected source: Source<AllExports>,
-    protected exportDeclaration: ExportedDeclarations | undefined,
-    protected isDefaultExport: boolean = false
+    private source: Source<AllExports>,
+    private exportName: string,
+    private exportDeclaration: ExportedDeclarations | undefined
   ) {}
 
-  abstract getName(): string
+  getName(): string {
+    if (this.exportName === 'default') {
+      const name = this.exportDeclaration
+        ? getDeclarationName(this.exportDeclaration) || this.source.getName()
+        : undefined
+
+      // Use the source name as the default export name if it is not defined
+      if (name === undefined) {
+        return this.source.getName()
+      }
+
+      return name
+    }
+
+    return this.exportName
+  }
 
   isMainExport(): boolean {
     const mainExport = this.source.getMainExport()
@@ -374,7 +384,7 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
 
   async getValue(): Promise<Value> {
     const moduleExports = await this.source.getModuleExports()
-    const name = this.isDefaultExport ? 'default' : this.getName()
+    const name = this.exportName === 'default' ? 'default' : this.getName()
     let exportValue = moduleExports![name]
 
     /* Apply validation if schema is provided. */
@@ -444,51 +454,6 @@ abstract class Export<Value, AllExports extends FileExports = FileExports>
       previousExport as Export<Value, AllExports> | undefined,
       nextExport as Export<Value, AllExports> | undefined,
     ]
-  }
-}
-
-class DefaultExport<AllExports extends FileExports>
-  extends Export<AllExports['default'], AllExports>
-  implements ExportSource<AllExports['default']>
-{
-  constructor(
-    source: Source<AllExports>,
-    exportDeclaration: ExportedDeclarations | undefined
-  ) {
-    super(source, exportDeclaration, true)
-  }
-
-  getName() {
-    const name = this.exportDeclaration
-      ? getDeclarationName(this.exportDeclaration) || this.source.getName()
-      : undefined
-
-    // Use the source name as the default export name if it is not defined
-    if (name === undefined) {
-      return this.source.getName()
-    }
-
-    return name
-  }
-}
-
-class NamedExport<
-    AllExports extends FileExports,
-    Name extends Exclude<keyof AllExports, 'default'>,
-  >
-  extends Export<AllExports[Name], AllExports>
-  implements ExportSource<AllExports[Name]>
-{
-  constructor(
-    source: Source<AllExports>,
-    private exportName: Name,
-    exportDeclaration: ExportedDeclarations | undefined
-  ) {
-    super(source, exportDeclaration)
-  }
-
-  getName() {
-    return this.exportName as string
   }
 }
 
@@ -695,7 +660,8 @@ class Source<AllExports extends FileExports>
     return [previousSource, nextSource]
   }
 
-  getDefaultExport(): ExportSource<AllExports['default']> {
+  getExport<Name extends keyof AllExports>(name: Name) {
+    const exportName = String(name)
     const sourceFile = this.sourceFileOrDirectory
 
     if (sourceFile instanceof tsMorph.Directory) {
@@ -703,48 +669,10 @@ class Source<AllExports extends FileExports>
       const validExtensions = this.collection.validExtensions
 
       throw new Error(
-        `[renoun] "getDefaultExport" was called for the directory "${baseName}" which does not have an associated index or readme file.
+        `[renoun] "getExport('${name.toString()}')" was called for the directory "${baseName}" which does not have an associated index or readme file.
 
 You can fix this error by taking one of the following actions:
-  - Filter out the directory before calling "getDefaultExport":
-    . Check if the source is a file using "<source>.isFile()"
-    . Check if the source is a directory using "<source>.isDirectory()"
-    . For example: (await <collection>.getSources()).filter(source => !source.isDirectory())
-  
-  - Add an index or README file to the "${baseName}" directory:
-    . Ensure the file has a valid extension based on the targeted file patterns of this collection: ${validExtensions.join(
-      ', '
-    )}
-    . Define a default export in the file or ensure the default export exists if compiled.
-    
-  - Handle the error:
-    Catch and manage this error in your code to prevent it from causing a failure.`
-      )
-    }
-
-    const defaultDeclaration = getExportedDeclaration(
-      sourceFile.getExportedDeclarations(),
-      'default'
-    )
-
-    return new DefaultExport<AllExports>(this, defaultDeclaration)
-  }
-
-  getNamedExport<Name extends Exclude<keyof AllExports, 'default'>>(
-    name: Name
-  ) {
-    const exportName = name as string
-    const sourceFile = this.sourceFileOrDirectory
-
-    if (sourceFile instanceof tsMorph.Directory) {
-      const baseName = sourceFile.getBaseName()
-      const validExtensions = this.collection.validExtensions
-
-      throw new Error(
-        `[renoun] "getNamedExport('${name.toString()}')" was called for the directory "${baseName}" which does not have an associated index or readme file.
-
-You can fix this error by taking one of the following actions:
-  - Filter out the directory before calling "getNamedExport":
+  - Filter out the directory before calling "getExport":
     . Check if the source is a file using "<source>.isFile()"
     . Check if the source is a directory using "<source>.isDirectory()"
     . For example: (await <collection>.getSources()).filter(source => !source.isDirectory())
@@ -765,7 +693,11 @@ You can fix this error by taking one of the following actions:
       exportName
     )
 
-    return new NamedExport<AllExports, Name>(this, name, exportDeclaration)
+    return new Export<AllExports[Name], AllExports>(
+      this,
+      exportName,
+      exportDeclaration
+    )
   }
 
   getMainExport() {
@@ -817,12 +749,7 @@ You can fix this error by taking one of the following actions:
       .getExportSymbols()
       .map((symbol) => {
         const name = symbol.getName()
-
-        if (name === 'default') {
-          return this.getDefaultExport()
-        }
-
-        return this.getNamedExport(name as Exclude<keyof AllExports, 'default'>)
+        return this.getExport(name as keyof AllExports)
       })
       .filter((source) => {
         if (filter) {
@@ -1252,18 +1179,6 @@ function isValidDepth(depth: number) {
 
 export function isExportSource(source: unknown): source is ExportSource<any> {
   return source instanceof Export
-}
-
-export function isNamedExportSource(
-  source: unknown
-): source is ExportSource<any> {
-  return source instanceof NamedExport
-}
-
-export function isDefaultExportSource(
-  source: unknown
-): source is ExportSource<any> {
-  return source instanceof DefaultExport
 }
 
 export function isFileSystemSource(

@@ -63,8 +63,8 @@ export default async function Page({ params }) {
 
   if (!source) notFound()
 
-  const frontmatter = await source.getNamedExport('frontmatter').getValue()
-  const Content = await source.getDefaultExport().getValue()
+  const frontmatter = await source.getExport('frontmatter').getValue()
+  const Content = await source.getExport('default').getValue()
 
   return (
     <>
