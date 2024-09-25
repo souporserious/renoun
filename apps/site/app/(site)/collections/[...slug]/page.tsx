@@ -20,7 +20,7 @@ const DocsCollection = createCollection<{
       }).parse,
     },
   },
-  (slug) => import(`app/${slug}`)
+  (slug) => import(`../../../${slug}.mdx`)
 )
 
 export async function generateStaticParams() {

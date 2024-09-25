@@ -10,5 +10,8 @@ export const ComponentsCollection = createCollection<ComponentSchema>(
     basePath: 'components',
     filePattern: '@/components/**/{index,*.examples,examples/*}.{ts,tsx}',
   },
-  (slug) => import(`components/${slug}`)
+  [
+    (slug) => import(`./components/${slug}.ts`),
+    (slug) => import(`./components/${slug}.tsx`),
+  ]
 )

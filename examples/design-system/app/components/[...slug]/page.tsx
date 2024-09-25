@@ -24,7 +24,7 @@ const ComponentsReadmeCollection = createCollection<{ default: MDXContent }>(
     basePath: 'components',
     filePattern: '@/components/**/README.mdx',
   },
-  (slug) => import(`components/${slug}`)
+  (slug) => import(`../../../components/${slug}.mdx`)
 )
 
 export default async function Component({

@@ -25,7 +25,7 @@ export const DocsCollection = createCollection<DocsSchema>(
     basePath: 'docs',
     filePattern: 'docs/**/*.mdx',
   },
-  (slug) => import(`docs/${slug}`)
+  (slug) => import(`./docs/${slug}.mdx`)
 )
 
 function filterInternalSources(
@@ -66,7 +66,7 @@ export const CollectionsCollection = createCollection<CollectionsSchema>(
     tsConfigFilePath: '../../packages/renoun/tsconfig.json',
     filePattern: 'src/collections/*.tsx',
   },
-  (slug) => import(`../../packages/renoun/src/collections/${slug}`)
+  (slug) => import(`../../packages/renoun/src/collections/${slug}.tsx`)
 )
 
 type ComponentSchema = Record<string, React.ComponentType>
@@ -81,7 +81,10 @@ export const ComponentsCollection = createCollection<ComponentSchema>(
     tsConfigFilePath: '../../packages/renoun/tsconfig.json',
     filePattern: 'src/components/**/*.{ts,tsx}',
   },
-  (slug) => import(`../../packages/renoun/src/components/${slug}`)
+  [
+    (slug) => import(`../../packages/renoun/src/components/${slug}.ts`),
+    (slug) => import(`../../packages/renoun/src/components/${slug}.tsx`),
+  ]
 )
 
 export const ComponentsMDXCollection = createCollection<{
@@ -94,5 +97,5 @@ export const ComponentsMDXCollection = createCollection<{
     tsConfigFilePath: '../../packages/renoun/tsconfig.json',
     filePattern: 'src/components/**/*.mdx',
   },
-  (slug) => import(`../../packages/renoun/src/components/${slug}`)
+  (slug) => import(`../../packages/renoun/src/components/${slug}.mdx`)
 )
