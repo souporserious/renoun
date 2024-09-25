@@ -32,6 +32,8 @@ import { extractExportByIdentifier } from '../utils/extract-export-by-identifier
 
 export type { MDXContent }
 
+type GetImport = (slug: string) => Promise<any>
+
 export type FilePatterns<Extension extends string = string> =
   | `${string}${Extension}`
   | `${string}${Extension}${string}`
@@ -859,8 +861,20 @@ You can fix this error by taking one of the following actions:
       )
     }
 
-    const slug = this.collection.getImportSlug(sourceFile) + '.' + slugExtension
-    return this.collection.getImport(slug)
+    let getImport: GetImport
+
+    if (Array.isArray(this.collection.getImport)) {
+      const importIndex = this.collection.validExtensions.findIndex(
+        (extension) => extension === slugExtension
+      )
+      getImport = this.collection.getImport[importIndex]
+    } else {
+      getImport = this.collection.getImport
+    }
+
+    const slug = this.collection.getImportSlug(sourceFile)
+
+    return getImport(slug)
   }
 }
 
@@ -868,7 +882,7 @@ class Collection<AllExports extends FileExports>
   implements CollectionSource<AllExports>
 {
   public options: CollectionOptions<AllExports>
-  public getImport: (slug: string) => Promise<any>
+  public getImport: GetImport | GetImport[]
   public project: Project
   public absoluteGlobPattern: string
   public absoluteBaseGlobPattern: string
@@ -881,7 +895,7 @@ class Collection<AllExports extends FileExports>
 
   constructor(
     options: CollectionOptions<AllExports>,
-    getImport?: (slug: string) => Promise<any>
+    getImport?: GetImport | GetImport[]
   ) {
     this.options = options
     this.getImport = getImport!
@@ -1173,7 +1187,7 @@ export function createCollection<
   AllExports extends { [key: string]: any } = { [key: string]: any },
 >(
   options: CollectionOptions<AllExports>,
-  getImport?: (slug: string) => Promise<any>
+  getImport?: GetImport | GetImport[]
 ): CollectionSource<AllExports> {
   return new Collection<AllExports>(options, getImport)
 }

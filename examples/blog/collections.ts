@@ -29,5 +29,5 @@ export const PostsCollection = createCollection<{
       return bFrontmatter.date.getTime() - aFrontmatter.date.getTime()
     },
   },
-  (slug) => import(`posts/${slug}`)
+  (slug) => import(`./posts/${slug}.mdx`)
 )

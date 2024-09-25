@@ -84,9 +84,14 @@ export async function writeCollectionImports(filename?: string) {
           options.filePattern,
           options?.tsConfigFilePath
         )
+        const parsedDynamicImportString = Array.isArray(dynamicImportString)
+          ? dynamicImportString.length > 1
+            ? `[${dynamicImportString.join(', ')}]`
+            : dynamicImportString[0]
+          : dynamicImportString
         const isSameImport = importArgument
           ? normalizeImportString(importArgument.getText()) ===
-            normalizeImportString(dynamicImportString)
+            normalizeImportString(parsedDynamicImportString)
           : false
 
         if (isSameImport) {
@@ -97,7 +102,7 @@ export async function writeCollectionImports(filename?: string) {
           callExpression.removeArgument(importArgument)
         }
 
-        callExpression.addArgument(dynamicImportString)
+        callExpression.addArgument(parsedDynamicImportString)
 
         // Format arguments with new lines so they are close to what the user's formatting is
         callExpression.getArguments().forEach((arg, index) => {
