@@ -1,7 +1,6 @@
-import { styled } from 'restyle'
-import Link from 'next/link'
-
-import { ComponentsCollection, type ComponentSource } from '@/collections'
+import { ComponentsCollection } from '@/collections'
+import { Card } from '@/components/Card'
+import { Row } from '@/components/Row'
 
 export default async function Components() {
   const sources = await ComponentsCollection.getSources({ depth: 1 })
@@ -19,33 +18,15 @@ export default async function Components() {
           developer experiences.
         </p>
       </div>
-      <ul
-        css={{
-          listStyle: 'none',
-          padding: 0,
-          margin: 0,
-        }}
-      >
+      <Row>
         {sources.map((source) => (
-          <ComponentItem key={source.getPath()} source={source} />
+          <Card
+            key={source.getPath()}
+            href={source.getPath()}
+            label={source.getName()}
+          />
         ))}
-      </ul>
+      </Row>
     </div>
-  )
-}
-
-const StyledLink = styled(Link, {
-  display: 'block',
-  padding: '1rem',
-  margin: '0 -1rem',
-})
-
-async function ComponentItem({ source }: { source: ComponentSource }) {
-  return (
-    <li>
-      <StyledLink href={source.getPath()}>
-        <h2 css={{ margin: 0 }}>{source.getName()}</h2>
-      </StyledLink>
-    </li>
   )
 }
