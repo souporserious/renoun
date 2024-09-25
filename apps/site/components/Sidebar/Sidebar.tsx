@@ -25,7 +25,7 @@ async function TreeNavigation({
           pathname={path}
           label={
             variant === 'title'
-              ? metadata?.title || source.getTitle()
+              ? metadata?.label || metadata?.title || source.getTitle()
               : source.getName()
           }
         />
@@ -64,7 +64,7 @@ async function TreeNavigation({
           pathname={path}
           label={
             variant === 'title'
-              ? metadata?.title || source.getTitle()
+              ? metadata?.label || metadata?.title || source.getTitle()
               : source.getName()
           }
         />
