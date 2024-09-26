@@ -183,7 +183,7 @@ export function SiteLayout({
           '@media screen and (min-width: 60rem)': {
             display: 'grid',
             gridTemplateColumns: 'subgrid',
-            gridColumn: sidebar ? '4 / -2' : '3 / -2',
+            gridColumn: sidebar ? '4 / -2' : '2 / -2',
             gridRow: '2',
             padding: '6rem 0',
           },
