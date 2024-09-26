@@ -6,16 +6,24 @@ export default async function Components() {
   const sources = await ComponentsCollection.getSources({ depth: 1 })
 
   return (
-    <div css={{ display: 'flex', flexDirection: 'column', gap: '3rem' }}>
+    <div
+      css={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '3rem',
+      }}
+    >
       <div className="prose">
         <h1>Components</h1>
         <p>
           Easily build interactive and engaging documentation with Renoun’s
-          powerful set of React components. From API references to advanced
-          syntax highlighting with embedded type information, each component is
-          designed to streamline your content workflow. Explore the building
-          blocks below to start creating rich, responsive, and an efficient
-          developer experiences.
+          powerful set of React components.
+        </p>
+        <p>
+          From API references to advanced syntax highlighting with embedded type
+          information, each component is designed to streamline your content
+          workflow. Explore the building blocks below to start creating rich,
+          responsive, and an efficient developer experiences.
         </p>
       </div>
       <Row>
