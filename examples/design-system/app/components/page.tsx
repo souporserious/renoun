@@ -7,7 +7,13 @@ export default async function Components() {
   const sources = await ComponentsCollection.getSources({ depth: 1 })
 
   return (
-    <main css={{ display: 'grid', padding: '4rem 0', gap: '1rem' }}>
+    <main
+      css={{
+        display: 'grid',
+        padding: '4rem 0',
+        gap: '1rem',
+      }}
+    >
       <h1 css={{ margin: 0 }}>Components</h1>
       <ul
         css={{

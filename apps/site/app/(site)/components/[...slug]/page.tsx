@@ -89,17 +89,7 @@ export default async function Component({
   }
 
   return (
-    <div
-      css={{
-        display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1fr)',
-        gap: '4rem',
-
-        '@media screen and (min-width: 60rem)': {
-          gridTemplateColumns: 'minmax(0, 1fr) 12rem',
-        },
-      }}
-    >
+    <>
       <div css={{ display: 'flex', flexDirection: 'column', gap: '4rem' }}>
         <div css={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <h1 css={{ fontSize: '3rem', margin: 0 }}>
@@ -192,7 +182,7 @@ export default async function Component({
       </div>
 
       <TableOfContents headings={headings} editPath={editPath} />
-    </div>
+    </>
   )
 }
 

@@ -21,6 +21,7 @@ export default function Page() {
   return (
     <div
       css={{
+        gridColumn: '1 / -1',
         display: 'flex',
         flexDirection: 'column',
         gap: '4rem',

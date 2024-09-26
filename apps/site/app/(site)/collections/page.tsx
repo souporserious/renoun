@@ -11,17 +11,7 @@ export default async function Page() {
   const headings = await docSource.getExport('headings').getValue()
 
   return (
-    <div
-      css={{
-        display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1fr)',
-        gap: '4rem',
-
-        '@media (min-width: 60rem)': {
-          gridTemplateColumns: 'minmax(0, 1fr) 12rem',
-        },
-      }}
-    >
+    <>
       <div
         css={{
           display: 'flex',
@@ -84,6 +74,6 @@ export default async function Page() {
           ]}
         />
       </aside>
-    </div>
+    </>
   )
 }

@@ -172,6 +172,8 @@ export function SiteLayout({
           padding: '4rem 2rem',
 
           '@media screen and (min-width: 60rem)': {
+            display: 'grid',
+            gridTemplateColumns: 'subgrid',
             gridColumn: sidebar ? '3 / -2' : '2 / -2',
             gridRow: '2',
             padding: '6rem 0',
