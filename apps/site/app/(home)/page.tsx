@@ -10,11 +10,20 @@ const ButtonLink = styled(Link, {
   alignItems: 'center',
   justifyContent: 'center',
   fontWeight: 600,
-  padding: '0 0.75rem',
+  padding: '0.5rem 1.25rem',
   borderRadius: '0.25rem',
   backgroundColor: 'var(--color-surface-primary)',
   color: 'var(--color-foreground)',
-  textDecoration: 'none',
+  fontSize: 'var(--font-size-button)',
+
+  ':hover': {
+    backgroundColor: 'var(--color-surface-primary-highlighted)',
+    textDecoration: 'none !important',
+  },
+
+  '@media (min-width: 60rem)': {
+    padding: '0 0.75rem',
+  },
 })
 
 export default function Page() {

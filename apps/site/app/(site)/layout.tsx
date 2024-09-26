@@ -6,5 +6,9 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
-  return <SiteLayout sidebar={<Sidebar />}>{children}</SiteLayout>
+  return (
+    <SiteLayout sidebar={<Sidebar />} variant="docs">
+      {children}
+    </SiteLayout>
+  )
 }

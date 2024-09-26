@@ -40,6 +40,12 @@ export function NavigationBoundary({
         gridTemplateColumns: 'var(--grid-template-columns)',
 
         '@media screen and (max-width: calc(60rem - 1px))': {
+          marginTop: 'var(--header-height)',
+          backgroundColor: 'var(--color-background)',
+          overflowY: 'auto',
+          overscrollBehavior: 'contain',
+          zIndex: 1,
+
           '&[data-open=false]': {
             display: 'none',
           },

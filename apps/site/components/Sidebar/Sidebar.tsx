@@ -133,8 +133,9 @@ export function Sidebar() {
           '@media screen and (min-width: 60rem)': {
             gridColumn: '2 / 3',
             gridRow: '1 / -1',
-            height: '100dvh',
-            padding: '6rem 2rem',
+            height: 'var(--body-height)',
+            padding: '4rem 2rem',
+            marginTop: 'var(--header-height)',
             overflowY: 'auto',
             overscrollBehavior: 'contain',
           },

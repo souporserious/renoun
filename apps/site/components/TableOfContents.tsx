@@ -1,7 +1,7 @@
 'use client'
+import { useEffect, useRef } from 'react'
 import type { CSSObject } from 'restyle'
 import type { Headings } from '@renoun/mdx'
-import { useStickyBox } from 'react-sticky-box'
 
 import { useSectionObserver } from 'hooks/use-section-observer'
 import { ViewSource } from './ViewSource'
@@ -13,26 +13,31 @@ export function TableOfContents({
   headings: Headings
   editPath?: string
 }) {
-  const ref = useStickyBox({
-    offsetTop: 32,
-    offsetBottom: 32,
-  })
   const sectionObserver = useSectionObserver()
 
   return (
     <aside
-      ref={ref}
       css={{
-        gridColumn: '3',
-        alignSelf: 'start',
+        display: 'grid',
+        pointerEvents: 'none',
+        position: 'fixed',
+        inset: 0,
+        gridTemplateColumns: 'var(--grid-template-columns)',
+
+        '@media screen and (max-width: calc(60rem - 1px))': {
+          display: 'none !important',
+        },
       }}
     >
       <nav
         css={{
-          display: 'none',
-          '@media screen and (min-width: 60rem)': {
-            display: 'block',
-          },
+          pointerEvents: 'auto',
+          gridColumn: '6 / -1',
+          height: 'var(--body-height)',
+          padding: '4rem 0',
+          marginTop: 'var(--header-height)',
+          overflowY: 'auto',
+          overscrollBehavior: 'contain',
         }}
       >
         <ul
@@ -40,12 +45,11 @@ export function TableOfContents({
             listStyle: 'none',
             display: 'flex',
             flexDirection: 'column',
-            padding: 0,
+            padding: '0 1rem',
             margin: 0,
-            marginTop: 'calc(var(--font-size-heading-1) + 1rem)',
           }}
         >
-          <li css={{ padding: '0.25rem 0px', marginBottom: '0.5rem' }}>
+          <li css={{ marginBottom: '0.5rem' }}>
             <h4 className="title">On this page</h4>
           </li>
           {headings?.map(({ text, depth, id }) =>
@@ -54,7 +58,13 @@ export function TableOfContents({
                 <Link
                   id={id}
                   sectionObserver={sectionObserver}
-                  css={{ paddingLeft: (depth - 2) * 0.8 + 'rem' }}
+                  css={{
+                    paddingLeft: (depth - 2) * 0.8 + 'rem',
+                    whiteSpace: 'nowrap',
+                    textOverflow: 'ellipsis',
+                    overflow: 'hidden',
+                  }}
+                  title={text}
                 >
                   {text}
                 </Link>
@@ -85,19 +95,23 @@ export function TableOfContents({
 
 function Link({
   id,
+  title,
   children,
   sectionObserver,
   css,
 }: {
   id: string
+  title: string
   children: React.ReactNode
   sectionObserver: ReturnType<typeof useSectionObserver>
   css: CSSObject
 }) {
+  const ref = useRef<HTMLAnchorElement>(null)
   const isActive = sectionObserver.useActiveSection(id)
   const styles: CSSObject = {
     fontSize: 'var(--font-size-body-3)',
     padding: '0.25rem 0',
+    scrollMarginBlock: 'var(--font-size-body-3)',
   }
 
   if (isActive) {
@@ -109,9 +123,24 @@ function Link({
     }
   }
 
+  useEffect(() => {
+    if (isActive && ref.current) {
+      const isSafari = /^((?!chrome|android).)*safari/i.test(
+        navigator.userAgent
+      )
+
+      ref.current.scrollIntoView({
+        behavior: isSafari ? 'instant' : 'smooth',
+        block: 'nearest',
+      })
+    }
+  }, [isActive])
+
   return (
     <a
+      ref={ref}
       href={`#${id}`}
+      title={title}
       onClick={(event) => {
         event.preventDefault()
         sectionObserver.scrollToSection(id)

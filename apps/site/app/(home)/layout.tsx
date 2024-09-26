@@ -5,5 +5,5 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
-  return <SiteLayout>{children}</SiteLayout>
+  return <SiteLayout variant="home">{children}</SiteLayout>
 }

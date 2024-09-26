@@ -6,6 +6,7 @@
   --color-background: hsl(215deg 46.96% 6.59%);
   --color-surface: hsl(210deg 50% 7%);
   --color-surface-primary: hsl(208.65deg 77.51% 42.83%);
+  --color-surface-primary-highlighted: hsl(208.65deg 77.51% 47.83%);
   --color-surface-secondary: hsl(208deg 100% 80% / 6%);
   --color-surface-interactive: hsl(218deg 42% 12%);
   --color-surface-interactive-highlighted: hsl(212deg 40.8% 15.37%);
@@ -20,17 +21,20 @@
   --font-size-body-2: 1.6rem;
   --font-size-body-3: 1.2rem;
   --font-size-title: 0.875rem;
-  --font-size-code: 1rem;
+  --font-size-code: 1.6rem;
+  --font-size-button: 1.6rem;
   --line-height-heading-1: 4rem;
   --line-height-heading-2: 3.4rem;
   --line-height-heading-3: 2.4rem;
   --line-height-body-1: 2.625rem;
   --line-height-body-2: 2.2rem;
-  --line-height-code: 1.2rem;
+  --line-height-code: 2rem;
   --font-weight-heading: 700;
   --font-weight-body: 400;
   --font-weight-button: 700;
   --letter-spacing-body: 0.01em;
+  --header-height: 5rem;
+  --body-height: calc(100dvh - var(--header-height));
 }
 
 @media screen and (min-width: 60rem) {
@@ -44,12 +48,14 @@
     --font-size-body-3: 0.875rem;
     --font-size-title: 0.65rem;
     --font-size-code: 1rem;
+    --font-size-button: 1rem;
     --line-height-heading-1: 3rem;
     --line-height-heading-2: 2.2rem;
     --line-height-heading-3: 1.8rem;
     --line-height-body-1: 1.65rem;
     --line-height-body-2: 1.4rem;
     --line-height-code: 1.4rem;
+    --header-height: 3.75rem;
   }
 }
 
@@ -96,9 +102,10 @@ a {
   flex-direction: column;
   gap: 1.6rem;
 
-  :where(h1, h2, h3) {
+  :where(h1, h2, h3, h4) {
     letter-spacing: normal;
     text-wrap: balance;
+    scroll-margin-top: calc(var(--header-height) + 1.6rem);
   }
 
   :where(h1, h2, h3)::before,

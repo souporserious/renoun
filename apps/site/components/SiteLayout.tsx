@@ -7,9 +7,11 @@ import { NavigationToggle } from './Sidebar/NavigationToggle'
 export function SiteLayout({
   sidebar,
   children,
+  variant,
 }: {
   sidebar?: React.ReactNode
   children: React.ReactNode
+  variant?: 'home' | 'docs'
 }) {
   return (
     <div
@@ -20,7 +22,7 @@ export function SiteLayout({
         width: '100%',
         flex: 1,
         gridTemplateColumns: 'var(--grid-template-columns)',
-        gridTemplateRows: 'min-content 1fr',
+        gridTemplateRows: 'var(--header-height) 1fr',
 
         '@media screen and (min-width: 60rem)': {
           '--column-gap': '4rem',
@@ -33,7 +35,8 @@ export function SiteLayout({
           gridRow: '1 / 2',
           display: 'grid',
           gridTemplateColumns: 'var(--grid-template-columns)',
-          gridTemplateRows: 'min-content 1fr',
+          gridTemplateRows: 'var(--header-height) 1fr',
+          height: 'var(--header-height)',
           justifyContent: 'center',
           backgroundColor: 'var(--color-surface)',
           borderBottom: '1px solid var(--color-separator)',
@@ -161,13 +164,15 @@ export function SiteLayout({
                 fill: 'var(--color-foreground-interactive)',
               }}
             />
-            <NavigationToggle
-              css={{
-                '@media screen and (min-width: 60rem)': {
-                  display: 'none',
-                },
-              }}
-            />
+            {variant === 'docs' ? (
+              <NavigationToggle
+                css={{
+                  '@media screen and (min-width: 60rem)': {
+                    display: 'none',
+                  },
+                }}
+              />
+            ) : null}
           </div>
         </nav>
       </header>
@@ -185,7 +190,7 @@ export function SiteLayout({
             gridTemplateColumns: 'subgrid',
             gridColumn: sidebar ? '4 / -2' : '2 / -2',
             gridRow: '2',
-            padding: '6rem 0',
+            padding: '4rem 0',
           },
         }}
       >
