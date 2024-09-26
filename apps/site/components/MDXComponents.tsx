@@ -103,7 +103,7 @@ export const MDXComponents = {
         value={props.children as string}
         paddingY="0"
         css={{
-          lineHeight: 1.2,
+          lineHeight: 1.15,
           overflowX: 'auto',
           color: '#82AAFF',
         }}
