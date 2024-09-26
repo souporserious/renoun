@@ -41,15 +41,12 @@ export function TableOfContents({
           </li>
           {headings?.map(({ text, depth, id }) =>
             depth > 1 ? (
-              <li
-                key={id}
-                css={{
-                  fontSize: 'var(--font-size-body-3)',
-                  padding: '0.25rem 0',
-                  paddingLeft: (depth - 2) * 0.8 + 'rem',
-                }}
-              >
-                <Link id={id} sectionObserver={sectionObserver}>
+              <li key={id} css={{ display: 'flex' }}>
+                <Link
+                  id={id}
+                  sectionObserver={sectionObserver}
+                  css={{ paddingLeft: (depth - 2) * 0.8 + 'rem' }}
+                >
                   {text}
                 </Link>
               </li>
@@ -81,13 +78,18 @@ function Link({
   id,
   children,
   sectionObserver,
+  css,
 }: {
   id: string
   children: React.ReactNode
   sectionObserver: ReturnType<typeof useSectionObserver>
+  css: CSSObject
 }) {
   const isActive = sectionObserver.useActiveSection(id)
-  const styles: CSSObject = {}
+  const styles: CSSObject = {
+    fontSize: 'var(--font-size-body-3)',
+    padding: '0.25rem 0',
+  }
 
   if (isActive) {
     styles.color = 'white'
@@ -105,7 +107,7 @@ function Link({
         event.preventDefault()
         sectionObserver.scrollToSection(id)
       }}
-      css={styles}
+      css={{ ...styles, ...css }}
     >
       {children}
     </a>
