@@ -14,44 +14,53 @@ export function SiteLayout({
   return (
     <div
       css={{
+        '--column-gap': '0',
+        '--grid-template-columns': `1fr 14rem var(--column-gap) minmax(0, 48rem) var(--column-gap) 14rem 1fr`,
         display: 'grid',
         width: '100%',
         flex: 1,
-        gridTemplateColumns: '1fr 14rem minmax(0, 48rem) 14rem 1fr',
+        gridTemplateColumns: 'var(--grid-template-columns)',
         gridTemplateRows: 'min-content 1fr',
 
         '@media screen and (min-width: 60rem)': {
-          columnGap: '4rem',
+          '--column-gap': '4rem',
         },
       }}
     >
-      {sidebar ? (
-        <div
-          css={{
-            gridRow: '1 / -1',
-            gridColumn: '1 / 3',
-            backgroundColor: 'var(--color-surface-secondary)',
-
-            '@media screen and (max-width: calc(60rem - 1px))': {
-              display: 'none',
-            },
-          }}
-        />
-      ) : null}
-
       <header
         css={{
           gridColumn: '1 / -1',
           gridRow: '1 / 2',
           display: 'grid',
-          gridTemplateColumns: 'subgrid',
+          gridTemplateColumns: 'var(--grid-template-columns)',
+          gridTemplateRows: 'min-content 1fr',
           justifyContent: 'center',
+          backgroundColor: 'var(--color-surface)',
           borderBottom: '1px solid var(--color-separator)',
+          position: 'fixed',
+          left: 0,
+          right: 0,
+          zIndex: 1,
         }}
       >
+        {sidebar ? (
+          <div
+            css={{
+              gridColumn: '1 / 3',
+              gridRow: '1 / 3',
+              backgroundColor: 'var(--color-surface-secondary)',
+
+              '@media screen and (max-width: calc(60rem - 1px))': {
+                display: 'none',
+              },
+            }}
+          />
+        ) : null}
+
         <nav
           css={{
             gridColumn: '2 / -2',
+            gridRow: '1 / 3',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'end',
@@ -174,7 +183,7 @@ export function SiteLayout({
           '@media screen and (min-width: 60rem)': {
             display: 'grid',
             gridTemplateColumns: 'subgrid',
-            gridColumn: sidebar ? '3 / -2' : '2 / -2',
+            gridColumn: sidebar ? '4 / -2' : '3 / -2',
             gridRow: '2',
             padding: '6rem 0',
           },

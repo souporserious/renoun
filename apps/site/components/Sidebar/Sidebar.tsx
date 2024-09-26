@@ -109,22 +109,34 @@ async function Navigation({
 export function Sidebar() {
   return (
     <NavigationBoundary>
-      <aside
+      <div
         css={{
+          gridRow: '1 / -1',
+          gridColumn: '1 / 3',
+          backgroundColor: 'var(--color-surface-secondary)',
+
+          '@media screen and (max-width: calc(60rem - 1px))': {
+            display: 'none',
+          },
+        }}
+      />
+      <div
+        css={{
+          pointerEvents: 'auto',
           gridColumn: '-1 / 1',
           gridRow: '2',
           display: 'flex',
           flexDirection: 'column',
           padding: '2rem',
           gap: '2rem',
-          alignSelf: 'start',
-          position: 'sticky',
-          top: '-4rem',
 
           '@media screen and (min-width: 60rem)': {
             gridColumn: '2 / 3',
-            gridRow: '2 / 3',
+            gridRow: '1 / -1',
+            height: '100dvh',
             padding: '6rem 2rem',
+            overflowY: 'auto',
+            overscrollBehavior: 'contain',
           },
         }}
       >
@@ -256,7 +268,7 @@ export function Sidebar() {
             </a>
           </span>
         </div>
-      </aside>
+      </div>
     </NavigationBoundary>
   )
 }

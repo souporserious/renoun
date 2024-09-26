@@ -31,9 +31,14 @@ export function NavigationBoundary({
   const isNavigationOpen = useIsNavigationOpen()
 
   return (
-    <div
+    <aside
       css={{
-        display: 'contents',
+        pointerEvents: 'none',
+        position: 'fixed',
+        inset: 0,
+        display: 'grid',
+        gridTemplateColumns: 'var(--grid-template-columns)',
+
         '@media screen and (max-width: calc(60rem - 1px))': {
           '&[data-open=false]': {
             display: 'none',
@@ -44,6 +49,6 @@ export function NavigationBoundary({
       data-open={isNavigationOpen}
     >
       {children}
-    </div>
+    </aside>
   )
 }

@@ -1,6 +1,7 @@
 'use client'
 import type { CSSObject } from 'restyle'
 import type { Headings } from '@renoun/mdx'
+import { useStickyBox } from 'react-sticky-box'
 
 import { useSectionObserver } from 'hooks/use-section-observer'
 import { ViewSource } from './ViewSource'
@@ -12,10 +13,20 @@ export function TableOfContents({
   headings: Headings
   editPath?: string
 }) {
+  const ref = useStickyBox({
+    offsetTop: 32,
+    offsetBottom: 32,
+  })
   const sectionObserver = useSectionObserver()
 
   return (
-    <aside css={{ display: 'contents' }}>
+    <aside
+      ref={ref}
+      css={{
+        gridColumn: '3',
+        alignSelf: 'start',
+      }}
+    >
       <nav
         css={{
           display: 'none',
@@ -32,8 +43,6 @@ export function TableOfContents({
             padding: 0,
             margin: 0,
             marginTop: 'calc(var(--font-size-heading-1) + 1rem)',
-            position: 'sticky',
-            top: '2rem',
           }}
         >
           <li css={{ padding: '0.25rem 0px', marginBottom: '0.5rem' }}>
