@@ -1,5 +1,6 @@
 import { styled } from 'restyle'
 import { GitProviderLogo } from 'renoun/components'
+import { Row } from '@/components/Row'
 
 const SocialLink = styled('a', {
   borderRadius: '0.25rem',
@@ -23,6 +24,10 @@ const SocialLink = styled('a', {
     padding: '1.5rem 0.75rem',
     letterSpacing: '0.025em',
     textWrap: 'balance',
+    color: 'var(--color-foreground-interactive)',
+  },
+  '& strong': {
+    color: 'var(--color-foreground-interactive)',
   },
 })
 
@@ -34,14 +39,7 @@ const StyledGitProviderLogo = styled(GitProviderLogo, {
 
 export function Socials() {
   return (
-    <div
-      css={{
-        display: 'grid',
-        gridAutoColumns: '1fr',
-        gridAutoFlow: 'column',
-        gap: '1rem',
-      }}
-    >
+    <Row>
       <SocialLink href="https://discord.gg/7Mf4xEBYx9">
         <div>
           <svg
@@ -89,8 +87,10 @@ export function Socials() {
             />
           </svg>
         </div>
-        <p>Follow renoun_dev on X for updates and announcements.</p>
+        <p>
+          Follow <strong>renoun_dev</strong> on X for updates and announcements.
+        </p>
       </SocialLink>
-    </div>
+    </Row>
   )
 }
