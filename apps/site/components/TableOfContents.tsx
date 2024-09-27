@@ -48,7 +48,7 @@ export function TableOfContents({
             margin: 0,
           }}
         >
-          <li css={{ marginBottom: '0.5rem' }}>
+          <li css={{ marginBottom: '1rem' }}>
             <h4 className="title">On this page</h4>
           </li>
           {headings?.map(({ text, depth, id }) =>
