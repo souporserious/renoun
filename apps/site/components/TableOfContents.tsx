@@ -1,5 +1,4 @@
 'use client'
-import { useEffect, useRef } from 'react'
 import type { CSSObject } from 'restyle'
 import type { Headings } from '@renoun/mdx'
 
@@ -106,8 +105,7 @@ function Link({
   sectionObserver: ReturnType<typeof useSectionObserver>
   css: CSSObject
 }) {
-  const ref = useRef<HTMLAnchorElement>(null)
-  const isActive = sectionObserver.useActiveSection(id)
+  const [isActive, linkProps] = sectionObserver.useLink(id)
   const styles: CSSObject = {
     fontSize: 'var(--font-size-body-3)',
     padding: '0.25rem 0',
@@ -123,30 +121,8 @@ function Link({
     }
   }
 
-  useEffect(() => {
-    if (isActive && ref.current) {
-      const isSafari = /^((?!chrome|android).)*safari/i.test(
-        navigator.userAgent
-      )
-
-      ref.current.scrollIntoView({
-        behavior: isSafari ? 'instant' : 'smooth',
-        block: 'nearest',
-      })
-    }
-  }, [isActive])
-
   return (
-    <a
-      ref={ref}
-      href={`#${id}`}
-      title={title}
-      onClick={(event) => {
-        event.preventDefault()
-        sectionObserver.scrollToSection(id)
-      }}
-      css={{ ...styles, ...css }}
-    >
+    <a title={title} css={{ ...styles, ...css }} {...linkProps}>
       {children}
     </a>
   )
