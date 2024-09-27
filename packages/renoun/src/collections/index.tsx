@@ -411,9 +411,9 @@ class Export<Value, AllExports extends FileExports = FileExports>
 
     /* Enable hot module reloading in development for Next.js component exports. */
     if (process.env.NODE_ENV === 'development') {
-      const isReactComponent = /react.*jsx|jsx.*react/i.test(
-        String(exportValue)
-      )
+      const isReactComponent = exportValue
+        ? /^[A-Z]/.test(exportValue.name) && String(exportValue).includes('jsx')
+        : false
 
       if (isReactComponent) {
         const Component = exportValue as React.ComponentType
