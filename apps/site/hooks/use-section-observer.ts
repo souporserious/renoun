@@ -87,7 +87,7 @@ export function useSectionObserver({
 
     function useSection(id: string) {
       useEffect(() => {
-        const element = document.getElementById(id)
+        const element = document.getElementById(id)!
         const intersectionObserver = observer.current
 
         if (!intersectionObserver || !element) {
@@ -140,7 +140,7 @@ export function useSectionObserver({
       }, [])
 
       return [
-        isActive,
+        activeSectionId.current!.value === null ? null : isActive,
         {
           href: `#${id}`,
           onClick: (event: React.MouseEvent<HTMLAnchorElement>) => {

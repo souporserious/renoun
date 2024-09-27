@@ -51,18 +51,13 @@ export function TableOfContents({
           <li css={{ marginBottom: '1rem' }}>
             <h4 className="title">On this page</h4>
           </li>
-          {headings?.map(({ text, depth, id }) =>
+          {headings?.map(({ text, depth, id }, index) =>
             depth > 1 ? (
               <li key={id} css={{ display: 'flex' }}>
                 <Link
                   id={id}
                   sectionObserver={sectionObserver}
-                  css={{
-                    paddingLeft: (depth - 2) * 0.8 + 'rem',
-                    whiteSpace: 'nowrap',
-                    textOverflow: 'ellipsis',
-                    overflow: 'hidden',
-                  }}
+                  css={{ paddingLeft: (depth - 2) * 0.8 + 'rem' }}
                   title={text}
                 >
                   {text}
@@ -110,20 +105,32 @@ function Link({
     fontSize: 'var(--font-size-body-3)',
     padding: '0.25rem 0',
     scrollMarginBlock: 'var(--font-size-body-3)',
-  }
-
-  if (isActive) {
-    styles.color = 'white'
-  } else {
-    styles.color = 'var(--color-foreground-interactive)'
-    styles[':hover'] = {
+    whiteSpace: 'nowrap',
+    textOverflow: 'ellipsis',
+    overflow: 'hidden',
+    color: 'var(--color-foreground-interactive)',
+    ':hover': {
       color: 'var(--color-foreground-interactive-highlighted)',
-    }
+    },
+    '&.active': {
+      color: 'white',
+    },
   }
 
   return (
-    <a title={title} css={{ ...styles, ...css }} {...linkProps}>
+    <a
+      title={title}
+      css={{ ...styles, ...css }}
+      className={isActive ? 'active' : ''}
+      suppressHydrationWarning
+      {...linkProps}
+    >
       {children}
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `window.isSectionLinkActive('${id}')`,
+        }}
+      />
     </a>
   )
 }
