@@ -48,9 +48,11 @@ export async function SiblingLink({
         css={{
           gridColumn: direction === 'previous' ? 2 : 1,
           gridRow: 1,
-          fontSize: '0.6rem',
+          fontSize: 'var(--font-size-title)',
+          fontWeight: 600,
           textTransform: 'uppercase',
-          letterSpacing: '0.08em',
+          letterSpacing: '0.1em',
+          color: 'var(--color-foreground) !important',
         }}
       >
         {direction === 'previous' ? 'Previous' : 'Next'}
