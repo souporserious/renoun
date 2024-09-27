@@ -47,17 +47,24 @@ export class WebSocketClient {
 
   #handleMessage(event: WebSocket.MessageEvent) {
     const message = event.data.toString()
-    const response: WebSocketResponse = JSON.parse(message)
-    const { id, result, error } = response
 
-    if (id !== undefined && this.#requests[id]) {
-      if (error) {
-        this.#requests[id].reject(error)
-      } else {
-        this.#requests[id].resolve(result)
+    try {
+      const response: WebSocketResponse = JSON.parse(message)
+      const { id, result, error } = response
+
+      if (id !== undefined && this.#requests[id]) {
+        if (error) {
+          this.#requests[id].reject(error)
+        } else {
+          this.#requests[id].resolve(result)
+        }
+
+        delete this.#requests[id]
       }
-
-      delete this.#requests[id]
+    } catch (error) {
+      throw new Error(`[renoun] WebSocket client error parsing message:`, {
+        cause: error,
+      })
     }
   }
 
