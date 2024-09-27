@@ -38,7 +38,7 @@ export function SiteLayout({
           gridTemplateRows: 'var(--header-height) 1fr',
           height: 'var(--header-height)',
           justifyContent: 'center',
-          backgroundColor: 'var(--color-surface)',
+          backgroundColor: 'var(--color-background)',
           borderBottom: '1px solid var(--color-separator)',
           position: 'fixed',
           left: 0,
