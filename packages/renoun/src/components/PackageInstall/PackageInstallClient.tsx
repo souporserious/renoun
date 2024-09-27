@@ -1,5 +1,5 @@
 'use client'
-import { useEffect } from 'react'
+import React, { useEffect } from 'react'
 
 /**
  * Client script to set the package manager based on local storage if available.
@@ -10,5 +10,5 @@ export function PackageInstallClient() {
     ;(window as any).setPackageManager()
   }, [])
 
-  return null
+  return <script>window.setPackageManager()</script>
 }

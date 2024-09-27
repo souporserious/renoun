@@ -225,6 +225,7 @@ window.setPackageManager = (packageManager) => {
   }
 
   const tabs = document.querySelectorAll('[data-storage-id^="package-manager-"]');
+  
   tabs.forEach((element, index) => {
     const isSelected = element.dataset.storageId === \`package-manager-\${packageManager}\`;
     const isTab = element.getAttribute('role') === 'tab';
@@ -233,6 +234,7 @@ window.setPackageManager = (packageManager) => {
     if (isTab) {
       element.tabIndex = isSelected ? 0 : -1;
       element.setAttribute('aria-selected', isSelected);
+
       if (shouldFocus && isSelected) {
         const x = window.scrollX;
         const y = window.scrollY;
@@ -248,8 +250,6 @@ window.setPackageManager = (packageManager) => {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  window.setPackageManager();
-
   const tabs = document.querySelectorAll('[data-package-install] [role="tab"]');
   
   tabs.forEach((tab, index) => {
@@ -287,6 +287,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 document.addEventListener('click', event => {
   const storageId = event.target.dataset.storageId;
+
   if (storageId?.startsWith('package-manager-')) {
     const command = storageId.replace('package-manager-', '');
     localStorage.setItem('${stateKey}', command);
