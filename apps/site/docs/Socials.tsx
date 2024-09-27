@@ -42,15 +42,6 @@ export function Socials() {
         gap: '1rem',
       }}
     >
-      <SocialLink href="https://github.com/souporserious/renoun">
-        <div>
-          <StyledGitProviderLogo />
-        </div>
-        <p>
-          Contribute, report bugs, or help support Renoun by giving us a star on
-          GitHub.
-        </p>
-      </SocialLink>
       <SocialLink href="https://discord.gg/7Mf4xEBYx9">
         <div>
           <svg
@@ -69,6 +60,15 @@ export function Socials() {
         <p>
           Join our Discord to chat with the community, get help, and stay
           updated.
+        </p>
+      </SocialLink>
+      <SocialLink href="https://github.com/souporserious/renoun">
+        <div>
+          <StyledGitProviderLogo />
+        </div>
+        <p>
+          Contribute, report bugs, or help support Renoun by giving us a star on
+          GitHub.
         </p>
       </SocialLink>
       <SocialLink href="https://x.com/renoun_dev">
