@@ -32,22 +32,24 @@ if (currentHighlighter === null) {
 export function createServer() {
   const server = new WebSocketServer()
 
-  watch(process.cwd(), { recursive: true }, (_, filename) => {
-    if (
-      !filename ||
-      DEFAULT_IGNORED_PATHS.some((ignoredFile) =>
-        filename?.startsWith(ignoredFile)
-      )
-    ) {
-      return
-    }
+  if (process.env.NODE_ENV === 'development') {
+    watch(process.cwd(), { recursive: true }, (_, filename) => {
+      if (
+        !filename ||
+        DEFAULT_IGNORED_PATHS.some((ignoredFile) =>
+          filename?.startsWith(ignoredFile)
+        )
+      ) {
+        return
+      }
 
-    /* Update all collection import maps when files change. */
-    writeCollectionImports(filename).then(() => {
-      /* Notify the client to refresh when files change. */
-      server.sendNotification({ type: 'refresh' })
+      /* Update all collection import maps when files change. */
+      writeCollectionImports(filename).then(() => {
+        /* Notify the client to refresh when files change. */
+        server.sendNotification({ type: 'refresh' })
+      })
     })
-  })
+  }
 
   server.registerMethod(
     'analyzeSourceText',
