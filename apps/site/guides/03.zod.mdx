@@ -1,0 +1,97 @@
+export const metadata = {
+  title: 'Zod Guide',
+  label: 'Zod',
+  description:
+    'Learn how to add schema validation to collections using Zod in Renoun.',
+}
+
+```ts
+import { collection } from 'renoun/collections'
+import { z } from 'zod'
+
+const frontmatterSchema = z.object({
+  title: z.string(),
+  date: z.coerce.date(),
+  summary: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+})
+
+export const PostsCollection = collection<{
+  default: MDXContent
+  frontmatter: z.infer<typeof frontmatterSchema>
+}>('posts/.mdx', {
+  baseDirectory: 'posts',
+  schema: {
+    frontmatter: frontmatterSchema.parse,
+  },
+})
+```
+
+#### Introduction
+
+In this guide, we'll walk through how to use [Zod](https://zod.dev/) to add collection schemas to your projects. Using Zod ensures that your targeted files conform to an expected structure, providing type safety and validation.
+
+### Before You Begin
+
+Before you start, make sure you have a basic understanding of how collections work in Renoun. If you're new to collections, check out the [Collections Guide](/collections). We'll also be using MDX files in this guide, so make sure you're familiar with the [MDX Guide](/docs/mdx) as well.
+
+### Using Zod
+
+Zod is a TypeScript-first schema validation library with static type inference. Let's look at how you can use Zod to add schema validation to your collections in Renoun.
+
+#### Install
+
+First, install `zod` using your package manager:
+
+```jsx
+<PackageInstall packages={['zod']} />
+```
+
+#### Define Schema
+
+Now, we'll create a schema using `zod` for the front matter of an MDX file:
+
+```ts
+import { z } from 'zod'
+
+const frontmatterSchema = z.object({
+  title: z.string(),
+  date: z.coerce.date(),
+  summary: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+})
+```
+
+#### Apply to Collection
+
+We can now apply the Zod `frontmatterSchema` to your collection using the `schema` option in the `collection` utility:
+
+```ts
+import { collection } from 'renoun/collections'
+import { z } from 'zod'
+
+const frontmatterSchema = z.object({
+  title: z.string(),
+  date: z.coerce.date(),
+  summary: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+})
+
+export const PostsCollection = collection<{
+  default: MDXContent
+  frontmatter: z.infer<typeof frontmatterSchema>
+}>('posts/.mdx', {
+  baseDirectory: 'posts',
+  schema: {
+    frontmatter: frontmatterSchema.parse,
+  },
+})
+```
+
+Now, the `frontmatter` field in your collection will be validated against the `frontmatterSchema` we defined using Zod. If the data does not match the schema, an error will be thrown.
+
+### Conclusion
+
+By using Zod, you can add robust schema validation to your collections in Renoun. This ensures that your data is always in the expected format, making your application more reliable and easier to maintain.
+
+For more information, refer to the [zod documentation](https://github.com/colinhacks/zod).

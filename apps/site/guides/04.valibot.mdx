@@ -1,0 +1,97 @@
+export const metadata = {
+  title: 'Valibot Guide',
+  label: 'Valibot',
+  description:
+    'Learn how to add schema validation to collections using Valibot in Renoun.',
+}
+
+```ts
+import { collection } from 'renoun/collections'
+import * as v from 'valibot'
+
+const frontmatterSchema = v.object({
+  title: v.string(),
+  date: v.pipe(v.unknown(), v.transform(Date)),
+  summary: v.optional(v.string()),
+  tags: v.optional(v.array(v.string())),
+})
+
+export const PostsCollection = collection<{
+  default: MDXContent
+  frontmatter: v.InferInput<typeof frontmatterSchema>
+}>('posts/.mdx', {
+  baseDirectory: 'posts',
+  schema: {
+    frontmatter: (value) => v.parse(frontmatterSchema, value),
+  },
+})
+```
+
+#### Introduction
+
+In this guide, we'll walk through how to use [Valibot](https://valibot.dev/) to add collection schemas to your projects. Using Valibot ensures that your targeted files conform to an expected structure, providing type safety and validation.
+
+### Before You Begin
+
+Before you start, make sure you have a basic understanding of how collections work in Renoun. If you're new to collections, check out the [Collections Guide](/collections). We'll also be using MDX files in this guide, so make sure you're familiar with the [MDX Guide](/docs/mdx) as well.
+
+### Using Valibot
+
+Valibot is an open-source schema library for TypeScript, designed with bundle size, type safety, and developer experience in mind. Let's look at how you can use Valibot to add schema validation to your collections in Renoun.
+
+#### Install
+
+First, install `valibot` using your package manager:
+
+```jsx
+<PackageInstall packages={['valibot']} />
+```
+
+#### Define Schema
+
+Now, we'll create a schema using `valibot` for the front matter of an MDX file:
+
+```ts
+import * as v from 'valibot'
+
+const frontmatterSchema = v.object({
+  title: v.string(),
+  date: v.pipe(v.unknown(), v.transform(Date)),
+  summary: v.optional(v.string()),
+  tags: v.optional(v.array(v.string())),
+})
+```
+
+#### Apply to Collection
+
+We can now apply the Valibot `frontmatterSchema` to your collection using the `schema` option in the `collection` utility:
+
+```ts
+import { collection } from 'renoun/collections'
+import * as v from 'valibot'
+
+const frontmatterSchema = v.object({
+  title: v.string(),
+  date: v.pipe(v.unknown(), v.transform(Date)),
+  summary: v.optional(v.string()),
+  tags: v.optional(v.array(v.string())),
+})
+
+export const PostsCollection = collection<{
+  default: MDXContent
+  frontmatter: v.InferInput<typeof frontmatterSchema>
+}>('posts/.mdx', {
+  baseDirectory: 'posts',
+  schema: {
+    frontmatter: (value) => v.parse(frontmatterSchema, value),
+  },
+})
+```
+
+Now, the `frontmatter` field in your collection will be validated against the `frontmatterSchema` we defined using Valibot. If the data does not match the schema, an error will be thrown.
+
+### Conclusion
+
+By using Valibot, you can add reliable schema validation to your collections in Renoun. This ensures that your data is always in the expected format, making your application more robust and maintainable.
+
+For more information, refer to the [valibot documentation](https://github.com/valibot/valibot).

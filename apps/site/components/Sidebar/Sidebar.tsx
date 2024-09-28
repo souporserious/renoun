@@ -2,7 +2,11 @@ import type { CSSObject } from 'restyle'
 import type { CollectionSource, FileSystemSource } from 'renoun/collections'
 import { GitProviderLink } from 'renoun/components'
 
-import { DocsCollection, ComponentsCollection } from '@/collections'
+import {
+  DocsCollection,
+  ComponentsCollection,
+  GuidesCollection,
+} from '@/collections'
 import { NavigationBoundary } from './NavigationBoundary'
 import { SidebarLink } from './SidebarLink'
 
@@ -159,6 +163,17 @@ export function Sidebar() {
             gap: '1rem',
           }}
         >
+          <h3 className="title">Guides</h3>
+          <Navigation collection={GuidesCollection} />
+        </div>
+
+        <div
+          css={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1rem',
+          }}
+        >
           <h3 className="title">Collections</h3>
           <ul
             css={{
@@ -171,12 +186,6 @@ export function Sidebar() {
           >
             <li>
               <SidebarLink pathname="/collections" label="Introduction" />
-            </li>
-            <li>
-              <SidebarLink
-                pathname="/collections/schema-validation"
-                label="Schema Validation"
-              />
             </li>
             <li>
               <SidebarLink pathname="/collections/recipes" label="Recipes" />
