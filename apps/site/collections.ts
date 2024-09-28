@@ -6,7 +6,7 @@ import {
   type ExportSource,
   type MDXContent,
 } from 'renoun/collections'
-import type { Headings } from '@renoun/mdx'
+import type { Headings } from 'renoun/mdx'
 import { z } from 'zod'
 
 type DocsSchema = {
@@ -30,14 +30,12 @@ export const DocsCollection = collection<DocsSchema>(
 )
 
 export const GuidesCollection = collection<DocsSchema>(
-
   {
     filePattern: 'guides/**/*.mdx',
     baseDirectory: 'guides',
     basePath: 'guides',
   },
   (slug) => import(`./guides/${slug}.mdx`)
-
 )
 
 function filterInternalSources(

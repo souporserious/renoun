@@ -40,16 +40,12 @@ To learn how to configure MDX with Next.js, check out the [Next.js Guide](/docs/
 
 ## Pre-configured Plugins
 
-The `@renoun/mdx` package includes pre-configured plugins for both [remark](https://remark.js.org/) and [rehype](https://unifiedjs.com/), which are part the MDX process that parses and transforms MDX content.
-
-To install the package, run the following command:
-
-<PackageInstall packages={['@renoun/mdx']} />
+The `renoun/mdx` import includes pre-configured plugins for both [remark](https://remark.js.org/) and [rehype](https://unifiedjs.com/), which are part the MDX process that parses and transforms MDX content.
 
 You can import these respective collections of plugins and add them to your MDX configuration to extend the functionality of your MDX content.
 
 ```ts
-import { remarkPlugins, rehypePlugins } from '@renoun/mdx'
+import { remarkPlugins, rehypePlugins } from 'renoun/mdx'
 ```
 
 Here's a list of the plugins and their effects:
@@ -127,7 +123,7 @@ We'll use the example from before and add the renoun MDX plugins to the `MDXCont
 
 ```tsx
 import { MDXContent } from 'renoun/components'
-import { remarkPlugins, rehypePlugins } from '@renoun/mdx'
+import { remarkPlugins, rehypePlugins } from 'renoun/mdx'
 
 const content = `
 ---

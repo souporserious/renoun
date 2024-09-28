@@ -56,7 +56,7 @@ Now, add the plugin to your `next.config.js` file while optionally including the
 
 ```js
 import createMDXPlugin from '@next/mdx'
-import { remarkPlugins, rehypePlugins } from '@renoun/mdx'
+import { remarkPlugins, rehypePlugins } from 'renoun/mdx'
 import webpack from 'webpack'
 
 const withMDX = createMDXPlugin({
@@ -78,7 +78,7 @@ Finally, we need to configure Webpack and alias `js` files since `renoun` is an 
 
 ```js
 import createMDXPlugin from '@next/mdx'
-import { remarkPlugins, rehypePlugins } from '@renoun/mdx'
+import { remarkPlugins, rehypePlugins } from 'renoun/mdx'
 import webpack from 'webpack'
 
 const withMDX = createMDXPlugin({

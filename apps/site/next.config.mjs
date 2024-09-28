@@ -1,5 +1,5 @@
 import createMDXPlugin from '@next/mdx'
-import { remarkPlugins, rehypePlugins } from '@renoun/mdx'
+import { remarkPlugins, rehypePlugins } from 'renoun/mdx'
 import webpack from 'webpack'
 
 const withMDX = createMDXPlugin({

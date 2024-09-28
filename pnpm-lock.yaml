@@ -297,6 +297,9 @@ importers:
       '@mdx-js/mdx':
         specifier: ^3.0.1
         version: 3.0.1
+      '@renoun/mdx':
+        specifier: workspace:*
+        version: link:../mdx
       fast-glob:
         specifier: ^3.3.2
         version: 3.3.2

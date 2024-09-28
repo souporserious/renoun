@@ -1,5 +1,5 @@
 import { APIReference, CodeBlock, Tokens } from 'renoun/components'
-import type { Headings } from '@renoun/mdx'
+import type { Headings } from 'renoun/mdx'
 import type { ExportSource } from 'renoun/collections'
 import { notFound } from 'next/navigation'
 import { GeistMono } from 'geist/font/mono'

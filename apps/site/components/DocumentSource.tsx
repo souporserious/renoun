@@ -1,5 +1,5 @@
 import type { FileSystemSource, MDXContent } from 'renoun/collections'
-import type { Headings } from '@renoun/mdx'
+import type { Headings } from 'renoun/mdx'
 
 import { SiblingLink } from './SiblingLink'
 import { TableOfContents } from './TableOfContents'

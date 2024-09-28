@@ -1,5 +1,5 @@
 import { MDXContent as RenounMDXContent } from 'renoun/components'
-import { remarkPlugins, rehypePlugins } from '@renoun/mdx'
+import { remarkPlugins, rehypePlugins } from 'renoun/mdx'
 
 import { MDXComponents } from '@/components/MDXComponents'
 
