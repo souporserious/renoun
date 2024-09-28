@@ -10,11 +10,19 @@ export async function DocumentSource<
     metadata: { title: string; description: string }
     headings: Headings
   }>,
->({ source }: { source: Source }) {
+>({
+  source,
+  shouldRenderTableOfContents = true,
+  shouldRenderUpdatedAt = true,
+}: {
+  source: Source
+  shouldRenderTableOfContents?: boolean
+  shouldRenderUpdatedAt?: boolean
+}) {
   const Content = await source.getExport('default').getValue()
   const metadata = await source.getExport('metadata').getValue()
   const headings = await source.getExport('headings').getValue()
-  const updatedAt = await source.getUpdatedAt()
+  const updatedAt = shouldRenderUpdatedAt ? await source.getUpdatedAt() : null
   const editPath = source.getEditPath()
   const [previousSource, nextSource] = await source.getSiblings({
     depth: 0,
@@ -83,7 +91,9 @@ export async function DocumentSource<
         </div>
       </div>
 
-      <TableOfContents headings={headings} editPath={editPath} />
+      {shouldRenderTableOfContents ? (
+        <TableOfContents headings={headings} editPath={editPath} />
+      ) : null}
     </>
   )
 }

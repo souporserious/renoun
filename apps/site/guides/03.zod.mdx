@@ -27,7 +27,7 @@ export const PostsCollection = collection<{
 })
 ```
 
-#### Introduction
+## Introduction
 
 In this guide, we'll walk through how to use [Zod](https://zod.dev/) to add collection schemas to your projects. Using Zod ensures that your targeted files conform to an expected structure, providing type safety and validation.
 
@@ -35,11 +35,11 @@ In this guide, we'll walk through how to use [Zod](https://zod.dev/) to add coll
 
 Before you start, make sure you have a basic understanding of how collections work in Renoun. If you're new to collections, check out the [Collections Guide](/collections). We'll also be using MDX files in this guide, so make sure you're familiar with the [MDX Guide](/docs/mdx) as well.
 
-### Using Zod
+## Using Zod
 
 Zod is a TypeScript-first schema validation library with static type inference. Let's look at how you can use Zod to add schema validation to your collections in Renoun.
 
-#### Install
+### Install
 
 First, install `zod` using your package manager:
 
@@ -47,7 +47,7 @@ First, install `zod` using your package manager:
 <PackageInstall packages={['zod']} />
 ```
 
-#### Define Schema
+### Define Schema
 
 Now, we'll create a schema using `zod` for the front matter of an MDX file:
 
@@ -62,11 +62,11 @@ const frontmatterSchema = z.object({
 })
 ```
 
-#### Apply to Collection
+### Apply to Collection
 
 We can now apply the Zod `frontmatterSchema` to your collection using the `schema` option in the `collection` utility:
 
-```ts
+```ts focusedLines="1,11-19"
 import { collection } from 'renoun/collections'
 import { z } from 'zod'
 
@@ -89,6 +89,10 @@ export const PostsCollection = collection<{
 ```
 
 Now, the `frontmatter` field in your collection will be validated against the `frontmatterSchema` we defined using Zod. If the data does not match the schema, an error will be thrown.
+
+## Beyond Front Matter
+
+While the example in this guide focused on validating front matter in MDX files, the same approach can be applied to validate any kind of export within a file. Whether you need to enforce a specific structure for other metadata, content fields, or custom data exports, Zod provides the flexibility to define schemas that fit your specific collections.
 
 ### Conclusion
 

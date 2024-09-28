@@ -66,7 +66,7 @@ const frontmatterSchema = v.object({
 
 We can now apply the Valibot `frontmatterSchema` to your collection using the `schema` option in the `collection` utility:
 
-```ts
+```ts focusedLines="1,11-19"
 import { collection } from 'renoun/collections'
 import * as v from 'valibot'
 
@@ -89,6 +89,10 @@ export const PostsCollection = collection<{
 ```
 
 Now, the `frontmatter` field in your collection will be validated against the `frontmatterSchema` we defined using Valibot. If the data does not match the schema, an error will be thrown.
+
+## Beyond Front Matter
+
+While the example in this guide focused on validating front matter in MDX files, the same approach can be applied to validate any kind of export within a file. Whether you need to enforce a specific structure for other metadata, content fields, or custom data exports, Valibot provides the flexibility to define schemas that fit your specific collections.
 
 ### Conclusion
 

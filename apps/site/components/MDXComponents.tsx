@@ -1,5 +1,9 @@
-import { MDXComponents as MDXComponentsType } from 'mdx/types'
-import { CodeBlock, CodeInline, PackageInstall } from 'renoun/components'
+import {
+  CodeBlock,
+  CodeInline,
+  PackageInstall,
+  type MDXComponents as MDXComponentsType,
+} from 'renoun/components'
 import { GeistMono } from 'geist/font/mono'
 
 import { Card } from './Card'
@@ -111,14 +115,14 @@ export const MDXComponents = {
       />
     )
   },
-  pre: (props) => {
-    const { value, language } = CodeBlock.parsePreProps(props)
-
+  pre: ({ value, language, highlightedLines, focusedLines }) => {
     return (
       <CodeBlock
         allowErrors
         value={value}
         language={language}
+        highlightedLines={highlightedLines}
+        focusedLines={focusedLines}
         css={{
           container: {
             fontSize: 'var(--font-size-code)',
