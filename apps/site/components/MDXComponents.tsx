@@ -115,10 +115,10 @@ export const MDXComponents = {
       />
     )
   },
-  pre: ({ value, language, highlightedLines, focusedLines }) => {
+  pre: ({ allowErrors, value, language, highlightedLines, focusedLines }) => {
     return (
       <CodeBlock
-        allowErrors
+        allowErrors={allowErrors}
         value={value}
         language={language}
         highlightedLines={highlightedLines}

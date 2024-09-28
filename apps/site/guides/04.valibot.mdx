@@ -5,7 +5,7 @@ export const metadata = {
     'Learn how to add schema validation to collections using Valibot in Renoun.',
 }
 
-```ts
+```ts allowErrors
 import { collection } from 'renoun/collections'
 import * as v from 'valibot'
 
@@ -43,15 +43,13 @@ Valibot is an open-source schema library for TypeScript, designed with bundle si
 
 First, install `valibot` using your package manager:
 
-```jsx
 <PackageInstall packages={['valibot']} />
-```
 
 #### Define Schema
 
 Now, we'll create a schema using `valibot` for the front matter of an MDX file:
 
-```ts
+```ts allowErrors
 import * as v from 'valibot'
 
 const frontmatterSchema = v.object({
@@ -66,8 +64,8 @@ const frontmatterSchema = v.object({
 
 We can now apply the Valibot `frontmatterSchema` to your collection using the `schema` option in the `collection` utility:
 
-```ts focusedLines="1,11-19"
-import { collection } from 'renoun/collections'
+```ts allowErrors focusedLines="1,11-19"
+import { collection, type MDXContent } from 'renoun/collections'
 import * as v from 'valibot'
 
 const frontmatterSchema = v.object({

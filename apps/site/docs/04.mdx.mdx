@@ -141,9 +141,11 @@ This is an MDX file.
 
 export default function Page() {
   return (
-    <MDXContent remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins}>
-      {content}
-    </MDXContent>
+    <MDXContent
+      remarkPlugins={remarkPlugins}
+      rehypePlugins={rehypePlugins}
+      value={content}
+    />
   )
 }
 ```

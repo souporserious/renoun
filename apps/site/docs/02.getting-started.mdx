@@ -40,9 +40,9 @@ import { collection } from 'renoun/collections'
 
 const posts = collection({ filePattern: 'posts/*.mdx' })
 
-export default async function Page({ params }) {
+export default async function Page({ params }: { params: { slug: string } }) {
   const Content = await posts
-    .getSource(params.slug)
+    .getSource(params.slug)!
     .getExport('default')
     .getValue()
 
@@ -109,7 +109,8 @@ const frontmatterSchema = z.object({
 export const PostsCollection = collection<{
   default: MDXContent
   frontmatter: z.infer<typeof frontmatterSchema>
-}>('posts/*.mdx', {
+}>({
+  filePattern: 'posts/*.mdx',
   baseDirectory: 'posts',
   schema: {
     frontmatter: frontmatterSchema.parse,
@@ -123,7 +124,7 @@ Here we define a schema for the front matter of our MDX files and use it to vali
 
 renoun provides several built-in components to enhance your documentation. For example, you can use the `PackageInstall` component to display installation instructions for a package:
 
-```tsx
+```tsx allowErrors
 <PackageInstall packages={['renoun']} />
 ```
 

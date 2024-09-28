@@ -5,7 +5,7 @@ export const metadata = {
     'Learn how to add schema validation to collections using Zod in Renoun.',
 }
 
-```ts
+```ts allowErrors
 import { collection } from 'renoun/collections'
 import { z } from 'zod'
 
@@ -43,15 +43,13 @@ Zod is a TypeScript-first schema validation library with static type inference. 
 
 First, install `zod` using your package manager:
 
-```jsx
 <PackageInstall packages={['zod']} />
-```
 
 ### Define Schema
 
 Now, we'll create a schema using `zod` for the front matter of an MDX file:
 
-```ts
+```ts allowErrors
 import { z } from 'zod'
 
 const frontmatterSchema = z.object({
@@ -66,8 +64,8 @@ const frontmatterSchema = z.object({
 
 We can now apply the Zod `frontmatterSchema` to your collection using the `schema` option in the `collection` utility:
 
-```ts focusedLines="1,11-19"
-import { collection } from 'renoun/collections'
+```ts allowErrors focusedLines="1,11-19"
+import { collection, type MDXContent } from 'renoun/collections'
 import { z } from 'zod'
 
 const frontmatterSchema = z.object({
