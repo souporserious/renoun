@@ -142,7 +142,7 @@ function TypeChildren({
 
         {type.properties && type.properties.length > 0 ? (
           <div>
-            <h4 css={{ margin: 0 }}>Properties</h4>
+            <h5 css={{ margin: 0 }}>Properties</h5>
             {type.properties.map((property, index) => (
               <TypeValue key={index} type={property} />
             ))}
@@ -290,7 +290,9 @@ function TypeProperties({
           ...cssProp,
         }}
       >
-        <h4 css={{ margin: 0 }}>Properties</h4>
+        <h5 css={{ margin: 0, color: 'var(--color-foreground-secondary)' }}>
+          Properties
+        </h5>
         {type.properties.map((propertyType, index) => (
           <TypeValue key={index} type={propertyType} />
         ))}
