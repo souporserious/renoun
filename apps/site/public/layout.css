@@ -179,6 +179,12 @@ a {
     text-wrap: pretty;
   }
 
+  ul {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
   li {
     text-wrap: pretty;
 
