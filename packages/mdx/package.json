@@ -31,12 +31,12 @@
   },
   "devDependencies": {
     "@types/mdast": "^4.0.4",
-    "@types/mdx": "catalog:",
     "@types/hast": "^3.0.4",
     "@types/unist": "^3.0.3",
     "vfile": "^6.0.3"
   },
   "dependencies": {
+    "@types/mdx": "catalog:",
     "estree-util-value-to-estree": "^3.1.2",
     "hast-util-to-string": "3.0.0",
     "mdast": "^3.0.0",

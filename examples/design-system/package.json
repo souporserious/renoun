@@ -10,7 +10,6 @@
     "@mdx-js/loader": "catalog:",
     "@mdx-js/react": "catalog:",
     "@next/mdx": "catalog:",
-    "@types/mdx": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "next": "catalog:",

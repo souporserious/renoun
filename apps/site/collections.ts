@@ -4,9 +4,8 @@ import {
   isFileSystemSource,
   type FileSystemSource,
   type ExportSource,
-  type MDXContent,
 } from 'renoun/collections'
-import type { Headings } from 'renoun/mdx'
+import type { MDXContent, Headings } from 'renoun/mdx'
 import { z } from 'zod'
 
 type DocsSchema = {

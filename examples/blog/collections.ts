@@ -1,4 +1,5 @@
-import { collection, type MDXContent } from 'renoun/collections'
+import { collection } from 'renoun/collections'
+import type { MDXContent } from 'renoun/mdx'
 import { z } from 'zod'
 
 const frontmatterSchema = z.object({

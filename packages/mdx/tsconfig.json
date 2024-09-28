@@ -1,14 +1,16 @@
 {
   "compilerOptions": {
-    "lib": ["ES2023"],
-    "module": "Node16",
-    "target": "ES2022",
-    "strict": true,
-    "esModuleInterop": true,
+    "target": "ESNext",
+    "lib": ["ESNext"],
     "skipLibCheck": true,
+    "strict": true,
     "forceConsistentCasingInFileNames": true,
-    "outDir": "dist",
+    "esModuleInterop": true,
+    "module": "Node16",
+    "rootDir": "./src",
+    "outDir": "./dist",
     "declaration": true
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  "exclude": ["**/*.test.ts", "dist", "node_modules"]
 }

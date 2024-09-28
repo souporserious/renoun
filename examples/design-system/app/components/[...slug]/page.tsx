@@ -1,9 +1,6 @@
 import { CodeBlock, Tokens } from 'renoun/components'
-import {
-  collection,
-  type MDXContent,
-  type ExportSource,
-} from 'renoun/collections'
+import { collection, type ExportSource } from 'renoun/collections'
+import type { MDXContent } from 'renoun/mdx'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 

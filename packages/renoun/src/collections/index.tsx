@@ -1,5 +1,4 @@
 import * as React from 'react'
-import type { MDXContent } from 'mdx/types'
 import type {
   Project,
   Directory,
@@ -29,8 +28,6 @@ import { getSourcePathMap } from '../utils/get-source-files-path-map.js'
 import { getSourceFilesOrderMap } from '../utils/get-source-files-sort-order.js'
 import { resolveTsConfigPath } from '../utils/resolve-ts-config-path.js'
 import { extractExportByIdentifier } from '../utils/extract-export-by-identifier.js'
-
-export type { MDXContent }
 
 type GetImport = (slug: string) => Promise<any>
 

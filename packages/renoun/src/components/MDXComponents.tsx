@@ -1,6 +1,6 @@
 import * as React from 'react'
-import type { MDXComponents as MDXComponentsType } from 'mdx/types'
 
+import type { MDXComponents as MDXComponentsType } from '../mdx/index.js'
 import type { BaseCodeBlockProps } from './CodeBlock/CodeBlock.js'
 import { CodeBlock } from './CodeBlock/CodeBlock.js'
 import type { CodeInlineProps } from './CodeInline.js'

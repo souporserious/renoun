@@ -11,11 +11,8 @@ Collections are a way to organize and query file-system data in Renoun. They are
 Let's look at an example of how to create a collection for a blog. We'll define a collection that queries all `mdx` files in a `posts` directory:
 
 ```tsx filename="collections.ts"
-import {
-  collection,
-  type FileSystemSource,
-  type MDXContent,
-} from 'renoun/collections'
+import { collection, type FileSystemSource } from 'renoun/collections'
+import type { MDXContent } from 'renoun/mdx'
 
 type PostsSchema = {
   default: MDXContent

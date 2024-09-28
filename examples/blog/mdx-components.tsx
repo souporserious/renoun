@@ -1,5 +1,5 @@
-import { MDXComponents } from 'mdx/types'
 import { CodeBlock, CodeInline } from 'renoun/components'
+import type { MDXComponents } from 'renoun/mdx'
 
 export function useMDXComponents() {
   return {

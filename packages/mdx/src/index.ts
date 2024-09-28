@@ -15,6 +15,8 @@ import { transformRelativeLinks } from './remark/transform-relative-links.js'
 
 export type { Headings } from './remark/add-headings.js'
 
+export type { MDXComponents, MDXContent } from 'mdx/types.js'
+
 export const remarkPlugins = [
   remarkFrontmatter,
   remarkMdxFrontmatter as any,

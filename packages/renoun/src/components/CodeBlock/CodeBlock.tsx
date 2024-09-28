@@ -1,8 +1,8 @@
 import React, { Suspense } from 'react'
 import { type CSSObject, styled } from 'restyle'
-import type { MDXComponents } from 'mdx/types'
 import 'server-only'
 
+import type { MDXComponents } from '../../mdx/index.js'
 import { analyzeSourceText } from '../../project/index.js'
 import { computeDirectionalStyles } from '../../utils/compute-directional-styles.js'
 import { getThemeColors } from '../../utils/get-theme-colors.js'

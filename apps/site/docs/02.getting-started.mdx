@@ -96,7 +96,8 @@ Renoun provides a way to validate module exports using schemas. This ensures tha
 In our Button component example, we can validate the front matter of the MDX file at the call site of our collection using a schema:
 
 ```tsx
-import { collection, type MDXContent } from 'renoun/collections'
+import { collection } from 'renoun/collections'
+import type { MDXContent } from 'renoun/mdx'
 import { z } from 'zod'
 
 const frontmatterSchema = z.object({
