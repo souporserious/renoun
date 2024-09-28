@@ -2,8 +2,8 @@
   "private": true,
   "name": "@examples/design-system",
   "scripts": {
-    "dev": "concurrently \"renoun watch\" \"next dev\"",
-    "build": "node ../../packages/renoun/dist/cli/index.js && next build",
+    "dev": "renoun next dev",
+    "build": "next build",
     "start": "next start"
   },
   "dependencies": {
@@ -20,6 +20,6 @@
     "remark-mdx-frontmatter": "^5.0.0",
     "renoun": "workspace:*",
     "restyle": "catalog:",
-    "webpack": "5.94.0"
+    "webpack": "catalog:"
   }
 }

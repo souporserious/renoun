@@ -37,7 +37,7 @@ export function NavigationLink({
     styles.color = css?.color ?? 'var(--color-foreground-interactive)'
     styles[':hover'] = {
       color: 'var(--color-foreground-interactive-highlighted)',
-      ...css?.[':hover'],
+      ...(css?.[':hover'] as CSSObject),
     }
   }
 

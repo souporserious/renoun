@@ -25,12 +25,7 @@ export default function RootLayout({
         href="/favicon-dark.svg"
         media="(prefers-color-scheme: dark)"
       />
-      <link
-        rel="stylesheet"
-        href="/layout.css"
-        // @ts-expect-error
-        precedence="medium"
-      />
+      <link rel="stylesheet" href="/layout.css" precedence="medium" />
       <body className={GeistSans.className}>
         <PackageInstallScript />
         <script

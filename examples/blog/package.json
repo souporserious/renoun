@@ -3,7 +3,7 @@
   "name": "@examples/blog",
   "scripts": {
     "dev": "renoun next",
-    "build": "node ../../packages/renoun/dist/cli/index.js && next build",
+    "build": "next build",
     "start": "next start"
   },
   "dependencies": {
@@ -20,7 +20,7 @@
     "remark-mdx-frontmatter": "^5.0.0",
     "renoun": "workspace:*",
     "restyle": "catalog:",
-    "webpack": "5.94.0",
+    "webpack": "catalog:",
     "zod": "^3.23.8"
   }
 }

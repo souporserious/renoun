@@ -97,7 +97,7 @@
     "fast-glob": "^3.3.2",
     "glob-parent": "^6.0.2",
     "restyle": "catalog:",
-    "minimatch": "^9.0.4",
+    "minimatch": "^10.0.1",
     "server-only": "0.0.1",
     "shiki": "catalog:",
     "ts-morph": "^23.0.0",
