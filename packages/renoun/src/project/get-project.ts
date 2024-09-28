@@ -8,7 +8,6 @@ const projects = new Map<string, Project>()
 
 const DEFAULT_IGNORED_PATHS = [
   '.git',
-  '.renoun',
   '.next',
   '.turbo',
   'build',

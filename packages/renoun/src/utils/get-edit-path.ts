@@ -45,7 +45,7 @@ export function getEditPath(
     if (gitSource === undefined) {
       if (!warned.has(relativeFilePath)) {
         console.warn(
-          `[renoun] \`getSourcePath\` could not determine the source path for "${relativeFilePath}". Ensure \`gitSource\` is configured at \`.renoun/config.json\`.`
+          `[renoun] \`getSourcePath\` could not determine the source path for "${relativeFilePath}". Ensure the \`gitSource\` property in the \`renoun.json\` at the root of your project is configured correctly. For more information, visit: https://renoun.dev/docs/configuration`
         )
         warned.add(relativeFilePath)
       }

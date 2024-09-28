@@ -102,7 +102,7 @@ export interface ExportSource<Value> extends BaseSource {
   getText(): string
 
   /**
-   * The runtime value of the export loaded from a dynamic import map generated in the `.renoun` directory at the root of the project.
+   * The runtime value of the export loaded from the dynamic import generated at the related collection's call site.
    * Note, any side-effects in modules of targeted files will be run.
    */
   getValue(): Promise<Value>
@@ -1101,7 +1101,7 @@ You can fix this error by ensuring the following:
 
 /**
  * Creates a collection of sources based on a specified file pattern.
- * Note, an import getter for each file extension will be generated at the root of the project in a `.renoun/collections.ts` file.
+ * Note, a dynamic import getter will automatically be generated for each file extension at the call site of this collection.
  *
  * @param filePattern - A pattern to match a set of source files (e.g., "*.ts", "*.mdx").
  * @param options - Optional settings for the collection, including base directory, base path, TypeScript config file path, and a custom sort function.

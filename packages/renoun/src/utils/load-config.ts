@@ -32,7 +32,7 @@ const defaultConfig = {
   },
 } satisfies ConfigurationOptions
 
-/** Load config from `.renoun/config.json`. */
+/** Loads config from `renoun.json` at the root of the project. */
 export function loadConfig(): ConfigurationOptions {
   if (existsSync(configPath)) {
     const userConfig: ConfigurationOptions = JSON.parse(

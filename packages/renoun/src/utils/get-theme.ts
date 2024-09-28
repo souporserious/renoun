@@ -21,7 +21,7 @@ export async function getTheme() {
 
   if (themePath === undefined) {
     throw new Error(
-      '[renoun] The theme is undefined. Either create a config at ".renoun/config.json" that defines a valid theme or set "process.env.RENOUN_THEME_PATH" to a valid theme.'
+      `[renoun] No valid theme found. Ensure the \`theme\` property in the \`renoun.json\` at the root of your project is configured correctly. For more information, visit: https://renoun.dev/docs/configuration`
     )
   }
 

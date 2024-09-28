@@ -10,7 +10,7 @@ function getGitProviderFromUrl(gitSource: string) {
 
 function throwGitSourceError(name: string) {
   throw new Error(
-    `[renoun] \`gitSource\` configuration is required for <${name} />. Configure the \`gitSource\` property in \`.renoun/config.json\`.`
+    `[renoun] \`gitSource\` configuration is required for <${name} />. Ensure the \`gitSource\` property in the \`renoun.json\` at the root of your project is configured correctly. For more information, visit: https://renoun.dev/docs/configuration`
   )
 }
 

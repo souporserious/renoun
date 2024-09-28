@@ -12,7 +12,6 @@ import { ProjectOptions } from './types.js'
 
 const DEFAULT_IGNORED_PATHS = [
   '.git',
-  '.renoun',
   '.next',
   '.turbo',
   'build',
