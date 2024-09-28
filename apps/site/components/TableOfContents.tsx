@@ -31,6 +31,8 @@ export function TableOfContents({
       <nav
         css={{
           pointerEvents: 'auto',
+          display: 'grid',
+          gridTemplateColumns: 'subgrid',
           gridColumn: '6 / -1',
           height: 'var(--body-height)',
           padding: '4rem 0',
@@ -41,6 +43,8 @@ export function TableOfContents({
       >
         <ul
           css={{
+            gridColumn: '1 / 2',
+            gridRow: '1 / -1',
             listStyle: 'none',
             display: 'flex',
             flexDirection: 'column',
