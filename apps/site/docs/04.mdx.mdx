@@ -99,9 +99,28 @@ In addition to the community plugins listed above, Renoun adds specific custom p
 
 Adds an `id` to all headings and exports a `headings` variable.
 
-#### remark `remove-paragraphs`
+#### remark `remove-immediate-paragraphs`
 
-Removes paragraph elements added around list items and component children.
+Removes paragraph elements added around immediate element and component children.
+
+For example, when using elements like `div`, this will remove the paragraph element added around the text content:
+
+```mdx
+<div>
+  An example of using a longer sentence in an element that when formatted by
+  tools like Prettier will be moved to a new line.
+</div>
+```
+
+If you'd like MDX to still wrap the text contents in a paragraph element, you can use a line break before and after the content like so:
+
+```mdx
+<div>
+
+By adding a line break before and after the content, MDX will now wrap this text in a paragraph element.
+
+</div>
+```
 
 #### remark `transform-relative-links`
 

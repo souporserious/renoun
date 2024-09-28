@@ -10,7 +10,7 @@ import rehypeInferReadingTimeMeta from 'rehype-infer-reading-time-meta'
 import { addCodeMetaProps } from './rehype/add-code-meta-props.js'
 import { addReadingTime } from './rehype/add-reading-time.js'
 import { addHeadings } from './remark/add-headings.js'
-import { removeParagraphs } from './remark/remove-paragraphs.js'
+import { removeImmediateParagraphs } from './remark/remove-immediate-paragraphs.js'
 import { transformRelativeLinks } from './remark/transform-relative-links.js'
 
 export type { Headings } from './remark/add-headings.js'
@@ -25,7 +25,7 @@ export const remarkPlugins = [
   remarkStripBadges,
   remarkSqueezeParagraphs,
   remarkUnwrapImages,
-  removeParagraphs,
+  removeImmediateParagraphs,
   transformRelativeLinks,
   addHeadings,
 ]

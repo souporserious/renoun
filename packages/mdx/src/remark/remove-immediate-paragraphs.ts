@@ -1,8 +1,8 @@
 import type { Root, Paragraph, Parent } from 'mdast'
 import { visitParents } from 'unist-util-visit-parents'
 
-/** Removes the paragraph element added around list items and component children. */
-export function removeParagraphs() {
+/** Removes the paragraph element added around immediate children. */
+export function removeImmediateParagraphs() {
   return function (tree: Root) {
     visitParents(tree, 'paragraph', (node: Paragraph, ancestors: Parent[]) => {
       const { children } = node
