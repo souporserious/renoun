@@ -16,10 +16,6 @@ The easiest way to get started using MDX with Renoun is with the `MDXContent` co
 import { MDXContent } from 'renoun/components'
 
 const content = `
----
-title: Hello, world!
----
-
 # Hello, world!
 
 This is an MDX file.
@@ -42,7 +38,7 @@ To learn how to configure MDX with Next.js, check out the [Next.js Guide](/docs/
 
 The `renoun/mdx` import includes pre-configured plugins for both [remark](https://remark.js.org/) and [rehype](https://unifiedjs.com/), which are part the MDX process that parses and transforms MDX content.
 
-You can import these respective collections of plugins and add them to your MDX configuration to extend the functionality of your MDX content.
+You can import these respective plugins and add them to your MDX configuration to extend the functionality of your MDX content.
 
 ```ts
 import { remarkPlugins, rehypePlugins } from 'renoun/mdx'
@@ -138,7 +134,7 @@ Exports the reading time metadata added by `rehype-infer-reading-time-meta` as a
 
 After installing the package, you can import and apply the plugins to the `MDXContent` component or any other MDX configuration in your application.
 
-We'll use the example from before and add the renoun MDX plugins to the `MDXContent` component:
+We'll use the example from before and add the `renoun/mdx` plugins to the `MDXContent` component:
 
 ```tsx
 import { MDXContent } from 'renoun/components'
@@ -165,7 +161,7 @@ export default function Page() {
 }
 ```
 
-By adding `remarkPlugins` and `rehypePlugins`, you can modify how MDX is parsed and rendered, enabling additional functionality in your components.
+Now we can utilize plugins like [remark-frontmatter](#remark-frontmatter) to specify front matter in our MDX content. By adding `remarkPlugins` and `rehypePlugins`, you can modify how MDX is parsed and rendered, enabling additional functionality in your components.
 
 ## Conclusion
 
