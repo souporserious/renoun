@@ -1,4 +1,5 @@
 export { APIReference } from './APIReference.js'
+export { Callout } from './Callout.js'
 export {
   CodeBlock,
   CopyButton,

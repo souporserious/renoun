@@ -1,0 +1,35 @@
+Highlight key messages, provide helpful guidance, and clearly communicate warnings or crucial information to enhance understanding within your content.
+
+- Only use callouts when they are essential to the reader's experience and success.
+- Limit the number of callouts to one or two per section to avoid overwhelming the reader.
+- Avoid placing callouts consecutively, as this can reduce their effectiveness.
+
+## Variant Overrides
+
+To override the default variants of the `Callout` component, you can use the `Callout.variants` method. This method allows you to customize the icon and style of the callout based on the variant:
+
+```tsx allowErrors filename="mdx-components.tsx"
+import { Callout, MDXComponents } from 'renoun/components'
+
+export function useMDXComponents() {
+  return {
+    ...MDXComponents,
+    Callout: Callout.variants({
+      warning: {
+        icon: '⚠️',
+        style: {
+          backgroundColor: 'yellow',
+          color: 'black',
+        },
+      },
+      important: {
+        icon: '📣',
+        style: {
+          backgroundColor: 'red',
+          color: 'white',
+        },
+      },
+    }),
+  }
+}
+```
