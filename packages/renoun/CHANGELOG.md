@@ -1,5 +1,50 @@
 # renoun
 
+## 5.0.0
+
+### Major Changes
+
+- 1c4c390: Moves `MDXContent` and `MDXComponents` type exports to `@renoun/mdx` package.
+- 5fa1a9e: Renames `createCollection` to `collection`.
+
+  ### Breaking Changes
+
+  Replace all instances of `createCollection` with `collection`:
+
+  ```diff
+  -import { createCollection } from 'renoun/collections'
+  +import { collection } from 'renoun/collections'
+
+  -const PostsCollection = createCollection({
+  +const PostsCollection = collection({
+    filePattern: 'posts/*.mdx',
+  })
+  ```
+
+- f5ecc15: Removes `getDefaultExport` and `getNamedExport` from collection export sources in favor of a new `getExport` method. This method works exactly the same as the previous `getNamedExport` method with the addition of accepting `default` as an export. This simplifies the API and reduces the number of methods needed to query an export source.
+
+  ### Breaking Changes
+
+  Update any usage of `getDefaultExport` and `getNamedExport` to use the new `getExport` method:
+
+  - `getDefaultExport()` -> `getExport('default')`
+  - `getNamedExport('metadata')` -> `getExport('metadata')`
+
+### Minor Changes
+
+- 5cdff4d: Adds `@renoun/mdx` to core `renoun` package as a `renoun/mdx` export. The `@renoun/mdx` package was initially split off to make maintenance easier. Since renoun is catering to content authoring, the MDX features should be as easy as possible to use.
+
+### Patch Changes
+
+- 482e1e4: Fixes fast refresh when using a custom JSX pragma.
+- 78080ed: Fixes fast refresh for collections targeting files outside of workspace.
+- abca1f8: Fixes package manager tab panel layout shift on page load.
+- 7e58c6d: Adds better error handling to internal CLI `WebSocketClient`.
+- 5da3781: Fixes watch command running during deployments.
+- Updated dependencies [1c4c390]
+- Updated dependencies [b9d52a3]
+  - @renoun/mdx@1.1.0
+
 ## 4.3.0
 
 ### Minor Changes
