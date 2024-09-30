@@ -1,5 +1,12 @@
 # @renoun/mdx
 
+## 1.1.0
+
+### Minor Changes
+
+- 1c4c390: Moves `MDXContent` and `MDXComponents` type exports to `@renoun/mdx` package.
+- b9d52a3: More descriptive name for remark paragraphs plugin, `removeParagraphs` -> `removeImmediateParagraphs`.
+
 ## 1.0.1
 
 ### Patch Changes
