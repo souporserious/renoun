@@ -50,54 +50,75 @@ export const MDXComponents = {
       />
     )
   },
-  Note: (props) => {
+  Note: ({ children }) => {
     return (
       <div
         css={{
+          '--padding-x': '1.5rem',
+          '--padding-y': '1rem',
+          '--border-width': '5px',
           display: 'flex',
-          alignItems: 'start',
-          width: 'calc(100% + 2rem)',
-          padding: '1.5rem 2rem 1.5rem 1rem',
-          margin: '1rem -1rem',
+          flexDirection: 'column',
+          padding: 'var(--padding-y) var(--padding-x)',
           gap: '1rem',
           backgroundColor: '#1b487d',
           color: 'white',
-          borderLeft: '3px solid #82aaff',
+          borderLeft: 'var(--border-width) solid #82aaff',
           borderRadius: 5,
-          borderTopLeftRadius: 0,
-          borderBottomLeftRadius: 0,
+          position: 'relative',
+
+          '& p': {
+            fontSize: 'var(--font-size-body-2) !important',
+            lineHeight: 'var(--line-height-body-2) !important',
+            textWrap: 'pretty',
+          },
+
+          '& pre': {
+            fontSize: 'var(--font-size-code-small)',
+            lineHeight: 'var(--line-height-code-small)',
+          },
+
+          '@media (min-width: 60rem)': {
+            width: 'calc(100% + 2rem)',
+            margin: '1rem -1rem',
+          },
         }}
       >
         <div
           css={{
-            flexShrink: 0,
+            '--translate-y': '5%',
             display: 'flex',
-            height: '1.5lh',
-            width: '1.5lh',
-            padding: '0.35lh',
-            marginTop: '0.15lh',
+            padding: '0.3rem',
+            position: 'absolute',
+            left: 0,
+            top: 'var(--padding-y)',
+            translate: `calc(-50% - var(--border-width) * 0.5) var(--translate-y)`,
+            backgroundColor: '#82AAFF',
             borderRadius: '100%',
-            backgroundColor: '#1f3a5a',
+
+            '@media (min-width: 60rem)': {
+              '--translate-y': '-14%',
+            },
           }}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            height="100%"
-            width="100%"
             viewBox="0 -960 960 960"
-            fill="#deedff"
+            css={{
+              width: '0.6lh',
+              height: '0.6lh',
+              fill: '#deedff',
+
+              '@media (min-width: 60rem)': {
+                width: '0.8lh',
+                height: '0.8lh',
+              },
+            }}
           >
             <path d="M320-240h320v-80H320v80zm0-160h320v-80H320v80zM240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240zm280-520v-200H240v640h480v-440H520zM240-800v200-200 640-640z" />
           </svg>
         </div>
-        <p
-          css={{
-            fontSize: 'var(--font-size-body-2) !important',
-            lineHeight: 'var(--line-height-body-2) !important',
-            textWrap: 'pretty',
-          }}
-          {...props}
-        />
+        {typeof children === 'string' ? <p>{children}</p> : children}
       </div>
     )
   },
