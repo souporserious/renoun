@@ -52,7 +52,7 @@ export const MDXComponents = {
   },
   Note: ({ children }) => {
     return (
-      <div
+      <aside
         css={{
           '--padding-x': '1.5rem',
           '--padding-y': '1rem',
@@ -119,7 +119,7 @@ export const MDXComponents = {
           </svg>
         </div>
         {typeof children === 'string' ? <p>{children}</p> : children}
-      </div>
+      </aside>
     )
   },
   code: (props) => {
