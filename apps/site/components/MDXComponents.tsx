@@ -97,7 +97,7 @@ export const MDXComponents = {
             borderRadius: '100%',
 
             '@media (min-width: 60rem)': {
-              '--translate-y': '-14%',
+              '--translate-y': '-7%',
             },
           }}
         >
