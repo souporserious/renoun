@@ -45,7 +45,21 @@ The `site` property is used to define the URL of your documentation site. This i
 
 ## Themes
 
-Themes are powered by <a href="https://shiki.style" target="_blank" rel="noopener">shiki</a> and are used to define the themes used to highlight syntax in code blocks. You can create your own theme or use a pre-built theme:
+Themes are powered by <a href="https://shiki.style" target="_blank" rel="noopener">Shiki</a> and specify how source code is highlighted in the `CodeBlock` and `CodeInline` components. You can use a bundled theme or create your own theme.
+
+### Bundled Themes
+
+To use a bundled theme, you can reference a <a href="https://shiki.matsu.io/themes" target="_blank" rel="noopener">valid theme by name</a>:
+
+```json
+{
+  "theme": "nord"
+}
+```
+
+### Custom Themes
+
+To use a custom theme, you can reference a JSON file that defines a <a href="https://code.visualstudio.com/api/extension-guides/color-theme" target="_blank" rel="noopener">VS Code compatible theme</a>:
 
 ```json
 {
