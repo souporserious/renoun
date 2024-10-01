@@ -1,10 +1,16 @@
 'use client'
-import { signal } from '@preact/signals-core'
+import { signal, effect } from '@preact/signals-core'
 
 import { useSignalValue } from 'hooks/use-signal-value'
 import type { CSSObject } from 'restyle'
 
 export const isNavigationOpenSignal = signal(false)
+
+if (typeof document !== 'undefined') {
+  effect(() => {
+    document.body.style.overflow = isNavigationOpenSignal.value ? 'hidden' : ''
+  })
+}
 
 export function NavigationToggle({ css }: { css?: CSSObject }) {
   const isNavigationOpen = useSignalValue(isNavigationOpenSignal)
