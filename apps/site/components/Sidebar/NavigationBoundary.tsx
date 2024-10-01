@@ -33,7 +33,6 @@ export function NavigationBoundary({
   return (
     <aside
       css={{
-        pointerEvents: 'none',
         position: 'fixed',
         inset: 0,
         display: 'grid',
@@ -50,6 +49,11 @@ export function NavigationBoundary({
             display: 'none',
           },
         },
+
+        '@media screen and (min-width: 60rem)': {
+          pointerEvents: 'none',
+        },
+
         ...css,
       }}
       data-open={isNavigationOpen}

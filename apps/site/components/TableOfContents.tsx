@@ -18,13 +18,16 @@ export function TableOfContents({
     <aside
       css={{
         display: 'grid',
-        pointerEvents: 'none',
         position: 'fixed',
         inset: 0,
         gridTemplateColumns: 'var(--grid-template-columns)',
 
         '@media screen and (max-width: calc(60rem - 1px))': {
           display: 'none !important',
+        },
+
+        '@media screen and (min-width: 60rem)': {
+          pointerEvents: 'none',
         },
       }}
     >
