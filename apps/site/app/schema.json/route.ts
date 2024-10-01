@@ -3,23 +3,13 @@ import { z } from 'zod'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 import { bundledThemesInfo } from 'shiki'
 
-const themeValueSchema = z.union([
+const themeSchema = z.union([
   z
     .enum(bundledThemesInfo.map((theme) => theme.id) as [string])
     .describe('A bundled Shiki theme.'),
   z
     .string()
     .describe('A path on the file system to a VS Code compatible theme.'),
-])
-
-const themeSchema = z.union([
-  themeValueSchema,
-  z
-    .object({})
-    .catchall(themeValueSchema)
-    .describe(
-      'Theme object with an arbitrary amount of themes. The first defined theme will be used as the default theme.'
-    ),
 ])
 
 const gitSchema = z.object({
