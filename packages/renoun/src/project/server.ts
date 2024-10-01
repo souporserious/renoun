@@ -8,6 +8,7 @@ import {
   type Highlighter,
 } from '../utils/create-highlighter.js'
 import { getRootDirectory } from '../utils/get-root-directory.js'
+import { resolveType } from '../utils/resolve-type.js'
 import { WebSocketServer } from './rpc/server.js'
 import { getProject } from './get-project.js'
 import { ProjectOptions } from './types.js'
@@ -75,6 +76,31 @@ export function createServer() {
         highlighter: currentHighlighter,
         project,
       })
+    }
+  )
+
+  server.registerMethod(
+    'resolveType',
+    async ({
+      projectOptions,
+      ...options
+    }: {
+      filePath: string
+      position: number
+      projectOptions?: ProjectOptions
+    }) => {
+      const project = await getProject(projectOptions)
+      const sourceFile = project.addSourceFileAtPath(options.filePath)
+      const declaration = sourceFile.getDescendantAtPos(options.position)
+
+      if (!declaration) {
+        throw new Error(
+          `[renoun] Could not find declaration at position ${options.position}`
+        )
+      }
+
+      const exportDeclaration = declaration.getParentOrThrow()
+      return resolveType(exportDeclaration.getType(), exportDeclaration)
     }
   )
 

@@ -1,3 +1,5 @@
+import type { Node } from 'ts-morph'
+
 import type {
   AnalyzeSourceTextOptions,
   AnalyzeSourceTextResult,
@@ -67,4 +69,31 @@ export async function analyzeSourceText(
       })
     }
   )
+}
+
+/**
+ * Resolve the type of an expression.
+ * @internal
+ */
+export async function resolveType({
+  declaration,
+  projectOptions,
+}: {
+  declaration: Node
+  projectOptions?: ProjectOptions
+}) {
+  if (client) {
+    const filePath = declaration.getSourceFile().getFilePath()
+    const position = declaration.getPos()
+
+    return client.callMethod('resolveType', {
+      filePath,
+      position,
+      tsConfigFilePath: projectOptions?.tsConfigFilePath,
+    })
+  }
+
+  return import('../utils/resolve-type.js').then(({ resolveType }) => {
+    return resolveType(declaration.getType(), declaration)
+  })
 }

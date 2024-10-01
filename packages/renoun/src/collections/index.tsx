@@ -11,11 +11,12 @@ import { dirname, resolve } from 'node:path'
 import globParent from 'glob-parent'
 import { minimatch } from 'minimatch'
 
+import { resolveType } from '../project/index.js'
 import { createSlug } from '../utils/create-slug.js'
 import { filePathToPathname } from '../utils/file-path-to-pathname.js'
 import { getJsDocMetadata } from '../utils/get-js-doc-metadata.js'
 import { getExportedDeclaration } from '../utils/get-exported-declaration.js'
-import { resolveType } from '../utils/resolve-type.js'
+import { resolveType as resolveTypeLocal } from '../utils/resolve-type.js'
 import { formatNameAsTitle } from '../utils/format-name-as-title.js'
 import {
   getDeclarationLocation,
@@ -276,9 +277,12 @@ class Export<Value, AllExports extends FileExports = FileExports>
       )
     }
 
-    // TODO: move type processing to web socket server
-
-    return resolveType(this.exportDeclaration.getType(), this.exportDeclaration)
+    return resolveType({
+      declaration: this.exportDeclaration,
+      projectOptions: {
+        tsConfigFilePath: this.source.getCollection().options.tsConfigFilePath,
+      },
+    })
   }
 
   getTitle() {
@@ -821,9 +825,13 @@ class Collection<AllExports extends FileExports>
     options: CollectionOptions<AllExports>,
     getImport?: GetImport | GetImport[]
   ) {
+    if (options.tsConfigFilePath === undefined) {
+      options.tsConfigFilePath = 'tsconfig.json'
+    }
+
     this.options = options
     this.getImport = getImport!
-    this.project = resolveProject(options.tsConfigFilePath ?? 'tsconfig.json')
+    this.project = resolveProject(options.tsConfigFilePath)
 
     const compilerOptions = this.project.getCompilerOptions()
     const tsConfigFilePath = String(compilerOptions.configFilePath)

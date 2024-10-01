@@ -1,6 +1,6 @@
 /** @jsxImportSource restyle */
 /** @jsxRuntime automatic */
-import { Fragment } from 'react'
+import { Fragment, Suspense } from 'react'
 import type { CSSObject } from 'restyle'
 
 import type { ExportSource } from '../collections/index.js'
@@ -20,8 +20,7 @@ const mdxComponents = {
   code: (props) => <MDXComponents.code {...props} paddingY="0" />,
 } satisfies MDXComponents
 
-/** Displays type documentation for all types related to a collection export source. */
-export async function APIReference({ source }: { source: ExportSource<any> }) {
+async function APIReferenceAsync({ source }: { source: ExportSource<any> }) {
   const type = await source.getType()
 
   if (type === undefined) {
@@ -421,5 +420,14 @@ function TypeValue({
           )
         : null}
     </div>
+  )
+}
+
+/** Displays type documentation for all types related to a collection export source. */
+export function APIReference({ source }: { source: ExportSource<any> }) {
+  return (
+    <Suspense fallback="Loading API references...">
+      <APIReferenceAsync source={source} />
+    </Suspense>
   )
 }
