@@ -107,7 +107,7 @@ export const MDXComponents = {
             css={{
               width: '0.6lh',
               height: '0.6lh',
-              fill: '#deedff',
+              fill: '#1b487d',
 
               '@media (min-width: 60rem)': {
                 width: '0.8lh',
