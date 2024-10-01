@@ -204,6 +204,7 @@ async function CodeBlockAsync({
             wordWrap: 'break-word',
             display: 'grid',
             gridTemplateColumns: showLineNumbers ? 'auto 1fr' : undefined,
+            gridAutoRows: 'max-content',
             margin: 0,
             overflow: 'auto',
             backgroundColor: shouldRenderToolbar ? 'inherit' : theme.background,
