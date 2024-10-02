@@ -1,5 +1,20 @@
 # renoun
 
+## 5.1.0
+
+### Minor Changes
+
+- 7b6dc4a: Moves type reference resolution to the `renoun` cli process. This offers a few benefits:
+
+  - Faster page loads in development where the `APIReference` component is used since it now utilizes a `Suspense` boundary
+  - Cross-references between types are now supported which will allow linking type references across pages
+
+### Patch Changes
+
+- 6b321e3: Fixes excessive `CodeBlock` vertical scroll area on mobile Safari.
+- dd1db4c: Improve readability for WebSocket params in error messages.
+- ca95e54: Adds named functions to web socket methods for better debuggability.
+
 ## 5.0.0
 
 ### Major Changes
