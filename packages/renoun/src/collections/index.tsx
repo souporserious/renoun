@@ -16,7 +16,6 @@ import { createSlug } from '../utils/create-slug.js'
 import { filePathToPathname } from '../utils/file-path-to-pathname.js'
 import { getJsDocMetadata } from '../utils/get-js-doc-metadata.js'
 import { getExportedDeclaration } from '../utils/get-exported-declaration.js'
-import { resolveType as resolveTypeLocal } from '../utils/resolve-type.js'
 import { formatNameAsTitle } from '../utils/format-name-as-title.js'
 import {
   getDeclarationLocation,
