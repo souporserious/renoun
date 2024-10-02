@@ -1,4 +1,4 @@
-import type { Node, Project } from "ts-morph";
+import type { Node, Project } from 'ts-morph'
 
 /** The start and and position of the declaration in the file. */
 export type DeclarationPosition = {

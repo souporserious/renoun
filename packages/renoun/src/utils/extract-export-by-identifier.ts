@@ -1,6 +1,7 @@
-import type { SourceFile } from "ts-morph";
-import tsMorph from "ts-morph";
-const { Node, ts } = tsMorph;
+import type { SourceFile } from 'ts-morph'
+import tsMorph from 'ts-morph'
+
+const { Node, ts } = tsMorph
 
 /** Extract a single export and its local dependencies from a source file. */
 export function extractExportByIdentifier(

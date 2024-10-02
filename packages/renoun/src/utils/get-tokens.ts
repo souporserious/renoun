@@ -9,9 +9,10 @@ import { generatedFilenames } from './parse-source-text-metadata.js'
 import type { Highlighter } from './create-highlighter.js'
 import { getTrimmedSourceFileText } from './get-trimmed-source-file-text.js'
 import { splitTokenByRanges } from './split-tokens-by-ranges.js'
-import type { Diagnostic, Project, SourceFile, ts } from "ts-morph";
-import tsMorph from "ts-morph";
-const { Node, SyntaxKind } = tsMorph;
+import type { Diagnostic, Project, SourceFile, ts } from 'ts-morph'
+import tsMorph from 'ts-morph'
+
+const { Node, SyntaxKind } = tsMorph
 
 export const languageMap = {
   mjs: 'js',

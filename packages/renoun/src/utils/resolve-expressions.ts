@@ -1,6 +1,11 @@
-import type { ArrayLiteralExpression, Expression, ObjectLiteralExpression } from "ts-morph";
-import tsMorph from "ts-morph";
-const { Node } = tsMorph;
+import type {
+  ArrayLiteralExpression,
+  Expression,
+  ObjectLiteralExpression,
+} from 'ts-morph'
+import tsMorph from 'ts-morph'
+
+const { Node } = tsMorph
 
 export type LiteralExpressionValue =
   | undefined

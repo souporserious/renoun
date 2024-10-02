@@ -21,6 +21,7 @@ import type {
   Node,
 } from 'ts-morph'
 import tsMorph from 'ts-morph'
+
 const { SyntaxKind, TypeFormatFlags } = tsMorph
 
 export interface BaseType {
