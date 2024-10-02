@@ -2,13 +2,13 @@ import { watch } from 'node:fs'
 import { minimatch } from 'minimatch'
 
 import { writeCollectionImports } from '../collections/write-collection-imports.js'
-import { analyzeSourceText } from '../utils/analyze-source-text.js'
+import { analyzeSourceText as baseAnalyzeSourceText } from '../utils/analyze-source-text.js'
 import {
   createHighlighter,
   type Highlighter,
 } from '../utils/create-highlighter.js'
 import { getRootDirectory } from '../utils/get-root-directory.js'
-import { resolveType } from '../utils/resolve-type.js'
+import { resolveType as baseResolveType } from '../utils/resolve-type.js'
 import { WebSocketServer } from './rpc/server.js'
 import { getProject } from './get-project.js'
 import { ProjectOptions } from './types.js'
@@ -57,12 +57,12 @@ export function createServer() {
 
   server.registerMethod(
     'analyzeSourceText',
-    async ({
+    async function analyzeSourceText({
       projectOptions,
       ...options
-    }: Parameters<typeof analyzeSourceText>[0] & {
+    }: Parameters<typeof baseAnalyzeSourceText>[0] & {
       projectOptions?: ProjectOptions
-    }) => {
+    }) {
       const project = await getProject(projectOptions)
 
       if (currentHighlighter === null) {
@@ -71,7 +71,7 @@ export function createServer() {
         )
       }
 
-      return analyzeSourceText({
+      return baseAnalyzeSourceText({
         ...options,
         highlighter: currentHighlighter,
         project,
@@ -81,14 +81,14 @@ export function createServer() {
 
   server.registerMethod(
     'resolveType',
-    async ({
+    async function resolveType({
       projectOptions,
       ...options
     }: {
       filePath: string
       position: number
       projectOptions?: ProjectOptions
-    }) => {
+    }) {
       const project = await getProject(projectOptions)
       const sourceFile = project.addSourceFileAtPath(options.filePath)
       const declaration = sourceFile.getDescendantAtPos(options.position)
@@ -100,7 +100,7 @@ export function createServer() {
       }
 
       const exportDeclaration = declaration.getParentOrThrow()
-      return resolveType(exportDeclaration.getType(), exportDeclaration)
+      return baseResolveType(exportDeclaration.getType(), exportDeclaration)
     }
   )
 
