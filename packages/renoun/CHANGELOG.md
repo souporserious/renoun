@@ -1,5 +1,16 @@
 # renoun
 
+## 5.2.0
+
+### Minor Changes
+
+- 6fc89d2: Adds `filter` prop to `APIReference` component.
+- d6cdba2: Adds declaration file path to symbol metadata for use when filtering API references.
+
+### Patch Changes
+
+- a753254: Fixes filtered types being treated as reference types when generating API references.
+
 ## 5.1.0
 
 ### Minor Changes
