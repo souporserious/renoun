@@ -8,6 +8,7 @@ import {
   createHighlighter,
   type Highlighter,
 } from '../utils/create-highlighter.js'
+import type { SymbolFilter } from '../utils/resolve-type.js'
 import type { DistributiveOmit } from '../types.js'
 import { WebSocketClient } from './rpc/client.js'
 import { getProject } from './get-project.js'
@@ -78,9 +79,11 @@ export async function analyzeSourceText(
 export async function resolveType({
   declaration,
   projectOptions,
+  filter,
 }: {
   declaration: Node
   projectOptions?: ProjectOptions
+  filter?: SymbolFilter
 }) {
   if (client) {
     const filePath = declaration.getSourceFile().getFilePath()
@@ -89,11 +92,12 @@ export async function resolveType({
     return client.callMethod('resolveType', {
       filePath,
       position,
+      filter: filter?.toString(),
       tsConfigFilePath: projectOptions?.tsConfigFilePath,
     })
   }
 
   return import('../utils/resolve-type.js').then(({ resolveType }) => {
-    return resolveType(declaration.getType(), declaration)
+    return resolveType(declaration.getType(), declaration, filter)
   })
 }

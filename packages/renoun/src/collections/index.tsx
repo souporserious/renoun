@@ -11,11 +11,9 @@ import { dirname, resolve } from 'node:path'
 import globParent from 'glob-parent'
 import { minimatch } from 'minimatch'
 
-import { resolveType } from '../project/index.js'
 import { createSlug } from '../utils/create-slug.js'
+import { extractExportByIdentifier } from '../utils/extract-export-by-identifier.js'
 import { filePathToPathname } from '../utils/file-path-to-pathname.js'
-import { getJsDocMetadata } from '../utils/get-js-doc-metadata.js'
-import { getExportedDeclaration } from '../utils/get-exported-declaration.js'
 import { formatNameAsTitle } from '../utils/format-name-as-title.js'
 import {
   getDeclarationLocation,
@@ -23,11 +21,14 @@ import {
 } from '../utils/get-declaration-location.js'
 import { getDirectorySourceFile } from '../utils/get-directory-source-file.js'
 import { getEditPath } from '../utils/get-edit-path.js'
+import { getExportedDeclaration } from '../utils/get-exported-declaration.js'
 import { getGitMetadata } from '../utils/get-git-metadata.js'
+import { getJsDocMetadata } from '../utils/get-js-doc-metadata.js'
+import { resolveType } from '../project/index.js'
+import { resolveTsConfigPath } from '../utils/resolve-ts-config-path.js'
+import type { SymbolFilter } from '../utils/resolve-type.js'
 import { getSourcePathMap } from '../utils/get-source-files-path-map.js'
 import { getSourceFilesOrderMap } from '../utils/get-source-files-sort-order.js'
-import { resolveTsConfigPath } from '../utils/resolve-ts-config-path.js'
-import { extractExportByIdentifier } from '../utils/extract-export-by-identifier.js'
 
 type GetImport = (slug: string) => Promise<any>
 
@@ -84,7 +85,7 @@ export interface ExportSource<Value> extends BaseSource {
   getName(): string
 
   /** The resolved type of the exported source based on the TypeScript type if it exists. */
-  getType(): Promise<ReturnType<typeof resolveType>>
+  getType(filter?: SymbolFilter): Promise<ReturnType<typeof resolveType>>
 
   /** The name of the exported source formatted as a title. */
   getTitle(): string
@@ -269,7 +270,7 @@ class Export<Value, AllExports extends FileExports = FileExports>
     )
   }
 
-  async getType() {
+  async getType(filter?: SymbolFilter) {
     if (!this.exportDeclaration) {
       throw new Error(
         `[renoun] Export could not be statically analyzed from source file at "${this.source.getPath()}".`
@@ -281,6 +282,7 @@ class Export<Value, AllExports extends FileExports = FileExports>
       projectOptions: {
         tsConfigFilePath: this.source.getCollection().options.tsConfigFilePath,
       },
+      filter,
     })
   }
 

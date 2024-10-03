@@ -8,7 +8,10 @@ import {
   type Highlighter,
 } from '../utils/create-highlighter.js'
 import { getRootDirectory } from '../utils/get-root-directory.js'
-import { resolveType as baseResolveType } from '../utils/resolve-type.js'
+import {
+  resolveType as baseResolveType,
+  type SymbolFilter,
+} from '../utils/resolve-type.js'
 import { WebSocketServer } from './rpc/server.js'
 import { getProject } from './get-project.js'
 import { ProjectOptions } from './types.js'
@@ -83,10 +86,12 @@ export function createServer() {
     'resolveType',
     async function resolveType({
       projectOptions,
+      filter,
       ...options
     }: {
       filePath: string
       position: number
+      filter?: string
       projectOptions?: ProjectOptions
     }) {
       const project = await getProject(projectOptions)
@@ -100,7 +105,29 @@ export function createServer() {
       }
 
       const exportDeclaration = declaration.getParentOrThrow()
-      return baseResolveType(exportDeclaration.getType(), exportDeclaration)
+      const filterFn = filter
+        ? (new Function(
+            'symbolMetadata',
+            `try {
+           return (${filter})(symbolMetadata)
+         } catch (error) {
+           if (error instanceof ReferenceError) {
+             throw new Error(
+               '[renoun]: A ReferenceError occured in the collection filter, this may have been caused by a variable defined outside the function scope. Ensure that all variables are defined within the filter function since it is serialized.',
+               { cause: error }
+             )
+           } else {
+             throw error
+           }
+         }`
+          ) as SymbolFilter)
+        : undefined
+
+      return baseResolveType(
+        exportDeclaration.getType(),
+        exportDeclaration,
+        filterFn
+      )
     }
   )
 

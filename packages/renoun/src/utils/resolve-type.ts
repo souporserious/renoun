@@ -442,9 +442,7 @@ export function resolveType(
         }
       }
 
-      const isFiltered = filter ? filter(symbolMetadata) : true
-
-      if (!isFiltered) {
+      if (filter === defaultFilter ? true : !filter(symbolMetadata)) {
         return {
           kind: 'Reference',
           text: typeText,

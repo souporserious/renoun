@@ -4,24 +4,31 @@ import { Fragment, Suspense } from 'react'
 import type { CSSObject } from 'restyle'
 
 import type { ExportSource } from '../collections/index.js'
-import { CodeInline } from './CodeInline.js'
-import { MDXContent } from './MDXContent.js'
-import { MDXComponents } from './MDXComponents.js'
 import { createSlug } from '../utils/create-slug.js'
 import type {
   AllTypes,
   ResolvedType,
+  SymbolFilter,
   TypeOfKind,
 } from '../utils/resolve-type.js'
 import { isParameterType, isPropertyType } from '../utils/resolve-type.js'
+import { CodeInline } from './CodeInline.js'
+import { MDXContent } from './MDXContent.js'
+import { MDXComponents } from './MDXComponents.js'
 
 const mdxComponents = {
   p: (props) => <p {...props} css={{ margin: 0 }} />,
   code: (props) => <MDXComponents.code {...props} paddingY="0" />,
 } satisfies MDXComponents
 
-async function APIReferenceAsync({ source }: { source: ExportSource<any> }) {
-  const type = await source.getType()
+async function APIReferenceAsync({
+  source,
+  filter,
+}: {
+  source: ExportSource<any>
+  filter?: SymbolFilter
+}) {
+  const type = await source.getType(filter)
 
   if (type === undefined) {
     return null
@@ -424,10 +431,16 @@ function TypeValue({
 }
 
 /** Displays type documentation for all types related to a collection export source. */
-export function APIReference({ source }: { source: ExportSource<any> }) {
+export function APIReference({
+  source,
+  filter,
+}: {
+  source: ExportSource<any>
+  filter?: SymbolFilter
+}) {
   return (
     <Suspense fallback="Loading API references...">
-      <APIReferenceAsync source={source} />
+      <APIReferenceAsync source={source} filter={filter} />
     </Suspense>
   )
 }
