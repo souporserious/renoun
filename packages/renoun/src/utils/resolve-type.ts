@@ -442,11 +442,15 @@ export function resolveType(
         }
       }
 
-      return {
-        kind: 'Reference',
-        text: typeText,
-        ...declarationLocation,
-      } satisfies ReferenceType
+      const isFiltered = filter ? filter(symbolMetadata) : true
+
+      if (!isFiltered) {
+        return {
+          kind: 'Reference',
+          text: typeText,
+          ...declarationLocation,
+        } satisfies ReferenceType
+      }
     }
   }
 
