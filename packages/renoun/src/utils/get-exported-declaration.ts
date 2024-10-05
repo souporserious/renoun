@@ -23,16 +23,16 @@ export function getExportedDeclaration(
         !Node.isPropertyAccessExpression(declaration.getParentOrThrow())
     )
 
-    if (filteredExportDeclarations.length > 1) {
-      const filePath = exportDeclarations[0]
-        .getSourceFile()
-        .getFilePath()
-        .replace(process.cwd(), '')
+    // if (filteredExportDeclarations.length > 1) {
+    //   const filePath = exportDeclarations[0]
+    //     .getSourceFile()
+    //     .getFilePath()
+    //     .replace(process.cwd(), '')
 
-      throw new Error(
-        `[renoun] Multiple declarations found for export after filtering type aliases, interfaces, and property access expressions in source file at ${filePath}. Only one export declaration is currently allowed. Please file an issue for support.`
-      )
-    }
+    //   throw new Error(
+    //     `[renoun] Multiple declarations found for export after filtering type aliases, interfaces, and property access expressions in source file at ${filePath}. Only one export declaration is currently allowed. Please file an issue for support.`
+    //   )
+    // }
 
     return filteredExportDeclarations[0]
   }
