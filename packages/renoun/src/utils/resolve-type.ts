@@ -251,7 +251,6 @@ export type SymbolMetadata = ReturnType<typeof getSymbolMetadata>
 export type SymbolFilter = (symbolMetadata: SymbolMetadata) => boolean
 
 const typeReferences = new WeakSet<Type>()
-const objectReferences = new Set<string>()
 const enclosingNodeMetadata = new WeakMap<Node, SymbolMetadata>()
 const defaultFilter = (metadata: SymbolMetadata) => !metadata.isInNodeModules
 const TYPE_FORMAT_FLAGS =
@@ -265,8 +264,7 @@ export function resolveType(
   enclosingNode?: Node,
   filter: SymbolFilter = defaultFilter,
   isRootType: boolean = true,
-  defaultValues?: Record<string, unknown> | unknown,
-  useReferences: boolean = true
+  defaultValues?: Record<string, unknown> | unknown
 ): ResolvedType | undefined {
   const symbol =
     // First, attempt to get the aliased symbol for imported and aliased types
@@ -276,7 +274,7 @@ export function resolveType(
     // Finally, try to get the symbol of the apparent type
     type.getApparentType().getSymbol()
   const symbolMetadata = getSymbolMetadata(symbol, enclosingNode)
-  const symbolDeclaration = symbol?.getDeclarations().at(0)
+  const symbolDeclaration = getPrimaryDeclaration(symbol)
   const isPrimitive = isPrimitiveType(type)
   const declaration = symbolDeclaration || enclosingNode
   const typeArguments = type.getTypeArguments()
@@ -305,6 +303,24 @@ export function resolveType(
     )
   }
 
+  const isPromise = typeText.startsWith('Promise<') && typeText.endsWith('>')
+
+  /* When the type is a property signature, check if it is referencing an exported symbol. */
+  if (
+    tsMorph.Node.isPropertySignature(enclosingNode) &&
+    tsMorph.Node.isExportable(symbolDeclaration) &&
+    symbolDeclaration.isExported()
+  ) {
+    if (isPromise) {
+      console.log('isReference:', typeText)
+    }
+    return {
+      kind: 'Reference',
+      text: typeText,
+      ...declarationLocation,
+    } satisfies ReferenceType
+  }
+
   /* Use the generic name and type text if the type is a type alias or property signature. */
   let genericTypeArguments: TypeNode[] = []
   let genericTypeName = ''
@@ -324,54 +340,55 @@ export function resolveType(
     }
   }
 
-  if (useReferences) {
-    /** Determine if the enclosing type is referencing a type in node modules. */
-    if (symbol && enclosingNode && !isPrimitive) {
-      const enclosingSymbolMetadata = enclosingNodeMetadata.get(enclosingNode)
-      const inSeparateProjects =
-        enclosingSymbolMetadata?.isInNodeModules === false &&
-        symbolMetadata.isInNodeModules
+  /** Determine if the enclosing type is referencing a type in node modules. */
+  if (symbol && enclosingNode && !isPrimitive) {
+    const enclosingSymbolMetadata = enclosingNodeMetadata.get(enclosingNode)
+    const inSeparateProjects =
+      enclosingSymbolMetadata?.isInNodeModules === false &&
+      symbolMetadata.isInNodeModules
 
-      if (inSeparateProjects) {
-        /**
-         * Additionally, we check if type arguments exist and are all located in node_modules before
-         * treating the entire expression as a reference.
-         */
-        if (
-          typeArguments.length === 0 ||
-          isEveryTypeInNodeModules(typeArguments)
-        ) {
-          if (aliasTypeArguments.length > 0) {
-            const resolvedTypeArguments = aliasTypeArguments
-              .map((type) => resolveType(type, declaration, filter, false))
-              .filter(Boolean) as ResolvedType[]
+    if (inSeparateProjects) {
+      /**
+       * Additionally, we check if type arguments exist and are all located in node_modules before
+       * treating the entire expression as a reference.
+       */
+      if (
+        typeArguments.length === 0 ||
+        isEveryTypeInNodeModules(typeArguments)
+      ) {
+        if (aliasTypeArguments.length > 0) {
+          const resolvedTypeArguments = aliasTypeArguments
+            .map((type) => resolveType(type, declaration, filter, false))
+            .filter(Boolean) as ResolvedType[]
 
-            if (resolvedTypeArguments.length === 0) {
-              return
-            }
-
-            return {
-              kind: 'Generic',
-              text: typeText,
-              typeName: typeName!,
-              arguments: resolvedTypeArguments.map((type) => ({
-                ...type,
-                context: 'parameter',
-              })),
-              ...declarationLocation,
-            } satisfies GenericType
-          } else {
-            if (!declarationLocation.filePath) {
-              throw new Error(
-                `[resolveType]: No file path found for "${typeText}". Please file an issue if you encounter this error.`
-              )
-            }
-            return {
-              kind: 'Reference',
-              text: typeText,
-              ...declarationLocation,
-            } satisfies ReferenceType
+          if (resolvedTypeArguments.length === 0) {
+            return
           }
+
+          return {
+            kind: 'Generic',
+            text: typeText,
+            typeName: typeName!,
+            arguments: resolvedTypeArguments.map((type) => ({
+              ...type,
+              context: 'parameter',
+            })),
+            ...declarationLocation,
+          } satisfies GenericType
+        } else {
+          if (!declarationLocation.filePath) {
+            throw new Error(
+              `[resolveType]: No file path found for "${typeText}". Please file an issue if you encounter this error.`
+            )
+          }
+          if (isPromise) {
+            console.log('isReference:', typeText)
+          }
+          return {
+            kind: 'Reference',
+            text: typeText,
+            ...declarationLocation,
+          } satisfies ReferenceType
         }
       }
     }
@@ -396,7 +413,7 @@ export function resolveType(
     const hasReference = typeReferences.has(type)
 
     if (
-      hasReference ||
+      (hasReference && !symbolMetadata.isGlobal) ||
       ((isLocallyExportedReference ||
         isExternalNonNodeModuleReference ||
         isNodeModuleReference) &&
@@ -406,40 +423,6 @@ export function resolveType(
         throw new Error(
           `[resolveType]: No file path found for "${typeText}". Please file an issue if you encounter this error.`
         )
-      }
-
-      /* Check if the reference is an object. This is specifically used in the `isComponent` function. */
-      let isObject = false
-
-      if (
-        isLocallyExportedReference ||
-        isExternalNonNodeModuleReference ||
-        isNodeModuleReference
-      ) {
-        const resolvedReferenceType = resolveType(
-          type,
-          enclosingNode,
-          filter,
-          isRootType,
-          defaultValues,
-          false
-        )
-
-        if (resolvedReferenceType?.kind === 'Object') {
-          isObject = true
-        } else if (resolvedReferenceType?.kind === 'Union') {
-          isObject = resolvedReferenceType.members.every(
-            (property) => property.kind === 'Object'
-          )
-        }
-
-        if (isObject) {
-          const referenceId = getReferenceId({
-            text: typeText,
-            ...declarationLocation,
-          })
-          objectReferences.add(referenceId)
-        }
       }
 
       if (filter === defaultFilter ? true : !filter(symbolMetadata)) {
@@ -504,7 +487,6 @@ export function resolveType(
         element: resolvedElementType,
       } satisfies ArrayType
     } else {
-      typeReferences.delete(type)
       return
     }
   } else {
@@ -527,8 +509,6 @@ export function resolveType(
 
       /* If the any of the type arguments are references, they need need to be linked to the generic type. */
       if (everyTypeArgumentIsReference && resolvedTypeArguments.length > 0) {
-        typeReferences.delete(type)
-
         return {
           kind: 'Generic',
           text: genericTypeText,
@@ -542,7 +522,7 @@ export function resolveType(
       }
     }
 
-    if (type.isClass()) {
+    if (type.isClass() || tsMorph.Node.isClassDeclaration(symbolDeclaration)) {
       if (tsMorph.Node.isClassDeclaration(symbolDeclaration)) {
         resolvedType = resolveClass(symbolDeclaration, filter)
         if (symbolMetadata.name) {
@@ -585,7 +565,6 @@ export function resolveType(
           .filter(Boolean) as ResolvedType[]
 
         if (resolvedIntersectionTypes.length === 0) {
-          typeReferences.delete(type)
           return
         }
 
@@ -624,7 +603,6 @@ export function resolveType(
         }
 
         if (resolvedUnionTypes.length === 0) {
-          typeReferences.delete(type)
           return
         }
 
@@ -663,7 +641,6 @@ export function resolveType(
       }
 
       if (properties.length === 0) {
-        typeReferences.delete(type)
         return
       }
 
@@ -694,7 +671,6 @@ export function resolveType(
       )
 
       if (elements.length === 0) {
-        typeReferences.delete(type)
         return
       }
 
@@ -763,7 +739,6 @@ export function resolveType(
             .filter(Boolean) as ResolvedType[]
 
           if (resolvedTypeArguments.length === 0) {
-            typeReferences.delete(type)
             return
           }
 
@@ -778,7 +753,6 @@ export function resolveType(
             })),
           } satisfies GenericType
         } else if (properties.length === 0) {
-          typeReferences.delete(type)
           return
         } else {
           resolvedType = {
@@ -796,8 +770,6 @@ export function resolveType(
         const apparentType = type.getApparentType()
 
         if (type !== apparentType) {
-          typeReferences.delete(type)
-
           return resolveType(
             apparentType,
             declaration,
@@ -809,8 +781,6 @@ export function resolveType(
       }
     }
   }
-
-  typeReferences.delete(type)
 
   let metadataDeclaration = declaration
 
@@ -1454,6 +1424,41 @@ function resolveClassProperty(
   )
 }
 
+/** Get the primary declaration of a symbol preferred by type hierarchy. */
+function getPrimaryDeclaration(symbol: Symbol | undefined): Node | undefined {
+  if (!symbol) return undefined
+
+  const declarations = symbol.getDeclarations()
+
+  // Prioritize declarations based on the preferred type hierarchy
+  // Type-related symbols: TypeAlias, Interface, Enum, Class
+  const typeRelatedDeclaration = declarations.find(
+    (declaration) =>
+      declaration.getKind() === SyntaxKind.TypeAliasDeclaration ||
+      declaration.getKind() === SyntaxKind.InterfaceDeclaration ||
+      declaration.getKind() === SyntaxKind.EnumDeclaration ||
+      declaration.getKind() === SyntaxKind.ClassDeclaration
+  )
+
+  if (typeRelatedDeclaration) {
+    return typeRelatedDeclaration
+  }
+
+  // If no type-related declaration, check for functions with a body in the case of function overloads
+  const functionWithBodyDeclaration = declarations.find((declaration) => {
+    return (
+      tsMorph.Node.isFunctionDeclaration(declaration) && declaration.hasBody()
+    )
+  })
+
+  if (functionWithBodyDeclaration) {
+    return functionWithBodyDeclaration
+  }
+
+  // If no type-related or function with body, fallback to any available declaration
+  return declarations[0]
+}
+
 /** Determines if a type is readonly. */
 function isTypeReadonly(type: Type, enclosingNode: Node | undefined) {
   let isReadonly = false
@@ -1490,16 +1495,6 @@ function isTypeReadonly(type: Type, enclosingNode: Node | undefined) {
   return isReadonly
 }
 
-/** Generate an id based on the type metadata. */
-function getReferenceId(typeMetadata: BaseType) {
-  return (
-    typeMetadata.text +
-    typeMetadata.path +
-    typeMetadata.position?.start.line +
-    typeMetadata.position?.start.column
-  )
-}
-
 /** Determines if a function is a component based on its name and call signature shape. */
 export function isComponent(
   name: string | undefined,
@@ -1516,29 +1511,8 @@ export function isComponent(
   }
 
   return callSignatures.every((signature) => {
-    if (
-      signature.returnType === 'ReactNode' ||
-      signature.returnType.endsWith('Element')
-    ) {
-      return true
-    } else if (signature.parameters.length === 1) {
-      const firstParameter = signature.parameters.at(0)!
-
-      if (firstParameter.kind === 'Object') {
-        return true
-      }
-
-      if (firstParameter.kind === 'Union') {
-        return firstParameter.members.every(
-          (property) => property.kind === 'Object'
-        )
-      }
-
-      if (firstParameter.kind === 'Reference') {
-        const referenceId = getReferenceId(firstParameter)
-        return Boolean(objectReferences.has(referenceId))
-      }
-    }
+    const parameterCount = signature.parameters.length
+    return parameterCount === 0 || parameterCount === 1
   })
 }
 
