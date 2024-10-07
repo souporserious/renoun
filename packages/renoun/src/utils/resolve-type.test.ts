@@ -1901,7 +1901,143 @@ describe('processProperties', () => {
     const typeAlias = sourceFile.getTypeAliasOrThrow('FileSystemSource')
     const processedProperties = resolveType(typeAlias.getType(), typeAlias)
 
-    // console.log(JSON.stringify(processedProperties, null, 2))
+    expect(processedProperties).toMatchInlineSnapshot(`
+      {
+        "filePath": "test.ts",
+        "kind": "Object",
+        "name": "FileSystemSource",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 3,
+          },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "properties": [
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": true,
+            "isReadonly": false,
+            "kind": "Class",
+            "name": "collection",
+            "position": {
+              "end": {
+                "column": 35,
+                "line": 2,
+              },
+              "start": {
+                "column": 3,
+                "line": 2,
+              },
+            },
+            "properties": [
+              {
+                "defaultValue": "undefined",
+                "element": {
+                  "filePath": "test.ts",
+                  "kind": "Object",
+                  "name": "FileSystemSource",
+                  "position": {
+                    "end": {
+                      "column": 2,
+                      "line": 3,
+                    },
+                    "start": {
+                      "column": 1,
+                      "line": 1,
+                    },
+                  },
+                  "properties": [
+                    {
+                      "context": "property",
+                      "defaultValue": undefined,
+                      "filePath": "test.ts",
+                      "isOptional": true,
+                      "isReadonly": false,
+                      "kind": "Class",
+                      "name": "collection",
+                      "position": {
+                        "end": {
+                          "column": 35,
+                          "line": 2,
+                        },
+                        "start": {
+                          "column": 3,
+                          "line": 2,
+                        },
+                      },
+                      "properties": [
+                        {
+                          "defaultValue": "undefined",
+                          "element": {
+                            "filePath": "test.ts",
+                            "kind": "Reference",
+                            "position": {
+                              "end": {
+                                "column": 2,
+                                "line": 3,
+                              },
+                              "start": {
+                                "column": 1,
+                                "line": 1,
+                              },
+                            },
+                            "text": "FileSystemSource<Exports>",
+                          },
+                          "filePath": "test.ts",
+                          "isReadonly": false,
+                          "kind": "Array",
+                          "name": "sources",
+                          "position": {
+                            "end": {
+                              "column": 52,
+                              "line": 6,
+                            },
+                            "start": {
+                              "column": 3,
+                              "line": 6,
+                            },
+                          },
+                          "scope": undefined,
+                          "text": "Array<FileSystemSource<Exports>>",
+                          "visibility": undefined,
+                        },
+                      ],
+                      "text": "Collection<Exports>",
+                    },
+                  ],
+                  "text": "FileSystemSource<Exports>",
+                },
+                "filePath": "test.ts",
+                "isReadonly": false,
+                "kind": "Array",
+                "name": "sources",
+                "position": {
+                  "end": {
+                    "column": 52,
+                    "line": 6,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 6,
+                  },
+                },
+                "scope": undefined,
+                "text": "Array<FileSystemSource<Exports>>",
+                "visibility": undefined,
+              },
+            ],
+            "text": "Collection<Exports>",
+          },
+        ],
+        "text": "FileSystemSource<Exports>",
+      }
+    `)
   })
 
   test('references property signature types located in node_modules', () => {
