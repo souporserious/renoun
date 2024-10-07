@@ -1974,24 +1974,9 @@ describe('processProperties', () => {
                       "properties": [
                         {
                           "defaultValue": "undefined",
-                          "element": {
-                            "filePath": "test.ts",
-                            "kind": "Reference",
-                            "position": {
-                              "end": {
-                                "column": 2,
-                                "line": 3,
-                              },
-                              "start": {
-                                "column": 1,
-                                "line": 1,
-                              },
-                            },
-                            "text": "FileSystemSource<Exports>",
-                          },
                           "filePath": "test.ts",
                           "isReadonly": false,
-                          "kind": "Array",
+                          "kind": "Reference",
                           "name": "sources",
                           "position": {
                             "end": {

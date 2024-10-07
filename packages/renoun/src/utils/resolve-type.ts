@@ -432,12 +432,16 @@ export function resolveType(
     }
   }
 
-  if (!symbolMetadata.isGlobal && !symbolMetadata.isVirtual) {
-    if (symbolMetadata.isExported) {
-      exportedReferences.add(type)
-    } else {
-      rootReferences.add(type)
-    }
+  if (
+    symbolMetadata.isExported &&
+    !symbolMetadata.isGlobal &&
+    !symbolMetadata.isVirtual
+  ) {
+    exportedReferences.add(type)
+  }
+
+  if (!symbolMetadata.isVirtual) {
+    rootReferences.add(type)
   }
 
   let resolvedType: ResolvedType = {
