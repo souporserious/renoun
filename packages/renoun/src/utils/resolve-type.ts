@@ -303,17 +303,12 @@ export function resolveType(
     )
   }
 
-  const isPromise = typeText.startsWith('Promise<') && typeText.endsWith('>')
-
   /* When the type is a property signature, check if it is referencing an exported symbol. */
   if (
     tsMorph.Node.isPropertySignature(enclosingNode) &&
     tsMorph.Node.isExportable(symbolDeclaration) &&
     symbolDeclaration.isExported()
   ) {
-    if (isPromise) {
-      console.log('isReference:', typeText)
-    }
     return {
       kind: 'Reference',
       text: typeText,
@@ -380,9 +375,6 @@ export function resolveType(
             throw new Error(
               `[resolveType]: No file path found for "${typeText}". Please file an issue if you encounter this error.`
             )
-          }
-          if (isPromise) {
-            console.log('isReference:', typeText)
           }
           return {
             kind: 'Reference',
