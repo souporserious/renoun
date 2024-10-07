@@ -413,7 +413,7 @@ export function resolveType(
     const hasReference = typeReferences.has(type)
 
     if (
-      (hasReference && !symbolMetadata.isGlobal) ||
+      hasReference ||
       ((isLocallyExportedReference ||
         isExternalNonNodeModuleReference ||
         isNodeModuleReference) &&
@@ -435,8 +435,8 @@ export function resolveType(
     }
   }
 
-  /* If the type is not virtual, store it as a reference. */
-  if (!symbolMetadata.isVirtual) {
+  /* If the type is not global or virtual, store it as a reference. */
+  if (!symbolMetadata.isGlobal && !symbolMetadata.isVirtual) {
     typeReferences.add(type)
   }
 
