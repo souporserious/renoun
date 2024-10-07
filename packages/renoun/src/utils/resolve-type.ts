@@ -1,9 +1,3 @@
-import { getJsDocMetadata } from './get-js-doc-metadata.js'
-import {
-  getPropertyDefaultValueKey,
-  getPropertyDefaultValue,
-} from './get-property-default-value.js'
-import { getSymbolDescription } from './get-symbol-description.js'
 import type {
   ClassDeclaration,
   FunctionDeclaration,
@@ -22,7 +16,12 @@ import type {
 } from 'ts-morph'
 import tsMorph from 'ts-morph'
 
-const { SyntaxKind, TypeFormatFlags } = tsMorph
+import { getJsDocMetadata } from './get-js-doc-metadata.js'
+import {
+  getPropertyDefaultValueKey,
+  getPropertyDefaultValue,
+} from './get-property-default-value.js'
+import { getSymbolDescription } from './get-symbol-description.js'
 
 export interface BaseType {
   /** Distinguishs between different kinds of types, such as primitives, objects, classes, functions, etc. */
@@ -259,9 +258,9 @@ const rootReferences = new WeakSet<Type>()
 const enclosingNodeMetadata = new WeakMap<Node, SymbolMetadata>()
 const defaultFilter = (metadata: SymbolMetadata) => !metadata.isInNodeModules
 const TYPE_FORMAT_FLAGS =
-  TypeFormatFlags.NoTruncation |
-  TypeFormatFlags.UseAliasDefinedOutsideCurrentScope |
-  TypeFormatFlags.WriteArrayAsGenericType
+  tsMorph.TypeFormatFlags.NoTruncation |
+  tsMorph.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope |
+  tsMorph.TypeFormatFlags.WriteArrayAsGenericType
 
 /** Process type metadata. */
 export function resolveType(
@@ -899,7 +898,10 @@ export function resolveSignature(
 
   const returnType = signature
     .getReturnType()
-    .getText(undefined, TypeFormatFlags.UseAliasDefinedOutsideCurrentScope)
+    .getText(
+      undefined,
+      tsMorph.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope
+    )
   const parametersText = resolvedParameters
     .map((parameter) => {
       const questionMark = parameter.isOptional ? '?' : ''
@@ -1271,15 +1273,15 @@ function getVisibility(
     | GetAccessorDeclaration
     | PropertyDeclaration
 ) {
-  if (node.hasModifier(SyntaxKind.PrivateKeyword)) {
+  if (node.hasModifier(tsMorph.SyntaxKind.PrivateKeyword)) {
     return 'private'
   }
 
-  if (node.hasModifier(SyntaxKind.ProtectedKeyword)) {
+  if (node.hasModifier(tsMorph.SyntaxKind.ProtectedKeyword)) {
     return 'protected'
   }
 
-  if (node.hasModifier(SyntaxKind.PublicKeyword)) {
+  if (node.hasModifier(tsMorph.SyntaxKind.PublicKeyword)) {
     return 'public'
   }
 }
@@ -1332,21 +1334,21 @@ export function resolveClass(
       tsMorph.Node.isGetAccessorDeclaration(member) ||
       tsMorph.Node.isSetAccessorDeclaration(member)
     ) {
-      if (!member.hasModifier(SyntaxKind.PrivateKeyword)) {
+      if (!member.hasModifier(tsMorph.SyntaxKind.PrivateKeyword)) {
         if (!classMetadata.accessors) {
           classMetadata.accessors = []
         }
         classMetadata.accessors.push(resolveClassAccessor(member, filter))
       }
     } else if (tsMorph.Node.isMethodDeclaration(member)) {
-      if (!member.hasModifier(SyntaxKind.PrivateKeyword)) {
+      if (!member.hasModifier(tsMorph.SyntaxKind.PrivateKeyword)) {
         if (!classMetadata.methods) {
           classMetadata.methods = []
         }
         classMetadata.methods.push(resolveClassMethod(member, filter))
       }
     } else if (tsMorph.Node.isPropertyDeclaration(member)) {
-      if (!member.hasModifier(SyntaxKind.PrivateKeyword)) {
+      if (!member.hasModifier(tsMorph.SyntaxKind.PrivateKeyword)) {
         if (!classMetadata.properties) {
           classMetadata.properties = []
         }
@@ -1451,10 +1453,10 @@ function getPrimaryDeclaration(symbol: Symbol | undefined): Node | undefined {
   // Type-related symbols: TypeAlias, Interface, Enum, Class
   const typeRelatedDeclaration = declarations.find(
     (declaration) =>
-      declaration.getKind() === SyntaxKind.TypeAliasDeclaration ||
-      declaration.getKind() === SyntaxKind.InterfaceDeclaration ||
-      declaration.getKind() === SyntaxKind.EnumDeclaration ||
-      declaration.getKind() === SyntaxKind.ClassDeclaration
+      declaration.getKind() === tsMorph.SyntaxKind.TypeAliasDeclaration ||
+      declaration.getKind() === tsMorph.SyntaxKind.InterfaceDeclaration ||
+      declaration.getKind() === tsMorph.SyntaxKind.EnumDeclaration ||
+      declaration.getKind() === tsMorph.SyntaxKind.ClassDeclaration
   )
 
   if (typeRelatedDeclaration) {
