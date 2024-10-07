@@ -7,6 +7,7 @@ import type {
   Project,
   PropertyDeclaration,
   PropertySignature,
+  IndexSignatureDeclaration,
   SetAccessorDeclaration,
   Signature,
   Symbol,
@@ -115,12 +116,18 @@ export interface TupleType extends BaseType {
 
 export interface ObjectType extends BaseType {
   kind: 'Object'
-  properties: PropertyTypes[]
+  properties: (IndexType | PropertyTypes)[]
 }
 
 export interface IntersectionType extends BaseType {
   kind: 'Intersection'
   properties: ResolvedType[]
+}
+
+export interface IndexType extends BaseType {
+  kind: 'Index'
+  key: ResolvedType
+  value: ResolvedType
 }
 
 export interface EnumType extends BaseType {
@@ -218,6 +225,7 @@ export type BaseTypes =
   | TupleType
   | ObjectType
   | IntersectionType
+  | IndexType
   | EnumType
   | UnionType
   | ClassType
@@ -733,6 +741,11 @@ export function resolveType(
           text: typeText,
         } satisfies PrimitiveType
       } else if (type.isObject()) {
+        const indexSignatures = resolveIndexSignatures(
+          symbolDeclaration,
+          filter,
+          false
+        )
         const properties = resolveTypeProperties(
           type,
           enclosingNode,
@@ -741,7 +754,11 @@ export function resolveType(
           defaultValues
         )
 
-        if (properties.length === 0 && typeArguments.length > 0) {
+        if (
+          indexSignatures.length === 0 &&
+          properties.length === 0 &&
+          typeArguments.length > 0
+        ) {
           const resolvedTypeArguments = typeArguments
             .map((type) =>
               resolveType(type, declaration, filter, false, defaultValues)
@@ -763,6 +780,13 @@ export function resolveType(
               context: 'parameter',
             })),
           } satisfies GenericType
+        } else if (properties.length === 0 && indexSignatures.length > 0) {
+          resolvedType = {
+            kind: 'Object',
+            name: symbolMetadata.name,
+            text: typeText,
+            properties: indexSignatures,
+          } satisfies ObjectType
         } else if (properties.length === 0) {
           rootReferences.delete(type)
           return
@@ -771,10 +795,13 @@ export function resolveType(
             kind: 'Object',
             name: symbolMetadata.name,
             text: typeText,
-            properties: properties.map((property) => ({
-              ...property,
-              context: 'property',
-            })),
+            properties: [
+              ...indexSignatures,
+              ...properties.map((property) => ({
+                ...property,
+                context: 'property',
+              })),
+            ] as PropertyTypes[],
           } satisfies ObjectType
         }
       } else {
@@ -931,6 +958,65 @@ export function resolveSignature(
     modifier,
     returnType,
   }
+}
+
+/** Process index signatures of an interface or type alias. */
+export function resolveIndexSignatures(
+  node?: Node,
+  filter: SymbolFilter = defaultFilter,
+  isRootType: boolean = true
+) {
+  return getIndexSignatures(node).map((indexSignature) => {
+    const text = indexSignature.getText()
+    const keyType = resolveType(
+      indexSignature.getKeyType(),
+      indexSignature,
+      filter,
+      isRootType
+    )
+
+    if (!keyType) {
+      throw new Error(
+        `[renoun]: No key type found for "${text}". Please file an issue if you encounter this error.`
+      )
+    }
+
+    const valueType = resolveType(
+      indexSignature.getReturnType(),
+      indexSignature,
+      filter,
+      isRootType
+    )
+
+    if (!valueType) {
+      throw new Error(
+        `[renoun]: No value type found for "${text}". Please file an issue if you encounter this error.`
+      )
+    }
+
+    return {
+      kind: 'Index',
+      key: keyType,
+      value: valueType,
+      text,
+    } satisfies IndexType
+  }) as IndexType[]
+}
+
+/** Get the index signature of an interface or type alias. */
+function getIndexSignatures(node?: Node) {
+  let indexSignatures: IndexSignatureDeclaration[] = []
+
+  if (tsMorph.Node.isInterfaceDeclaration(node)) {
+    indexSignatures = node.getIndexSignatures()
+  } else if (tsMorph.Node.isTypeAliasDeclaration(node)) {
+    const typeNode = node.getTypeNodeOrThrow()
+    if (tsMorph.Node.isTypeLiteral(typeNode)) {
+      indexSignatures = typeNode.getIndexSignatures()
+    }
+  }
+
+  return indexSignatures
 }
 
 /** Process all apparent properties of a given type. */
