@@ -250,7 +250,12 @@ export type SymbolMetadata = ReturnType<typeof getSymbolMetadata>
 
 export type SymbolFilter = (symbolMetadata: SymbolMetadata) => boolean
 
-const typeReferences = new WeakSet<Type>()
+/** Tracks exported references to link types together. */
+const exportedReferences = new WeakSet<Type>()
+
+/** Tracks root type references to prevent infinite recursion. */
+const rootReferences = new WeakSet<Type>()
+
 const enclosingNodeMetadata = new WeakMap<Node, SymbolMetadata>()
 const defaultFilter = (metadata: SymbolMetadata) => !metadata.isInNodeModules
 const TYPE_FORMAT_FLAGS =
@@ -389,6 +394,7 @@ export function resolveType(
      * Determine if the symbol should be treated as a reference.
      * TODO: this should account for what's actually exported from package.json exports to determine what's resolved.
      */
+    const isReference = exportedReferences.has(type) || rootReferences.has(type)
     const isLocallyExportedReference =
       !isRootType &&
       !symbolMetadata.isInNodeModules &&
@@ -402,10 +408,9 @@ export function resolveType(
       typeArguments.length === 0 &&
       aliasTypeArguments.length === 0 &&
       genericTypeArguments.length === 0
-    const hasReference = typeReferences.has(type)
 
     if (
-      hasReference ||
+      isReference ||
       ((isLocallyExportedReference ||
         isExternalNonNodeModuleReference ||
         isNodeModuleReference) &&
@@ -427,9 +432,12 @@ export function resolveType(
     }
   }
 
-  /* If the type is not global or virtual, store it as a reference. */
   if (!symbolMetadata.isGlobal && !symbolMetadata.isVirtual) {
-    typeReferences.add(type)
+    if (symbolMetadata.isExported) {
+      exportedReferences.add(type)
+    } else {
+      rootReferences.add(type)
+    }
   }
 
   let resolvedType: ResolvedType = {
@@ -479,6 +487,7 @@ export function resolveType(
         element: resolvedElementType,
       } satisfies ArrayType
     } else {
+      rootReferences.delete(type)
       return
     }
   } else {
@@ -501,6 +510,8 @@ export function resolveType(
 
       /* If the any of the type arguments are references, they need need to be linked to the generic type. */
       if (everyTypeArgumentIsReference && resolvedTypeArguments.length > 0) {
+        rootReferences.delete(type)
+
         return {
           kind: 'Generic',
           text: genericTypeText,
@@ -557,6 +568,7 @@ export function resolveType(
           .filter(Boolean) as ResolvedType[]
 
         if (resolvedIntersectionTypes.length === 0) {
+          rootReferences.delete(type)
           return
         }
 
@@ -595,6 +607,7 @@ export function resolveType(
         }
 
         if (resolvedUnionTypes.length === 0) {
+          rootReferences.delete(type)
           return
         }
 
@@ -633,6 +646,7 @@ export function resolveType(
       }
 
       if (properties.length === 0) {
+        rootReferences.delete(type)
         return
       }
 
@@ -663,6 +677,7 @@ export function resolveType(
       )
 
       if (elements.length === 0) {
+        rootReferences.delete(type)
         return
       }
 
@@ -731,6 +746,7 @@ export function resolveType(
             .filter(Boolean) as ResolvedType[]
 
           if (resolvedTypeArguments.length === 0) {
+            rootReferences.delete(type)
             return
           }
 
@@ -745,6 +761,7 @@ export function resolveType(
             })),
           } satisfies GenericType
         } else if (properties.length === 0) {
+          rootReferences.delete(type)
           return
         } else {
           resolvedType = {
@@ -762,6 +779,8 @@ export function resolveType(
         const apparentType = type.getApparentType()
 
         if (type !== apparentType) {
+          rootReferences.delete(type)
+
           return resolveType(
             apparentType,
             declaration,
@@ -773,6 +792,8 @@ export function resolveType(
       }
     }
   }
+
+  rootReferences.delete(type)
 
   let metadataDeclaration = declaration
 

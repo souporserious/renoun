@@ -5272,7 +5272,7 @@ describe('processProperties', () => {
                 },
                 {
                   "filePath": "test.ts",
-                  "kind": "Intersection",
+                  "kind": "Object",
                   "name": undefined,
                   "position": {
                     "end": {
@@ -5286,19 +5286,25 @@ describe('processProperties', () => {
                   },
                   "properties": [
                     {
+                      "context": "property",
+                      "defaultValue": undefined,
                       "filePath": "test.ts",
-                      "kind": "Reference",
+                      "isOptional": false,
+                      "isReadonly": false,
+                      "kind": "String",
+                      "name": "color",
                       "position": {
                         "end": {
-                          "column": 36,
+                          "column": 33,
                           "line": 1,
                         },
                         "start": {
-                          "column": 1,
+                          "column": 20,
                           "line": 1,
                         },
                       },
-                      "text": "BaseProps",
+                      "text": "string",
+                      "value": undefined,
                     },
                     {
                       "context": "property",
@@ -7759,7 +7765,7 @@ describe('processProperties', () => {
                 },
                 {
                   "filePath": "test.ts",
-                  "kind": "Intersection",
+                  "kind": "Object",
                   "name": undefined,
                   "position": {
                     "end": {
@@ -7815,19 +7821,116 @@ describe('processProperties', () => {
                       "value": undefined,
                     },
                     {
+                      "context": "property",
+                      "defaultValue": undefined,
+                      "description": "Controls how types are rendered.",
                       "filePath": "test.ts",
-                      "kind": "Reference",
+                      "isOptional": true,
+                      "isReadonly": false,
+                      "kind": "Function",
+                      "name": "children",
                       "position": {
                         "end": {
-                          "column": 2,
-                          "line": 20,
+                          "column": 23,
+                          "line": 19,
                         },
                         "start": {
-                          "column": 1,
-                          "line": 15,
+                          "column": 3,
+                          "line": 17,
                         },
                       },
-                      "text": "BaseExportedTypesProps",
+                      "signatures": [
+                        {
+                          "kind": "FunctionSignature",
+                          "modifier": undefined,
+                          "parameters": [
+                            {
+                              "context": "parameter",
+                              "defaultValue": undefined,
+                              "description": undefined,
+                              "element": {
+                                "filePath": "test.ts",
+                                "kind": "Object",
+                                "name": undefined,
+                                "position": {
+                                  "end": {
+                                    "column": 6,
+                                    "line": 11,
+                                  },
+                                  "start": {
+                                    "column": 5,
+                                    "line": 5,
+                                  },
+                                },
+                                "properties": [
+                                  {
+                                    "context": "property",
+                                    "defaultValue": undefined,
+                                    "filePath": "test.ts",
+                                    "isOptional": false,
+                                    "isReadonly": false,
+                                    "kind": "String",
+                                    "name": "name",
+                                    "position": {
+                                      "end": {
+                                        "column": 21,
+                                        "line": 7,
+                                      },
+                                      "start": {
+                                        "column": 7,
+                                        "line": 7,
+                                      },
+                                    },
+                                    "text": "string",
+                                    "value": undefined,
+                                  },
+                                  {
+                                    "context": "property",
+                                    "defaultValue": undefined,
+                                    "filePath": "test.ts",
+                                    "isOptional": false,
+                                    "isReadonly": false,
+                                    "kind": "String",
+                                    "name": "description",
+                                    "position": {
+                                      "end": {
+                                        "column": 40,
+                                        "line": 10,
+                                      },
+                                      "start": {
+                                        "column": 7,
+                                        "line": 10,
+                                      },
+                                    },
+                                    "text": "string",
+                                    "value": undefined,
+                                  },
+                                ],
+                                "text": "{ name: string; description: string; }",
+                              },
+                              "filePath": "test.ts",
+                              "isOptional": false,
+                              "kind": "Array",
+                              "name": "exportedTypes",
+                              "position": {
+                                "end": {
+                                  "column": 55,
+                                  "line": 18,
+                                },
+                                "start": {
+                                  "column": 5,
+                                  "line": 18,
+                                },
+                              },
+                              "text": "Array<{ name: string; description: string; }>",
+                            },
+                          ],
+                          "returnType": "ReactNode",
+                          "text": "(exportedTypes: Array<{ name: string; description: string; }>) => ReactNode",
+                        },
+                      ],
+                      "tags": undefined,
+                      "text": "(exportedTypes: ReturnType<typeof getExportedTypes>) => React.ReactNode",
                     },
                   ],
                   "text": "{ filename: string; value: string; } & BaseExportedTypesProps",
