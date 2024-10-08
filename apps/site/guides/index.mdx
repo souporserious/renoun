@@ -1,3 +1,5 @@
+import { AllGuides } from './AllGuides'
+
 export const metadata = {
   title: 'Guides',
   description:
@@ -5,8 +7,7 @@ export const metadata = {
 }
 
 <Row>
-  <Card href="/guides/next" label="Next.js" />
-  <Card href="/guides/waku" label="Waku" />
+  <AllGuides />
 </Row>
 
 Don't see a guide for the library you use? [Request a guide](https://github.com/souporserious/renoun/issues/new?title=requesting%20a%20guide%20for%20%3Cframework-here%3E) and we'll help you get started!
