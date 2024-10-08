@@ -30,7 +30,7 @@ export default async function Page() {
           <h1 css={{ fontSize: '3rem', margin: 0 }}>Collections</h1>
           <Content />
         </div>
-        {/* <div>
+        <div>
           <h2
             id="api-reference"
             css={{
@@ -45,7 +45,7 @@ export default async function Page() {
           {sourceExports.map((exportSource) => (
             <APIReference key={exportSource.getSlug()} source={exportSource} />
           ))}
-        </div> */}
+        </div>
       </div>
 
       <aside
