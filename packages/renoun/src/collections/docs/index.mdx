@@ -80,6 +80,60 @@ export default async function Page({ params }: { params: { slug: string } }) {
 }
 ```
 
-Collections can be used to generate static pages, create navigations, and much more. At their core, they abstract files and directories into either a `CollectionSource`, `FileSystemSource`, or `ExportSource` allowing you to analyze and render them programmatically.
+## Composite Collections
 
-Learn more at the [recipes](/collections/recipes) page.
+In addition to creating individual collections, Renoun also allows you to define **composite collections**. A composite collection is a combination of multiple collections, allowing you to treat them as a single entity. This can be useful when you want to query across different directories or file patterns while maintaining a unified interface.
+
+### Creating a Composite Collection
+
+Let's say you have two collections, one for blog posts, and another for components. Using a composite collection, you can combine these into a single collection that can be queried as if it were one:
+
+```tsx
+import { collection } from 'renoun/collections'
+
+const PostsCollection = collection({
+  filePattern: 'posts/*.mdx',
+  baseDirectory: 'posts',
+})
+
+const ComponentsCollection = collection({
+  filePattern: 'src/components/**/*.{ts,tsx}',
+  baseDirectory: 'components',
+})
+
+const AllCollections = collection(PostsCollection, ComponentsCollection)
+```
+
+With this setup, `AllCollections` allows you to query across both `PostsCollection` and `ComponentsCollection` seamlessly.
+
+### Querying a Composite Collection
+
+When retrieving a source and querying for siblings, composite collections will account for all sources across the collections it comprises:
+
+```tsx allowErrors
+const source = AllCollections.getSource(
+  'posts/how-to-build-a-button-component'
+)!
+
+const [previousSource, nextSource] = await source.getSiblings()
+```
+
+Here, `source.getSiblings()` will return the sources from both `PostsCollection` and `ComponentsCollection` as a combined set.
+
+### Type Guarding with Composite Collections
+
+Collections provide a type guard to check if a source belongs to a specific collection within a composite collection. You can use the `<Collection>.hasSource` method to safely narrow the type of a source when working with composite collections:
+
+```tsx allowErrors
+if (ComponentsCollection.hasSource(nextSource)) {
+  // nextSource is now typed as a ComponentsCollection source
+}
+```
+
+This type guard ensures that you’re working with the correct source type within a composite collection, allowing you to access schema-specific exports.
+
+## Conclusion
+
+Collections can be used to generate static pages, create navigations, site maps and much more. At their core, they abstract files and directories into either a `CollectionSource`, `FileSystemSource`, or `ExportSource` allowing you to analyze and render them programmatically.
+
+Explore more ways to utilize collections by visiting the [recipes](/collections/recipes) page for practical examples.
