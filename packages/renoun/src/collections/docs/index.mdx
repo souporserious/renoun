@@ -106,7 +106,7 @@ const AllCollections = collection(PostsCollection, ComponentsCollection)
 
 With this setup, `AllCollections` allows you to query across both `PostsCollection` and `ComponentsCollection` seamlessly.
 
-### Querying a Composite Collection
+### Querying Across Collections
 
 When retrieving a source and querying for siblings, composite collections will account for all sources across the collections it comprises:
 
@@ -120,7 +120,7 @@ const [previousSource, nextSource] = await source.getSiblings()
 
 Here, `source.getSiblings()` will return the sources from both `PostsCollection` and `ComponentsCollection` as a combined set.
 
-### Type Guarding with Composite Collections
+### Narrowing Source Types
 
 Collections provide a type guard to check if a source belongs to a specific collection within a composite collection. You can use the `<Collection>.hasSource` method to safely narrow the type of a source when working with composite collections:
 
