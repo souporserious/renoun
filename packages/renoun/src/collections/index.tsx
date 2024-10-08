@@ -178,7 +178,11 @@ export type CollectionSource<Exports extends FileExports> = Omit<
   BaseSource,
   'getEditPath' | 'getPathSegments'
 > &
-  SourceProvider<Exports>
+  SourceProvider<Exports> & {
+    hasSource(
+      source: FileSystemSource<any> | undefined
+    ): source is FileSystemSource<Exports>
+  }
 
 export interface CollectionOptions<Exports extends FileExports> {
   /** The file pattern used to match source files. */
@@ -1120,6 +1124,12 @@ You can fix this error by ensuring the following:
         // remove file extension: Button.tsx -> Button
         .replace(/\.[^/.]+$/, '')
     )
+  }
+
+  hasSource(
+    source: FileSystemSource<any> | undefined
+  ): source is FileSystemSource<AllExports> {
+    return source ? this.#sources.has(source.getPath()) : false
   }
 }
 
