@@ -1,9 +1,3 @@
-import { getJsDocMetadata } from './get-js-doc-metadata.js'
-import {
-  getPropertyDefaultValueKey,
-  getPropertyDefaultValue,
-} from './get-property-default-value.js'
-import { getSymbolDescription } from './get-symbol-description.js'
 import type {
   ClassDeclaration,
   FunctionDeclaration,
@@ -13,6 +7,7 @@ import type {
   Project,
   PropertyDeclaration,
   PropertySignature,
+  IndexSignatureDeclaration,
   SetAccessorDeclaration,
   Signature,
   Symbol,
@@ -22,7 +17,12 @@ import type {
 } from 'ts-morph'
 import tsMorph from 'ts-morph'
 
-const { SyntaxKind, TypeFormatFlags } = tsMorph
+import { getJsDocMetadata } from './get-js-doc-metadata.js'
+import {
+  getPropertyDefaultValueKey,
+  getPropertyDefaultValue,
+} from './get-property-default-value.js'
+import { getSymbolDescription } from './get-symbol-description.js'
 
 export interface BaseType {
   /** Distinguishs between different kinds of types, such as primitives, objects, classes, functions, etc. */
@@ -116,12 +116,18 @@ export interface TupleType extends BaseType {
 
 export interface ObjectType extends BaseType {
   kind: 'Object'
-  properties: PropertyTypes[]
+  properties: (IndexType | PropertyTypes)[]
 }
 
 export interface IntersectionType extends BaseType {
   kind: 'Intersection'
   properties: ResolvedType[]
+}
+
+export interface IndexType extends BaseType {
+  kind: 'Index'
+  key: ResolvedType
+  value: ResolvedType
 }
 
 export interface EnumType extends BaseType {
@@ -219,6 +225,7 @@ export type BaseTypes =
   | TupleType
   | ObjectType
   | IntersectionType
+  | IndexType
   | EnumType
   | UnionType
   | ClassType
@@ -259,9 +266,9 @@ const rootReferences = new WeakSet<Type>()
 const enclosingNodeMetadata = new WeakMap<Node, SymbolMetadata>()
 const defaultFilter = (metadata: SymbolMetadata) => !metadata.isInNodeModules
 const TYPE_FORMAT_FLAGS =
-  TypeFormatFlags.NoTruncation |
-  TypeFormatFlags.UseAliasDefinedOutsideCurrentScope |
-  TypeFormatFlags.WriteArrayAsGenericType
+  tsMorph.TypeFormatFlags.NoTruncation |
+  tsMorph.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope |
+  tsMorph.TypeFormatFlags.WriteArrayAsGenericType
 
 /** Process type metadata. */
 export function resolveType(
@@ -432,12 +439,16 @@ export function resolveType(
     }
   }
 
-  if (!symbolMetadata.isGlobal && !symbolMetadata.isVirtual) {
-    if (symbolMetadata.isExported) {
-      exportedReferences.add(type)
-    } else {
-      rootReferences.add(type)
-    }
+  if (
+    symbolMetadata.isExported &&
+    !symbolMetadata.isGlobal &&
+    !symbolMetadata.isVirtual
+  ) {
+    exportedReferences.add(type)
+  }
+
+  if (!symbolMetadata.isVirtual) {
+    rootReferences.add(type)
   }
 
   let resolvedType: ResolvedType = {
@@ -730,6 +741,11 @@ export function resolveType(
           text: typeText,
         } satisfies PrimitiveType
       } else if (type.isObject()) {
+        const indexSignatures = resolveIndexSignatures(
+          symbolDeclaration,
+          filter,
+          false
+        )
         const properties = resolveTypeProperties(
           type,
           enclosingNode,
@@ -738,7 +754,11 @@ export function resolveType(
           defaultValues
         )
 
-        if (properties.length === 0 && typeArguments.length > 0) {
+        if (
+          indexSignatures.length === 0 &&
+          properties.length === 0 &&
+          typeArguments.length > 0
+        ) {
           const resolvedTypeArguments = typeArguments
             .map((type) =>
               resolveType(type, declaration, filter, false, defaultValues)
@@ -760,6 +780,13 @@ export function resolveType(
               context: 'parameter',
             })),
           } satisfies GenericType
+        } else if (properties.length === 0 && indexSignatures.length > 0) {
+          resolvedType = {
+            kind: 'Object',
+            name: symbolMetadata.name,
+            text: typeText,
+            properties: indexSignatures,
+          } satisfies ObjectType
         } else if (properties.length === 0) {
           rootReferences.delete(type)
           return
@@ -768,10 +795,13 @@ export function resolveType(
             kind: 'Object',
             name: symbolMetadata.name,
             text: typeText,
-            properties: properties.map((property) => ({
-              ...property,
-              context: 'property',
-            })),
+            properties: [
+              ...indexSignatures,
+              ...properties.map((property) => ({
+                ...property,
+                context: 'property',
+              })),
+            ] as PropertyTypes[],
           } satisfies ObjectType
         }
       } else {
@@ -895,7 +925,10 @@ export function resolveSignature(
 
   const returnType = signature
     .getReturnType()
-    .getText(undefined, TypeFormatFlags.UseAliasDefinedOutsideCurrentScope)
+    .getText(
+      undefined,
+      tsMorph.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope
+    )
   const parametersText = resolvedParameters
     .map((parameter) => {
       const questionMark = parameter.isOptional ? '?' : ''
@@ -925,6 +958,65 @@ export function resolveSignature(
     modifier,
     returnType,
   }
+}
+
+/** Process index signatures of an interface or type alias. */
+export function resolveIndexSignatures(
+  node?: Node,
+  filter: SymbolFilter = defaultFilter,
+  isRootType: boolean = true
+) {
+  return getIndexSignatures(node).map((indexSignature) => {
+    const text = indexSignature.getText()
+    const keyType = resolveType(
+      indexSignature.getKeyType(),
+      indexSignature,
+      filter,
+      isRootType
+    )
+
+    if (!keyType) {
+      throw new Error(
+        `[renoun]: No key type found for "${text}". Please file an issue if you encounter this error.`
+      )
+    }
+
+    const valueType = resolveType(
+      indexSignature.getReturnType(),
+      indexSignature,
+      filter,
+      isRootType
+    )
+
+    if (!valueType) {
+      throw new Error(
+        `[renoun]: No value type found for "${text}". Please file an issue if you encounter this error.`
+      )
+    }
+
+    return {
+      kind: 'Index',
+      key: keyType,
+      value: valueType,
+      text,
+    } satisfies IndexType
+  }) as IndexType[]
+}
+
+/** Get the index signature of an interface or type alias. */
+function getIndexSignatures(node?: Node) {
+  let indexSignatures: IndexSignatureDeclaration[] = []
+
+  if (tsMorph.Node.isInterfaceDeclaration(node)) {
+    indexSignatures = node.getIndexSignatures()
+  } else if (tsMorph.Node.isTypeAliasDeclaration(node)) {
+    const typeNode = node.getTypeNodeOrThrow()
+    if (tsMorph.Node.isTypeLiteral(typeNode)) {
+      indexSignatures = typeNode.getIndexSignatures()
+    }
+  }
+
+  return indexSignatures
 }
 
 /** Process all apparent properties of a given type. */
@@ -1267,15 +1359,15 @@ function getVisibility(
     | GetAccessorDeclaration
     | PropertyDeclaration
 ) {
-  if (node.hasModifier(SyntaxKind.PrivateKeyword)) {
+  if (node.hasModifier(tsMorph.SyntaxKind.PrivateKeyword)) {
     return 'private'
   }
 
-  if (node.hasModifier(SyntaxKind.ProtectedKeyword)) {
+  if (node.hasModifier(tsMorph.SyntaxKind.ProtectedKeyword)) {
     return 'protected'
   }
 
-  if (node.hasModifier(SyntaxKind.PublicKeyword)) {
+  if (node.hasModifier(tsMorph.SyntaxKind.PublicKeyword)) {
     return 'public'
   }
 }
@@ -1328,21 +1420,21 @@ export function resolveClass(
       tsMorph.Node.isGetAccessorDeclaration(member) ||
       tsMorph.Node.isSetAccessorDeclaration(member)
     ) {
-      if (!member.hasModifier(SyntaxKind.PrivateKeyword)) {
+      if (!member.hasModifier(tsMorph.SyntaxKind.PrivateKeyword)) {
         if (!classMetadata.accessors) {
           classMetadata.accessors = []
         }
         classMetadata.accessors.push(resolveClassAccessor(member, filter))
       }
     } else if (tsMorph.Node.isMethodDeclaration(member)) {
-      if (!member.hasModifier(SyntaxKind.PrivateKeyword)) {
+      if (!member.hasModifier(tsMorph.SyntaxKind.PrivateKeyword)) {
         if (!classMetadata.methods) {
           classMetadata.methods = []
         }
         classMetadata.methods.push(resolveClassMethod(member, filter))
       }
     } else if (tsMorph.Node.isPropertyDeclaration(member)) {
-      if (!member.hasModifier(SyntaxKind.PrivateKeyword)) {
+      if (!member.hasModifier(tsMorph.SyntaxKind.PrivateKeyword)) {
         if (!classMetadata.properties) {
           classMetadata.properties = []
         }
@@ -1447,10 +1539,10 @@ function getPrimaryDeclaration(symbol: Symbol | undefined): Node | undefined {
   // Type-related symbols: TypeAlias, Interface, Enum, Class
   const typeRelatedDeclaration = declarations.find(
     (declaration) =>
-      declaration.getKind() === SyntaxKind.TypeAliasDeclaration ||
-      declaration.getKind() === SyntaxKind.InterfaceDeclaration ||
-      declaration.getKind() === SyntaxKind.EnumDeclaration ||
-      declaration.getKind() === SyntaxKind.ClassDeclaration
+      declaration.getKind() === tsMorph.SyntaxKind.TypeAliasDeclaration ||
+      declaration.getKind() === tsMorph.SyntaxKind.InterfaceDeclaration ||
+      declaration.getKind() === tsMorph.SyntaxKind.EnumDeclaration ||
+      declaration.getKind() === tsMorph.SyntaxKind.ClassDeclaration
   )
 
   if (typeRelatedDeclaration) {
