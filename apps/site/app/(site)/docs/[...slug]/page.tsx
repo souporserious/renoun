@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 
-import { DocsCollection } from '@/collections'
+import { AllCollections, DocsCollection } from '@/collections'
 import { DocumentSource } from '@/components/DocumentSource'
 
 export async function generateStaticParams() {
@@ -12,9 +12,9 @@ export async function generateStaticParams() {
 }
 
 export default async function Doc({ params }: { params: { slug: string[] } }) {
-  const docSource = DocsCollection.getSource(['docs', ...params.slug])
+  const docSource = AllCollections.getSource(['docs', ...params.slug])
 
-  if (!docSource) {
+  if (!DocsCollection.hasSource(docSource)) {
     notFound()
   }
 

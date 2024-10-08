@@ -4,7 +4,11 @@ import type { ExportSource } from 'renoun/collections'
 import { notFound } from 'next/navigation'
 import { GeistMono } from 'geist/font/mono'
 
-import { ComponentsCollection, ComponentsMDXCollection } from '@/collections'
+import {
+  AllCollections,
+  ComponentsCollection,
+  ComponentsMDXCollection,
+} from '@/collections'
 import { MDXContent } from '@/components/MDXContent'
 import { SiblingLink } from '@/components/SiblingLink'
 import { TableOfContents } from '@/components/TableOfContents'
@@ -23,9 +27,9 @@ export default async function Component({
   params: { slug: string[] }
 }) {
   const componentsPathname = ['components', ...params.slug]
-  const componentSource = ComponentsCollection.getSource(componentsPathname)
+  const componentSource = AllCollections.getSource(componentsPathname)
 
-  if (!componentSource) {
+  if (!ComponentsCollection.hasSource(componentSource)) {
     notFound()
   }
 
@@ -175,10 +179,24 @@ export default async function Component({
             }}
           >
             {previousSource ? (
-              <SiblingLink source={previousSource} direction="previous" />
+              <SiblingLink
+                source={previousSource}
+                direction="previous"
+                variant={
+                  ComponentsCollection.hasSource(previousSource)
+                    ? 'name'
+                    : 'title'
+                }
+              />
             ) : null}
             {nextSource ? (
-              <SiblingLink source={nextSource} direction="next" />
+              <SiblingLink
+                source={nextSource}
+                direction="next"
+                variant={
+                  ComponentsCollection.hasSource(nextSource) ? 'name' : 'title'
+                }
+              />
             ) : null}
           </nav>
         </div>
