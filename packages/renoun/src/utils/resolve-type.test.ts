@@ -5644,6 +5644,171 @@ describe('processProperties', () => {
     `)
   })
 
+  test('index types', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      export interface FileExports {
+        [key: string]: unknown
+      }`,
+      { overwrite: true }
+    )
+    const interfaceDeclaration = sourceFile.getInterfaceOrThrow('FileExports')
+    const types = resolveType(
+      interfaceDeclaration.getType(),
+      interfaceDeclaration
+    )
+
+    expect(types).toMatchInlineSnapshot(`
+      {
+        "filePath": "test.ts",
+        "kind": "Object",
+        "name": "FileExports",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 3,
+          },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "properties": [
+          {
+            "key": {
+              "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+              "kind": "String",
+              "name": undefined,
+              "position": {
+                "end": {
+                  "column": 4402,
+                  "line": 4,
+                },
+                "start": {
+                  "column": 3482,
+                  "line": 4,
+                },
+              },
+              "text": "string",
+              "value": undefined,
+            },
+            "kind": "Index",
+            "text": "[key: string]: unknown",
+            "value": {
+              "filePath": "test.ts",
+              "kind": "Primitive",
+              "position": {
+                "end": {
+                  "column": 25,
+                  "line": 2,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 2,
+                },
+              },
+              "text": "unknown",
+            },
+          },
+        ],
+        "text": "FileExports",
+      }
+    `)
+  })
+
+  test('index signature mixed with property signature', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      export type FileExports = {
+        [key: string]: unknown
+        foo: string
+      }`,
+      { overwrite: true }
+    )
+    const typeAlias = sourceFile.getTypeAliasOrThrow('FileExports')
+    const types = resolveType(typeAlias.getType(), typeAlias)
+
+    expect(types).toMatchInlineSnapshot(`
+      {
+        "filePath": "test.ts",
+        "kind": "Object",
+        "name": "FileExports",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 4,
+          },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "properties": [
+          {
+            "key": {
+              "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+              "kind": "String",
+              "name": undefined,
+              "position": {
+                "end": {
+                  "column": 4402,
+                  "line": 4,
+                },
+                "start": {
+                  "column": 3482,
+                  "line": 4,
+                },
+              },
+              "text": "string",
+              "value": undefined,
+            },
+            "kind": "Index",
+            "text": "[key: string]: unknown",
+            "value": {
+              "filePath": "test.ts",
+              "kind": "Primitive",
+              "position": {
+                "end": {
+                  "column": 25,
+                  "line": 2,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 2,
+                },
+              },
+              "text": "unknown",
+            },
+          },
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "String",
+            "name": "foo",
+            "position": {
+              "end": {
+                "column": 14,
+                "line": 3,
+              },
+              "start": {
+                "column": 3,
+                "line": 3,
+              },
+            },
+            "text": "string",
+            "value": undefined,
+          },
+        ],
+        "text": "FileExports",
+      }
+    `)
+  })
+
   test('mapped types without declarations', () => {
     project.createSourceFile(
       'theme.ts',
