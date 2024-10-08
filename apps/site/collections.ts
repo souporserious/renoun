@@ -13,7 +13,9 @@ type DocsSchema = {
   headings: Headings
   metadata: {
     title: string
+    label?: string
     description: string
+    tags?: string[]
   }
 }
 

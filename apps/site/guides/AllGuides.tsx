@@ -3,8 +3,15 @@ import { Card } from '@/components/Card'
 
 export function AllGuides() {
   return GuidesCollection.getSources().then((sources) =>
-    sources.map((source, index) => (
-      <Card key={index} href={source.getPath()} label={source.getTitle()} />
-    ))
+    sources.map(async (source, index) => {
+      const metadata = await source.getExport('metadata').getValue()
+      return (
+        <Card
+          key={index}
+          href={source.getPath()}
+          label={metadata.label ?? metadata.title}
+        />
+      )
+    })
   )
 }
