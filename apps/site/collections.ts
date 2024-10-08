@@ -132,3 +132,9 @@ export const ComponentsMDXCollection = collection<{
   },
   (slug) => import(`../../packages/renoun/src/components/${slug}.mdx`)
 )
+
+export const AllCollections = collection(
+  DocsCollection,
+  GuidesCollection,
+  ComponentsCollection
+)

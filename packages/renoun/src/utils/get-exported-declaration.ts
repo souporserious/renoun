@@ -14,6 +14,15 @@ export function getExportedDeclaration(
     return undefined
   }
 
+  // Check if there are overloads and return the implementation if found
+  const implementationDeclaration = exportDeclarations.find((declaration) => {
+    return Node.isFunctionDeclaration(declaration) && declaration.hasBody()
+  })
+
+  if (implementationDeclaration) {
+    return implementationDeclaration
+  }
+
   // Filter out types if multiple declarations are found
   if (exportDeclarations.length > 1) {
     const filteredExportDeclarations = exportDeclarations.filter(
@@ -33,8 +42,6 @@ export function getExportedDeclaration(
         `[renoun] Multiple declarations found for export after filtering type aliases, interfaces, and property access expressions in source file at ${filePath}. Only one export declaration is currently allowed. Please file an issue for support.`
       )
     }
-
-    return filteredExportDeclarations[0]
   }
 
   return exportDeclarations[0]

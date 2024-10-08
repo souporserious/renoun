@@ -13,9 +13,12 @@ export function getCollectionCallExpressions(project: Project) {
     .findReferencesAsNodes()
     .forEach((node) => {
       const callExpression = node.getParentOrThrow()
-
       if (tsMorph.Node.isCallExpression(callExpression)) {
-        allCollections.push(callExpression)
+        const [firstArgument] = callExpression.getArguments()
+
+        if (tsMorph.Node.isObjectLiteralExpression(firstArgument)) {
+          allCollections.push(callExpression)
+        }
       }
     })
 

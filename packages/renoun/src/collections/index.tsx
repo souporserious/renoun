@@ -36,8 +36,8 @@ export type FilePatterns<Extension extends string = string> =
   | `${string}${Extension}`
   | `${string}${Extension}${string}`
 
-export interface FileExports {
-  [key: string]: any
+export type FileExports = {
+  [key: string]: unknown
 }
 
 export interface BaseSource {
@@ -66,8 +66,7 @@ type PositiveIntegerOrInfinity<Type extends number> = `${Type}` extends
   ? never
   : Type
 
-export interface BaseSourceWithGetters<Exports extends FileExports>
-  extends BaseSource {
+export interface SourceProvider<Exports extends FileExports> {
   /** Retrieves a source in the immediate directory or sub-directory by its path. */
   getSource(path?: string | string[]): FileSystemSource<Exports> | undefined
 
@@ -124,7 +123,8 @@ export interface ExportSource<Value> extends BaseSource {
 }
 
 export interface FileSystemSource<Exports extends FileExports>
-  extends BaseSourceWithGetters<Exports> {
+  extends BaseSource,
+    SourceProvider<Exports> {
   /** The base file name or directory name. */
   getName(): string
 
@@ -167,12 +167,22 @@ export interface FileSystemSource<Exports extends FileExports>
 
   /** If the source is a directory. */
   isDirectory(): boolean
+
+  /** If the source is from a specific collection. Useful for composite collections. */
+  isFromCollection<Exports extends FileExports>(
+    collection: Collection<Exports>
+  ): this is FileSystemSource<Exports>
 }
 
 export type CollectionSource<Exports extends FileExports> = Omit<
-  BaseSourceWithGetters<Exports>,
+  BaseSource,
   'getEditPath' | 'getPathSegments'
->
+> &
+  SourceProvider<Exports> & {
+    hasSource(
+      source: FileSystemSource<any> | undefined
+    ): source is FileSystemSource<Exports>
+  }
 
 export interface CollectionOptions<Exports extends FileExports> {
   /** The file pattern used to match source files. */
@@ -466,6 +476,7 @@ class Source<AllExports extends FileExports>
 
   constructor(
     private collection: Collection<AllExports>,
+    private compositeCollection: CompositeCollection<any> | undefined,
     private sourceFileOrDirectory: SourceFile | Directory
   ) {
     this.#sourcePath = getFileSystemSourcePath(this.sourceFileOrDirectory)
@@ -477,6 +488,12 @@ class Source<AllExports extends FileExports>
 
   isDirectory() {
     return this.sourceFileOrDirectory instanceof tsMorph.Directory
+  }
+
+  isFromCollection<Exports extends FileExports>(
+    collection: Collection<Exports>
+  ): this is FileSystemSource<Exports> {
+    return (this.collection as unknown as Collection<Exports>) === collection
   }
 
   getCollection() {
@@ -633,20 +650,9 @@ class Source<AllExports extends FileExports>
       )
     }
 
-    const minDepth = this.collection.getDepth()
-    const maxDepth = depth === Infinity ? Infinity : this.getDepth() + depth
-    const seenPaths = new Set<string>()
-    const filteredSources = (
-      await this.collection.getFileSystemSources()
-    ).filter((source) => {
-      const sourcePath = source.getPath()
-      if (seenPaths.has(sourcePath)) {
-        return false
-      }
-      seenPaths.add(sourcePath)
-
-      const sourceDepth = source.getDepth()
-      return sourceDepth >= minDepth && sourceDepth <= maxDepth
+    const collection = this.compositeCollection || this.collection
+    const filteredSources = await collection.getSources({
+      depth: depth === Infinity ? Infinity : this.getDepth() + depth,
     })
     const currentIndex = filteredSources.findIndex(
       (source) => source.getPath() === this.getPath()
@@ -659,7 +665,10 @@ class Source<AllExports extends FileExports>
     const previousSource = filteredSources[currentIndex - 1]
     const nextSource = filteredSources[currentIndex + 1]
 
-    return [previousSource, nextSource]
+    return [previousSource, nextSource] as [
+      previous?: FileSystemSource<AllExports> | undefined,
+      next?: FileSystemSource<AllExports> | undefined,
+    ]
   }
 
   getExport<Name extends keyof AllExports>(name: Name) {
@@ -807,6 +816,7 @@ You can fix this error by taking one of the following actions:
   }
 }
 
+/** Creates a collection of file system sources based on a file pattern. */
 class Collection<AllExports extends FileExports>
   implements CollectionSource<AllExports>
 {
@@ -903,14 +913,21 @@ You can fix this error by ensuring the following:
     })
   }
 
-  getFileSystemSource(sourceFileOrDirectory: SourceFile | Directory) {
+  getFileSystemSource(
+    sourceFileOrDirectory: SourceFile | Directory,
+    compositeCollection?: CompositeCollection<any>
+  ) {
     const path = this.sourcePathMap.get(
       getFileSystemSourcePath(sourceFileOrDirectory)
     )!
-    return this.getSource(path)
+    return this.getSource(
+      path,
+      // @ts-expect-error - private property
+      compositeCollection
+    )
   }
 
-  async getFileSystemSources() {
+  async getFileSystemSources(compositeCollection?: CompositeCollection<any>) {
     const tsConfig = this.project.getCompilerOptions()
     const tsConfigDirectory = dirname(tsConfig.configFilePath as string)
     let exclude: string[] = []
@@ -935,7 +952,7 @@ You can fix this error by ensuring the following:
           }
         }
 
-        return this.getFileSystemSource(fileSystemSource)
+        return this.getFileSystemSource(fileSystemSource, compositeCollection)
       })
       .filter((source) => {
         if (source) {
@@ -1026,6 +1043,7 @@ You can fix this error by ensuring the following:
   getSource(
     path: string | string[] = 'index'
   ): FileSystemSource<AllExports> | undefined {
+    const compositeCollection = arguments[1] as CompositeCollection<any>
     let pathString = Array.isArray(path) ? path.join('/') : path
 
     if (this.#sources.has(pathString)) {
@@ -1062,7 +1080,7 @@ You can fix this error by ensuring the following:
       return undefined
     }
 
-    const source = new Source(this, sourceFileOrDirectory)
+    const source = new Source(this, compositeCollection, sourceFileOrDirectory)
 
     this.#sources.set(pathString, source)
 
@@ -1076,9 +1094,10 @@ You can fix this error by ensuring the following:
       )
     }
 
+    const compositeCollection = arguments[1] as CompositeCollection<any>
+    const sources = await this.getFileSystemSources(compositeCollection)
     const minDepth = this.getDepth()
     const maxDepth = depth === Infinity ? Infinity : minDepth + depth
-    const sources = await this.getFileSystemSources()
     const seenPaths = new Set<string>()
 
     return sources.filter((source) => {
@@ -1106,23 +1125,108 @@ You can fix this error by ensuring the following:
         .replace(/\.[^/.]+$/, '')
     )
   }
+
+  hasSource(
+    source: FileSystemSource<any> | undefined
+  ): source is FileSystemSource<AllExports> {
+    return source ? this.#sources.has(source.getPath()) : false
+  }
+}
+
+type FileSystemSourceFromCollection<Collection> =
+  Collection extends CollectionSource<infer Exports>
+    ? FileSystemSource<Exports>
+    : never
+
+type FileSystemSourceUnion<Collections extends CollectionSource<any>[]> = {
+  [Key in keyof Collections]: FileSystemSourceFromCollection<Collections[Key]>
+}[number]
+
+/**
+ * Combines multiple collections into a single source provider that can be queried together.
+ * This is useful for creating feeds or navigations that span multiple collections.
+ */
+class CompositeCollection<Collections extends CollectionSource<any>[]>
+  implements SourceProvider<any>
+{
+  private collections: Collections
+
+  constructor(...collections: Collections) {
+    this.collections = collections
+  }
+
+  getSource(
+    path?: string | string[]
+  ): FileSystemSourceUnion<Collections> | undefined {
+    for (const collection of this.collections) {
+      const source = collection.getSource(
+        path,
+        // @ts-expect-error - private property
+        this
+      )
+      if (source) {
+        return source as FileSystemSourceUnion<Collections>
+      }
+    }
+    return undefined
+  }
+
+  async getSources({ depth = Infinity }: { depth?: number } = {}): Promise<
+    FileSystemSourceUnion<Collections>[]
+  > {
+    const sourcesArrays = await Promise.all(
+      this.collections.map((collection) =>
+        collection.getSources(
+          { depth },
+          // @ts-expect-error - private property
+          this
+        )
+      )
+    )
+    return sourcesArrays.flat() as FileSystemSourceUnion<Collections>[]
+  }
 }
 
 /**
- * Creates a collection of sources based on a specified file pattern.
+ * Creates a collection of file system sources based on a file pattern.
  * Note, a dynamic import getter will automatically be generated for each file extension at the call site of this collection.
  *
- * @param filePattern - A pattern to match a set of source files (e.g., "*.ts", "*.mdx").
- * @param options - Optional settings for the collection, including base directory, base path, TypeScript config file path, and a custom sort function.
- * @returns A collection object that provides methods to retrieve individual sources or all sources matching the pattern.
+ * @param options - Settings for the collection, including base directory, base path, TypeScript config file path, and a custom sort function.
+ * @param getImport - A dynamic import getter function that returns the module exports for a given slug. This is automatically generated based on the `filePattern` extensions.
+ * @returns A collection object that provides methods to retrieve all sources or an individual source that match the file pattern.
  */
-export function collection<
-  AllExports extends { [key: string]: any } = { [key: string]: any },
->(
+export function collection<AllExports extends FileExports = FileExports>(
   options: CollectionOptions<AllExports>,
   getImport?: GetImport | GetImport[]
-): CollectionSource<AllExports> {
-  return new Collection<AllExports>(options, getImport)
+): CollectionSource<AllExports>
+
+/**
+ * Creates a composite collection of file system sources based on multiple collections.
+ * This is useful for creating feeds or navigations that span multiple collections.
+ *
+ * @param collections - A list of collections to combine.
+ * @returns A composite collection that provides methods to retrieve all sources or an individual source.
+ */
+export function collection<Collections extends CollectionSource<any>[]>(
+  ...collections: Collections
+): CompositeCollection<Collections>
+
+export function collection<AllExports extends FileExports = FileExports>(
+  ...args:
+    | [CollectionOptions<AllExports>, (GetImport | GetImport[])?]
+    | CollectionSource<AllExports>[]
+):
+  | CollectionSource<AllExports>
+  | CompositeCollection<CollectionSource<AllExports>[]> {
+  if (args[0] instanceof Collection) {
+    return new CompositeCollection(...(args as CollectionSource<AllExports>[]))
+  } else {
+    const [options, getImport] = args as [
+      CollectionOptions<AllExports>,
+      GetImport?,
+    ]
+    return new Collection<AllExports>(options, getImport)
+  }
 }
 
 /** Get all sources for a file pattern. */
