@@ -167,11 +167,6 @@ export interface FileSystemSource<Exports extends FileExports>
 
   /** If the source is a directory. */
   isDirectory(): boolean
-
-  /** If the source is from a specific collection. Useful for composite collections. */
-  isFromCollection<Exports extends FileExports>(
-    collection: Collection<Exports>
-  ): this is FileSystemSource<Exports>
 }
 
 export type CollectionSource<Exports extends FileExports> = Omit<
@@ -488,12 +483,6 @@ class Source<AllExports extends FileExports>
 
   isDirectory() {
     return this.sourceFileOrDirectory instanceof tsMorph.Directory
-  }
-
-  isFromCollection<Exports extends FileExports>(
-    collection: Collection<Exports>
-  ): this is FileSystemSource<Exports> {
-    return (this.collection as unknown as Collection<Exports>) === collection
   }
 
   getCollection() {
