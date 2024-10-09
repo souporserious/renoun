@@ -120,7 +120,10 @@ async function CodeInlineAsync({
         {allowCopy ? (
           <CopyButton
             value={value}
-            css={{ color: theme.activityBar.foreground }}
+            css={{
+              marginLeft: 'auto',
+              color: theme.activityBar.foreground,
+            }}
           />
         ) : null}
       </code>
