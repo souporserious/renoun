@@ -129,6 +129,8 @@ export class WebSocketClient {
       } else {
         this.#pendingRequests.add(JSON.stringify(request))
       }
+    }).catch((error) => {
+      throw new Error(error.data || error.message)
     })
   }
 }

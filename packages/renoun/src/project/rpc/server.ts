@@ -118,7 +118,7 @@ export class WebSocketServer {
           ws,
           request.id,
           -32603,
-          `[renoun] Internal error for method "${request.method}" with params:\n${JSON.stringify(request.params, null, 2)}`,
+          `[renoun] Internal server error for method "${request.method}" with params:\n${JSON.stringify(request.params, null, 2)}`,
           error.message
         )
       }
