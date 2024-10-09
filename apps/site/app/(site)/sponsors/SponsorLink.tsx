@@ -13,7 +13,7 @@ export function SponsorLink() {
         color: 'white',
       }}
     >
-      Sponsor Renoun on GitHub
+      Sponsor renoun on GitHub
     </a>
   )
 }

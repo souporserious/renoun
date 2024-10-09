@@ -18,7 +18,7 @@ jobs:
                 "embeds": [
                   {
                     "title": "🚀 New Release ${{ github.event.release.tag_name }}",
-                    "description": "A new version of Renoun is now available! Check out what\'s new in this release:",
+                    "description": "A new version of renoun is now available! Check out what\'s new in this release:",
                     "color": 3066993,
                     "fields": [
                       {

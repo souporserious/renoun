@@ -16,7 +16,7 @@ export default async function Components() {
       <div className="prose">
         <h1>Components</h1>
         <p>
-          Easily build interactive and engaging documentation with Renoun’s
+          Easily build interactive and engaging documentation with renoun’s
           powerful set of React components.
         </p>
         <p>

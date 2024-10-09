@@ -2,7 +2,7 @@
   <a href="https://renoun.dev">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="/packages/renoun/images/logo-dark.png">
-      <img src="/packages/renoun/images/logo-light.png" alt="Renoun" width="180"/>
+      <img src="/packages/renoun/images/logo-light.png" alt="renoun" width="180"/>
     </picture>
   </a>
   <h2>Documentation That Matches the Quality of Your Product</h2>
@@ -31,7 +31,7 @@ After installing the package, you can follow the [getting started guide](https:/
 
 ### Collections
 
-Collections are a way to organize and query file-system data in Renoun. They are a powerful tool that allows you to define a schema for file exports and query those exports using a simple API.
+Collections are a way to organize and query file-system data in renoun. They are a powerful tool that allows you to define a schema for file exports and query those exports using a simple API.
 
 Use the `collection` utility to render a collection of files from the file system:
 
@@ -54,7 +54,7 @@ For a more in-depth look at collections, visit the [collections](https://www.ren
 
 ### Components
 
-Easily build interactive and engaging documentation with Renoun’s powerful set of React components.
+Easily build interactive and engaging documentation with renoun’s powerful set of React components.
 
 #### Syntax Highlighting
 
@@ -85,9 +85,9 @@ export default async function Page({ params }) {
 }
 ```
 
-### And More
+---
 
-Renoun offers many different components to help facilitate writing technical content. Visit the [components](https://www.renoun.dev/components) page to learn more.
+The renoun toolkit offers many different components to help facilitate writing technical content. Visit the [components](https://www.renoun.dev/components) page to learn more.
 
 ## License
 

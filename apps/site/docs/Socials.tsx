@@ -67,7 +67,7 @@ export function Socials() {
           />
         </div>
         <p>
-          Contribute, report bugs, or help support Renoun by giving us a star on
+          Contribute, report bugs, or help support renoun by giving us a star on
           GitHub.
         </p>
       </SocialLink>

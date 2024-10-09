@@ -4,7 +4,7 @@ import { GeistSans } from 'geist/font/sans'
 import { PackageInstallScript } from 'renoun/components'
 
 export const metadata = {
-  title: 'Renoun',
+  title: 'renoun',
   description: 'The toolkit to build docs as great as your product.',
 } satisfies Metadata
 

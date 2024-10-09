@@ -1,7 +1,7 @@
 import React from 'react'
 
 /**
- * The logo mark of the Renoun library.
+ * The logo mark of the renoun library.
  * @internal
  */
 export function RenounMark({ size = 24 }: { size?: number }) {
@@ -28,7 +28,7 @@ export function RenounMark({ size = 24 }: { size?: number }) {
 }
 
 /**
- * The logo of the Renoun library.
+ * The logo of the renoun library.
  * @internal
  */
 export function RenounMarkLink({
@@ -54,7 +54,7 @@ export function RenounMarkLink({
 }
 
 /**
- * The logo of the Renoun library.
+ * The logo of the renoun library.
  * @internal
  */
 export function RenounLogo({
@@ -93,7 +93,7 @@ export function RenounLogo({
 }
 
 /**
- * A component that displays the Renoun logo that links to the Renoun website.
+ * A component that displays the renoun logo that links to the renoun website.
  * @internal
  */
 export function RenounLogoLink({
@@ -117,7 +117,7 @@ export function RenounLogoLink({
 }
 
 /**
- * A component that displays a "Built with Renoun" message.
+ * A component that displays a "Built with renoun" message.
  * @internal
  */
 export function BuiltWithRenoun({

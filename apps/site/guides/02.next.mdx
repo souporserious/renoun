@@ -2,15 +2,15 @@ export const metadata = {
   title: 'Next.js Guide',
   label: 'Next.js',
   description:
-    'Renoun enhances the Next.js framework with powerful content and documentation features.',
+    'The renoun toolkit enhances the Next.js framework with powerful content and documentation features.',
   tags: ['next', 'next.js', 'framework'],
 }
 
-Renoun enhances [Next.js](https://nextjs.org/) by providing features like [collections](/collections), [syntax highlighting](/components/code-block), and [type documentation](/components/api-reference), making it easier to create accurate and engaging content for blogs, documentation, and design systems.
+renoun enhances [Next.js](https://nextjs.org/) by providing features like [collections](/collections), [syntax highlighting](/components/code-block), and [type documentation](/components/api-reference), making it easier to create accurate and engaging content for blogs, documentation, and design systems.
 
 ## Install
 
-To use Renoun with Next.js, start with an existing or new Next.js project. If you don't have a project yet, you can create one using the Next.js create command:
+To use renoun with Next.js, start with an existing or new Next.js project. If you don't have a project yet, you can create one using the Next.js create command:
 
 ```bash
 npx create-next-app@latest
@@ -18,7 +18,7 @@ npx create-next-app@latest
 
 ## Setup
 
-Modify the `next` scripts located in the project's `package.json` file to use the `renoun` CLI. This will ensure that the Renoun process starts before your Next.js server:
+Modify the `next` scripts located in the project's `package.json` file to use the `renoun` CLI. This will ensure that the renoun process starts before your Next.js server:
 
 ```json
 {
@@ -31,7 +31,7 @@ Modify the `next` scripts located in the project's `package.json` file to use th
 
 <Note>
 
-This command is necessary to enable Renoun features in your Next.js project.
+This command is necessary to enable renoun features in your Next.js project.
 The `renoun` CLI starts a WebSocket server that communicates with components
 and utilities in your project to provide performant syntax highlighting and
 code analysis.
@@ -50,7 +50,7 @@ want to configure your own MDX plugins.
 
 </Note>
 
-First, install the Next.js MDX plugin and the Renoun MDX plugins:
+First, install the Next.js MDX plugin and the renoun MDX plugins:
 
 ```bash
 npm install @next/mdx @renoun/mdx
@@ -121,10 +121,10 @@ export default withMDX({
 
 ## Start
 
-Now you can start your Next.js server with Renoun enabled:
+Now you can start your Next.js server with renoun enabled:
 
 ```bash
 npm run dev
 ```
 
-Congratulations, you've successfully set up Renoun with Next.js! You can now create [collections](/collections) or use one of the many [components](/components) available to enhance your content and documentation.
+Congratulations, you've successfully set up renoun with Next.js! You can now create [collections](/collections) or use one of the many [components](/components) available to enhance your content and documentation.

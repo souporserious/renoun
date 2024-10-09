@@ -2,7 +2,7 @@ export const metadata = {
   title: 'Getting Started',
 }
 
-Renoun is a powerful toolkit for building documentation sites. This guide will help you set up and start using renoun in your project.
+Designed for building content and documentation sites, renoun is a versatile toolkit. This guide will help you set up renoun and start using it in your project.
 
 ## Installation
 
@@ -135,7 +135,7 @@ export function Button({ label, onClick, className }) {
 
 ## Validating Exports
 
-Renoun provides a way to validate module exports using schemas. This ensures that your module exports stay consistent and are correctly documented. Here's an example of how you might validate a module export.
+By using schemas, you can validate module exports and ensure they remain consistent and properly documented. The following is an example of how to validate a module export with renoun using [Zod](https://zod.dev/).
 
 In our Button component example, we can validate the front matter of the MDX file at the call site of our collection using a schema:
 

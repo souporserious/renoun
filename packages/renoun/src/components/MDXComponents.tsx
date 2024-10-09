@@ -15,7 +15,7 @@ type RenounComponentsType = Omit<MDXComponentsType, 'pre' | 'code'> & {
 
 export type MDXComponents = RenounComponentsType
 
-/** Preconfigured Renoun components for `pre` and `code` elements. */
+/** Preconfigured renoun components for `pre` and `code` elements. */
 export const MDXComponents = {
   pre: ({
     allowCopy,
