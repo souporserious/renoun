@@ -67,12 +67,8 @@ export function SiteLayout({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'end',
-            padding: '2rem',
+            padding: '0 2rem',
             gap: '1.5rem',
-
-            '@media screen and (min-width: 60rem)': {
-              padding: '1rem 2rem',
-            },
           }}
         >
           <a
