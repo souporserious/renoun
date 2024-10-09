@@ -2,7 +2,7 @@
   <a href="https://renoun.dev">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="/packages/renoun/images/logo-dark.png">
-      <img src="/packages/renoun/images/logo-light.png" alt="Renoun" width="320"/>
+      <img src="/packages/renoun/images/logo-light.png" alt="Renoun" width="180"/>
     </picture>
   </a>
   <h2>Documentation That Matches the Quality of Your Product</h2>
