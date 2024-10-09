@@ -1,5 +1,4 @@
 import {
-  CodeBlock,
   CodeInline,
   PackageInstall,
   type MDXComponents as MDXComponentsType,
@@ -7,6 +6,7 @@ import {
 import { GeistMono } from 'geist/font/mono'
 
 import { Card } from './Card'
+import { CodeBlock } from './CodeBlock'
 import { Row } from './Row'
 
 export const MDXComponents = {
@@ -144,21 +144,6 @@ export const MDXComponents = {
         language={language}
         highlightedLines={highlightedLines}
         focusedLines={focusedLines}
-        css={{
-          container: {
-            fontSize: 'var(--font-size-code)',
-            lineHeight: 'var(--line-height-code)',
-            width: 'calc(100% + 2rem)',
-            padding: '0.75rem 1rem',
-            margin: '0 -1rem',
-          },
-          toolbar: {
-            padding: '0.75rem 1rem',
-          },
-        }}
-        className={{
-          container: GeistMono.className,
-        }}
       />
     )
   },

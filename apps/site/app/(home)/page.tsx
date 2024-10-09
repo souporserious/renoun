@@ -1,9 +1,10 @@
 import { CodeInline } from 'renoun/components'
-
-import { SignupForm } from '../SignupForm'
-import { Text } from '@/components/Text'
-import Link from 'next/link'
 import { styled } from 'restyle'
+import Link from 'next/link'
+
+import { Text } from '@/components/Text'
+import { SignupForm } from '../SignupForm'
+import { QuickSteps } from './QuickSteps'
 
 const ButtonLink = styled(Link, {
   display: 'inline-flex',
@@ -62,7 +63,18 @@ export default function Page() {
           Meticulously crafted React components and utilities to build
           documentation with the same quality you put into your product.
         </p>
-        <div css={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
+        <div
+          css={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1rem',
+            marginTop: '2rem',
+
+            '@media (min-width: 60rem)': {
+              flexDirection: 'row',
+            },
+          }}
+        >
           <ButtonLink href="/docs/getting-started">Get Started</ButtonLink>
           <CodeInline
             allowCopy
@@ -70,13 +82,13 @@ export default function Page() {
             language="bash"
             paddingX="0.8em"
             paddingY="0.5em"
-            css={{
-              alignSelf: 'start',
-              fontSize: 'var(--font-size-code)',
-            }}
+            css={{ fontSize: 'var(--font-size-code)' }}
           />
         </div>
       </div>
+
+      <QuickSteps />
+
       <div
         css={{
           display: 'flex',
