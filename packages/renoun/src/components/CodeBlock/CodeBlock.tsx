@@ -254,8 +254,8 @@ async function CodeBlockAsync({
               />
               <Code
                 css={{
-                  padding: containerPadding.all,
                   gridColumn: 2,
+                  padding: containerPadding.all,
                   paddingLeft: 0,
                   ...focusedLinesStyles,
                 }}
@@ -279,8 +279,8 @@ async function CodeBlockAsync({
           ) : (
             <Code
               css={{
-                padding: containerPadding.all,
                 gridColumn: 1,
+                padding: containerPadding.all,
                 ...focusedLinesStyles,
               }}
             >
