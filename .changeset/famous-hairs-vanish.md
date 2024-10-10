@@ -2,20 +2,25 @@
 'renoun': minor
 ---
 
-Introduces a concept of "composite collections". This allows overloading the `collection` utility to treat a set of collections as a single collection:
+Introduces a new `CompositeCollection` class. This allows grouping a set of collections to treat them as a single collection:
 
 ```tsx
-const CollectionsCollection = collection({
+import { Collection, CompositeCollection } from 'renoun/collections'
+
+const CollectionsCollection = new Collection({
   filePattern: 'src/collections/index.tsx',
   baseDirectory: 'collections',
 })
 
-const ComponentsCollection = collection({
+const ComponentsCollection = new Collection({
   filePattern: 'src/components/**/*.{ts,tsx}',
   baseDirectory: 'components',
 })
 
-const AllCollections = collection(CollectionsCollection, ComponentsCollection)
+const AllCollections = new CompositeCollection(
+  CollectionsCollection,
+  ComponentsCollection
+)
 ```
 
 When getting a source from a composite collection, the `<FileSystemSource>.getSiblings` method will account for all collections in the composite collection:

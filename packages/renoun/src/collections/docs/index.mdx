@@ -89,19 +89,22 @@ In addition to creating individual collections, renoun also allows you to define
 Let's say you have two collections, one for blog posts, and another for components. Using a composite collection, you can combine these into a single collection that can be queried as if it were one:
 
 ```tsx
-import { collection } from 'renoun/collections'
+import { Collection, CompositeCollection } from 'renoun/collections'
 
-const PostsCollection = collection({
+const PostsCollection = new Collection({
   filePattern: 'posts/*.mdx',
   baseDirectory: 'posts',
 })
 
-const ComponentsCollection = collection({
+const ComponentsCollection = new Collection({
   filePattern: 'src/components/**/*.{ts,tsx}',
   baseDirectory: 'components',
 })
 
-const AllCollections = collection(PostsCollection, ComponentsCollection)
+const AllCollections = new CompositeCollection(
+  PostsCollection,
+  ComponentsCollection
+)
 ```
 
 With this setup, `AllCollections` allows you to query across both `PostsCollection` and `ComponentsCollection` seamlessly.

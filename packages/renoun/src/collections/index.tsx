@@ -794,7 +794,7 @@ You can fix this error by taking one of the following actions:
 }
 
 /** Creates a collection of file system sources based on a file pattern. */
-class Collection<AllExports extends FileExports>
+export class Collection<AllExports extends FileExports>
   implements CollectionSource<AllExports>
 {
   public options: CollectionOptions<AllExports>
@@ -1123,7 +1123,7 @@ type FileSystemSourceUnion<Collections extends CollectionSource<any>[]> = {
  * Combines multiple collections into a single source provider that can be queried together.
  * This is useful for creating feeds or navigations that span multiple collections.
  */
-class CompositeCollection<Collections extends CollectionSource<any>[]>
+export class CompositeCollection<Collections extends CollectionSource<any>[]>
   implements SourceProvider<any>
 {
   private collections: Collections
@@ -1168,42 +1168,18 @@ class CompositeCollection<Collections extends CollectionSource<any>[]>
  * Creates a collection of file system sources based on a file pattern.
  * Note, a dynamic import getter will automatically be generated for each file extension at the call site of this collection.
  *
+ * @deprecated Use the `Collection` class directly.
  * @param options - Settings for the collection, including base directory, base path, TypeScript config file path, and a custom sort function.
  * @param getImport - A dynamic import getter function that returns the module exports for a given slug. This is automatically generated based on the `filePattern` extensions.
  * @returns A collection object that provides methods to retrieve all sources or an individual source that match the file pattern.
  */
-export function collection<AllExports extends FileExports = FileExports>(
+export function collection<
+  AllExports extends { [key: string]: any } = { [key: string]: any },
+>(
   options: CollectionOptions<AllExports>,
   getImport?: GetImport | GetImport[]
-): CollectionSource<AllExports>
-
-/**
- * Creates a composite collection of file system sources based on multiple collections.
- * This is useful for creating feeds or navigations that span multiple collections.
- *
- * @param collections - A list of collections to combine.
- * @returns A composite collection that provides methods to retrieve all sources or an individual source.
- */
-export function collection<Collections extends CollectionSource<any>[]>(
-  ...collections: Collections
-): CompositeCollection<Collections>
-
-export function collection<AllExports extends FileExports = FileExports>(
-  ...args:
-    | [CollectionOptions<AllExports>, (GetImport | GetImport[])?]
-    | CollectionSource<AllExports>[]
-):
-  | CollectionSource<AllExports>
-  | CompositeCollection<CollectionSource<AllExports>[]> {
-  if (args[0] instanceof Collection) {
-    return new CompositeCollection(...(args as CollectionSource<AllExports>[]))
-  } else {
-    const [options, getImport] = args as [
-      CollectionOptions<AllExports>,
-      GetImport?,
-    ]
-    return new Collection<AllExports>(options, getImport)
-  }
+): CollectionSource<AllExports> {
+  return new Collection<AllExports>(options, getImport)
 }
 
 /** Get all sources for a file pattern. */

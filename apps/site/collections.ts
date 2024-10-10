@@ -1,5 +1,6 @@
 import {
-  collection,
+  Collection,
+  CompositeCollection,
   isExportSource,
   isFileSystemSource,
   type FileSystemSource,
@@ -21,7 +22,7 @@ type DocsSchema = {
 
 export type DocsSource = FileSystemSource<DocsSchema>
 
-export const DocsCollection = collection<DocsSchema>(
+export const DocsCollection = new Collection<DocsSchema>(
   {
     filePattern: 'docs/**/*.mdx',
     baseDirectory: 'docs',
@@ -30,7 +31,7 @@ export const DocsCollection = collection<DocsSchema>(
   (slug) => import(`./docs/${slug}.mdx`)
 )
 
-export const GuidesCollection = collection<DocsSchema>(
+export const GuidesCollection = new Collection<DocsSchema>(
   {
     filePattern: 'guides/**/*.mdx',
     baseDirectory: 'guides',
@@ -69,7 +70,7 @@ type CollectionsSchema = Record<string, React.ComponentType>
 
 export type CollectionsSource = FileSystemSource<CollectionsSchema>
 
-export const CollectionsCollection = collection<CollectionsSchema>(
+export const CollectionsCollection = new Collection<CollectionsSchema>(
   {
     filePattern: 'src/collections/*.tsx',
     baseDirectory: 'collections',
@@ -91,7 +92,7 @@ type CollectionsDocsSchema = {
   headings: Headings
 }
 
-export const CollectionsDocsCollection = collection<CollectionsDocsSchema>(
+export const CollectionsDocsCollection = new Collection<CollectionsDocsSchema>(
   {
     filePattern: 'src/collections/docs/*.mdx',
     baseDirectory: 'src/collections/docs',
@@ -108,7 +109,7 @@ type ComponentSchema = Record<string, React.ComponentType>
 
 export type ComponentSource = FileSystemSource<ComponentSchema>
 
-export const ComponentsCollection = collection<ComponentSchema>(
+export const ComponentsCollection = new Collection<ComponentSchema>(
   {
     filePattern: 'src/components/**/*.{ts,tsx}',
     baseDirectory: 'components',
@@ -122,7 +123,7 @@ export const ComponentsCollection = collection<ComponentSchema>(
   ]
 )
 
-export const ComponentsMDXCollection = collection<{
+export const ComponentsMDXCollection = new Collection<{
   default: MDXContent
   headings: Headings
 }>(
@@ -135,7 +136,7 @@ export const ComponentsMDXCollection = collection<{
   (slug) => import(`../../packages/renoun/src/components/${slug}.mdx`)
 )
 
-export const AllCollections = collection(
+export const AllCollections = new CompositeCollection(
   DocsCollection,
   GuidesCollection,
   ComponentsCollection

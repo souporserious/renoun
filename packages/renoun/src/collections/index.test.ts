@@ -1,21 +1,21 @@
 import type { ComponentType } from 'react'
 import { describe, it, expect } from 'vitest'
 
-import { collection } from './index'
+import { Collection, CompositeCollection } from './index'
 
 describe('collections', () => {
   it('merges composite collection siblings', async () => {
-    const CollectionsCollection = collection({
+    const CollectionsCollection = new Collection({
       filePattern: 'src/collections/index.tsx',
       baseDirectory: 'collections',
     })
-    const ComponentsCollection = collection<{
+    const ComponentsCollection = new Collection<{
       [key: string]: ComponentType
     }>({
       filePattern: 'src/components/**/*.{ts,tsx}',
       baseDirectory: 'components',
     })
-    const AllCollections = collection(
+    const AllCollections = new CompositeCollection(
       CollectionsCollection,
       ComponentsCollection
     )
