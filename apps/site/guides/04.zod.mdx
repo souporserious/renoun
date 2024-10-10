@@ -6,7 +6,7 @@ export const metadata = {
 }
 
 ```ts allowErrors
-import { collection } from 'renoun/collections'
+import { Collection } from 'renoun/collections'
 import { z } from 'zod'
 
 const frontmatterSchema = z.object({
@@ -16,7 +16,7 @@ const frontmatterSchema = z.object({
   tags: z.array(z.string()).optional(),
 })
 
-export const PostsCollection = collection<{
+export const PostsCollection = new Collection<{
   default: MDXContent
   frontmatter: z.infer<typeof frontmatterSchema>
 }>('posts/.mdx', {
@@ -65,7 +65,7 @@ const frontmatterSchema = z.object({
 We can now apply the Zod `frontmatterSchema` to your collection using the `schema` option in the `collection` utility:
 
 ```ts allowErrors focusedLines="1-2,12-20"
-import { collection } from 'renoun/collections'
+import { Collection } from 'renoun/collections'
 import type { MDXContent } from 'renoun/mdx'
 import { z } from 'zod'
 
@@ -76,7 +76,7 @@ const frontmatterSchema = z.object({
   tags: z.array(z.string()).optional(),
 })
 
-export const PostsCollection = collection<{
+export const PostsCollection = new Collection<{
   default: MDXContent
   frontmatter: z.infer<typeof frontmatterSchema>
 }>('posts/.mdx', {

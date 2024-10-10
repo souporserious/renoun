@@ -1,4 +1,4 @@
-import { collection } from 'renoun/collections'
+import { Collection } from 'renoun/collections'
 import type { MDXContent } from 'renoun/mdx'
 import { z } from 'zod'
 
@@ -9,7 +9,7 @@ const frontmatterSchema = z.object({
   tags: z.array(z.string()).optional(),
 })
 
-export const PostsCollection = collection<{
+export const PostsCollection = new Collection<{
   default: MDXContent
   frontmatter: z.infer<typeof frontmatterSchema>
 }>(

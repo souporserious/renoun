@@ -1,5 +1,5 @@
 import { CodeBlock, Tokens } from 'renoun/components'
-import { collection, type ExportSource } from 'renoun/collections'
+import { Collection, type ExportSource } from 'renoun/collections'
 import type { MDXContent } from 'renoun/mdx'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -15,7 +15,7 @@ export async function generateStaticParams() {
     .map((source) => ({ slug: source.getPathSegments() }))
 }
 
-const ComponentsReadmeCollection = collection<{ default: MDXContent }>(
+const ComponentsReadmeCollection = new Collection<{ default: MDXContent }>(
   {
     baseDirectory: 'components',
     basePath: 'components',

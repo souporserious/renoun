@@ -15,9 +15,9 @@ By organizing content into structured collections, we can easily generate static
 A collection is created by calling the `collection` function with a glob pattern and optional options:
 
 ```ts allowErrors filename="@/collections.ts"
-import { collection, type SourceOf } from 'renoun'
+import { Collection, type SourceOf } from 'renoun'
 
-export const PostsCollection = collection<{
+export const PostsCollection = new Collection<{
   frontmatter: {
     title: string
     description: string
@@ -268,7 +268,7 @@ export const metadata = {
 To use the metadata, we can get the value of the `metadata` constant from the file and use it to set the page title and description:
 
 ```tsx allowErrors filename="components/[slug]/page.tsx"
-import { collection } from 'renoun/collections'
+import { Collection } from 'renoun/collections'
 import { notFound } from 'next/navigation'
 
 type Schema = {
@@ -278,7 +278,7 @@ type Schema = {
   }
 }
 
-export const Components = collection<Schema>({
+export const Components = new Collection<Schema>({
   filePattern: '@/components/**/index.{ts,tsx}',
 })
 
@@ -336,11 +336,11 @@ This works by finding the index file related to the root directory we're targeti
 
 ```tsx allowErrors
 import type { MDXContent, SourceOf } from 'renoun'
-import { collection } from 'renoun/collections'
+import { Collection } from 'renoun/collections'
 import { notFound } from 'next/navigation'
 import { getSiteMetadata } from '@/utils'
 
-export const Posts = collection<{
+export const Posts = new Collection<{
   default: MDXContent
   frontmatter: {
     title: string
@@ -495,10 +495,11 @@ export default async function Page({ params }) {
 ### components/[slug]/[example]/page.tsx
 
 ```tsx allowErrors
-import { collection, Tokens } from 'renoun'
+import { Collection } from 'renoun/collections'
+import { Tokens } from 'renoun/components'
 import { notFound } from 'next/navigation'
 
-export const ComponentExamples = collection<
+export const ComponentExamples = new Collection<
   Record<string, React.ComponentType>
 >({
   filePattern: '@/components/**/*.examples.tsx',

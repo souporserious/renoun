@@ -8,20 +8,20 @@ const steps = [
   {
     title: 'Collect',
     content: `Start by collecting structured data from your file system. Collections help organize and validate your source code.`,
-    code: `import { collection } from 'renoun/collections'
+    code: `import { Collection } from 'renoun/collections'
 import type { MDXContent } from 'renoun/mdx'
 
-const posts = collection<{ default: MDXContent }>({
+const posts = new Collection<{ default: MDXContent }>({
   filePattern: 'docs/*.mdx'
 })`,
   },
   {
     title: 'Render',
     content: `Easily query and render your file system sources programmatically using a fluent API.`,
-    code: `import { collection } from 'renoun/collections'
+    code: `import { Collection } from 'renoun/collections'
 import type { MDXContent } from 'renoun/mdx'
 
-const posts = collection<{ default: MDXContent }>({
+const posts = new Collection<{ default: MDXContent }>({
   filePattern: 'docs/*.mdx'
 })
 

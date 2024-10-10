@@ -6,7 +6,7 @@ export const metadata = {
 }
 
 ```ts allowErrors
-import { collection } from 'renoun/collections'
+import { Collection } from 'renoun/collections'
 import * as v from 'valibot'
 
 const frontmatterSchema = v.object({
@@ -16,7 +16,7 @@ const frontmatterSchema = v.object({
   tags: v.optional(v.array(v.string())),
 })
 
-export const PostsCollection = collection<{
+export const PostsCollection = new Collection<{
   default: MDXContent
   frontmatter: v.InferInput<typeof frontmatterSchema>
 }>('posts/.mdx', {
@@ -65,7 +65,7 @@ const frontmatterSchema = v.object({
 We can now apply the Valibot `frontmatterSchema` to your collection using the `schema` option in the `collection` utility:
 
 ```ts allowErrors focusedLines="1-2,12-20"
-import { collection } from 'renoun/collections'
+import { Collection } from 'renoun/collections'
 import type { MDXContent } from 'renoun/mdx'
 import * as v from 'valibot'
 
@@ -76,7 +76,7 @@ const frontmatterSchema = v.object({
   tags: v.optional(v.array(v.string())),
 })
 
-export const PostsCollection = collection<{
+export const PostsCollection = new Collection<{
   default: MDXContent
   frontmatter: v.InferInput<typeof frontmatterSchema>
 }>('posts/.mdx', {

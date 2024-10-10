@@ -1,10 +1,10 @@
-import { collection, type FileSystemSource } from 'renoun/collections'
+import { Collection, type FileSystemSource } from 'renoun/collections'
 
 type ComponentSchema = Record<string, React.ComponentType>
 
 export type ComponentSource = FileSystemSource<ComponentSchema>
 
-export const ComponentsCollection = collection<ComponentSchema>(
+export const ComponentsCollection = new Collection<ComponentSchema>(
   {
     baseDirectory: 'components',
     basePath: 'components',

@@ -11,7 +11,7 @@ Collections are a way to organize and query file-system data in renoun. They are
 Let's look at an example of how to create a collection for a blog. We'll define a collection that queries all `mdx` files in a `posts` directory:
 
 ```tsx filename="collections.ts"
-import { collection, type FileSystemSource } from 'renoun/collections'
+import { Collection, type FileSystemSource } from 'renoun/collections'
 import type { MDXContent } from 'renoun/mdx'
 
 type PostsSchema = {
@@ -24,7 +24,7 @@ type PostsSchema = {
 
 export type PostsSource = FileSystemSource<PostsSchema>
 
-export const PostsCollection = collection<PostsSchema>({
+export const PostsCollection = new Collection<PostsSchema>({
   filePattern: 'posts/*.mdx',
   baseDirectory: 'posts',
   basePath: 'posts',

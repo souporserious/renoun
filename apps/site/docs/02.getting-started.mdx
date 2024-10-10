@@ -46,10 +46,10 @@ const posts = collection({
 We can then constrain the collection by providing types for the exports we're interested in querying:
 
 ```tsx
-import { collection } from 'renoun/collections'
+import { Collection } from 'renoun/collections'
 import type { MDXContent } from 'renoun/mdx'
 
-const posts = collection<{
+const posts = new Collection<{
   default: MDXContent
 }>({
   filePattern: 'posts/*.mdx',
@@ -59,10 +59,10 @@ const posts = collection<{
 Finally, we can use this collection to render the contents of our MDX files:
 
 ```tsx
-import { collection } from 'renoun/collections'
+import { Collection } from 'renoun/collections'
 import type { MDXContent } from 'renoun/mdx'
 
-const posts = collection<{
+const posts = new Collection<{
   default: MDXContent
 }>({
   filePattern: 'posts/*.mdx',
@@ -140,7 +140,7 @@ By using schemas, you can validate module exports and ensure they remain consist
 In our Button component example, we can validate the front matter of the MDX file at the call site of our collection using a schema:
 
 ```tsx
-import { collection } from 'renoun/collections'
+import { Collection } from 'renoun/collections'
 import type { MDXContent } from 'renoun/mdx'
 import { z } from 'zod'
 
@@ -151,7 +151,7 @@ const frontmatterSchema = z.object({
   tags: z.array(z.string()).optional(),
 })
 
-export const PostsCollection = collection<{
+export const PostsCollection = new Collection<{
   default: MDXContent
   frontmatter: z.infer<typeof frontmatterSchema>
 }>({
