@@ -183,6 +183,14 @@ async function CodeBlockAsync({
         style: props.style?.container,
       }
     : {}
+  const focusedLinesStyles = focusedLines
+    ? {
+        '--m0': `rgba(0, 0, 0, ${unfocusedLinesOpacity})`,
+        '--m1': 'rgba(0, 0, 0, 1)',
+        maskPosition: `0 ${containerPadding.top}`,
+        maskImage: focusedLinesGradient,
+      }
+    : {}
 
   return (
     <Context value={contextValue}>
@@ -212,21 +220,13 @@ async function CodeBlockAsync({
             borderRadius: shouldRenderToolbar ? 'inherit' : 5,
             boxShadow: shouldRenderToolbar
               ? undefined
-              : `0 0 0 1px inset ${theme.panel.border}`,
+              : `0 0 0 1px ${theme.panel.border}`,
             ...(highlightedLines
               ? {
                   '--h0': `rgba(0, 0, 0, 0)`,
                   '--h1': theme.editor.rangeHighlightBackground,
                   backgroundPosition: `0 ${containerPadding.top}`,
                   backgroundImage: highlightedLinesGradient,
-                }
-              : {}),
-            ...(focusedLines
-              ? {
-                  '--m0': `rgba(0, 0, 0, ${unfocusedLinesOpacity})`,
-                  '--m1': 'rgba(0, 0, 0, 1)',
-                  maskPosition: `0 ${containerPadding.top}`,
-                  maskImage: focusedLinesGradient,
                 }
               : {}),
             ...(shouldRenderToolbar ? {} : props.css?.container),
@@ -257,6 +257,7 @@ async function CodeBlockAsync({
                   padding: containerPadding.all,
                   gridColumn: 2,
                   paddingLeft: 0,
+                  ...focusedLinesStyles,
                 }}
               >
                 <Tokens
@@ -276,7 +277,13 @@ async function CodeBlockAsync({
               </Code>
             </>
           ) : (
-            <Code css={{ padding: containerPadding.all, gridColumn: 1 }}>
+            <Code
+              css={{
+                padding: containerPadding.all,
+                gridColumn: 1,
+                ...focusedLinesStyles,
+              }}
+            >
               <Tokens
                 css={{
                   token: props.css?.token,

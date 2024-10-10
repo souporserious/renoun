@@ -2,4 +2,4 @@
 'renoun': patch
 ---
 
-Moves box shadow border used for `CodeBlock` to an inset box-shadow to prevent it getting clipped when used with the `focusedLines` prop.
+Moves image mask to code element when using `CodeBlock.focusedLines` prop to prevent dimming the border and copy button.
