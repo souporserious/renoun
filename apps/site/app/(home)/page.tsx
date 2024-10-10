@@ -50,8 +50,8 @@ export default function Page() {
             margin: 0,
           }}
         >
-          Meticulously crafted React components and utilities to help you build
-          great content and documentation sites.
+          Meticulously crafted React components and utilities to help you create
+          engaging content and documentation.
         </p>
         <div
           css={{

@@ -5,15 +5,15 @@
       <img src="/packages/renoun/images/logo-light.png" alt="renoun" width="180"/>
     </picture>
   </a>
-  <h2>Documentation That Matches the Quality of Your Product</h2>
+  <h2>Your Technical Content Toolkit</h2>
   <p>
-Meticulously crafted React components and utilities, designed to elevate every stage of your JavaScript documentation.
+Meticulously crafted React components and utilities to<br/>help you create engaging content and documentation.
   </p>
 </div>
 
 ## Features
 
-- 📝 Quickly author great technincal content
+- 📝 Quickly start authoring technincal content
 - 📊 Query file and directory metadata
 - 🛟 Validate module exports
 - 📘 Display API references
