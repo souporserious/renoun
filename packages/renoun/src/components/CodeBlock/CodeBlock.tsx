@@ -175,7 +175,7 @@ async function CodeBlockAsync({
           backgroundColor: theme.background,
           color: theme.foreground,
           borderRadius: 5,
-          boxShadow: `0 0 0 1px ${theme.panel.border}`,
+          boxShadow: `0 0 0 1px inset ${theme.panel.border}`,
           ...props.css?.container,
           padding: 0,
         } satisfies CSSObject,
@@ -212,7 +212,7 @@ async function CodeBlockAsync({
             borderRadius: shouldRenderToolbar ? 'inherit' : 5,
             boxShadow: shouldRenderToolbar
               ? undefined
-              : `0 0 0 1px ${theme.panel.border}`,
+              : `0 0 0 1px inset ${theme.panel.border}`,
             ...(highlightedLines
               ? {
                   '--h0': `rgba(0, 0, 0, 0)`,
