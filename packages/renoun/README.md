@@ -36,9 +36,9 @@ Collections are a way to organize and query file-system data in renoun. They are
 Use the `collection` utility to render a collection of files from the file system:
 
 ```tsx
-import { collection } from 'renoun/collections'
+import { Collection } from 'renoun/collections'
 
-const posts = collection({ filePattern: 'posts/*.mdx' })
+const posts = new Collection({ filePattern: 'posts/*.mdx' })
 
 export default async function Page({ params }) {
   const Content = await posts
@@ -73,15 +73,15 @@ export default function Page() {
 Use the `APIReference` component to render API references from `collection` sources:
 
 ```tsx
-import { collection } from 'renoun/collections'
+import { Collection } from 'renoun/collections'
 import { APIReference } from 'renoun/components'
 
-const components = collection({ filePattern: 'components/*.tsx' })
+const components = new Collection({ filePattern: 'components/*.tsx' })
 
 export default async function Page({ params }) {
-  const Component = await components.getSource(params.slug)!
+  const component = await components.getSource(params.slug)!
 
-  return <APIReference component={Component} />
+  return <APIReference source={component} />
 }
 ```
 

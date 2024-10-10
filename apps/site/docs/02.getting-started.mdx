@@ -36,9 +36,9 @@ Prepending the renoun CLI ensures that the renoun process starts before your fra
 The `collection` utility is a core concept in renoun. This allows you to query a collection of files from the file system. For example, to create a list of blog posts or documentation pages we can query all the MDX files in a directory:
 
 ```tsx
-import { collection } from 'renoun/collections'
+import { Collection } from 'renoun/collections'
 
-const posts = collection({
+const posts = new Collection({
   filePattern: 'posts/*.mdx',
 })
 ```
@@ -87,10 +87,10 @@ generated at the collection's call site for each targeted extension during the d
 process. These imports are necessary to load the targeted files from
 the file system.
 
-```ts
-import { collection } from 'renoun/collections'
+```ts highlightedLines="5"
+import { Collection } from 'renoun/collections'
 
-const posts = collection(
+const posts = new Collection(
   { filePattern: 'posts/*.mdx' },
   (slug) => import(`./posts/${slug}.mdx`)
 )
