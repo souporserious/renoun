@@ -1,5 +1,98 @@
 # renoun
 
+## 5.3.0
+
+### Minor Changes
+
+- 6a74c71: Deprecates the `collection` utility in favor of using the `Collection` class directly:
+
+  ```diff
+  -- import { collection } from 'renoun/collections'
+  ++ import { Collection } from 'renoun/collections'
+
+  -- export const PostsCollection = collection({
+  ++ export const PostsCollection = new Collection({
+    filePattern: 'posts/*.mdx',
+    baseDirectory: 'posts',
+    basePath: 'posts',
+  })
+  ```
+
+- ad250de: Introduces a new `CompositeCollection` class. This allows grouping a set of collections to treat them as a single collection:
+
+  ```tsx
+  import { Collection, CompositeCollection } from 'renoun/collections'
+
+  const CollectionsCollection = new Collection({
+    filePattern: 'src/collections/index.tsx',
+    baseDirectory: 'collections',
+  })
+
+  const ComponentsCollection = new Collection({
+    filePattern: 'src/components/**/*.{ts,tsx}',
+    baseDirectory: 'components',
+  })
+
+  const AllCollections = new CompositeCollection(
+    CollectionsCollection,
+    ComponentsCollection
+  )
+  ```
+
+  When getting a source from a composite collection, the `<FileSystemSource>.getSiblings` method will account for all collections in the composite collection:
+
+  ```tsx
+  const source = AllCollections.getSource('collections/index')!
+
+  const [previousSource, nextSource] = await source.getSiblings()
+  ```
+
+  A new `<Collection>.hasSource` type guard is also available to help constrain the type of the source when working with composite collections:
+
+  ```tsx
+  if (ComponentsCollection.hasSource(nextSource)) {
+    // nextSource is now typed as a ComponentsCollection source
+  }
+  ```
+
+- f499a2b: Adds support to `<ExportSource>.getType()` for capturing API references that use index types.
+- 8822ce6: Adds an initial highlight animation of all symbols when the pointer enters the `CodeBlock`.
+- fc1e9a6: Adds support for passing a file path to the `APIReference.source` prop:
+
+  ```tsx
+  import { APIReference } from 'renoun/components'
+
+  export function FilePath() {
+    return (
+      <APIReference
+        source="./GitProvider.tsx"
+        workingDirectory={import.meta.url}
+      />
+    )
+  }
+  ```
+
+### Patch Changes
+
+- 53ad975: Moves image mask to code element when using `CodeBlock.focusedLines` prop to prevent dimming the border and copy button.
+- c35be54: Fixes CLI errors not bubbling correctly during local development.
+- 508d086: This update resolves several issues with API references, particularly recursion bugs in the internal `resolveType` utility. The key changes involve an updated algorithm for computing component types, which affects the following case:
+
+  - Named functions with a capitalized first letter and a single non-object argument are now interpreted as components when they should be functions. This is an unintended behavior change and will be corrected in an upcoming update.
+
+  ### Type References
+
+  Type references are now split into two maps that serve the following use cases:
+
+  - **Prevent Infinite Recursion**: A map of type references is maintained during type iteration of the root type to prevent infinite recursion.
+  - **Optimized Type Handling for Exported Declarations**:
+    - Adds an explicit map for tracking exported declarations to avoid type duplication.
+    - Improves performance and establishes a link between types.
+
+- a8b77df: Updates `renoun/assets` with the latest logos.
+- fc2cc02: Allows `CodeInline` to stretch by anchoring the `CopyButton` to the end.
+- 2e75254: Adds better error messaging with actions to take when `CodeBlock` or `CodeInline` has diagnostic errors.
+
 ## 5.2.0
 
 ### Minor Changes
