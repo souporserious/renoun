@@ -72,7 +72,7 @@ export default function Page() {
             language="bash"
             paddingX="0.8em"
             paddingY="0.5em"
-            css={{ fontSize: 'var(--font-size-code)' }}
+            css={{ fontSize: 'var(--font-size-code-1)' }}
           />
         </div>
       </div>

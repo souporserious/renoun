@@ -21,8 +21,9 @@
   --font-size-body-2: 1.6rem;
   --font-size-body-3: 1.2rem;
   --font-size-title: 0.875rem;
-  --font-size-code: 1.6rem;
-  --font-size-code-small: 1.4rem;
+  --font-size-code-1: 1.6rem;
+  --font-size-code-2: 1.6rem;
+  --font-size-code-3: 1.4rem;
   --font-size-button: 1.6rem;
   --line-height-heading-0: 5rem;
   --line-height-heading-1: 4rem;
@@ -30,8 +31,9 @@
   --line-height-heading-3: 2.4rem;
   --line-height-body-1: 2.625rem;
   --line-height-body-2: 2.2rem;
-  --line-height-code: 2rem;
-  --line-height-code-small: 1.8rem;
+  --line-height-code-1: 2.4rem;
+  --line-height-code-2: 2rem;
+  --line-height-code-3: 1.8rem;
   --font-weight-heading: 700;
   --font-weight-body: 400;
   --font-weight-button: 700;
@@ -51,16 +53,18 @@
     --font-size-body-2: 1rem;
     --font-size-body-3: 0.875rem;
     --font-size-title: 0.65rem;
-    --font-size-code: 1rem;
-    --font-size-code-small: 0.875rem;
+    --font-size-code-1: 1.2rem;
+    --font-size-code-2: 1rem;
+    --font-size-code-3: 0.875rem;
     --font-size-button: 1.2rem;
     --line-height-heading-1: 3rem;
     --line-height-heading-2: 2.2rem;
     --line-height-heading-3: 1.8rem;
     --line-height-body-1: 1.65rem;
     --line-height-body-2: 1.4rem;
-    --line-height-code: 1.4rem;
-    --line-height-code-small: 1.2rem;
+    --line-height-code-1: 1.6rem;
+    --line-height-code-2: 1.4rem;
+    --line-height-code-3: 1.2rem;
     --header-height: 3.75rem;
   }
 }

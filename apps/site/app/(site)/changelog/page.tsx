@@ -14,8 +14,8 @@ export default function Page() {
               {...props}
               style={{
                 container: {
-                  fontSize: 'var(--font-size-code)',
-                  lineHeight: 'var(--line-height-code)',
+                  fontSize: 'var(--font-size-code-2)',
+                  lineHeight: 'var(--line-height-code-2)',
                 },
               }}
             />

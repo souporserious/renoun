@@ -175,7 +175,7 @@ async function CodeBlockAsync({
           backgroundColor: theme.background,
           color: theme.foreground,
           borderRadius: 5,
-          boxShadow: `0 0 0 1px inset ${theme.panel.border}`,
+          boxShadow: `0 0 0 1px ${theme.panel.border}`,
           ...props.css?.container,
           padding: 0,
         } satisfies CSSObject,

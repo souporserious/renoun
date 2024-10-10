@@ -35,8 +35,8 @@ export const MDXComponents = {
         packages={packages}
         css={{
           container: {
-            fontSize: 'var(--font-size-code)',
-            lineHeight: 'var(--line-height-code)',
+            fontSize: 'var(--font-size-code-2)',
+            lineHeight: 'var(--line-height-code-2)',
             width: 'calc(100% + 2rem)',
             margin: '0 -1rem',
           },
@@ -74,8 +74,8 @@ export const MDXComponents = {
           },
 
           '& pre': {
-            fontSize: 'var(--font-size-code-small)',
-            lineHeight: 'var(--line-height-code-small)',
+            fontSize: 'var(--font-size-code-3)',
+            lineHeight: 'var(--line-height-code-3)',
           },
 
           '@media (min-width: 60rem)': {
