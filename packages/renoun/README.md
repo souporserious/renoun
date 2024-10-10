@@ -19,7 +19,7 @@ Meticulously crafted React components and utilities to<br/>help you create engag
 - 📘 Display API references
 - 🌈 Accurately highlight code blocks
 - ✅ Type-check code blocks
-- 🖼️ Preview source code examples
+- 🖼️ Render source code examples
 
 ## Getting Started
 
