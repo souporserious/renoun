@@ -38,7 +38,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
     },
   },
   {
-    title: 'Customize',
+    title: 'Personalize',
     content: `Select from a growing list of pre-built components to tailor your documentation to fit your unique needs and brand identity.`,
     code: `import { CodeBlock, Tokens } from 'renoun/components'
 
