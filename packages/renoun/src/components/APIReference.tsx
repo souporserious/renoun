@@ -4,6 +4,7 @@ import { Fragment, Suspense } from 'react'
 import type { CSSObject } from 'restyle'
 
 import type { ExportSource } from '../collections/index.js'
+import { getExportedTypes } from '../collections/project.js'
 import { createSlug } from '../utils/create-slug.js'
 import type {
   AllTypes,
@@ -21,13 +22,108 @@ const mdxComponents = {
   code: (props) => <MDXComponents.code {...props} paddingY="0" />,
 } satisfies MDXComponents
 
+interface SourceString {
+  /** The file path to the source code. */
+  source: string
+
+  /** The working directory to resolve the file path from. Will use the base URL if a URL is provided. */
+  workingDirectory?: string
+}
+
+interface SourceExport {
+  /** The export source from a collection export source to get types from. */
+  source: ExportSource<any>
+}
+
+interface Filter {
+  /** A filter to apply to the exported types. */
+  filter?: SymbolFilter
+}
+
+export type APIReferenceProps =
+  | (SourceString & Filter)
+  | (SourceExport & Filter)
+
+/** Displays type documentation for all types exported from a file path or types related to a collection export source. */
+export function APIReference(props: APIReferenceProps) {
+  return (
+    <Suspense fallback="Loading API references...">
+      <APIReferenceAsync {...props} />
+    </Suspense>
+  )
+}
+
 async function APIReferenceAsync({
   source,
   filter,
-}: {
-  source: ExportSource<any>
-  filter?: SymbolFilter
-}) {
+  ...props
+}: APIReferenceProps) {
+  if (typeof source === 'string') {
+    let workingDirectory: string | undefined
+
+    if ('workingDirectory' in props && props.workingDirectory) {
+      if (URL.canParse(props.workingDirectory)) {
+        const { pathname } = new URL(props.workingDirectory)
+        workingDirectory = pathname.slice(0, pathname.lastIndexOf('/'))
+      } else {
+        workingDirectory = props.workingDirectory
+      }
+    }
+
+    const exportedTypes = await getExportedTypes(
+      source,
+      filter,
+      workingDirectory
+    )
+
+    return exportedTypes.map((type) => (
+      <div
+        key={type.name}
+        css={{
+          display: 'flex',
+          flexDirection: 'column',
+          padding: '1.6rem 0',
+          borderBottom: '1px solid var(--color-separator-secondary)',
+        }}
+      >
+        <div
+          css={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.8rem',
+          }}
+        >
+          <div
+            css={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '1rem',
+            }}
+          >
+            <h3
+              id={type.name ? createSlug(type.name) : undefined}
+              css={{ flexShrink: 0, margin: 0 }}
+            >
+              {type.name}
+            </h3>
+
+            <CodeInline value={type.text} language="typescript" />
+
+            {/* {type.path && <ViewSource href={type.path} />} */}
+          </div>
+
+          {type.description ? (
+            <MDXContent value={type.description} components={mdxComponents} />
+          ) : null}
+        </div>
+
+        <div css={{ display: 'flex' }}>
+          <TypeChildren type={type} css={{ marginTop: '2rem' }} />
+        </div>
+      </div>
+    ))
+  }
+
   const type = await source.getType(filter)
 
   if (type === undefined) {
@@ -427,20 +523,5 @@ function TypeValue({
           )
         : null}
     </div>
-  )
-}
-
-/** Displays type documentation for all types related to a collection export source. */
-export function APIReference({
-  source,
-  filter,
-}: {
-  source: ExportSource<any>
-  filter?: SymbolFilter
-}) {
-  return (
-    <Suspense fallback="Loading API references...">
-      <APIReferenceAsync source={source} filter={filter} />
-    </Suspense>
   )
 }

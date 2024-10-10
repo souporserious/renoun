@@ -29,6 +29,7 @@ import { resolveTsConfigPath } from '../utils/resolve-ts-config-path.js'
 import type { SymbolFilter } from '../utils/resolve-type.js'
 import { getSourcePathMap } from '../utils/get-source-files-path-map.js'
 import { getSourceFilesOrderMap } from '../utils/get-source-files-sort-order.js'
+import { getProject } from './project.js'
 
 type GetImport = (slug: string) => Promise<any>
 
@@ -214,19 +215,6 @@ export interface CollectionOptions<Exports extends FileExports> {
   schema?: {
     [Name in keyof Exports]?: (value: Exports[Name]) => Exports[Name]
   }
-}
-
-const projectCache = new Map<string, Project>()
-
-function resolveProject(tsConfigFilePath: string): Project {
-  if (!projectCache.has(tsConfigFilePath)) {
-    const project = new tsMorph.Project({
-      skipAddingFilesFromTsConfig: true,
-      tsConfigFilePath,
-    })
-    projectCache.set(tsConfigFilePath, project)
-  }
-  return projectCache.get(tsConfigFilePath)!
 }
 
 class Export<Value, AllExports extends FileExports = FileExports>
@@ -831,7 +819,7 @@ class Collection<AllExports extends FileExports>
 
     this.options = options
     this.getImport = getImport!
-    this.project = resolveProject(options.tsConfigFilePath)
+    this.project = getProject(options.tsConfigFilePath)
 
     const compilerOptions = this.project.getCompilerOptions()
     const tsConfigFilePath = String(compilerOptions.configFilePath)
