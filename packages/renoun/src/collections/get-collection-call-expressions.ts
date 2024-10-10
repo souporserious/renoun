@@ -1,24 +1,21 @@
-import type { Project, CallExpression } from 'ts-morph'
+import type { Project, NewExpression } from 'ts-morph'
 import tsMorph from 'ts-morph'
 
 export function getCollectionCallExpressions(project: Project) {
   const collectionSourceFile = project.createSourceFile(
     '__collection.ts',
-    `import { collection } from 'renoun/collections';`
+    `import { Collection } from 'renoun/collections';`
   )
-  const allCollections: CallExpression[] = []
+  const allCollections: NewExpression[] = []
 
   collectionSourceFile
     .getFirstDescendantByKindOrThrow(tsMorph.SyntaxKind.Identifier)
     .findReferencesAsNodes()
     .forEach((node) => {
-      const callExpression = node.getParentOrThrow()
-      if (tsMorph.Node.isCallExpression(callExpression)) {
-        const [firstArgument] = callExpression.getArguments()
+      const newExpression = node.getParentOrThrow()
 
-        if (tsMorph.Node.isObjectLiteralExpression(firstArgument)) {
-          allCollections.push(callExpression)
-        }
+      if (tsMorph.Node.isNewExpression(newExpression)) {
+        allCollections.push(newExpression)
       }
     })
 
