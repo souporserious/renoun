@@ -6,8 +6,8 @@ export const ButtonLink = styled(Link, {
   alignItems: 'center',
   justifyContent: 'center',
   fontWeight: 600,
-  minHeight: '2.1715rem',
-  padding: '0.5rem 1.25rem',
+  height: '2lh',
+  padding: '0 1.5rem',
   borderRadius: '0.25rem',
   backgroundColor: 'var(--color-surface-primary)',
   color: 'var(--color-foreground)',
@@ -19,6 +19,6 @@ export const ButtonLink = styled(Link, {
   },
 
   '@media (min-width: 60rem)': {
-    padding: '0 0.75rem',
+    padding: '0 1.5rem',
   },
 })
