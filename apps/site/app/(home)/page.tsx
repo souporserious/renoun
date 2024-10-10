@@ -27,7 +27,7 @@ export default function Page() {
           gap: '2rem',
 
           '@media (min-width: 60rem)': {
-            maxWidth: '56ch',
+            maxWidth: '60ch',
           },
         }}
       >
@@ -51,7 +51,7 @@ export default function Page() {
           }}
         >
           Meticulously crafted React components and utilities to help you build
-          content and documentation sites.
+          great content and documentation sites.
         </p>
         <div
           css={{
