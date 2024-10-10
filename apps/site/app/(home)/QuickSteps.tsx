@@ -39,7 +39,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
   },
   {
     title: 'Customize',
-    content: `Take complete control. Select from a growing list of pre-built components to tailor your documentation to fit your unique needs and brand identity.`,
+    content: `Select from a growing list of pre-built components to tailor your documentation to fit your unique needs and brand identity.`,
     code: `import { CodeBlock, Tokens } from 'renoun/components'
 
 export function Page() {
@@ -106,6 +106,7 @@ export function QuickSteps() {
               css={{
                 gridColumn: '1 / -1',
                 display: 'grid',
+                alignItems: 'center',
 
                 '@media (min-width: 60rem)': {
                   gridTemplateColumns: 'subgrid',
