@@ -1,27 +1,78 @@
+import { ButtonLink } from '@/components/ButtonLink'
 import { CodeBlock } from '@/components/CodeBlock'
 import { Text } from '@/components/Text'
+import Link from 'next/link'
+import type { CodeBlockProps } from 'renoun/components'
 
 const steps = [
   {
     title: 'Collect',
-    content: `Start by adding structured data to your file system. Organize your content or documentation using collections to query and retrieve your source files with ease.`,
-    code: `import { collection } from 'renoun/collections'\n\nconst posts = collection({ filePattern: 'docs/*.mdx' })`,
+    content: `Start by collecting structured data from your file system. Collections help organize and validate your source code.`,
+    code: `import { collection } from 'renoun/collections'
+import type { MDXContent } from 'renoun/mdx'
+
+const posts = collection<{ default: MDXContent }>({
+  filePattern: 'docs/*.mdx'
+})`,
   },
   {
     title: 'Render',
-    content: `Easily query and render your file system sources programmatically.`,
-    code: `import { collection } from 'renoun/collections'\n\nconst posts = collection({ filePattern: 'docs/*.mdx' })\n\nexport default async function Page( params ) {\n  const Content = await posts\n    .getSource(params.slug)\n    .getDefaultExport()\n    .getValue()\n\n  return <Content />\n}`,
+    content: `Easily query and render your file system sources programmatically using a fluent API.`,
+    code: `import { collection } from 'renoun/collections'
+import type { MDXContent } from 'renoun/mdx'
+
+const posts = collection<{ default: MDXContent }>({
+  filePattern: 'docs/*.mdx'
+})
+
+export default async function Page({ params }: { params: { slug: string } }) {
+  const Content = await posts
+    .getSource(params.slug)!
+    .getExport('default')
+    .getValue()
+    
+  return <Content />
+}`,
+    codeBlockProps: {
+      focusedLines: '8-15',
+    },
   },
   {
-    title: 'Elevate',
-    content: `Customize with flexibility. Select from a growing list of pre-built components to tailor your documentation to fit your unique needs and brand identity.`,
-    code: `import { CodeBlock } from 'renoun/components'\n\nexport function Page() {\n  return (\n    <div>\n      <h1>Start Writing Docs in 3 Steps</h1>\n      <CodeBlock\n        language="tsx"\n        value={\`import { CodeBlock } from 'renoun/components'\`}\n      />\n    </div>\n  )\n}`,
+    title: 'Customize',
+    content: `Take complete control. Select from a growing list of pre-built components to tailor your documentation to fit your unique needs and brand identity.`,
+    code: `import { CodeBlock, Tokens } from 'renoun/components'
+
+export function Page() {
+  return (
+    <CodeBlock
+      language="tsx"
+      value={\`import { CodeBlock } from 'renoun/components'\`} 
+    >
+      <pre>
+        <Tokens />
+      </pre>
+    </CodeBlock>
+  )
+}`,
   },
-]
+] satisfies {
+  title: string
+  content: string
+  code: string
+  codeBlockProps?: Partial<CodeBlockProps>
+}[]
 
 export function QuickSteps() {
   return (
-    <section css={{ padding: '6rem 0' }}>
+    <section
+      css={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        padding: '6rem 0',
+        rowGap: '6rem',
+      }}
+    >
       <ol
         css={{
           display: 'flex',
@@ -94,7 +145,6 @@ export function QuickSteps() {
                 </Text>
               </figcaption>
               <CodeBlock
-                allowErrors
                 language="tsx"
                 value={step.code}
                 css={{
@@ -103,11 +153,15 @@ export function QuickSteps() {
                     marginTop: '2.6rem',
                   },
                 }}
+                {...step.codeBlockProps}
               />
             </figure>
           </li>
         ))}
       </ol>
+      <ButtonLink href="/collections">
+        Learn More About Collections →
+      </ButtonLink>
     </section>
   )
 }

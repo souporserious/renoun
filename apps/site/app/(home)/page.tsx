@@ -1,31 +1,9 @@
 import { CodeInline } from 'renoun/components'
-import { styled } from 'restyle'
-import Link from 'next/link'
 
+import { ButtonLink } from '@/components/ButtonLink'
 import { Text } from '@/components/Text'
 import { SignupForm } from '../SignupForm'
 import { QuickSteps } from './QuickSteps'
-
-const ButtonLink = styled(Link, {
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  fontWeight: 600,
-  padding: '0.5rem 1.25rem',
-  borderRadius: '0.25rem',
-  backgroundColor: 'var(--color-surface-primary)',
-  color: 'var(--color-foreground)',
-  fontSize: 'var(--font-size-button)',
-
-  ':hover': {
-    backgroundColor: 'var(--color-surface-primary-highlighted)',
-    textDecoration: 'none !important',
-  },
-
-  '@media (min-width: 60rem)': {
-    padding: '0 0.75rem',
-  },
-})
 
 export default function Page() {
   return (
@@ -41,15 +19,27 @@ export default function Page() {
         },
       }}
     >
-      <div className="prose" css={{ maxWidth: '45rem' }}>
+      <div
+        className="prose"
+        css={{
+          alignSelf: 'center',
+          textAlign: 'center',
+          gap: '2rem',
+
+          '@media (min-width: 60rem)': {
+            maxWidth: '56ch',
+          },
+        }}
+      >
         <h1
           css={{
-            fontSize: 'var(--font-size-heading)',
+            fontSize: 'var(--font-size-heading-0) !important',
+            lineHeight: 'var(--line-height-heading-0) !important',
             textWrap: 'balance',
             margin: 0,
           }}
         >
-          Elevate Every Stage of Your JavaScript Documentation
+          Your Technical Content Toolkit
         </h1>
         <p
           css={{
@@ -60,22 +50,22 @@ export default function Page() {
             margin: 0,
           }}
         >
-          Meticulously crafted React components and utilities to build
-          documentation with the same quality you put into your product.
+          Meticulously crafted React components and utilities to help you build
+          content and documentation sites.
         </p>
         <div
           css={{
             display: 'flex',
             flexDirection: 'column',
+            justifyContent: 'center',
             gap: '1rem',
-            marginTop: '2rem',
 
             '@media (min-width: 60rem)': {
               flexDirection: 'row',
             },
           }}
         >
-          <ButtonLink href="/docs/getting-started">Get Started</ButtonLink>
+          <ButtonLink href="/docs/getting-started">Start Writing</ButtonLink>
           <CodeInline
             allowCopy
             value={`npm install renoun`}
