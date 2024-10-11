@@ -1,5 +1,6 @@
 import type {
   ClassDeclaration,
+  Decorator,
   FunctionDeclaration,
   GetAccessorDeclaration,
   MethodDeclaration,
@@ -151,6 +152,10 @@ export interface ClassType extends BaseType {
 export interface SharedClassMemberType extends BaseType {
   scope?: 'abstract' | 'static'
   visibility?: 'private' | 'protected' | 'public'
+  decorators: {
+    name: string
+    arguments?: string[]
+  }[]
 }
 
 export interface ClassGetAccessorType extends SharedClassMemberType {
@@ -1456,6 +1461,7 @@ function resolveClassAccessor(
     scope: getScope(accessor),
     visibility: getVisibility(accessor),
     text: accessor.getType().getText(accessor, TYPE_FORMAT_FLAGS),
+    decorators: resolveDecorators(accessor.getDecorators()),
     ...getJsDocMetadata(accessor),
   }
 
@@ -1500,6 +1506,7 @@ function resolveClassMethod(
     visibility: getVisibility(method),
     signatures: resolveCallSignatures(callSignatures, method, filter),
     text: method.getType().getText(method, TYPE_FORMAT_FLAGS),
+    decorators: resolveDecorators(method.getDecorators()),
     ...getJsDocMetadata(method),
   } satisfies ClassMethodType
 }
@@ -1521,12 +1528,23 @@ function resolveClassProperty(
       scope: getScope(property),
       visibility: getVisibility(property),
       isReadonly: property.isReadonly(),
+      decorators: resolveDecorators(property.getDecorators()),
     } satisfies ClassPropertyType
   }
 
   throw new Error(
     `[renoun:resolveClassProperty] Class property type could not be resolved. This declaration was either filtered, should be marked as internal, or filed as an issue for support.\n\n${printNode(property)}`
   )
+}
+
+/** Resolve the decorators of a class member. */
+function resolveDecorators(
+  decorators: Decorator[]
+): { name: string; arguments: string[] }[] {
+  return decorators.map((decorator) => ({
+    name: decorator.getName(),
+    arguments: decorator.getArguments().map((argument) => argument.getText()),
+  }))
 }
 
 /** Get the primary declaration of a symbol preferred by type hierarchy. */

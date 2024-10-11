@@ -1937,6 +1937,7 @@ describe('processProperties', () => {
             },
             "properties": [
               {
+                "decorators": [],
                 "defaultValue": "undefined",
                 "element": {
                   "filePath": "test.ts",
@@ -1973,6 +1974,7 @@ describe('processProperties', () => {
                       },
                       "properties": [
                         {
+                          "decorators": [],
                           "defaultValue": "undefined",
                           "filePath": "test.ts",
                           "isReadonly": false,
@@ -3761,6 +3763,7 @@ describe('processProperties', () => {
         "kind": "Class",
         "methods": [
           {
+            "decorators": [],
             "kind": "ClassMethod",
             "name": "setValue",
             "scope": undefined,
@@ -3812,6 +3815,7 @@ describe('processProperties', () => {
         },
         "properties": [
           {
+            "decorators": [],
             "defaultValue": undefined,
             "filePath": "test.ts",
             "isReadonly": false,
@@ -3891,6 +3895,7 @@ describe('processProperties', () => {
             },
             "properties": [
               {
+                "decorators": [],
                 "defaultValue": "#666",
                 "filePath": "test.ts",
                 "isReadonly": false,
@@ -6515,6 +6520,7 @@ describe('processProperties', () => {
       {
         "accessors": [
           {
+            "decorators": [],
             "description": "Sets the count.",
             "kind": "ClassSetAccessor",
             "modifier": undefined,
@@ -6549,6 +6555,7 @@ describe('processProperties', () => {
             "visibility": undefined,
           },
           {
+            "decorators": [],
             "description": "Returns the current count.",
             "kind": "ClassGetAccessor",
             "name": "accessorCount",
@@ -6593,6 +6600,7 @@ describe('processProperties', () => {
         "kind": "Class",
         "methods": [
           {
+            "decorators": [],
             "description": "Increments the count.",
             "kind": "ClassMethod",
             "name": "increment",
@@ -6611,6 +6619,7 @@ describe('processProperties', () => {
             "visibility": undefined,
           },
           {
+            "decorators": [],
             "description": "Decrements the count.",
             "kind": "ClassMethod",
             "name": "decrement",
@@ -6629,6 +6638,7 @@ describe('processProperties', () => {
             "visibility": undefined,
           },
           {
+            "decorators": [],
             "description": "Returns the current count.",
             "kind": "ClassMethod",
             "name": "getCount",
@@ -6668,6 +6678,7 @@ describe('processProperties', () => {
             "visibility": "public",
           },
           {
+            "decorators": [],
             "kind": "ClassMethod",
             "name": "getStaticCount",
             "scope": "static",
@@ -6697,6 +6708,7 @@ describe('processProperties', () => {
         },
         "properties": [
           {
+            "decorators": [],
             "defaultValue": 0,
             "filePath": "test.ts",
             "isReadonly": false,
@@ -6718,6 +6730,7 @@ describe('processProperties', () => {
             "visibility": undefined,
           },
           {
+            "decorators": [],
             "defaultValue": 0,
             "filePath": "test.ts",
             "isReadonly": false,
@@ -8475,6 +8488,7 @@ describe('processProperties', () => {
           "kind": "Class",
           "methods": [
             {
+              "decorators": [],
               "kind": "ClassMethod",
               "name": "increment",
               "scope": undefined,
@@ -8504,6 +8518,7 @@ describe('processProperties', () => {
           },
           "properties": [
             {
+              "decorators": [],
               "defaultValue": 0,
               "filePath": "test.ts",
               "isReadonly": false,
@@ -8754,6 +8769,142 @@ describe('processProperties', () => {
           },
         ],
         "text": "Foo",
+      }
+    `)
+  })
+
+  test('class decorators', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      function loggedMethod<This, Args extends any[], Return>(
+        target: (this: This, ...args: Args) => Return,
+        context: ClassMethodDecoratorContext<This, (this: This, ...args: Args) => Return>
+      ) {
+        const methodName = String(context.name);
+
+        function replacementMethod(this: This, ...args: Args): Return {
+            console.log("LOG: Entering method.")
+            const result = target.call(this, ...args);
+            console.log("LOG: Exiting method.")
+            return result;
+        }
+
+        return replacementMethod;
+      }
+
+      class Person {
+        name: string;
+
+        constructor(name: string) {
+          this.name = name;
+        }
+
+        @loggedMethod
+        greet(): void {
+          console.log("Hello, " + this.name);
+        }
+      }`,
+      { overwrite: true }
+    )
+    const classDeclaration = sourceFile.getClassOrThrow('Person')
+    const types = resolveType(classDeclaration.getType(), classDeclaration)
+
+    expect(types).toMatchInlineSnapshot(`
+      {
+        "constructors": [
+          {
+            "kind": "FunctionSignature",
+            "modifier": undefined,
+            "parameters": [
+              {
+                "context": "parameter",
+                "defaultValue": undefined,
+                "description": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "kind": "String",
+                "name": "name",
+                "position": {
+                  "end": {
+                    "column": 27,
+                    "line": 20,
+                  },
+                  "start": {
+                    "column": 15,
+                    "line": 20,
+                  },
+                },
+                "text": "string",
+                "value": undefined,
+              },
+            ],
+            "returnType": "Person",
+            "text": "(name: string) => Person",
+          },
+        ],
+        "filePath": "test.ts",
+        "kind": "Class",
+        "methods": [
+          {
+            "decorators": [
+              {
+                "arguments": [],
+                "name": "loggedMethod",
+              },
+            ],
+            "kind": "ClassMethod",
+            "name": "greet",
+            "scope": undefined,
+            "signatures": [
+              {
+                "kind": "FunctionSignature",
+                "modifier": undefined,
+                "parameters": [],
+                "returnType": "void",
+                "text": "() => void",
+              },
+            ],
+            "text": "() => void",
+            "visibility": undefined,
+          },
+        ],
+        "name": "Person",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 28,
+          },
+          "start": {
+            "column": 1,
+            "line": 17,
+          },
+        },
+        "properties": [
+          {
+            "decorators": [],
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isReadonly": false,
+            "kind": "String",
+            "name": "name",
+            "position": {
+              "end": {
+                "column": 16,
+                "line": 18,
+              },
+              "start": {
+                "column": 3,
+                "line": 18,
+              },
+            },
+            "scope": undefined,
+            "text": "string",
+            "value": undefined,
+            "visibility": undefined,
+          },
+        ],
+        "text": "Person",
       }
     `)
   })
