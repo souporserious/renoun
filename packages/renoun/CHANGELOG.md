@@ -1,5 +1,18 @@
 # renoun
 
+## 5.4.0
+
+### Minor Changes
+
+- f37e6e1: Adds support for analyzing generic parameters.
+- 09e4efd: Adds initial support for analyzing class member decorators.
+
+### Patch Changes
+
+- 72697ee: Makes sure to update `Collection` new expressions with the related dynamic import.
+- 00d64e2: Improves errors that can occur during type resolution.
+- 9c86e10: Fixes collection exports generic parameter to not be overconstrained.
+
 ## 5.3.0
 
 ### Minor Changes
