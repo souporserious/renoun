@@ -37,10 +37,6 @@ export type FilePatterns<Extension extends string = string> =
   | `${string}${Extension}`
   | `${string}${Extension}${string}`
 
-export type FileExports = {
-  [key: string]: unknown
-}
-
 export interface BaseSource {
   /**
    * The full path to the source formatted to be URL-friendly, taking the
@@ -67,7 +63,7 @@ type PositiveIntegerOrInfinity<Type extends number> = `${Type}` extends
   ? never
   : Type
 
-export interface SourceProvider<Exports extends FileExports> {
+export interface SourceProvider<Exports extends object> {
   /** Retrieves a source in the immediate directory or sub-directory by its path. */
   getSource(path?: string | string[]): FileSystemSource<Exports> | undefined
 
@@ -123,7 +119,7 @@ export interface ExportSource<Value> extends BaseSource {
   isMainExport(): boolean
 }
 
-export interface FileSystemSource<Exports extends FileExports>
+export interface FileSystemSource<Exports extends object>
   extends BaseSource,
     SourceProvider<Exports> {
   /** The base file name or directory name. */
@@ -170,7 +166,7 @@ export interface FileSystemSource<Exports extends FileExports>
   isDirectory(): boolean
 }
 
-export type CollectionSource<Exports extends FileExports> = Omit<
+export type CollectionSource<Exports extends object> = Omit<
   BaseSource,
   'getEditPath' | 'getPathSegments'
 > &
@@ -180,7 +176,7 @@ export type CollectionSource<Exports extends FileExports> = Omit<
     ): source is FileSystemSource<Exports>
   }
 
-export interface CollectionOptions<Exports extends FileExports> {
+export interface CollectionOptions<Exports extends object> {
   /** The file pattern used to match source files. */
   filePattern: FilePatterns
 
@@ -217,7 +213,7 @@ export interface CollectionOptions<Exports extends FileExports> {
   }
 }
 
-class Export<Value, AllExports extends FileExports = FileExports>
+class Export<Value, AllExports extends object = object>
   implements ExportSource<Value>
 {
   #jsDocMetadata: ReturnType<typeof getJsDocMetadata> | null = null
@@ -379,7 +375,9 @@ class Export<Value, AllExports extends FileExports = FileExports>
 
   async getValue(): Promise<Value> {
     const moduleExports = await this.source.getModuleExports()
-    const name = this.exportName === 'default' ? 'default' : this.getName()
+    const name = (
+      this.exportName === 'default' ? 'default' : this.getName()
+    ) as keyof AllExports
     let exportValue = moduleExports![name]
 
     /* Apply validation if schema is provided. */
@@ -394,7 +392,7 @@ class Export<Value, AllExports extends FileExports = FileExports>
         } catch (error) {
           if (error instanceof Error) {
             throw new Error(
-              `[renoun] Failed to parse export "${name}" using schema for file "${this.source.getPath()}" \n\n${
+              `[renoun] Failed to parse export "${String(name)}" using schema for file "${this.source.getPath()}" \n\n${
                 error.message
               }`,
               { cause: error }
@@ -452,7 +450,7 @@ class Export<Value, AllExports extends FileExports = FileExports>
   }
 }
 
-class Source<AllExports extends FileExports>
+class Source<AllExports extends object>
   implements FileSystemSource<AllExports>
 {
   #sourcePath: string
@@ -794,7 +792,7 @@ You can fix this error by taking one of the following actions:
 }
 
 /** Creates a collection of file system sources based on a file pattern. */
-export class Collection<AllExports extends FileExports>
+export class Collection<AllExports extends object>
   implements CollectionSource<AllExports>
 {
   public options: CollectionOptions<AllExports>
