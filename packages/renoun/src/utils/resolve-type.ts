@@ -152,10 +152,7 @@ export interface ClassType extends BaseType {
 export interface SharedClassMemberType extends BaseType {
   scope?: 'abstract' | 'static'
   visibility?: 'private' | 'protected' | 'public'
-  decorators: {
-    name: string
-    arguments?: string[]
-  }[]
+  decorators: ResolvedType[]
 }
 
 export interface ClassGetAccessorType extends SharedClassMemberType {
@@ -182,6 +179,7 @@ export type ClassPropertyType = BaseTypes &
 export interface FunctionSignatureType extends BaseType {
   kind: 'FunctionSignature'
   modifier?: 'async' | 'generator'
+  generics?: GenericParameterType[]
   parameters: ParameterTypes[]
   returnType: string
 }
@@ -217,6 +215,12 @@ export interface GenericType extends BaseType {
   arguments: ParameterTypes[]
 }
 
+export interface GenericParameterType extends BaseType {
+  kind: 'GenericParameter'
+  constraint?: BaseTypes
+  defaultType?: BaseTypes
+}
+
 export interface UnknownType extends BaseType {
   kind: 'Unknown'
 }
@@ -239,6 +243,7 @@ export type BaseTypes =
   | PrimitiveType
   | ReferenceType
   | GenericType
+  | GenericParameterType
   | UnknownType
 
 export type AllTypes =
@@ -281,7 +286,8 @@ export function resolveType(
   enclosingNode?: Node,
   filter: SymbolFilter = defaultFilter,
   isRootType: boolean = true,
-  defaultValues?: Record<string, unknown> | unknown
+  defaultValues?: Record<string, unknown> | unknown,
+  keepReferences: boolean = false
 ): ResolvedType | undefined {
   const symbol =
     // First, attempt to get the aliased symbol for imported and aliased types
@@ -503,7 +509,9 @@ export function resolveType(
         element: resolvedElementType,
       } satisfies ArrayType
     } else {
-      rootReferences.delete(type)
+      if (!keepReferences) {
+        rootReferences.delete(type)
+      }
       return
     }
   } else {
@@ -526,7 +534,9 @@ export function resolveType(
 
       /* If the any of the type arguments are references, they need need to be linked to the generic type. */
       if (everyTypeArgumentIsReference && resolvedTypeArguments.length > 0) {
-        rootReferences.delete(type)
+        if (!keepReferences) {
+          rootReferences.delete(type)
+        }
 
         return {
           kind: 'Generic',
@@ -541,7 +551,25 @@ export function resolveType(
       }
     }
 
-    if (type.isClass() || tsMorph.Node.isClassDeclaration(symbolDeclaration)) {
+    if (type.isTypeParameter()) {
+      const constraintType = type.getConstraint()
+      const defaultType = type.getDefault()
+
+      resolvedType = {
+        kind: 'GenericParameter',
+        name: symbolMetadata.name,
+        text: typeText,
+        constraint: constraintType
+          ? resolveType(constraintType, enclosingNode, filter, false)
+          : undefined,
+        defaultType: defaultType
+          ? resolveType(defaultType, enclosingNode, filter, false)
+          : undefined,
+      } satisfies GenericParameterType
+    } else if (
+      type.isClass() ||
+      tsMorph.Node.isClassDeclaration(symbolDeclaration)
+    ) {
       if (tsMorph.Node.isClassDeclaration(symbolDeclaration)) {
         resolvedType = resolveClass(symbolDeclaration, filter)
         if (symbolMetadata.name) {
@@ -584,7 +612,9 @@ export function resolveType(
           .filter(Boolean) as ResolvedType[]
 
         if (resolvedIntersectionTypes.length === 0) {
-          rootReferences.delete(type)
+          if (!keepReferences) {
+            rootReferences.delete(type)
+          }
           return
         }
 
@@ -623,7 +653,9 @@ export function resolveType(
         }
 
         if (resolvedUnionTypes.length === 0) {
-          rootReferences.delete(type)
+          if (!keepReferences) {
+            rootReferences.delete(type)
+          }
           return
         }
 
@@ -662,7 +694,9 @@ export function resolveType(
       }
 
       if (properties.length === 0) {
-        rootReferences.delete(type)
+        if (!keepReferences) {
+          rootReferences.delete(type)
+        }
         return
       }
 
@@ -693,7 +727,9 @@ export function resolveType(
       )
 
       if (elements.length === 0) {
-        rootReferences.delete(type)
+        if (!keepReferences) {
+          rootReferences.delete(type)
+        }
         return
       }
 
@@ -710,8 +746,7 @@ export function resolveType(
         const resolvedCallSignatures = resolveCallSignatures(
           callSignatures,
           declaration,
-          filter,
-          false
+          filter
         )
 
         if (isComponent(symbolMetadata.name, resolvedCallSignatures)) {
@@ -771,7 +806,9 @@ export function resolveType(
             .filter(Boolean) as ResolvedType[]
 
           if (resolvedTypeArguments.length === 0) {
-            rootReferences.delete(type)
+            if (!keepReferences) {
+              rootReferences.delete(type)
+            }
             return
           }
 
@@ -793,7 +830,9 @@ export function resolveType(
             properties: indexSignatures,
           } satisfies ObjectType
         } else if (properties.length === 0) {
-          rootReferences.delete(type)
+          if (!keepReferences) {
+            rootReferences.delete(type)
+          }
           return
         } else {
           resolvedType = {
@@ -814,7 +853,9 @@ export function resolveType(
         const apparentType = type.getApparentType()
 
         if (type !== apparentType) {
-          rootReferences.delete(type)
+          if (!keepReferences) {
+            rootReferences.delete(type)
+          }
 
           return resolveType(
             apparentType,
@@ -828,7 +869,9 @@ export function resolveType(
     }
   }
 
-  rootReferences.delete(type)
+  if (!keepReferences) {
+    rootReferences.delete(type)
+  }
 
   let metadataDeclaration = declaration
 
@@ -848,13 +891,10 @@ export function resolveType(
 export function resolveCallSignatures(
   signatures: Signature[],
   enclosingNode?: Node,
-  filter: SymbolFilter = defaultFilter,
-  isRootType: boolean = true
+  filter: SymbolFilter = defaultFilter
 ): FunctionSignatureType[] {
   return signatures
-    .map((signature) =>
-      resolveSignature(signature, enclosingNode, filter, isRootType)
-    )
+    .map((signature) => resolveSignature(signature, enclosingNode, filter))
     .filter(Boolean) as FunctionSignatureType[]
 }
 
@@ -862,19 +902,29 @@ export function resolveCallSignatures(
 export function resolveSignature(
   signature: Signature,
   enclosingNode?: Node,
-  filter: SymbolFilter = defaultFilter,
-  isRootType: boolean = true
+  filter: SymbolFilter = defaultFilter
 ): FunctionSignatureType | undefined {
   const signatureDeclaration = signature.getDeclaration()
   const signatureParameters = signature.getParameters()
   const parameterDeclarations = signatureParameters.map((parameter) =>
     parameter.getDeclarations().at(0)
   ) as (ParameterDeclaration | undefined)[]
-  const generics = signature
-    .getTypeParameters()
-    .map((parameter) => parameter.getText())
-    .join(', ')
-  const genericsText = generics ? `<${generics}>` : ''
+  const genericParameters = signature.getTypeParameters()
+  const resolvedGenericParameters = genericParameters
+    .map((parameter) =>
+      resolveType(parameter, enclosingNode, filter, false, undefined, true)
+    )
+    .filter(Boolean) as GenericParameterType[]
+  const genericsText = resolvedGenericParameters.length
+    ? `<${resolvedGenericParameters
+        .map((generic) => {
+          const constraintText = generic.constraint
+            ? ` extends ${generic.constraint}`
+            : ''
+          return generic.name + constraintText
+        })
+        .join(', ')}>`
+    : ''
   const resolvedParameters = signatureParameters
     .map((parameter, index) => {
       const parameterDeclaration = parameterDeclarations[index]
@@ -887,15 +937,16 @@ export function resolveSignature(
         const defaultValue = parameterDeclaration
           ? getPropertyDefaultValue(parameterDeclaration)
           : undefined
-        const resolvedType = resolveType(
-          parameter.getTypeAtLocation(signatureDeclaration),
+        const parameterType = parameter.getTypeAtLocation(signatureDeclaration)
+        const resolvedParameterType = resolveType(
+          parameterType,
           declaration,
           filter,
-          isRootType,
+          false,
           defaultValue
         )
 
-        if (resolvedType) {
+        if (resolvedParameterType) {
           let name: string | undefined = parameter.getName()
 
           if (name.startsWith('__')) {
@@ -903,7 +954,7 @@ export function resolveSignature(
           }
 
           return {
-            ...resolvedType,
+            ...resolvedParameterType,
             context: 'parameter',
             name,
             defaultValue,
@@ -959,6 +1010,7 @@ export function resolveSignature(
   return {
     kind: 'FunctionSignature',
     text: simplifiedTypeText,
+    generics: resolvedGenericParameters,
     parameters: resolvedParameters,
     modifier,
     returnType,
@@ -1538,13 +1590,13 @@ function resolveClassProperty(
 }
 
 /** Resolve the decorators of a class member. */
-function resolveDecorators(
-  decorators: Decorator[]
-): { name: string; arguments: string[] }[] {
-  return decorators.map((decorator) => ({
-    name: decorator.getName(),
-    arguments: decorator.getArguments().map((argument) => argument.getText()),
-  }))
+function resolveDecorators(decorators: Decorator[], filter?: SymbolFilter) {
+  return decorators
+    .map((decorator) => {
+      const expression = decorator.getExpression()
+      return resolveType(expression.getType(), expression, filter)
+    })
+    .filter(Boolean) as ResolvedType[]
 }
 
 /** Get the primary declaration of a symbol preferred by type hierarchy. */
