@@ -385,7 +385,7 @@ export function resolveType(
         } else {
           if (!declarationLocation.filePath) {
             throw new Error(
-              `[resolveType]: No file path found for "${typeText}". Please file an issue if you encounter this error.`
+              `[renoun:resolveType]: No file path found for "${typeText}". Please file an issue if you encounter this error.`
             )
           }
           return {
@@ -425,7 +425,7 @@ export function resolveType(
     ) {
       if (!declarationLocation.filePath) {
         throw new Error(
-          `[resolveType]: No file path found for "${typeText}". Please file an issue if you encounter this error.`
+          `[renoun:resolveType]: No file path found for "${typeText}". Please file an issue if you encounter this error.`
         )
       }
 
@@ -544,7 +544,7 @@ export function resolveType(
         }
       } else {
         throw new Error(
-          `[resolveType]: No class declaration found for "${symbolMetadata.name}". Please file an issue if you encounter this error.`
+          `[renoun:resolveType]: No class declaration found for "${symbolMetadata.name}". Please file an issue if you encounter this error.`
         )
       }
     } else if (type.isEnum()) {
@@ -561,7 +561,7 @@ export function resolveType(
         } satisfies EnumType
       } else {
         throw new Error(
-          `[resolveType]: No enum declaration found for "${symbolMetadata.name}". Please file an issue if you encounter this error.`
+          `[renoun:resolveType]: No enum declaration found for "${symbolMetadata.name}". Please file an issue if you encounter this error.`
         )
       }
     } else if (type.isUnion()) {
@@ -908,7 +908,7 @@ export function resolveSignature(
         }
       } else {
         throw new Error(
-          `[resolveCallSignatures]: No parameter declaration found for "${parameter.getName()}". You must pass the enclosing node as the second argument to "resolveCallSignatures".`
+          `[renoun:resolveCallSignatures]: No parameter declaration found for "${parameter.getName()}". You must pass the enclosing node as the second argument to "resolveCallSignatures".`
         )
       }
     })
@@ -1086,7 +1086,7 @@ export function resolveTypeProperties(
         }
       } else {
         throw new Error(
-          `[resolveTypeProperties]: No property declaration found for "${property.getName()}". You must pass the enclosing node as the second argument to "resolveTypeProperties".`
+          `[renoun:resolveTypeProperties]: No property declaration found for "${property.getName()}". You must pass the enclosing node as the second argument to "resolveTypeProperties".`
         )
       }
     })
@@ -1476,7 +1476,7 @@ function resolveClassAccessor(
     }
 
     throw new Error(
-      `[resolveClassAccessor] Setter "${accessor.getName()}" could not be resolved. This declaration was either filtered, should be marked as internal, or filed as an issue for support.`
+      `[renoun:resolveClassAccessor] Class accessor type could not be resolved. This declaration was either filtered, should be marked as internal, or filed as an issue for support.\n\n${printNode(accessor)}`
     )
   }
 
@@ -1525,7 +1525,7 @@ function resolveClassProperty(
   }
 
   throw new Error(
-    `[resolveClassPropertyDeclaration] Property "${property.getName()}" could not be resolved. This declaration was either filtered, should be marked as internal, or filed as an issue for support.`
+    `[renoun:resolveClassProperty] Class property type could not be resolved. This declaration was either filtered, should be marked as internal, or filed as an issue for support.\n\n${printNode(property)}`
   )
 }
 
@@ -1629,4 +1629,25 @@ export function isParameterType(
 
 export function isPropertyType(property: AllTypes): property is PropertyTypes {
   return property.context === 'property'
+}
+
+/** Prints helpful information about a node for debugging. */
+function printNode(
+  node: tsMorph.Node | tsMorph.FunctionDeclaration | tsMorph.PropertyDeclaration
+) {
+  const kindName = node.getKindName()
+  let output = `(${kindName})\n`
+
+  if (tsMorph.Node.isFunctionDeclaration(node)) {
+    output += `Name: ${node.getName()}\n`
+    output += `Signature: ${node.getSignature().getDeclaration().getText()}\n`
+  } else if (tsMorph.Node.isPropertyDeclaration(node)) {
+    output += `Name: ${node.getName()}\n`
+    output += `Type: ${node.getType().getText()}\n`
+  }
+
+  output += `Text:\n${node.getText()}\n`
+  output += `Start: ${node.getStart()}, End: ${node.getEnd()}\n`
+
+  return output
 }
