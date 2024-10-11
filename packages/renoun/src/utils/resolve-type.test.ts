@@ -11,7 +11,7 @@ import { resolveTypeProperties, resolveType } from './resolve-type.js'
 
 const project = new Project()
 
-describe('processProperties', () => {
+describe('resolveType', () => {
   const sourceFile = project.createSourceFile(
     'test.ts',
     `
@@ -88,6 +88,7 @@ describe('processProperties', () => {
             },
             "signatures": [
               {
+                "generics": [],
                 "kind": "FunctionSignature",
                 "modifier": undefined,
                 "parameters": [
@@ -247,6 +248,7 @@ describe('processProperties', () => {
               },
               "signatures": [
                 {
+                  "generics": [],
                   "kind": "FunctionSignature",
                   "modifier": undefined,
                   "parameters": [
@@ -501,6 +503,7 @@ describe('processProperties', () => {
               },
               "signatures": [
                 {
+                  "generics": [],
                   "kind": "FunctionSignature",
                   "modifier": undefined,
                   "parameters": [
@@ -855,6 +858,7 @@ describe('processProperties', () => {
               },
               "signatures": [
                 {
+                  "generics": [],
                   "kind": "FunctionSignature",
                   "modifier": undefined,
                   "parameters": [],
@@ -1401,6 +1405,7 @@ describe('processProperties', () => {
             },
             "signatures": [
               {
+                "generics": [],
                 "kind": "FunctionSignature",
                 "modifier": undefined,
                 "parameters": [
@@ -1453,6 +1458,7 @@ describe('processProperties', () => {
             },
             "signatures": [
               {
+                "generics": [],
                 "kind": "FunctionSignature",
                 "modifier": "async",
                 "parameters": [],
@@ -2842,6 +2848,7 @@ describe('processProperties', () => {
         },
         "signatures": [
           {
+            "generics": [],
             "kind": "ComponentSignature",
             "modifier": undefined,
             "parameter": {
@@ -2939,6 +2946,7 @@ describe('processProperties', () => {
         },
         "signatures": [
           {
+            "generics": [],
             "kind": "ComponentSignature",
             "modifier": undefined,
             "parameter": {
@@ -3003,6 +3011,7 @@ describe('processProperties', () => {
         },
         "signatures": [
           {
+            "generics": [],
             "kind": "ComponentSignature",
             "modifier": undefined,
             "parameter": {
@@ -3072,6 +3081,7 @@ describe('processProperties', () => {
         },
         "signatures": [
           {
+            "generics": [],
             "kind": "ComponentSignature",
             "modifier": undefined,
             "parameter": {
@@ -3417,6 +3427,7 @@ describe('processProperties', () => {
         },
         "signatures": [
           {
+            "generics": [],
             "kind": "FunctionSignature",
             "modifier": undefined,
             "parameters": [
@@ -3769,6 +3780,7 @@ describe('processProperties', () => {
             "scope": undefined,
             "signatures": [
               {
+                "generics": [],
                 "kind": "FunctionSignature",
                 "modifier": undefined,
                 "parameters": [
@@ -4494,6 +4506,7 @@ describe('processProperties', () => {
         },
         "signatures": [
           {
+            "generics": [],
             "kind": "ComponentSignature",
             "modifier": undefined,
             "parameter": undefined,
@@ -4536,6 +4549,7 @@ describe('processProperties', () => {
         },
         "signatures": [
           {
+            "generics": [],
             "kind": "FunctionSignature",
             "modifier": undefined,
             "parameters": [
@@ -4601,6 +4615,7 @@ describe('processProperties', () => {
         },
         "signatures": [
           {
+            "generics": [],
             "kind": "FunctionSignature",
             "modifier": undefined,
             "parameters": [
@@ -4696,6 +4711,7 @@ describe('processProperties', () => {
         },
         "signatures": [
           {
+            "generics": [],
             "kind": "FunctionSignature",
             "modifier": undefined,
             "parameters": [
@@ -4810,6 +4826,7 @@ describe('processProperties', () => {
         },
         "signatures": [
           {
+            "generics": [],
             "kind": "FunctionSignature",
             "modifier": undefined,
             "parameters": [
@@ -4874,6 +4891,7 @@ describe('processProperties', () => {
         },
         "signatures": [
           {
+            "generics": [],
             "kind": "FunctionSignature",
             "modifier": undefined,
             "parameters": [
@@ -4941,6 +4959,7 @@ describe('processProperties', () => {
         },
         "signatures": [
           {
+            "generics": [],
             "kind": "FunctionSignature",
             "modifier": undefined,
             "parameters": [
@@ -5011,6 +5030,7 @@ describe('processProperties', () => {
         },
         "signatures": [
           {
+            "generics": [],
             "kind": "FunctionSignature",
             "modifier": undefined,
             "parameters": [
@@ -5081,6 +5101,7 @@ describe('processProperties', () => {
         },
         "signatures": [
           {
+            "generics": [],
             "kind": "FunctionSignature",
             "modifier": undefined,
             "parameters": [
@@ -5190,6 +5211,7 @@ describe('processProperties', () => {
         },
         "signatures": [
           {
+            "generics": [],
             "kind": "ComponentSignature",
             "modifier": undefined,
             "parameter": {
@@ -5508,6 +5530,7 @@ describe('processProperties', () => {
         },
         "signatures": [
           {
+            "generics": [],
             "kind": "ComponentSignature",
             "modifier": undefined,
             "parameter": {
@@ -5876,6 +5899,7 @@ describe('processProperties', () => {
         },
         "signatures": [
           {
+            "generics": [],
             "kind": "ComponentSignature",
             "modifier": undefined,
             "parameter": {
@@ -6522,6 +6546,7 @@ describe('processProperties', () => {
           {
             "decorators": [],
             "description": "Sets the count.",
+            "generics": [],
             "kind": "ClassSetAccessor",
             "modifier": undefined,
             "name": "accessorCount",
@@ -6567,6 +6592,7 @@ describe('processProperties', () => {
         ],
         "constructors": [
           {
+            "generics": [],
             "kind": "FunctionSignature",
             "modifier": undefined,
             "parameters": [
@@ -6607,6 +6633,7 @@ describe('processProperties', () => {
             "scope": undefined,
             "signatures": [
               {
+                "generics": [],
                 "kind": "FunctionSignature",
                 "modifier": undefined,
                 "parameters": [],
@@ -6626,6 +6653,7 @@ describe('processProperties', () => {
             "scope": undefined,
             "signatures": [
               {
+                "generics": [],
                 "kind": "FunctionSignature",
                 "modifier": undefined,
                 "parameters": [],
@@ -6645,6 +6673,7 @@ describe('processProperties', () => {
             "scope": undefined,
             "signatures": [
               {
+                "generics": [],
                 "kind": "FunctionSignature",
                 "modifier": undefined,
                 "parameters": [
@@ -6684,6 +6713,7 @@ describe('processProperties', () => {
             "scope": "static",
             "signatures": [
               {
+                "generics": [],
                 "kind": "FunctionSignature",
                 "modifier": undefined,
                 "parameters": [],
@@ -6786,6 +6816,7 @@ describe('processProperties', () => {
         },
         "signatures": [
           {
+            "generics": [],
             "kind": "FunctionSignature",
             "modifier": undefined,
             "parameters": [
@@ -6873,6 +6904,7 @@ describe('processProperties', () => {
         },
         "signatures": [
           {
+            "generics": [],
             "kind": "FunctionSignature",
             "modifier": undefined,
             "parameters": [
@@ -7358,6 +7390,7 @@ describe('processProperties', () => {
         },
         "signatures": [
           {
+            "generics": [],
             "kind": "FunctionSignature",
             "modifier": undefined,
             "parameters": [
@@ -7582,6 +7615,7 @@ describe('processProperties', () => {
         },
         "signatures": [
           {
+            "generics": [],
             "kind": "ComponentSignature",
             "modifier": undefined,
             "parameter": {
@@ -7765,6 +7799,7 @@ describe('processProperties', () => {
         },
         "signatures": [
           {
+            "generics": [],
             "kind": "ComponentSignature",
             "modifier": undefined,
             "parameter": {
@@ -7832,6 +7867,7 @@ describe('processProperties', () => {
                       },
                       "signatures": [
                         {
+                          "generics": [],
                           "kind": "FunctionSignature",
                           "modifier": undefined,
                           "parameters": [
@@ -8004,6 +8040,7 @@ describe('processProperties', () => {
                       },
                       "signatures": [
                         {
+                          "generics": [],
                           "kind": "FunctionSignature",
                           "modifier": undefined,
                           "parameters": [
@@ -8494,6 +8531,7 @@ describe('processProperties', () => {
               "scope": undefined,
               "signatures": [
                 {
+                  "generics": [],
                   "kind": "FunctionSignature",
                   "modifier": undefined,
                   "parameters": [],
@@ -8755,6 +8793,7 @@ describe('processProperties', () => {
                 },
                 "signatures": [
                   {
+                    "generics": [],
                     "kind": "FunctionSignature",
                     "modifier": undefined,
                     "parameters": [],
@@ -8773,47 +8812,85 @@ describe('processProperties', () => {
     `)
   })
 
-  test('class decorators', () => {
+  test('generic parameters', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       dedent`
-      function loggedMethod<This, Args extends any[], Return>(
-        target: (this: This, ...args: Args) => Return,
-        context: ClassMethodDecoratorContext<This, (this: This, ...args: Args) => Return>
-      ) {
-        const methodName = String(context.name);
-
-        function replacementMethod(this: This, ...args: Args): Return {
-            console.log("LOG: Entering method.")
-            const result = target.call(this, ...args);
-            console.log("LOG: Exiting method.")
-            return result;
-        }
-
-        return replacementMethod;
-      }
-
-      class Person {
-        name: string;
-
-        constructor(name: string) {
-          this.name = name;
-        }
-
-        @loggedMethod
-        greet(): void {
-          console.log("Hello, " + this.name);
-        }
-      }`,
+      declare function loggedMethod<Args extends string[]>(...args: Args): void;`,
       { overwrite: true }
     )
-    const classDeclaration = sourceFile.getClassOrThrow('Person')
+    const classDeclaration = sourceFile.getFunctionOrThrow('loggedMethod')
     const types = resolveType(classDeclaration.getType(), classDeclaration)
 
     expect(types).toMatchInlineSnapshot(`
       {
-        "constructors": [
+        "filePath": "test.ts",
+        "kind": "Function",
+        "name": "loggedMethod",
+        "position": {
+          "end": {
+            "column": 75,
+            "line": 1,
+          },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "signatures": [
           {
+            "generics": [
+              {
+                "constraint": {
+                  "element": {
+                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                    "kind": "String",
+                    "name": undefined,
+                    "position": {
+                      "end": {
+                        "column": 4402,
+                        "line": 4,
+                      },
+                      "start": {
+                        "column": 3482,
+                        "line": 4,
+                      },
+                    },
+                    "text": "string",
+                    "value": undefined,
+                  },
+                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                  "kind": "Array",
+                  "name": undefined,
+                  "position": {
+                    "end": {
+                      "column": 14214,
+                      "line": 4,
+                    },
+                    "start": {
+                      "column": 12443,
+                      "line": 4,
+                    },
+                  },
+                  "text": "Array<string>",
+                },
+                "defaultType": undefined,
+                "filePath": "test.ts",
+                "kind": "GenericParameter",
+                "name": "Args",
+                "position": {
+                  "end": {
+                    "column": 52,
+                    "line": 1,
+                  },
+                  "start": {
+                    "column": 31,
+                    "line": 1,
+                  },
+                },
+                "text": "Args",
+              },
+            ],
             "kind": "FunctionSignature",
             "modifier": undefined,
             "parameters": [
@@ -8823,34 +8900,313 @@ describe('processProperties', () => {
                 "description": undefined,
                 "filePath": "test.ts",
                 "isOptional": false,
-                "kind": "String",
-                "name": "name",
+                "kind": "Reference",
+                "name": "args",
                 "position": {
                   "end": {
-                    "column": 27,
-                    "line": 20,
+                    "column": 67,
+                    "line": 1,
                   },
                   "start": {
-                    "column": 15,
-                    "line": 20,
+                    "column": 54,
+                    "line": 1,
                   },
                 },
-                "text": "string",
-                "value": undefined,
+                "text": "Args",
               },
             ],
-            "returnType": "Person",
-            "text": "(name: string) => Person",
+            "returnType": "void",
+            "text": "function loggedMethod<Args extends [object Object]>(args: Args): void",
           },
         ],
+        "text": "<Args extends string[]>(...args: Args) => void",
+      }
+    `)
+  })
+
+  test('class decorators', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      function loggedMethod<This, Args extends any[], Return>(
+        target: (this: This, ...args: Args) => Return,
+        context: ClassMethodDecoratorContext<This, (this: This, ...args: Args) => Return>
+      ) {
+        return function replacementMethod(this: This, ...args: Args): Return {
+            console.log("Entering method")
+            const result = target.call(this, ...args);
+            console.log("Exiting method")
+            return result;
+        }
+      }
+
+      class Person {
+        @loggedMethod
+        greet(name: string) {
+          return "Hello, " + name
+        }
+      }`,
+      { overwrite: true }
+    )
+    const classDeclaration = sourceFile.getClassOrThrow('Person')
+    const types = resolveType(classDeclaration.getType(), classDeclaration)
+
+    expect(types).toMatchInlineSnapshot(`
+      {
         "filePath": "test.ts",
         "kind": "Class",
         "methods": [
           {
             "decorators": [
               {
-                "arguments": [],
+                "filePath": "test.ts",
+                "kind": "Function",
                 "name": "loggedMethod",
+                "position": {
+                  "end": {
+                    "column": 2,
+                    "line": 11,
+                  },
+                  "start": {
+                    "column": 1,
+                    "line": 1,
+                  },
+                },
+                "signatures": [
+                  {
+                    "generics": [
+                      {
+                        "constraint": undefined,
+                        "defaultType": undefined,
+                        "filePath": "test.ts",
+                        "kind": "GenericParameter",
+                        "name": "This",
+                        "position": {
+                          "end": {
+                            "column": 27,
+                            "line": 1,
+                          },
+                          "start": {
+                            "column": 23,
+                            "line": 1,
+                          },
+                        },
+                        "text": "This",
+                      },
+                      {
+                        "constraint": {
+                          "element": {
+                            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                            "kind": "Primitive",
+                            "position": {
+                              "end": {
+                                "column": 14214,
+                                "line": 4,
+                              },
+                              "start": {
+                                "column": 12443,
+                                "line": 4,
+                              },
+                            },
+                            "text": "any",
+                          },
+                          "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                          "kind": "Array",
+                          "name": undefined,
+                          "position": {
+                            "end": {
+                              "column": 14214,
+                              "line": 4,
+                            },
+                            "start": {
+                              "column": 12443,
+                              "line": 4,
+                            },
+                          },
+                          "text": "Array<any>",
+                        },
+                        "defaultType": undefined,
+                        "filePath": "test.ts",
+                        "kind": "GenericParameter",
+                        "name": "Args",
+                        "position": {
+                          "end": {
+                            "column": 47,
+                            "line": 1,
+                          },
+                          "start": {
+                            "column": 29,
+                            "line": 1,
+                          },
+                        },
+                        "text": "Args",
+                      },
+                      {
+                        "constraint": undefined,
+                        "defaultType": undefined,
+                        "filePath": "test.ts",
+                        "kind": "GenericParameter",
+                        "name": "Return",
+                        "position": {
+                          "end": {
+                            "column": 55,
+                            "line": 1,
+                          },
+                          "start": {
+                            "column": 49,
+                            "line": 1,
+                          },
+                        },
+                        "text": "Return",
+                      },
+                    ],
+                    "kind": "FunctionSignature",
+                    "modifier": undefined,
+                    "parameters": [
+                      {
+                        "context": "parameter",
+                        "defaultValue": undefined,
+                        "description": undefined,
+                        "filePath": "test.ts",
+                        "isOptional": false,
+                        "kind": "Function",
+                        "name": "target",
+                        "position": {
+                          "end": {
+                            "column": 48,
+                            "line": 2,
+                          },
+                          "start": {
+                            "column": 3,
+                            "line": 2,
+                          },
+                        },
+                        "signatures": [
+                          {
+                            "generics": [],
+                            "kind": "FunctionSignature",
+                            "modifier": undefined,
+                            "parameters": [
+                              {
+                                "context": "parameter",
+                                "defaultValue": undefined,
+                                "description": undefined,
+                                "filePath": "test.ts",
+                                "isOptional": false,
+                                "kind": "Reference",
+                                "name": "args",
+                                "position": {
+                                  "end": {
+                                    "column": 37,
+                                    "line": 2,
+                                  },
+                                  "start": {
+                                    "column": 24,
+                                    "line": 2,
+                                  },
+                                },
+                                "text": "Args",
+                              },
+                            ],
+                            "returnType": "Return",
+                            "text": "(args: Args) => Return",
+                          },
+                        ],
+                        "text": "(this: This, ...args: Args) => Return",
+                      },
+                      {
+                        "arguments": [
+                          {
+                            "context": "parameter",
+                            "filePath": "test.ts",
+                            "kind": "Reference",
+                            "position": {
+                              "end": {
+                                "column": 27,
+                                "line": 1,
+                              },
+                              "start": {
+                                "column": 23,
+                                "line": 1,
+                              },
+                            },
+                            "text": "This",
+                          },
+                          {
+                            "context": "parameter",
+                            "filePath": "test.ts",
+                            "kind": "Function",
+                            "name": undefined,
+                            "position": {
+                              "end": {
+                                "column": 83,
+                                "line": 3,
+                              },
+                              "start": {
+                                "column": 46,
+                                "line": 3,
+                              },
+                            },
+                            "signatures": [
+                              {
+                                "generics": [],
+                                "kind": "FunctionSignature",
+                                "modifier": undefined,
+                                "parameters": [
+                                  {
+                                    "context": "parameter",
+                                    "defaultValue": undefined,
+                                    "description": undefined,
+                                    "filePath": "test.ts",
+                                    "isOptional": false,
+                                    "kind": "Reference",
+                                    "name": "args",
+                                    "position": {
+                                      "end": {
+                                        "column": 72,
+                                        "line": 3,
+                                      },
+                                      "start": {
+                                        "column": 59,
+                                        "line": 3,
+                                      },
+                                    },
+                                    "text": "Args",
+                                  },
+                                ],
+                                "returnType": "Return",
+                                "text": "(args: Args) => Return",
+                              },
+                            ],
+                            "text": "(this: This, ...args: Args) => Return",
+                          },
+                        ],
+                        "context": "parameter",
+                        "defaultValue": undefined,
+                        "description": undefined,
+                        "filePath": "test.ts",
+                        "isOptional": false,
+                        "kind": "Generic",
+                        "name": "context",
+                        "position": {
+                          "end": {
+                            "column": 84,
+                            "line": 3,
+                          },
+                          "start": {
+                            "column": 3,
+                            "line": 3,
+                          },
+                        },
+                        "text": "ClassMethodDecoratorContext<This, (this: This, ...args: Args) => Return>",
+                        "typeName": "ClassMethodDecoratorContext",
+                      },
+                    ],
+                    "returnType": "(this: This, ...args: Args) => Return",
+                    "text": "function loggedMethod<This, Args extends [object Object], Return>(target: (this: This, ...args: Args) => Return, context: ClassMethodDecoratorContext<This, (this: This, ...args: Args) => Return>): (this: This, ...args: Args) => Return",
+                  },
+                ],
+                "text": "<This, Args extends any[], Return>(target: (this: This, ...args: Args) => Return, context: ClassMethodDecoratorContext<This, (this: This, ...args: Args) => Return>) => (this: This, ...args: Args) => Return",
               },
             ],
             "kind": "ClassMethod",
@@ -8858,14 +9214,37 @@ describe('processProperties', () => {
             "scope": undefined,
             "signatures": [
               {
+                "generics": [],
                 "kind": "FunctionSignature",
                 "modifier": undefined,
-                "parameters": [],
-                "returnType": "void",
-                "text": "() => void",
+                "parameters": [
+                  {
+                    "context": "parameter",
+                    "defaultValue": undefined,
+                    "description": undefined,
+                    "filePath": "test.ts",
+                    "isOptional": false,
+                    "kind": "String",
+                    "name": "name",
+                    "position": {
+                      "end": {
+                        "column": 21,
+                        "line": 15,
+                      },
+                      "start": {
+                        "column": 9,
+                        "line": 15,
+                      },
+                    },
+                    "text": "string",
+                    "value": undefined,
+                  },
+                ],
+                "returnType": "string",
+                "text": "(name: string) => string",
               },
             ],
-            "text": "() => void",
+            "text": "(name: string) => string",
             "visibility": undefined,
           },
         ],
@@ -8873,37 +9252,13 @@ describe('processProperties', () => {
         "position": {
           "end": {
             "column": 2,
-            "line": 28,
+            "line": 18,
           },
           "start": {
             "column": 1,
-            "line": 17,
+            "line": 13,
           },
         },
-        "properties": [
-          {
-            "decorators": [],
-            "defaultValue": undefined,
-            "filePath": "test.ts",
-            "isReadonly": false,
-            "kind": "String",
-            "name": "name",
-            "position": {
-              "end": {
-                "column": 16,
-                "line": 18,
-              },
-              "start": {
-                "column": 3,
-                "line": 18,
-              },
-            },
-            "scope": undefined,
-            "text": "string",
-            "value": undefined,
-            "visibility": undefined,
-          },
-        ],
         "text": "Person",
       }
     `)
