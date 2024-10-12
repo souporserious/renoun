@@ -1,5 +1,16 @@
 # renoun
 
+## 5.5.0
+
+### Minor Changes
+
+- 555815e: Adds a cache to the `<ExportSource>.getType` method to prevent unnecessary processing of types since this is an expensive operation. Types will now only be resolved the first time they are requested and then cached for subsequent requests unless one of the file dependencies has changed.
+
+### Patch Changes
+
+- c8760f7: Runs initial script to write collections in parallel when starting the dev server. This needed to run synchronously in a previous implementation.
+- d6c374b: Handles CLI sub-process clean up better if an error in the WebSocket server occurs.
+
 ## 5.4.0
 
 ### Minor Changes
