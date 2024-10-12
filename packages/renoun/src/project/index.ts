@@ -87,10 +87,10 @@ export async function resolveType({
   filter?: SymbolFilter
   useClient?: boolean
 }) {
-  if (useClient && client) {
-    const filePath = declaration.getSourceFile().getFilePath()
-    const position = declaration.getPos()
+  const filePath = declaration.getSourceFile().getFilePath()
+  const position = declaration.getPos()
 
+  if (useClient && client) {
     return client.callMethod('resolveType', {
       filePath,
       position,
@@ -99,7 +99,10 @@ export async function resolveType({
     })
   }
 
-  return import('../utils/resolve-type.js').then(({ resolveType }) => {
-    return resolveType(declaration.getType(), declaration, filter)
-  })
+  return import('../utils/resolve-type-at-location.js').then(
+    async ({ resolveTypeAtLocation }) => {
+      const project = await getProject(projectOptions)
+      return resolveTypeAtLocation(project, filePath, position, filter)
+    }
+  )
 }

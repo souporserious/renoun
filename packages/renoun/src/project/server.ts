@@ -8,10 +8,8 @@ import {
   type Highlighter,
 } from '../utils/create-highlighter.js'
 import { getRootDirectory } from '../utils/get-root-directory.js'
-import {
-  resolveType as baseResolveType,
-  type SymbolFilter,
-} from '../utils/resolve-type.js'
+import type { SymbolFilter } from '../utils/resolve-type.js'
+import { resolveTypeAtLocation } from '../utils/resolve-type-at-location.js'
 import { WebSocketServer } from './rpc/server.js'
 import { getProject } from './get-project.js'
 import { ProjectOptions } from './types.js'
@@ -95,16 +93,6 @@ export function createServer() {
       projectOptions?: ProjectOptions
     }) {
       const project = await getProject(projectOptions)
-      const sourceFile = project.addSourceFileAtPath(options.filePath)
-      const declaration = sourceFile.getDescendantAtPos(options.position)
-
-      if (!declaration) {
-        throw new Error(
-          `[renoun] Could not find declaration at position ${options.position}`
-        )
-      }
-
-      const exportDeclaration = declaration.getParentOrThrow()
       const filterFn = filter
         ? (new Function(
             'symbolMetadata',
@@ -123,9 +111,10 @@ export function createServer() {
           ) as SymbolFilter)
         : undefined
 
-      return baseResolveType(
-        exportDeclaration.getType(),
-        exportDeclaration,
+      return resolveTypeAtLocation(
+        project,
+        options.filePath,
+        options.position,
         filterFn
       )
     }
