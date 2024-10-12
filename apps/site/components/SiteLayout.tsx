@@ -79,7 +79,7 @@ export function SiteLayout({
             }}
           >
             <RenounLogo
-              style={{
+              css={{
                 width: 'unset',
                 height: 'var(--font-size-heading-3)',
                 fill: 'white',
