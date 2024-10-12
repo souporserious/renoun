@@ -19,6 +19,15 @@ process.env.WS_NO_BUFFER_UTIL = 'true'
 writeCollectionImports()
 
 if (firstArgument === 'next' || firstArgument === 'waku') {
+  let subProcess: ReturnType<typeof spawn> | undefined
+
+  function cleanupAndExit(code: number) {
+    if (subProcess) {
+      subProcess.kill('SIGTERM')
+    }
+    process.exit(code)
+  }
+
   const isDev = secondArgument === undefined || secondArgument === 'dev'
 
   if (process.env.NODE_ENV === undefined) {
@@ -26,27 +35,35 @@ if (firstArgument === 'next' || firstArgument === 'waku') {
   }
 
   function runSubProcess() {
-    const subProcess = spawn(
-      firstArgument,
-      [secondArgument, ...restArguments],
-      {
-        stdio: 'inherit',
-        shell: true,
-        env: {
-          ...process.env,
-          RENOUN_SERVER: 'true',
-        },
-      }
-    )
+    subProcess = spawn(firstArgument, [secondArgument, ...restArguments], {
+      stdio: 'inherit',
+      shell: true,
+      env: {
+        ...process.env,
+        RENOUN_SERVER: 'true',
+      },
+    })
 
-    subProcess.on('close', (code) => {
+    subProcess.on('close', (code: number) => {
       server.cleanup()
-      process.exit(code)
+      cleanupAndExit(code)
     })
   }
 
   const server = createServer()
+
   runSubProcess()
+
+  // Handle Ctrl+C
+  process.on('SIGINT', () => cleanupAndExit(0))
+
+  // Handle kill commands
+  process.on('SIGTERM', () => cleanupAndExit(0))
+
+  process.on('uncaughtException', (error) => {
+    console.error('Uncaught exception:', error)
+    cleanupAndExit(1)
+  })
 } else if (firstArgument === 'watch') {
   if (process.env.NODE_ENV === undefined) {
     process.env.NODE_ENV = 'development'
