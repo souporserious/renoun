@@ -17,7 +17,7 @@ const posts = new Collection<{ default: MDXContent }>({
   },
   {
     title: 'Render',
-    content: `Easily query and render your file system sources programmatically using a fluent API.`,
+    content: `Easily query and render your file system sources programmatically using a simple API.`,
     code: `import { Collection } from 'renoun/collections'
 import type { MDXContent } from 'renoun/mdx'
 
