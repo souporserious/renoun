@@ -33,7 +33,7 @@ After installing the package, you can follow the [getting started guide](https:/
 
 Collections are a way to organize and query file-system data in renoun. They are a powerful tool that allows you to define a schema for file exports and query those exports using a simple API.
 
-Use the `collection` utility to render a collection of files from the file system:
+Use the [`collection`](https://www.renoun.dev/collections#collection) utility to render a collection of files from the file system:
 
 ```tsx
 import { Collection } from 'renoun/collections'
@@ -54,11 +54,11 @@ For a more in-depth look at collections, visit the [collections](https://www.ren
 
 ### Components
 
-Easily build interactive and engaging documentation with renoun’s powerful set of React components.
+Quickly build interactive and engaging content and documentation with renoun’s powerful set of React components.
 
 #### Syntax Highlighting
 
-Use the `CodeBlock` component to render syntax-highlighted code blocks:
+Use the [`CodeBlock`](https://www.renoun.dev/components/code-block) component to render syntax-highlighted code blocks:
 
 ```tsx
 import { CodeBlock } from 'renoun/components'
@@ -68,9 +68,25 @@ export default function Page() {
 }
 ```
 
+Or take full control of the highlighting process with the `Tokens` component:
+
+```tsx
+import { CodeBlock, Tokens } from 'renoun/components'
+
+export default function Page() {
+  return (
+    <CodeBlock language="jsx" value={`<div>Hello, world!</div>`}>
+      <pre>
+        <Tokens />
+      </pre>
+    </CodeBlock>
+  )
+}
+```
+
 #### API References
 
-Quickly document your APIs with renoun’s `APIReference` component:
+Quickly document your APIs with renoun’s [`APIReference`](https://www.renoun.dev/components/api-reference) component:
 
 ```tsx
 import { APIReference } from 'renoun/components'
