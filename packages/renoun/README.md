@@ -40,7 +40,7 @@ import { Collection } from 'renoun/collections'
 
 const posts = new Collection({ filePattern: 'posts/*.mdx' })
 
-export default async function Page({ params }) {
+export default async function Page({ params }: { params: { slug: string } }) {
   const Content = await posts
     .getSource(params.slug)!
     .getExport('default')
@@ -70,7 +70,17 @@ export default function Page() {
 
 #### API References
 
-Use the `APIReference` component to render API references from `collection` sources:
+Quickly document your APIs with renoun’s `APIReference` component:
+
+```tsx
+import { APIReference } from 'renoun/components'
+
+export default function Page() {
+  return <APIReference source="src/components/Button.tsx" />
+}
+```
+
+Or render API references from `collection` sources:
 
 ```tsx
 import { Collection } from 'renoun/collections'
@@ -78,7 +88,7 @@ import { APIReference } from 'renoun/components'
 
 const components = new Collection({ filePattern: 'components/*.tsx' })
 
-export default async function Page({ params }) {
+export default async function Page({ params }: { params: { slug: string } }) {
   const component = await components.getSource(params.slug)!
 
   return <APIReference source={component} />
