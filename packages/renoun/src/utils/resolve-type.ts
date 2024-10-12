@@ -280,6 +280,18 @@ const TYPE_FORMAT_FLAGS =
   tsMorph.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope |
   tsMorph.TypeFormatFlags.WriteArrayAsGenericType
 
+/** Determines if the type is a parameter type. */
+export function isParameterType(
+  property: AllTypes
+): property is ParameterTypes {
+  return property.context === 'parameter'
+}
+
+/** Determines if the type is a property type. */
+export function isPropertyType(property: AllTypes): property is PropertyTypes {
+  return property.context === 'property'
+}
+
 /** Process type metadata. */
 export function resolveType(
   type: Type,
@@ -287,17 +299,31 @@ export function resolveType(
   filter: SymbolFilter = defaultFilter,
   isRootType: boolean = true,
   defaultValues?: Record<string, unknown> | unknown,
-  keepReferences: boolean = false
+  keepReferences: boolean = false,
+  dependencies?: Set<string>
 ): ResolvedType | undefined {
   const symbol =
-    // First, attempt to get the aliased symbol for imported and aliased types
+    /* First, attempt to get the aliased symbol for imported and aliased types */
     type.getAliasSymbol() ||
-    // Next, try to get the symbol of the type itself
+    /* Next, try to get the symbol of the type itself */
     type.getSymbol() ||
-    // Finally, try to get the symbol of the apparent type
+    /* Finally, try to get the symbol of the apparent type */
     type.getApparentType().getSymbol()
   const symbolMetadata = getSymbolMetadata(symbol, enclosingNode)
   const symbolDeclaration = getPrimaryDeclaration(symbol)
+
+  /* Track the root type's dependencies for changes if they are provided. */
+  if (dependencies && symbolDeclaration) {
+    const { filePath, isInNodeModules } = symbolMetadata
+    if (!isInNodeModules && filePath && !dependencies.has(filePath)) {
+      try {
+        dependencies.add(filePath)
+      } catch {
+        // File was probably deleted
+      }
+    }
+  }
+
   const isPrimitive = isPrimitiveType(type)
   const declaration = symbolDeclaration || enclosingNode
   const typeArguments = type.getTypeArguments()
@@ -376,7 +402,17 @@ export function resolveType(
       ) {
         if (aliasTypeArguments.length > 0) {
           const resolvedTypeArguments = aliasTypeArguments
-            .map((type) => resolveType(type, declaration, filter, false))
+            .map((type) =>
+              resolveType(
+                type,
+                declaration,
+                filter,
+                false,
+                defaultValues,
+                keepReferences,
+                dependencies
+              )
+            )
             .filter(Boolean) as ResolvedType[]
 
           if (resolvedTypeArguments.length === 0) {
@@ -499,7 +535,10 @@ export function resolveType(
       elementType,
       declaration,
       filter,
-      false
+      false,
+      defaultValues,
+      keepReferences,
+      dependencies
     )
     if (resolvedElementType) {
       resolvedType = {
@@ -519,7 +558,15 @@ export function resolveType(
     if (aliasTypeArguments.length === 0 && genericTypeArguments.length > 0) {
       const resolvedTypeArguments = genericTypeArguments
         .map((type) => {
-          const resolvedType = resolveType(type.getType(), type, filter, false)
+          const resolvedType = resolveType(
+            type.getType(),
+            type,
+            filter,
+            false,
+            defaultValues,
+            keepReferences,
+            dependencies
+          )
           if (resolvedType) {
             return {
               ...resolvedType,
@@ -560,10 +607,26 @@ export function resolveType(
         name: symbolMetadata.name,
         text: typeText,
         constraint: constraintType
-          ? resolveType(constraintType, enclosingNode, filter, false)
+          ? resolveType(
+              constraintType,
+              enclosingNode,
+              filter,
+              false,
+              defaultValues,
+              keepReferences,
+              dependencies
+            )
           : undefined,
         defaultType: defaultType
-          ? resolveType(defaultType, enclosingNode, filter, false)
+          ? resolveType(
+              defaultType,
+              enclosingNode,
+              filter,
+              false,
+              defaultValues,
+              keepReferences,
+              dependencies
+            )
           : undefined,
       } satisfies GenericParameterType
     } else if (
@@ -607,7 +670,15 @@ export function resolveType(
         const resolvedIntersectionTypes = typeNode
           .getTypeNodes()
           .map((typeNode) =>
-            resolveType(typeNode.getType(), typeNode, filter, false)
+            resolveType(
+              typeNode.getType(),
+              typeNode,
+              filter,
+              false,
+              defaultValues,
+              keepReferences,
+              dependencies
+            )
           )
           .filter(Boolean) as ResolvedType[]
 
@@ -633,7 +704,9 @@ export function resolveType(
             declaration,
             filter,
             false,
-            defaultValues
+            defaultValues,
+            keepReferences,
+            dependencies
           )
 
           if (resolvedType) {
@@ -675,7 +748,9 @@ export function resolveType(
             declaration,
             filter,
             false,
-            defaultValues
+            defaultValues,
+            keepReferences,
+            dependencies
           )
         )
         .filter(Boolean) as ResolvedType[]
@@ -746,7 +821,8 @@ export function resolveType(
         const resolvedCallSignatures = resolveCallSignatures(
           callSignatures,
           declaration,
-          filter
+          filter,
+          dependencies
         )
 
         if (isComponent(symbolMetadata.name, resolvedCallSignatures)) {
@@ -801,7 +877,15 @@ export function resolveType(
         ) {
           const resolvedTypeArguments = typeArguments
             .map((type) =>
-              resolveType(type, declaration, filter, false, defaultValues)
+              resolveType(
+                type,
+                declaration,
+                filter,
+                false,
+                defaultValues,
+                keepReferences,
+                dependencies
+              )
             )
             .filter(Boolean) as ResolvedType[]
 
@@ -862,7 +946,9 @@ export function resolveType(
             declaration,
             filter,
             false,
-            defaultValues
+            defaultValues,
+            keepReferences,
+            dependencies
           )
         }
       }
@@ -888,21 +974,25 @@ export function resolveType(
 }
 
 /** Process all function signatures of a given type including their parameters and return types. */
-export function resolveCallSignatures(
+function resolveCallSignatures(
   signatures: Signature[],
   enclosingNode?: Node,
-  filter: SymbolFilter = defaultFilter
+  filter: SymbolFilter = defaultFilter,
+  dependencies?: Set<string>
 ): FunctionSignatureType[] {
   return signatures
-    .map((signature) => resolveSignature(signature, enclosingNode, filter))
+    .map((signature) =>
+      resolveSignature(signature, enclosingNode, filter, dependencies)
+    )
     .filter(Boolean) as FunctionSignatureType[]
 }
 
 /** Process a single function signature including its parameters and return type. */
-export function resolveSignature(
+function resolveSignature(
   signature: Signature,
   enclosingNode?: Node,
-  filter: SymbolFilter = defaultFilter
+  filter: SymbolFilter = defaultFilter,
+  dependencies?: Set<string>
 ): FunctionSignatureType | undefined {
   const signatureDeclaration = signature.getDeclaration()
   const signatureParameters = signature.getParameters()
@@ -912,7 +1002,15 @@ export function resolveSignature(
   const genericParameters = signature.getTypeParameters()
   const resolvedGenericParameters = genericParameters
     .map((parameter) =>
-      resolveType(parameter, enclosingNode, filter, false, undefined, true)
+      resolveType(
+        parameter,
+        enclosingNode,
+        filter,
+        false,
+        undefined,
+        true,
+        dependencies
+      )
     )
     .filter(Boolean) as GenericParameterType[]
   const genericsText = resolvedGenericParameters.length
@@ -943,7 +1041,9 @@ export function resolveSignature(
           declaration,
           filter,
           false,
-          defaultValue
+          defaultValue,
+          false,
+          dependencies
         )
 
         if (resolvedParameterType) {
@@ -1018,7 +1118,7 @@ export function resolveSignature(
 }
 
 /** Process index signatures of an interface or type alias. */
-export function resolveIndexSignatures(
+function resolveIndexSignatures(
   node?: Node,
   filter: SymbolFilter = defaultFilter,
   isRootType: boolean = true
@@ -1447,9 +1547,10 @@ function getScope(
 }
 
 /** Processes a class declaration into a metadata object. */
-export function resolveClass(
+function resolveClass(
   classDeclaration: ClassDeclaration,
-  filter?: SymbolFilter
+  filter?: SymbolFilter,
+  dependencies?: Set<string>
 ): ClassType {
   const classMetadata: ClassType = {
     kind: 'Class',
@@ -1468,7 +1569,8 @@ export function resolveClass(
     classMetadata.constructors = resolveCallSignatures(
       constructorSignatures,
       classDeclaration,
-      filter
+      filter,
+      dependencies
     )
   }
 
@@ -1506,14 +1608,19 @@ export function resolveClass(
 /** Processes a class accessor (getter or setter) declaration into a metadata object. */
 function resolveClassAccessor(
   accessor: GetAccessorDeclaration | SetAccessorDeclaration,
-  filter?: SymbolFilter
+  filter?: SymbolFilter,
+  dependencies?: Set<string>
 ): ClassAccessorType {
   const sharedMetadata: SharedClassMemberType = {
     name: accessor.getName(),
     scope: getScope(accessor),
     visibility: getVisibility(accessor),
     text: accessor.getType().getText(accessor, TYPE_FORMAT_FLAGS),
-    decorators: resolveDecorators(accessor.getDecorators()),
+    decorators: resolveDecorators(
+      accessor.getDecorators(),
+      filter,
+      dependencies
+    ),
     ...getJsDocMetadata(accessor),
   }
 
@@ -1521,7 +1628,8 @@ function resolveClassAccessor(
     const resolvedSignature = resolveSignature(
       accessor.getSignature(),
       accessor,
-      filter
+      filter,
+      dependencies
     )
 
     if (resolvedSignature) {
@@ -1547,7 +1655,8 @@ function resolveClassAccessor(
 /** Processes a method declaration into a metadata object. */
 function resolveClassMethod(
   method: MethodDeclaration,
-  filter?: SymbolFilter
+  filter?: SymbolFilter,
+  dependencies?: Set<string>
 ): ClassMethodType {
   const callSignatures = method.getType().getCallSignatures()
 
@@ -1558,7 +1667,7 @@ function resolveClassMethod(
     visibility: getVisibility(method),
     signatures: resolveCallSignatures(callSignatures, method, filter),
     text: method.getType().getText(method, TYPE_FORMAT_FLAGS),
-    decorators: resolveDecorators(method.getDecorators()),
+    decorators: resolveDecorators(method.getDecorators(), filter, dependencies),
     ...getJsDocMetadata(method),
   } satisfies ClassMethodType
 }
@@ -1566,10 +1675,19 @@ function resolveClassMethod(
 /** Processes a class property declaration into a metadata object. */
 function resolveClassProperty(
   property: PropertyDeclaration,
-  filter?: SymbolFilter
+  filter?: SymbolFilter,
+  dependencies?: Set<string>
 ): ClassPropertyType {
   const propertyType = property.getType()
-  const resolvedType = resolveType(propertyType, property, filter)
+  const resolvedType = resolveType(
+    propertyType,
+    property,
+    filter,
+    false,
+    undefined,
+    false,
+    dependencies
+  )
 
   if (resolvedType) {
     return {
@@ -1580,7 +1698,11 @@ function resolveClassProperty(
       scope: getScope(property),
       visibility: getVisibility(property),
       isReadonly: property.isReadonly(),
-      decorators: resolveDecorators(property.getDecorators()),
+      decorators: resolveDecorators(
+        property.getDecorators(),
+        filter,
+        dependencies
+      ),
     } satisfies ClassPropertyType
   }
 
@@ -1590,11 +1712,23 @@ function resolveClassProperty(
 }
 
 /** Resolve the decorators of a class member. */
-function resolveDecorators(decorators: Decorator[], filter?: SymbolFilter) {
+function resolveDecorators(
+  decorators: Decorator[],
+  filter?: SymbolFilter,
+  dependencies?: Set<string>
+) {
   return decorators
     .map((decorator) => {
       const expression = decorator.getExpression()
-      return resolveType(expression.getType(), expression, filter)
+      return resolveType(
+        expression.getType(),
+        expression,
+        filter,
+        false,
+        undefined,
+        false,
+        dependencies
+      )
     })
     .filter(Boolean) as ResolvedType[]
 }
@@ -1671,7 +1805,7 @@ function isTypeReadonly(type: Type, enclosingNode: Node | undefined) {
 }
 
 /** Determines if a function is a component based on its name and call signature shape. */
-export function isComponent(
+function isComponent(
   name: string | undefined,
   callSignatures: FunctionSignatureType[]
 ) {
@@ -1689,16 +1823,6 @@ export function isComponent(
     const parameterCount = signature.parameters.length
     return parameterCount === 0 || parameterCount === 1
   })
-}
-
-export function isParameterType(
-  property: AllTypes
-): property is ParameterTypes {
-  return property.context === 'parameter'
-}
-
-export function isPropertyType(property: AllTypes): property is PropertyTypes {
-  return property.context === 'property'
 }
 
 /** Prints helpful information about a node for debugging. */
