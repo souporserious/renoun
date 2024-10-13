@@ -1,10 +1,13 @@
-import type { bundledThemes } from 'shiki'
+import type { bundledThemes, bundledLanguages } from 'shiki'
 import { existsSync, readFileSync } from 'fs'
 import { resolve } from 'path/posix'
 
 type ConfigurationOptions = {
   /** Path to the VS Code compatible theme used for syntax highlighting the `CodeBlock`, `CodeInline`, and `Tokens` components. */
   theme: keyof typeof bundledThemes | (string & {})
+
+  /** List of languages to load for syntax highlighting. */
+  languages: (keyof typeof bundledLanguages)[]
 
   /** Configuration options for git linking. */
   git?: {
@@ -25,6 +28,18 @@ type ConfigurationOptions = {
 const configPath = resolve(process.cwd(), 'renoun.json')
 const defaultConfig = {
   theme: 'nord',
+  languages: [
+    'css',
+    'js',
+    'jsx',
+    'ts',
+    'tsx',
+    'md',
+    'mdx',
+    'sh',
+    'json',
+    'html',
+  ],
   git: {
     branch: process.env.RENOUN_GIT_BRANCH || 'main',
     provider: process.env.RENOUN_GIT_PROVIDER as any,

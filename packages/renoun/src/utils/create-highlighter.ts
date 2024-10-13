@@ -1,22 +1,12 @@
 import { getTheme } from './get-theme.js'
-
-const defaultLanguages = [
-  'css',
-  'js',
-  'jsx',
-  'ts',
-  'tsx',
-  'md',
-  'mdx',
-  'sh',
-  'json',
-  'html',
-]
+import { loadConfig } from './load-config.js'
 
 /** Converts a string of code to an array of highlighted tokens. */
 export async function createHighlighter() {
+  const config = loadConfig()
+
   return (await import('shiki/bundle/web')).createHighlighter({
-    langs: defaultLanguages,
+    langs: config.languages,
     themes: [getTheme()],
   })
 }

@@ -12,6 +12,7 @@ The `renoun.json` file is used to globally configure components and utilities fo
 {
   "$schema": "https://renoun.dev/schema.json",
   "theme": "theme.json",
+  "languages": ["sh", "ts", "tsx"],
   "git": {
     "source": "https://github.com/souporserious/renoun"
   },
@@ -40,6 +41,16 @@ To use a custom theme, you can reference a JSON file that defines a <a href="htt
 ```json
 {
   "theme": "theme.json"
+}
+```
+
+## Languages
+
+The `languages` property is used to define the languages that are supported by the `CodeBlock` and `CodeInline` components. This is used to determine which language to load when highlighting code:
+
+```json
+{
+  "languages": ["sh", "ts", "tsx"]
 }
 ```
 

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { zodToJsonSchema } from 'zod-to-json-schema'
-import { bundledThemesInfo } from 'shiki'
+import { bundledThemesInfo, bundledLanguagesInfo } from 'shiki'
 
 const themeSchema = z.union([
   z
@@ -11,6 +11,10 @@ const themeSchema = z.union([
     .string()
     .describe('A path on the file system to a VS Code compatible theme.'),
 ])
+
+const languagesSchema = z.enum(
+  bundledLanguagesInfo.map((language) => language.id) as [string]
+)
 
 const gitSchema = z.object({
   source: z.string().url().describe('URL to the Git repository.').optional(),
@@ -28,6 +32,9 @@ const gitSchema = z.object({
 const renounConfigSchema = z.object({
   $schema: z.string().describe('URL to the JSON schema'),
   theme: themeSchema.describe('Theme configuration object').optional(),
+  languages: z
+    .array(languagesSchema)
+    .describe('List of language grammars to load.'),
   git: gitSchema.describe('Git configuration object').optional(),
   siteUrl: z.string().url().describe('URL of the site').optional(),
 })
