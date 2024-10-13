@@ -33,7 +33,7 @@ After installing the package, you can follow the [getting started guide](https:/
 
 Collections are a way to organize and query file-system data in renoun. They are a powerful tool that allows you to define a schema for file exports and query those exports using a simple API.
 
-Use the [`collection`](https://www.renoun.dev/collections#collection) utility to render a collection of files from the file system:
+To get started with collections, instantiate the [`Collection`](https://www.renoun.dev/collections#collection) class to create a collection of files and directories from the file system:
 
 ```tsx
 import { Collection } from 'renoun/collections'
@@ -49,6 +49,8 @@ export default async function Page({ params }: { params: { slug: string } }) {
   return <Content />
 }
 ```
+
+Collections are not limited to MDX files and can be used with _any file type_. By organizing content and source code into structured collections, we can easily generate static pages and manage complex routing and navigations.
 
 For a more in-depth look at collections, visit the [collections](https://www.renoun.dev/collections) page.
 
@@ -96,7 +98,7 @@ export default function Page() {
 }
 ```
 
-Or render API references from `collection` sources:
+API references can also be resolved from a `Collection` source. This can be from a file that will include references for all exports:
 
 ```tsx
 import { Collection } from 'renoun/collections'
@@ -108,6 +110,27 @@ export default async function Page({ params }: { params: { slug: string } }) {
   const component = await components.getSource(params.slug)!
 
   return <APIReference source={component} />
+}
+```
+
+Or from a specific export within a file:
+
+```tsx
+import { Collection } from 'renoun/collections'
+import { APIReference } from 'renoun/components'
+
+const components = new Collection({ filePattern: 'components/*.tsx' })
+
+export default async function Page({ params }: { params: { slug: string } }) {
+  const component = await components.getSource(params.slug)!
+  const componentExports = component.getExports()
+
+  return componentExports.map((source) => (
+    <section>
+      <h2>{source.getName()}</h2>
+      <APIReference source={source} />
+    </section>
+  ))
 }
 ```
 
