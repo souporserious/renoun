@@ -11,35 +11,11 @@ The `renoun.json` file is used to globally configure components and utilities fo
 ```json
 {
   "$schema": "https://renoun.dev/schema.json",
+  "theme": "theme.json",
   "git": {
     "source": "https://github.com/souporserious/renoun"
   },
-  "site": "https://renoun.dev",
-  "theme": "theme.json"
-}
-```
-
-## Git Information
-
-Git can be used to set the `source`, `branch`, and `provider` of your documentation site. This is used to generate the canonical URL for each page:
-
-```json
-{
-  "git": {
-    "source": "https://github.com/souporserious/renoun",
-    "branch": "main",
-    "provider": "github"
-  }
-}
-```
-
-## Site
-
-The `site` property is used to define the URL of your documentation site. This is used to generate the canonical URL for each page:
-
-```json
-{
-  "site": "https://renoun.dev"
+  "siteUrl": "https://renoun.dev"
 }
 ```
 
@@ -64,5 +40,29 @@ To use a custom theme, you can reference a JSON file that defines a <a href="htt
 ```json
 {
   "theme": "theme.json"
+}
+```
+
+## Git Information
+
+Git can be used to set the `source`, `branch`, and `provider` of your documentation site. This is used to generate the canonical URL for each page:
+
+```json
+{
+  "git": {
+    "source": "https://github.com/souporserious/renoun",
+    "branch": "main",
+    "provider": "github"
+  }
+}
+```
+
+## Site URL
+
+The `siteUrl` property is used to define the URL of your documentation site. This is used to generate the canonical URL for each page:
+
+```json
+{
+  "siteUrl": "https://renoun.dev"
 }
 ```
