@@ -50,6 +50,9 @@ export interface BaseSource {
    */
   getPathSegments(): string[]
 
+  /** The file path to the source in the file system. */
+  getFileSystemPath(): string
+
   /**
    * The path to the source on the local filesystem in development
    * and the git repository in production if configured.
@@ -168,7 +171,7 @@ export interface FileSystemSource<Exports extends object>
 
 export type CollectionSource<Exports extends object> = Omit<
   BaseSource,
-  'getEditPath' | 'getPathSegments'
+  'getPathSegments' | 'getFileSystemPath' | 'getEditPath'
 > &
   SourceProvider<Exports> & {
     hasSource(
@@ -348,7 +351,7 @@ class Export<Value, AllExports extends object = object>
     return this.source.getPathSegments().concat(this.getName() || [])
   }
 
-  getEditPath() {
+  getFileSystemPath() {
     if (!this.exportDeclaration) {
       throw new Error(
         `[renoun] Export could not be statically analyzed from source file at "${this.source.getPath()}".`
@@ -359,6 +362,12 @@ class Export<Value, AllExports extends object = object>
       process.env.NODE_ENV === 'development'
         ? this.source.getSourceFile().getFilePath()
         : getDeclarationLocation(this.exportDeclaration).filePath
+
+    return filePath
+  }
+
+  getEditPath() {
+    const filePath = this.getFileSystemPath()
     const position = this.getPosition()
 
     return getEditPath(filePath, position.start.line, position.start.column)
@@ -536,6 +545,10 @@ class Source<AllExports extends object>
           segment !== 'index' &&
           segment !== 'readme'
       )
+  }
+
+  getFileSystemPath() {
+    return this.#sourcePath
   }
 
   getEditPath() {

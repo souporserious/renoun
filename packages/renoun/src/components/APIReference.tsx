@@ -3,7 +3,7 @@
 import { Fragment, Suspense } from 'react'
 import type { CSSObject } from 'restyle'
 
-import type { ExportSource } from '../collections/index.js'
+import { isFileSystemSource, type ExportSource } from '../collections/index.js'
 import { getExportedTypes } from '../collections/project.js'
 import { createSlug } from '../utils/create-slug.js'
 import type {
@@ -58,7 +58,15 @@ async function APIReferenceAsync({
   filter,
   ...props
 }: APIReferenceProps) {
-  if (typeof source === 'string') {
+  if (isFileSystemSource(source) || typeof source === 'string') {
+    let filePath
+
+    if (typeof source === 'string') {
+      filePath = source
+    } else {
+      filePath = source.getFileSystemPath()
+    }
+
     let workingDirectory: string | undefined
 
     if ('workingDirectory' in props && props.workingDirectory) {
@@ -71,7 +79,7 @@ async function APIReferenceAsync({
     }
 
     const exportedTypes = await getExportedTypes(
-      source,
+      filePath,
       filter,
       workingDirectory
     )
