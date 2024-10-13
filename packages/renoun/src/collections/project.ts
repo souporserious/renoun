@@ -1,4 +1,4 @@
-import type { Node, Project } from 'ts-morph'
+import type { Project } from 'ts-morph'
 import tsMorph from 'ts-morph'
 import { resolve } from 'node:path'
 
