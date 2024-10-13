@@ -1175,24 +1175,6 @@ export class CompositeCollection<Collections extends CollectionSource<any>[]>
   }
 }
 
-/**
- * Creates a collection of file system sources based on a file pattern.
- * Note, a dynamic import getter will automatically be generated for each file extension at the call site of this collection.
- *
- * @deprecated Use the `Collection` class directly.
- * @param options - Settings for the collection, including base directory, base path, TypeScript config file path, and a custom sort function.
- * @param getImport - A dynamic import getter function that returns the module exports for a given slug. This is automatically generated based on the `filePattern` extensions.
- * @returns A collection object that provides methods to retrieve all sources or an individual source that match the file pattern.
- */
-export function collection<
-  AllExports extends { [key: string]: any } = { [key: string]: any },
->(
-  options: CollectionOptions<AllExports>,
-  getImport?: GetImport | GetImport[]
-): CollectionSource<AllExports> {
-  return new Collection<AllExports>(options, getImport)
-}
-
 /** Get all sources for a file pattern. */
 function getSourceFilesAndDirectories(
   project: Project,
