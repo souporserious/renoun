@@ -33,6 +33,8 @@ import { getProject } from './project.js'
 
 type GetImport = (slug: string) => Promise<any>
 
+type FileExports = object
+
 export type FilePatterns<Extension extends string = string> =
   | `${string}${Extension}`
   | `${string}${Extension}${string}`
@@ -66,7 +68,7 @@ type PositiveIntegerOrInfinity<Type extends number> = `${Type}` extends
   ? never
   : Type
 
-export interface SourceProvider<Exports extends object> {
+export interface SourceProvider<Exports extends FileExports> {
   /** Retrieves a source in the immediate directory or sub-directory by its path. */
   getSource(path?: string | string[]): FileSystemSource<Exports> | undefined
 
@@ -122,7 +124,7 @@ export interface ExportSource<Value> extends BaseSource {
   isMainExport(): boolean
 }
 
-export interface FileSystemSource<Exports extends object>
+export interface FileSystemSource<Exports extends FileExports>
   extends BaseSource,
     SourceProvider<Exports> {
   /** The base file name or directory name. */
@@ -169,7 +171,7 @@ export interface FileSystemSource<Exports extends object>
   isDirectory(): boolean
 }
 
-export type CollectionSource<Exports extends object> = Omit<
+export type CollectionSource<Exports extends FileExports> = Omit<
   BaseSource,
   'getPathSegments' | 'getFileSystemPath' | 'getEditPath'
 > &
@@ -179,7 +181,7 @@ export type CollectionSource<Exports extends object> = Omit<
     ): source is FileSystemSource<Exports>
   }
 
-export interface CollectionOptions<Exports extends object> {
+export interface CollectionOptions<Exports extends FileExports> {
   /** The file pattern used to match source files. */
   filePattern: FilePatterns
 
@@ -216,7 +218,7 @@ export interface CollectionOptions<Exports extends object> {
   }
 }
 
-class Export<Value, AllExports extends object = object>
+class Export<Value, AllExports extends FileExports = FileExports>
   implements ExportSource<Value>
 {
   #jsDocMetadata: ReturnType<typeof getJsDocMetadata> | null = null
@@ -459,7 +461,7 @@ class Export<Value, AllExports extends object = object>
   }
 }
 
-class Source<AllExports extends object>
+class Source<AllExports extends FileExports>
   implements FileSystemSource<AllExports>
 {
   #sourcePath: string
@@ -805,7 +807,7 @@ You can fix this error by taking one of the following actions:
 }
 
 /** Creates a collection of file system sources based on a file pattern. */
-export class Collection<AllExports extends object>
+export class Collection<AllExports extends FileExports>
   implements CollectionSource<AllExports>
 {
   public options: CollectionOptions<AllExports>
