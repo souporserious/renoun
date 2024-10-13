@@ -110,7 +110,7 @@ async function APIReferenceAsync({
           >
             <h3
               id={type.name ? createSlug(type.name) : undefined}
-              css={{ flexShrink: 0, margin: 0 }}
+              css={{ flexShrink: 0, margin: '0 !important' }}
             >
               {type.name}
             </h3>
