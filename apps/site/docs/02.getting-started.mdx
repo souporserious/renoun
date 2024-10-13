@@ -1,3 +1,5 @@
+import { APIReference } from 'renoun/components'
+
 export const metadata = {
   title: 'Getting Started',
 }
@@ -167,13 +169,19 @@ Here we define a schema for the front matter of our MDX files and use it to vali
 
 ## Enhancing with Components
 
-renoun provides several built-in components to enhance your documentation. For example, you can use the `PackageInstall` component to display installation instructions for a package:
+The renoun toolkit provides several built-in components to enhance your documentation. For example, you can use the `APIReference` component to easily document your APIs:
 
-```tsx allowErrors
-<PackageInstall packages={['renoun']} />
+```mdx
+import { APIReference } from 'renoun/components'
+
+<APIReference source="components/Card.tsx" />
 ```
 
-This will render an interactive component showing installation commands for different package managers. Explore more [components](/components) to enhance your documentation.
+<Preview>
+  <APIReference source="components/Card.tsx" />
+</Preview>
+
+Explore more [components](/components) to enhance your documentation.
 
 ## Conclusion
 
