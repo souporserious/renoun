@@ -476,6 +476,7 @@ export function resolveType(
         )
       }
 
+      /* Allow node_module references to be filtered in. */
       if (filter === defaultFilter ? true : !filter(symbolMetadata)) {
         return {
           kind: 'Reference',
