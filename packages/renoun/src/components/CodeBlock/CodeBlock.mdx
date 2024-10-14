@@ -73,31 +73,3 @@ This will only render highlighted tokens. Use the other `CodeBlock` components
 like `LineNumbers` and `Toolbar` to render the other parts of the code block.
 
 </Note>
-
-## Next.js MDX Code Blocks
-
-If you are using the `@renoun/mdx` package, you can also use the `MDXComponents` export to override the `pre` and `code` components in your project's `mdx-components.tsx` file:
-
-```tsx filename="02.mdx-components.tsx"
-import { MDXComponents } from 'renoun/components'
-
-export function useMDXComponents() {
-  return MDXComponents
-}
-```
-
-This forwards the meta information added from the `@renoun/mdx` rehype plugin to the `CodeBlock` component.
-
-Alternatively, you can use the extended `CodeBlock` component from above to only override the `pre` component:
-
-```tsx allowErrors filename="02.mdx-components.tsx"
-import { MDXComponents } from 'renoun/components'
-import { CodeBlock } from './CodeBlock'
-
-export function useMDXComponents() {
-  return {
-    ...MDXComponents,
-    pre: CodeBlock,
-  } satisfies MDXComponents
-}
-```

@@ -119,6 +119,20 @@ export default withMDX({
 })
 ```
 
+## MDX Code Blocks
+
+Use the `MDXComponents` export to override the `pre` and `code` components in your project's `mdx-components.tsx` file:
+
+```tsx filename="02.mdx-components.tsx"
+import { MDXComponents } from 'renoun/components'
+
+export function useMDXComponents() {
+  return MDXComponents
+}
+```
+
+This forwards the meta information added from the `@renoun/mdx` rehype plugin to the `CodeBlock` component.
+
 ## Start
 
 Now you can start your Next.js server with renoun enabled:
