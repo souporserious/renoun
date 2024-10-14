@@ -3,6 +3,7 @@ import { join, posix, isAbsolute } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import type { Project, SourceFile } from 'ts-morph'
 
+import { formatSourceText } from './format-source-text.js'
 import { getLanguage, type Languages } from './get-language.js'
 import { isJsxOnly } from './is-jsx-only.js'
 import type { ExclusiveUnion } from '../types.js'
@@ -106,16 +107,13 @@ export async function parseSourceTextMetadata({
   }
 
   // Format JavaScript code blocks.
-  // TODO: reimplement formatting that allows for other formatters (this should move to .renoun directory config e.g. `getFormatter`)
   if (isJavaScriptLikeLanguage || isHtmlLanguage) {
     try {
-      // const { format, resolveConfig } = await import('prettier')
-      // const config = (await resolveConfig(filename)) || {}
-      // config.filepath = filename
-      // config.printWidth = 80
-      // finalValue = await format(finalValue, config)
+      finalValue = await formatSourceText(filename, finalValue)
     } catch (error) {
-      // Ignore formatting errors.
+      console.log(
+        `[renoun] Error formatting "${componentName}" source text${filename ? ` at filename "${filename}"` : ''} ${error}`
+      )
     }
 
     // Trim semicolon and trailing newline from formatting.
