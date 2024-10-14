@@ -1,5 +1,40 @@
 # renoun
 
+## 6.0.0
+
+### Major Changes
+
+- 0e6279a: Removes the deprecated `collection` function.
+
+  ### Breaking Changes
+
+  The `collection` function has been removed. You can now use the `Collection` class directly to create a collection:
+
+  ```tsx
+  import { Collection } from 'renoun/collections'
+
+  const posts = new Collection({
+    filePattern: 'posts/*.mdx',
+  })
+  ```
+
+### Minor Changes
+
+- ebdfb16: Adds `getFileSystemPath` method to `FileSystemSource` and `ExportSource` to allow getting types for a file in `APIReference`.
+- 489960a: Adds the ability to specify the set of languages loaded for syntax highlighting using the `languages` field in the `renoun.json` configuration file. This allows you to reduce the bundle size by only loading the languages you need:
+
+  ```json
+  {
+    "languages": ["sh", "ts", "tsx"]
+  }
+  ```
+
+- ed8fb6a: Adds support for formatting the `CodeBlock` component source text using `prettier` if it is available to the workspace.
+
+### Patch Changes
+
+- cab837b: Fixes issue with trying to format dynamic imports added to collections from CLI causing issues with linters. Now, formatting will only occur if the workspace has access to `prettier`.
+
 ## 5.5.0
 
 ### Minor Changes
