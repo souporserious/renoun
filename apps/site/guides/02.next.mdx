@@ -133,6 +133,73 @@ export function useMDXComponents() {
 
 This forwards the meta information added from the `@renoun/mdx` rehype plugin to the `CodeBlock` component.
 
+## Creating Collections
+
+The `Collection` utility is a core concept in renoun. This allows you to query a collection of files from the file system. For example, to create a list of blog posts or documentation pages we can query all the MDX files in a directory:
+
+```tsx
+import { Collection } from 'renoun/collections'
+
+const posts = new Collection({
+  filePattern: 'posts/*.mdx',
+})
+```
+
+We can then constrain the collection by providing types for the exports we're interested in querying:
+
+```tsx
+import { Collection } from 'renoun/collections'
+import type { MDXContent } from 'renoun/mdx'
+
+const posts = new Collection<{
+  default: MDXContent
+}>({
+  filePattern: 'posts/*.mdx',
+})
+```
+
+Finally, we can use this collection to render the contents of our MDX files:
+
+```tsx
+import { Collection } from 'renoun/collections'
+import type { MDXContent } from 'renoun/mdx'
+
+const posts = new Collection<{
+  default: MDXContent
+}>({
+  filePattern: 'posts/*.mdx',
+})
+
+export default async function Page({ params }: { params: { slug: string } }) {
+  const Content = await posts
+    .getSource(params.slug)!
+    .getExport('default')
+    .getValue()
+
+  return <Content />
+}
+```
+
+This will create a collection of all MDX files in the `posts` directory and render them based on the provided slug. Collections are not limited to MDX files and can be used with _any file type_.
+
+<Note>
+
+When creating a new collection for the first time, a dynamic import will be
+generated at the collection's call site for each targeted extension during the development and build
+process. These imports are necessary to load the targeted files from
+the file system.
+
+```ts highlightedLines="5"
+import { Collection } from 'renoun/collections'
+
+const posts = new Collection(
+  { filePattern: 'posts/*.mdx' },
+  (slug) => import(`./posts/${slug}.mdx`)
+)
+```
+
+</Note>
+
 ## Start
 
 Now you can start your Next.js server with renoun enabled:
