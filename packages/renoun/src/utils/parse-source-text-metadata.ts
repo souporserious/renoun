@@ -111,10 +111,11 @@ export async function parseSourceTextMetadata({
     try {
       finalValue = await formatSourceText(filename, finalValue)
     } catch (error) {
-      throw new Error(
-        `[renoun] Error formatting "${componentName}" source text${filename ? ` at filename "${filename}"` : ''}`,
-        { cause: error }
-      )
+      console.log({ error })
+      // throw new Error(
+      //   `[renoun] Error formatting "${componentName}" source text${filename ? ` at filename "${filename}"` : ''}`,
+      //   { cause: error }
+      // )
     }
 
     // Trim semicolon and trailing newline from formatting.
