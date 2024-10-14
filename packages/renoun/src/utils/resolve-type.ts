@@ -634,7 +634,7 @@ export function resolveType(
       tsMorph.Node.isClassDeclaration(symbolDeclaration)
     ) {
       if (tsMorph.Node.isClassDeclaration(symbolDeclaration)) {
-        resolvedType = resolveClass(symbolDeclaration, filter)
+        resolvedType = resolveClass(symbolDeclaration, filter, dependencies)
         if (symbolMetadata.name) {
           resolvedType.name = symbolMetadata.name
         }
@@ -1583,21 +1583,27 @@ function resolveClass(
         if (!classMetadata.accessors) {
           classMetadata.accessors = []
         }
-        classMetadata.accessors.push(resolveClassAccessor(member, filter))
+        classMetadata.accessors.push(
+          resolveClassAccessor(member, filter, dependencies)
+        )
       }
     } else if (tsMorph.Node.isMethodDeclaration(member)) {
       if (!member.hasModifier(tsMorph.SyntaxKind.PrivateKeyword)) {
         if (!classMetadata.methods) {
           classMetadata.methods = []
         }
-        classMetadata.methods.push(resolveClassMethod(member, filter))
+        classMetadata.methods.push(
+          resolveClassMethod(member, filter, dependencies)
+        )
       }
     } else if (tsMorph.Node.isPropertyDeclaration(member)) {
       if (!member.hasModifier(tsMorph.SyntaxKind.PrivateKeyword)) {
         if (!classMetadata.properties) {
           classMetadata.properties = []
         }
-        classMetadata.properties.push(resolveClassProperty(member))
+        classMetadata.properties.push(
+          resolveClassProperty(member, filter, dependencies)
+        )
       }
     }
   })
