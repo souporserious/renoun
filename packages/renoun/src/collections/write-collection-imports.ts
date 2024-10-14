@@ -3,9 +3,11 @@ import type {
   ObjectLiteralExpression,
   ArrowFunction,
   StringLiteral,
+  SourceFile,
 } from 'ts-morph'
 import tsMorph from 'ts-morph'
 
+import { formatSourceText } from '../utils/format-source-text.js'
 import {
   resolveObjectLiteralExpression,
   isLiteralExpressionValue,
@@ -63,6 +65,7 @@ export async function writeCollectionImports(filename?: string) {
     }
   })
 
+  const sourceFilesToFormat = new Set<SourceFile>()
   const collections = (
     await Promise.all(
       collectionExpressions.map(async (callExpression) => {
@@ -108,14 +111,7 @@ export async function writeCollectionImports(filename?: string) {
 
         callExpression.addArgument(parsedDynamicImportString)
 
-        // Format arguments with new lines so they are close to what the user's formatting is
-        callExpression.getArguments().forEach((arg, index) => {
-          const endNewLine = index === 0 ? '' : '\n'
-          arg.replaceWithText('\n' + arg.getText() + endNewLine)
-          arg.formatText()
-        })
-
-        callExpression.formatText()
+        sourceFilesToFormat.add(callExpression.getSourceFile())
       })
     )
   ).filter((collection) => collection !== null)
@@ -123,6 +119,17 @@ export async function writeCollectionImports(filename?: string) {
   if (collections.length === 0) {
     return
   }
+
+  /* Format all source files with updated collection imports. */
+  await Promise.all(
+    Array.from(sourceFilesToFormat).map(async (sourceFile) => {
+      const formattedSourceText = await formatSourceText(
+        sourceFile.getFilePath(),
+        sourceFile.getText()
+      )
+      sourceFile.replaceWithText(formattedSourceText)
+    })
+  )
 
   return project.save()
 }
