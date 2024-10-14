@@ -31,11 +31,10 @@ function loadPrettier() {
 
 let formatter: (sourceText: string, options?: Record<string, unknown>) => string
 
-/**
- * Formats the provided source text using the installed formatter.
- * TODO: Add support for other formatters like dprint and biome
- */
+/** Formats the provided source text using the installed formatter. */
 export async function formatSourceText(filePath: string, sourceText: string) {
+  // TODO: Add support for other formatters like dprint and biome
+
   if (formatter === undefined) {
     const prettier = await loadPrettier()
 
