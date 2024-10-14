@@ -10,7 +10,7 @@ Collections are a way to organize and query file-system data in renoun. They are
 
 Let's walk through an example of creating a collection for a blog. We'll define a `PostsCollection` that targets all MDX files within the posts directory using the `filePattern` field that accepts a [minimatch](https://www.npmjs.com/package/minimatch) pattern:
 
-```ts filename="collections.ts"
+```ts filename="01.collections.ts"
 import { Collection } from 'renoun/collections'
 
 export const PostsCollection = new Collection({
@@ -28,7 +28,7 @@ the file system.
 ```ts highlightedLines="5"
 import { Collection } from 'renoun/collections'
 
-const PostsCollection = new Collection(
+export const PostsCollection = new Collection(
   { filePattern: 'posts/*.mdx' },
   (slug) => import(`./posts/${slug}.mdx`)
 )
@@ -40,7 +40,7 @@ const PostsCollection = new Collection(
 
 You can specify a `baseDirectory` to trim the beginning of the generated path up to that point, and a `basePath` to define a prefix added to the generated path.
 
-```ts filename="collections.ts"
+```ts filename="02.collections.ts"
 import { Collection } from 'renoun/collections'
 
 export const PostsCollection = new Collection({
@@ -111,6 +111,46 @@ export const PostsCollection = new Collection<PostsSchema>({
 Now we'll validate the front matter of each MDX file in the `posts` directory using the `frontmatterSchema`. This ensures that each file adheres to the schema and provides type safety when accessing the front matter.
 
 See the [Zod](/guides/zod) and [Valibot](/guides/valibot) guides for more information on how to use schemas with collections.
+
+## Querying Sources
+
+Once you've configured your collections, you can query the targeted files using the `getSource` and `getSources` methods. These methods return `Source` instances that represent a single file or directory in the collection.
+
+To start, we'll generate a set of navigation links for all of the posts in the `PostsCollection` using the `getSources` method. Each `Source` has additional helper methods, such as `getPath` that returns a URL-friendly path of the source relative to the collection's base directory:
+
+```tsx filename="posts/index.tsx"
+import { PostsCollection } from '../collections'
+
+export default async function Posts() {
+  const sources = await PostsCollection.getSources()
+
+  return (
+    <ul>
+      {sources.map((source) => (
+        <li key={source.getPath()}>
+          <a href={source.getPath()}>{source.getName()}</a>
+        </li>
+      ))}
+    </ul>
+  )
+}
+```
+
+We can now generate a page for individual posts using a `slug` parameter to retrieve the source for a specific MDX file in the `posts` directory:
+
+```tsx filename="posts/post.tsx"
+import { PostsCollection } from '../collections'
+
+export default async function Post({ params }: { params: { slug: string } }) {
+  const Content = await PostsCollection.getSource(params.slug)!
+    .getExport('default')
+    .getValue()
+
+  return <Content />
+}
+```
+
+This was a simple example of how to query and render the contents of MDX files using collections. Collections are not limited to MDX files and can be used with _any file type_ your bundler is capable of importing.
 
 ## Composite Collections
 
