@@ -182,7 +182,10 @@ export type CollectionSource<Exports extends FileExports> = Omit<
   }
 
 export interface CollectionOptions<Exports extends FileExports> {
-  /** The file pattern used to match source files. */
+  /**
+   * The file pattern used to match source files.
+   * Accepts a [minimatch](https://www.npmjs.com/package/minimatch) file pattern.
+   */
   filePattern: FilePatterns
 
   /**
