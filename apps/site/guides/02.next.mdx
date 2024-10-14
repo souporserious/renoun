@@ -40,23 +40,23 @@ code analysis.
 
 ## MDX (Optional)
 
-To enable writing MDX content in your Next.js application, we will use the `@next/mdx` and `@renoun/mdx` packages. These packages allow you to author MDX content in your Next.js project and ship with pre-configured plugins that include reasonable defaults.
+To enable writing MDX content in your Next.js application, we will use the `@next/mdx` package. This package allows you to author MDX content in your Next.js project. Additionally, you can use the pre-configured `remarkPlugins` and `rehypePlugins` from `renoun/mdx`.
 
 <Note>
 
 This step is optional and only necessary if you plan to use MDX in your
-project. Additionaly, you can skip adding the `@renoun/mdx` package if you
+project. Additionaly, you can skip adding the `renoun/mdx` package if you
 want to configure your own MDX plugins.
 
 </Note>
 
-First, install the Next.js MDX plugin and the renoun MDX plugins:
+First, install the Next.js MDX plugin:
 
 ```bash
-npm install @next/mdx @renoun/mdx
+npm install @next/mdx
 ```
 
-Now, add the plugin to your `next.config.js` file while optionally including the pre-configured `remarkPlugins` and `rehypePlugins` from `@renoun/mdx`:
+Now, add the plugin to your `next.config.js` file while optionally including the pre-configured `remarkPlugins` and `rehypePlugins` from `renoun/mdx`:
 
 ```js
 import createMDXPlugin from '@next/mdx'
