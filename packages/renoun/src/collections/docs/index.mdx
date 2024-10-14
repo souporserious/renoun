@@ -8,21 +8,65 @@ Collections are a way to organize and query file-system data in renoun. They are
 
 ## Creating a Collection
 
-Let's look at an example of how to create a collection for a blog. We'll define a collection that queries all `mdx` files in a `posts` directory:
+Let's walk through an example of creating a collection for a blog. We'll define a `PostsCollection` that targets all MDX files within the posts directory using the `filePattern` field that accepts a [minimatch](https://www.npmjs.com/package/minimatch) pattern:
 
-```tsx filename="collections.ts"
+```ts filename="collections.ts"
+import { Collection } from 'renoun/collections'
+
+export const PostsCollection = new Collection({
+  filePattern: 'posts/*.mdx',
+})
+```
+
+<Note>
+
+When creating a new collection for the first time, a dynamic import will be
+generated at the collection's call site for each targeted extension during the development and build
+process. These imports are necessary to load the targeted files from
+the file system.
+
+```ts highlightedLines="5"
+import { Collection } from 'renoun/collections'
+
+const PostsCollection = new Collection(
+  { filePattern: 'posts/*.mdx' },
+  (slug) => import(`./posts/${slug}.mdx`)
+)
+```
+
+</Note>
+
+## Configuring Collections
+
+You can specify a `baseDirectory` to trim the beginning of the generated path up to that point, and a `basePath` to define a prefix added to the generated path.
+
+```ts filename="collections.ts"
+import { Collection } from 'renoun/collections'
+
+export const PostsCollection = new Collection({
+  filePattern: 'posts/*.mdx',
+  baseDirectory: 'posts',
+  basePath: 'posts',
+})
+```
+
+## Adding Types
+
+To define the shape of the file exports, you can pass a generic type to the `Collection` constructor. This type will be used to type-check the exports of the files in the collection.
+
+Since we're working with MDX, we can use the `MDXContent` type from the `renoun/mdx` package to define the shape of the default export. We'll also add types for the `frontmatter` export we expect to be defined in the MDX files:
+
+```ts filename="collections.ts"
 import { Collection, type FileSystemSource } from 'renoun/collections'
 import type { MDXContent } from 'renoun/mdx'
 
-type PostsSchema = {
+interface PostsSchema {
   default: MDXContent
   frontmatter: {
     title: string
     description: string
   }
 }
-
-export type PostsSource = FileSystemSource<PostsSchema>
 
 export const PostsCollection = new Collection<PostsSchema>({
   filePattern: 'posts/*.mdx',
@@ -31,54 +75,42 @@ export const PostsCollection = new Collection<PostsSchema>({
 })
 ```
 
-In this example, we define a `PostsCollection` that will query all `mdx` files in the `posts` directory. The `PostsSchema` defines the shape of the file exports, and the `PostsSource` is the type of the source that will be queried.
+This will ensure that the `default` export of each MDX file in the `posts` directory is of type `MDXContent`, and that the `frontmatter` export is an object with `title` and `description` properties.
 
-We can now query the `PostsCollection` in our application. For example, using a framework like Next.js, we can create a page that lists all the posts in the `posts` directory:
+## Adding a Schema
 
-```tsx allowErrors filename="app/posts/page.tsx"
-import { PostsCollection } from '../../../collections'
+While types are useful for type-checking, you can also define a schema for the collection. A schema is a set of rules that define the structure of the file exports and provide useful error handling.
 
-export default async function Page() {
-  const sources = await PostsCollection.getSources()
+You can use the `schema` field to define a schema for the expected file exports in a collection. Using a library like [Zod](https://zod.dev/) can help you define schemas in a type-safe way:
 
-  return (
-    <>
-      <h1>All Posts</h1>
-      <ul>
-        {sources.map((source) => (
-          <li key={source.getPath()}>
-            <a href={source.getPath()}>{source.getPath()}</a>
-          </li>
-        ))}
-      </ul>
-    </>
-  )
+```ts
+import { Collection } from 'renoun/collections'
+import type { MDXContent } from 'renoun/mdx'
+import { z } from 'zod'
+
+const frontmatterSchema = z.object({
+  title: z.string(),
+  description: z.string(),
+})
+
+interface PostsSchema {
+  default: MDXContent
+  frontmatter: z.infer<typeof frontmatterSchema>
 }
+
+export const PostsCollection = new Collection<PostsSchema>({
+  filePattern: 'posts/*.mdx',
+  baseDirectory: 'posts',
+  basePath: 'posts',
+  schema: {
+    frontmatter: frontmatterSchema.parse,
+  },
+})
 ```
 
-To render the content of a post, we can use the `source` object:
+Now we'll validate the front matter of each MDX file in the `posts` directory using the `frontmatterSchema`. This ensures that each file adheres to the schema and provides type safety when accessing the front matter.
 
-```tsx allowErrors filename="app/posts/[slug].tsx"
-import { PostsCollection } from '../../../collections'
-import { notFound } from 'next/navigation'
-
-export default async function Page({ params }: { params: { slug: string } }) {
-  const source = PostsCollection.getSource(params.slug)
-
-  if (!source) notFound()
-
-  const frontmatter = await source.getExport('frontmatter').getValue()
-  const Content = await source.getExport('default').getValue()
-
-  return (
-    <>
-      <h1>{frontmatter.title}</h1>
-      <p>{frontmatter.description}</p>
-      <Content />
-    </>
-  )
-}
-```
+See the [Zod](/guides/zod) and [Valibot](/guides/valibot) guides for more information on how to use schemas with collections.
 
 ## Composite Collections
 
