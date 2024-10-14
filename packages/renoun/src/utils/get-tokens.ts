@@ -498,7 +498,9 @@ function throwDiagnosticErrors(
   const actionsToTake = `You can fix this error by taking one of the following actions:
   - Use the diagnostic ${errorMessages.length > 1 ? 'messages' : 'message'} above to identify and fix any issues in the ${componentName} component.
   - If type declarations are missing, ensure that the necessary types are installed and available in the targeted workspace.
+  - Make sure "filename" is unique and does not conflict with other filenames in the same module. Prefix the filename with a number for progressive examples e.g. filename="01.${filename}".
   - If this error is expected for educational purposes or temporary migrations, pass the "allowErrors" prop to the ${componentName} component.
+  - If you are unable to resolve this error, please file an issue at: https://github.com/souporserious/renoun/issues
   `
   const errorMessage = `${formattedErrors}\n\n${tokensToPlainText(tokens)}\n\n${actionsToTake}`
 

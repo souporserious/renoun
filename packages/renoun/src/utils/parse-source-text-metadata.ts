@@ -34,6 +34,9 @@ export type ParseMetadataResult = {
 
 export const generatedFilenames = new Set<string>()
 
+/** Identifier for the scope of generated filenames to prevent conflicts. */
+const scopeId = '_renoun'
+
 /** Parses and normalizes source text metadata. */
 export async function parseSourceTextMetadata({
   project,
@@ -128,7 +131,7 @@ export async function parseSourceTextMetadata({
 
   // Scope code block source files since they can conflict with other files on disk.
   if ('value' in props) {
-    filename = join('renoun', filename)
+    filename = join(scopeId, filename)
   }
 
   // Store generated filenames to provide better error messages
@@ -180,7 +183,7 @@ export async function parseSourceTextMetadata({
   }
 
   const filenameLabel = (filenameProp || filename)
-    .replace(join('renoun', posix.sep), '') // Remove renoun/ prefix
+    .replace(join(scopeId, posix.sep), '') // Remove _renoun/ prefix
     .replace(/\d+\./, '') // Remove ordered number prefix
 
   return {
