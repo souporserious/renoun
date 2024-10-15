@@ -1,13 +1,15 @@
-## Next.js MDX Inline Code
+## MDX Inline Code
 
-If you are using the `@renoun/mdx` package, you can also use the `MDXComponents` export to override the `pre` and `code` components in your project's `mdx-components.tsx` file:
+When using MDX with the `rehypePlugins` from `renoun/mdx` you can prefix the inline code with a language similar to fenced code blocks. For example:
 
-```tsx filename="02.mdx-components.tsx"
-import { MDXComponents } from 'renoun/components'
-
-export function useMDXComponents() {
-  return MDXComponents
-}
+```mdx
+When using inline code `js console.log('Hello, World!')`, you can specify the language for syntax highlighting.
 ```
 
-This properly forwards the MDX component props from the `code` component to the `CodeInline` component.
+<Preview>
+
+When using inline code `js console.log('Hello, World!')`, you can specify the language for syntax highlighting.
+
+</Preview>
+
+This will render the inline code with syntax highlighting based on the specified language when used with [MDXComponents](/components/mdx-components).
