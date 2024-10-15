@@ -2,6 +2,8 @@ import type { Parent } from 'unist'
 import type { Element, Properties } from 'hast'
 import { toString } from 'hast-util-to-string'
 import { visit, SKIP } from 'unist-util-visit'
+import { bundledLanguagesInfo } from 'shiki'
+import { inspect } from 'util'
 
 interface CodeMetaElement extends Element {
   data?: {
@@ -13,6 +15,10 @@ interface CodeMetaElement extends Element {
     language?: string
   }
 }
+
+const allBundledLanguages = bundledLanguagesInfo
+  .map((language) => language.id)
+  .concat(['js', 'ts'])
 
 /** Parses `CodeBlock` and `CodeInline` props and adds them to `pre` and `code` element properties respectively. */
 export function addCodeMetaProps() {
@@ -72,17 +78,20 @@ export function addCodeMetaProps() {
 
         if (firstSpaceIndex > -1) {
           const language = codeString.substring(0, firstSpaceIndex)
+          const isValidLanguage = allBundledLanguages.includes(language)
 
-          // Add the language as a prop for syntax highlighting
-          element.properties.language = language
+          if (isValidLanguage) {
+            // Add the language as a prop for syntax highlighting
+            element.properties.language = language
 
-          // Replace the element's content with just the code
-          element.children = [
-            {
-              type: 'text',
-              value: codeString.substring(firstSpaceIndex + 1),
-            },
-          ]
+            // Replace the element's content with just the code
+            element.children = [
+              {
+                type: 'text',
+                value: codeString.substring(firstSpaceIndex + 1),
+              },
+            ]
+          }
         }
       }
     })

@@ -263,6 +263,9 @@ importers:
       remark-unwrap-images:
         specifier: 4.0.0
         version: 4.0.0
+      shiki:
+        specifier: 'catalog:'
+        version: 1.17.7
       unist-util-visit:
         specifier: ^5.0.0
         version: 5.0.0

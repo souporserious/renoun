@@ -50,6 +50,7 @@
     "remark-squeeze-paragraphs": "6.0.0",
     "remark-strip-badges": "7.0.0",
     "remark-unwrap-images": "4.0.0",
+    "shiki": "catalog:",
     "unist-util-visit": "^5.0.0",
     "unist-util-visit-parents": "^6.0.1"
   }

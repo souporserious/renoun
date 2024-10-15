@@ -119,13 +119,14 @@ export async function parseSourceTextMetadata({
       )
     }
 
-    // Trim semicolon and trailing newline from formatting.
+    // Trim trailing newline from formatting.
     if (jsxOnly) {
       finalValue = finalValue.trimEnd()
+    }
 
-      if (finalValue.startsWith(';')) {
-        finalValue = finalValue.slice(1)
-      }
+    // Trim semicolon from formatting.
+    if ((jsxOnly || isInline) && finalValue.startsWith(';')) {
+      finalValue = finalValue.slice(1)
     }
   }
 
