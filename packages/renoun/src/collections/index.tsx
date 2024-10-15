@@ -1238,18 +1238,20 @@ function isValidDepth(depth: number) {
   return (depth >= 0 && Number.isInteger(depth)) || depth === Infinity
 }
 
-export function isExportSource(source: unknown): source is ExportSource<any> {
+export const isExportSource = (
+  source: unknown
+): source is ExportSource<any> => {
   return source instanceof Export
 }
 
-export function isFileSystemSource(
+export const isFileSystemSource = (
   source: unknown
-): source is FileSystemSource<any> {
+): source is FileSystemSource<any> => {
   return source instanceof Source
 }
 
-export function isCollectionSource(
+export const isCollectionSource = (
   source: unknown
-): source is CollectionSource<any> {
+): source is CollectionSource<any> => {
   return source instanceof Collection
 }
