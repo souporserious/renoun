@@ -1020,7 +1020,7 @@ function resolveSignature(
     ? `<${resolvedGenericParameters
         .map((generic) => {
           const constraintText = generic.constraint
-            ? ` extends ${generic.constraint}`
+            ? ` extends ${generic.constraint.text}`
             : ''
           return generic.name + constraintText
         })
