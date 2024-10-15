@@ -92,6 +92,7 @@ export const MDXComponents = {
     return (
       <CodeInline
         value={props.children as string}
+        language={props.language}
         paddingY="0"
         css={{
           lineHeight: 1.15,
