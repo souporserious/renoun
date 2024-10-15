@@ -6,23 +6,34 @@ This guide will help you configure renoun in your project.
 
 ## renoun.json
 
-The `renoun.json` file is used to globally configure components and utilities for the entire project. This file should be placed in the root of your project:
+The `renoun.json` file is used to globally configure components and utilities and override defaults for the entire workspace.
 
-```json
+This file should be placed in the root of your workspace. Here is an example configuration:
+
+```json filename="renoun.json"
 {
+  // Provide a schema for the configuration file to enable intellisense
   "$schema": "https://renoun.dev/schema.json",
+
+  // Specify the theme to use for code highlighting
   "theme": "theme.json",
+
+  // Specify the languages to load for code highlighting
   "languages": ["sh", "ts", "tsx"],
+
+  // Specify the git information for edit links
   "git": {
     "source": "https://github.com/souporserious/renoun"
   },
+
+  // Specify the site URL for the canonical URL
   "siteUrl": "https://renoun.dev"
 }
 ```
 
 ## Themes
 
-Themes are powered by <a href="https://shiki.style" target="_blank" rel="noopener">Shiki</a> and specify how source code is highlighted in the `CodeBlock` and `CodeInline` components. You can use a bundled theme or create your own theme.
+Themes are powered by <a href="https://shiki.style" target="_blank" rel="noopener">Shiki</a> and specify how source code is highlighted in the `CodeBlock` and `CodeInline` components. You can use a bundled theme or create your own theme. The default theme is set to `nord`.
 
 ### Bundled Themes
 
@@ -46,13 +57,28 @@ To use a custom theme, you can reference a JSON file that defines a <a href="htt
 
 ## Languages
 
-The `languages` property is used to define the languages that are supported by the `CodeBlock` and `CodeInline` components. This is used to determine which language to load when highlighting code:
+The `languages` property is used to define the languages that are supported by the `CodeBlock` and `CodeInline` components. This is used to determine which language to load when highlighting code.
+
+The following list is the default languages loaded by renoun:
 
 ```json
 {
-  "languages": ["sh", "ts", "tsx"]
+  "languages": [
+    "css",
+    "js",
+    "jsx",
+    "ts",
+    "tsx",
+    "md",
+    "mdx",
+    "sh",
+    "json",
+    "html"
+  ]
 }
 ```
+
+Overriding this property will replace the default languages with the provided list.
 
 ## Git Information
 
