@@ -138,6 +138,6 @@ export const ComponentsMDXCollection = new Collection<{
 
 export const AllCollections = new CompositeCollection(
   DocsCollection,
-  GuidesCollection,
-  ComponentsCollection
+  ComponentsCollection,
+  GuidesCollection
 )

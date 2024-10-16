@@ -166,17 +166,6 @@ export function Sidebar() {
               gap: '1rem',
             }}
           >
-            <h3 className="title">Guides</h3>
-            <Navigation collection={GuidesCollection} />
-          </li>
-
-          <li
-            css={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '1rem',
-            }}
-          >
             <h3 className="title">Collections</h3>
             <ul
               css={{
@@ -205,6 +194,17 @@ export function Sidebar() {
           >
             <h3 className="title">Components</h3>
             <Navigation collection={ComponentsCollection} variant="name" />
+          </li>
+
+          <li
+            css={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1rem',
+            }}
+          >
+            <h3 className="title">Guides</h3>
+            <Navigation collection={GuidesCollection} />
           </li>
 
           <li css={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
