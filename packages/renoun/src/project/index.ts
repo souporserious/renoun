@@ -80,17 +80,15 @@ export async function resolveType({
   declaration,
   projectOptions,
   filter,
-  useClient = true,
 }: {
   declaration: Node
   projectOptions?: ProjectOptions
   filter?: SymbolFilter
-  useClient?: boolean
 }) {
   const filePath = declaration.getSourceFile().getFilePath()
   const position = declaration.getPos()
 
-  if (useClient && client) {
+  if (client) {
     return client.callMethod('resolveType', {
       filePath,
       position,

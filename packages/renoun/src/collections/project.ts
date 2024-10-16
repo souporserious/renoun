@@ -42,7 +42,6 @@ export async function getExportedTypes(
             declaration,
             filter,
             projectOptions: { tsConfigFilePath },
-            useClient: false,
           })
         )
       })
