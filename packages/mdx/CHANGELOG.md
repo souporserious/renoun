@@ -1,5 +1,11 @@
 # @renoun/mdx
 
+## 1.2.0
+
+### Minor Changes
+
+- 72a2e98: Fixes specifying a `language` for inline MDX code.
+
 ## 1.1.0
 
 ### Minor Changes
