@@ -1,6 +1,7 @@
 import type { Project } from 'ts-morph'
 import { statSync } from 'node:fs'
 
+import { waitForRefreshingProjects } from '../project/get-project.js'
 import {
   resolveType,
   type ResolvedType,
@@ -16,12 +17,14 @@ export const resolvedTypeCache = new Map<
 >()
 
 /** Process all properties of a given type including their default values. */
-export function resolveTypeAtLocation(
+export async function resolveTypeAtLocation(
   project: Project,
   filePath: string,
   position: number,
   filter?: SymbolFilter
 ) {
+  await waitForRefreshingProjects()
+
   const typeId = `${filePath}:${position}`
   const sourceFile = project.addSourceFileAtPath(filePath)
   const declaration = sourceFile.getDescendantAtPos(position)
