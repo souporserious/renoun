@@ -1,8 +1,4 @@
-import type {
-  Project,
-  ProjectOptions as TsMorphProjectOptions,
-  FileSystemRefreshResult,
-} from 'ts-morph'
+import type { Project, FileSystemRefreshResult } from 'ts-morph'
 import { EventEmitter } from 'node:events'
 import { join, dirname, extname, resolve } from 'node:path'
 import { existsSync, watch, statSync } from 'node:fs'
@@ -21,19 +17,6 @@ const DEFAULT_IGNORED_PATHS = [
   'node_modules',
   'out',
 ]
-const DEFAULT_PROJECT_OPTIONS = {
-  compilerOptions: {
-    allowJs: true,
-    resolveJsonModule: true,
-    esModuleInterop: true,
-    moduleResolution: 100, // ts.ModuleResolutionKind.Bundler,
-    jsx: 4, // ts.JsxEmit.ReactJSX,
-    module: 99, // ts.ModuleKind.ESNext,
-    target: 99, // ts.ScriptTarget.ESNext,
-    isolatedModules: true,
-  },
-  tsConfigFilePath: 'tsconfig.json',
-} satisfies TsMorphProjectOptions
 
 /** Get the project associated with the provided options. */
 export async function getProject(options?: ProjectOptions) {
@@ -43,9 +26,19 @@ export async function getProject(options?: ProjectOptions) {
     return projects.get(projectId)!
   }
 
-  const { Project } = await import('ts-morph')
+  const { Project, ts } = await import('ts-morph')
   const project = new Project({
-    ...DEFAULT_PROJECT_OPTIONS,
+    compilerOptions: {
+      allowJs: true,
+      resolveJsonModule: true,
+      esModuleInterop: true,
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      jsx: ts.JsxEmit.ReactJSX,
+      module: ts.ModuleKind.ESNext,
+      target: ts.ScriptTarget.ESNext,
+      isolatedModules: true,
+    },
+    tsConfigFilePath: 'tsconfig.json',
     ...options,
   })
   const projectDirectory = options?.tsConfigFilePath
