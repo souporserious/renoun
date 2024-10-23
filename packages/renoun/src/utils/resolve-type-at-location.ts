@@ -7,7 +7,7 @@ import {
   type SymbolFilter,
 } from './resolve-type.js'
 
-const resolvedTypeCache = new Map<
+export const resolvedTypeCache = new Map<
   string,
   {
     resolvedType?: ResolvedType

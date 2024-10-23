@@ -2,6 +2,7 @@ import type { Project, ProjectOptions as TsMorphProjectOptions } from 'ts-morph'
 import { join, dirname, extname, resolve } from 'node:path'
 import { existsSync, watch, statSync } from 'node:fs'
 
+import { resolvedTypeCache } from '../utils/resolve-type-at-location.js'
 import { ProjectOptions } from './types.js'
 
 const projects = new Map<string, Project>()
@@ -92,6 +93,7 @@ export async function getProject(options?: ProjectOptions) {
           else if (eventType === 'change') {
             const previousSourceFile = project.getSourceFile(filePath)
             if (previousSourceFile) {
+              resolvedTypeCache.clear()
               previousSourceFile.refreshFromFileSystem()
             } else {
               project.addSourceFileAtPath(filePath)
