@@ -1,4 +1,9 @@
-import type { Project, ProjectOptions as TsMorphProjectOptions } from 'ts-morph'
+import type {
+  Project,
+  ProjectOptions as TsMorphProjectOptions,
+  FileSystemRefreshResult,
+} from 'ts-morph'
+import { EventEmitter } from 'node:events'
 import { join, dirname, extname, resolve } from 'node:path'
 import { existsSync, watch, statSync } from 'node:fs'
 
@@ -88,13 +93,23 @@ export async function getProject(options?: ProjectOptions) {
                 removedSourceFile.delete()
               }
             }
-          }
-          // The file contents were changed
-          else if (eventType === 'change') {
+          } else if (eventType === 'change') {
             const previousSourceFile = project.getSourceFile(filePath)
+
             if (previousSourceFile) {
               resolvedTypeCache.clear()
-              previousSourceFile.refreshFromFileSystem()
+
+              startRefreshingProjects()
+
+              const promise = previousSourceFile.refreshFromFileSystem()
+              activeRefreshingProjects.add(promise)
+
+              promise.finally(() => {
+                activeRefreshingProjects.delete(promise)
+                if (activeRefreshingProjects.size === 0) {
+                  completeRefreshingProjects()
+                }
+              })
             } else {
               project.addSourceFileAtPath(filePath)
             }
@@ -114,4 +129,43 @@ export async function getProject(options?: ProjectOptions) {
   projects.set(projectId, project)
 
   return project
+}
+
+const REFRESHING_STARTED = 'refreshing:started'
+const REFRESHING_COMPLETED = 'refreshing:completed'
+const emitter = new EventEmitter()
+const activeRefreshingProjects = new Set<Promise<FileSystemRefreshResult>>()
+let isRefreshingProjects = false
+
+/** Mark the start of the refreshing process and emit an event. */
+function startRefreshingProjects() {
+  if (!isRefreshingProjects) {
+    isRefreshingProjects = true
+    emitter.emit(REFRESHING_STARTED)
+  }
+}
+
+/** Mark the completion of the refreshing process and emit an event. */
+function completeRefreshingProjects() {
+  if (isRefreshingProjects && activeRefreshingProjects.size === 0) {
+    isRefreshingProjects = false
+    emitter.emit(REFRESHING_COMPLETED)
+  }
+}
+
+/** Emit an event when all projects have finished refreshing. */
+export async function waitForRefreshingProjects() {
+  if (!isRefreshingProjects) return
+
+  return new Promise<void>((resolve) => {
+    const timeoutId = setTimeout(() => {
+      emitter.removeAllListeners(REFRESHING_COMPLETED)
+      resolve()
+    }, 10000)
+
+    emitter.once(REFRESHING_COMPLETED, () => {
+      clearTimeout(timeoutId)
+      resolve()
+    })
+  })
 }
