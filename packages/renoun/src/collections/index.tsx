@@ -7,6 +7,7 @@ import type {
   ExportedDeclarations,
 } from 'ts-morph'
 import tsMorph from 'ts-morph'
+import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import globParent from 'glob-parent'
 import { minimatch } from 'minimatch'
@@ -822,6 +823,8 @@ export class Collection<AllExports extends FileExports>
   public _sourceFilesOrderMap: Map<string, string>
   public _sourcePathMap: Map<string, string>
   public _validExtensions: string[] = []
+  public _tsConfig: any
+  public _tsConfigDirectory: string
 
   #sources = new Map<string, Source<AllExports>>()
 
@@ -840,6 +843,13 @@ export class Collection<AllExports extends FileExports>
     const compilerOptions = this._project.getCompilerOptions()
     const tsConfigFilePath = String(compilerOptions.configFilePath)
     const tsConfigDirectory = dirname(tsConfigFilePath)
+
+    this._tsConfig =
+      typeof compilerOptions.configFilePath === 'string'
+        ? JSON.parse(readFileSync(tsConfigFilePath, 'utf-8'))
+        : {}
+    this._tsConfigDirectory = tsConfigDirectory
+
     const resolvedGlobPattern =
       compilerOptions.baseUrl && compilerOptions.paths
         ? resolveTsConfigPath(
@@ -921,19 +931,6 @@ You can fix this error by ensuring the following:
   }
 
   async _getFileSystemSources(compositeCollection?: CompositeCollection<any>) {
-    const tsConfig = this._project.getCompilerOptions()
-    const tsConfigDirectory = dirname(tsConfig.configFilePath as string)
-    let exclude: string[] = []
-
-    if (typeof tsConfig.configFilePath === 'string') {
-      const tsConfigJson = JSON.parse(
-        this._project.addSourceFileAtPath(tsConfig.configFilePath).getText()
-      )
-      if (tsConfigJson.exclude) {
-        exclude = tsConfigJson.exclude
-      }
-    }
-
     const sources = this._fileSystemSources
       .map((fileSystemSource) => {
         // Filter out directories that have an index or readme file
@@ -950,17 +947,17 @@ You can fix this error by ensuring the following:
       .filter((source) => {
         if (source) {
           // filter based on ignored files in tsconfig
-          if (tsConfig) {
+          if (this._tsConfig.exclude.length) {
             const filePath = getFileSystemSourcePath(
               // @ts-expect-error - private property
               source.sourceFileOrDirectory
             )
             const trimmedFilePath = filePath.replace(
-              tsConfigDirectory + '/',
+              this._tsConfigDirectory + '/',
               ''
             )
 
-            for (const pattern of exclude) {
+            for (const pattern of this._tsConfig.exclude) {
               if (minimatch(trimmedFilePath, pattern)) {
                 return false
               }
