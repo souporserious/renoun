@@ -28,7 +28,7 @@ import { resolveType } from '../project/client.js'
 import { resolveTsConfigPath } from '../utils/resolve-ts-config-path.js'
 import type { SymbolFilter } from '../utils/resolve-type.js'
 import { getSourcePathMap } from '../utils/get-source-files-path-map.js'
-import { getSourceFilesOrderMap } from '../utils/get-source-files-sort-order.js'
+import { getSourceFilesOrderMap } from '../utils/get-source-files-order-map.js'
 import { getProject } from './project.js'
 
 type GetImport = (slug: string) => Promise<any>
