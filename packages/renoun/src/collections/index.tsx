@@ -976,45 +976,45 @@ You can fix this error by ensuring the following:
         return false
       }) as FileSystemSource<AllExports>[]
 
-    sources.sort((a, b) => a.getOrder().localeCompare(b.getOrder()))
+    try {
+      const sourcesCount = sources.length
 
-    if (this.options.sort) {
-      try {
-        const sourcesCount = sources.length
-
+      for (let sourceIndex = 0; sourceIndex < sourcesCount - 1; sourceIndex++) {
         for (
-          let sourceIndex = 0;
-          sourceIndex < sourcesCount - 1;
-          sourceIndex++
+          let sourceCompareIndex = 0;
+          sourceCompareIndex < sourcesCount - 1 - sourceIndex;
+          sourceCompareIndex++
         ) {
-          for (
-            let sourceCompareIndex = 0;
-            sourceCompareIndex < sourcesCount - 1 - sourceIndex;
-            sourceCompareIndex++
-          ) {
-            if (
-              (await this.options.sort(
-                sources[sourceCompareIndex],
-                sources[sourceCompareIndex + 1]
-              )) > 0
-            ) {
-              const compareSource = sources[sourceCompareIndex]
-              sources[sourceCompareIndex] = sources[sourceCompareIndex + 1]
-              sources[sourceCompareIndex + 1] = compareSource
+          const aSource = sources[sourceCompareIndex]
+          const bSource = sources[sourceCompareIndex + 1]
+
+          if (this.options.sort) {
+            if ((await this.options.sort(aSource, bSource)) > 0) {
+              sources[sourceCompareIndex] = bSource
+              sources[sourceCompareIndex + 1] = aSource
+            }
+          } else {
+            // sort by order if no sort function is provided
+            const aOrder = aSource.getOrder()
+            const bOrder = bSource.getOrder()
+
+            if (aOrder.localeCompare(bOrder) > 0) {
+              sources[sourceCompareIndex] = bSource
+              sources[sourceCompareIndex + 1] = aSource
             }
           }
         }
-      } catch (error) {
-        const badge = '[renoun] '
-        if (error instanceof Error && error.message.includes(badge)) {
-          throw new Error(
-            `[renoun] Error occurred while sorting sources for collection with file pattern "${
-              this.options.filePattern
-            }". \n\n${error.message.slice(badge.length)}`
-          )
-        }
-        throw error
       }
+    } catch (error) {
+      const badge = '[renoun] '
+      if (error instanceof Error && error.message.includes(badge)) {
+        throw new Error(
+          `[renoun] Error occurred while sorting sources for collection with file pattern "${
+            this.options.filePattern
+          }". \n\n${error.message.slice(badge.length)}`
+        )
+      }
+      throw error
     }
 
     return sources
