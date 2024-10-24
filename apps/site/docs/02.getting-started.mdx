@@ -71,10 +71,13 @@ const posts = new Collection<{
 })
 
 export default async function Page({ params }: { params: { slug: string } }) {
-  const Content = await posts
-    .getSource(params.slug)!
-    .getExport('default')
-    .getValue()
+  const post = await posts.getSource(params.slug)
+
+  if (!post) {
+    return <div>Post not found</div>
+  }
+
+  const Content = await post.getExport('default').getValue()
 
   return <Content />
 }

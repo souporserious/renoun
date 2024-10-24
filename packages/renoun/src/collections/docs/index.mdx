@@ -142,9 +142,13 @@ We can now generate a page for individual posts using a `slug` parameter to retr
 import { PostsCollection } from '../collections'
 
 export default async function Post({ params }: { params: { slug: string } }) {
-  const Content = await PostsCollection.getSource(params.slug)!
-    .getExport('default')
-    .getValue()
+  const post = await PostsCollection.getSource(params.slug)
+
+  if (!post) {
+    return <div>Post not found</div>
+  }
+
+  const Content = await post.getExport('default').getValue()
 
   return <Content />
 }

@@ -19,7 +19,7 @@ describe('collections', () => {
       CollectionsCollection,
       ComponentsCollection
     )
-    const source = AllCollections.getSource('collections/index')!
+    const source = (await AllCollections.getSource('collections/index'))!
     const [, nextSource] = await source.getSiblings()
 
     expect(nextSource).toBeDefined()

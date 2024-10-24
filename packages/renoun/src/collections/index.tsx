@@ -71,7 +71,9 @@ type PositiveIntegerOrInfinity<Type extends number> = `${Type}` extends
 
 export interface SourceProvider<Exports extends FileExports> {
   /** Retrieves a source in the immediate directory or sub-directory by its path. */
-  getSource(path?: string | string[]): FileSystemSource<Exports> | undefined
+  getSource(
+    path?: string | string[]
+  ): Promise<FileSystemSource<Exports> | undefined>
 
   /**
    * Retrieves sources in the immediate directory and possibly sub-directories based on the provided `depth`.
@@ -916,7 +918,7 @@ You can fix this error by ensuring the following:
     })
   }
 
-  _getFileSystemSource(
+  async _getFileSystemSource(
     sourceFileOrDirectory: SourceFile | Directory,
     compositeCollection?: CompositeCollection<any>
   ) {
@@ -931,8 +933,8 @@ You can fix this error by ensuring the following:
   }
 
   async _getFileSystemSources(compositeCollection?: CompositeCollection<any>) {
-    const sources = this._fileSystemSources
-      .map((fileSystemSource) => {
+    const resolvedSources = await Promise.all(
+      this._fileSystemSources.map((fileSystemSource) => {
         // Filter out directories that have an index or readme file
         if (fileSystemSource instanceof tsMorph.Directory) {
           const directorySourceFile = getDirectorySourceFile(fileSystemSource)
@@ -944,34 +946,35 @@ You can fix this error by ensuring the following:
 
         return this._getFileSystemSource(fileSystemSource, compositeCollection)
       })
-      .filter((source) => {
-        if (source) {
-          // filter based on ignored files in tsconfig
-          if (this._tsConfig.exclude.length) {
-            const filePath = getFileSystemSourcePath(
-              // @ts-expect-error - private property
-              source.sourceFileOrDirectory
-            )
-            const trimmedFilePath = filePath.replace(
-              this._tsConfigDirectory + '/',
-              ''
-            )
+    )
+    const sources = resolvedSources.filter((source) => {
+      if (source) {
+        // filter based on ignored files in tsconfig
+        if (this._tsConfig.exclude.length) {
+          const filePath = getFileSystemSourcePath(
+            // @ts-expect-error - private property
+            source.sourceFileOrDirectory
+          )
+          const trimmedFilePath = filePath.replace(
+            this._tsConfigDirectory + '/',
+            ''
+          )
 
-            for (const pattern of this._tsConfig.exclude) {
-              if (minimatch(trimmedFilePath, pattern)) {
-                return false
-              }
+          for (const pattern of this._tsConfig.exclude) {
+            if (minimatch(trimmedFilePath, pattern)) {
+              return false
             }
           }
-
-          if (this.options.filter) {
-            return this.options.filter(source)
-          }
-
-          return true
         }
-        return false
-      }) as FileSystemSource<AllExports>[]
+
+        if (this.options.filter) {
+          return this.options.filter(source)
+        }
+
+        return true
+      }
+      return false
+    }) as FileSystemSource<AllExports>[]
 
     try {
       const sourcesCount = sources.length
@@ -1042,9 +1045,9 @@ You can fix this error by ensuring the following:
     return this.options.basePath ? getPathDepth(this.options.basePath) : -1
   }
 
-  getSource(
+  async getSource(
     path: string | string[] = 'index'
-  ): FileSystemSource<AllExports> | undefined {
+  ): Promise<FileSystemSource<AllExports> | undefined> {
     const compositeCollection = arguments[1] as CompositeCollection<any>
     let pathString = Array.isArray(path) ? path.join('/') : path
 
@@ -1145,11 +1148,11 @@ export class CompositeCollection<Collections extends CollectionSource<any>[]>
     this.collections = collections
   }
 
-  getSource(
+  async getSource(
     path?: string | string[]
-  ): FileSystemSourceUnion<Collections> | undefined {
+  ): Promise<FileSystemSourceUnion<Collections> | undefined> {
     for (const collection of this.collections) {
-      const source = collection.getSource(
+      const source = await collection.getSource(
         path,
         // @ts-expect-error - private property
         this

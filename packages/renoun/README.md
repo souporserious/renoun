@@ -41,10 +41,13 @@ import { Collection } from 'renoun/collections'
 const posts = new Collection({ filePattern: 'posts/*.mdx' })
 
 export default async function Page({ params }: { params: { slug: string } }) {
-  const Content = await posts
-    .getSource(params.slug)!
-    .getExport('default')
-    .getValue()
+  const post = await posts.getSource(params.slug)
+
+  if (!post) {
+    return <div>Post not found</div>
+  }
+
+  const Content = await post.getExport('default').getValue()
 
   return <Content />
 }
@@ -107,7 +110,11 @@ import { APIReference } from 'renoun/components'
 const components = new Collection({ filePattern: 'components/*.tsx' })
 
 export default async function Page({ params }: { params: { slug: string } }) {
-  const component = await components.getSource(params.slug)!
+  const component = await components.getSource(params.slug)
+
+  if (!component) {
+    return <div>Component not found</div>
+  }
 
   return <APIReference source={component} />
 }
@@ -122,7 +129,12 @@ import { APIReference } from 'renoun/components'
 const components = new Collection({ filePattern: 'components/*.tsx' })
 
 export default async function Page({ params }: { params: { slug: string } }) {
-  const component = await components.getSource(params.slug)!
+  const component = await components.getSource(params.slug)
+
+  if (!component) {
+    return <div>Component not found</div>
+  }
+
   const componentExports = component.getExports()
 
   return componentExports.map((source) => (

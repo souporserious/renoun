@@ -12,7 +12,7 @@ export async function generateStaticParams() {
 }
 
 export default async function Doc({ params }: { params: { slug: string[] } }) {
-  const docSource = AllCollections.getSource(['guides', ...params.slug])
+  const docSource = await AllCollections.getSource(['guides', ...params.slug])
 
   if (!GuidesCollection.hasSource(docSource)) {
     notFound()

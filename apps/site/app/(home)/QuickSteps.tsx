@@ -1,8 +1,8 @@
+import type { CodeBlockProps } from 'renoun/components'
+
 import { ButtonLink } from '@/components/ButtonLink'
 import { CodeBlock } from '@/components/CodeBlock'
 import { Text } from '@/components/Text'
-import Link from 'next/link'
-import type { CodeBlockProps } from 'renoun/components'
 
 const steps = [
   {
@@ -26,10 +26,13 @@ const posts = new Collection<{ default: MDXContent }>({
 })
 
 export default async function Page({ params }: { params: { slug: string } }) {
-  const Content = await posts
-    .getSource(params.slug)!
-    .getExport('default')
-    .getValue()
+  const post = await posts.getSource(params.slug)
+
+  if (!post) {
+    return <div>Post not found</div>
+  }
+
+  const Content = await post.getExport('default').getValue()
     
   return <Content />
 }`,

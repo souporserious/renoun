@@ -357,7 +357,10 @@ export function generateStaticParams() {
 }
 
 export async function generateMetadata({ params }) {
-  const source = Posts.getSource(params.slug)!
+  const source = await Posts.getSource(params.slug)
+
+  if (!source) notFound()
+
   const frontmatter = await source.getExport('frontmatter').getValue()
 
   return getSiteMetadata({

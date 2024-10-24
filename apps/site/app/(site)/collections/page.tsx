@@ -4,9 +4,19 @@ import { CollectionsCollection, CollectionsDocsCollection } from '@/collections'
 import { TableOfContents } from '@/components/TableOfContents'
 
 export default async function Page() {
-  const source = CollectionsCollection.getSource()!
+  const source = await CollectionsCollection.getSource()
+
+  if (!source) {
+    return null
+  }
+
   const sourceExports = source.getExports()
-  const docSource = CollectionsDocsCollection.getSource()!
+  const docSource = await CollectionsDocsCollection.getSource()
+
+  if (!docSource) {
+    return null
+  }
+
   const Content = await docSource.getExport('default').getValue()
   const headings = await docSource.getExport('headings').getValue()
 

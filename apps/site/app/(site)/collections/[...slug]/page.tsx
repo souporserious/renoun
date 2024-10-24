@@ -16,7 +16,7 @@ export default async function Document({
 }: {
   params: { slug: string[] }
 }) {
-  const source = CollectionsDocsCollection.getSource(params.slug)
+  const source = await CollectionsDocsCollection.getSource(params.slug)
 
   if (!source) {
     notFound()

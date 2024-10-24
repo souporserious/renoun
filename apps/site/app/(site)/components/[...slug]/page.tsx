@@ -27,16 +27,16 @@ export default async function Component({
   params: { slug: string[] }
 }) {
   const componentsPathname = ['components', ...params.slug]
-  const componentSource = AllCollections.getSource(componentsPathname)
+  const componentSource = await AllCollections.getSource(componentsPathname)
 
   if (!ComponentsCollection.hasSource(componentSource)) {
     notFound()
   }
 
-  const mdxSource = ComponentsMDXCollection.getSource(componentsPathname)
+  const mdxSource = await ComponentsMDXCollection.getSource(componentsPathname)
   const mdxHeadings = await mdxSource?.getExport('headings').getValue()
   const Content = await mdxSource?.getExport('default').getValue()
-  const examplesSource = componentSource.getSource('examples')
+  const examplesSource = await componentSource.getSource('examples')
   const examplesSources = await examplesSource?.getSources()
   const isExamplesPage = params.slug.at(-1) === 'examples'
   const examplesExports = isExamplesPage

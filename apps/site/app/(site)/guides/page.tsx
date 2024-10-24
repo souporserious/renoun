@@ -4,7 +4,7 @@ import { GuidesCollection } from '@/collections'
 import { DocumentSource } from '@/components/DocumentSource'
 
 export default async function Doc() {
-  const docSource = GuidesCollection.getSource()
+  const docSource = await GuidesCollection.getSource()
 
   if (!docSource) {
     notFound()
