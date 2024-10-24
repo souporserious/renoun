@@ -27,7 +27,7 @@ import { getJsDocMetadata } from '../utils/get-js-doc-metadata.js'
 import { resolveType } from '../project/client.js'
 import { resolveTsConfigPath } from '../utils/resolve-ts-config-path.js'
 import type { SymbolFilter } from '../utils/resolve-type.js'
-import { getSourcePathMap } from '../utils/get-source-files-path-map.js'
+import { getSourceFilesPathMap } from '../utils/get-source-files-path-map.js'
 import { getSourceFilesOrderMap } from '../utils/get-source-files-order-map.js'
 import { getProject } from './project.js'
 
@@ -900,7 +900,7 @@ You can fix this error by ensuring the following:
       this._absoluteBaseGlobPattern
     )
     this._sourceFilesOrderMap = getSourceFilesOrderMap(baseDirectory)
-    this._sourcePathMap = getSourcePathMap(baseDirectory, {
+    this._sourcePathMap = getSourceFilesPathMap(baseDirectory, {
       baseDirectory: options.baseDirectory,
       basePath: options.basePath,
     })

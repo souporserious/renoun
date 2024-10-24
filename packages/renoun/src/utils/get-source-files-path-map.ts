@@ -2,7 +2,7 @@ import { filePathToPathname } from '../utils/file-path-to-pathname.js'
 import type { Directory } from 'ts-morph'
 
 /** Returns a map of source file paths to their pathname. */
-export function getSourcePathMap(
+export function getSourceFilesPathMap(
   baseDirectory: Directory,
   options?: {
     baseDirectory?: string
