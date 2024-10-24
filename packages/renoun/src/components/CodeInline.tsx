@@ -2,7 +2,7 @@ import React, { Fragment, Suspense } from 'react'
 import { css, styled, type CSSObject } from 'restyle'
 import 'server-only'
 
-import { analyzeSourceText } from '../project/index.js'
+import { analyzeSourceText } from '../project/client.js'
 import { getThemeColors } from '../utils/get-theme-colors.js'
 import type { Languages, Token } from '../utils/get-tokens.js'
 import { CopyButton } from './CodeBlock/CopyButton.js'

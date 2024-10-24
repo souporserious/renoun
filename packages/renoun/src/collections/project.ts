@@ -2,7 +2,7 @@ import type { Project } from 'ts-morph'
 import tsMorph from 'ts-morph'
 import { resolve } from 'node:path'
 
-import { resolveType } from '../project/index.js'
+import { resolveType } from '../project/client.js'
 import type { SymbolFilter } from '../utils/resolve-type.js'
 
 const projectCache = new Map<string, Project>()

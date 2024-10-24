@@ -1,7 +1,7 @@
 import React, { Fragment } from 'react'
 import { styled, type CSSObject } from 'restyle'
 
-import { analyzeSourceText } from '../../project/index.js'
+import { analyzeSourceText } from '../../project/client.js'
 import { getThemeColors } from '../../utils/get-theme-colors.js'
 import type { Token, TokenDiagnostic } from '../../utils/get-tokens.js'
 import { MDXContent } from '../MDXContent.js'

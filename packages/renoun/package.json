@@ -53,8 +53,8 @@
       "import": "./dist/mdx/index.js"
     },
     "./project": {
-      "types": "./dist/project/index.d.ts",
-      "import": "./dist/project/index.js"
+      "types": "./dist/project/client.d.ts",
+      "import": "./dist/project/client.js"
     }
   },
   "typesVersions": {
@@ -75,7 +75,7 @@
         "./dist/mdx/index.d.ts"
       ],
       "project": [
-        "./dist/project/index.d.ts"
+        "./dist/project/client.d.ts"
       ]
     }
   },
