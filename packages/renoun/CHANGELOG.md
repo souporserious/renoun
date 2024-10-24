@@ -1,5 +1,22 @@
 # renoun
 
+## 6.1.0
+
+### Minor Changes
+
+- cd963a0: Marks pseudo-private methods in collection classes as these are not meant to be used publicly and will not adhere to semver.
+- 7642f56: Filters out private class members that start with `#` or `_` when using `<Export>.getType()`.
+
+### Patch Changes
+
+- 72a2e98: Fixes specifying a `language` for inline MDX code.
+- eca091b: Fixes constraint text in generated generics text.
+- 6753e12: Waits for any active refreshing source files before resolving types.
+- 9ac5434: Fixes bug in `CodeBlock` when targeting renoun filenames. The `CodeBlock` source files now use a unique identifier that does not clash with renoun exports.
+- 619abd9: Fixes class type resolution not accounting for filter and file dependencies.
+- Updated dependencies [72a2e98]
+  - @renoun/mdx@1.2.0
+
 ## 6.0.0
 
 ### Major Changes
