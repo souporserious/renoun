@@ -8,6 +8,8 @@ import {
   type Highlighter,
 } from '../utils/create-highlighter.js'
 import { getRootDirectory } from '../utils/get-root-directory.js'
+import { getSourceFilesOrderMap as baseGetSourceFilesOrderMap } from '../utils/get-source-files-order-map.js'
+import { getSourceFilesPathMap as baseGetSourceFilesPathMap } from '../utils/get-source-files-path-map.js'
 import type { SymbolFilter } from '../utils/resolve-type.js'
 import { resolveTypeAtLocation } from '../utils/resolve-type-at-location.js'
 import { WebSocketServer } from './rpc/server.js'
@@ -55,6 +57,41 @@ export function createServer() {
       })
     })
   }
+
+  server.registerMethod(
+    'getSourceFilesOrderMap',
+    async function getSourceFilesOrderMap(options: {
+      baseFilePattern: string
+      tsConfigFilePath: string
+    }) {
+      const project = await getProject({
+        tsConfigFilePath: options.tsConfigFilePath,
+      })
+      const baseDirectory = project.getDirectoryOrThrow(options.baseFilePattern)
+
+      return baseGetSourceFilesOrderMap(baseDirectory)
+    }
+  )
+
+  server.registerMethod(
+    'getSourceFilesPathMap',
+    async function getSourceFilesPathMap(options: {
+      baseFilePattern: string
+      baseDirectory?: string
+      basePath?: string
+      tsConfigFilePath: string
+    }) {
+      const project = await getProject({
+        tsConfigFilePath: options.tsConfigFilePath,
+      })
+      const baseDirectory = project.getDirectoryOrThrow(options.baseFilePattern)
+
+      return baseGetSourceFilesPathMap(baseDirectory, {
+        baseDirectory: options.baseDirectory,
+        basePath: options.basePath,
+      })
+    }
+  )
 
   server.registerMethod(
     'analyzeSourceText',
