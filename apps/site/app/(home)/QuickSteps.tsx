@@ -37,7 +37,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
   return <Content />
 }`,
     codeBlockProps: {
-      focusedLines: '8-15',
+      focusedLines: '8-18',
     },
   },
   {
