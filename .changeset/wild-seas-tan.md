@@ -15,7 +15,7 @@ const posts = new Collection({
   filePattern: 'posts/*.mdx',
 })
 
-export default async function Page({ params }: { params: { slug: string } }) {
+export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
 --  const post = posts.getSource(params.slug)
 ++  const post = await posts.getSource(params.slug)
 

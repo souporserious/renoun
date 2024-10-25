@@ -1,3 +1,4 @@
+'use client'
 import { Card } from '..'
 
 /** A basic card component */

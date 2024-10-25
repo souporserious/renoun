@@ -70,8 +70,12 @@ const posts = new Collection<{
   filePattern: 'posts/*.mdx',
 })
 
-export default async function Page({ params }: { params: { slug: string } }) {
-  const post = await posts.getSource(params.slug)
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}) {
+  const post = await posts.getSource((await params).slug)
 
   if (!post) {
     return <div>Post not found</div>

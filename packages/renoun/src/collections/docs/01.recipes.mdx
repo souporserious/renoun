@@ -35,7 +35,11 @@ This will create a collection of files and directories normalized as a `Source` 
 import { PostsCollection, type PostSource } from '@/collections'
 import { notFound } from 'next/navigation'
 
-export default async function Page({ params }: { params: { slug: string } }) {
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}) {
   const Post = await PostsCollection.getSource(params.path)
 
   if (!Post) notFound()
@@ -213,7 +217,7 @@ import { PostsCollection, type PostsSource } from '@/collections'
 import { notFound } from 'next/navigation'
 
 export default async function Page({ params }) {
-  const source = PostsCollection.getSource(params.slug)
+  const source = PostsCollection.getSource((await params).slug)
 
   if (!source) notFound()
 
@@ -283,7 +287,7 @@ export const Components = new Collection<Schema>({
 })
 
 export default async function Page({ params }) {
-  const source = Components.getSource(params.slug)
+  const source = Components.getSource((await params).slug)
 
   if (!source) notFound()
 
@@ -357,7 +361,7 @@ export function generateStaticParams() {
 }
 
 export async function generateMetadata({ params }) {
-  const source = await Posts.getSource(params.slug)
+  const source = await Posts.getSource((await params).slug)
 
   if (!source) notFound()
 
@@ -370,7 +374,7 @@ export async function generateMetadata({ params }) {
 }
 
 export default async function Page({ params }) {
-  const source = await Posts.getSource(params.slug)
+  const source = await Posts.getSource((await params).slug)
 
   if (!source) notFound()
 
@@ -476,8 +480,8 @@ export function generateStaticParams() {
 }
 
 export default async function Page({ params }) {
-  const Component = Components.getSource(params.slug)
-  const ComponentMDX = ComponentsMDX.getSource(params.slug)
+  const Component = Components.getSource((await params).slug)
+  const ComponentMDX = ComponentsMDX.getSource((await params).slug)
 
   if (!Component && !ComponentMDX) notFound()
 

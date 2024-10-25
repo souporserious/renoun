@@ -39,6 +39,8 @@ const renounConfigSchema = z.object({
   siteUrl: z.string().url().describe('URL of the site').optional(),
 })
 
+export const dynamic = 'force-static'
+
 export async function GET() {
   return NextResponse.json(zodToJsonSchema(renounConfigSchema))
 }

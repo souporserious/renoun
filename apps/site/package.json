@@ -16,9 +16,9 @@
     "@types/react-dom": "catalog:",
     "@vercel/analytics": "^1.3.1",
     "geist": "^1.3.1",
-    "next": "catalog:",
-    "react": "catalog:",
-    "react-dom": "catalog:",
+    "next": "14.2.13",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
     "remark-frontmatter": "^5.0.0",
     "remark-mdx-frontmatter": "^5.0.0",
     "renoun": "workspace:*",
@@ -26,6 +26,6 @@
     "shiki": "catalog:",
     "webpack": "catalog:",
     "zod": "3.23.8",
-    "zod-to-json-schema": "3.23.3"
+    "zod-to-json-schema": "3.23.5"
   }
 }

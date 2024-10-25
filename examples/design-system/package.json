@@ -2,7 +2,7 @@
   "private": true,
   "name": "@examples/design-system",
   "scripts": {
-    "dev": "renoun next dev",
+    "dev": "renoun next dev --turbopack",
     "build": "next build",
     "start": "next start"
   },
@@ -19,6 +19,8 @@
     "remark-mdx-frontmatter": "^5.0.0",
     "renoun": "workspace:*",
     "restyle": "catalog:",
+    "shiki": "catalog:",
+    "ts-morph": "^24.0.0",
     "webpack": "catalog:"
   }
 }

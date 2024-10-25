@@ -40,8 +40,12 @@ import { Collection } from 'renoun/collections'
 
 const posts = new Collection({ filePattern: 'posts/*.mdx' })
 
-export default async function Page({ params }: { params: { slug: string } }) {
-  const post = await posts.getSource(params.slug)
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}) {
+  const post = await posts.getSource((await params).slug)
 
   if (!post) {
     return <div>Post not found</div>
@@ -109,8 +113,12 @@ import { APIReference } from 'renoun/components'
 
 const components = new Collection({ filePattern: 'components/*.tsx' })
 
-export default async function Page({ params }: { params: { slug: string } }) {
-  const component = await components.getSource(params.slug)
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}) {
+  const component = await components.getSource((await params).slug)
 
   if (!component) {
     return <div>Component not found</div>
@@ -128,8 +136,12 @@ import { APIReference } from 'renoun/components'
 
 const components = new Collection({ filePattern: 'components/*.tsx' })
 
-export default async function Page({ params }: { params: { slug: string } }) {
-  const component = await components.getSource(params.slug)
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}) {
+  const component = await components.getSource((await params).slug)
 
   if (!component) {
     return <div>Component not found</div>

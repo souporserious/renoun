@@ -5,8 +5,12 @@ export async function generateStaticParams() {
   return sources.map((source) => ({ slug: source.getPathSegments().at(0) }))
 }
 
-export default async function Page({ params }: { params: { slug: string } }) {
-  const PostSource = PostsCollection.getSource(params.slug)
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}) {
+  const PostSource = await PostsCollection.getSource((await params).slug)
   const Content = await PostSource.getExport('default').getValue()
   const frontmatter = await PostSource.getExport('frontmatter').getValue()
   const formattedDate = new Intl.DateTimeFormat('en-US', {

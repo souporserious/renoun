@@ -27,23 +27,25 @@ const ComponentsReadmeCollection = new Collection<{ default: MDXContent }>(
 export default async function Component({
   params,
 }: {
-  params: { slug: string[] }
+  params: Promise<{ slug: string[] }>
 }) {
-  const componentsPathname = ['components', ...params.slug]
-  const componentSource = ComponentsCollection.getSource(componentsPathname)
+  const slug = (await params).slug
+  const componentsPathname = ['components', ...slug]
+  const componentSource =
+    await ComponentsCollection.getSource(componentsPathname)
 
   if (!componentSource) {
     notFound()
   }
 
-  const readmeSource = ComponentsReadmeCollection.getSource([
+  const readmeSource = await ComponentsReadmeCollection.getSource([
     ...componentsPathname,
     'readme',
   ])
   const Readme = await readmeSource?.getExport('default').getValue()
-  const examplesSource = componentSource.getSource('examples')
+  const examplesSource = await componentSource.getSource('examples')
   const examples = await examplesSource?.getSources()
-  const isExamplesPage = params.slug.at(-1) === 'examples'
+  const isExamplesPage = slug.at(-1) === 'examples'
   const updatedAt = await componentSource.getUpdatedAt()
   const editPath = componentSource.getEditPath()
   const [previousSource, nextSource] = await componentSource.getSiblings({

@@ -4,8 +4,8 @@ import remarkGfm from 'remark-gfm'
 import remarkSmartyPants from 'remark-smartypants'
 import remarkStripBadges from 'remark-strip-badges'
 import remarkSqueezeParagraphs from 'remark-squeeze-paragraphs'
-import remarkUnwrapImages from 'remark-unwrap-images'
 import rehypeInferReadingTimeMeta from 'rehype-infer-reading-time-meta'
+import rehypeUnwrapImages from 'rehype-unwrap-images'
 
 import { addCodeMetaProps } from './rehype/add-code-meta-props.js'
 import { addReadingTime } from './rehype/add-reading-time.js'
@@ -24,7 +24,6 @@ export const remarkPlugins = [
   [remarkSmartyPants, { dashes: 'oldschool' }] as any,
   remarkStripBadges,
   remarkSqueezeParagraphs,
-  remarkUnwrapImages,
   removeImmediateParagraphs,
   transformRelativeLinks,
   addHeadings,
@@ -32,6 +31,7 @@ export const remarkPlugins = [
 
 export const rehypePlugins = [
   rehypeInferReadingTimeMeta,
+  rehypeUnwrapImages,
   addReadingTime,
   addCodeMetaProps,
 ]

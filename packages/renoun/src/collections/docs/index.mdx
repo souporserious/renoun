@@ -141,8 +141,12 @@ We can now generate a page for individual posts using a `slug` parameter to retr
 ```tsx filename="posts/post.tsx"
 import { PostsCollection } from '../collections'
 
-export default async function Post({ params }: { params: { slug: string } }) {
-  const post = await PostsCollection.getSource(params.slug)
+export default async function Post({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}) {
+  const post = await PostsCollection.getSource((await params).slug)
 
   if (!post) {
     return <div>Post not found</div>
