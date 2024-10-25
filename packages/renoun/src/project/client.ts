@@ -37,59 +37,6 @@ function untilHighlighterLoaded(): Promise<void> {
 }
 
 /**
- * Get the order of source files in the project.
- * @internal
- */
-export async function getSourceFilesOrderMap(options: {
-  baseFilePattern: string
-  tsConfigFilePath: string
-}) {
-  if (client) {
-    return client.callMethod('getSourceFilesOrderMap', options)
-  }
-
-  const project = await getProject({
-    tsConfigFilePath: options.tsConfigFilePath,
-  })
-  const baseDirectory = project.getDirectoryOrThrow(options.baseFilePattern)
-
-  return import('../utils/get-source-files-order-map.js').then(
-    async ({ getSourceFilesOrderMap }) => {
-      return getSourceFilesOrderMap(baseDirectory)
-    }
-  )
-}
-
-/**
- * Get the path map based on the source files in the project.
- * @internal
- */
-export async function getSourceFilesPathMap(options: {
-  baseFilePattern: string
-  baseDirectory?: string
-  basePath?: string
-  tsConfigFilePath: string
-}) {
-  if (client) {
-    return client.callMethod('getSourceFilesPathMap', options)
-  }
-
-  const project = await getProject({
-    tsConfigFilePath: options.tsConfigFilePath,
-  })
-  const baseDirectory = project.getDirectoryOrThrow(options.baseFilePattern)
-
-  return import('../utils/get-source-files-path-map.js').then(
-    async ({ getSourceFilesPathMap }) => {
-      return getSourceFilesPathMap(baseDirectory, {
-        baseDirectory: options.baseDirectory,
-        basePath: options.basePath,
-      })
-    }
-  )
-}
-
-/**
  * Analyze source text and return highlighted tokens with diagnostics.
  * @internal
  */
