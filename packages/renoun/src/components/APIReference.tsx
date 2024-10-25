@@ -3,7 +3,11 @@
 import { Fragment, Suspense } from 'react'
 import type { CSSObject } from 'restyle'
 
-import { isFileSystemSource, type ExportSource } from '../collections/index.js'
+import {
+  isFileSystemSource,
+  type FileSystemSource,
+  type ExportSource,
+} from '../collections/index.js'
 import { getExportedTypes } from '../collections/project.js'
 import { createSlug } from '../utils/create-slug.js'
 import type {
@@ -32,7 +36,7 @@ interface SourceString {
 
 interface SourceExport {
   /** The export source from a collection export source to get types from. */
-  source: ExportSource<any>
+  source: FileSystemSource<any> | ExportSource<any>
 }
 
 interface Filter {
