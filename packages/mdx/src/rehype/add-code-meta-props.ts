@@ -3,7 +3,6 @@ import type { Element, Properties } from 'hast'
 import { toString } from 'hast-util-to-string'
 import { visit, SKIP } from 'unist-util-visit'
 import { bundledLanguagesInfo } from 'shiki'
-import { inspect } from 'util'
 
 interface CodeMetaElement extends Element {
   data?: {
