@@ -1,4 +1,4 @@
-import { CodeBlock, Tokens } from 'renoun/components'
+import { APIReference, CodeBlock, Tokens } from 'renoun/components'
 import { Collection, type ExportSource } from 'renoun/collections'
 import type { MDXContent } from 'renoun/mdx'
 import Link from 'next/link'
@@ -67,17 +67,8 @@ export default async function Component({
       </div>
 
       <div>
-        <h2 css={{ margin: '0 0 2rem' }}>Exports</h2>
-        {componentSource.getExports().map((exportSource) => (
-          <div key={exportSource.getName()}>
-            <h3>{exportSource.getName()}</h3>
-            <CodeBlock
-              allowErrors
-              value={exportSource.getText()}
-              language="tsx"
-            />
-          </div>
-        ))}
+        <h2>API Reference</h2>
+        <APIReference source={componentSource} />
       </div>
 
       {isExamplesPage || !examples ? null : (
