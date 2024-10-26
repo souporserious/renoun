@@ -33,7 +33,7 @@ After installing the package, you can follow the [getting started guide](https:/
 
 Collections are a way to organize and query file-system data in renoun. They are a powerful tool that allows you to define a schema for file exports and query those exports using a simple API.
 
-To get started with collections, instantiate the [`Collection`](https://www.renoun.dev/collections#collection) class to create a collection of files and directories from the file system:
+To get started with collections, instantiate the [`Collection`](https://www.renoun.dev/collections#collection) class to create a collection of files and directories from the file system. We can use the `getSource` method to query a specific file or directory:
 
 ```tsx
 import { Collection } from 'renoun/collections'
@@ -57,9 +57,41 @@ export default async function Page({
 }
 ```
 
-Collections are not limited to MDX files and can be used with _any file type_. By organizing content and source code into structured collections, we can easily generate static pages and manage complex routing and navigations.
+Next, we can generate an index page of links to all posts using the `getSources` method:
 
-For a more in-depth look at collections, visit the [collections](https://www.renoun.dev/collections) page.
+```tsx
+import { Collection } from 'renoun/collections'
+
+const posts = new Collection<{ frontmatter: { title: string } }>({
+  filePattern: 'posts/*.mdx',
+})
+
+export default async function Page() {
+  const allPosts = await posts.getSources({ depth: 1 })
+
+  return (
+    <>
+      <h1>Blog</h1>
+      <ul>
+        {allPosts.map(async (post) => {
+          const path = post.getPath()
+          const frontmatter = await post.getExport('frontmatter').getValue()
+
+          return (
+            <li key={path}>
+              <Link href={path}>{frontmatter.title}</Link>
+            </li>
+          )
+        })}
+      </ul>
+    </>
+  )
+}
+```
+
+We added module export types to the `Collection` to provide better intellisense, for example, when enabling [frontmatter](https://www.renoun.dev/guides/mdx#remark-frontmatter) from `renoun/mdx`. We can also provide [schema validation](https://www.renoun.dev/docs/getting-started#validating-exports) to ensure that modules export the correct shape.
+
+Collections are not limited to MDX files and can be used with _any file type_. By organizing content and source code into structured collections, we can easily generate static pages and manage complex routing and navigations. For a more in-depth look at collections, visit the [collections](https://www.renoun.dev/collections) guide.
 
 ### Components
 
