@@ -7,7 +7,7 @@ export async function getAbsoluteGlobPattern(
   filePattern: string,
   tsConfigFilePath: string
 ) {
-  const project = await getProject({ tsConfigFilePath })
+  const project = getProject({ tsConfigFilePath })
   const compilerOptions = project.getCompilerOptions()
   const tsConfigDirectory = tsConfigFilePath
     ? dirname(String(compilerOptions.configFilePath))

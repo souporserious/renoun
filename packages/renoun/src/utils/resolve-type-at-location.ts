@@ -1,7 +1,6 @@
 import type { Project } from 'ts-morph'
 import { statSync } from 'node:fs'
 
-import { waitForRefreshingProjects } from '../project/get-project.js'
 import {
   resolveType,
   type ResolvedType,
@@ -23,10 +22,15 @@ export async function resolveTypeAtLocation(
   position: number,
   filter?: SymbolFilter
 ) {
-  await waitForRefreshingProjects()
-
   const typeId = `${filePath}:${position}`
   const sourceFile = project.addSourceFileAtPath(filePath)
+
+  // TODO: there is a bug in the `getProject` watch implementation and the `waitForRefreshingProjects` utility
+  // that currently requires refreshing the file every time
+  if (process.env.NODE_ENV === 'development') {
+    await sourceFile.refreshFromFileSystem()
+  }
+
   const declaration = sourceFile.getDescendantAtPos(position)
 
   if (!declaration) {

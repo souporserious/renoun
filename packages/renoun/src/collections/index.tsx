@@ -12,6 +12,7 @@ import { dirname, resolve } from 'node:path'
 import globParent from 'glob-parent'
 import { minimatch } from 'minimatch'
 
+import { getProject } from '../project/get-project.js'
 import { createSlug } from '../utils/create-slug.js'
 import { extractExportByIdentifier } from '../utils/extract-export-by-identifier.js'
 import { filePathToPathname } from '../utils/file-path-to-pathname.js'
@@ -30,7 +31,6 @@ import { resolveTsConfigPath } from '../utils/resolve-ts-config-path.js'
 import type { SymbolFilter } from '../utils/resolve-type.js'
 import { getSourceFilesPathMap } from '../utils/get-source-files-path-map.js'
 import { getSourceFilesOrderMap } from '../utils/get-source-files-order-map.js'
-import { getProject } from './project.js'
 
 type GetImport = (slug: string) => Promise<any>
 
@@ -840,7 +840,7 @@ export class Collection<AllExports extends FileExports>
 
     this.options = options
     this._getImport = getImport!
-    this._project = getProject(options.tsConfigFilePath)
+    this._project = getProject({ tsConfigFilePath: options.tsConfigFilePath })
 
     const compilerOptions = this._project.getCompilerOptions()
     const tsConfigFilePath = String(compilerOptions.configFilePath)

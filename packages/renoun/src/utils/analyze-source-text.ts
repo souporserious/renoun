@@ -1,3 +1,4 @@
+import { waitForRefreshingProjects } from '../project/refresh.js'
 import { getTokens } from './get-tokens.js'
 import type { createHighlighter } from './create-highlighter.js'
 import type { ParseMetadataOptions } from './parse-source-text-metadata.js'
@@ -28,6 +29,8 @@ export async function analyzeSourceText({
   highlighter,
   ...options
 }: AnalyzeSourceTextOptions): Promise<AnalyzeSourceTextResult> {
+  await waitForRefreshingProjects()
+
   const metadata = await parseSourceTextMetadata({
     project,
     filename,

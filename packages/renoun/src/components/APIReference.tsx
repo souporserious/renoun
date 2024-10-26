@@ -8,7 +8,7 @@ import {
   type FileSystemSource,
   type ExportSource,
 } from '../collections/index.js'
-import { getExportedTypes } from '../collections/project.js'
+import { getExportedTypes } from '../collections/get-exported-types.js'
 import { createSlug } from '../utils/create-slug.js'
 import type {
   AllTypes,

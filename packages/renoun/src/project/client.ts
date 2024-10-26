@@ -12,6 +12,7 @@ import type { SymbolFilter } from '../utils/resolve-type.js'
 import type { DistributiveOmit } from '../types.js'
 import { WebSocketClient } from './rpc/client.js'
 import { getProject } from './get-project.js'
+import { waitForRefreshingProjects } from './refresh.js'
 import type { ProjectOptions } from './types.js'
 
 let client: WebSocketClient | undefined
@@ -51,7 +52,7 @@ export async function analyzeSourceText(
 
   /* Switch to synchronous analysis when building for production to prevent timeouts. */
   const { projectOptions, ...analyzeOptions } = options
-  const project = await getProject(projectOptions)
+  const project = getProject(projectOptions)
 
   await untilHighlighterLoaded()
 
@@ -85,6 +86,8 @@ export async function resolveType({
   projectOptions?: ProjectOptions
   filter?: SymbolFilter
 }) {
+  await waitForRefreshingProjects()
+
   const filePath = declaration.getSourceFile().getFilePath()
   const position = declaration.getPos()
 
@@ -99,7 +102,7 @@ export async function resolveType({
 
   return import('../utils/resolve-type-at-location.js').then(
     async ({ resolveTypeAtLocation }) => {
-      const project = await getProject(projectOptions)
+      const project = getProject(projectOptions)
       return resolveTypeAtLocation(project, filePath, position, filter)
     }
   )

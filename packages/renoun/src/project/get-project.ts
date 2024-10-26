@@ -1,8 +1,12 @@
-import type { Project, FileSystemRefreshResult } from 'ts-morph'
-import { EventEmitter } from 'node:events'
+import { Project, ts } from 'ts-morph'
 import { join, dirname, extname, resolve } from 'node:path'
 import { existsSync, watch, statSync } from 'node:fs'
 
+import {
+  activeRefreshingProjects,
+  completeRefreshingProjects,
+  startRefreshingProjects,
+} from './refresh.js'
 import { resolvedTypeCache } from '../utils/resolve-type-at-location.js'
 import { ProjectOptions } from './types.js'
 
@@ -19,14 +23,13 @@ const DEFAULT_IGNORED_PATHS = [
 ]
 
 /** Get the project associated with the provided options. */
-export async function getProject(options?: ProjectOptions) {
+export function getProject(options?: ProjectOptions) {
   const projectId = JSON.stringify(options)
 
   if (projects.has(projectId)) {
     return projects.get(projectId)!
   }
 
-  const { Project, ts } = await import('ts-morph')
   const project = new Project({
     compilerOptions: {
       allowJs: true,
@@ -94,15 +97,16 @@ export async function getProject(options?: ProjectOptions) {
 
               startRefreshingProjects()
 
-              const promise = previousSourceFile.refreshFromFileSystem()
-              activeRefreshingProjects.add(promise)
+              const promise = previousSourceFile
+                .refreshFromFileSystem()
+                .finally(() => {
+                  activeRefreshingProjects.delete(promise)
+                  if (activeRefreshingProjects.size === 0) {
+                    completeRefreshingProjects()
+                  }
+                })
 
-              promise.finally(() => {
-                activeRefreshingProjects.delete(promise)
-                if (activeRefreshingProjects.size === 0) {
-                  completeRefreshingProjects()
-                }
-              })
+              activeRefreshingProjects.add(promise)
             } else {
               project.addSourceFileAtPath(filePath)
             }
@@ -122,43 +126,4 @@ export async function getProject(options?: ProjectOptions) {
   projects.set(projectId, project)
 
   return project
-}
-
-const REFRESHING_STARTED = 'refreshing:started'
-const REFRESHING_COMPLETED = 'refreshing:completed'
-const emitter = new EventEmitter()
-const activeRefreshingProjects = new Set<Promise<FileSystemRefreshResult>>()
-let isRefreshingProjects = false
-
-/** Mark the start of the refreshing process and emit an event. */
-function startRefreshingProjects() {
-  if (!isRefreshingProjects) {
-    isRefreshingProjects = true
-    emitter.emit(REFRESHING_STARTED)
-  }
-}
-
-/** Mark the completion of the refreshing process and emit an event. */
-function completeRefreshingProjects() {
-  if (isRefreshingProjects && activeRefreshingProjects.size === 0) {
-    isRefreshingProjects = false
-    emitter.emit(REFRESHING_COMPLETED)
-  }
-}
-
-/** Emit an event when all projects have finished refreshing. */
-export async function waitForRefreshingProjects() {
-  if (!isRefreshingProjects) return
-
-  return new Promise<void>((resolve) => {
-    const timeoutId = setTimeout(() => {
-      emitter.removeAllListeners(REFRESHING_COMPLETED)
-      resolve()
-    }, 10000)
-
-    emitter.once(REFRESHING_COMPLETED, () => {
-      clearTimeout(timeoutId)
-      resolve()
-    })
-  })
 }

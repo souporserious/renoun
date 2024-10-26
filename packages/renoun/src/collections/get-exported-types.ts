@@ -1,24 +1,8 @@
-import type { Project } from 'ts-morph'
-import tsMorph from 'ts-morph'
 import { resolve } from 'node:path'
 
 import { resolveType } from '../project/client.js'
+import { getProject } from '../project/get-project.js'
 import type { SymbolFilter } from '../utils/resolve-type.js'
-
-const projectCache = new Map<string, Project>()
-
-export function getProject(
-  tsConfigFilePath: string = 'tsconfig.json'
-): Project {
-  if (!projectCache.has(tsConfigFilePath)) {
-    const project = new tsMorph.Project({
-      skipAddingFilesFromTsConfig: true,
-      tsConfigFilePath,
-    })
-    projectCache.set(tsConfigFilePath, project)
-  }
-  return projectCache.get(tsConfigFilePath)!
-}
 
 export async function getExportedTypes(
   filePath: string,
@@ -26,7 +10,7 @@ export async function getExportedTypes(
   workingDirectory: string = process.cwd(),
   tsConfigFilePath: string = 'tsconfig.json'
 ) {
-  const project = getProject(tsConfigFilePath)
+  const project = getProject({ tsConfigFilePath })
 
   try {
     const resolvedFilePath = resolve(workingDirectory, filePath)
