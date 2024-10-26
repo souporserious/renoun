@@ -1099,7 +1099,9 @@ You can fix this error by ensuring the following:
       )
     }
 
-    const compositeCollection = arguments[1] as CompositeCollection<any>
+    const compositeCollection = arguments[1] as
+      | CompositeCollection<any>
+      | undefined
     const sources = await this._getFileSystemSources(compositeCollection)
     const minDepth = this.getDepth()
     const maxDepth = depth === Infinity ? Infinity : minDepth + depth
