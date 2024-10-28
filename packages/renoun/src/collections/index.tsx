@@ -1061,10 +1061,6 @@ You can fix this error by ensuring the following:
     const compositeCollection = arguments[1] as CompositeCollection<any>
     let pathString = Array.isArray(path) ? path.join('/') : path
 
-    if (this.#sources.has(pathString)) {
-      return this.#sources.get(pathString)
-    }
-
     // ensure the path starts with a slash
     if (!pathString.startsWith('/')) {
       pathString = `/${pathString}`
@@ -1075,6 +1071,10 @@ You can fix this error by ensuring the following:
       if (!pathString.startsWith(`/${this.options.basePath}`)) {
         pathString = `/${this.options.basePath}${pathString}`
       }
+    }
+
+    if (this.#sources.has(pathString)) {
+      return this.#sources.get(pathString)
     }
 
     let sourceFileOrDirectory = this._fileSystemSources.find((source) => {
@@ -1118,16 +1118,15 @@ You can fix this error by ensuring the following:
     const seenPaths = new Set<string>()
 
     return sources.filter((source) => {
+      // Account for files that have the same base name but different suffixes/extensions e.g. Button.tsx, Button.test.tsx
       const sourcePath = source.getPath()
       if (seenPaths.has(sourcePath)) {
         return false
       }
       seenPaths.add(sourcePath)
 
-      if (source) {
-        const descendantDepth = source.getDepth()
-        return descendantDepth > minDepth && descendantDepth <= maxDepth
-      }
+      const descendantDepth = source.getDepth()
+      return descendantDepth >= minDepth && descendantDepth <= maxDepth
     }) as FileSystemSource<AllExports>[]
   }
 
