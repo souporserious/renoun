@@ -569,7 +569,7 @@ class Source<AllExports extends FileExports>
 
     if (!calculatedPath) {
       throw new Error(
-        `[renoun] Could not calculate depth. Source path not found for file path "${
+        `[renoun] Could not calculate path. Source path not found for file path "${
           this.#sourcePath
         }".`
       )
