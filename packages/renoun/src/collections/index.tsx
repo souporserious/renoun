@@ -192,8 +192,11 @@ export interface CollectionOptions<Exports extends FileExports> {
   filePattern: FilePatterns
 
   /**
-   * The base directory used when calculating source paths. This is useful in monorepos where
-   * source files can be located outside of the workspace.
+   * The base directory path to trim from calculated paths.
+   *
+   * The path must match a portion of the base directory structure of the targeted file pattern.
+   * For example, if the file pattern is `src/components/*.{ts,tsx}` and the
+   * `baseDirectory` is `src/components`, the path will only include the file name.
    */
   baseDirectory?: string
 
