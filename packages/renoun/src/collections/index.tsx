@@ -834,6 +834,16 @@ export class Collection<AllExports extends FileExports>
     options: CollectionOptions<AllExports>,
     getImport?: GetImport | GetImport[]
   ) {
+    // TODO: add better validation for options
+    if (
+      options.baseDirectory &&
+      !options.filePattern.startsWith(options.baseDirectory)
+    ) {
+      throw new Error(
+        `[renoun] The "baseDirectory" option "${options.baseDirectory}" must be included in the file pattern "${options.filePattern}".`
+      )
+    }
+
     if (options.tsConfigFilePath === undefined) {
       options.tsConfigFilePath = 'tsconfig.json'
     }
