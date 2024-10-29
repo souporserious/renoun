@@ -644,7 +644,24 @@ class Source<AllExports extends FileExports>
     return gitMetadata.authors
   }
 
-  getSource(path: string | string[] = 'index') {
+  async getSource(
+    path?: string | string[]
+  ): Promise<FileSystemSource<AllExports> | undefined> {
+    // try to get the source from index or readme file if it exists
+    if (path === undefined) {
+      const indexSource = this.getSource('index')
+      if (indexSource) {
+        return indexSource
+      }
+
+      const readmeSource = this.getSource('readme')
+      if (readmeSource) {
+        return readmeSource
+      }
+
+      return
+    }
+
     const currentPath = this.getPath()
     const fullPath = Array.isArray(path)
       ? `${currentPath}/${path.join('/')}`
@@ -665,7 +682,6 @@ class Source<AllExports extends FileExports>
     const maxDepth = depth === Infinity ? Infinity : currentDepth + depth
     const fileSystemSources = await this.collection._getFileSystemSources()
     const seenPaths = new Set<string>()
-    let previousDirectoryName: string
 
     return fileSystemSources.filter((source) => {
       // Account for index/readme files and files that have the same base name but different suffixes/extensions e.g. Button.tsx, Button.test.tsx
@@ -683,15 +699,6 @@ class Source<AllExports extends FileExports>
       }
 
       const descendantDepth = source.getDepth()
-
-      // Skip sources that are the same name as the previous directory name
-      if (source.getName() === previousDirectoryName) {
-        return false
-      }
-      if (source.isDirectory()) {
-        previousDirectoryName = source.getName()
-      }
-
       return descendantDepth > currentDepth && descendantDepth <= maxDepth
     }) as FileSystemSource<AllExports>[]
   }
@@ -788,7 +795,10 @@ You can fix this error by taking one of the following actions:
     let sourceFile: SourceFile
 
     if (this.sourceFileOrDirectory instanceof tsMorph.Directory) {
-      sourceFile = getDirectorySourceFile(this.sourceFileOrDirectory)!
+      sourceFile = getDirectorySourceFile(
+        this.sourceFileOrDirectory,
+        this.collection._validExtensions
+      )!
     } else {
       sourceFile = this.sourceFileOrDirectory
     }
@@ -1075,8 +1085,23 @@ export class Collection<AllExports extends FileExports>
   }
 
   async getSource(
-    path: string | string[] = 'index'
+    path?: string | string[]
   ): Promise<FileSystemSource<AllExports> | undefined> {
+    // try to get the source from index or readme file if it exists
+    if (path === undefined) {
+      const indexSource = this.getSource('index')
+      if (indexSource) {
+        return indexSource
+      }
+
+      const readmeSource = this.getSource('readme')
+      if (readmeSource) {
+        return readmeSource
+      }
+
+      return
+    }
+
     const compositeCollection = arguments[1] as CompositeCollection<any>
     let pathString = Array.isArray(path) ? path.join('/') : path
 
@@ -1096,11 +1121,24 @@ export class Collection<AllExports extends FileExports>
       return this.#sources.get(pathString)
     }
 
-    const sourceFileOrDirectory = this._fileSystemSources.find((source) => {
+    let sourceFileOrDirectory = this._fileSystemSources.find((source) => {
       const fileSystemSourcePath = getFileSystemSourcePath(source)
       const sourcePath = this._sourcePathMap.get(fileSystemSourcePath)
       return sourcePath === pathString
     })
+
+    // Attempt to find the directory's related source file if it exists
+    // index -> readme -> filename that matches directory name
+    if (sourceFileOrDirectory instanceof tsMorph.Directory) {
+      const directorySourceFile = getDirectorySourceFile(
+        sourceFileOrDirectory,
+        this._validExtensions
+      )
+
+      if (directorySourceFile) {
+        sourceFileOrDirectory = directorySourceFile
+      }
+    }
 
     if (!sourceFileOrDirectory) {
       return
@@ -1127,7 +1165,6 @@ export class Collection<AllExports extends FileExports>
     const minDepth = this.getDepth()
     const maxDepth = depth === Infinity ? Infinity : minDepth + depth
     const seenPaths = new Set<string>()
-    let previousDirectoryName: string
 
     return sources.filter((source) => {
       // Account for index/readme files and files that have the same base name but different members/extensions e.g. Button.tsx, Button.test.tsx
@@ -1136,14 +1173,6 @@ export class Collection<AllExports extends FileExports>
         return false
       }
       seenPaths.add(sourcePath)
-
-      // Skip sources that are the same name as the previous directory name
-      if (source.getName() === previousDirectoryName) {
-        return false
-      }
-      if (source.isDirectory()) {
-        previousDirectoryName = source.getName()
-      }
 
       const descendantDepth = source.getDepth()
       return descendantDepth > minDepth && descendantDepth <= maxDepth

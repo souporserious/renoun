@@ -73,12 +73,11 @@ describe('collections', () => {
 
     async function buildTreeNavigation(source: FileSystemSource<any>) {
       const path = source.getPath()
+      const sources = await source.getSources({ depth: 1 })
 
-      if (source.isFile()) {
+      if (sources.length === 0) {
         return path
       }
-
-      const sources = await source.getSources({ depth: 1 })
 
       return {
         path,
@@ -106,10 +105,7 @@ describe('collections', () => {
         "/git-provider",
         "/mdx-components",
         "/mdx-content",
-        {
-          "children": [],
-          "path": "/package-install",
-        },
+        "/package-install",
         "/rendered-html",
       ]
     `)

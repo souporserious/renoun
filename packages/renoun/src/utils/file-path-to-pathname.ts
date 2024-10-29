@@ -52,6 +52,16 @@ export function filePathToPathname(
     segments.push(lastSegment)
   }
 
+  // Remove consecutive duplicate segments (e.g. "Button/Button.tsx")
+  if (segments.length > 1) {
+    segments = segments.reduce((result, segment) => {
+      if (result.at(-1) !== segment) {
+        result.push(segment)
+      }
+      return result
+    }, [] as string[])
+  }
+
   // Prepend the base pathname if defined
   if (basePathname) {
     segments.unshift(basePathname)

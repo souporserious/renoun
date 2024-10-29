@@ -5,7 +5,7 @@ import { filePathToPathname } from './file-path-to-pathname.js'
 
 const workingDirectory = '/Users/username/Code/renoun/site'
 
-describe('filePathToUrlPathname', () => {
+describe('filePathToPathname', () => {
   beforeEach(() => {
     vi.spyOn(process, 'cwd').mockReturnValue(workingDirectory)
   })
@@ -66,7 +66,7 @@ describe('filePathToUrlPathname', () => {
 
   test('handles the same directory and base name', () => {
     expect(filePathToPathname('src/components/Button/Button.tsx', 'src')).toBe(
-      '/components/button/button'
+      '/components/button'
     )
   })
 
@@ -140,7 +140,7 @@ describe('filePathToUrlPathname', () => {
   test('directory, file name, and file name member', () => {
     expect(
       filePathToPathname('src/components/Button/Button/examples', 'src')
-    ).toBe('/components/button/button/examples')
+    ).toBe('/components/button/examples')
 
     expect(
       filePathToPathname('src/components/Button/examples.tsx', 'src')
@@ -148,6 +148,6 @@ describe('filePathToUrlPathname', () => {
 
     expect(
       filePathToPathname('src/components/Button/Button.examples.tsx', 'src')
-    ).toBe('/components/button/button/examples')
+    ).toBe('/components/button/examples')
   })
 })
