@@ -1,11 +1,11 @@
 import { beforeEach, afterEach, describe, test, expect, vi } from 'vitest'
-import { resolve } from 'node:path'
+import { join } from 'node:path'
 
 import { filePathToPathname } from './file-path-to-pathname.js'
 
 const workingDirectory = '/Users/username/Code/renoun/site'
 
-describe('filePathToUrlPathname', () => {
+describe('filePathToPathname', () => {
   beforeEach(() => {
     vi.spyOn(process, 'cwd').mockReturnValue(workingDirectory)
   })
@@ -16,68 +16,52 @@ describe('filePathToUrlPathname', () => {
 
   test('converts a file system path to a URL-friendly pathname', () => {
     expect(
-      filePathToPathname(workingDirectory + '/src/components/Code.tsx', 'src')
+      filePathToPathname(
+        join(workingDirectory, 'src/components/Code.tsx'),
+        join(workingDirectory, 'src')
+      )
     ).toBe('/components/code')
   })
 
   test('removes sorting numbers', () => {
-    expect(filePathToPathname('docs/examples/02.authoring.mdx')).toBe(
-      '/docs/examples/authoring'
+    expect(
+      filePathToPathname(
+        join(workingDirectory, 'docs/examples/02.authoring.mdx'),
+        workingDirectory
+      )
+    ).toBe('/docs/examples/authoring')
+  })
+
+  test('directory index', () => {
+    expect(
+      filePathToPathname('src/collections/index.tsx', 'src/collections')
+    ).toBe('/index')
+  })
+
+  test('uses base pathname', () => {
+    expect(filePathToPathname('src/index.tsx', 'src', 'components')).toBe(
+      '/components/index'
     )
   })
 
-  test('uses package name for index', () => {
-    expect(
-      filePathToPathname(
-        workingDirectory + '/src/index.ts',
-        'src',
-        undefined,
-        'renoun'
-      )
-    ).toBe('/renoun')
-
-    expect(filePathToPathname('src/utils/index.js', 'utils')).toBe('/utils')
-  })
-
-  test('uses base pathname for index', () => {
-    expect(
-      filePathToPathname(
-        workingDirectory + '/src/index.tsx',
-        'src',
-        'components'
-      )
-    ).toBe('/components')
-  })
-
-  test('uses base directory for index', () => {
-    expect(
-      filePathToPathname(
-        workingDirectory + '/src/components/index.tsx',
-        'components'
-      )
-    ).toBe('/components')
-
-    expect(filePathToPathname('src/utils/index.js', 'utils')).toBe('/utils')
-  })
-
-  test('uses directory for readme', () => {
-    expect(filePathToPathname('renoun/src/components/readme.md')).toBe(
-      '/renoun/src/components'
+  test('trims base directory', () => {
+    expect(filePathToPathname('src/components/index.tsx', 'src')).toBe(
+      '/components/index'
     )
 
-    expect(
-      filePathToPathname(
-        workingDirectory + '/src/README.mdx',
-        'src',
-        'packages'
-      )
-    ).toBe('/packages')
+    expect(filePathToPathname('src/utils/index.js', 'src')).toBe('/utils/index')
   })
 
   test('accounts for base directory', () => {
-    expect(filePathToPathname('../../src/components/index.tsx', 'src')).toBe(
-      '/components'
-    )
+    expect(
+      filePathToPathname('../../src/components/index.tsx', '../../src')
+    ).toBe('/components/index')
+  })
+
+  test('errors for bad base directory', () => {
+    expect(() => {
+      filePathToPathname('src/components/index.ts', 'src/utils')
+    }).toThrowError()
   })
 
   test('handles the same directory and base name', () => {
@@ -89,10 +73,10 @@ describe('filePathToUrlPathname', () => {
   test('normalizes relative paths', () => {
     expect(
       filePathToPathname(
-        resolve(workingDirectory, '../packages/renoun/src/components/index.ts'),
-        '../packages/renoun/src'
+        join(workingDirectory, '../packages/renoun/src/components/index.ts'),
+        join(workingDirectory, '../packages/renoun/src')
       )
-    ).toBe('/components')
+    ).toBe('/components/index')
   })
 
   test('handles upper case filenames', () => {
@@ -139,25 +123,12 @@ describe('filePathToUrlPathname', () => {
 
   test('replaces base directory with base pathname', () => {
     expect(
-      filePathToPathname('/src/posts/getting-started.mdx', 'posts', 'blog')
+      filePathToPathname('/src/posts/getting-started.mdx', '/src/posts', 'blog')
     ).toBe('/blog/getting-started')
   })
 
   test('removes working directory', () => {
-    expect(filePathToPathname(workingDirectory + '/src/hooks/index.tsx')).toBe(
-      '/src/hooks'
-    )
-  })
-
-  test('handles base directory, base pathname, and package name', () => {
-    expect(
-      filePathToPathname(
-        resolve(workingDirectory, '../packages/renoun/src/index.ts'),
-        '../packages/renoun/src',
-        'packages',
-        'renoun'
-      )
-    ).toBe('/packages/renoun')
+    expect(filePathToPathname('/src/hooks/index.tsx')).toBe('/src/hooks/index')
   })
 
   test('file name member', () => {

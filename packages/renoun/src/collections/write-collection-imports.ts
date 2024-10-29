@@ -2,10 +2,10 @@ import type {
   Project,
   ObjectLiteralExpression,
   ArrowFunction,
-  StringLiteral,
   SourceFile,
 } from 'ts-morph'
 import tsMorph from 'ts-morph'
+import { join } from 'node:path'
 
 import { formatSourceText } from '../utils/format-source-text.js'
 import {
@@ -40,31 +40,6 @@ export async function writeCollectionImports(filename?: string) {
   }
 
   const collectionExpressions = getCollectionCallExpressions(project)
-
-  // Update old collections API if it is being used
-  collectionExpressions.forEach((callExpression) => {
-    const args = callExpression.getArguments()
-    const optionsArgument = args.at(0) as ObjectLiteralExpression
-
-    if (tsMorph.Node.isStringLiteral(optionsArgument)) {
-      const filePatternArgument = optionsArgument as StringLiteral
-      const filePattern = filePatternArgument.getLiteralValue()
-
-      if (args.length <= 1) {
-        optionsArgument.replaceWithText(`{ filePattern: '${filePattern}' }`)
-      } else {
-        const optionsArgument = args.at(1) as ObjectLiteralExpression
-
-        optionsArgument.insertPropertyAssignment(0, {
-          name: 'filePattern',
-          initializer: `'${filePattern}'`,
-        })
-
-        callExpression.removeArgument(filePatternArgument)
-      }
-    }
-  })
-
   const sourceFilesToFormat = new Set<SourceFile>()
   const collections = (
     await Promise.all(
@@ -86,8 +61,11 @@ export async function writeCollectionImports(filename?: string) {
         const workingDirectory = callExpression
           .getSourceFile()
           .getDirectoryPath()
+        const parsedFilePattern = options.baseDirectory
+          ? join(options.baseDirectory, options.filePattern)
+          : options.filePattern
         const dynamicImportString = await getDynamicImportString(
-          options.filePattern,
+          parsedFilePattern,
           options?.tsConfigFilePath,
           workingDirectory
         )

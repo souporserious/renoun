@@ -15,10 +15,7 @@ import { TableOfContents } from '@/components/TableOfContents'
 
 export async function generateStaticParams() {
   const sources = await ComponentsCollection.getSources()
-
-  return sources
-    .filter((source) => source.isFile())
-    .map((source) => ({ slug: source.getPathSegments() }))
+  return sources.map((source) => ({ slug: source.getPathSegments() }))
 }
 
 export default async function Component({

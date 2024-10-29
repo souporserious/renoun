@@ -67,6 +67,15 @@ async function APIReferenceAsync({
 
     if (typeof source === 'string') {
       filePath = source
+    } else if (source.isDirectory()) {
+      const indexSource = await source.getSource('index')
+      if (indexSource) {
+        filePath = indexSource.getFileSystemPath()
+      } else {
+        throw new Error(
+          `[renoun] The source "${source.getFileSystemPath()}" does not have an associated index file.`
+        )
+      }
     } else {
       filePath = source.getFileSystemPath()
     }

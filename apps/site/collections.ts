@@ -24,7 +24,7 @@ export type DocsSource = FileSystemSource<DocsSchema>
 
 export const DocsCollection = new Collection<DocsSchema>(
   {
-    filePattern: 'docs/**/*.mdx',
+    filePattern: '**/*.mdx',
     baseDirectory: 'docs',
     basePath: 'docs',
   },
@@ -33,7 +33,7 @@ export const DocsCollection = new Collection<DocsSchema>(
 
 export const GuidesCollection = new Collection<DocsSchema>(
   {
-    filePattern: 'guides/**/*.mdx',
+    filePattern: '**/*.mdx',
     baseDirectory: 'guides',
     basePath: 'guides',
   },
@@ -72,8 +72,8 @@ export type CollectionsSource = FileSystemSource<CollectionsSchema>
 
 export const CollectionsCollection = new Collection<CollectionsSchema>(
   {
-    filePattern: 'src/collections/*.tsx',
-    baseDirectory: 'collections',
+    filePattern: '*.tsx',
+    baseDirectory: 'src/collections',
     basePath: 'collections',
     filter: filterInternalSources,
     tsConfigFilePath: '../../packages/renoun/tsconfig.json',
@@ -94,7 +94,7 @@ type CollectionsDocsSchema = {
 
 export const CollectionsDocsCollection = new Collection<CollectionsDocsSchema>(
   {
-    filePattern: 'src/collections/docs/*.mdx',
+    filePattern: '*.mdx',
     baseDirectory: 'src/collections/docs',
     basePath: 'collections',
     schema: {
@@ -111,8 +111,8 @@ export type ComponentSource = FileSystemSource<ComponentSchema>
 
 export const ComponentsCollection = new Collection<ComponentSchema>(
   {
-    filePattern: 'src/components/**/*.{ts,tsx}',
-    baseDirectory: 'components',
+    filePattern: '**/*.{ts,tsx}',
+    baseDirectory: 'src/components',
     basePath: 'components',
     filter: filterInternalSources,
     tsConfigFilePath: '../../packages/renoun/tsconfig.json',
@@ -128,8 +128,8 @@ export const ComponentsMDXCollection = new Collection<{
   headings: Headings
 }>(
   {
-    filePattern: 'src/components/**/*.mdx',
-    baseDirectory: 'components',
+    filePattern: '**/*.mdx',
+    baseDirectory: 'src/components',
     basePath: 'components',
     tsConfigFilePath: '../../packages/renoun/tsconfig.json',
   },
