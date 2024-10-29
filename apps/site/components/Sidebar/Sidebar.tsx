@@ -17,15 +17,12 @@ async function TreeNavigation({
   source: FileSystemSource<any>
   variant?: 'name' | 'title'
 }) {
-  const mainSource = source.isDirectory()
-    ? await source.getSource('index')
-    : source
-  const metadata = mainSource
-    ? await mainSource.getExport('metadata').getValue()
-    : null
   const sources = await source.getSources({ depth: 1 })
   const depth = source.getDepth()
   const path = source.getPath()
+  const metadata = source.isDirectory()
+    ? null
+    : await source.getExport('metadata').getValue()
 
   if (sources.length === 0) {
     return (

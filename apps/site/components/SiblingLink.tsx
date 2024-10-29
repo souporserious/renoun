@@ -29,11 +29,7 @@ export async function SiblingLink({
   variant?: 'name' | 'title'
 }) {
   if (source.isDirectory()) {
-    source = (await source.getSource('index')) as FileSystemSource<any>
-
-    if (!source) {
-      return null
-    }
+    return null
   }
 
   const metadata = await source.getExport('metadata').getValue()
