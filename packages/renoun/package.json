@@ -55,6 +55,10 @@
     "./project": {
       "types": "./dist/project/client.d.ts",
       "import": "./dist/project/client.js"
+    },
+    "./server": {
+      "types": "./dist/project/server.d.ts",
+      "import": "./dist/project/server.js"
     }
   },
   "typesVersions": {
@@ -76,6 +80,9 @@
       ],
       "project": [
         "./dist/project/client.d.ts"
+      ],
+      "server": [
+        "./dist/project/server.d.ts"
       ]
     }
   },
