@@ -58,7 +58,7 @@ export default async function Page() {
         </div>
       </div>
 
-      <aside
+      <div
         css={{
           alignSelf: 'start',
           position: 'sticky',
@@ -83,7 +83,7 @@ export default async function Page() {
             })),
           ]}
         />
-      </aside>
+      </div>
     </>
   )
 }
