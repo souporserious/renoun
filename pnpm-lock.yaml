@@ -145,10 +145,10 @@ importers:
         version: 3.1.0(acorn@8.12.1)(webpack@5.95.0(esbuild@0.23.1))
       '@mdx-js/react':
         specifier: 'catalog:'
-        version: 3.1.0(@types/react@18.3.12)(react@18.3.1)
+        version: 3.1.0(@types/react@18.3.12)(react@19.0.0-rc-02c0e824-20241028)
       '@next/mdx':
         specifier: 'catalog:'
-        version: 15.0.1(@mdx-js/loader@3.1.0(acorn@8.12.1)(webpack@5.95.0(esbuild@0.23.1)))(@mdx-js/react@3.1.0(@types/react@18.3.12)(react@18.3.1))
+        version: 15.0.1(@mdx-js/loader@3.1.0(webpack@5.95.0(esbuild@0.23.1)))(@mdx-js/react@3.1.0(@types/react@18.3.12)(react@19.0.0-rc-02c0e824-20241028))
       '@types/react':
         specifier: 'catalog:'
         version: 18.3.12
@@ -156,14 +156,14 @@ importers:
         specifier: 'catalog:'
         version: 18.3.1
       next:
-        specifier: 14.2.13
-        version: 14.2.13(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        specifier: 'catalog:'
+        version: 15.0.2(react-dom@19.0.0-rc-02c0e824-20241028(react@19.0.0-rc-02c0e824-20241028))(react@19.0.0-rc-02c0e824-20241028)
       react:
-        specifier: 18.3.1
-        version: 18.3.1
+        specifier: 'catalog:'
+        version: 19.0.0-rc-02c0e824-20241028
       react-dom:
-        specifier: 18.3.1
-        version: 18.3.1(react@18.3.1)
+        specifier: 'catalog:'
+        version: 19.0.0-rc-02c0e824-20241028(react@19.0.0-rc-02c0e824-20241028)
       remark-frontmatter:
         specifier: ^5.0.0
         version: 5.0.0
@@ -175,7 +175,7 @@ importers:
         version: link:../../packages/renoun
       restyle:
         specifier: 'catalog:'
-        version: 2.4.0(react@18.3.1)
+        version: 2.4.0(react@19.0.0-rc-02c0e824-20241028)
       webpack:
         specifier: 'catalog:'
         version: 5.95.0(esbuild@0.23.1)

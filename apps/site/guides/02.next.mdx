@@ -6,7 +6,7 @@ export const metadata = {
   tags: ['next', 'next.js', 'framework'],
 }
 
-renoun enhances [Next.js](https://nextjs.org/) by providing features like [collections](/collections), [syntax highlighting](/components/code-block), and [type documentation](/components/api-reference), making it easier to create accurate and engaging content for blogs, documentation, and design systems.
+The renoun toolkit provides [collections](/collections), [syntax highlighting](/components/code-block), and [api references](/components/api-reference), making it easier to create accurate and engaging content for blogs, documentation, and design systems powered by Next.js.
 
 ## Install
 
@@ -33,14 +33,13 @@ Modify the `next` scripts located in the project's `package.json` file to use th
 
 This command is necessary to enable renoun features in your Next.js project.
 The `renoun` CLI starts a WebSocket server that communicates with components
-and utilities in your project to provide performant syntax highlighting and
-code analysis.
+and utilities in your project to provide accurate and performant code analysis and syntax highlighting.
 
 </Note>
 
 ## MDX (Optional)
 
-To enable writing MDX content in your Next.js application, we will use the `@next/mdx` package. This package allows you to author MDX content in your Next.js project. Additionally, you can use the pre-configured `remarkPlugins` and `rehypePlugins` from `renoun/mdx`.
+To enable writing MDX content in your Next.js application, we will use the [`@next/mdx`](https://github.com/vercel/next.js/tree/canary/packages/next-mdx) package. This package allows you to author MDX content in your Next.js project. Additionally, you can use the pre-configured `remarkPlugins` and `rehypePlugins` from `renoun/mdx`.
 
 <Note>
 
@@ -52,16 +51,13 @@ want to configure your own MDX plugins.
 
 First, install the Next.js MDX plugin:
 
-```bash
-npm install @next/mdx
-```
+<PackageInstall packages={['@next/mdx']} />
 
-Now, add the plugin to your `next.config.js` file while optionally including the pre-configured `remarkPlugins` and `rehypePlugins` from `renoun/mdx`:
+Now, add the plugin to your `next.config` file while optionally including the pre-configured `remarkPlugins` and `rehypePlugins` from `renoun/mdx`:
 
 ```js
 import createMDXPlugin from '@next/mdx'
 import { remarkPlugins, rehypePlugins } from 'renoun/mdx'
-import webpack from 'webpack'
 
 const withMDX = createMDXPlugin({
   extension: /\.mdx?$/,
@@ -73,49 +69,6 @@ const withMDX = createMDXPlugin({
 
 export default withMDX({
   pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
-})
-```
-
-## Webpack Configuration
-
-Finally, we need to configure Webpack and alias `js` files since `renoun` is an ESM package and will otherwise error. We also need to silence critical dependency warnings for `@ts-morph/common` as these come from the `ts-morph` package `renoun` depends on. This is necessary to prevent warnings from appearing in the console:
-
-```js
-import createMDXPlugin from '@next/mdx'
-import { remarkPlugins, rehypePlugins } from 'renoun/mdx'
-import webpack from 'webpack'
-
-const withMDX = createMDXPlugin({
-  extension: /\.mdx?$/,
-  options: {
-    remarkPlugins,
-    rehypePlugins,
-  },
-})
-
-export default withMDX({
-  output: 'export',
-  pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
-  webpack(config) {
-    /* Resolve .js files to .ts and .tsx */
-    config.resolve.extensionAlias = {
-      '.js': ['.ts', '.tsx', '.js'],
-    }
-
-    /* Silence critical dependency warnings for @ts-morph/common */
-    config.plugins.push(
-      new webpack.ContextReplacementPlugin(
-        /\/(@ts-morph\/common)\//,
-        (data) => {
-          for (const dependency of data.dependencies) {
-            delete dependency.critical
-          }
-          return data
-        }
-      )
-    )
-    return config
-  },
 })
 ```
 
@@ -157,6 +110,12 @@ const posts = new Collection<{
   filePattern: 'posts/*.mdx',
 })
 ```
+
+<Note>
+
+`MDXContent` is a type exported from `renoun/mdx` that represents the default export of an MDX file. This type is used to ensure that the default export of each MDX file in the collection is an MDX component. It is different from the [`MDXContent`](/components/mdx-content) component.
+
+</Note>
 
 Finally, we can use this collection to render the contents of our MDX files:
 
