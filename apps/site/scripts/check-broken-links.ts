@@ -153,6 +153,17 @@ function checkLink(link: Link): Promise<void> {
   const { url, originUrl, html } = link
 
   if (checkedLinks.has(url)) {
+    const brokenLink = brokenLinks.find((link) => link.url === url)
+
+    if (brokenLink) {
+      brokenLinks.push({
+        url,
+        originUrl,
+        html,
+        status: brokenLink.status,
+      })
+    }
+
     return Promise.resolve()
   }
   checkedLinks.add(url)
