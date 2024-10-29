@@ -39,42 +39,36 @@ export default function RootLayout({
 }
 
 const tableOfContentsActiveState = `
-window.previousActiveSectionId = null;
-
+const getVisibilityRatio = (element) => {
+  const rect = element.getBoundingClientRect();
+  const scrollTop = window.scrollY;
+  const scrollBottom = scrollTop + window.innerHeight;
+  const top = scrollTop + rect.top;
+  const bottom = scrollTop + rect.bottom;
+  const visibleTop = Math.max(scrollTop, top);
+  const visibleBottom = Math.min(scrollBottom, bottom);
+  return Math.max(0, visibleBottom - visibleTop) / (bottom - top);
+};
+let previousActiveSectionId = null;
 window.isSectionLinkActive = function (id) {
-  const getVisibilityRatio = (element) => {
-    const rect = element.getBoundingClientRect();
-    const scrollTop = window.scrollY;
-    const scrollBottom = scrollTop + window.innerHeight;
-    const top = scrollTop + rect.top;
-    const bottom = scrollTop + rect.bottom;
-    const visibleTop = Math.max(scrollTop, top);
-    const visibleBottom = Math.min(scrollBottom, bottom);
-    return Math.max(0, visibleBottom - visibleTop) / (bottom - top);
-  };
-
   const section = document.getElementById(id);
+  if (!section) return;
   const currentVisibility = getVisibilityRatio(section);
-
   if (currentVisibility > 0) {
-    if (window.previousActiveSectionId) {
-      const previousSection = document.getElementById(window.previousActiveSectionId);
+    if (previousActiveSectionId) {
+      const previousSection = document.getElementById(previousActiveSectionId);
       const previousVisibility = getVisibilityRatio(previousSection);
-
       // Update active only if the current section is more visible
       if (currentVisibility <= previousVisibility) {
         return; // Keep the previous section active
       }
-
-      const previousActiveLink = document.querySelector(\`[href="#\${window.previousActiveSectionId}"]\`);
+      const previousActiveLink = document.querySelector(\`[href="#\${previousActiveSectionId}"]\`);
       if (previousActiveLink) {
         previousActiveLink.classList.remove("active");
       }
     }
-    // Update previousActiveSectionId and set current link as active
-    window.previousActiveSectionId = id;
+    previousActiveSectionId = id;
   }
-
   document.currentScript.parentElement.classList.toggle("active", currentVisibility > 0);
 };
 `
