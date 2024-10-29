@@ -2,7 +2,7 @@
   "private": true,
   "name": "@examples/design-system",
   "scripts": {
-    "dev": "renoun next dev",
+    "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start"
   },
