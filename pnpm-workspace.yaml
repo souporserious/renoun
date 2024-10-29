@@ -10,9 +10,9 @@ catalog:
   '@types/mdx': 2.0.13
   '@types/react': 18.3.12
   '@types/react-dom': 18.3.1
-  'next': 15.0.1
-  'react': 19.0.0-rc-69d4b800-20241021
-  'react-dom': 19.0.0-rc-69d4b800-20241021
+  'next': 14.2.16
+  'react': 18.2.0
+  'react-dom': 18.2.0
   'restyle': 2.4.0
   'shiki': 1.22.1
   'webpack': 5.95.0
