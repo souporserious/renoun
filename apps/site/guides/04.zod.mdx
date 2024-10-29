@@ -19,7 +19,8 @@ const frontmatterSchema = z.object({
 export const PostsCollection = new Collection<{
   default: MDXContent
   frontmatter: z.infer<typeof frontmatterSchema>
-}>('posts/.mdx', {
+}>({
+  filePattern: '*.mdx',
   baseDirectory: 'posts',
   schema: {
     frontmatter: frontmatterSchema.parse,
@@ -79,7 +80,8 @@ const frontmatterSchema = z.object({
 export const PostsCollection = new Collection<{
   default: MDXContent
   frontmatter: z.infer<typeof frontmatterSchema>
-}>('posts/.mdx', {
+}>({
+  filePattern: '*.mdx',
   baseDirectory: 'posts',
   schema: {
     frontmatter: frontmatterSchema.parse,

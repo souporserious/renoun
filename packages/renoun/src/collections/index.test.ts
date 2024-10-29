@@ -39,41 +39,46 @@ function filterInternalSources(
 describe('collections', () => {
   test('merges composite collection siblings', async () => {
     const CollectionsCollection = new Collection({
-      filePattern: 'src/collections/index.tsx',
-      baseDirectory: 'collections',
+      filePattern: 'collections/*.tsx',
+      baseDirectory: 'src',
+      filter: filterInternalSources,
     })
     const ComponentsCollection = new Collection<{
       [key: string]: ComponentType
     }>({
-      filePattern: 'src/components/**/*.{ts,tsx}',
-      baseDirectory: 'components',
+      filePattern: 'components/**/*.{ts,tsx}',
+      baseDirectory: 'src',
+      filter: filterInternalSources,
     })
     const AllCollections = new CompositeCollection(
       CollectionsCollection,
       ComponentsCollection
     )
-    const source = (await AllCollections.getSource('collections/index'))!
-    const [, nextSource] = await source.getSiblings()
+    const source = (await AllCollections.getSource(
+      'components'
+    )) as FileSystemSource<any>
+    const [previousSource] = await source.getSiblings()
 
-    expect(nextSource).toBeDefined()
+    expect(previousSource).toBeDefined()
   })
 
   test('generating tree navigation', async () => {
     const ComponentsCollection = new Collection<{
       [key: string]: ComponentType
     }>({
-      filePattern: 'src/components/**/*.{ts,tsx}',
-      baseDirectory: 'components',
+      filePattern: '**/*.{ts,tsx}',
+      baseDirectory: 'src/components',
       filter: filterInternalSources,
     })
 
     async function buildTreeNavigation(source: FileSystemSource<any>) {
-      const sources = await source.getSources({ depth: 1 })
       const path = source.getPath()
 
-      if (sources.length === 0) {
+      if (source.isFile()) {
         return path
       }
+
+      const sources = await source.getSources({ depth: 1 })
 
       return {
         path,
@@ -86,7 +91,6 @@ describe('collections', () => {
 
     expect(tree).toMatchInlineSnapshot(`
       [
-        "/components",
         "/api-reference",
         {
           "children": [
@@ -102,7 +106,10 @@ describe('collections', () => {
         "/git-provider",
         "/mdx-components",
         "/mdx-content",
-        "/package-install",
+        {
+          "children": [],
+          "path": "/package-install",
+        },
         "/rendered-html",
       ]
     `)

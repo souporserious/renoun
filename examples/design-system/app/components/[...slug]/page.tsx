@@ -9,17 +9,14 @@ import { Stack } from '@/components'
 
 export async function generateStaticParams() {
   const sources = await ComponentsCollection.getSources()
-
-  return sources
-    .filter((source) => source.isFile())
-    .map((source) => ({ slug: source.getPathSegments() }))
+  return sources.map((source) => ({ slug: source.getPathSegments() }))
 }
 
 const ComponentsReadmeCollection = new Collection<{ default: MDXContent }>(
   {
+    filePattern: '**/README.mdx',
     baseDirectory: 'components',
     basePath: 'components',
-    filePattern: '@/components/**/README.mdx',
   },
   (slug) => import(`../../../components/${slug}.mdx`)
 )
@@ -66,10 +63,12 @@ export default async function Component({
         {Readme ? <Readme /> : null}
       </div>
 
-      <div>
-        <h2>API Reference</h2>
-        <APIReference source={componentSource} />
-      </div>
+      {isExamplesPage ? null : (
+        <div>
+          <h2>API Reference</h2>
+          <APIReference source={componentSource} />
+        </div>
+      )}
 
       {isExamplesPage || !examples ? null : (
         <div>

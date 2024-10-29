@@ -19,7 +19,8 @@ const frontmatterSchema = v.object({
 export const PostsCollection = new Collection<{
   default: MDXContent
   frontmatter: v.InferInput<typeof frontmatterSchema>
-}>('posts/.mdx', {
+}>({
+  filePattern: '*.mdx',
   baseDirectory: 'posts',
   schema: {
     frontmatter: (value) => v.parse(frontmatterSchema, value),
@@ -79,7 +80,8 @@ const frontmatterSchema = v.object({
 export const PostsCollection = new Collection<{
   default: MDXContent
   frontmatter: v.InferInput<typeof frontmatterSchema>
-}>('posts/.mdx', {
+}>({
+  filePattern: '*.mdx',
   baseDirectory: 'posts',
   schema: {
     frontmatter: (value) => v.parse(frontmatterSchema, value),

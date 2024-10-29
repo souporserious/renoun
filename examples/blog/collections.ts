@@ -14,7 +14,7 @@ export const PostsCollection = new Collection<{
   frontmatter: z.infer<typeof frontmatterSchema>
 }>(
   {
-    filePattern: 'posts/*.mdx',
+    filePattern: '*.mdx',
     baseDirectory: 'posts',
     schema: {
       frontmatter: frontmatterSchema.parse,

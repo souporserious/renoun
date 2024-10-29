@@ -6,9 +6,9 @@ export type ComponentSource = FileSystemSource<ComponentSchema>
 
 export const ComponentsCollection = new Collection<ComponentSchema>(
   {
+    filePattern: '**/{index,*.examples,examples/*}.{ts,tsx}',
     baseDirectory: 'components',
     basePath: 'components',
-    filePattern: '@/components/**/{index,*.examples,examples/*}.{ts,tsx}',
   },
   [
     (slug) => import(`./components/${slug}.ts`),

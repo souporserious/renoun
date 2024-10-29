@@ -8,7 +8,7 @@ import type {
 } from 'ts-morph'
 import tsMorph from 'ts-morph'
 import { readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { dirname, resolve, join } from 'node:path'
 import globParent from 'glob-parent'
 import { minimatch } from 'minimatch'
 
@@ -371,7 +371,7 @@ class Export<Value, AllExports extends FileExports = FileExports>
 
     const filePath =
       process.env.NODE_ENV === 'development'
-        ? this.source._getSourceFile().getFilePath()
+        ? this.exportDeclaration.getSourceFile().getFilePath()
         : getDeclarationLocation(this.exportDeclaration).filePath
 
     return filePath
@@ -644,7 +644,7 @@ class Source<AllExports extends FileExports>
     return gitMetadata.authors
   }
 
-  getSource(path: string | string[]) {
+  getSource(path: string | string[] = 'index') {
     const currentPath = this.getPath()
     const fullPath = Array.isArray(path)
       ? `${currentPath}/${path.join('/')}`
@@ -663,18 +663,36 @@ class Source<AllExports extends FileExports>
     const currentPath = this.getPath()
     const currentDepth = this.getDepth()
     const maxDepth = depth === Infinity ? Infinity : currentDepth + depth
+    const fileSystemSources = await this.collection._getFileSystemSources()
+    const seenPaths = new Set<string>()
+    let previousDirectoryName: string
 
-    return (await this.collection._getFileSystemSources()).filter((source) => {
-      if (source) {
-        const descendantPath = source.getPath()
-        const descendantDepth = source.getDepth()
-
-        return (
-          descendantPath.startsWith(currentPath) &&
-          descendantDepth > currentDepth &&
-          descendantDepth <= maxDepth
-        )
+    return fileSystemSources.filter((source) => {
+      // Account for index/readme files and files that have the same base name but different suffixes/extensions e.g. Button.tsx, Button.test.tsx
+      const sourcePath = source.getPath()
+      if (seenPaths.has(sourcePath)) {
+        return false
       }
+      seenPaths.add(sourcePath)
+
+      const descendantPath = source.getPath()
+
+      // Skip sources that are not descendants
+      if (!descendantPath.startsWith(currentPath)) {
+        return
+      }
+
+      const descendantDepth = source.getDepth()
+
+      // Skip sources that are the same name as the previous directory name
+      if (source.getName() === previousDirectoryName) {
+        return false
+      }
+      if (source.isDirectory()) {
+        previousDirectoryName = source.getName()
+      }
+
+      return descendantDepth > currentDepth && descendantDepth <= maxDepth
     }) as FileSystemSource<AllExports>[]
   }
 
@@ -837,13 +855,15 @@ export class Collection<AllExports extends FileExports>
     options: CollectionOptions<AllExports>,
     getImport?: GetImport | GetImport[]
   ) {
-    // TODO: add better validation for options
-    if (
-      options.baseDirectory &&
-      !options.filePattern.startsWith(options.baseDirectory)
-    ) {
-      throw new Error(
-        `[renoun] The "baseDirectory" option "${options.baseDirectory}" must be included in the file pattern "${options.filePattern}".`
+    this.options = options
+
+    // Ensure the base directory is resolved relative to the tsconfig file path if provided.
+    if (options.baseDirectory) {
+      this.options.baseDirectory = resolve(
+        options.tsConfigFilePath
+          ? dirname(options.tsConfigFilePath)
+          : process.cwd(),
+        options.baseDirectory
       )
     }
 
@@ -851,7 +871,6 @@ export class Collection<AllExports extends FileExports>
       options.tsConfigFilePath = 'tsconfig.json'
     }
 
-    this.options = options
     this._getImport = getImport!
     this._project = getProject({ tsConfigFilePath: options.tsConfigFilePath })
 
@@ -865,17 +884,23 @@ export class Collection<AllExports extends FileExports>
         : {}
     this._tsConfigDirectory = tsConfigDirectory
 
-    const resolvedGlobPattern =
+    const filePatternWithBaseDirectory = this.options.baseDirectory
+      ? join(this.options.baseDirectory, options.filePattern)
+      : options.filePattern
+    const resolvedFilePattern = resolve(
+      tsConfigDirectory,
       compilerOptions.baseUrl && compilerOptions.paths
         ? resolveTsConfigPath(
             tsConfigFilePath,
             compilerOptions.baseUrl,
             compilerOptions.paths,
-            options.filePattern
+            filePatternWithBaseDirectory
           )
-        : options.filePattern
-    this._absoluteGlobPattern = resolve(tsConfigDirectory, resolvedGlobPattern)
-    this._absoluteBaseGlobPattern = globParent(this._absoluteGlobPattern)
+        : filePatternWithBaseDirectory
+    )
+
+    this._absoluteGlobPattern = resolvedFilePattern
+    this._absoluteBaseGlobPattern = globParent(resolvedFilePattern)
 
     const fileSystemSources = getSourceFilesAndDirectories(
       this._project,
@@ -898,11 +923,11 @@ export class Collection<AllExports extends FileExports>
       throw new Error(
         `[renoun] No source files or directories were found for the file pattern: ${options.filePattern}
 
-You can fix this error by ensuring the following:
-  
-  ${filePatternMessage}
-  - If using a relative path, ensure the "tsConfigFilePath" option is targeting the correct workspace.
-  - If you continue to see this error, please file an issue: https://github.com/souporserious/renoun/issues\n`
+    You can fix this error by ensuring the following:
+
+      ${filePatternMessage}
+      - If using a relative path, ensure the "tsConfigFilePath" option is targeting the correct workspace.
+      - If you continue to see this error, please file an issue: https://github.com/souporserious/renoun/issues\n`
       )
     }
 
@@ -921,12 +946,12 @@ You can fix this error by ensuring the following:
       )
     )
 
-    const baseDirectory = this._project.getDirectoryOrThrow(
+    const projectRootDirectory = this._project.getDirectoryOrThrow(
       this._absoluteBaseGlobPattern
     )
-    this._sourceFilesOrderMap = getSourceFilesOrderMap(baseDirectory)
-    this._sourcePathMap = getSourceFilesPathMap(baseDirectory, {
-      baseDirectory: options.baseDirectory,
+    this._sourceFilesOrderMap = getSourceFilesOrderMap(projectRootDirectory)
+    this._sourcePathMap = getSourceFilesPathMap(projectRootDirectory, {
+      baseDirectory: this.options.baseDirectory,
       basePath: options.basePath,
     })
   }
@@ -947,20 +972,11 @@ You can fix this error by ensuring the following:
 
   async _getFileSystemSources(compositeCollection?: CompositeCollection<any>) {
     const resolvedSources = await Promise.all(
-      this._fileSystemSources.map((fileSystemSource) => {
-        // Filter out directories that have an index or readme file
-        if (fileSystemSource instanceof tsMorph.Directory) {
-          const directorySourceFile = getDirectorySourceFile(fileSystemSource)
-
-          if (directorySourceFile) {
-            return
-          }
-        }
-
-        return this._getFileSystemSource(fileSystemSource, compositeCollection)
-      })
+      this._fileSystemSources.map((fileSystemSource) =>
+        this._getFileSystemSource(fileSystemSource, compositeCollection)
+      )
     )
-    const sources = resolvedSources.filter((source) => {
+    const filteredSources = resolvedSources.filter((source) => {
       if (source) {
         // filter based on ignored files in tsconfig
         if (this._tsConfig.exclude.length) {
@@ -990,7 +1006,7 @@ You can fix this error by ensuring the following:
     }) as FileSystemSource<AllExports>[]
 
     try {
-      const sourcesCount = sources.length
+      const sourcesCount = filteredSources.length
 
       for (let sourceIndex = 0; sourceIndex < sourcesCount - 1; sourceIndex++) {
         for (
@@ -998,13 +1014,13 @@ You can fix this error by ensuring the following:
           sourceCompareIndex < sourcesCount - 1 - sourceIndex;
           sourceCompareIndex++
         ) {
-          const aSource = sources[sourceCompareIndex]
-          const bSource = sources[sourceCompareIndex + 1]
+          const aSource = filteredSources[sourceCompareIndex]
+          const bSource = filteredSources[sourceCompareIndex + 1]
 
           if (this.options.sort) {
             if ((await this.options.sort(aSource, bSource)) > 0) {
-              sources[sourceCompareIndex] = bSource
-              sources[sourceCompareIndex + 1] = aSource
+              filteredSources[sourceCompareIndex] = bSource
+              filteredSources[sourceCompareIndex + 1] = aSource
             }
           } else {
             // sort by order if no sort function is provided
@@ -1012,8 +1028,8 @@ You can fix this error by ensuring the following:
             const bOrder = bSource.getOrder()
 
             if (aOrder.localeCompare(bOrder) > 0) {
-              sources[sourceCompareIndex] = bSource
-              sources[sourceCompareIndex + 1] = aSource
+              filteredSources[sourceCompareIndex] = bSource
+              filteredSources[sourceCompareIndex + 1] = aSource
             }
           }
         }
@@ -1030,7 +1046,7 @@ You can fix this error by ensuring the following:
       throw error
     }
 
-    return sources
+    return filteredSources
   }
 
   _getImportSlug(source: SourceFile | Directory) {
@@ -1080,22 +1096,14 @@ You can fix this error by ensuring the following:
       return this.#sources.get(pathString)
     }
 
-    let sourceFileOrDirectory = this._fileSystemSources.find((source) => {
+    const sourceFileOrDirectory = this._fileSystemSources.find((source) => {
       const fileSystemSourcePath = getFileSystemSourcePath(source)
       const sourcePath = this._sourcePathMap.get(fileSystemSourcePath)
       return sourcePath === pathString
     })
 
-    if (sourceFileOrDirectory instanceof tsMorph.Directory) {
-      const directorySourceFile = getDirectorySourceFile(sourceFileOrDirectory)
-
-      if (directorySourceFile) {
-        sourceFileOrDirectory = directorySourceFile
-      }
-    }
-
     if (!sourceFileOrDirectory) {
-      return undefined
+      return
     }
 
     const source = new Source(this, compositeCollection, sourceFileOrDirectory)
@@ -1119,17 +1127,26 @@ You can fix this error by ensuring the following:
     const minDepth = this.getDepth()
     const maxDepth = depth === Infinity ? Infinity : minDepth + depth
     const seenPaths = new Set<string>()
+    let previousDirectoryName: string
 
     return sources.filter((source) => {
-      // Account for files that have the same base name but different suffixes/extensions e.g. Button.tsx, Button.test.tsx
+      // Account for index/readme files and files that have the same base name but different members/extensions e.g. Button.tsx, Button.test.tsx
       const sourcePath = source.getPath()
       if (seenPaths.has(sourcePath)) {
         return false
       }
       seenPaths.add(sourcePath)
 
+      // Skip sources that are the same name as the previous directory name
+      if (source.getName() === previousDirectoryName) {
+        return false
+      }
+      if (source.isDirectory()) {
+        previousDirectoryName = source.getName()
+      }
+
       const descendantDepth = source.getDepth()
-      return descendantDepth >= minDepth && descendantDepth <= maxDepth
+      return descendantDepth > minDepth && descendantDepth <= maxDepth
     }) as FileSystemSource<AllExports>[]
   }
 

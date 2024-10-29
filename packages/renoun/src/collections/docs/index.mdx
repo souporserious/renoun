@@ -38,17 +38,32 @@ export const PostsCollection = new Collection(
 
 ## Configuring Collections
 
-You can specify a `baseDirectory` to trim the beginning of the generated path up to that point, and a `basePath` to define a prefix added to the generated path.
+You can specify a `baseDirectory` to trim the beginning of the generated source paths up to that point:
 
 ```ts filename="02.collections.ts"
 import { Collection } from 'renoun/collections'
 
 export const PostsCollection = new Collection({
-  filePattern: 'posts/*.mdx',
+  filePattern: '*.mdx',
+  baseDirectory: 'posts',
+})
+```
+
+In this example, the `PostsCollection` will target all MDX files within the `posts` directory and generate paths relative to the `posts` directory. This means a file system path like `posts/how-to-build-a-button-component.mdx` will be transformed into the URL path `/how-to-build-a-button-component`. Notice the `baseDirectory` is trimmed from the source path.
+
+If you want to customize the source path, you can set the `basePath` option which will prepend a path to the final generated path:
+
+```ts filename="03.collections.ts"
+import { Collection } from 'renoun/collections'
+
+export const PostsCollection = new Collection({
+  filePattern: '*.mdx',
   baseDirectory: 'posts',
   basePath: 'posts',
 })
 ```
+
+The `basePath` option is useful if you want to build custom index pages. Note, this option does not affect the query key used to [query sources](#querying-sources).
 
 ## Adding Types
 
@@ -69,7 +84,7 @@ interface PostsSchema {
 }
 
 export const PostsCollection = new Collection<PostsSchema>({
-  filePattern: 'posts/*.mdx',
+  filePattern: '*.mdx',
   baseDirectory: 'posts',
   basePath: 'posts',
 })
@@ -99,7 +114,7 @@ interface PostsSchema {
 }
 
 export const PostsCollection = new Collection<PostsSchema>({
-  filePattern: 'posts/*.mdx',
+  filePattern: '*.mdx',
   baseDirectory: 'posts',
   basePath: 'posts',
   schema: {
@@ -172,13 +187,13 @@ Let's say you have two collections, one for blog posts, and another for componen
 import { Collection, CompositeCollection } from 'renoun/collections'
 
 const PostsCollection = new Collection({
-  filePattern: 'posts/*.mdx',
+  filePattern: '*.mdx',
   baseDirectory: 'posts',
 })
 
 const ComponentsCollection = new Collection({
-  filePattern: 'src/components/**/*.{ts,tsx}',
-  baseDirectory: 'components',
+  filePattern: '**/*.{ts,tsx}',
+  baseDirectory: 'src/components',
 })
 
 const AllCollections = new CompositeCollection(

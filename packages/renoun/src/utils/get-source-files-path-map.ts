@@ -7,7 +7,6 @@ export function getSourceFilesPathMap(
   options?: {
     baseDirectory?: string
     basePath?: string
-    packageName?: string
   }
 ): Map<string, string> {
   const sourcePathMap = new Map<string, string>()
@@ -17,8 +16,7 @@ export function getSourceFilesPathMap(
     const directoryPathname = filePathToPathname(
       directoryPath,
       options?.baseDirectory,
-      options?.basePath,
-      options?.packageName
+      options?.basePath
     )
 
     sourcePathMap.set(directoryPath, directoryPathname)
@@ -26,22 +24,14 @@ export function getSourceFilesPathMap(
     const sourceFiles = directory.getSourceFiles()
 
     for (const sourceFile of sourceFiles) {
-      const sourceFilePath = sourceFile.getFilePath()
-      const pathname = filePathToPathname(
-        sourceFilePath,
+      const filePath = sourceFile.getFilePath()
+      const filePathname = filePathToPathname(
+        filePath,
         options?.baseDirectory,
-        options?.basePath,
-        options?.packageName
+        options?.basePath
       )
 
-      const baseName = sourceFile.getBaseNameWithoutExtension().toLowerCase()
-
-      // TODO: this can be removed once createSource is removed and filePathToPathname can be refactored
-      if (baseName === 'index' || baseName === 'readme') {
-        sourcePathMap.set(sourceFilePath, pathname + '/' + baseName)
-      } else {
-        sourcePathMap.set(sourceFilePath, pathname)
-      }
+      sourcePathMap.set(filePath, filePathname)
     }
 
     for (const subDirectory of directory.getDirectories()) {
