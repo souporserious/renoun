@@ -18,7 +18,7 @@ describe('filePathToUrlPathname', () => {
     expect(
       filePathToPathname(
         join(workingDirectory, 'src/components/Code.tsx'),
-        'src'
+        join(workingDirectory, 'src')
       )
     ).toBe('/components/code')
   })
@@ -26,131 +26,96 @@ describe('filePathToUrlPathname', () => {
   test('removes sorting numbers', () => {
     expect(
       filePathToPathname(
-        join(workingDirectory, 'docs/examples/02.authoring.mdx')
+        join(workingDirectory, 'docs/examples/02.authoring.mdx'),
+        workingDirectory
       )
     ).toBe('/docs/examples/authoring')
   })
 
   test('directory index', () => {
     expect(
-      filePathToPathname(
-        join(workingDirectory, 'src/collections/index.tsx'),
-        'src/collections'
-      )
+      filePathToPathname('src/collections/index.tsx', 'src/collections')
     ).toBe('/index')
   })
 
   test('uses base pathname', () => {
-    expect(
-      filePathToPathname(
-        join(workingDirectory, 'src/index.tsx'),
-        'src',
-        'components'
-      )
-    ).toBe('/components/index')
+    expect(filePathToPathname('src/index.tsx', 'src', 'components')).toBe(
+      '/components/index'
+    )
   })
 
   test('trims base directory', () => {
-    expect(
-      filePathToPathname(
-        join(workingDirectory, 'src/components/index.tsx'),
-        'src'
-      )
-    ).toBe('/components/index')
+    expect(filePathToPathname('src/components/index.tsx', 'src')).toBe(
+      '/components/index'
+    )
 
-    expect(
-      filePathToPathname(join(workingDirectory, 'src/utils/index.js'), 'src')
-    ).toBe('/utils/index')
+    expect(filePathToPathname('src/utils/index.js', 'src')).toBe('/utils/index')
   })
 
   test('accounts for base directory', () => {
     expect(
-      filePathToPathname(
-        join(workingDirectory, '../../src/components/index.tsx'),
-        '../../src'
-      )
+      filePathToPathname('../../src/components/index.tsx', '../../src')
     ).toBe('/components/index')
   })
 
   test('errors for bad base directory', () => {
     expect(() => {
-      filePathToPathname(
-        join(workingDirectory, 'src/components/index.ts'),
-        'src/utils'
-      )
+      filePathToPathname('src/components/index.ts', 'src/utils')
     }).toThrowError()
   })
 
   test('handles the same directory and base name', () => {
-    expect(
-      filePathToPathname(
-        join(workingDirectory, 'src/components/Button/Button.tsx'),
-        'src'
-      )
-    ).toBe('/components/button/button')
+    expect(filePathToPathname('src/components/Button/Button.tsx', 'src')).toBe(
+      '/components/button/button'
+    )
   })
 
   test('normalizes relative paths', () => {
     expect(
       filePathToPathname(
         join(workingDirectory, '../packages/renoun/src/components/index.ts'),
-        '../packages/renoun/src'
+        join(workingDirectory, '../packages/renoun/src')
       )
     ).toBe('/components/index')
   })
 
   test('handles upper case filenames', () => {
-    expect(
-      filePathToPathname(
-        join(workingDirectory, 'src/components/MDX.tsx'),
-        'src'
-      )
-    ).toBe('/components/mdx')
+    expect(filePathToPathname('src/components/MDX.tsx', 'src')).toBe(
+      '/components/mdx'
+    )
 
-    expect(
-      filePathToPathname(
-        join(workingDirectory, 'src/components/MDXProvider.tsx'),
-        'src'
-      )
-    ).toBe('/components/mdx-provider')
+    expect(filePathToPathname('src/components/MDXProvider.tsx', 'src')).toBe(
+      '/components/mdx-provider'
+    )
   })
 
   test('handles pascal case filenames', () => {
-    expect(
-      filePathToPathname(
-        join(workingDirectory, 'src/components/CodeBlock.tsx'),
-        'src'
-      )
-    ).toBe('/components/code-block')
+    expect(filePathToPathname('src/components/CodeBlock.tsx', 'src')).toBe(
+      '/components/code-block'
+    )
   })
 
   test('handles camel case filenames', () => {
-    expect(
-      filePathToPathname(join(workingDirectory, 'src/hooks/useHover.ts'), 'src')
-    ).toBe('/hooks/use-hover')
+    expect(filePathToPathname('src/hooks/useHover.ts', 'src')).toBe(
+      '/hooks/use-hover'
+    )
   })
 
   test('handles nested paths with the same name as base directory', () => {
     expect(
       filePathToPathname(
-        join(workingDirectory, 'content/content_1/section_1/01.page-1.mdx'),
+        'content/content_1/section_1/01.page-1.mdx',
         'content/'
       )
     ).toBe('/content-1/section-1/page-1')
 
     expect(
-      filePathToPathname(
-        join(workingDirectory, 'content/content_1/section_1/01.page-1.mdx'),
-        'content'
-      )
+      filePathToPathname('content/content_1/section_1/01.page-1.mdx', 'content')
     ).toBe('/content-1/section-1/page-1')
 
     expect(
       filePathToPathname(
-        join(
-          workingDirectory,
-          '/src/content/content_1/section_1/01.page-1.mdx'
-        ),
+        '/src/content/content_1/section_1/01.page-1.mdx',
         '/src/content'
       )
     ).toBe('/content-1/section-1/page-1')
@@ -158,49 +123,31 @@ describe('filePathToUrlPathname', () => {
 
   test('replaces base directory with base pathname', () => {
     expect(
-      filePathToPathname(
-        join(workingDirectory, '/src/posts/getting-started.mdx'),
-        '/src/posts',
-        'blog'
-      )
+      filePathToPathname('/src/posts/getting-started.mdx', '/src/posts', 'blog')
     ).toBe('/blog/getting-started')
   })
 
   test('removes working directory', () => {
-    expect(filePathToPathname(workingDirectory + '/src/hooks/index.tsx')).toBe(
-      '/src/hooks/index'
-    )
+    expect(filePathToPathname('/src/hooks/index.tsx')).toBe('/src/hooks/index')
   })
 
   test('file name member', () => {
-    expect(
-      filePathToPathname(
-        join(workingDirectory, 'src/components/Button.tests.tsx'),
-        'src'
-      )
-    ).toBe('/components/button/tests')
+    expect(filePathToPathname('src/components/Button.tests.tsx', 'src')).toBe(
+      '/components/button/tests'
+    )
   })
 
   test('directory, file name, and file name member', () => {
     expect(
-      filePathToPathname(
-        join(workingDirectory, 'src/components/Button/Button/examples'),
-        'src'
-      )
+      filePathToPathname('src/components/Button/Button/examples', 'src')
     ).toBe('/components/button/button/examples')
 
     expect(
-      filePathToPathname(
-        join(workingDirectory, 'src/components/Button/examples.tsx'),
-        'src'
-      )
+      filePathToPathname('src/components/Button/examples.tsx', 'src')
     ).toBe('/components/button/examples')
 
     expect(
-      filePathToPathname(
-        join(workingDirectory, 'src/components/Button/Button.examples.tsx'),
-        'src'
-      )
+      filePathToPathname('src/components/Button/Button.examples.tsx', 'src')
     ).toBe('/components/button/button/examples')
   })
 })
