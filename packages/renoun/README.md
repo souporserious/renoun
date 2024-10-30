@@ -79,7 +79,7 @@ export default async function Page() {
 
           return (
             <li key={path}>
-              <Link href={path}>{frontmatter.title}</Link>
+              <a href={path}>{frontmatter.title}</a>
             </li>
           )
         })}
