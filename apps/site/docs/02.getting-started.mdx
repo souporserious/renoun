@@ -58,7 +58,7 @@ const posts = new Collection<{
 })
 ```
 
-Finally, we can use this collection to render the contents of our MDX files:
+Now we can use this collection to render the contents of our MDX files:
 
 ```tsx
 import { Collection } from 'renoun/collections'
@@ -106,6 +106,43 @@ const posts = new Collection(
 ```
 
 </Note>
+
+### Generating Links
+
+A source's `getPath` method is used to generate a URL path for each source in the collection. For example, to generate a link to each post, you can map over the collection using `getSources` and use the `getPath` method on a source to generate a list of links:
+
+```tsx
+import { Collection } from 'renoun/collections'
+import type { MDXContent } from 'renoun/mdx'
+import Link from 'next/link'
+
+const posts = new Collection<{
+  default: MDXContent
+}>({
+  filePattern: 'posts/*.mdx',
+})
+
+export default async function Page() {
+  const allPosts = await posts.getSources({ depth: 1 })
+
+  return (
+    <>
+      <h1>Blog</h1>
+      <ul>
+        {allPosts.map(async (post) => {
+          const path = post.getPath()
+
+          return (
+            <li key={path}>
+              <Link href={path}>{post.getTitle()}</Link>
+            </li>
+          )
+        })}
+      </ul>
+    </>
+  )
+}
+```
 
 ## Authoring Content
 
@@ -192,4 +229,4 @@ Explore more [components](/components) to enhance your documentation.
 
 ## Conclusion
 
-By following this guide, you should now have a basic setup running renoun in your project. You can now start writing documentation and building your site with renoun's powerful toolkit.
+By following this guide, you should now have a basic setup running renoun in your Next.js project. You can now start writing content and documentation with renoun's powerful toolkit. If you have any questions or need further assistance, feel free to reach out on [Discord](https://discord.gg/7Mf4xEBYx9) or [GitHub](https://github.com/souporserious/renoun).
