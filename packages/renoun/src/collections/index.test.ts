@@ -49,6 +49,18 @@ describe('collections', () => {
     expect(file).toBeDefined()
   })
 
+  test('generating sibling navigation from file', async () => {
+    const ProjectCollection = new Collection({
+      fileExtensions: ['ts'],
+      baseDirectory: 'src/project',
+    })
+    const file = await ProjectCollection.getFile('server', 'ts')
+    const [previousEntry, nextEntry] = await file!.getSiblings()
+
+    expect(previousEntry?.getName()).toBe('rpc')
+    expect(nextEntry?.getName()).toBe('types')
+  })
+
   test('generating tree navigation', async () => {
     const ComponentsCollection = new Collection<{ ts: object; tsx: object }>({
       fileExtensions: ['ts', 'tsx'],

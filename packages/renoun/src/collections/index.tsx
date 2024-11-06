@@ -46,10 +46,12 @@ export type FileSystemEntry<FileExports extends object> =
 
 /** A file in the file system. */
 export class File {
+  #directory: Directory
   #filePath: string
   #baseDirectory?: string
 
-  constructor(filePath: string, baseDirectory?: string) {
+  constructor(directory: Directory, filePath: string, baseDirectory?: string) {
+    this.#directory = directory
     this.#filePath = filePath
     this.#baseDirectory = baseDirectory
   }
@@ -66,6 +68,18 @@ export class File {
     return this.#baseDirectory
       ? relative(this.#baseDirectory, this.#filePath)
       : this.#filePath
+  }
+
+  async getSiblings(): Promise<
+    [File | Directory | undefined, File | Directory | undefined]
+  > {
+    const entries = await this.#directory.getEntries()
+    const index = entries.findIndex((file) => file.getPath() === this.getPath())
+    const previousEntry = index > 0 ? entries[index - 1] : undefined
+    const nextEntry =
+      index < entries.length - 1 ? entries[index + 1] : undefined
+
+    return [previousEntry, nextEntry]
   }
 }
 
@@ -107,11 +121,12 @@ export class JavaScriptFile<FileExports extends ModuleExports> extends File {
   #getModule?: (path: string) => Promise<FileExports>
 
   constructor(
+    directory: Directory,
     basePath: string,
     baseDirectory?: string,
     getModule?: (path: string) => Promise<FileExports>
   ) {
-    super(basePath, baseDirectory)
+    super(directory, basePath, baseDirectory)
     this.#getModule = getModule
   }
 
@@ -241,19 +256,34 @@ export class Directory<
           ) {
             entries.push(
               new JavaScriptFile(
+                this,
                 entryPath,
                 this.#baseDirectory,
                 this.#getModule
               )
             )
           } else {
-            entries.push(new File(entryPath, this.#baseDirectory))
+            entries.push(new File(this, entryPath, this.#baseDirectory))
           }
         }
       }
     }
 
     return entries
+  }
+
+  async getSiblings(
+    entry: File | Directory
+  ): Promise<[File | Directory | undefined, File | Directory | undefined]> {
+    const entries = await this.getEntries()
+    const index = entries.findIndex(
+      (entryToCompare) => entryToCompare.getPath() === entry.getPath()
+    )
+    const previousEntry = index > 0 ? entries[index - 1] : undefined
+    const nextEntry =
+      index < entries.length - 1 ? entries[index + 1] : undefined
+
+    return [previousEntry, nextEntry]
   }
 
   getName() {
