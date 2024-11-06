@@ -21,6 +21,11 @@ describe('collections', () => {
       fileExtensions: ['ts'],
       baseDirectory: 'src',
     })
+    const directory = await ProjectCollection.getDirectory('project')
+
+    expect(directory).toBeInstanceOf(Directory)
+    expect(directory?.getName()).toBe('project')
+
     const file = await ProjectCollection.getFile('project/server', 'ts')
 
     expect(file).toBeInstanceOf(File)

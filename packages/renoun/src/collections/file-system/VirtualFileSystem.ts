@@ -11,19 +11,38 @@ export class VirtualFileSystem extends FileSystem {
 
   async readDirectory(path: string = '.'): Promise<DirectoryEntry[]> {
     const entries: DirectoryEntry[] = []
+    const directories = new Set<string>()
 
     for (const filePath of this.#files.keys()) {
       if (filePath.startsWith(path)) {
-        const relativePath = filePath.slice(path.length)
+        const relativePath = filePath.slice(path.length).replace(/^\//, '')
         const segments = relativePath.split('/').filter(Boolean)
-        const name = segments.at(-1)!
-        const isFile = this.#files.has(filePath)
+
+        // Store all directories in the path
+        let currentPath = path
+        for (let index = 0; index < segments.length - 1; index++) {
+          currentPath += `/${segments[index]}`
+          directories.add(currentPath)
+        }
 
         entries.push({
-          name,
-          isFile,
-          isDirectory: !isFile,
+          name: segments.at(-1)!,
+          isFile: true,
+          isDirectory: false,
           path: filePath,
+        })
+      }
+    }
+
+    for (const directoryPath of directories) {
+      if (!entries.some((entry) => entry.path === directoryPath)) {
+        const segments = directoryPath.split('/').filter(Boolean)
+
+        entries.push({
+          name: segments.at(-1)!,
+          isFile: false,
+          isDirectory: true,
+          path: directoryPath,
         })
       }
     }
