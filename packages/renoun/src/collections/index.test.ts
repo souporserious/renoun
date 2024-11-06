@@ -1,5 +1,6 @@
 import { describe, test, expect, expectTypeOf } from 'vitest'
 
+import { VirtualFileSystem } from './file-system/VirtualFileSystem'
 import {
   Collection,
   isFile,
@@ -10,6 +11,22 @@ import {
 } from './index'
 
 describe('collections', () => {
+  test('virtual file system', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'src/project/server.ts': 'export const server = 1',
+      'src/project/types.ts': 'export interface Types {}',
+    })
+    const ProjectCollection = new Collection({
+      fileSystem,
+      fileExtensions: ['ts'],
+      baseDirectory: 'src',
+    })
+    const file = await ProjectCollection.getFile('project/server', 'ts')
+
+    expect(file).toBeInstanceOf(File)
+    expect(file?.getName()).toBe('server')
+  })
+
   test('returns file', async () => {
     const RootCollection = new Collection({ fileExtensions: ['json'] })
     const file = await RootCollection.getFile('tsconfig', 'json')

@@ -1,7 +1,6 @@
-import { readdir } from 'node:fs/promises'
-import { readFileSync } from 'node:fs'
 import { basename, extname, join, relative } from 'node:path'
-import { minimatch } from 'minimatch'
+
+import type { FileSystem } from './file-system/FileSystem'
 
 const javascriptLikeExtensions = [
   'js',
@@ -157,6 +156,7 @@ export class Directory<
     string
   >[],
 > {
+  #fileSystem: FileSystem | undefined
   #directory?: Directory
   #basePath?: string
   #baseDirectory?: string
@@ -165,19 +165,30 @@ export class Directory<
   #getModule?: (path: string) => Promise<any>
 
   constructor(
-    directory: Directory | undefined,
     fileExtensions: FileExtensions[],
+    fileSystem: FileSystem | undefined,
+    directory: Directory | undefined,
     basePath?: string,
     baseDirectory?: string,
     tsConfigFilePath?: string,
     getModule?: (path: string) => Promise<FileExports>
   ) {
+    this.#fileSystem = fileSystem
     this.#directory = directory
     this.#basePath = basePath
     this.#baseDirectory = baseDirectory
     this.#fileExtensions = fileExtensions
     this.#tsConfigFilePath = tsConfigFilePath
     this.#getModule = getModule
+  }
+
+  async #getFileSystem() {
+    if (this.#fileSystem) {
+      return this.#fileSystem
+    }
+    const { NodeFileSystem } = await import('./file-system/NodeFileSystem')
+    this.#fileSystem = new NodeFileSystem(this.#tsConfigFilePath)
+    return this.#fileSystem
   }
 
   async getFile(
@@ -232,36 +243,28 @@ export class Directory<
   }
 
   async getEntries(): Promise<FileSystemEntry<FileExports>[]> {
-    const directoryEntries = await readdir(
-      this.#basePath ? this.#basePath : process.cwd(),
-      { withFileTypes: true }
-    )
+    const fileSystem = await this.#getFileSystem()
+    const directoryEntries = await fileSystem.readDirectory(this.#basePath)
     const entries: FileSystemEntry<FileExports>[] = []
 
     for (const entry of directoryEntries) {
-      const entryPath = this.#basePath
-        ? join(this.#basePath, entry.name)
-        : entry.name
-
-      if (
-        this.#tsConfigFilePath &&
-        isFilePathExcludedFromTsConfig(entryPath, this.#tsConfigFilePath)
-      ) {
+      if (fileSystem.isFilePathExcludedFromTsConfig(entry.path)) {
         continue
       }
 
-      if (entry.isDirectory()) {
+      if (entry.isDirectory) {
         entries.push(
           new Directory(
-            this,
             this.#fileExtensions,
-            entryPath,
+            this.#fileSystem,
+            this,
+            entry.path,
             this.#baseDirectory,
             this.#tsConfigFilePath,
             this.#getModule
           )
         )
-      } else if (entry.isFile()) {
+      } else if (entry.isFile) {
         const extension = extname(entry.name).slice(1)
 
         if (
@@ -276,13 +279,13 @@ export class Directory<
             entries.push(
               new JavaScriptFile(
                 this,
-                entryPath,
+                entry.path,
                 this.#baseDirectory,
                 this.#getModule
               )
             )
           } else {
-            entries.push(new File(this, entryPath, this.#baseDirectory))
+            entries.push(new File(this, entry.path, this.#baseDirectory))
           }
         }
       }
@@ -330,6 +333,7 @@ export type CollectionOptions<
   >[],
 > = {
   fileExtensions: FileExtensions
+  fileSystem?: FileSystem
   baseDirectory?: string
 } & (IsJavaScriptLikeExtensions<FileExtensions> extends true
   ? {
@@ -350,8 +354,9 @@ export class Collection<
 
   constructor(options: CollectionOptions<FileExports, FileExtensions>) {
     super(
-      undefined,
       options.fileExtensions as unknown as FileExtensions[],
+      options.fileSystem,
+      undefined,
       options.baseDirectory,
       options.baseDirectory,
       'tsConfigFilePath' in options ? options.tsConfigFilePath : undefined,
@@ -387,39 +392,4 @@ export function isDirectory<
   entry: FileSystemEntry<FileExports>
 ): entry is Directory<FileExports, FileExtensions> {
   return entry instanceof Directory
-}
-
-const tsConfigs = new Map<string, any>()
-
-/** Parse and cache tsconfig.json files */
-function getTsConfig(tsConfigFilePath: string) {
-  // TODO: Handle tsconfig.json files that extend other tsconfig.json files
-  if (tsConfigs.has(tsConfigFilePath)) {
-    return tsConfigs.get(tsConfigFilePath)
-  }
-
-  const tsConfigContents = readFileSync(tsConfigFilePath, 'utf-8')
-  const parsedTsConfig = JSON.parse(tsConfigContents)
-
-  tsConfigs.set(tsConfigFilePath, parsedTsConfig)
-
-  return parsedTsConfig
-}
-
-/** Check if a file path is excluded from a tsconfig.json file */
-function isFilePathExcludedFromTsConfig(
-  filePath: string,
-  tsConfigFilePath: string
-) {
-  const tsConfig = getTsConfig(tsConfigFilePath)
-
-  if (tsConfig.exclude?.length) {
-    for (const exclude of tsConfig.exclude) {
-      if (minimatch(filePath, exclude)) {
-        return true
-      }
-    }
-  }
-
-  return false
 }
