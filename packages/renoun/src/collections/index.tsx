@@ -213,6 +213,21 @@ export class Directory<
     return undefined
   }
 
+  async getDirectory(
+    path: string | string[]
+  ): Promise<Directory<FileExports, FileExtensions> | undefined> {
+    const directoryPath =
+      this.#basePath && Array.isArray(path)
+        ? join(this.#basePath, ...path)
+        : path
+    const allEntries = await this.getEntries()
+    const directory = allEntries.find(
+      (entry) => isDirectory(entry) && entry.getPath() === directoryPath
+    )
+
+    return directory as Directory<FileExports, FileExtensions> | undefined
+  }
+
   async getEntries(): Promise<FileSystemEntry<FileExports>[]> {
     const directoryEntries = await readdir(
       this.#basePath ? this.#basePath : process.cwd(),

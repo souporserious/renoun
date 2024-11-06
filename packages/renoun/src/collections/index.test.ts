@@ -4,12 +4,13 @@ import {
   Collection,
   isFile,
   File,
+  Directory,
   JavaScriptFile,
   type FileSystemEntry,
 } from './index'
 
 describe('collections', () => {
-  test('returns generic file', async () => {
+  test('returns file', async () => {
     const RootCollection = new Collection({ fileExtensions: ['json'] })
     const file = await RootCollection.getFile('tsconfig', 'json')
 
@@ -26,6 +27,16 @@ describe('collections', () => {
 
     expect(file!).toBeInstanceOf(JavaScriptFile)
     expectTypeOf(file!).toMatchTypeOf<JavaScriptFile<any>>()
+  })
+
+  test('returns directory', async () => {
+    const ProjectCollection = new Collection({
+      fileExtensions: ['ts'],
+      baseDirectory: 'src/components',
+    })
+    const directory = await ProjectCollection.getDirectory('CodeBlock')
+
+    expect(directory).toBeInstanceOf(Directory)
   })
 
   test.skip('getRuntimeValue is only typed when getModule is defined', async () => {
