@@ -157,6 +157,7 @@ export class Directory<
     string
   >[],
 > {
+  #directory?: Directory
   #basePath?: string
   #baseDirectory?: string
   #fileExtensions: FileExtensions[]
@@ -164,12 +165,14 @@ export class Directory<
   #getModule?: (path: string) => Promise<any>
 
   constructor(
+    directory: Directory | undefined,
     fileExtensions: FileExtensions[],
     basePath?: string,
     baseDirectory?: string,
     tsConfigFilePath?: string,
     getModule?: (path: string) => Promise<FileExports>
   ) {
+    this.#directory = directory
     this.#basePath = basePath
     this.#baseDirectory = baseDirectory
     this.#fileExtensions = fileExtensions
@@ -250,6 +253,7 @@ export class Directory<
       if (entry.isDirectory()) {
         entries.push(
           new Directory(
+            this,
             this.#fileExtensions,
             entryPath,
             this.#baseDirectory,
@@ -287,12 +291,16 @@ export class Directory<
     return entries
   }
 
-  async getSiblings(
-    entry: File | Directory
-  ): Promise<[File | Directory | undefined, File | Directory | undefined]> {
-    const entries = await this.getEntries()
+  async getSiblings(): Promise<
+    [File | Directory | undefined, File | Directory | undefined]
+  > {
+    if (!this.#directory) {
+      return [undefined, undefined]
+    }
+
+    const entries = await this.#directory.getEntries()
     const index = entries.findIndex(
-      (entryToCompare) => entryToCompare.getPath() === entry.getPath()
+      (entryToCompare) => entryToCompare.getPath() === this.getPath()
     )
     const previousEntry = index > 0 ? entries[index - 1] : undefined
     const nextEntry =
@@ -342,6 +350,7 @@ export class Collection<
 
   constructor(options: CollectionOptions<FileExports, FileExtensions>) {
     super(
+      undefined,
       options.fileExtensions as unknown as FileExtensions[],
       options.baseDirectory,
       options.baseDirectory,

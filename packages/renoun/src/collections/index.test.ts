@@ -39,16 +39,19 @@ describe('collections', () => {
     expect(directory).toBeInstanceOf(Directory)
   })
 
-  test.skip('getRuntimeValue is only typed when getModule is defined', async () => {
-    const ProjectCollection = new Collection({
-      fileExtensions: ['ts', 'tsx'],
-      baseDirectory: 'src/project',
-      tsConfigFilePath: 'tsconfig.json',
-      getModule: (path) => import(`../project/${path}`),
-    })
-    const file = await ProjectCollection.getFile('server', 'ts')
-    const fileExports = await file!.getExports()
-  })
+  test.todo(
+    'getRuntimeValue is only typed when getModule is defined',
+    async () => {
+      const ProjectCollection = new Collection({
+        fileExtensions: ['ts', 'tsx'],
+        baseDirectory: 'src/project',
+        tsConfigFilePath: 'tsconfig.json',
+        getModule: (path) => import(`../project/${path}`),
+      })
+      const file = await ProjectCollection.getFile('server', 'ts')
+      const fileExports = await file!.getExports()
+    }
+  )
 
   test('uses collection file extensions when no file extension present', async () => {
     const ProjectCollection = new Collection({
@@ -60,7 +63,7 @@ describe('collections', () => {
     expect(file).toBeDefined()
   })
 
-  test('generating sibling navigation from file', async () => {
+  test('generates sibling navigation from file', async () => {
     const ProjectCollection = new Collection({
       fileExtensions: ['ts'],
       baseDirectory: 'src/project',
@@ -72,7 +75,19 @@ describe('collections', () => {
     expect(nextEntry?.getName()).toBe('types')
   })
 
-  test('generating tree navigation', async () => {
+  test('generates sibling navigation from directory', async () => {
+    const ProjectCollection = new Collection({
+      fileExtensions: ['ts'],
+      baseDirectory: 'src/project',
+    })
+    const directory = await ProjectCollection.getDirectory('rpc')
+    const [previousEntry, nextEntry] = await directory!.getSiblings()
+
+    expect(previousEntry?.getName()).toBe('refresh')
+    expect(nextEntry?.getName()).toBe('server')
+  })
+
+  test('generates tree navigation', async () => {
     const ComponentsCollection = new Collection<{ ts: object; tsx: object }>({
       fileExtensions: ['ts', 'tsx'],
       baseDirectory: 'src/project',
