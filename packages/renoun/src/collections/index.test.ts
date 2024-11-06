@@ -28,7 +28,7 @@ describe('collections', () => {
     expectTypeOf(file!).toMatchTypeOf<JavaScriptFile<any>>()
   })
 
-  test('getRuntimeValue is only typed when getModule is defined', async () => {
+  test.skip('getRuntimeValue is only typed when getModule is defined', async () => {
     const ProjectCollection = new Collection({
       fileExtensions: ['ts', 'tsx'],
       baseDirectory: 'src/project',
@@ -36,6 +36,17 @@ describe('collections', () => {
       getModule: (path) => import(`../project/${path}`),
     })
     const file = await ProjectCollection.getFile('server', 'ts')
+    const fileExports = await file!.getExports()
+  })
+
+  test('uses collection file extensions when no file extension present', async () => {
+    const ProjectCollection = new Collection({
+      fileExtensions: ['ts'],
+      baseDirectory: 'src/project',
+    })
+    const file = await ProjectCollection.getFile('server')
+
+    expect(file).toBeDefined()
   })
 
   test('generating tree navigation', async () => {

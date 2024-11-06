@@ -144,14 +144,14 @@ export class Directory<
 > {
   #basePath?: string
   #baseDirectory?: string
-  #fileExtensions?: FileExtensions[]
+  #fileExtensions: FileExtensions[]
   #tsConfigFilePath?: string
   #getModule?: (path: string) => Promise<any>
 
   constructor(
+    fileExtensions: FileExtensions[],
     basePath?: string,
     baseDirectory?: string,
-    fileExtensions?: FileExtensions[],
     tsConfigFilePath?: string,
     getModule?: (path: string) => Promise<FileExports>
   ) {
@@ -170,7 +170,11 @@ export class Directory<
       this.#basePath && Array.isArray(path)
         ? join(this.#basePath, ...path)
         : path
-    const fileExtensions = Array.isArray(extension) ? extension : [extension]
+    const fileExtensions = extension
+      ? Array.isArray(extension)
+        ? extension
+        : [extension]
+      : this.#fileExtensions
     const allFiles = await this.getEntries()
 
     for (const extension of fileExtensions) {
@@ -216,9 +220,9 @@ export class Directory<
       if (entry.isDirectory()) {
         entries.push(
           new Directory(
+            this.#fileExtensions,
             entryPath,
             this.#baseDirectory,
-            this.#fileExtensions,
             this.#tsConfigFilePath,
             this.#getModule
           )
@@ -293,9 +297,9 @@ export class Collection<
 
   constructor(options: CollectionOptions<FileExports, FileExtensions>) {
     super(
-      options.baseDirectory,
-      options.baseDirectory,
       options.fileExtensions as unknown as FileExtensions[],
+      options.baseDirectory,
+      options.baseDirectory,
       'tsConfigFilePath' in options ? options.tsConfigFilePath : undefined,
       'getModule' in options ? options.getModule : undefined
     )
