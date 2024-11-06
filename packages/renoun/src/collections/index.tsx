@@ -29,13 +29,6 @@ type IsJavaScriptLikeExtensions<FileExtensions extends string[]> =
       : false
     : false
 
-type HasJavaScriptLikeExtensions<FileExtensions extends string[]> =
-  FileExtensions extends [infer First, ...infer Rest]
-    ? First extends JavaScriptLikeExtensions
-      ? true
-      : HasJavaScriptLikeExtensions<Rest extends string[] ? Rest : []>
-    : false
-
 type FileForExtension<
   FileExports extends ModuleExports = ModuleExports,
   FileExtensions extends Extract<keyof FileExports, string>[] = Extract<
@@ -212,6 +205,13 @@ export class Directory<
       const entryPath = this.#basePath
         ? join(this.#basePath, entry.name)
         : entry.name
+
+      if (
+        this.#tsConfigFilePath &&
+        isFilePathExcludedFromTsConfig(entryPath, this.#tsConfigFilePath)
+      ) {
+        continue
+      }
 
       if (entry.isDirectory()) {
         entries.push(
