@@ -1,6 +1,5 @@
-import { basename, extname, join, relative } from 'node:path'
-
 import type { FileSystem } from './file-system/FileSystem'
+import { basename, extname, join, relative } from './path'
 
 const javascriptLikeExtensions = [
   'js',
