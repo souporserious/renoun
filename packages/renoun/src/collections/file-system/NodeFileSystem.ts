@@ -9,7 +9,11 @@ export class NodeFileSystem extends FileSystem {
     const entries = await readdir(path, { withFileTypes: true })
 
     return entries.map((entry) => {
-      const entryPath = join(path, entry.name)
+      let entryPath = join(path, entry.name)
+
+      if (!entryPath.startsWith('.')) {
+        entryPath = `./${entryPath}`
+      }
 
       return {
         name: entry.name,

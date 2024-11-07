@@ -6,7 +6,16 @@ export class VirtualFileSystem extends FileSystem {
 
   constructor(files: { [path: string]: string }) {
     super()
-    this.#files = new Map(Object.entries(files))
+    this.#files = new Map(
+      Object.entries(files).map(([path, content]) => [
+        path.startsWith('.') ? path : `./${path}`,
+        content,
+      ])
+    )
+  }
+
+  getFiles() {
+    return this.#files
   }
 
   async readDirectory(path: string = '.'): Promise<DirectoryEntry[]> {
