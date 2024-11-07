@@ -107,3 +107,24 @@ export async function resolveType({
     }
   )
 }
+
+/**
+ * Get the exports of a file.
+ * @internal
+ */
+export async function getFileExports(
+  filePath: string,
+  projectOptions?: ProjectOptions
+) {
+  if (client) {
+    return client.callMethod('getFileExports', {
+      filePath,
+      tsConfigFilePath: projectOptions?.tsConfigFilePath,
+    })
+  }
+
+  return import('../utils/get-file-exports.js').then(({ getFileExports }) => {
+    const project = getProject(projectOptions)
+    return getFileExports(filePath, project)
+  })
+}

@@ -32,6 +32,16 @@ describe('collections', () => {
     expect(file?.getName()).toBe('server')
   })
 
+  test('returns directory', async () => {
+    const ProjectCollection = new Collection({
+      fileExtensions: ['ts'],
+      baseDirectory: 'src/components',
+    })
+    const directory = await ProjectCollection.getDirectory('CodeBlock')
+
+    expect(directory).toBeInstanceOf(Directory)
+  })
+
   test('returns file', async () => {
     const RootCollection = new Collection({ fileExtensions: ['json'] })
     const file = await RootCollection.getFile('tsconfig', 'json')
@@ -51,14 +61,15 @@ describe('collections', () => {
     expectTypeOf(file!).toMatchTypeOf<JavaScriptFile<any>>()
   })
 
-  test('returns directory', async () => {
+  test('file exports', async () => {
     const ProjectCollection = new Collection({
       fileExtensions: ['ts'],
-      baseDirectory: 'src/components',
+      baseDirectory: 'src/project',
     })
-    const directory = await ProjectCollection.getDirectory('CodeBlock')
+    const file = await ProjectCollection.getFile('server', 'ts')
+    const fileExports = await file!.getExports()
 
-    expect(directory).toBeInstanceOf(Directory)
+    expect(fileExports).toMatchObject([{ name: 'createServer' }])
   })
 
   test.todo(

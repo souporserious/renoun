@@ -30,6 +30,7 @@ export class VirtualFileSystem extends FileSystem {
           isFile: true,
           isDirectory: false,
           path: filePath,
+          absolutePath: filePath,
         })
       }
     }
@@ -43,6 +44,7 @@ export class VirtualFileSystem extends FileSystem {
           isFile: false,
           isDirectory: true,
           path: directoryPath,
+          absolutePath: directoryPath,
         })
       }
     }

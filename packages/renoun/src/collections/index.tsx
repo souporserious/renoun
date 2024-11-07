@@ -1,5 +1,6 @@
-import type { FileSystem } from './file-system/FileSystem'
-import { basename, extname, join, relative } from './path'
+import type { FileSystem } from './file-system/FileSystem.js'
+import { getFileExports } from '../project/client.js'
+import { basename, extname, join, relative } from './path.js'
 
 const javascriptLikeExtensions = [
   'js',
@@ -46,11 +47,18 @@ export type FileSystemEntry<FileExports extends object> =
 export class File {
   #directory: Directory
   #filePath: string
+  #absoluteFilePath: string
   #baseDirectory?: string
 
-  constructor(directory: Directory, filePath: string, baseDirectory?: string) {
+  constructor(
+    directory: Directory,
+    filePath: string,
+    absoluteFilePath: string,
+    baseDirectory?: string
+  ) {
     this.#directory = directory
     this.#filePath = filePath
+    this.#absoluteFilePath = absoluteFilePath
     this.#baseDirectory = baseDirectory
   }
 
@@ -66,6 +74,10 @@ export class File {
     return this.#baseDirectory
       ? relative(this.#baseDirectory, this.#filePath)
       : this.#filePath
+  }
+
+  getAbsolutePath() {
+    return this.#absoluteFilePath
   }
 
   async getSiblings(): Promise<
@@ -88,15 +100,18 @@ export class JavaScriptFileExport<
 > {
   #name: ExportName
   #filePath: string
+  #absoluteFilePath: string
   #runtimeModule: Promise<FileExports>
 
   constructor(
     name: ExportName,
     filePath: string,
+    absoluteFilePath: string,
     runtimeModule: Promise<FileExports>
   ) {
     this.#name = name
     this.#filePath = filePath
+    this.#absoluteFilePath = absoluteFilePath
     this.#runtimeModule = runtimeModule
   }
 
@@ -108,6 +123,10 @@ export class JavaScriptFileExport<
     return this.#filePath
   }
 
+  getAbsolutePath() {
+    return this.#absoluteFilePath
+  }
+
   async getRuntimeValue(): Promise<FileExports[ExportName]> {
     const fileExports = await this.#runtimeModule
     return fileExports[this.#name]
@@ -117,31 +136,31 @@ export class JavaScriptFileExport<
 /** A JavaScript file in the file system. */
 export class JavaScriptFile<FileExports extends ModuleExports> extends File {
   #getModule?: (path: string) => Promise<FileExports>
+  #tsConfigFilePath?: string
 
   constructor(
     directory: Directory,
-    basePath: string,
+    filePath: string,
+    absoluteFilePath: string,
     baseDirectory?: string,
-    getModule?: (path: string) => Promise<FileExports>
+    getModule?: (path: string) => Promise<FileExports>,
+    tsConfigFilePath?: string
   ) {
-    super(directory, basePath, baseDirectory)
+    super(directory, filePath, absoluteFilePath, baseDirectory)
     this.#getModule = getModule
+    this.#tsConfigFilePath = tsConfigFilePath
   }
 
   async getExports(): Promise<FileExports> {
-    if (!this.#getModule) throw new Error('Module loader not provided')
-    return await this.#getModule(this.getPath())
+    return getFileExports(this.getAbsolutePath(), {
+      tsConfigFilePath: this.#tsConfigFilePath,
+    })
   }
 
   async getExport<ExportName extends keyof FileExports>(
     name: ExportName
   ): Promise<JavaScriptFileExport<FileExports, ExportName>> {
-    const moduleExports = await this.getExports()
-    return new JavaScriptFileExport(
-      name,
-      this.getPath(),
-      Promise.resolve(moduleExports)
-    )
+    throw new Error('Not implemented')
   }
 }
 
@@ -157,7 +176,8 @@ export class Directory<
 > {
   #fileSystem: FileSystem | undefined
   #directory?: Directory
-  #basePath?: string
+  #filePath?: string
+  #absoluteFilePath?: string
   #baseDirectory?: string
   #fileExtensions: FileExtensions[]
   #tsConfigFilePath?: string
@@ -167,14 +187,16 @@ export class Directory<
     fileExtensions: FileExtensions[],
     fileSystem: FileSystem | undefined,
     directory: Directory | undefined,
-    basePath?: string,
+    filePath?: string,
+    absoluteFilePath?: string,
     baseDirectory?: string,
     tsConfigFilePath?: string,
     getModule?: (path: string) => Promise<FileExports>
   ) {
     this.#fileSystem = fileSystem
     this.#directory = directory
-    this.#basePath = basePath
+    this.#filePath = filePath
+    this.#absoluteFilePath = absoluteFilePath
     this.#baseDirectory = baseDirectory
     this.#fileExtensions = fileExtensions
     this.#tsConfigFilePath = tsConfigFilePath
@@ -195,8 +217,8 @@ export class Directory<
     extension?: FileExtensions[number] | FileExtensions[number][]
   ): Promise<FileForExtension<FileExports, FileExtensions> | undefined> {
     const filePath =
-      this.#basePath && Array.isArray(path)
-        ? join(this.#basePath, ...path)
+      this.#filePath && Array.isArray(path)
+        ? join(this.#filePath, ...path)
         : path
     const fileExtensions = extension
       ? Array.isArray(extension)
@@ -230,8 +252,8 @@ export class Directory<
     path: string | string[]
   ): Promise<Directory<FileExports, FileExtensions> | undefined> {
     const directoryPath =
-      this.#basePath && Array.isArray(path)
-        ? join(this.#basePath, ...path)
+      this.#filePath && Array.isArray(path)
+        ? join(this.#filePath, ...path)
         : path
     const allEntries = await this.getEntries()
     const directory = allEntries.find(
@@ -243,7 +265,7 @@ export class Directory<
 
   async getEntries(): Promise<FileSystemEntry<FileExports>[]> {
     const fileSystem = await this.#getFileSystem()
-    const directoryEntries = await fileSystem.readDirectory(this.#basePath)
+    const directoryEntries = await fileSystem.readDirectory(this.#filePath)
     const entries: FileSystemEntry<FileExports>[] = []
 
     for (const entry of directoryEntries) {
@@ -258,6 +280,7 @@ export class Directory<
             this.#fileSystem,
             this,
             entry.path,
+            entry.absolutePath,
             this.#baseDirectory,
             this.#tsConfigFilePath,
             this.#getModule
@@ -279,12 +302,21 @@ export class Directory<
               new JavaScriptFile(
                 this,
                 entry.path,
+                entry.absolutePath,
                 this.#baseDirectory,
-                this.#getModule
+                this.#getModule,
+                this.#tsConfigFilePath
               )
             )
           } else {
-            entries.push(new File(this, entry.path, this.#baseDirectory))
+            entries.push(
+              new File(
+                this,
+                entry.path,
+                entry.absolutePath,
+                this.#baseDirectory
+              )
+            )
           }
         }
       }
@@ -312,15 +344,19 @@ export class Directory<
   }
 
   getName() {
-    return this.#basePath ? basename(this.#basePath) : ''
+    return this.#filePath ? basename(this.#filePath) : ''
   }
 
   getPath() {
     return this.#baseDirectory
-      ? this.#basePath
-        ? relative(this.#baseDirectory, this.#basePath)
+      ? this.#filePath
+        ? relative(this.#baseDirectory, this.#filePath)
         : this.#baseDirectory
-      : this.#basePath
+      : this.#filePath
+  }
+
+  getAbsolutePath() {
+    return this.#absoluteFilePath
   }
 }
 
@@ -356,6 +392,7 @@ export class Collection<
       options.fileExtensions as unknown as FileExtensions[],
       options.fileSystem,
       undefined,
+      options.baseDirectory,
       options.baseDirectory,
       options.baseDirectory,
       'tsConfigFilePath' in options ? options.tsConfigFilePath : undefined,
