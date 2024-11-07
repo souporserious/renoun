@@ -1,6 +1,6 @@
 import type { FileSystem } from './file-system/FileSystem.js'
 import { getFileExports } from '../project/client.js'
-import { basename, extname, join, relative } from './path.js'
+import { basename, extname, join } from './path.js'
 
 const javascriptLikeExtensions = [
   'js',
@@ -43,41 +43,38 @@ export type FileSystemEntry<FileExports extends object> =
   | JavaScriptFile<FileExports>
   | Directory<FileExports>
 
+interface FileOptions {
+  directory: Directory
+  path: string
+  absolutePath: string
+}
+
 /** A file in the file system. */
 export class File {
   #directory: Directory
-  #filePath: string
-  #absoluteFilePath: string
-  #baseDirectory?: string
+  #path: string
+  #absolutePath: string
 
-  constructor(
-    directory: Directory,
-    filePath: string,
-    absoluteFilePath: string,
-    baseDirectory?: string
-  ) {
-    this.#directory = directory
-    this.#filePath = filePath
-    this.#absoluteFilePath = absoluteFilePath
-    this.#baseDirectory = baseDirectory
+  constructor(options: FileOptions) {
+    this.#directory = options.directory
+    this.#path = options.path
+    this.#absolutePath = options.absolutePath
   }
 
   getName() {
-    return basename(this.#filePath, extname(this.#filePath))
+    return basename(this.#path, extname(this.#path))
   }
 
   getExtension() {
-    return extname(this.#filePath).slice(1)
+    return extname(this.#path).slice(1)
   }
 
   getPath() {
-    return this.#baseDirectory
-      ? relative(this.#baseDirectory, this.#filePath)
-      : this.#filePath
+    return this.#path
   }
 
   getAbsolutePath() {
-    return this.#absoluteFilePath
+    return this.#absolutePath
   }
 
   async getSiblings(): Promise<
@@ -133,21 +130,23 @@ export class JavaScriptFileExport<
   }
 }
 
+interface JavaScriptFileOptions extends FileOptions {
+  getJavaScriptModule?: (path: string) => Promise<any>
+  tsConfigFilePath?: string
+}
+
 /** A JavaScript file in the file system. */
 export class JavaScriptFile<FileExports extends ModuleExports> extends File {
-  #getModule?: (path: string) => Promise<FileExports>
+  #getJavaScriptModule?: (path: string) => Promise<FileExports>
   #tsConfigFilePath?: string
 
-  constructor(
-    directory: Directory,
-    filePath: string,
-    absoluteFilePath: string,
-    baseDirectory?: string,
-    getModule?: (path: string) => Promise<FileExports>,
-    tsConfigFilePath?: string
-  ) {
-    super(directory, filePath, absoluteFilePath, baseDirectory)
-    this.#getModule = getModule
+  constructor({
+    getJavaScriptModule,
+    tsConfigFilePath,
+    ...fileOptions
+  }: JavaScriptFileOptions) {
+    super(fileOptions)
+    this.#getJavaScriptModule = getJavaScriptModule
     this.#tsConfigFilePath = tsConfigFilePath
   }
 
@@ -166,6 +165,25 @@ export class JavaScriptFile<FileExports extends ModuleExports> extends File {
 
 export type ModuleExports = { [name: string]: any }
 
+export type DirectoryOptions<
+  FileExports extends ModuleExports = ModuleExports,
+  FileExtensions extends Extract<keyof FileExports, string>[] = Extract<
+    keyof FileExports,
+    string
+  >[],
+> = {
+  fileExtensions: FileExtensions
+  fileSystem?: FileSystem
+  directory?: Directory
+  path?: string
+  rootPath?: string
+} & (IsJavaScriptLikeExtensions<FileExtensions> extends true
+  ? {
+      tsConfigFilePath?: string
+      getJavaScriptModule?: (path: string) => Promise<any>
+    }
+  : {})
+
 /** A directory containing files and subdirectories in the file system. */
 export class Directory<
   const FileExports extends ModuleExports = ModuleExports,
@@ -175,32 +193,31 @@ export class Directory<
   >[],
 > {
   #fileSystem: FileSystem | undefined
+  #fileExtensions: FileExtensions
+  #path: string
+  #rootPath: string
   #directory?: Directory
-  #filePath?: string
-  #absoluteFilePath?: string
-  #baseDirectory?: string
-  #fileExtensions: FileExtensions[]
   #tsConfigFilePath?: string
-  #getModule?: (path: string) => Promise<any>
+  #getJavaScriptModule?: (path: string) => Promise<any>
 
-  constructor(
-    fileExtensions: FileExtensions[],
-    fileSystem: FileSystem | undefined,
-    directory: Directory | undefined,
-    filePath?: string,
-    absoluteFilePath?: string,
-    baseDirectory?: string,
-    tsConfigFilePath?: string,
-    getModule?: (path: string) => Promise<FileExports>
-  ) {
-    this.#fileSystem = fileSystem
-    this.#directory = directory
-    this.#filePath = filePath
-    this.#absoluteFilePath = absoluteFilePath
-    this.#baseDirectory = baseDirectory
-    this.#fileExtensions = fileExtensions
-    this.#tsConfigFilePath = tsConfigFilePath
-    this.#getModule = getModule
+  constructor(options: DirectoryOptions<FileExports, FileExtensions>) {
+    this.#fileSystem = options.fileSystem
+    this.#fileExtensions = options.fileExtensions
+    this.#path = options.path
+      ? options.path.startsWith('.')
+        ? options.path
+        : join('.', options.path)
+      : '.'
+    this.#rootPath = options.rootPath ?? this.#path
+    this.#directory = options.directory
+
+    if ('tsConfigFilePath' in options) {
+      this.#tsConfigFilePath = options.tsConfigFilePath
+    }
+
+    if ('getJavaScriptModule' in options) {
+      this.#getJavaScriptModule = options.getJavaScriptModule
+    }
   }
 
   async #getFileSystem() {
@@ -216,10 +233,8 @@ export class Directory<
     path: string | string[],
     extension?: FileExtensions[number] | FileExtensions[number][]
   ): Promise<FileForExtension<FileExports, FileExtensions> | undefined> {
-    const filePath =
-      this.#filePath && Array.isArray(path)
-        ? join(this.#filePath, ...path)
-        : path
+    const normalizedPath = Array.isArray(path) ? join(...path) : path
+    const filePath = join(this.#rootPath, normalizedPath)
     const fileExtensions = extension
       ? Array.isArray(extension)
         ? extension
@@ -251,10 +266,10 @@ export class Directory<
   async getDirectory(
     path: string | string[]
   ): Promise<Directory<FileExports, FileExtensions> | undefined> {
-    const directoryPath =
-      this.#filePath && Array.isArray(path)
-        ? join(this.#filePath, ...path)
-        : path
+    const normalizedPath = Array.isArray(path) ? path : [path]
+    const directoryPath = this.#path
+      ? join(this.#path, ...normalizedPath)
+      : join(...normalizedPath)
     const allEntries = await this.getEntries()
     const directory = allEntries.find(
       (entry) => isDirectory(entry) && entry.getPath() === directoryPath
@@ -265,7 +280,7 @@ export class Directory<
 
   async getEntries(): Promise<FileSystemEntry<FileExports>[]> {
     const fileSystem = await this.#getFileSystem()
-    const directoryEntries = await fileSystem.readDirectory(this.#filePath)
+    const directoryEntries = await fileSystem.readDirectory(this.#path)
     const entries: FileSystemEntry<FileExports>[] = []
 
     for (const entry of directoryEntries) {
@@ -275,16 +290,15 @@ export class Directory<
 
       if (entry.isDirectory) {
         entries.push(
-          new Directory(
-            this.#fileExtensions,
-            this.#fileSystem,
-            this,
-            entry.path,
-            entry.absolutePath,
-            this.#baseDirectory,
-            this.#tsConfigFilePath,
-            this.#getModule
-          )
+          new Directory<FileExports, FileExtensions>({
+            fileSystem,
+            fileExtensions: this.#fileExtensions,
+            path: entry.path,
+            rootPath: this.#rootPath,
+            directory: this,
+            tsConfigFilePath: this.#tsConfigFilePath,
+            getJavaScriptModule: this.#getJavaScriptModule,
+          })
         )
       } else if (entry.isFile) {
         const extension = extname(entry.name).slice(1)
@@ -299,23 +313,21 @@ export class Directory<
             )
           ) {
             entries.push(
-              new JavaScriptFile(
-                this,
-                entry.path,
-                entry.absolutePath,
-                this.#baseDirectory,
-                this.#getModule,
-                this.#tsConfigFilePath
-              )
+              new JavaScriptFile({
+                directory: this,
+                path: entry.path,
+                absolutePath: entry.absolutePath,
+                getJavaScriptModule: this.#getJavaScriptModule,
+                tsConfigFilePath: this.#tsConfigFilePath,
+              })
             )
           } else {
             entries.push(
-              new File(
-                this,
-                entry.path,
-                entry.absolutePath,
-                this.#baseDirectory
-              )
+              new File({
+                directory: this,
+                path: entry.path,
+                absolutePath: entry.absolutePath,
+              })
             )
           }
         }
@@ -336,70 +348,22 @@ export class Directory<
     const index = entries.findIndex(
       (entryToCompare) => entryToCompare.getPath() === this.getPath()
     )
-    const previousEntry = index > 0 ? entries[index - 1] : undefined
-    const nextEntry =
-      index < entries.length - 1 ? entries[index + 1] : undefined
+    const previous = index > 0 ? entries[index - 1] : undefined
+    const next = index < entries.length - 1 ? entries[index + 1] : undefined
 
-    return [previousEntry, nextEntry]
+    return [previous, next]
   }
 
   getName() {
-    return this.#filePath ? basename(this.#filePath) : ''
+    return basename(this.#path)
   }
 
   getPath() {
-    return this.#baseDirectory
-      ? this.#filePath
-        ? relative(this.#baseDirectory, this.#filePath)
-        : this.#baseDirectory
-      : this.#filePath
+    return this.#path
   }
 
   getAbsolutePath() {
-    return this.#absoluteFilePath
-  }
-}
-
-export type CollectionOptions<
-  FileExports extends ModuleExports = ModuleExports,
-  FileExtensions extends Extract<keyof FileExports, string>[] = Extract<
-    keyof FileExports,
-    string
-  >[],
-> = {
-  fileExtensions: FileExtensions
-  fileSystem?: FileSystem
-  baseDirectory?: string
-} & (IsJavaScriptLikeExtensions<FileExtensions> extends true
-  ? {
-      tsConfigFilePath?: string
-      getModule?: (path: string) => Promise<any>
-    }
-  : {})
-
-/** A collection of files and directories for a specific base directory and file extensions. */
-export class Collection<
-  const FileExports extends ModuleExports = ModuleExports,
-  const FileExtensions extends Extract<keyof FileExports, string>[] = Extract<
-    keyof FileExports,
-    string
-  >[],
-> extends Directory<FileExports, NoInfer<FileExtensions>> {
-  options: CollectionOptions<FileExports, FileExtensions>
-
-  constructor(options: CollectionOptions<FileExports, FileExtensions>) {
-    super(
-      options.fileExtensions as unknown as FileExtensions[],
-      options.fileSystem,
-      undefined,
-      options.baseDirectory,
-      options.baseDirectory,
-      options.baseDirectory,
-      'tsConfigFilePath' in options ? options.tsConfigFilePath : undefined,
-      'getModule' in options ? options.getModule : undefined
-    )
-
-    this.options = options
+    return this.#path
   }
 }
 
