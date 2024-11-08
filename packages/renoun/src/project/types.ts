@@ -16,4 +16,7 @@ export type ProjectOptions = {
 
   /** The git provider to use. This option disables the provider detection from the `gitSource` which is helpful for self-hosted instances. */
   gitProvider?: 'github' | 'gitlab' | 'bitbucket'
-} & Pick<TsMorphProjectOptions, 'compilerOptions' | 'tsConfigFilePath'>
+} & Pick<
+  TsMorphProjectOptions,
+  'compilerOptions' | 'tsConfigFilePath' | 'useInMemoryFileSystem'
+>

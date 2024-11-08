@@ -71,7 +71,7 @@ describe('collections', () => {
     expect(fileExports).toMatchObject([{ name: 'createServer' }])
   })
 
-  test.todo('virtual file exports', async () => {
+  test('virtual file exports', async () => {
     const fileSystem = new VirtualFileSystem({
       'server.ts': 'export const createServer = () => {}',
     })

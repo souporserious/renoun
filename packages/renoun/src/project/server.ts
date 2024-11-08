@@ -124,14 +124,32 @@ export function createServer() {
   server.registerMethod(
     'getFileExports',
     async function getFileExports({
+      filePath,
       projectOptions,
-      ...options
     }: {
       filePath: string
       projectOptions?: ProjectOptions
     }) {
       const project = getProject(projectOptions)
-      return baseGetFileExports(options.filePath, project)
+      return baseGetFileExports(filePath, project)
+    }
+  )
+
+  server.registerMethod(
+    'createSourceFile',
+    async function createSourceFile({
+      filePath,
+      sourceText,
+      projectOptions,
+    }: {
+      filePath: string
+      sourceText: string
+      projectOptions?: ProjectOptions
+    }) {
+      const project = getProject(projectOptions)
+      project.createSourceFile(filePath, sourceText, {
+        overwrite: true,
+      })
     }
   )
 

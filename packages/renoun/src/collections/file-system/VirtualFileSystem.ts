@@ -1,5 +1,9 @@
+import { createSourceFile } from '../../project/client'
+import { isJavaScriptLikeExtension } from '../is-javascript-like-extension'
 import { FileSystem } from './FileSystem'
 import type { DirectoryEntry } from './types'
+
+// TODO: generate an identifier that can be associated with each file system instance
 
 export class VirtualFileSystem extends FileSystem {
   #files: Map<string, string>
@@ -12,6 +16,14 @@ export class VirtualFileSystem extends FileSystem {
         content,
       ])
     )
+
+    // Create a TypeScript source file for each file
+    for (const [path, content] of this.#files) {
+      const extension = path.split('.').at(-1)
+      if (extension && isJavaScriptLikeExtension(extension)) {
+        createSourceFile(path, content, { useInMemoryFileSystem: true })
+      }
+    }
   }
 
   getFiles() {

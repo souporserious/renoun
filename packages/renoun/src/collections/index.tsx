@@ -1,25 +1,11 @@
-import type { FileSystem } from './file-system/FileSystem.js'
 import { getFileExports } from '../project/client.js'
+import type { FileSystem } from './file-system/FileSystem.js'
+import { VirtualFileSystem } from './file-system/VirtualFileSystem.js'
+import {
+  isJavaScriptLikeExtension,
+  type JavaScriptLikeExtensions,
+} from './is-javascript-like-extension.js'
 import { basename, extname, join } from './path.js'
-
-const javascriptLikeExtensions = [
-  'js',
-  'jsx',
-  'ts',
-  'tsx',
-  'mjs',
-  'mjsx',
-  'cjs',
-  'cjsx',
-  'mts',
-  'mtsx',
-  'cts',
-  'ctsx',
-  'md',
-  'mdx',
-] as const
-
-type JavaScriptLikeExtensions = (typeof javascriptLikeExtensions)[number]
 
 type IsJavaScriptLikeExtensions<FileExtensions extends string[]> =
   FileExtensions extends (infer FileExtension)[]
@@ -133,26 +119,31 @@ export class JavaScriptFileExport<
 interface JavaScriptFileOptions extends FileOptions {
   getJavaScriptModule?: (path: string) => Promise<any>
   tsConfigFilePath?: string
+  isVirtual?: boolean
 }
 
 /** A JavaScript file in the file system. */
 export class JavaScriptFile<FileExports extends ModuleExports> extends File {
   #getJavaScriptModule?: (path: string) => Promise<FileExports>
   #tsConfigFilePath?: string
+  #isVirtual: boolean
 
   constructor({
     getJavaScriptModule,
     tsConfigFilePath,
+    isVirtual = false,
     ...fileOptions
   }: JavaScriptFileOptions) {
     super(fileOptions)
     this.#getJavaScriptModule = getJavaScriptModule
     this.#tsConfigFilePath = tsConfigFilePath
+    this.#isVirtual = isVirtual
   }
 
   async getExports(): Promise<FileExports> {
     return getFileExports(this.getAbsolutePath(), {
       tsConfigFilePath: this.#tsConfigFilePath,
+      useInMemoryFileSystem: this.#isVirtual,
     })
   }
 
@@ -249,11 +240,7 @@ export class Directory<
       )
 
       if (file) {
-        if (
-          javascriptLikeExtensions.includes(
-            extension as JavaScriptLikeExtensions
-          )
-        ) {
+        if (isJavaScriptLikeExtension(extension)) {
           return file as JavaScriptFile<FileExports>
         }
 
@@ -307,11 +294,7 @@ export class Directory<
           !this.#fileExtensions ||
           this.#fileExtensions.includes(extension as any)
         ) {
-          if (
-            javascriptLikeExtensions.includes(
-              extension as JavaScriptLikeExtensions
-            )
-          ) {
+          if (isJavaScriptLikeExtension(extension)) {
             entries.push(
               new JavaScriptFile({
                 directory: this,
@@ -319,6 +302,7 @@ export class Directory<
                 absolutePath: entry.absolutePath,
                 getJavaScriptModule: this.#getJavaScriptModule,
                 tsConfigFilePath: this.#tsConfigFilePath,
+                isVirtual: fileSystem instanceof VirtualFileSystem,
               })
             )
           } else {
@@ -363,6 +347,7 @@ export class Directory<
   }
 
   getAbsolutePath() {
+    // TODO: add this.#fileSystem.getAbsolutePath(this.#path) method
     return this.#path
   }
 }

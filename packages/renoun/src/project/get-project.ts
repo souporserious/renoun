@@ -41,7 +41,9 @@ export function getProject(options?: ProjectOptions) {
       target: ts.ScriptTarget.ESNext,
       isolatedModules: true,
     },
-    tsConfigFilePath: 'tsconfig.json',
+    tsConfigFilePath: options?.useInMemoryFileSystem
+      ? undefined
+      : 'tsconfig.json',
     ...options,
   })
   const projectDirectory = options?.tsConfigFilePath

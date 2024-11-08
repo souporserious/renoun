@@ -21,21 +21,3 @@ export function join(...paths: string[]): string {
     .replace(/\/+/g, '/') // Remove any duplicate slashes
     .replace(/\/$/, '') // Remove trailing slash if present
 }
-
-export function relative(from: string, to: string): string {
-  const fromParts = from.split('/').filter(Boolean)
-  const toParts = to.split('/').filter(Boolean)
-
-  let commonIndex = 0
-  while (
-    commonIndex < fromParts.length &&
-    fromParts[commonIndex] === toParts[commonIndex]
-  ) {
-    commonIndex++
-  }
-
-  const fromRemaining = fromParts.slice(commonIndex).map(() => '..')
-  const toRemaining = toParts.slice(commonIndex)
-
-  return [...fromRemaining, ...toRemaining].join('/')
-}

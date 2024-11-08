@@ -119,7 +119,7 @@ export async function getFileExports(
   if (client) {
     return client.callMethod('getFileExports', {
       filePath,
-      tsConfigFilePath: projectOptions?.tsConfigFilePath,
+      projectOptions,
     })
   }
 
@@ -127,4 +127,25 @@ export async function getFileExports(
     const project = getProject(projectOptions)
     return getFileExports(filePath, project)
   })
+}
+
+/**
+ * Create a source file in the project.
+ * @internal
+ */
+export function createSourceFile(
+  filePath: string,
+  sourceText: string,
+  projectOptions?: ProjectOptions
+) {
+  if (client) {
+    return client.callMethod('createSourceFile', {
+      filePath,
+      sourceText,
+      projectOptions,
+    })
+  }
+
+  const project = getProject(projectOptions)
+  project.createSourceFile(filePath, sourceText, { overwrite: true })
 }
