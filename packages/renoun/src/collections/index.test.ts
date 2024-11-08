@@ -68,21 +68,23 @@ describe('collections', () => {
     const file = await ProjectDirectory.getFile('server', 'ts')
     const fileExports = await file!.getExports()
 
-    expect(fileExports).toMatchObject([{ name: 'createServer' }])
+    expect(fileExports).toMatchObject([
+      { name: 'createServer', position: 1245 },
+    ])
   })
 
   test('virtual file exports', async () => {
     const fileSystem = new VirtualFileSystem({
-      'server.ts': 'export const createServer = () => {}',
+      'use-hover.ts': 'export const useHover = () => {}',
     })
     const RootDirectory = new Directory({
       fileSystem,
       fileExtensions: ['ts'],
     })
-    const file = await RootDirectory.getFile('server', 'ts')
+    const file = await RootDirectory.getFile('use-hover', 'ts')
     const fileExports = await file!.getExports()
 
-    expect(fileExports).toMatchObject([{ name: 'createServer' }])
+    expect(fileExports).toMatchObject([{ name: 'useHover', position: 12 }])
   })
 
   test.todo(

@@ -8,9 +8,12 @@ export function getFileExports(filePath: string, project: Project) {
     sourceFile = project.addSourceFileAtPath(filePath)
   }
 
-  return sourceFile.getExportSymbols().map((symbol) => {
-    return {
-      name: symbol.getName(),
+  return Array.from(sourceFile.getExportedDeclarations()).flatMap(
+    ([name, declarations]) => {
+      return declarations.map((declaration) => ({
+        name,
+        position: declaration.getPos(),
+      }))
     }
-  })
+  )
 }
