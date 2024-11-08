@@ -8,7 +8,9 @@ import {
   createHighlighter,
   type Highlighter,
 } from '../utils/create-highlighter.js'
+import type { FileExport } from '../utils/get-file-exports.js'
 import type { SymbolFilter } from '../utils/resolve-type.js'
+import type { resolveTypeAtLocation } from '../utils/resolve-type-at-location.js'
 import type { DistributiveOmit } from '../types.js'
 import { WebSocketClient } from './rpc/client.js'
 import { getProject } from './get-project.js'
@@ -47,7 +49,10 @@ export async function analyzeSourceText(
   }
 ): Promise<AnalyzeSourceTextResult> {
   if (client) {
-    return client.callMethod('analyzeSourceText', options)
+    return client.callMethod<AnalyzeSourceTextResult>(
+      'analyzeSourceText',
+      options
+    )
   }
 
   /* Switch to synchronous analysis when building for production to prevent timeouts. */
@@ -92,12 +97,15 @@ export async function resolveType({
   const position = declaration.getPos()
 
   if (client) {
-    return client.callMethod('resolveType', {
-      filePath,
-      position,
-      filter: filter?.toString(),
-      tsConfigFilePath: projectOptions?.tsConfigFilePath,
-    })
+    return client.callMethod<ReturnType<typeof resolveTypeAtLocation>>(
+      'resolveType',
+      {
+        filePath,
+        position,
+        filter: filter?.toString(),
+        tsConfigFilePath: projectOptions?.tsConfigFilePath,
+      }
+    )
   }
 
   return import('../utils/resolve-type-at-location.js').then(
@@ -117,7 +125,7 @@ export async function getFileExports(
   projectOptions?: ProjectOptions
 ) {
   if (client) {
-    return client.callMethod('getFileExports', {
+    return client.callMethod<FileExport[]>('getFileExports', {
       filePath,
       projectOptions,
     })
@@ -133,13 +141,13 @@ export async function getFileExports(
  * Create a source file in the project.
  * @internal
  */
-export function createSourceFile(
+export async function createSourceFile(
   filePath: string,
   sourceText: string,
   projectOptions?: ProjectOptions
 ) {
   if (client) {
-    return client.callMethod('createSourceFile', {
+    return client.callMethod<void>('createSourceFile', {
       filePath,
       sourceText,
       projectOptions,

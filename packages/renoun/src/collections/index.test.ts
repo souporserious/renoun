@@ -9,7 +9,7 @@ import {
   type FileSystemEntry,
 } from './index'
 
-describe('collections', () => {
+describe('file system', () => {
   test('virtual file system', async () => {
     const fileSystem = new VirtualFileSystem({
       'src/project/server.ts': 'export const server = 1',
@@ -87,21 +87,33 @@ describe('collections', () => {
     expect(fileExports).toMatchObject([{ name: 'useHover', position: 12 }])
   })
 
-  test.todo(
-    'getRuntimeValue is only typed when getJavaScriptModule is defined',
-    async () => {
-      const ProjectDirectory = new Directory({
-        path: 'src/project',
-        fileExtensions: ['ts', 'tsx'],
-        tsConfigFilePath: 'tsconfig.json',
-        getJavaScriptModule: (path) => import(`../project/${path}`),
-      })
-      const file = await ProjectDirectory.getFile('server', 'ts')
-      const fileExports = await file!.getExports()
-    }
-  )
+  // test.only('getRuntimeValue is only typed when getJavaScriptModule is defined', async () => {
+  //   const CollectionsDirectory = new Directory({
+  //     path: 'src/collections',
+  //     fileExtensions: ['ts', 'tsx'],
+  //   })
+  //   const file = await CollectionsDirectory.getFile('path', 'ts')
+  //   const fileExport = await file!.getExport('basename')
+  //   // @ts-expect-error getRuntimeValue is not typed when getJavaScriptModule is not defined
+  //   fileExport!.getRuntimeValue
+  // })
 
-  test('uses collection file extensions when no file extension present', async () => {
+  test('getRuntimeValue resolves export runtime value from getJavaScriptModule', async () => {
+    const CollectionsDirectory = new Directory({
+      path: 'src/collections',
+      fileExtensions: ['ts', 'tsx'],
+      tsConfigFilePath: 'tsconfig.json',
+      getJavaScriptModule: (path) => import(`./${path}`),
+    })
+    const file = await CollectionsDirectory.getFile('path', 'ts')
+    const fileExport = await file!.getExport('basename')
+    const basename = await fileExport!.getRuntimeValue()
+
+    expect(basename).toBeDefined()
+    expect(basename('/path/to/file.ts', '.ts')).toBe('file')
+  })
+
+  test('uses directory file extensions when no file extension present', async () => {
     const ProjectDirectory = new Directory({
       path: 'src/project',
       fileExtensions: ['ts'],

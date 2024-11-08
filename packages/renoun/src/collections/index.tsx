@@ -5,7 +5,7 @@ import {
   isJavaScriptLikeExtension,
   type JavaScriptLikeExtensions,
 } from './is-javascript-like-extension.js'
-import { basename, extname, join } from './path.js'
+import { basename, extname, join, relative } from './path.js'
 
 type IsJavaScriptLikeExtensions<FileExtensions extends string[]> =
   FileExtensions extends (infer FileExtension)[]
@@ -47,6 +47,10 @@ export class File {
     this.#absolutePath = options.absolutePath
   }
 
+  getDirectory() {
+    return this.#directory
+  }
+
   getName() {
     return basename(this.#path, extname(this.#path))
   }
@@ -82,28 +86,31 @@ export class JavaScriptFileExport<
   ExportName extends keyof FileExports,
 > {
   #name: ExportName
-  #filePath: string
+  #position: number
+  #relativeFilePath: string
   #absoluteFilePath: string
-  #runtimeModule: Promise<FileExports>
+  #getJavaScriptModule?: (path: string) => Promise<FileExports>
 
   constructor(
     name: ExportName,
-    filePath: string,
+    position: number,
+    relativeFilePath: string,
     absoluteFilePath: string,
-    runtimeModule: Promise<FileExports>
+    getJavaScriptModule?: (path: string) => Promise<FileExports>
   ) {
     this.#name = name
-    this.#filePath = filePath
+    this.#position = position
+    this.#relativeFilePath = relativeFilePath
     this.#absoluteFilePath = absoluteFilePath
-    this.#runtimeModule = runtimeModule
+    this.#getJavaScriptModule = getJavaScriptModule
   }
 
   getName() {
     return this.#name
   }
 
-  getPath() {
-    return this.#filePath
+  getRelativePath() {
+    return this.#relativeFilePath
   }
 
   getAbsolutePath() {
@@ -111,46 +118,80 @@ export class JavaScriptFileExport<
   }
 
   async getRuntimeValue(): Promise<FileExports[ExportName]> {
-    const fileExports = await this.#runtimeModule
-    return fileExports[this.#name]
+    if (!this.#getJavaScriptModule) {
+      throw new Error(
+        `[renoun] JavaScript module loader is not defined for this file: ${this.#relativeFilePath}`
+      )
+    }
+
+    const fileModule = await this.#getJavaScriptModule(this.#relativeFilePath)
+    const fileModuleExport = fileModule[this.#name]
+
+    if (fileModuleExport === undefined) {
+      throw new Error(
+        `[renoun] JavaScript file export "${String(this.#name)}" not found in ${this.#absoluteFilePath}`
+      )
+    }
+
+    return fileModuleExport
   }
 }
 
 interface JavaScriptFileOptions extends FileOptions {
   getJavaScriptModule?: (path: string) => Promise<any>
   tsConfigFilePath?: string
-  isVirtual?: boolean
+  isVirtualFileSystem?: boolean
 }
 
 /** A JavaScript file in the file system. */
 export class JavaScriptFile<FileExports extends ModuleExports> extends File {
   #getJavaScriptModule?: (path: string) => Promise<FileExports>
   #tsConfigFilePath?: string
-  #isVirtual: boolean
+  #isVirtualFileSystem: boolean
 
   constructor({
     getJavaScriptModule,
     tsConfigFilePath,
-    isVirtual = false,
+    isVirtualFileSystem = false,
     ...fileOptions
   }: JavaScriptFileOptions) {
     super(fileOptions)
     this.#getJavaScriptModule = getJavaScriptModule
     this.#tsConfigFilePath = tsConfigFilePath
-    this.#isVirtual = isVirtual
+    this.#isVirtualFileSystem = isVirtualFileSystem
   }
 
-  async getExports(): Promise<FileExports> {
+  async getExports() {
     return getFileExports(this.getAbsolutePath(), {
       tsConfigFilePath: this.#tsConfigFilePath,
-      useInMemoryFileSystem: this.#isVirtual,
+      useInMemoryFileSystem: this.#isVirtualFileSystem,
     })
   }
 
-  async getExport<ExportName extends keyof FileExports>(
+  async getExport<ExportName extends Extract<keyof FileExports, string>>(
     name: ExportName
-  ): Promise<JavaScriptFileExport<FileExports, ExportName>> {
-    throw new Error('Not implemented')
+  ) {
+    const fileExports = await this.getExports()
+    const fileExport = fileExports.find(
+      (fileExport) => fileExport.name === name
+    )
+
+    if (!fileExport) {
+      throw new Error(
+        `[renoun] JavaScript file export "${name}" not found in ${this.getPath()}`
+      )
+    }
+
+    const directory = this.getDirectory()
+    const relativePath = relative(directory.getRootPath(), this.getPath())
+
+    return new JavaScriptFileExport(
+      fileExport.name,
+      fileExport.position,
+      relativePath,
+      this.getAbsolutePath(),
+      this.#getJavaScriptModule
+    )
   }
 }
 
@@ -292,7 +333,7 @@ export class Directory<
 
         if (
           !this.#fileExtensions ||
-          this.#fileExtensions.includes(extension as any)
+          this.#fileExtensions.includes(extension as FileExtensions[number])
         ) {
           if (isJavaScriptLikeExtension(extension)) {
             entries.push(
@@ -302,7 +343,7 @@ export class Directory<
                 absolutePath: entry.absolutePath,
                 getJavaScriptModule: this.#getJavaScriptModule,
                 tsConfigFilePath: this.#tsConfigFilePath,
-                isVirtual: fileSystem instanceof VirtualFileSystem,
+                isVirtualFileSystem: fileSystem instanceof VirtualFileSystem,
               })
             )
           } else {
@@ -349,6 +390,10 @@ export class Directory<
   getAbsolutePath() {
     // TODO: add this.#fileSystem.getAbsolutePath(this.#path) method
     return this.#path
+  }
+
+  getRootPath() {
+    return this.#rootPath
   }
 }
 
