@@ -17,10 +17,15 @@ export const javascriptLikeExtensions = [
 
 export type JavaScriptLikeExtensions = (typeof javascriptLikeExtensions)[number]
 
+export type HasJavaScriptLikeExtensions<FileExtensions extends string[]> =
+  Extract<FileExtensions[number], JavaScriptLikeExtensions> extends never
+    ? false
+    : true
+
 export function isJavaScriptLikeExtension(
-  extension: string
+  extension: string | undefined
 ): extension is JavaScriptLikeExtensions {
-  return javascriptLikeExtensions.includes(
-    extension as JavaScriptLikeExtensions
-  )
+  return javascriptLikeExtensions
+    ? javascriptLikeExtensions.includes(extension as JavaScriptLikeExtensions)
+    : false
 }

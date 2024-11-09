@@ -3,26 +3,9 @@ import type { FileSystem } from './file-system/FileSystem.js'
 import { VirtualFileSystem } from './file-system/VirtualFileSystem.js'
 import {
   isJavaScriptLikeExtension,
-  type JavaScriptLikeExtensions,
+  type HasJavaScriptLikeExtensions,
 } from './is-javascript-like-extension.js'
 import { basename, extname, join, relative } from './path.js'
-
-type IsJavaScriptLikeExtensions<FileExtensions extends string[]> =
-  FileExtensions extends (infer FileExtension)[]
-    ? FileExtension extends JavaScriptLikeExtensions
-      ? true
-      : false
-    : false
-
-type FileForExtension<
-  FileExports extends ModuleExports = ModuleExports,
-  FileExtensions extends Extract<keyof FileExports, string>[] = Extract<
-    keyof FileExports,
-    string
-  >[],
-> = FileExtensions extends JavaScriptLikeExtensions | JavaScriptLikeExtensions[]
-  ? JavaScriptFile<FileExports>
-  : File
 
 export type FileSystemEntry<FileExports extends object> =
   | File
@@ -116,20 +99,32 @@ export class JavaScriptFileExport<
   getAbsolutePath() {
     return this.#absoluteFilePath
   }
+}
+
+export class JavaScriptFileExportWithRuntime<
+  FileExports extends ModuleExports,
+  ExportName extends keyof FileExports,
+> extends JavaScriptFileExport<FileExports, ExportName> {
+  #getJavaScriptModule: (path: string) => Promise<FileExports>
+
+  constructor(
+    name: ExportName,
+    position: number,
+    relativeFilePath: string,
+    absoluteFilePath: string,
+    getJavaScriptModule: (path: string) => Promise<FileExports>
+  ) {
+    super(name, position, relativeFilePath, absoluteFilePath)
+    this.#getJavaScriptModule = getJavaScriptModule
+  }
 
   async getRuntimeValue(): Promise<FileExports[ExportName]> {
-    if (!this.#getJavaScriptModule) {
-      throw new Error(
-        `[renoun] JavaScript module loader is not defined for this file: ${this.#relativeFilePath}`
-      )
-    }
-
-    const fileModule = await this.#getJavaScriptModule(this.#relativeFilePath)
-    const fileModuleExport = fileModule[this.#name]
+    const fileModule = await this.#getJavaScriptModule(this.getRelativePath())
+    const fileModuleExport = fileModule[this.getName()]
 
     if (fileModuleExport === undefined) {
       throw new Error(
-        `[renoun] JavaScript file export "${String(this.#name)}" not found in ${this.#absoluteFilePath}`
+        `[renoun] JavaScript file export "${String(this.getName())}" not found in ${this.getAbsolutePath()}`
       )
     }
 
@@ -138,25 +133,21 @@ export class JavaScriptFileExport<
 }
 
 interface JavaScriptFileOptions extends FileOptions {
-  getJavaScriptModule?: (path: string) => Promise<any>
   tsConfigFilePath?: string
   isVirtualFileSystem?: boolean
 }
 
 /** A JavaScript file in the file system. */
 export class JavaScriptFile<FileExports extends ModuleExports> extends File {
-  #getJavaScriptModule?: (path: string) => Promise<FileExports>
   #tsConfigFilePath?: string
   #isVirtualFileSystem: boolean
 
   constructor({
-    getJavaScriptModule,
     tsConfigFilePath,
     isVirtualFileSystem = false,
     ...fileOptions
   }: JavaScriptFileOptions) {
     super(fileOptions)
-    this.#getJavaScriptModule = getJavaScriptModule
     this.#tsConfigFilePath = tsConfigFilePath
     this.#isVirtualFileSystem = isVirtualFileSystem
   }
@@ -170,7 +161,10 @@ export class JavaScriptFile<FileExports extends ModuleExports> extends File {
 
   async getExport<ExportName extends Extract<keyof FileExports, string>>(
     name: ExportName
-  ) {
+  ): Promise<
+    | JavaScriptFileExportWithRuntime<FileExports, ExportName>
+    | JavaScriptFileExport<FileExports, ExportName>
+  > {
     const fileExports = await this.getExports()
     const fileExport = fileExports.find(
       (fileExport) => fileExport.name === name
@@ -186,7 +180,53 @@ export class JavaScriptFile<FileExports extends ModuleExports> extends File {
     const relativePath = relative(directory.getRootPath(), this.getPath())
 
     return new JavaScriptFileExport(
-      fileExport.name,
+      fileExport.name as ExportName,
+      fileExport.position,
+      relativePath,
+      this.getAbsolutePath()
+    )
+  }
+}
+
+interface JavaScriptFileWithRuntimeOptions extends JavaScriptFileOptions {
+  getJavaScriptModule: (path: string) => Promise<any>
+}
+
+class JavaScriptFileWithRuntime<
+  FileExports extends ModuleExports,
+> extends JavaScriptFile<FileExports> {
+  #getJavaScriptModule: (path: string) => Promise<FileExports>
+
+  constructor({
+    getJavaScriptModule,
+    ...fileOptions
+  }: JavaScriptFileWithRuntimeOptions) {
+    super(fileOptions)
+    this.#getJavaScriptModule = getJavaScriptModule
+  }
+
+  async getExport<ExportName extends Extract<keyof FileExports, string>>(
+    name: ExportName
+  ): Promise<
+    | JavaScriptFileExportWithRuntime<FileExports, ExportName>
+    | JavaScriptFileExport<FileExports, ExportName>
+  > {
+    const fileExports = await this.getExports()
+    const fileExport = fileExports.find(
+      (fileExport) => fileExport.name === name
+    )
+
+    if (!fileExport) {
+      throw new Error(
+        `[renoun] JavaScript file export "${name}" not found in ${this.getPath()}`
+      )
+    }
+
+    const directory = this.getDirectory()
+    const relativePath = relative(directory.getRootPath(), this.getPath())
+
+    return new JavaScriptFileExportWithRuntime(
+      fileExport.name as ExportName,
       fileExport.position,
       relativePath,
       this.getAbsolutePath(),
@@ -197,7 +237,7 @@ export class JavaScriptFile<FileExports extends ModuleExports> extends File {
 
 export type ModuleExports = { [name: string]: any }
 
-export type DirectoryOptions<
+type BaseDirectoryOptions<
   FileExports extends ModuleExports = ModuleExports,
   FileExtensions extends Extract<keyof FileExports, string>[] = Extract<
     keyof FileExports,
@@ -209,12 +249,38 @@ export type DirectoryOptions<
   directory?: Directory
   path?: string
   rootPath?: string
-} & (IsJavaScriptLikeExtensions<FileExtensions> extends true
-  ? {
-      tsConfigFilePath?: string
-      getJavaScriptModule?: (path: string) => Promise<any>
-    }
-  : {})
+}
+
+type DirectoryWithJavaScriptOptions<
+  FileExports extends ModuleExports = ModuleExports,
+  FileExtensions extends Extract<keyof FileExports, string>[] = Extract<
+    keyof FileExports,
+    string
+  >[],
+  RuntimeOptions extends {
+    getJavaScriptModule?: (path: string) => Promise<any>
+  } = {},
+> = BaseDirectoryOptions<FileExports, FileExtensions> & {
+  tsConfigFilePath?: string
+} & RuntimeOptions
+
+export type DirectoryOptions<
+  FileExports extends ModuleExports = ModuleExports,
+  FileExtensions extends Extract<keyof FileExports, string>[] = Extract<
+    keyof FileExports,
+    string
+  >[],
+  RuntimeOptions extends {
+    getJavaScriptModule?: (path: string) => Promise<any>
+  } = {},
+> =
+  HasJavaScriptLikeExtensions<FileExtensions> extends true
+    ? DirectoryWithJavaScriptOptions<
+        FileExports,
+        FileExtensions,
+        RuntimeOptions
+      >
+    : BaseDirectoryOptions<FileExports, FileExtensions>
 
 /** A directory containing files and subdirectories in the file system. */
 export class Directory<
@@ -223,6 +289,9 @@ export class Directory<
     keyof FileExports,
     string
   >[],
+  RuntimeOptions extends {
+    getJavaScriptModule?: (path: string) => Promise<any>
+  } = {},
 > {
   #fileSystem: FileSystem | undefined
   #fileExtensions: FileExtensions
@@ -230,9 +299,11 @@ export class Directory<
   #rootPath: string
   #directory?: Directory
   #tsConfigFilePath?: string
-  #getJavaScriptModule?: (path: string) => Promise<any>
+  protected getJavaScriptModule?: (path: string) => Promise<any>
 
-  constructor(options: DirectoryOptions<FileExports, FileExtensions>) {
+  constructor(
+    options: DirectoryOptions<FileExports, FileExtensions, RuntimeOptions>
+  ) {
     this.#fileSystem = options.fileSystem
     this.#fileExtensions = options.fileExtensions
     this.#path = options.path
@@ -248,7 +319,7 @@ export class Directory<
     }
 
     if ('getJavaScriptModule' in options) {
-      this.#getJavaScriptModule = options.getJavaScriptModule
+      this.getJavaScriptModule = options.getJavaScriptModule
     }
   }
 
@@ -261,10 +332,27 @@ export class Directory<
     return this.#fileSystem
   }
 
-  async getFile(
+  #hasJavaScriptModule(): this is {
+    getJavaScriptModule: (path: string) => Promise<any>
+  } {
+    return typeof this.getJavaScriptModule === 'function'
+  }
+
+  async getFile<
+    Extension extends FileExtensions[number] | undefined = undefined,
+  >(
     path: string | string[],
-    extension?: FileExtensions[number] | FileExtensions[number][]
-  ): Promise<FileForExtension<FileExports, FileExtensions> | undefined> {
+    extension?: Extension | Extension[]
+  ): Promise<
+    | (HasJavaScriptLikeExtensions<FileExtensions> extends true
+        ? RuntimeOptions extends {
+            getJavaScriptModule: (path: string) => Promise<any>
+          }
+          ? JavaScriptFileWithRuntime<FileExports>
+          : JavaScriptFile<FileExports>
+        : File)
+    | undefined
+  > {
     const normalizedPath = Array.isArray(path) ? join(...path) : path
     const filePath = join(this.#rootPath, normalizedPath)
     const fileExtensions = extension
@@ -280,14 +368,15 @@ export class Directory<
         (file) => file.getPath() === filePathWithExtension
       )
 
-      if (file) {
-        if (isJavaScriptLikeExtension(extension)) {
-          return file as JavaScriptFile<FileExports>
-        }
-
-        return file as FileForExtension<FileExports, FileExtensions>
-      }
+      return file as HasJavaScriptLikeExtensions<FileExtensions> extends true
+        ? RuntimeOptions extends {
+            getJavaScriptModule: (path: string) => Promise<any>
+          }
+          ? JavaScriptFileWithRuntime<FileExports>
+          : JavaScriptFile<FileExports>
+        : File
     }
+
     return undefined
   }
 
@@ -317,16 +406,18 @@ export class Directory<
       }
 
       if (entry.isDirectory) {
+        const directoryOptions = {
+          fileSystem,
+          fileExtensions: this.#fileExtensions,
+          path: entry.path,
+          rootPath: this.#rootPath,
+          directory: this,
+          tsConfigFilePath: this.#tsConfigFilePath,
+          getJavaScriptModule: this.#getJavaScriptModule,
+        } satisfies DirectoryWithJavaScriptOptions<FileExports, FileExtensions>
+
         entries.push(
-          new Directory<FileExports, FileExtensions>({
-            fileSystem,
-            fileExtensions: this.#fileExtensions,
-            path: entry.path,
-            rootPath: this.#rootPath,
-            directory: this,
-            tsConfigFilePath: this.#tsConfigFilePath,
-            getJavaScriptModule: this.#getJavaScriptModule,
-          })
+          new Directory<FileExports, FileExtensions>(directoryOptions)
         )
       } else if (entry.isFile) {
         const extension = extname(entry.name).slice(1)
@@ -336,16 +427,28 @@ export class Directory<
           this.#fileExtensions.includes(extension as FileExtensions[number])
         ) {
           if (isJavaScriptLikeExtension(extension)) {
-            entries.push(
-              new JavaScriptFile({
-                directory: this,
-                path: entry.path,
-                absolutePath: entry.absolutePath,
-                getJavaScriptModule: this.#getJavaScriptModule,
-                tsConfigFilePath: this.#tsConfigFilePath,
-                isVirtualFileSystem: fileSystem instanceof VirtualFileSystem,
-              })
-            )
+            if (this.#hasJavaScriptModule()) {
+              entries.push(
+                new JavaScriptFileWithRuntime({
+                  directory: this,
+                  path: entry.path,
+                  absolutePath: entry.absolutePath,
+                  getJavaScriptModule: this.getJavaScriptModule!,
+                  tsConfigFilePath: this.#tsConfigFilePath,
+                  isVirtualFileSystem: fileSystem instanceof VirtualFileSystem,
+                })
+              )
+            } else {
+              entries.push(
+                new JavaScriptFile({
+                  directory: this,
+                  path: entry.path,
+                  absolutePath: entry.absolutePath,
+                  tsConfigFilePath: this.#tsConfigFilePath,
+                  isVirtualFileSystem: fileSystem instanceof VirtualFileSystem,
+                })
+              )
+            }
           } else {
             entries.push(
               new File({
