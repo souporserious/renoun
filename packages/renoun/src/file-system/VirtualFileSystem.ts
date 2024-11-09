@@ -1,7 +1,7 @@
-import { createSourceFile } from '../../project/client'
-import { isJavaScriptLikeExtension } from '../is-javascript-like-extension'
-import { FileSystem } from './FileSystem'
-import type { DirectoryEntry } from './types'
+import { createSourceFile } from '../project/client.js'
+import { isJavaScriptLikeExtension } from './is-javascript-like-extension.js'
+import { FileSystem } from './FileSystem.js'
+import type { DirectoryEntry } from './types.js'
 
 // TODO: generate an identifier that can be associated with each file system instance
 

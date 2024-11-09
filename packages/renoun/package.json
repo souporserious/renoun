@@ -48,6 +48,10 @@
       "types": "./dist/components/*.d.ts",
       "import": "./dist/components/*.js"
     },
+    "./file-system": {
+      "types": "./dist/file-system/index.d.ts",
+      "import": "./dist/file-system/index.js"
+    },
     "./mdx": {
       "types": "./dist/mdx/index.d.ts",
       "import": "./dist/mdx/index.js"
@@ -74,6 +78,9 @@
       ],
       "components/*": [
         "./dist/components/*.d.ts"
+      ],
+      "file-system": [
+        "./dist/file-system/index.d.ts"
       ],
       "mdx": [
         "./dist/mdx/index.d.ts"

@@ -1,6 +1,6 @@
 import { minimatch } from 'minimatch'
 
-import type { DirectoryEntry } from './types'
+import type { DirectoryEntry } from './types.js'
 
 export abstract class FileSystem {
   #tsConfig?: any

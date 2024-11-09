@@ -1,8 +1,8 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 
-import { FileSystem } from './FileSystem'
-import type { DirectoryEntry } from './types'
+import { FileSystem } from './FileSystem.js'
+import type { DirectoryEntry } from './types.js'
 
 export class NodeFileSystem extends FileSystem {
   async readDirectory(path: string = '.'): Promise<DirectoryEntry[]> {
