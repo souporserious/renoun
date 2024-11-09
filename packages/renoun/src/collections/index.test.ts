@@ -6,6 +6,9 @@ import {
   File,
   Directory,
   JavaScriptFile,
+  JavaScriptFileExport,
+  JavaScriptFileWithRuntime,
+  JavaScriptFileExportWithRuntime,
   type FileSystemEntry,
 } from './index'
 
@@ -87,16 +90,23 @@ describe('file system', () => {
     expect(fileExports).toMatchObject([{ name: 'useHover', position: 12 }])
   })
 
-  // test.only('getRuntimeValue is only typed when getJavaScriptModule is defined', async () => {
-  //   const CollectionsDirectory = new Directory({
-  //     path: 'src/collections',
-  //     fileExtensions: ['ts', 'tsx'],
-  //   })
-  //   const file = await CollectionsDirectory.getFile('path', 'ts')
-  //   const fileExport = await file!.getExport('basename')
-  //   // @ts-expect-error getRuntimeValue is not typed when getJavaScriptModule is not defined
-  //   fileExport!.getRuntimeValue
-  // })
+  test('getRuntimeValue is not typed when getJavaScriptModule is not defined', async () => {
+    const CollectionsDirectory = new Directory({
+      path: 'src/collections',
+      fileExtensions: ['ts', 'tsx'],
+      tsConfigFilePath: 'tsconfig.json',
+    })
+    const file = await CollectionsDirectory.getFile('path', 'ts')
+
+    expect(file).toBeInstanceOf(JavaScriptFile)
+
+    const fileExport = await file!.getExport('basename')
+
+    expect(fileExport).toBeInstanceOf(JavaScriptFileExport)
+
+    // @ts-expect-error - getRuntimeValue should not be typed when getJavaScriptModule is not defined
+    fileExport!.getRuntimeValue
+  })
 
   test('getRuntimeValue resolves export runtime value from getJavaScriptModule', async () => {
     const CollectionsDirectory = new Directory({
@@ -106,7 +116,13 @@ describe('file system', () => {
       getJavaScriptModule: (path) => import(`./${path}`),
     })
     const file = await CollectionsDirectory.getFile('path', 'ts')
+
+    expect(file).toBeInstanceOf(JavaScriptFileWithRuntime)
+
     const fileExport = await file!.getExport('basename')
+
+    expect(fileExport).toBeInstanceOf(JavaScriptFileExportWithRuntime)
+
     const basename = await fileExport!.getRuntimeValue()
 
     expect(basename).toBeDefined()

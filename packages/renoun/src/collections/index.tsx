@@ -63,7 +63,7 @@ export class File {
   }
 }
 
-/** A JavaScript file export with a strongly typed runtime value. */
+/** A JavaScript file export. */
 export class JavaScriptFileExport<
   FileExports extends ModuleExports,
   ExportName extends keyof FileExports,
@@ -72,20 +72,17 @@ export class JavaScriptFileExport<
   #position: number
   #relativeFilePath: string
   #absoluteFilePath: string
-  #getJavaScriptModule?: (path: string) => Promise<FileExports>
 
   constructor(
     name: ExportName,
     position: number,
     relativeFilePath: string,
-    absoluteFilePath: string,
-    getJavaScriptModule?: (path: string) => Promise<FileExports>
+    absoluteFilePath: string
   ) {
     this.#name = name
     this.#position = position
     this.#relativeFilePath = relativeFilePath
     this.#absoluteFilePath = absoluteFilePath
-    this.#getJavaScriptModule = getJavaScriptModule
   }
 
   getName() {
@@ -98,37 +95,6 @@ export class JavaScriptFileExport<
 
   getAbsolutePath() {
     return this.#absoluteFilePath
-  }
-}
-
-export class JavaScriptFileExportWithRuntime<
-  FileExports extends ModuleExports,
-  ExportName extends keyof FileExports,
-> extends JavaScriptFileExport<FileExports, ExportName> {
-  #getJavaScriptModule: (path: string) => Promise<FileExports>
-
-  constructor(
-    name: ExportName,
-    position: number,
-    relativeFilePath: string,
-    absoluteFilePath: string,
-    getJavaScriptModule: (path: string) => Promise<FileExports>
-  ) {
-    super(name, position, relativeFilePath, absoluteFilePath)
-    this.#getJavaScriptModule = getJavaScriptModule
-  }
-
-  async getRuntimeValue(): Promise<FileExports[ExportName]> {
-    const fileModule = await this.#getJavaScriptModule(this.getRelativePath())
-    const fileModuleExport = fileModule[this.getName()]
-
-    if (fileModuleExport === undefined) {
-      throw new Error(
-        `[renoun] JavaScript file export "${String(this.getName())}" not found in ${this.getAbsolutePath()}`
-      )
-    }
-
-    return fileModuleExport
   }
 }
 
@@ -161,10 +127,7 @@ export class JavaScriptFile<FileExports extends ModuleExports> extends File {
 
   async getExport<ExportName extends Extract<keyof FileExports, string>>(
     name: ExportName
-  ): Promise<
-    | JavaScriptFileExportWithRuntime<FileExports, ExportName>
-    | JavaScriptFileExport<FileExports, ExportName>
-  > {
+  ): Promise<JavaScriptFileExport<FileExports, ExportName>> {
     const fileExports = await this.getExports()
     const fileExport = fileExports.find(
       (fileExport) => fileExport.name === name
@@ -188,29 +151,59 @@ export class JavaScriptFile<FileExports extends ModuleExports> extends File {
   }
 }
 
+/** A JavaScript file export with runtime value. */
+export class JavaScriptFileExportWithRuntime<
+  FileExports extends ModuleExports,
+  ExportName extends keyof FileExports,
+> extends JavaScriptFileExport<FileExports, ExportName> {
+  protected getJavaScriptModule: (path: string) => Promise<FileExports>
+
+  constructor(
+    name: ExportName,
+    position: number,
+    relativeFilePath: string,
+    absoluteFilePath: string,
+    getJavaScriptModule: (path: string) => Promise<FileExports>
+  ) {
+    super(name, position, relativeFilePath, absoluteFilePath)
+    this.getJavaScriptModule = getJavaScriptModule
+  }
+
+  async getRuntimeValue(): Promise<FileExports[ExportName]> {
+    const fileModule = await this.getJavaScriptModule(this.getRelativePath())
+    const fileModuleExport = fileModule[this.getName()]
+
+    if (fileModuleExport === undefined) {
+      throw new Error(
+        `[renoun] JavaScript file export "${String(this.getName())}" not found in ${this.getAbsolutePath()}`
+      )
+    }
+
+    return fileModuleExport
+  }
+}
+
 interface JavaScriptFileWithRuntimeOptions extends JavaScriptFileOptions {
   getJavaScriptModule: (path: string) => Promise<any>
 }
 
-class JavaScriptFileWithRuntime<
+/** A JavaScript file with runtime value. */
+export class JavaScriptFileWithRuntime<
   FileExports extends ModuleExports,
 > extends JavaScriptFile<FileExports> {
-  #getJavaScriptModule: (path: string) => Promise<FileExports>
+  protected getJavaScriptModule: (path: string) => Promise<FileExports>
 
   constructor({
     getJavaScriptModule,
     ...fileOptions
   }: JavaScriptFileWithRuntimeOptions) {
     super(fileOptions)
-    this.#getJavaScriptModule = getJavaScriptModule
+    this.getJavaScriptModule = getJavaScriptModule
   }
 
   async getExport<ExportName extends Extract<keyof FileExports, string>>(
     name: ExportName
-  ): Promise<
-    | JavaScriptFileExportWithRuntime<FileExports, ExportName>
-    | JavaScriptFileExport<FileExports, ExportName>
-  > {
+  ): Promise<JavaScriptFileExportWithRuntime<FileExports, ExportName>> {
     const fileExports = await this.getExports()
     const fileExport = fileExports.find(
       (fileExport) => fileExport.name === name
@@ -230,7 +223,7 @@ class JavaScriptFileWithRuntime<
       fileExport.position,
       relativePath,
       this.getAbsolutePath(),
-      this.#getJavaScriptModule
+      this.getJavaScriptModule
     )
   }
 }
@@ -413,8 +406,12 @@ export class Directory<
           rootPath: this.#rootPath,
           directory: this,
           tsConfigFilePath: this.#tsConfigFilePath,
-          getJavaScriptModule: this.#getJavaScriptModule,
-        } satisfies DirectoryWithJavaScriptOptions<FileExports, FileExtensions>
+          getJavaScriptModule: this.getJavaScriptModule,
+        } satisfies DirectoryWithJavaScriptOptions<
+          FileExports,
+          FileExtensions,
+          { getJavaScriptModule?: (path: string) => Promise<any> }
+        >
 
         entries.push(
           new Directory<FileExports, FileExtensions>(directoryOptions)
