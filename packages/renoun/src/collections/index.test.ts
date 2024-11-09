@@ -94,17 +94,18 @@ describe('file system', () => {
     const CollectionsDirectory = new Directory({
       path: 'src/collections',
       fileExtensions: ['ts', 'tsx'],
-      tsConfigFilePath: 'tsconfig.json',
     })
     const file = await CollectionsDirectory.getFile('path', 'ts')
 
+    expectTypeOf(file!).toMatchTypeOf<JavaScriptFile<any>>()
     expect(file).toBeInstanceOf(JavaScriptFile)
 
     const fileExport = await file!.getExport('basename')
 
+    expectTypeOf(fileExport).not.toHaveProperty('getRuntimeValue')
     expect(fileExport).toBeInstanceOf(JavaScriptFileExport)
 
-    // @ts-expect-error - getRuntimeValue should not be typed when getJavaScriptModule is not defined
+    // @ts-expect-error
     fileExport!.getRuntimeValue
   })
 
@@ -117,10 +118,12 @@ describe('file system', () => {
     })
     const file = await CollectionsDirectory.getFile('path', 'ts')
 
+    expectTypeOf(file!).toMatchTypeOf<JavaScriptFileWithRuntime<any>>()
     expect(file).toBeInstanceOf(JavaScriptFileWithRuntime)
 
     const fileExport = await file!.getExport('basename')
 
+    expectTypeOf(fileExport).toHaveProperty('getRuntimeValue')
     expect(fileExport).toBeInstanceOf(JavaScriptFileExportWithRuntime)
 
     const basename = await fileExport!.getRuntimeValue()
