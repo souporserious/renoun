@@ -9,8 +9,7 @@ import {
   type Highlighter,
 } from '../utils/create-highlighter.js'
 import type { FileExport } from '../utils/get-file-exports.js'
-import type { SymbolFilter } from '../utils/resolve-type.js'
-import type { resolveTypeAtLocation } from '../utils/resolve-type-at-location.js'
+import type { ResolvedType, SymbolFilter } from '../utils/resolve-type.js'
 import type { DistributiveOmit } from '../types.js'
 import { WebSocketClient } from './rpc/client.js'
 import { getProject } from './get-project.js'
@@ -90,22 +89,19 @@ export async function resolveType({
   declaration: Node
   projectOptions?: ProjectOptions
   filter?: SymbolFilter
-}) {
+}): Promise<ResolvedType | undefined> {
   await waitForRefreshingProjects()
 
   const filePath = declaration.getSourceFile().getFilePath()
   const position = declaration.getPos()
 
   if (client) {
-    return client.callMethod<ReturnType<typeof resolveTypeAtLocation>>(
-      'resolveType',
-      {
-        filePath,
-        position,
-        filter: filter?.toString(),
-        tsConfigFilePath: projectOptions?.tsConfigFilePath,
-      }
-    )
+    return client.callMethod<ResolvedType>('resolveType', {
+      filePath,
+      position,
+      filter: filter?.toString(),
+      tsConfigFilePath: projectOptions?.tsConfigFilePath,
+    })
   }
 
   return import('../utils/resolve-type-at-location.js').then(
