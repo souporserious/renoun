@@ -28,7 +28,7 @@ import { getGitMetadata } from '../utils/get-git-metadata.js'
 import { getJsDocMetadata } from '../utils/get-js-doc-metadata.js'
 import { resolveType } from '../project/client.js'
 import { resolveTsConfigPath } from '../utils/resolve-ts-config-path.js'
-import type { SymbolFilter } from '../utils/resolve-type.js'
+import type { ResolvedType, SymbolFilter } from '../utils/resolve-type.js'
 import { getSourceFilesPathMap } from '../utils/get-source-files-path-map.js'
 import { getSourceFilesOrderMap } from '../utils/get-source-files-order-map.js'
 
@@ -89,7 +89,7 @@ export interface ExportSource<Value> extends BaseSource {
   getName(): string
 
   /** The resolved type of the exported source based on the TypeScript type if it exists. */
-  getType(filter?: SymbolFilter): Promise<ReturnType<typeof resolveType>>
+  getType(filter?: SymbolFilter): Promise<ResolvedType | undefined>
 
   /** The name of the exported source formatted as a title. */
   getTitle(): string
