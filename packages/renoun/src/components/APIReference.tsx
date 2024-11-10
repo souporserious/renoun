@@ -97,52 +97,54 @@ async function APIReferenceAsync({
       workingDirectory
     )
 
-    return exportedTypes.map((type) => (
-      <div
-        key={type.name}
-        css={{
-          display: 'flex',
-          flexDirection: 'column',
-          padding: '1.6rem 0',
-          borderBottom: '1px solid var(--color-separator-secondary)',
-        }}
-      >
+    return exportedTypes
+      .filter((type): type is ResolvedType => Boolean(type))
+      .map((type) => (
         <div
+          key={type.name}
           css={{
             display: 'flex',
             flexDirection: 'column',
-            gap: '0.8rem',
+            padding: '1.6rem 0',
+            borderBottom: '1px solid var(--color-separator-secondary)',
           }}
         >
           <div
             css={{
               display: 'flex',
-              alignItems: 'center',
-              gap: '1rem',
+              flexDirection: 'column',
+              gap: '0.8rem',
             }}
           >
-            <h3
-              id={type.name ? createSlug(type.name) : undefined}
-              css={{ flexShrink: 0, margin: '0 !important' }}
+            <div
+              css={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '1rem',
+              }}
             >
-              {type.name}
-            </h3>
+              <h3
+                id={type.name ? createSlug(type.name) : undefined}
+                css={{ flexShrink: 0, margin: '0 !important' }}
+              >
+                {type.name}
+              </h3>
 
-            <CodeInline value={type.text} language="typescript" />
+              <CodeInline value={type.text} language="typescript" />
 
-            {/* {type.path && <ViewSource href={type.path} />} */}
+              {/* {type.path && <ViewSource href={type.path} />} */}
+            </div>
+
+            {type.description ? (
+              <MDXContent value={type.description} components={mdxComponents} />
+            ) : null}
           </div>
 
-          {type.description ? (
-            <MDXContent value={type.description} components={mdxComponents} />
-          ) : null}
+          <div css={{ display: 'flex' }}>
+            <TypeChildren type={type} css={{ marginTop: '2rem' }} />
+          </div>
         </div>
-
-        <div css={{ display: 'flex' }}>
-          <TypeChildren type={type} css={{ marginTop: '2rem' }} />
-        </div>
-      </div>
-    ))
+      ))
   }
 
   const type = await source.getType(filter)
