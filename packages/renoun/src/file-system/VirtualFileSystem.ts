@@ -1,3 +1,5 @@
+import ignore from 'ignore'
+
 import { createSourceFile } from '../project/client.js'
 import { isJavaScriptLikeExtension } from './is-javascript-like-extension.js'
 import { FileSystem } from './FileSystem.js'
@@ -7,6 +9,7 @@ import type { DirectoryEntry } from './types.js'
 
 export class VirtualFileSystem extends FileSystem {
   #files: Map<string, string>
+  #ignore: ReturnType<typeof ignore> | undefined
 
   constructor(files: { [path: string]: string }) {
     super()
@@ -73,11 +76,40 @@ export class VirtualFileSystem extends FileSystem {
     return entries
   }
 
-  async readFile(path: string): Promise<string> {
+  readFileSync(path: string): string {
     const content = this.#files.get(path)
     if (content === undefined) {
       throw new Error(`File not found: ${path}`)
     }
     return content
+  }
+
+  async readFile(path: string): Promise<string> {
+    return this.readFileSync(path)
+  }
+
+  isFilePathGitIgnored(filePath: string) {
+    if (!this.#ignore) {
+      try {
+        const contents = this.readFileSync('.gitignore')
+
+        if (contents) {
+          const gitIgnorePatterns = contents
+            .split('\n')
+            .map((line) => line.trim())
+            // Filter out comments and empty lines
+            .filter((line) => line && !line.startsWith('#'))
+
+          this.#ignore = ignore()
+          this.#ignore.add(gitIgnorePatterns)
+        } else {
+          return false
+        }
+      } catch (error) {
+        return false
+      }
+    }
+
+    return this.#ignore.ignores(filePath)
   }
 }

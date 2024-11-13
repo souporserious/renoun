@@ -118,6 +118,7 @@
     "@renoun/mdx": "workspace:*",
     "fast-glob": "^3.3.2",
     "glob-parent": "^6.0.2",
+    "ignore": "^6.0.2",
     "resolve": "^1.22.8",
     "restyle": "catalog:",
     "minimatch": "^10.0.1",

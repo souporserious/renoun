@@ -13,6 +13,7 @@ export abstract class FileSystem {
 
   abstract readFile(path: string): Promise<string>
   abstract readDirectory(path?: string): Promise<DirectoryEntry[]>
+  abstract isFilePathGitIgnored(filePath: string): boolean
 
   #getTsConfig = async (tsConfigFilePath: string) => {
     const tsConfigContents = await this.readFile(tsConfigFilePath)
