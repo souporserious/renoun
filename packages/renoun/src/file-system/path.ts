@@ -39,3 +39,14 @@ export function relative(from: string, to: string): string {
 
   return [...fromRemaining, ...toRemaining].join('/')
 }
+
+export function dirname(path: string): string {
+  const slashIndex = path.lastIndexOf('/')
+  if (slashIndex === -1) return '.'
+  if (slashIndex === 0) return '/'
+  return path.substring(0, slashIndex)
+}
+
+export function removeExtension(filePath: string): string {
+  return join(dirname(filePath), basename(filePath, extname(filePath)))
+}

@@ -3,14 +3,14 @@ import type { FileSystem } from './FileSystem.js'
 import { VirtualFileSystem } from './VirtualFileSystem.js'
 import {
   isJavaScriptLikeExtension,
-  type HasJavaScriptLikeExtensions,
+  type IsJavaScriptLikeExtension,
 } from './is-javascript-like-extension.js'
-import { basename, extname, join, relative } from './path.js'
+import { basename, extname, join, relative, removeExtension } from './path.js'
 
 export type FileSystemEntry<FileExports extends object> =
   | File
   | JavaScriptFile<FileExports>
-  | Directory<FileExports>
+  | Directory
 
 interface FileOptions {
   directory: Directory
@@ -104,7 +104,9 @@ interface JavaScriptFileOptions extends FileOptions {
 }
 
 /** A JavaScript file in the file system. */
-export class JavaScriptFile<FileExports extends ModuleExports> extends File {
+export class JavaScriptFile<
+  FileExports extends ModuleExports = ModuleExports,
+> extends File {
   #tsConfigFilePath?: string
   #isVirtualFileSystem: boolean
 
@@ -189,7 +191,7 @@ interface JavaScriptFileWithRuntimeOptions extends JavaScriptFileOptions {
 
 /** A JavaScript file with runtime value. */
 export class JavaScriptFileWithRuntime<
-  FileExports extends ModuleExports,
+  FileExports extends ModuleExports = ModuleExports,
 > extends JavaScriptFile<FileExports> {
   protected getModule: (path: string) => Promise<FileExports>
 
@@ -227,90 +229,37 @@ export class JavaScriptFileWithRuntime<
 
 export type ModuleExports = { [name: string]: any }
 
-type BaseDirectoryOptions<
-  FileExports extends ModuleExports = ModuleExports,
-  FileExtensions extends Extract<keyof FileExports, string>[] = Extract<
-    keyof FileExports,
-    string
-  >[],
-> = {
-  fileExtensions: FileExtensions
-  fileSystem?: FileSystem
-  directory?: Directory
+interface DirectoryOptions {
   path?: string
   rootPath?: string
+  tsConfigPath?: string
+  fileSystem?: FileSystem
+  directory?: Directory
+  getModule?: (path: string) => Promise<any>
 }
-
-type DirectoryWithJavaScriptOptions<
-  FileExports extends ModuleExports = ModuleExports,
-  FileExtensions extends Extract<keyof FileExports, string>[] = Extract<
-    keyof FileExports,
-    string
-  >[],
-  RuntimeOptions extends {
-    getModule?: (path: string) => Promise<any>
-  } = {},
-> = BaseDirectoryOptions<FileExports, FileExtensions> & {
-  tsConfigFilePath?: string
-} & RuntimeOptions
-
-export type DirectoryOptions<
-  FileExports extends ModuleExports = ModuleExports,
-  FileExtensions extends Extract<keyof FileExports, string>[] = Extract<
-    keyof FileExports,
-    string
-  >[],
-  RuntimeOptions extends {
-    getModule?: (path: string) => Promise<any>
-  } = {},
-> =
-  HasJavaScriptLikeExtensions<FileExtensions> extends true
-    ? DirectoryWithJavaScriptOptions<
-        FileExports,
-        FileExtensions,
-        RuntimeOptions
-      >
-    : BaseDirectoryOptions<FileExports, FileExtensions>
 
 /** A directory containing files and subdirectories in the file system. */
 export class Directory<
-  const FileExports extends ModuleExports = ModuleExports,
-  const FileExtensions extends Extract<keyof FileExports, string>[] = Extract<
-    keyof FileExports,
-    string
-  >[],
-  RuntimeOptions extends {
-    getModule?: (path: string) => Promise<any>
-  } = {},
+  const Options extends DirectoryOptions = DirectoryOptions,
 > {
   #fileSystem: FileSystem | undefined
-  #fileExtensions: FileExtensions
+  #directory?: Directory
   #path: string
   #rootPath: string
-  #directory?: Directory
-  #tsConfigFilePath?: string
+  #tsConfigPath?: string
   protected getModule?: (path: string) => Promise<any>
 
-  constructor(
-    options: DirectoryOptions<FileExports, FileExtensions, RuntimeOptions>
-  ) {
-    this.#fileSystem = options.fileSystem
-    this.#fileExtensions = options.fileExtensions
+  constructor(options: Options = {} as Options) {
     this.#path = options.path
       ? options.path.startsWith('.')
         ? options.path
         : join('.', options.path)
       : '.'
     this.#rootPath = options.rootPath ?? this.#path
+    this.#tsConfigPath = options.tsConfigPath
+    this.#fileSystem = options.fileSystem
     this.#directory = options.directory
-
-    if ('tsConfigFilePath' in options) {
-      this.#tsConfigFilePath = options.tsConfigFilePath
-    }
-
-    if ('getModule' in options) {
-      this.getModule = options.getModule
-    }
+    this.getModule = options.getModule
   }
 
   async #getFileSystem() {
@@ -318,7 +267,7 @@ export class Directory<
       return this.#fileSystem
     }
     const { NodeFileSystem } = await import('./NodeFileSystem.js')
-    this.#fileSystem = new NodeFileSystem(this.#tsConfigFilePath)
+    this.#fileSystem = new NodeFileSystem(this.#tsConfigPath)
     return this.#fileSystem
   }
 
@@ -328,51 +277,49 @@ export class Directory<
     return typeof this.getModule === 'function'
   }
 
-  async getFile<
-    Extension extends FileExtensions[number] | undefined = undefined,
-  >(
+  async getFile<Extension extends string | undefined = undefined>(
     path: string | string[],
     extension?: Extension | Extension[]
   ): Promise<
-    | (HasJavaScriptLikeExtensions<FileExtensions> extends true
-        ? RuntimeOptions extends {
-            getModule: (path: string) => Promise<any>
-          }
-          ? JavaScriptFileWithRuntime<FileExports>
-          : JavaScriptFile<FileExports>
+    | (Extension extends string
+        ? IsJavaScriptLikeExtension<Extension> extends true
+          ? 'getModule' extends keyof Options
+            ? JavaScriptFileWithRuntime
+            : JavaScriptFile
+          : File
         : File)
     | undefined
   > {
     const normalizedPath = Array.isArray(path) ? join(...path) : path
     const filePath = join(this.#rootPath, normalizedPath)
-    const fileExtensions = extension
-      ? Array.isArray(extension)
-        ? extension
-        : [extension]
-      : this.#fileExtensions
     const allFiles = await this.getEntries()
+    const fileExtensions = Array.isArray(extension) ? extension : [extension]
 
-    for (const extension of fileExtensions) {
-      const filePathWithExtension = `${filePath}.${extension}`
+    if (extension) {
+      for (const extension of fileExtensions) {
+        const filePathWithExtension = `${filePath}.${extension}`
+        const file = allFiles.find(
+          (file) => file.getPath() === filePathWithExtension
+        )
+
+        if (file) {
+          return file as any
+        }
+      }
+    } else {
       const file = allFiles.find(
-        (file) => file.getPath() === filePathWithExtension
+        (file) => removeExtension(file.getPath()) === filePath
       )
 
-      return file as HasJavaScriptLikeExtensions<FileExtensions> extends true
-        ? RuntimeOptions extends {
-            getModule: (path: string) => Promise<any>
-          }
-          ? JavaScriptFileWithRuntime<FileExports>
-          : JavaScriptFile<FileExports>
-        : File
+      if (file) {
+        return file as any
+      }
     }
 
     return undefined
   }
 
-  async getDirectory(
-    path: string | string[]
-  ): Promise<Directory<FileExports, FileExtensions> | undefined> {
+  async getDirectory(path: string | string[]): Promise<Directory | undefined> {
     const normalizedPath = Array.isArray(path) ? path : [path]
     const directoryPath = this.#path
       ? join(this.#path, ...normalizedPath)
@@ -382,76 +329,67 @@ export class Directory<
       (entry) => isDirectory(entry) && entry.getPath() === directoryPath
     )
 
-    return directory as Directory<FileExports, FileExtensions> | undefined
+    return directory as Directory | undefined
   }
 
-  async getEntries(): Promise<FileSystemEntry<FileExports>[]> {
+  async getEntries(): Promise<FileSystemEntry<any>[]> {
     const fileSystem = await this.#getFileSystem()
     const directoryEntries = await fileSystem.readDirectory(this.#path)
-    const entries: FileSystemEntry<FileExports>[] = []
+    const entries: FileSystemEntry<any>[] = []
 
     for (const entry of directoryEntries) {
-      if (fileSystem.isFilePathExcludedFromTsConfig(entry.path)) {
+      if (
+        fileSystem.isFilePathGitIgnored(entry.path) ||
+        fileSystem.isFilePathExcludedFromTsConfig(entry.path)
+      ) {
         continue
       }
 
       if (entry.isDirectory) {
         const directoryOptions = {
           fileSystem,
-          fileExtensions: this.#fileExtensions,
+          directory: this,
           path: entry.path,
           rootPath: this.#rootPath,
-          directory: this,
-          tsConfigFilePath: this.#tsConfigFilePath,
+          tsConfigPath: this.#tsConfigPath,
           getModule: this.getModule,
-        } satisfies DirectoryWithJavaScriptOptions<
-          FileExports,
-          FileExtensions,
-          { getModule?: (path: string) => Promise<any> }
-        >
+        } satisfies DirectoryOptions
 
-        entries.push(
-          new Directory<FileExports, FileExtensions>(directoryOptions)
-        )
+        entries.push(new Directory(directoryOptions))
       } else if (entry.isFile) {
         const extension = extname(entry.name).slice(1)
 
-        if (
-          !this.#fileExtensions ||
-          this.#fileExtensions.includes(extension as FileExtensions[number])
-        ) {
-          if (isJavaScriptLikeExtension(extension)) {
-            if (this.#hasJavaScriptModule()) {
-              entries.push(
-                new JavaScriptFileWithRuntime({
-                  directory: this,
-                  path: entry.path,
-                  absolutePath: entry.absolutePath,
-                  getModule: this.getModule!,
-                  tsConfigFilePath: this.#tsConfigFilePath,
-                  isVirtualFileSystem: fileSystem instanceof VirtualFileSystem,
-                })
-              )
-            } else {
-              entries.push(
-                new JavaScriptFile({
-                  directory: this,
-                  path: entry.path,
-                  absolutePath: entry.absolutePath,
-                  tsConfigFilePath: this.#tsConfigFilePath,
-                  isVirtualFileSystem: fileSystem instanceof VirtualFileSystem,
-                })
-              )
-            }
-          } else {
+        if (isJavaScriptLikeExtension(extension)) {
+          if (this.#hasJavaScriptModule()) {
             entries.push(
-              new File({
+              new JavaScriptFileWithRuntime({
                 directory: this,
                 path: entry.path,
                 absolutePath: entry.absolutePath,
+                getModule: this.getModule!,
+                tsConfigFilePath: this.#tsConfigPath,
+                isVirtualFileSystem: fileSystem instanceof VirtualFileSystem,
+              })
+            )
+          } else {
+            entries.push(
+              new JavaScriptFile({
+                directory: this,
+                path: entry.path,
+                absolutePath: entry.absolutePath,
+                tsConfigFilePath: this.#tsConfigPath,
+                isVirtualFileSystem: fileSystem instanceof VirtualFileSystem,
               })
             )
           }
+        } else {
+          entries.push(
+            new File({
+              directory: this,
+              path: entry.path,
+              absolutePath: entry.absolutePath,
+            })
+          )
         }
       }
     }
@@ -494,28 +432,18 @@ export class Directory<
 }
 
 /** Determines if a `FileSystemEntry` is a `File`. */
-export function isFile<FileExports extends object>(
-  entry: FileSystemEntry<FileExports>
-): entry is File {
+export function isFile(entry: FileSystemEntry<any>): entry is File {
   return entry instanceof File
 }
 
 /** Determines if a `FileSystemEntry` is a `JavaScriptFile`. */
-export function isJavaScriptFile<FileExports extends object>(
-  entry: FileSystemEntry<FileExports>
-): entry is JavaScriptFile<FileExports> {
+export function isJavaScriptFile<JavaScriptExports extends object>(
+  entry: FileSystemEntry<any>
+): entry is JavaScriptFile<JavaScriptExports> {
   return entry instanceof JavaScriptFile
 }
 
 /** Determines if a `FileSystemEntry` is a `Directory`. */
-export function isDirectory<
-  const FileExports extends ModuleExports = ModuleExports,
-  const FileExtensions extends Extract<keyof FileExports, string>[] = Extract<
-    keyof FileExports,
-    string
-  >[],
->(
-  entry: FileSystemEntry<FileExports>
-): entry is Directory<FileExports, FileExtensions> {
+export function isDirectory(entry: FileSystemEntry<any>): entry is Directory {
   return entry instanceof Directory
 }

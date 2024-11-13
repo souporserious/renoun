@@ -22,6 +22,9 @@ export type HasJavaScriptLikeExtensions<FileExtensions extends string[]> =
     ? false
     : true
 
+export type IsJavaScriptLikeExtension<FileExtension extends string> =
+  FileExtension extends JavaScriptLikeExtensions ? true : false
+
 export function isJavaScriptLikeExtension(
   extension: string | undefined
 ): extension is JavaScriptLikeExtensions {

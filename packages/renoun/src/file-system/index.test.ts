@@ -6,8 +6,8 @@ import {
   File,
   Directory,
   JavaScriptFile,
-  JavaScriptFileExport,
   JavaScriptFileWithRuntime,
+  JavaScriptFileExport,
   JavaScriptFileExportWithRuntime,
   type FileSystemEntry,
 } from './index'
@@ -20,7 +20,6 @@ describe('file system', () => {
     })
     const SrcDirectory = new Directory({
       path: 'src',
-      fileExtensions: ['ts'],
       fileSystem,
     })
     const directory = await SrcDirectory.getDirectory('project')
@@ -35,17 +34,14 @@ describe('file system', () => {
   })
 
   test('returns directory', async () => {
-    const ComponentsDirectory = new Directory({
-      path: 'src/components',
-      fileExtensions: ['ts', 'tsx'],
-    })
+    const ComponentsDirectory = new Directory({ path: 'src/components' })
     const directory = await ComponentsDirectory.getDirectory('CodeBlock')
 
     expect(directory).toBeInstanceOf(Directory)
   })
 
   test('returns file', async () => {
-    const RootDirectory = new Directory({ fileExtensions: ['json'] })
+    const RootDirectory = new Directory()
     const file = await RootDirectory.getFile('tsconfig', 'json')
 
     expectTypeOf(file!).toMatchTypeOf<File>()
@@ -53,10 +49,7 @@ describe('file system', () => {
   })
 
   test('returns javascript file', async () => {
-    const ProjectDirectory = new Directory({
-      path: 'src/project',
-      fileExtensions: ['ts'],
-    })
+    const ProjectDirectory = new Directory({ path: 'src/project' })
     const file = await ProjectDirectory.getFile('server', 'ts')
 
     expect(file!).toBeInstanceOf(JavaScriptFile)
@@ -64,10 +57,7 @@ describe('file system', () => {
   })
 
   test('file exports', async () => {
-    const ProjectDirectory = new Directory({
-      path: 'src/project',
-      fileExtensions: ['ts'],
-    })
+    const ProjectDirectory = new Directory({ path: 'src/project' })
     const file = await ProjectDirectory.getFile('server', 'ts')
     const fileExports = await file!.getExports()
 
@@ -80,10 +70,7 @@ describe('file system', () => {
     const fileSystem = new VirtualFileSystem({
       'use-hover.ts': 'export const useHover = () => {}',
     })
-    const RootDirectory = new Directory({
-      fileSystem,
-      fileExtensions: ['ts'],
-    })
+    const RootDirectory = new Directory({ fileSystem })
     const file = await RootDirectory.getFile('use-hover', 'ts')
     const fileExports = await file!.getExports()
 
@@ -91,10 +78,7 @@ describe('file system', () => {
   })
 
   test('getRuntimeValue is not typed when getModule is not defined', async () => {
-    const FileSystemDirectory = new Directory({
-      path: 'src/file-system',
-      fileExtensions: ['ts', 'tsx'],
-    })
+    const FileSystemDirectory = new Directory({ path: 'src/file-system' })
     const file = await FileSystemDirectory.getFile('path', 'ts')
 
     expectTypeOf(file!).toMatchTypeOf<JavaScriptFile<any>>()
@@ -112,8 +96,7 @@ describe('file system', () => {
   test('getRuntimeValue resolves export runtime value from getModule', async () => {
     const FileSystemDirectory = new Directory({
       path: 'src/file-system',
-      fileExtensions: ['ts', 'tsx'],
-      tsConfigFilePath: 'tsconfig.json',
+      tsConfigPath: 'tsconfig.json',
       getModule: (path) => import(`./${path}`),
     })
     const file = await FileSystemDirectory.getFile('path', 'ts')
@@ -132,21 +115,15 @@ describe('file system', () => {
     expect(basename('/path/to/file.ts', '.ts')).toBe('file')
   })
 
-  test('uses directory file extensions when no file extension present', async () => {
-    const ProjectDirectory = new Directory({
-      path: 'src/project',
-      fileExtensions: ['ts'],
-    })
+  test('uses first file found when no file extension present', async () => {
+    const ProjectDirectory = new Directory({ path: 'src/project' })
     const file = await ProjectDirectory.getFile('server')
 
     expect(file).toBeDefined()
   })
 
   test('generates sibling navigation from file', async () => {
-    const ProjectDirectory = new Directory({
-      path: 'src/project',
-      fileExtensions: ['ts'],
-    })
+    const ProjectDirectory = new Directory({ path: 'src/project' })
     const file = await ProjectDirectory.getFile('server', 'ts')
     const [previousEntry, nextEntry] = await file!.getSiblings()
 
@@ -155,10 +132,7 @@ describe('file system', () => {
   })
 
   test('generates sibling navigation from directory', async () => {
-    const ProjectDirectory = new Directory({
-      path: 'src/project',
-      fileExtensions: ['ts'],
-    })
+    const ProjectDirectory = new Directory({ path: 'src/project' })
     const directory = await ProjectDirectory.getDirectory('rpc')
     const [previousEntry, nextEntry] = await directory!.getSiblings()
 
@@ -167,11 +141,7 @@ describe('file system', () => {
   })
 
   test('generates tree navigation', async () => {
-    const ProjectDirectory = new Directory<{ ts: object; tsx: object }>({
-      path: 'src/project',
-      fileExtensions: ['ts', 'tsx'],
-      tsConfigFilePath: 'tsconfig.json',
-    })
+    const ProjectDirectory = new Directory({ path: 'src/project' })
 
     async function buildTreeNavigation<Entry extends FileSystemEntry<any>>(
       entry: Entry
