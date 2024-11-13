@@ -240,6 +240,7 @@ interface DirectoryOptions {
 
 /** A directory containing files and subdirectories in the file system. */
 export class Directory<
+  Exports extends ModuleExports = ModuleExports,
   const Options extends DirectoryOptions = DirectoryOptions,
 > {
   #fileSystem: FileSystem | undefined
@@ -271,12 +272,6 @@ export class Directory<
     return this.#fileSystem
   }
 
-  #hasJavaScriptModule(): this is {
-    getModule: (path: string) => Promise<any>
-  } {
-    return typeof this.getModule === 'function'
-  }
-
   async getFile<Extension extends string | undefined = undefined>(
     path: string | string[],
     extension?: Extension | Extension[]
@@ -284,8 +279,8 @@ export class Directory<
     | (Extension extends string
         ? IsJavaScriptLikeExtension<Extension> extends true
           ? 'getModule' extends keyof Options
-            ? JavaScriptFileWithRuntime
-            : JavaScriptFile
+            ? JavaScriptFileWithRuntime<Exports[Extension]>
+            : JavaScriptFile<Exports[Extension]>
           : File
         : File)
     | undefined
@@ -360,13 +355,13 @@ export class Directory<
         const extension = extname(entry.name).slice(1)
 
         if (isJavaScriptLikeExtension(extension)) {
-          if (this.#hasJavaScriptModule()) {
+          if (typeof this.getModule === 'function') {
             entries.push(
               new JavaScriptFileWithRuntime({
                 directory: this,
                 path: entry.path,
                 absolutePath: entry.absolutePath,
-                getModule: this.getModule!,
+                getModule: this.getModule,
                 tsConfigFilePath: this.#tsConfigPath,
                 isVirtualFileSystem: fileSystem instanceof VirtualFileSystem,
               })

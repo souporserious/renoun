@@ -77,6 +77,18 @@ describe('file system', () => {
     expect(fileExports).toMatchObject([{ name: 'useHover', position: 12 }])
   })
 
+  test('file export value types', async () => {
+    const ProjectDirectory = new Directory<{ ts: { createServer: Function } }>({
+      path: 'src/project',
+      getModule: (path) => import(`./${path}`),
+    })
+    const file = await ProjectDirectory.getFile('server', 'ts')
+    const fileExport = await file!.getExport('createServer')
+    const value = await fileExport!.getRuntimeValue()
+
+    expectTypeOf(value).toMatchTypeOf<Function>()
+  })
+
   test('getRuntimeValue is not typed when getModule is not defined', async () => {
     const FileSystemDirectory = new Directory({ path: 'src/file-system' })
     const file = await FileSystemDirectory.getFile('path', 'ts')
