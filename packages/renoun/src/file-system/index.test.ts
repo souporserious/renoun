@@ -176,6 +176,26 @@ describe('file system', () => {
     expect(file).toBeDefined()
   })
 
+  test('attempts to load index file when targeting directory path', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'src/project/index.ts': 'export const project = 1',
+    })
+    const RootDirectory = new Directory({ fileSystem })
+    const file = await RootDirectory.getFile('src/project')
+
+    expect(file).toBeInstanceOf(File)
+  })
+
+  test('attempts to load readme file when targeting directory path', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'src/project/README.mdx': '# Project',
+    })
+    const ProjectDirectory = new Directory({ path: 'src', fileSystem })
+    const file = await ProjectDirectory.getFile('project')
+
+    expect(file).toBeInstanceOf(File)
+  })
+
   test('generates sibling navigation from file', async () => {
     const ProjectDirectory = new Directory({ path: 'src/project' })
     const file = await ProjectDirectory.getFile('server', 'ts')

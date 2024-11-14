@@ -370,27 +370,46 @@ export class Directory<
   > {
     const normalizedPath = Array.isArray(path) ? join(...path) : path
     const filePath = join(this.#path, normalizedPath)
-    const allFiles = await this.getEntries()
+    const allEntries = await this.getEntries()
     const fileExtensions = Array.isArray(extension) ? extension : [extension]
 
     if (extension) {
       for (const extension of fileExtensions) {
         const filePathWithExtension = `${filePath}.${extension}`
-        const file = allFiles.find(
-          (file) => file.getPath() === filePathWithExtension
-        )
+        const file = allEntries.find((entry) => {
+          if (entry instanceof Directory) {
+            return false
+          }
+          const matches = entry.getPath() === filePathWithExtension
+          return matches
+        })
 
         if (file) {
           return file as any
         }
       }
     } else {
-      const file = allFiles.find(
-        (file) => removeExtension(file.getPath()) === filePath
+      const fileOrDirectory = allEntries.find(
+        (entry) => removeExtension(entry.getPath()) === filePath
       )
 
-      if (file) {
-        return file as any
+      if (fileOrDirectory) {
+        // Check if index or readme exists in the directory
+        if (fileOrDirectory instanceof Directory) {
+          const entries = await fileOrDirectory.getEntries()
+          const targetFiles = ['index', 'readme']
+
+          for (const entry of entries) {
+            const name = entry.getName().toLowerCase()
+            if (targetFiles.includes(name)) {
+              return entry as any
+            }
+          }
+
+          return undefined
+        }
+
+        return fileOrDirectory as any
       }
     }
 
