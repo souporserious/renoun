@@ -125,8 +125,10 @@ describe('file system', () => {
     const file = await directory.getFileOrThrow('index', 'ts')
     const fileExport = await file.getExportOrThrow('metadata')
 
-    await expect(fileExport!.getRuntimeValue()).rejects.toThrowError(
-      '[renoun] Schema validation failed to parse export "metadata" at file path "./index.ts"'
+    await expect(
+      fileExport!.getRuntimeValue()
+    ).rejects.toThrowErrorMatchingInlineSnapshot(
+      `[Error: [renoun] Schema validation failed to parse export "metadata" at file path "./index.ts"]`
     )
   })
 
