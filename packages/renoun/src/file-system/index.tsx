@@ -30,36 +30,41 @@ export class File {
     this.#absolutePath = options.absolutePath
   }
 
+  /** Get the directory containing this file. */
   getDirectory() {
     return this.#directory
   }
 
+  /** Get the base name of the file excluding the extension. */
   getName() {
     return basename(this.#path, extname(this.#path))
   }
 
+  /** Get the extension of the file. */
   getExtension() {
     return extname(this.#path).slice(1)
   }
 
+  /** Get the relative path of the file. */
   getPath() {
     return this.#path
   }
 
+  /** Get the absolute path of the file. */
   getAbsolutePath() {
     return this.#absolutePath
   }
 
+  /** Get the previous and next sibling entries (files or directories) of the parent directory. */
   async getSiblings(): Promise<
     [File | Directory | undefined, File | Directory | undefined]
   > {
     const entries = await this.#directory.getEntries()
     const index = entries.findIndex((file) => file.getPath() === this.getPath())
-    const previousEntry = index > 0 ? entries[index - 1] : undefined
-    const nextEntry =
-      index < entries.length - 1 ? entries[index + 1] : undefined
+    const previous = index > 0 ? entries[index - 1] : undefined
+    const next = index < entries.length - 1 ? entries[index + 1] : undefined
 
-    return [previousEntry, nextEntry]
+    return [previous, next]
   }
 }
 
@@ -82,6 +87,7 @@ export class JavaScriptFileExport<
     this.#file = file
   }
 
+  /** Get the name of the export. */
   getName() {
     return this.#name
   }
@@ -122,6 +128,7 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
     this.#isVirtualFileSystem = isVirtualFileSystem
   }
 
+  /** Parse and validate an export value using the configured schema. */
   parseSchemaExportValue(name: string, value: any): any {
     if (!this.#schema) {
       return value
@@ -149,6 +156,7 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
     return value
   }
 
+  /** Get all exports from the JavaScript file. */
   async getExports() {
     return getFileExports(this.getAbsolutePath(), {
       tsConfigFilePath: this.#tsConfigFilePath,
@@ -156,18 +164,17 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
     })
   }
 
+  /** Get a JavaScript file export by name. */
   async getExport<ExportName extends Extract<keyof Exports, string>>(
     name: ExportName
-  ): Promise<JavaScriptFileExport<Exports, ExportName>> {
+  ): Promise<JavaScriptFileExport<Exports, ExportName> | undefined> {
     const fileExports = await this.getExports()
     const fileExport = fileExports.find(
       (fileExport) => fileExport.name === name
     )
 
     if (!fileExport) {
-      throw new Error(
-        `[renoun] JavaScript file export "${name}" not found in ${this.getPath()}`
-      )
+      return undefined
     }
 
     return new JavaScriptFileExport(
@@ -175,6 +182,21 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
       fileExport.position,
       this
     )
+  }
+
+  /** Get a JavaScript file export by name. An error will be thrown if the export is not found. */
+  async getExportOrThrow<ExportName extends Extract<keyof Exports, string>>(
+    name: ExportName
+  ): Promise<JavaScriptFileExport<Exports, ExportName>> {
+    const fileExport = await this.getExport(name)
+
+    if (!fileExport) {
+      throw new Error(
+        `[renoun] JavaScript file export "${name}" not found in ${this.getAbsolutePath()}`
+      )
+    }
+
+    return fileExport
   }
 }
 
@@ -197,6 +219,10 @@ export class JavaScriptFileExportWithRuntime<
     this.#getModule = getModule
   }
 
+  /**
+   * Get the runtime value of the export. An error will be thrown if the export
+   * is not found or the configured schema validation for this file extension fails.
+   */
   async getRuntimeValue(): Promise<Exports[ExportName]> {
     const exportName = this.getName()
     const fileModule = await this.#getModule(this.getRelativePath())
@@ -227,18 +253,17 @@ export class JavaScriptFileWithRuntime<
     this.getModule = getModule
   }
 
+  /** Get a JavaScript file export by name. */
   async getExport<ExportName extends Extract<keyof Exports, string>>(
     name: ExportName
-  ): Promise<JavaScriptFileExportWithRuntime<Exports, ExportName>> {
+  ): Promise<JavaScriptFileExportWithRuntime<Exports, ExportName> | undefined> {
     const fileExports = await this.getExports()
     const fileExport = fileExports.find(
       (fileExport) => fileExport.name === name
     )
 
     if (!fileExport) {
-      throw new Error(
-        `[renoun] JavaScript file export "${name}" not found in ${this.getPath()}`
-      )
+      return undefined
     }
 
     return new JavaScriptFileExportWithRuntime(
@@ -247,6 +272,21 @@ export class JavaScriptFileWithRuntime<
       this,
       this.getModule
     )
+  }
+
+  /** Get a JavaScript file export by name. An error will be thrown if the export is not found. */
+  async getExportOrThrow<ExportName extends Extract<keyof Exports, string>>(
+    name: ExportName
+  ): Promise<JavaScriptFileExportWithRuntime<Exports, ExportName>> {
+    const fileExport = await this.getExport(name)
+
+    if (!fileExport) {
+      throw new Error(
+        `[renoun] JavaScript file export "${name}" not found in ${this.getAbsolutePath()}`
+      )
+    }
+
+    return fileExport
   }
 }
 
@@ -322,6 +362,7 @@ export class Directory<
     return this.#fileSystem
   }
 
+  /** Get a file with the specified path and optional extensions. */
   async getFile<Extension extends string | undefined = undefined>(
     path: string | string[],
     extension?: Extension | Extension[]
@@ -364,6 +405,33 @@ export class Directory<
     return undefined
   }
 
+  /**
+   * Get a file with the specified path and optional extensions.
+   * An error will be thrown if the file is not found.
+   */
+  async getFileOrThrow<Extension extends string | undefined = undefined>(
+    path: string | string[],
+    extension?: Extension | Extension[]
+  ): Promise<
+    Extension extends string
+      ? IsJavaScriptLikeExtension<Extension> extends true
+        ? 'getModule' extends keyof Options
+          ? JavaScriptFileWithRuntime<Types[Extension]>
+          : JavaScriptFile<Types[Extension]>
+        : File
+      : File
+  > {
+    const file = await this.getFile(path, extension)
+    if (!file) {
+      const normalizedPath = Array.isArray(path) ? join(...path) : path
+      throw new Error(
+        `[renoun] File not found at path "${normalizedPath}" with extension "${extension}"`
+      )
+    }
+    return file as any
+  }
+
+  /** Get a directory with the specified path. */
   async getDirectory(path: string | string[]): Promise<Directory | undefined> {
     const normalizedPath = Array.isArray(path) ? path : [path]
     const directoryPath = this.#path
@@ -377,6 +445,10 @@ export class Directory<
     return directory as Directory | undefined
   }
 
+  /**
+   * Get all entries within the directory that are not git ignored or excluded
+   * from the tsconfig file if configured.
+   */
   async getEntries(): Promise<FileSystemEntry<any>[]> {
     const fileSystem = await this.#getFileSystem()
     const directoryEntries = await fileSystem.readDirectory(this.#path)
@@ -445,6 +517,7 @@ export class Directory<
     return entries
   }
 
+  /** Get the previous and next sibling entries (files or directories) of the parent directory. */
   async getSiblings(): Promise<
     [File | Directory | undefined, File | Directory | undefined]
   > {
@@ -462,18 +535,22 @@ export class Directory<
     return [previous, next]
   }
 
+  /** Get the base name of the directory. */
   getName() {
     return basename(this.#path)
   }
 
+  /** Get the relative path of the directory. */
   getPath() {
     return this.#path
   }
 
+  /** Get the absolute path of the directory. */
   getAbsolutePath() {
     return this.#path
   }
 
+  /** Get the path of the root directory. */
   getRootPath() {
     return this.#rootPath
   }

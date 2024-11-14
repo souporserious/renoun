@@ -85,8 +85,8 @@ describe('file system', () => {
       path: 'src/project',
       getModule: (path) => import(`../project/${path}`),
     })
-    const file = await ProjectDirectory.getFile('server', 'ts')
-    const fileExport = await file!.getExport('createServer')
+    const file = await ProjectDirectory.getFileOrThrow('server', 'ts')
+    const fileExport = await file.getExport('createServer')
     const value = await fileExport!.getRuntimeValue()
 
     expectTypeOf(value).toMatchTypeOf<Function>()
@@ -96,7 +96,7 @@ describe('file system', () => {
     const fileSystem = new VirtualFileSystem({
       'index.ts': 'export const metadata = 1',
     })
-    const ProjectDirectory = new Directory<{
+    const directory = new Directory<{
       ts: { metadata: { title: string } }
     }>({
       fileSystem,
@@ -122,8 +122,8 @@ describe('file system', () => {
         return module.exports
       },
     })
-    const file = await ProjectDirectory.getFile('index', 'ts')
-    const fileExport = await file!.getExport('metadata')
+    const file = await directory.getFileOrThrow('index', 'ts')
+    const fileExport = await file.getExportOrThrow('metadata')
 
     await expect(fileExport!.getRuntimeValue()).rejects.toThrowError(
       '[renoun] Schema validation failed to parse export "metadata" at file path "./index.ts"'
@@ -132,12 +132,12 @@ describe('file system', () => {
 
   test('getRuntimeValue is not typed when getModule is not defined', async () => {
     const FileSystemDirectory = new Directory({ path: 'src/file-system' })
-    const file = await FileSystemDirectory.getFile('path', 'ts')
+    const file = await FileSystemDirectory.getFileOrThrow('path', 'ts')
 
     expectTypeOf(file!).toMatchTypeOf<JavaScriptFile<any>>()
     expect(file).toBeInstanceOf(JavaScriptFile)
 
-    const fileExport = await file!.getExport('basename')
+    const fileExport = await file.getExport('basename')
 
     expectTypeOf(fileExport).not.toHaveProperty('getRuntimeValue')
     expect(fileExport).toBeInstanceOf(JavaScriptFileExport)
@@ -152,17 +152,17 @@ describe('file system', () => {
       tsConfigPath: 'tsconfig.json',
       getModule: (path) => import(`./${path}`),
     })
-    const file = await FileSystemDirectory.getFile('path', 'ts')
+    const file = await FileSystemDirectory.getFileOrThrow('path', 'ts')
 
-    expectTypeOf(file!).toMatchTypeOf<JavaScriptFileWithRuntime<any>>()
+    expectTypeOf(file).toMatchTypeOf<JavaScriptFileWithRuntime<any>>()
     expect(file).toBeInstanceOf(JavaScriptFileWithRuntime)
 
-    const fileExport = await file!.getExport('basename')
+    const fileExport = await file.getExportOrThrow('basename')
 
     expectTypeOf(fileExport).toHaveProperty('getRuntimeValue')
     expect(fileExport).toBeInstanceOf(JavaScriptFileExportWithRuntime)
 
-    const basename = await fileExport!.getRuntimeValue()
+    const basename = await fileExport.getRuntimeValue()
 
     expect(basename).toBeDefined()
     expect(basename('/path/to/file.ts', '.ts')).toBe('file')
