@@ -50,6 +50,11 @@ export class File {
     return this.#path
   }
 
+  /** Get the path of the file relative to another path. */
+  getPathRelativeTo(path: string) {
+    return relative(path, this.#path)
+  }
+
   /** Get the absolute path of the file. */
   getAbsolutePath() {
     return this.#absolutePath
@@ -90,17 +95,6 @@ export class JavaScriptFileExport<
   /** Get the name of the export. */
   getName() {
     return this.#name
-  }
-
-  getRelativePath() {
-    return relative(
-      this.#file.getDirectory().getRootPath(),
-      this.#file.getPath()
-    )
-  }
-
-  getAbsolutePath() {
-    return this.#file.getAbsolutePath()
   }
 }
 
@@ -225,12 +219,15 @@ export class JavaScriptFileExportWithRuntime<
    */
   async getRuntimeValue(): Promise<Exports[ExportName]> {
     const exportName = this.getName()
-    const fileModule = await this.#getModule(this.getRelativePath())
+    const fileSystem = await this.#file.getDirectory().getFileSystem()
+    const fileModule = await this.#getModule(
+      this.#file.getPathRelativeTo(fileSystem.getPath())
+    )
     const fileModuleExport = fileModule[this.getName()]
 
     if (fileModuleExport === undefined) {
       throw new Error(
-        `[renoun] JavaScript file export "${String(this.getName())}" not found in ${this.getAbsolutePath()}`
+        `[renoun] JavaScript file export "${String(this.getName())}" not found in ${this.#file.getAbsolutePath()}`
       )
     }
 
@@ -312,7 +309,6 @@ interface ExtensionSchemas {
 
 interface DirectoryOptions<Types extends ExtensionTypes = ExtensionTypes> {
   path?: string
-  rootPath?: string
   fileSystem?: FileSystem
   directory?: Directory<any, any>
   schema?: {
@@ -333,7 +329,7 @@ export class Directory<
   #fileSystem: FileSystem | undefined
   #directory?: Directory<any, any>
   #path: string
-  #rootPath: string
+
   #schema?: DirectoryOptions<Types>['schema']
   #getModule?: (path: string) => Promise<any>
 
@@ -343,19 +339,18 @@ export class Directory<
         ? options.path
         : join('.', options.path)
       : '.'
-    this.#rootPath = options.rootPath ?? this.#path
     this.#fileSystem = options.fileSystem
     this.#directory = options.directory
     this.#schema = options.schema
     this.#getModule = options.getModule
   }
 
-  async #getFileSystem() {
+  async getFileSystem() {
     if (this.#fileSystem) {
       return this.#fileSystem
     }
     const { NodeFileSystem } = await import('./NodeFileSystem.js')
-    this.#fileSystem = new NodeFileSystem()
+    this.#fileSystem = new NodeFileSystem({ basePath: this.#path })
     return this.#fileSystem
   }
 
@@ -374,7 +369,7 @@ export class Directory<
     | undefined
   > {
     const normalizedPath = Array.isArray(path) ? join(...path) : path
-    const filePath = join(this.#rootPath, normalizedPath)
+    const filePath = join(this.#path, normalizedPath)
     const allFiles = await this.getEntries()
     const fileExtensions = Array.isArray(extension) ? extension : [extension]
 
@@ -447,7 +442,7 @@ export class Directory<
    * from the tsconfig file if configured.
    */
   async getEntries(): Promise<FileSystemEntry<any>[]> {
-    const fileSystem = await this.#getFileSystem()
+    const fileSystem = await this.getFileSystem()
     const directoryEntries = await fileSystem.readDirectory(this.#path)
     const entries: FileSystemEntry<any>[] = []
 
@@ -465,7 +460,6 @@ export class Directory<
             fileSystem,
             directory: this,
             path: entry.path,
-            rootPath: this.#rootPath,
             schema: this.#schema,
             getModule: this.#getModule,
           })
@@ -542,11 +536,6 @@ export class Directory<
   /** Get the absolute path of the directory. */
   getAbsolutePath() {
     return this.#path
-  }
-
-  /** Get the path of the root directory. */
-  getRootPath() {
-    return this.#rootPath
   }
 }
 

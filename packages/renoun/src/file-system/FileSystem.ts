@@ -3,16 +3,21 @@ import { minimatch } from 'minimatch'
 import type { DirectoryEntry } from './types.js'
 
 interface FileSystemOptions {
+  /** Base path to use when reading files. */
+  basePath?: string
+
   /**
    * Path to the tsconfig.json file to use when analyzing types and determining if a file is excluded. */
   tsConfigPath?: string
 }
 
 export abstract class FileSystem {
+  #basePath: string
   #tsConfigPath: string
   #tsConfig?: any
 
   constructor(options: FileSystemOptions = {}) {
+    this.#basePath = options.basePath || '.'
     this.#tsConfigPath = options.tsConfigPath || 'tsconfig.json'
   }
 
@@ -20,6 +25,10 @@ export abstract class FileSystem {
   abstract readFile(path: string): Promise<string>
   abstract readDirectory(path?: string): Promise<DirectoryEntry[]>
   abstract isFilePathGitIgnored(filePath: string): boolean
+
+  getPath() {
+    return this.#basePath
+  }
 
   #getTsConfig() {
     try {
