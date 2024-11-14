@@ -78,9 +78,11 @@ describe('file system', () => {
   })
 
   test('file export value types', async () => {
-    const ProjectDirectory = new Directory<{ ts: { createServer: Function } }>({
+    const ProjectDirectory = new Directory<{
+      ts: { createServer: () => void }
+    }>({
       path: 'src/project',
-      getModule: (path) => import(`./${path}`),
+      getModule: (path) => import(`../project/${path}`),
     })
     const file = await ProjectDirectory.getFile('server', 'ts')
     const fileExport = await file!.getExport('createServer')
