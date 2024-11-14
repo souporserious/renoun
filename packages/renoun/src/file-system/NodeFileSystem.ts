@@ -30,6 +30,10 @@ export class NodeFileSystem extends FileSystem {
     })
   }
 
+  readFileSync(path: string): string {
+    return readFileSync(path, 'utf-8')
+  }
+
   async readFile(path: string): Promise<string> {
     return readFile(path, 'utf-8')
   }

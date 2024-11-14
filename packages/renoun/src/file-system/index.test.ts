@@ -151,7 +151,6 @@ describe('file system', () => {
   test('getRuntimeValue resolves export runtime value from getModule', async () => {
     const FileSystemDirectory = new Directory({
       path: 'src/file-system',
-      tsConfigPath: 'tsconfig.json',
       getModule: (path) => import(`./${path}`),
     })
     const file = await FileSystemDirectory.getFileOrThrow('path', 'ts')

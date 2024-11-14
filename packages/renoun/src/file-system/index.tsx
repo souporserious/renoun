@@ -313,7 +313,6 @@ interface ExtensionSchemas {
 interface DirectoryOptions<Types extends ExtensionTypes = ExtensionTypes> {
   path?: string
   rootPath?: string
-  tsConfigPath?: string
   fileSystem?: FileSystem
   directory?: Directory<any, any>
   schema?: {
@@ -335,7 +334,6 @@ export class Directory<
   #directory?: Directory<any, any>
   #path: string
   #rootPath: string
-  #tsConfigPath?: string
   #schema?: DirectoryOptions<Types>['schema']
   #getModule?: (path: string) => Promise<any>
 
@@ -346,7 +344,6 @@ export class Directory<
         : join('.', options.path)
       : '.'
     this.#rootPath = options.rootPath ?? this.#path
-    this.#tsConfigPath = options.tsConfigPath
     this.#fileSystem = options.fileSystem
     this.#directory = options.directory
     this.#schema = options.schema
@@ -358,7 +355,7 @@ export class Directory<
       return this.#fileSystem
     }
     const { NodeFileSystem } = await import('./NodeFileSystem.js')
-    this.#fileSystem = new NodeFileSystem(this.#tsConfigPath)
+    this.#fileSystem = new NodeFileSystem()
     return this.#fileSystem
   }
 
@@ -470,7 +467,6 @@ export class Directory<
             path: entry.path,
             rootPath: this.#rootPath,
             schema: this.#schema,
-            tsConfigPath: this.#tsConfigPath,
             getModule: this.#getModule,
           })
         )
@@ -486,7 +482,6 @@ export class Directory<
                 absolutePath: entry.absolutePath,
                 getModule: this.#getModule,
                 schema: this.#schema,
-                tsConfigFilePath: this.#tsConfigPath,
                 isVirtualFileSystem: fileSystem instanceof VirtualFileSystem,
               })
             )
@@ -497,7 +492,6 @@ export class Directory<
                 path: entry.path,
                 absolutePath: entry.absolutePath,
                 schema: this.#schema,
-                tsConfigFilePath: this.#tsConfigPath,
                 isVirtualFileSystem: fileSystem instanceof VirtualFileSystem,
               })
             )
