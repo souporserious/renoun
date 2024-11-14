@@ -7,10 +7,10 @@ import {
 } from './is-javascript-like-extension.js'
 import { basename, extname, join, relative, removeExtension } from './path.js'
 
-export type FileSystemEntry<Schemas extends ExtensionSchemas> =
+export type FileSystemEntry<Types extends ExtensionTypes> =
   | File
   | JavaScriptFile<any>
-  | Directory<Schemas>
+  | Directory<Types>
 
 interface FileOptions {
   directory: Directory<any, any>
