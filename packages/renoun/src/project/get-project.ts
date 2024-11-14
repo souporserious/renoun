@@ -37,7 +37,7 @@ export function getProject(options?: ProjectOptions) {
       esModuleInterop: true,
       moduleResolution: ts.ModuleResolutionKind.Bundler,
       jsx: ts.JsxEmit.ReactJSX,
-      module: ts.ModuleKind.ESNext,
+      module: ts.ModuleKind.CommonJS,
       target: ts.ScriptTarget.ESNext,
       isolatedModules: true,
     },

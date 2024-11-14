@@ -1,4 +1,5 @@
 import { describe, test, expect, expectTypeOf } from 'vitest'
+import { runInNewContext } from 'node:vm'
 
 import { VirtualFileSystem } from './VirtualFileSystem'
 import {
@@ -89,6 +90,44 @@ describe('file system', () => {
     const value = await fileExport!.getRuntimeValue()
 
     expectTypeOf(value).toMatchTypeOf<Function>()
+  })
+
+  test('file export schema', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'index.ts': 'export const metadata = 1',
+    })
+    const ProjectDirectory = new Directory<{
+      ts: { metadata: { title: string } }
+    }>({
+      fileSystem,
+      schema: {
+        ts: {
+          metadata: (value) => {
+            if (typeof value.title === 'string') {
+              return value
+            }
+            throw new Error('Expected a title')
+          },
+        },
+      },
+      getModule: async (path) => {
+        const transpiledCode = await fileSystem.transpileFile(path)
+        const module = { exports: {} }
+
+        runInNewContext(
+          `(function(module, exports) { ${transpiledCode} })(module, module.exports);`,
+          { module }
+        )
+
+        return module.exports
+      },
+    })
+    const file = await ProjectDirectory.getFile('index', 'ts')
+    const fileExport = await file!.getExport('metadata')
+
+    await expect(fileExport!.getRuntimeValue()).rejects.toThrowError(
+      '[renoun] Schema validation failed to parse export "metadata" at file path "./index.ts"'
+    )
   })
 
   test('getRuntimeValue is not typed when getModule is not defined', async () => {

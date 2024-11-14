@@ -1,6 +1,6 @@
 import ignore from 'ignore'
 
-import { createSourceFile } from '../project/client.js'
+import { createSourceFile, transpileSourceFile } from '../project/client.js'
 import { isJavaScriptLikeExtension } from './is-javascript-like-extension.js'
 import { FileSystem } from './FileSystem.js'
 import type { DirectoryEntry } from './types.js'
@@ -27,6 +27,10 @@ export class VirtualFileSystem extends FileSystem {
         createSourceFile(path, content, { useInMemoryFileSystem: true })
       }
     }
+  }
+
+  transpileFile(path: string) {
+    return transpileSourceFile(path, { useInMemoryFileSystem: true })
   }
 
   getFiles() {
@@ -77,6 +81,9 @@ export class VirtualFileSystem extends FileSystem {
   }
 
   readFileSync(path: string): string {
+    if (!path.startsWith('.')) {
+      path = `./${path}`
+    }
     const content = this.#files.get(path)
     if (content === undefined) {
       throw new Error(`File not found: ${path}`)

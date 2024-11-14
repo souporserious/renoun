@@ -153,5 +153,26 @@ export function createServer() {
     }
   )
 
+  server.registerMethod(
+    'transpileSourceFile',
+    async function transpileSourceFile({
+      filePath,
+      projectOptions,
+    }: {
+      filePath: string
+      projectOptions?: ProjectOptions
+    }) {
+      const project = getProject(projectOptions)
+      const sourceFile = project.getSourceFile(filePath)
+
+      if (!sourceFile) {
+        throw new Error(`Source file "${filePath}" not found`)
+      }
+
+      const [outputFile] = sourceFile.getEmitOutput().getOutputFiles()
+      return outputFile.getText()
+    }
+  )
+
   return server
 }

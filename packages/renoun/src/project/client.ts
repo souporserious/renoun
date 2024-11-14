@@ -153,3 +153,29 @@ export async function createSourceFile(
   const project = getProject(projectOptions)
   project.createSourceFile(filePath, sourceText, { overwrite: true })
 }
+
+/**
+ * Transpile a source file.
+ * @internal
+ */
+export async function transpileSourceFile(
+  filePath: string,
+  projectOptions?: ProjectOptions
+) {
+  if (client) {
+    return client.callMethod<string>('transpileSourceFile', {
+      filePath,
+      projectOptions,
+    })
+  }
+
+  const project = getProject(projectOptions)
+  const sourceFile = project.getSourceFile(filePath)
+
+  if (!sourceFile) {
+    throw new Error(`Source file "${filePath}" not found`)
+  }
+
+  const [outputFile] = sourceFile.getEmitOutput().getOutputFiles()
+  return outputFile.getText()
+}
