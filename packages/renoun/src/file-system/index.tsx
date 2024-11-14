@@ -50,6 +50,11 @@ export class File {
     return this.#path
   }
 
+  /** Get the path segments of the file. */
+  getPathSegments() {
+    return this.#path.split('/').filter(Boolean)
+  }
+
   /** Get the path of the file relative to another path. */
   getPathRelativeTo(path: string) {
     return relative(path, this.#path)
@@ -550,6 +555,11 @@ export class Directory<
   /** Get the relative path of the directory. */
   getPath() {
     return this.#path
+  }
+
+  /** Get the path segments of the directory. */
+  getPathSegments() {
+    return this.#path.split('/').filter(Boolean)
   }
 
   /** Get the absolute path of the directory. */
