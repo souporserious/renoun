@@ -79,19 +79,12 @@ export class File {
 }
 
 /** A JavaScript file export. */
-export class JavaScriptFileExport<
-  Schema extends ExtensionSchema,
-  ExportName extends keyof Schema,
-> {
-  #name: ExportName
+export class JavaScriptFileExport<Exports extends ExtensionType> {
+  #name: string
   #position: number
-  #file: JavaScriptFile<Schema>
+  #file: JavaScriptFile<Exports>
 
-  constructor(
-    name: ExportName,
-    position: number,
-    file: JavaScriptFile<Schema>
-  ) {
+  constructor(name: string, position: number, file: JavaScriptFile<Exports>) {
     this.#name = name
     this.#position = position
     this.#file = file
@@ -166,7 +159,7 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
   /** Get a JavaScript file export by name. */
   async getExport<ExportName extends Extract<keyof Exports, string>>(
     name: ExportName
-  ): Promise<JavaScriptFileExport<Exports, ExportName> | undefined> {
+  ): Promise<JavaScriptFileExport<Exports> | undefined> {
     const fileExports = await this.getExports()
     const fileExport = fileExports.find(
       (fileExport) => fileExport.name === name
@@ -186,7 +179,7 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
   /** Get a JavaScript file export by name. An error will be thrown if the export is not found. */
   async getExportOrThrow<ExportName extends Extract<keyof Exports, string>>(
     name: ExportName
-  ): Promise<JavaScriptFileExport<Exports, ExportName>> {
+  ): Promise<JavaScriptFileExport<Exports>> {
     const fileExport = await this.getExport(name)
 
     if (!fileExport) {
@@ -201,9 +194,13 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
 
 /** A JavaScript file export with runtime value. */
 export class JavaScriptFileExportWithRuntime<
-  Exports extends ExtensionType,
-  ExportName extends Extract<keyof Exports, string>,
-> extends JavaScriptFileExport<Exports, ExportName> {
+  Value extends Exports[ExportName] = any,
+  Exports extends ExtensionType = ExtensionType,
+  ExportName extends Extract<keyof Exports, string> = Extract<
+    keyof Exports,
+    string
+  >,
+> extends JavaScriptFileExport<Exports> {
   #file: JavaScriptFile<Exports>
   #getModule: (path: string) => Promise<any>
 
@@ -222,7 +219,7 @@ export class JavaScriptFileExportWithRuntime<
    * Get the runtime value of the export. An error will be thrown if the export
    * is not found or the configured schema validation for this file extension fails.
    */
-  async getRuntimeValue(): Promise<Exports[ExportName]> {
+  async getRuntimeValue(): Promise<Value> {
     const exportName = this.getName()
     const fileSystem = await this.#file.getDirectory().getFileSystem()
     const fileModule = await this.#getModule(
@@ -258,7 +255,10 @@ export class JavaScriptFileWithRuntime<
   /** Get a JavaScript file export by name. */
   async getExport<ExportName extends Extract<keyof Exports, string>>(
     name: ExportName
-  ): Promise<JavaScriptFileExportWithRuntime<Exports, ExportName> | undefined> {
+  ): Promise<
+    | JavaScriptFileExportWithRuntime<Exports[ExportName], Exports, ExportName>
+    | undefined
+  > {
     const fileExports = await this.getExports()
     const fileExport = fileExports.find(
       (fileExport) => fileExport.name === name
@@ -279,7 +279,9 @@ export class JavaScriptFileWithRuntime<
   /** Get a JavaScript file export by name. An error will be thrown if the export is not found. */
   async getExportOrThrow<ExportName extends Extract<keyof Exports, string>>(
     name: ExportName
-  ): Promise<JavaScriptFileExportWithRuntime<Exports, ExportName>> {
+  ): Promise<
+    JavaScriptFileExportWithRuntime<Exports[ExportName], Exports, ExportName>
+  > {
     const fileExport = await this.getExport(name)
 
     if (!fileExport) {
