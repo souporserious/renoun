@@ -52,12 +52,29 @@ describe('file system', () => {
     expect(directory).toBeInstanceOf(Directory)
   })
 
+  test('returns nested directory', async () => {
+    const rootDirectory = new Directory()
+    const nestedDirectory = await rootDirectory.getDirectory('src/project/rpc')
+
+    expect(nestedDirectory).toBeInstanceOf(Directory)
+  })
+
   test('returns file', async () => {
     const RootDirectory = new Directory()
     const file = await RootDirectory.getFile('tsconfig', 'json')
 
     expectTypeOf(file!).toMatchTypeOf<File>()
     expect(file!).toBeInstanceOf(File)
+  })
+
+  test('returns nested file', async () => {
+    const rootDirectory = new Directory()
+    const nestedfile = await rootDirectory.getFile(
+      'src/project/rpc/server',
+      'ts'
+    )
+
+    expect(nestedfile).toBeInstanceOf(File)
   })
 
   test('returns javascript file', async () => {

@@ -372,48 +372,55 @@ export class Directory<
         : File)
     | undefined
   > {
-    const normalizedPath = Array.isArray(path) ? join(...path) : path
-    const filePath = join(this.#path, normalizedPath)
-    const fileExtensions = Array.isArray(extension) ? extension : [extension]
-    const allEntries = await this.getEntries()
+    const segments = Array.isArray(path) ? path : path.split('/')
+    let currentDirectory: Directory<Types> = this
+    let entry: FileSystemEntry<any> | undefined
 
-    if (extension) {
-      for (const extension of fileExtensions) {
-        const filePathWithExtension = `${filePath}.${extension}`
-        const file = allEntries.find((entry) => {
-          if (entry instanceof Directory) {
-            return false
-          }
-          const matches = entry.getPath() === filePathWithExtension
-          return matches
-        })
+    while (segments.length > 0) {
+      const currentSegment = segments.shift()
+      const allEntries = await currentDirectory.getEntries()
 
-        if (file) {
-          return file as any
-        }
+      // Find the entry matching the current segment
+      entry = allEntries.find((entry) => entry.getName() === currentSegment)
+
+      if (!entry) {
+        return undefined
       }
-    } else {
-      const fileOrDirectory = allEntries.find(
-        (entry) => removeExtension(entry.getPath()) === filePath
-      )
 
-      if (fileOrDirectory) {
-        // Check if index or readme exists in the directory
-        if (fileOrDirectory instanceof Directory) {
-          const entries = await fileOrDirectory.getEntries()
-          const targetFiles = ['index', 'readme']
-
-          for (const entry of entries) {
-            const name = entry.getName().toLowerCase()
-            if (targetFiles.includes(name)) {
+      // If this is the last segment, check for file or extension match
+      if (segments.length === 0) {
+        if (entry instanceof File) {
+          if (extension) {
+            const fileExtensions = Array.isArray(extension)
+              ? extension
+              : [extension]
+            if (fileExtensions.includes(entry.getExtension() as Extension)) {
               return entry as any
             }
+          } else {
+            return entry as any
           }
+        } else if (entry instanceof Directory) {
+          // Check if `index` or `readme` exists in the directory
+          const entries = await entry.getEntries()
+          const targetFiles = ['index', 'readme']
 
-          return undefined
+          for (const subEntry of entries) {
+            const name = subEntry.getName().toLowerCase()
+            if (targetFiles.includes(name)) {
+              return subEntry as any
+            }
+          }
         }
 
-        return fileOrDirectory as any
+        return undefined
+      }
+
+      // If the entry is a directory, continue with the next segment
+      if (entry instanceof Directory) {
+        currentDirectory = entry
+      } else {
+        return undefined
       }
     }
 
@@ -448,16 +455,24 @@ export class Directory<
 
   /** Get a directory at the specified `path`. */
   async getDirectory(path: string | string[]): Promise<Directory | undefined> {
-    const normalizedPath = Array.isArray(path) ? path : [path]
-    const directoryPath = this.#path
-      ? join(this.#path, ...normalizedPath)
-      : join(...normalizedPath)
-    const allEntries = await this.getEntries()
-    const directory = allEntries.find(
-      (entry) => isDirectory(entry) && entry.getPath() === directoryPath
-    )
+    const segments = Array.isArray(path) ? path : path.split('/')
+    let currentDirectory: Directory<Types> = this
 
-    return directory as Directory | undefined
+    while (segments.length > 0) {
+      const currentSegment = segments.shift()
+      const allEntries = await currentDirectory.getEntries()
+      const entry = allEntries.find((entry) => {
+        return entry instanceof Directory && entry.getName() === currentSegment
+      })
+
+      if (!entry || !(entry instanceof Directory)) {
+        return undefined
+      }
+
+      currentDirectory = entry
+    }
+
+    return currentDirectory
   }
 
   /**
