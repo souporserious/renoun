@@ -19,35 +19,35 @@ describe('file system', () => {
       'src/project/server.ts': 'export const server = 1',
       'src/project/types.ts': 'export interface Types {}',
     })
-    const SrcDirectory = new Directory({
+    const srcDirectory = new Directory({
       path: 'src',
       fileSystem,
     })
-    const directory = await SrcDirectory.getDirectory('project')
+    const directory = await srcDirectory.getDirectory('project')
 
     expect(directory).toBeInstanceOf(Directory)
     expect(directory?.getName()).toBe('project')
 
-    const file = await SrcDirectory.getFile('project/server', 'ts')
+    const file = await srcDirectory.getFile('project/server', 'ts')
 
     expect(file).toBeInstanceOf(File)
     expect(file?.getName()).toBe('server')
   })
 
   test('returns entry', async () => {
-    const SrcDirectory = new Directory({ path: 'src' })
+    const srcDirectory = new Directory({ path: 'src' })
 
-    expect(await SrcDirectory.getEntry('project')).toBeInstanceOf(Directory)
+    expect(await srcDirectory.getEntry('project')).toBeInstanceOf(Directory)
     expect(
       await (
-        await SrcDirectory.getDirectoryOrThrow('project')
+        await srcDirectory.getDirectoryOrThrow('project')
       ).getEntry('server')
     ).toBeInstanceOf(File)
   })
 
   test('returns directory', async () => {
-    const ComponentsDirectory = new Directory({ path: 'src/components' })
-    const directory = await ComponentsDirectory.getDirectory('CodeBlock')
+    const componentsDirectory = new Directory({ path: 'src/components' })
+    const directory = await componentsDirectory.getDirectory('CodeBlock')
 
     expect(directory).toBeInstanceOf(Directory)
   })
@@ -60,8 +60,8 @@ describe('file system', () => {
   })
 
   test('returns file', async () => {
-    const RootDirectory = new Directory()
-    const file = await RootDirectory.getFile('tsconfig', 'json')
+    const rootDirectory = new Directory()
+    const file = await rootDirectory.getFile('tsconfig', 'json')
 
     expectTypeOf(file!).toMatchTypeOf<File>()
     expect(file!).toBeInstanceOf(File)
@@ -78,16 +78,16 @@ describe('file system', () => {
   })
 
   test('returns javascript file', async () => {
-    const ProjectDirectory = new Directory({ path: 'src/project' })
-    const file = await ProjectDirectory.getFile('server', 'ts')
+    const projectDirectory = new Directory({ path: 'src/project' })
+    const file = await projectDirectory.getFile('server', 'ts')
 
     expect(file!).toBeInstanceOf(JavaScriptFile)
     expectTypeOf(file!).toMatchTypeOf<JavaScriptFile<any>>()
   })
 
   test('file exports', async () => {
-    const ProjectDirectory = new Directory({ path: 'src/project' })
-    const file = await ProjectDirectory.getFile('server', 'ts')
+    const projectDirectory = new Directory({ path: 'src/project' })
+    const file = await projectDirectory.getFile('server', 'ts')
     const fileExports = await file!.getExports()
 
     expect(fileExports).toMatchObject([
@@ -99,21 +99,21 @@ describe('file system', () => {
     const fileSystem = new VirtualFileSystem({
       'use-hover.ts': 'export const useHover = () => {}',
     })
-    const RootDirectory = new Directory({ fileSystem })
-    const file = await RootDirectory.getFile('use-hover', 'ts')
+    const rootDirectory = new Directory({ fileSystem })
+    const file = await rootDirectory.getFile('use-hover', 'ts')
     const fileExports = await file!.getExports()
 
     expect(fileExports).toMatchObject([{ name: 'useHover', position: 12 }])
   })
 
   test('file export value types', async () => {
-    const ProjectDirectory = new Directory<{
+    const projectDirectory = new Directory<{
       ts: { createServer: () => void }
     }>({
       path: 'src/project',
       getModule: (path) => import(`../project/${path}`),
     })
-    const file = await ProjectDirectory.getFileOrThrow('server', 'ts')
+    const file = await projectDirectory.getFileOrThrow('server', 'ts')
     const fileExport = await file.getExport('createServer')
     const value = await fileExport!.getRuntimeValue()
 
@@ -161,8 +161,8 @@ describe('file system', () => {
   })
 
   test('getRuntimeValue is not typed when getModule is not defined', async () => {
-    const FileSystemDirectory = new Directory({ path: 'src/file-system' })
-    const file = await FileSystemDirectory.getFileOrThrow('path', 'ts')
+    const fileSystemDirectory = new Directory({ path: 'src/file-system' })
+    const file = await fileSystemDirectory.getFileOrThrow('path', 'ts')
 
     expectTypeOf(file!).toMatchTypeOf<JavaScriptFile<any>>()
     expect(file).toBeInstanceOf(JavaScriptFile)
@@ -177,11 +177,11 @@ describe('file system', () => {
   })
 
   test('getRuntimeValue resolves export runtime value from getModule', async () => {
-    const FileSystemDirectory = new Directory({
+    const fileSystemDirectory = new Directory({
       path: 'src/file-system',
       getModule: (path) => import(`./${path}`),
     })
-    const file = await FileSystemDirectory.getFileOrThrow('path', 'ts')
+    const file = await fileSystemDirectory.getFileOrThrow('path', 'ts')
 
     expectTypeOf(file).toMatchTypeOf<JavaScriptFileWithRuntime<any>>()
     expect(file).toBeInstanceOf(JavaScriptFileWithRuntime)
@@ -198,8 +198,8 @@ describe('file system', () => {
   })
 
   test('uses first file found when no file extension present', async () => {
-    const ProjectDirectory = new Directory({ path: 'src/project' })
-    const file = await ProjectDirectory.getFile('server')
+    const projectDirectory = new Directory({ path: 'src/project' })
+    const file = await projectDirectory.getFile('server')
 
     expect(file).toBeDefined()
   })
@@ -208,8 +208,8 @@ describe('file system', () => {
     const fileSystem = new VirtualFileSystem({
       'src/project/index.ts': 'export const project = 1',
     })
-    const RootDirectory = new Directory({ fileSystem })
-    const file = await RootDirectory.getFile('src/project')
+    const rootDirectory = new Directory({ fileSystem })
+    const file = await rootDirectory.getFile('src/project')
 
     expect(file).toBeInstanceOf(File)
   })
@@ -218,15 +218,15 @@ describe('file system', () => {
     const fileSystem = new VirtualFileSystem({
       'src/project/README.mdx': '# Project',
     })
-    const ProjectDirectory = new Directory({ path: 'src', fileSystem })
-    const file = await ProjectDirectory.getFile('project')
+    const projectDirectory = new Directory({ path: 'src', fileSystem })
+    const file = await projectDirectory.getFile('project')
 
     expect(file).toBeInstanceOf(File)
   })
 
   test('generates sibling navigation from file', async () => {
-    const ProjectDirectory = new Directory({ path: 'src/project' })
-    const file = await ProjectDirectory.getFile('server', 'ts')
+    const projectDirectory = new Directory({ path: 'src/project' })
+    const file = await projectDirectory.getFile('server', 'ts')
     const [previousEntry, nextEntry] = await file!.getSiblings()
 
     expect(previousEntry?.getName()).toBe('rpc')
@@ -234,8 +234,8 @@ describe('file system', () => {
   })
 
   test('generates sibling navigation from directory', async () => {
-    const ProjectDirectory = new Directory({ path: 'src/project' })
-    const directory = await ProjectDirectory.getDirectory('rpc')
+    const projectDirectory = new Directory({ path: 'src/project' })
+    const directory = await projectDirectory.getDirectory('rpc')
     const [previousEntry, nextEntry] = await directory!.getSiblings()
 
     expect(previousEntry?.getName()).toBe('refresh')
@@ -243,7 +243,7 @@ describe('file system', () => {
   })
 
   test('generates tree navigation', async () => {
-    const ProjectDirectory = new Directory({ path: 'src/project' })
+    const projectDirectory = new Directory({ path: 'src/project' })
 
     async function buildTreeNavigation<Entry extends FileSystemEntry<any>>(
       entry: Entry
@@ -264,7 +264,7 @@ describe('file system', () => {
       }
     }
 
-    const sources = await ProjectDirectory.getEntries()
+    const sources = await projectDirectory.getEntries()
     const tree = await Promise.all(sources.map(buildTreeNavigation))
 
     expect(tree).toMatchInlineSnapshot(`
