@@ -394,7 +394,7 @@ export class Directory<
         : File)
     | undefined
   > {
-    const segments = Array.isArray(path) ? path : path.split('/')
+    const segments = Array.isArray(path) ? path.slice(0) : path.split('/')
     let currentDirectory: Directory<Types> = this
     let entry: FileSystemEntry<any> | undefined
 
@@ -483,7 +483,7 @@ export class Directory<
 
   /** Get a directory at the specified `path`. */
   async getDirectory(path: string | string[]): Promise<Directory | undefined> {
-    const segments = Array.isArray(path) ? path : path.split('/')
+    const segments = Array.isArray(path) ? path.slice(0) : path.split('/')
     let currentDirectory: Directory<Types> = this
 
     while (segments.length > 0) {
