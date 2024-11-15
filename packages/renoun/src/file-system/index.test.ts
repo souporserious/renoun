@@ -362,4 +362,13 @@ describe('file system', () => {
       ]
     `)
   })
+
+  test('uses directory name when index or readme file', async () => {
+    const projectDirectory = new Directory({ path: 'src/components' })
+    const indexFile = await projectDirectory.getFile('index')
+    const readmeFile = await projectDirectory.getFile('README')
+
+    expect(indexFile?.getName()).toBe('components')
+    expect(readmeFile?.getName()).toBe('components')
+  })
 })

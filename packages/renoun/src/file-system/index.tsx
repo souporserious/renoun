@@ -37,9 +37,28 @@ export class File {
     return this.#directory
   }
 
-  /** Get the base name of the file excluding the extension. */
+  /**
+   * Get the base name of the file excluding the extension. The directory name
+   * will be used if the file is an index or readme file.
+   */
   getName() {
-    return basename(this.#path, extname(this.#path))
+    let name = this.getBaseName()
+
+    // Use the directory name if the file is an index or readme file
+    if (['index', 'readme'].includes(name.toLowerCase())) {
+      name = this.#directory.getName()
+    }
+
+    return name.split('.').at(0)!
+  }
+
+  /** Get the base name of the file excluding the extension. */
+  getBaseName() {
+    return (
+      basename(this.#path, extname(this.#path))
+        // remove leading numbers e.g. 01.intro -> intro
+        .replace(/^\d+\./, '')
+    )
   }
 
   /** Get the extension of the file. */
@@ -343,7 +362,7 @@ export class Directory<
       )
 
       // Find the entry matching the current segment
-      entry = allEntries.find((entry) => entry.getName() === currentSegment)
+      entry = allEntries.find((entry) => entry.getBaseName() === currentSegment)
 
       if (!entry) {
         return undefined
@@ -371,7 +390,7 @@ export class Directory<
           const targetFiles = ['index', 'readme']
 
           for (const subEntry of entries) {
-            const name = subEntry.getName().toLowerCase()
+            const name = subEntry.getBaseName().toLowerCase()
             if (targetFiles.includes(name)) {
               return subEntry as any
             }
@@ -418,8 +437,14 @@ export class Directory<
     return file as any
   }
 
-  /** Get a directory at the specified `path`. */
-  async getDirectory(path: string | string[]): Promise<Directory | undefined> {
+  /** Get the parent directory or a directory at the specified `path`. */
+  async getDirectory(
+    path?: string | string[]
+  ): Promise<Directory<Types> | undefined> {
+    if (path === undefined) {
+      return this.#directory
+    }
+
     const segments = Array.isArray(path) ? path.slice(0) : path.split('/')
     let currentDirectory: Directory<Types> = this
 
@@ -427,7 +452,9 @@ export class Directory<
       const currentSegment = segments.shift()
       const allEntries = await currentDirectory.getEntries()
       const entry = allEntries.find((entry) => {
-        return entry instanceof Directory && entry.getName() === currentSegment
+        return (
+          entry instanceof Directory && entry.getBaseName() === currentSegment
+        )
       })
 
       if (!entry || !(entry instanceof Directory)) {
@@ -444,10 +471,16 @@ export class Directory<
    * Get a directory at the specified `path`. An error will be thrown if the
    * directory is not found.
    */
-  async getDirectoryOrThrow(path: string | string[]): Promise<Directory> {
+  async getDirectoryOrThrow(
+    path?: string | string[]
+  ): Promise<Directory<Types>> {
     const directory = await this.getDirectory(path)
     if (!directory) {
-      throw new Error(`[renoun] Directory not found at path "${join(...path)}"`)
+      throw new Error(
+        path
+          ? `[renoun] Directory not found at path "${join(...path)}"`
+          : `[renoun] Parent directory not found`
+      )
     }
     return directory
   }
@@ -546,7 +579,9 @@ export class Directory<
         // Skip `index` and `readme` files if not explicitly included since they represent the directory
         if (
           !includeIndexAndReadme &&
-          ['index', 'readme'].includes(fileSystemEntry.getName().toLowerCase())
+          ['index', 'readme'].includes(
+            fileSystemEntry.getBaseName().toLowerCase()
+          )
         ) {
           continue
         }
@@ -580,7 +615,16 @@ export class Directory<
 
   /** Get the base name of the directory. */
   getName() {
-    return basename(this.#path)
+    return this.getBaseName()
+  }
+
+  /** Get the base name of the directory. */
+  getBaseName() {
+    return (
+      basename(this.#path)
+        // remove leading numbers e.g. 01.intro -> intro
+        .replace(/^\d+\./, '')
+    )
   }
 
   /** Get the relative path of the directory. */
