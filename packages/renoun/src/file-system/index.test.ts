@@ -97,6 +97,20 @@ describe('file system', () => {
     expect(nestedfile).toBeInstanceOf(File)
   })
 
+  test('returns index file', async () => {
+    const srcDirectory = new Directory()
+    const file = await srcDirectory.getFile(['src', 'components', 'index'])
+
+    expect(file).toBeInstanceOf(File)
+  })
+
+  test('returns readme file', async () => {
+    const srcDirectory = new Directory()
+    const file = await srcDirectory.getFile('src/components/README', 'mdx')
+
+    expect(file).toBeInstanceOf(File)
+  })
+
   test('returns javascript file', async () => {
     const projectDirectory = new Directory({ path: 'src/project' })
     const file = await projectDirectory.getFile('server', 'ts')
