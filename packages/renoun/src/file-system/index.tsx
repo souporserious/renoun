@@ -73,6 +73,16 @@ export class File {
     return fileSystem.getUrlPathRelativeTo(removeExtension(this.#path))
   }
 
+  /** Get the path segments of the file. */
+  getPathSegments() {
+    const fileSystem = this.#directory.getFileSystem()
+    const path = fileSystem.getUrlPathRelativeTo(
+      removeExtension(this.#path),
+      false
+    )
+    return path.split('/').filter(Boolean)
+  }
+
   /** Get the relative path to the file. */
   getRelativePath() {
     return this.#path
@@ -81,11 +91,6 @@ export class File {
   /** Get the file path to the editor in local development and the configured git repository in production. */
   getEditPath() {
     return getEditPath(this.#path)
-  }
-
-  /** Get the path segments of the file. */
-  getPathSegments() {
-    return this.#path.split('/').filter(Boolean)
   }
 
   /** Get the path of the file relative to another path. */
@@ -657,6 +662,13 @@ export class Directory<
     return fileSystem.getUrlPathRelativeTo(this.#path)
   }
 
+  /** Get the path segments of the directory. */
+  getPathSegments() {
+    const fileSystem = this.getFileSystem()
+    const path = fileSystem.getUrlPathRelativeTo(this.#path, false)
+    return path.split('/').filter(Boolean)
+  }
+
   /** Get the relative path of the directory. */
   getRelativePath() {
     return this.#path
@@ -665,11 +677,6 @@ export class Directory<
   /** Get the directory path to the editor in local development and the configured git repository in production. */
   getEditPath() {
     return getEditPath(this.#path)
-  }
-
-  /** Get the path segments of the directory. */
-  getPathSegments() {
-    return this.#path.split('/').filter(Boolean)
   }
 
   /** Get the absolute path of the directory. */

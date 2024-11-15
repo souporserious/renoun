@@ -388,4 +388,28 @@ describe('file system', () => {
     expect(indexFile?.getName()).toBe('components')
     expect(readmeFile?.getName()).toBe('components')
   })
+
+  test('adds basePath to file and directory getPath', async () => {
+    const projectDirectory = new Directory({
+      path: 'src/project',
+      basePath: 'renoun',
+    })
+    const file = await projectDirectory.getFileOrThrow('server', 'ts')
+    const directory = await projectDirectory.getDirectoryOrThrow('rpc')
+
+    expect(file.getPath()).toBe('/renoun/server')
+    expect(directory.getPath()).toBe('/renoun/rpc')
+  })
+
+  test('does not add basePath to getPathSegments', async () => {
+    const projectDirectory = new Directory({
+      path: 'src/project',
+      basePath: 'renoun',
+    })
+    const segments = (
+      await projectDirectory.getDirectoryOrThrow('rpc')
+    ).getPathSegments()
+
+    expect(segments).toEqual(['rpc'])
+  })
 })

@@ -40,7 +40,7 @@ export abstract class FileSystem {
     return this.#basePath
   }
 
-  getUrlPathRelativeTo(path: string) {
+  getUrlPathRelativeTo(path: string, includeBasePath = true) {
     const parsedPath = relative(this.getRootPath(), path)
       // remove leading dot
       .replace(/^\.\//, '')
@@ -48,7 +48,7 @@ export abstract class FileSystem {
       .replace(/\/$/, '')
     const basePath = this.getBasePath()
 
-    if (basePath) {
+    if (includeBasePath && basePath) {
       return `/${basePath}/${parsedPath}`
     }
 
