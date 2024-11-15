@@ -37,11 +37,13 @@ export function getProject(options?: ProjectOptions) {
       esModuleInterop: true,
       moduleResolution: ts.ModuleResolutionKind.Bundler,
       jsx: ts.JsxEmit.ReactJSX,
-      module: ts.ModuleKind.ESNext,
+      module: ts.ModuleKind.CommonJS,
       target: ts.ScriptTarget.ESNext,
       isolatedModules: true,
     },
-    tsConfigFilePath: 'tsconfig.json',
+    tsConfigFilePath: options?.useInMemoryFileSystem
+      ? undefined
+      : 'tsconfig.json',
     ...options,
   })
   const projectDirectory = options?.tsConfigFilePath

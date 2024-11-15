@@ -48,6 +48,10 @@
       "types": "./dist/components/*.d.ts",
       "import": "./dist/components/*.js"
     },
+    "./file-system": {
+      "types": "./dist/file-system/index.d.ts",
+      "import": "./dist/file-system/index.js"
+    },
     "./mdx": {
       "types": "./dist/mdx/index.d.ts",
       "import": "./dist/mdx/index.js"
@@ -74,6 +78,9 @@
       ],
       "components/*": [
         "./dist/components/*.d.ts"
+      ],
+      "file-system": [
+        "./dist/file-system/index.d.ts"
       ],
       "mdx": [
         "./dist/mdx/index.d.ts"
@@ -111,6 +118,7 @@
     "@renoun/mdx": "workspace:*",
     "fast-glob": "^3.3.2",
     "glob-parent": "^6.0.2",
+    "ignore": "^6.0.2",
     "resolve": "^1.22.8",
     "restyle": "catalog:",
     "minimatch": "^10.0.1",

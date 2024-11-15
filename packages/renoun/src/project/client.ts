@@ -8,7 +8,8 @@ import {
   createHighlighter,
   type Highlighter,
 } from '../utils/create-highlighter.js'
-import type { SymbolFilter } from '../utils/resolve-type.js'
+import type { FileExport } from '../utils/get-file-exports.js'
+import type { ResolvedType, SymbolFilter } from '../utils/resolve-type.js'
 import type { DistributiveOmit } from '../types.js'
 import { WebSocketClient } from './rpc/client.js'
 import { getProject } from './get-project.js'
@@ -47,7 +48,10 @@ export async function analyzeSourceText(
   }
 ): Promise<AnalyzeSourceTextResult> {
   if (client) {
-    return client.callMethod('analyzeSourceText', options)
+    return client.callMethod<AnalyzeSourceTextResult>(
+      'analyzeSourceText',
+      options
+    )
   }
 
   /* Switch to synchronous analysis when building for production to prevent timeouts. */
@@ -85,14 +89,14 @@ export async function resolveType({
   declaration: Node
   projectOptions?: ProjectOptions
   filter?: SymbolFilter
-}) {
+}): Promise<ResolvedType | undefined> {
   await waitForRefreshingProjects()
 
   const filePath = declaration.getSourceFile().getFilePath()
   const position = declaration.getPos()
 
   if (client) {
-    return client.callMethod('resolveType', {
+    return client.callMethod<ResolvedType>('resolveType', {
       filePath,
       position,
       filter: filter?.toString(),
@@ -106,4 +110,72 @@ export async function resolveType({
       return resolveTypeAtLocation(project, filePath, position, filter)
     }
   )
+}
+
+/**
+ * Get the exports of a file.
+ * @internal
+ */
+export async function getFileExports(
+  filePath: string,
+  projectOptions?: ProjectOptions
+) {
+  if (client) {
+    return client.callMethod<FileExport[]>('getFileExports', {
+      filePath,
+      projectOptions,
+    })
+  }
+
+  return import('../utils/get-file-exports.js').then(({ getFileExports }) => {
+    const project = getProject(projectOptions)
+    return getFileExports(filePath, project)
+  })
+}
+
+/**
+ * Create a source file in the project.
+ * @internal
+ */
+export async function createSourceFile(
+  filePath: string,
+  sourceText: string,
+  projectOptions?: ProjectOptions
+) {
+  if (client) {
+    return client.callMethod<void>('createSourceFile', {
+      filePath,
+      sourceText,
+      projectOptions,
+    })
+  }
+
+  const project = getProject(projectOptions)
+  project.createSourceFile(filePath, sourceText, { overwrite: true })
+}
+
+/**
+ * Transpile a source file.
+ * @internal
+ */
+export async function transpileSourceFile(
+  filePath: string,
+  projectOptions?: ProjectOptions
+) {
+  if (client) {
+    return client.callMethod<string>('transpileSourceFile', {
+      filePath,
+      projectOptions,
+    })
+  }
+
+  const project = getProject(projectOptions)
+  const sourceFile = project.getSourceFile(filePath)
+
+  if (!sourceFile) {
+    throw new Error(`Source file "${filePath}" not found`)
+  }
+
+  const [outputFile] = sourceFile.getEmitOutput().getOutputFiles()
+  return outputFile.getText()
 }

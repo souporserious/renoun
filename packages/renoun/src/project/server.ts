@@ -7,6 +7,7 @@ import {
   createHighlighter,
   type Highlighter,
 } from '../utils/create-highlighter.js'
+import { getFileExports as baseGetFileExports } from '../utils/get-file-exports.js'
 import { getRootDirectory } from '../utils/get-root-directory.js'
 import type { SymbolFilter } from '../utils/resolve-type.js'
 import { resolveTypeAtLocation } from '../utils/resolve-type-at-location.js'
@@ -117,6 +118,59 @@ export function createServer() {
         options.position,
         filterFn
       )
+    }
+  )
+
+  server.registerMethod(
+    'getFileExports',
+    async function getFileExports({
+      filePath,
+      projectOptions,
+    }: {
+      filePath: string
+      projectOptions?: ProjectOptions
+    }) {
+      const project = getProject(projectOptions)
+      return baseGetFileExports(filePath, project)
+    }
+  )
+
+  server.registerMethod(
+    'createSourceFile',
+    async function createSourceFile({
+      filePath,
+      sourceText,
+      projectOptions,
+    }: {
+      filePath: string
+      sourceText: string
+      projectOptions?: ProjectOptions
+    }) {
+      const project = getProject(projectOptions)
+      project.createSourceFile(filePath, sourceText, {
+        overwrite: true,
+      })
+    }
+  )
+
+  server.registerMethod(
+    'transpileSourceFile',
+    async function transpileSourceFile({
+      filePath,
+      projectOptions,
+    }: {
+      filePath: string
+      projectOptions?: ProjectOptions
+    }) {
+      const project = getProject(projectOptions)
+      const sourceFile = project.getSourceFile(filePath)
+
+      if (!sourceFile) {
+        throw new Error(`Source file "${filePath}" not found`)
+      }
+
+      const [outputFile] = sourceFile.getEmitOutput().getOutputFiles()
+      return outputFile.getText()
     }
   )
 

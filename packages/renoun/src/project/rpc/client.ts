@@ -99,11 +99,15 @@ export class WebSocketClient {
     }
   }
 
-  callMethod(method: string, params: any, timeout = 60000): Promise<any> {
+  async callMethod<Value>(
+    method: string,
+    params: any,
+    timeout = 60000
+  ): Promise<Value> {
     const id = performance.now()
     const request: WebSocketRequest = { method, params, id }
 
-    return new Promise((resolve, reject) => {
+    return new Promise<Value>((resolve, reject) => {
       const timeoutId = setTimeout(() => {
         reject(
           new Error(
