@@ -400,7 +400,10 @@ export class Directory<
 
     while (segments.length > 0) {
       const currentSegment = segments.shift()
-      const allEntries = await currentDirectory.getEntries()
+      const allEntries = await currentDirectory.getEntries(
+        // @ts-expect-error - private argument to enable adding `index` and `readme` files
+        true
+      )
 
       // Find the entry matching the current segment
       entry = allEntries.find((entry) => entry.getName() === currentSegment)
@@ -424,7 +427,10 @@ export class Directory<
           }
         } else if (entry instanceof Directory) {
           // Check if `index` or `readme` exists in the directory
-          const entries = await entry.getEntries()
+          const entries = await entry.getEntries(
+            // @ts-expect-error - private argument to enable adding `index` and `readme` files
+            true
+          )
           const targetFiles = ['index', 'readme']
 
           for (const subEntry of entries) {
@@ -546,6 +552,7 @@ export class Directory<
    * from the tsconfig file if configured.
    */
   async getEntries(): Promise<FileSystemEntry<any>[]> {
+    const includeIndexAndReadme = arguments[0]
     const fileSystem = await this.getFileSystem()
     const directoryEntries = await fileSystem.readDirectory(this.#path)
     const entries: FileSystemEntry<any>[] = []
@@ -596,6 +603,14 @@ export class Directory<
             path: entry.path,
             absolutePath: entry.absolutePath,
           })
+        }
+
+        // Skip `index` and `readme` files if not explicitly included since they represent the directory
+        if (
+          !includeIndexAndReadme &&
+          ['index', 'readme'].includes(fileSystemEntry.getName().toLowerCase())
+        ) {
+          continue
         }
       }
 

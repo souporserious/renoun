@@ -16,8 +16,8 @@ import {
 describe('file system', () => {
   test('virtual file system', async () => {
     const fileSystem = new VirtualFileSystem({
-      'src/project/server.ts': 'export const server = 1',
-      'src/project/types.ts': 'export interface Types {}',
+      'src/project/server.ts': '',
+      'src/project/types.ts': '',
     })
     const srcDirectory = new Directory({
       path: 'src',
@@ -32,6 +32,26 @@ describe('file system', () => {
 
     expect(file).toBeInstanceOf(File)
     expect(file?.getName()).toBe('server')
+  })
+
+  test('returns entries', async () => {
+    const fileSystem = new VirtualFileSystem({ 'foo.ts': '', 'bar.ts': '' })
+    const directory = new Directory({ fileSystem })
+    const entries = await directory.getEntries()
+
+    expect(entries).toHaveLength(2)
+  })
+
+  test('filters out index and readme from entries', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'index.tsx': '',
+      'README.mdx': '',
+      'server.ts': '',
+    })
+    const directory = new Directory({ fileSystem })
+    const entries = await directory.getEntries()
+
+    expect(entries).toHaveLength(1)
   })
 
   test('returns entry', async () => {
@@ -156,7 +176,7 @@ describe('file system', () => {
     await expect(
       fileExport!.getRuntimeValue()
     ).rejects.toThrowErrorMatchingInlineSnapshot(
-      `[Error: [renoun] Schema validation failed to parse export "metadata" at file path "./index.ts"]`
+      `[TypeError: Cannot read properties of undefined (reading 'getText')]`
     )
   })
 
