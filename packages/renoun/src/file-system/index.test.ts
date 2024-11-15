@@ -34,6 +34,17 @@ describe('file system', () => {
     expect(file?.getName()).toBe('server')
   })
 
+  test('returns entry', async () => {
+    const SrcDirectory = new Directory({ path: 'src' })
+
+    expect(await SrcDirectory.getEntry('project')).toBeInstanceOf(Directory)
+    expect(
+      await (
+        await SrcDirectory.getDirectoryOrThrow('project')
+      ).getEntry('server')
+    ).toBeInstanceOf(File)
+  })
+
   test('returns directory', async () => {
     const ComponentsDirectory = new Directory({ path: 'src/components' })
     const directory = await ComponentsDirectory.getDirectory('CodeBlock')

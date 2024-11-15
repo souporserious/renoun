@@ -361,7 +361,7 @@ export class Directory<
     return this.#fileSystem
   }
 
-  /** Get a file with the specified path and optional extensions. */
+  /** Get a file at the specified `path` and optional extensions. */
   async getFile<Extension extends string | undefined = undefined>(
     path: string | string[],
     extension?: Extension | Extension[]
@@ -424,7 +424,7 @@ export class Directory<
   }
 
   /**
-   * Get a file with the specified path and optional extensions.
+   * Get a file at the specified `path` and optional extensions.
    * An error will be thrown if the file is not found.
    */
   async getFileOrThrow<Extension extends string | undefined = undefined>(
@@ -449,7 +449,7 @@ export class Directory<
     return file as any
   }
 
-  /** Get a directory with the specified path. */
+  /** Get a directory at the specified `path`. */
   async getDirectory(path: string | string[]): Promise<Directory | undefined> {
     const normalizedPath = Array.isArray(path) ? path : [path]
     const directoryPath = this.#path
@@ -473,6 +473,38 @@ export class Directory<
       throw new Error(`[renoun] Directory not found at path "${join(...path)}"`)
     }
     return directory
+  }
+
+  /** Get a file or directory at the specified `path`. Files will be prioritized over directories. */
+  async getEntry(
+    path: string | string[]
+  ): Promise<FileSystemEntry<any> | undefined> {
+    const file = await this.getFile(path)
+
+    if (file) {
+      return file
+    }
+
+    const directory = await this.getDirectory(path)
+
+    if (directory) {
+      return directory
+    }
+
+    return undefined
+  }
+
+  /** Get a file or directory at the specified `path`. An error will be thrown if the entry is not found. */
+  async getEntryOrThrow(
+    path: string | string[]
+  ): Promise<FileSystemEntry<any>> {
+    const entry = await this.getEntry(path)
+
+    if (!entry) {
+      throw new Error(`[renoun] Entry not found at path "${join(...path)}"`)
+    }
+
+    return entry
   }
 
   /**
