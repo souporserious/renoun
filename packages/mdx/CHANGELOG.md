@@ -1,5 +1,11 @@
 # @renoun/mdx
 
+## 1.2.1
+
+### Patch Changes
+
+- 7020585: Updates all dependencies to latest version.
+
 ## 1.2.0
 
 ### Minor Changes
