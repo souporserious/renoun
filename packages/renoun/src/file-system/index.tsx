@@ -309,22 +309,20 @@ interface ExtensionSchema {
   [exportName: string]: SchemaFunction<any>
 }
 
-/** Functions that validate and transform export values. */
-interface ExtensionSchemas {
-  [extension: string]: ExtensionSchema
+/** Functions that validate and transform export values for specific extensions. */
+type ExtensionSchemas<Types extends ExtensionTypes> = {
+  [Extension in keyof Types]?: {
+    [ExportName in keyof Types[Extension]]?: SchemaFunction<
+      Types[Extension][ExportName]
+    >
+  }
 }
 
 interface DirectoryOptions<Types extends ExtensionTypes = ExtensionTypes> {
   path?: string
   fileSystem?: FileSystem
   directory?: Directory<any, any>
-  schema?: {
-    [Extension in keyof Types]?: {
-      [ExportName in keyof Types[Extension]]?: SchemaFunction<
-        Types[Extension][ExportName]
-      >
-    }
-  }
+  schema?: ExtensionSchemas<Types>
   getModule?: (path: string) => Promise<any>
 }
 
@@ -333,11 +331,10 @@ export class Directory<
   Types extends ExtensionTypes = ExtensionTypes,
   const Options extends DirectoryOptions<Types> = DirectoryOptions<Types>,
 > {
+  #path: string
   #fileSystem: FileSystem | undefined
   #directory?: Directory<any, any>
-  #path: string
-
-  #schema?: DirectoryOptions<Types>['schema']
+  #schema?: ExtensionSchemas<Types>
   #getModule?: (path: string) => Promise<any>
 
   constructor(options: Options = {} as Options) {
@@ -377,8 +374,8 @@ export class Directory<
   > {
     const normalizedPath = Array.isArray(path) ? join(...path) : path
     const filePath = join(this.#path, normalizedPath)
-    const allEntries = await this.getEntries()
     const fileExtensions = Array.isArray(extension) ? extension : [extension]
+    const allEntries = await this.getEntries()
 
     if (extension) {
       for (const extension of fileExtensions) {
