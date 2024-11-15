@@ -1,5 +1,6 @@
 import { getFileExports } from '../project/client.js'
 import { getEditPath } from '../utils/get-edit-path.js'
+import { getGitMetadata } from '../utils/get-git-metadata.js'
 import type { FileSystem } from './FileSystem.js'
 import { VirtualFileSystem } from './VirtualFileSystem.js'
 import {
@@ -69,6 +70,21 @@ export class File {
   /** Get the absolute path of the file. */
   getAbsolutePath() {
     return this.#absolutePath
+  }
+
+  async getCreatedAt() {
+    const gitMetadata = await getGitMetadata(this.#path)
+    return gitMetadata.createdAt ? new Date(gitMetadata.createdAt) : undefined
+  }
+
+  async getUpdatedAt() {
+    const gitMetadata = await getGitMetadata(this.#path)
+    return gitMetadata.updatedAt ? new Date(gitMetadata.updatedAt) : undefined
+  }
+
+  async getAuthors() {
+    const gitMetadata = await getGitMetadata(this.#path)
+    return gitMetadata.authors
   }
 
   /** Get the previous and next sibling entries (files or directories) of the parent directory. */
@@ -634,6 +650,21 @@ export class Directory<
   /** Get the absolute path of the directory. */
   getAbsolutePath() {
     return this.#path
+  }
+
+  async getCreatedAt() {
+    const gitMetadata = await getGitMetadata(this.#path)
+    return gitMetadata.createdAt ? new Date(gitMetadata.createdAt) : undefined
+  }
+
+  async getUpdatedAt() {
+    const gitMetadata = await getGitMetadata(this.#path)
+    return gitMetadata.updatedAt ? new Date(gitMetadata.updatedAt) : undefined
+  }
+
+  async getAuthors() {
+    const gitMetadata = await getGitMetadata(this.#path)
+    return gitMetadata.authors
   }
 }
 
