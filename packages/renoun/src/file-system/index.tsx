@@ -103,12 +103,10 @@ export class File {
 /** A JavaScript file export. */
 export class JavaScriptFileExport<Exports extends ExtensionType> {
   #name: string
-  #position: number
   #file: JavaScriptFile<Exports>
 
-  constructor(name: string, position: number, file: JavaScriptFile<Exports>) {
+  constructor(name: string, file: JavaScriptFile<Exports>) {
     this.#name = name
-    this.#position = position
     this.#file = file
   }
 
@@ -181,36 +179,8 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
   /** Get a JavaScript file export by name. */
   async getExport<ExportName extends Extract<keyof Exports, string>>(
     name: ExportName
-  ): Promise<JavaScriptFileExport<Exports> | undefined> {
-    const fileExports = await this.getExports()
-    const fileExport = fileExports.find(
-      (fileExport) => fileExport.name === name
-    )
-
-    if (!fileExport) {
-      return undefined
-    }
-
-    return new JavaScriptFileExport(
-      fileExport.name as ExportName,
-      fileExport.position,
-      this
-    )
-  }
-
-  /** Get a JavaScript file export by name. An error will be thrown if the export is not found. */
-  async getExportOrThrow<ExportName extends Extract<keyof Exports, string>>(
-    name: ExportName
   ): Promise<JavaScriptFileExport<Exports>> {
-    const fileExport = await this.getExport(name)
-
-    if (!fileExport) {
-      throw new Error(
-        `[renoun] JavaScript file export "${name}" not found in ${this.getAbsolutePath()}`
-      )
-    }
-
-    return fileExport
+    return new JavaScriptFileExport(name, this)
   }
 }
 
@@ -228,11 +198,10 @@ export class JavaScriptFileExportWithRuntime<
 
   constructor(
     name: ExportName,
-    position: number,
     file: JavaScriptFile<Exports>,
     getModule: (path: string) => Promise<any>
   ) {
-    super(name, position, file)
+    super(name, file)
     this.#file = file
     this.#getModule = getModule
   }
@@ -278,41 +247,9 @@ export class JavaScriptFileWithRuntime<
   async getExport<ExportName extends Extract<keyof Exports, string>>(
     name: ExportName
   ): Promise<
-    | JavaScriptFileExportWithRuntime<Exports[ExportName], Exports, ExportName>
-    | undefined
-  > {
-    const fileExports = await this.getExports()
-    const fileExport = fileExports.find(
-      (fileExport) => fileExport.name === name
-    )
-
-    if (!fileExport) {
-      return undefined
-    }
-
-    return new JavaScriptFileExportWithRuntime(
-      fileExport.name as ExportName,
-      fileExport.position,
-      this,
-      this.getModule
-    )
-  }
-
-  /** Get a JavaScript file export by name. An error will be thrown if the export is not found. */
-  async getExportOrThrow<ExportName extends Extract<keyof Exports, string>>(
-    name: ExportName
-  ): Promise<
     JavaScriptFileExportWithRuntime<Exports[ExportName], Exports, ExportName>
   > {
-    const fileExport = await this.getExport(name)
-
-    if (!fileExport) {
-      throw new Error(
-        `[renoun] JavaScript file export "${name}" not found in ${this.getAbsolutePath()}`
-      )
-    }
-
-    return fileExport
+    return new JavaScriptFileExportWithRuntime(name, this, this.getModule)
   }
 }
 

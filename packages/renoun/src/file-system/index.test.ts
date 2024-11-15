@@ -119,7 +119,7 @@ describe('file system', () => {
     expectTypeOf(file!).toMatchTypeOf<JavaScriptFile<any>>()
   })
 
-  test('file exports', async () => {
+  test('all file exports', async () => {
     const projectDirectory = new Directory({ path: 'src/project' })
     const file = await projectDirectory.getFile('server', 'ts')
     const fileExports = await file!.getExports()
@@ -129,7 +129,7 @@ describe('file system', () => {
     ])
   })
 
-  test('virtual file exports', async () => {
+  test('all virtual file exports', async () => {
     const fileSystem = new VirtualFileSystem({
       'use-hover.ts': 'export const useHover = () => {}',
     })
@@ -138,6 +138,28 @@ describe('file system', () => {
     const fileExports = await file!.getExports()
 
     expect(fileExports).toMatchObject([{ name: 'useHover', position: 12 }])
+  })
+
+  test('single virtual file export', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'use-hover.ts': 'export const useHover = () => {}',
+    })
+    const rootDirectory = new Directory<{
+      ts: { useHover: Function }
+    }>({
+      fileSystem,
+      getModule: async () => {
+        return {
+          useHover: () => {},
+        }
+      },
+    })
+    const file = await rootDirectory.getFileOrThrow('use-hover', 'ts')
+    const fileExport = await file.getExport('useHover')
+    const value = await fileExport.getRuntimeValue()
+
+    expectTypeOf(value).toMatchTypeOf<Function>()
+    expect(value).toBeInstanceOf(Function)
   })
 
   test('file export value types', async () => {
@@ -149,7 +171,7 @@ describe('file system', () => {
     })
     const file = await projectDirectory.getFileOrThrow('server', 'ts')
     const fileExport = await file.getExport('createServer')
-    const value = await fileExport!.getRuntimeValue()
+    const value = await fileExport.getRuntimeValue()
 
     expectTypeOf(value).toMatchTypeOf<Function>()
   })
@@ -185,7 +207,7 @@ describe('file system', () => {
       },
     })
     const file = await directory.getFileOrThrow('index', 'ts')
-    const fileExport = await file.getExportOrThrow('metadata')
+    const fileExport = await file.getExport('metadata')
 
     await expect(
       fileExport!.getRuntimeValue()
@@ -220,7 +242,7 @@ describe('file system', () => {
     expectTypeOf(file).toMatchTypeOf<JavaScriptFileWithRuntime<any>>()
     expect(file).toBeInstanceOf(JavaScriptFileWithRuntime)
 
-    const fileExport = await file.getExportOrThrow('basename')
+    const fileExport = await file.getExport('basename')
 
     expectTypeOf(fileExport).toHaveProperty('getRuntimeValue')
     expect(fileExport).toBeInstanceOf(JavaScriptFileExportWithRuntime)
