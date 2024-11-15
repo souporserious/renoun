@@ -1,11 +1,12 @@
 import { getFileExports } from '../project/client.js'
+import { getEditPath } from '../utils/get-edit-path.js'
 import type { FileSystem } from './FileSystem.js'
 import { VirtualFileSystem } from './VirtualFileSystem.js'
 import {
   isJavaScriptLikeExtension,
   type IsJavaScriptLikeExtension,
 } from './is-javascript-like-extension.js'
-import { basename, extname, join, relative, removeExtension } from './path.js'
+import { basename, extname, join, relative } from './path.js'
 
 export type FileSystemEntry<Types extends ExtensionTypes> =
   | File
@@ -48,6 +49,11 @@ export class File {
   /** Get the relative path of the file. */
   getPath() {
     return this.#path
+  }
+
+  /** Get the file path to the editor in local development and the configured git repository in production. */
+  getEditPath() {
+    return getEditPath(this.#path)
   }
 
   /** Get the path segments of the file. */
@@ -613,6 +619,11 @@ export class Directory<
   /** Get the relative path of the directory. */
   getPath() {
     return this.#path
+  }
+
+  /** Get the directory path to the editor in local development and the configured git repository in production. */
+  getEditPath() {
+    return getEditPath(this.#path)
   }
 
   /** Get the path segments of the directory. */
