@@ -11,7 +11,9 @@ const steps = [
     code: `import { Directory } from 'renoun/file-system'
 import type { MDXContent } from 'renoun/mdx'
 
-const posts = new Directory<{ mdx: { default: MDXContent } }>({ path: 'posts' })`,
+const posts = new Directory<{ mdx: { default: MDXContent } }>({
+  path: 'posts'
+})`,
   },
   {
     title: 'Render',
@@ -19,7 +21,9 @@ const posts = new Directory<{ mdx: { default: MDXContent } }>({ path: 'posts' })
     code: `import { Directory } from 'renoun/file-system'
 import type { MDXContent } from 'renoun/mdx'
 
-const posts = new Directory<{ mdx: { default: MDXContent } }>({ path: 'posts' })
+const posts = new Directory<{ mdx: { default: MDXContent } }>({
+  path: 'posts'
+})
 
 export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
   const post = await posts.getFile((await params).slug, 'mdx')
