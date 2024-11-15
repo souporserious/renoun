@@ -7,32 +7,28 @@ import { Text } from '@/components/Text'
 const steps = [
   {
     title: 'Collect',
-    content: `Start by collecting structured data from your file system. Collections help organize and validate your source code.`,
-    code: `import { Collection } from 'renoun/collections'
+    content: `Start by collecting structured data from your file system. The \`file-system\` utilties help organize and validate your source code.`,
+    code: `import { Directory } from 'renoun/file-system'
 import type { MDXContent } from 'renoun/mdx'
 
-const posts = new Collection<{ default: MDXContent }>({
-  filePattern: 'docs/*.mdx'
-})`,
+const posts = new Directory<{ mdx: { default: MDXContent } }>({ path: 'posts' })`,
   },
   {
     title: 'Render',
     content: `Easily query and render your file system sources programmatically using a simple API.`,
-    code: `import { Collection } from 'renoun/collections'
+    code: `import { Directory } from 'renoun/file-system'
 import type { MDXContent } from 'renoun/mdx'
 
-const posts = new Collection<{ default: MDXContent }>({
-  filePattern: 'docs/*.mdx'
-})
+const posts = new Directory<{ mdx: { default: MDXContent } }>({ path: 'posts' })
 
-export default async function Page({ params }: { params: { slug: string } }) {
-  const post = await posts.getSource(params.slug)
+export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
+  const post = await posts.getFile((await params).slug)
 
   if (!post) {
     return <div>Post not found</div>
   }
 
-  const Content = await post.getExport('default').getValue()
+  const Content = await (await post.getExport('default')).getRuntimeValue()
     
   return <Content />
 }`,
