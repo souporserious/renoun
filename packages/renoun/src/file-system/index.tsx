@@ -106,12 +106,24 @@ export class File {
     return gitMetadata.authors
   }
 
-  /** Get the previous and next sibling entries (files or directories) of the parent directory. */
+  /**
+   * Get the previous and next sibling entries (files or directories) of the parent directory.
+   * If the file is an index or readme file, the siblings will be retrieved from the parent directory.
+   */
   async getSiblings(): Promise<
     [File | Directory | undefined, File | Directory | undefined]
   > {
+    const isIndexOrReadme = ['index', 'readme'].includes(
+      this.getBaseName().toLowerCase()
+    )
+    if (isIndexOrReadme) {
+      return this.#directory.getSiblings()
+    }
+
     const entries = await this.#directory.getEntries()
-    const index = entries.findIndex((file) => file.getPath() === this.getPath())
+    const index = entries.findIndex((file) => {
+      return file.getPath() === this.getPath()
+    })
     const previous = index > 0 ? entries[index - 1] : undefined
     const next = index < entries.length - 1 ? entries[index + 1] : undefined
 

@@ -298,6 +298,20 @@ describe('file system', () => {
     expect(nextEntry?.getName()).toBe('server')
   })
 
+  test('generates sibling navigation from index as directory', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'components/index.ts': '',
+      'utils/index.ts': '',
+    })
+    const rootDirectory = new Directory({ fileSystem })
+    const indexFile = await rootDirectory.getFileOrThrow('components/index')
+    const [previousEntry, nextEntry] = await indexFile.getSiblings()
+
+    expect(previousEntry).toBe(undefined)
+    expect(nextEntry?.getName()).toBe('utils')
+    expect(nextEntry).toBeInstanceOf(Directory)
+  })
+
   test('generates tree navigation', async () => {
     const projectDirectory = new Directory({ path: 'src/project' })
 
