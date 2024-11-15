@@ -464,6 +464,18 @@ export class Directory<
   }
 
   /**
+   * Get a directory at the specified `path`. An error will be thrown if the
+   * directory is not found.
+   */
+  async getDirectoryOrThrow(path: string | string[]): Promise<Directory> {
+    const directory = await this.getDirectory(path)
+    if (!directory) {
+      throw new Error(`[renoun] Directory not found at path "${join(...path)}"`)
+    }
+    return directory
+  }
+
+  /**
    * Get all entries within the directory that are not git ignored or excluded
    * from the tsconfig file if configured.
    */
