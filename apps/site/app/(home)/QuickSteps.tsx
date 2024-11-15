@@ -7,7 +7,7 @@ import { Text } from '@/components/Text'
 const steps = [
   {
     title: 'Collect',
-    content: `Start by collecting structured data from your file system. The \`file-system\` utilties help organize and validate your source code.`,
+    content: `Collect, organize, and validate structured data using the File System API.`,
     code: `import { Directory } from 'renoun/file-system'
 import type { MDXContent } from 'renoun/mdx'
 
@@ -17,12 +17,13 @@ const posts = new Directory<{ mdx: { default: MDXContent } }>({
   },
   {
     title: 'Render',
-    content: `Easily query and render your file system sources programmatically using a simple API.`,
+    content: `Query and render your file system entries programmatically using a simple API.`,
     code: `import { Directory } from 'renoun/file-system'
 import type { MDXContent } from 'renoun/mdx'
 
 const posts = new Directory<{ mdx: { default: MDXContent } }>({
-  path: 'posts'
+  path: 'posts',
+  getModule: (path) => import(\`./posts/\${path}\`)
 })
 
 export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
@@ -32,17 +33,17 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
     return <div>Post not found</div>
   }
 
-  const Content = await (await post.getExport('default')).getRuntimeValue()
+  const Content = await post.getExport('default').getRuntimeValue()
     
   return <Content />
 }`,
     codeBlockProps: {
-      focusedLines: '8-18',
+      focusedLines: '6,9-23',
     },
   },
   {
     title: 'Personalize',
-    content: `Select from a growing list of pre-built components to tailor your documentation to fit your unique needs and brand identity.`,
+    content: `Select from a growing list of pre-built components to tailor your content and documentation to fit your unique needs and brand identity.`,
     code: `import { CodeBlock, Tokens } from 'renoun/components'
 
 export function Page() {
