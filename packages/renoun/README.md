@@ -5,9 +5,9 @@
       <img src="/packages/renoun/images/logo-light.png" alt="renoun" width="180"/>
     </picture>
   </a>
-  <h2>Your Technical Content Toolkit</h2>
+  <h2>Create Engaging Content and Documentation</h2>
   <p>
-Meticulously crafted React components and utilities to<br/>help you create engaging content and documentation.
+Meticulously crafted React components and utilities to<br/>help you write better technical content and documentation.
   </p>
 </div>
 
@@ -29,45 +29,66 @@ npm install renoun
 
 After installing the package, you can follow the [getting started guide](https://www.renoun.dev/docs/getting-started) or start creating content using your [favorite framework](https://www.renoun.dev/guides).
 
-### Collections
+### File System
 
-Collections are a way to organize and query file-system data in renoun. They are a powerful tool that allows you to define a schema for file exports and query those exports using a simple API.
+The File System API offers a way to organize and query file-system data in renoun. It is a powerful tool that allows you to define a schema for file exports and query those exports using a simple API.
 
-To get started with collections, instantiate the [`Collection`](https://www.renoun.dev/collections#collection) class to create a collection of files and directories from the file system. We can use the `getSource` method to query a specific file or directory:
+To get started with the File System API, instantiate the `Directory` class to target a set of files and directories from the file system. We can then use the `getEntry` / `getDirectory` / `getFile` methods to query a specific file or directory:
 
 ```tsx
-import { Collection } from 'renoun/collections'
+import { Directory } from 'renoun/file-system'
 
-const posts = new Collection({ filePattern: 'posts/*.mdx' })
+const posts = new Directory({ path: 'posts' })
 
 export default async function Page({
   params,
 }: {
   params: Promise<{ slug: string }>
 }) {
-  const post = await posts.getSource((await params).slug)
+  const post = await posts.getFile((await params).slug, 'mdx')
 
   if (!post) {
     return <div>Post not found</div>
   }
 
-  const Content = await post.getExport('default').getValue()
+  const Content = await (await post.getExport('default')).getValue()
 
   return <Content />
 }
 ```
 
-Next, we can generate an index page of links to all posts using the `getSources` method:
+Right now we aren't getting the best type checking from the `getExport` method. We can improve this by providing the types we expect for this extension to the `Directory` class:
 
 ```tsx
-import { Collection } from 'renoun/collections'
+import { Directory } from 'renoun/file-system'
+import type { MDXContent } from 'renoun/mdx'
 
-const posts = new Collection<{ frontmatter: { title: string } }>({
-  filePattern: 'posts/*.mdx',
+const posts = new Directory<{
+  mdx: { default: MDXContent }
+}>({
+  path: 'posts',
+})
+```
+
+Now when we call `getExport`, we will get better type checking and intellisense.
+
+Next, we can generate an index page of links to all posts using the `getEntries` method. We'll also add types for the incoming front matter that we are expecting from enabling [frontmatter](https://www.renoun.dev/guides/mdx#remark-frontmatter) from `renoun/mdx`:
+
+```tsx
+import { Directory } from 'renoun/file-system'
+import type { MDXContent } from 'renoun/mdx'
+
+const posts = new Directory<{
+  mdx: {
+    default: MDXContent
+    frontmatter: { title: string }
+  }
+}>({
+  path: 'posts',
 })
 
 export default async function Page() {
-  const allPosts = await posts.getSources({ depth: 1 })
+  const allPosts = await posts.getEntries()
 
   return (
     <>
@@ -75,7 +96,9 @@ export default async function Page() {
       <ul>
         {allPosts.map(async (post) => {
           const path = post.getPath()
-          const frontmatter = await post.getExport('frontmatter').getValue()
+          const frontmatter = await (
+            await post.getExport('frontmatter')
+          ).getRuntimeValue()
 
           return (
             <li key={path}>
@@ -89,9 +112,9 @@ export default async function Page() {
 }
 ```
 
-We added module export types to the `Collection` to provide better intellisense, for example, when enabling [frontmatter](https://www.renoun.dev/guides/mdx#remark-frontmatter) from `renoun/mdx`. We can also provide [schema validation](https://www.renoun.dev/docs/getting-started#validating-exports) to ensure that modules export the correct shape.
+To further improve the types we can also provide [schema validation](https://www.renoun.dev/docs/getting-started#validating-exports) to ensure that modules export the correct shape.
 
-Collections are not limited to MDX files and can be used with _any file type_. By organizing content and source code into structured collections, we can easily generate static pages and manage complex routing and navigations. For a more in-depth look at collections, visit the [collections](https://www.renoun.dev/collections) guide.
+This File System API is not limited to MDX files and can be used with _any file type_ in your file-system. By organizing content and source code into structured collections, you can easily generate static pages and manage complex routing and navigations. For a more in-depth look at the File System API, visit the [docs site](https://www.renoun.dev/).
 
 ### Components
 
@@ -137,20 +160,20 @@ export default function Page() {
 }
 ```
 
-API references can also be resolved from a `Collection` source. This can be from a file that will include references for all exports:
+API references can also be resolved from a `File` that will include references for all exports:
 
 ```tsx
-import { Collection } from 'renoun/collections'
+import { Directory } from 'renoun/file-system'
 import { APIReference } from 'renoun/components'
 
-const components = new Collection({ filePattern: 'components/*.tsx' })
+const components = new Directory({ path: 'components' })
 
 export default async function Page({
   params,
 }: {
   params: Promise<{ slug: string }>
 }) {
-  const component = await components.getSource((await params).slug)
+  const component = await components.getFile((await params).slug, 'tsx')
 
   if (!component) {
     return <div>Component not found</div>
@@ -160,20 +183,20 @@ export default async function Page({
 }
 ```
 
-Or from a specific export within a file:
+Or from a specific exports within a `File`:
 
 ```tsx
-import { Collection } from 'renoun/collections'
+import { Directory } from 'renoun/file-system'
 import { APIReference } from 'renoun/components'
 
-const components = new Collection({ filePattern: 'components/*.tsx' })
+const components = new Directory({ filePattern: 'components' })
 
 export default async function Page({
   params,
 }: {
   params: Promise<{ slug: string }>
 }) {
-  const component = await components.getSource((await params).slug)
+  const component = await components.getFile((await params).slug, 'tsx')
 
   if (!component) {
     return <div>Component not found</div>
