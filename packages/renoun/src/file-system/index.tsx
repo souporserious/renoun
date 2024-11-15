@@ -485,8 +485,9 @@ export class Directory<
   }
 
   /**
-   * Get all entries within the directory that are not git ignored or excluded
-   * from the tsconfig file if configured.
+   * Retrieves all entries (files and directories) within the current directory
+   * that are not excluded by Git ignore rules or the closest `tsconfig` file.
+   * Additionally, `index` and `readme` files are excluded as they represent the directory.
    */
   async getEntries(): Promise<FileSystemEntry<any>[]> {
     const includeIndexAndReadme = arguments[0]
