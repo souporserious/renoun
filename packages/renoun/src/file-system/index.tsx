@@ -558,51 +558,49 @@ export class Directory<
         continue
       }
 
+      let fileSystemEntry: FileSystemEntry<any> | undefined
+
       if (entry.isDirectory) {
-        entries.push(
-          new Directory<Types>({
-            fileSystem,
-            directory: this,
-            path: entry.path,
-            schema: this.#schema,
-            getModule: this.#getModule,
-          })
-        )
+        fileSystemEntry = new Directory<Types>({
+          fileSystem,
+          directory: this,
+          path: entry.path,
+          schema: this.#schema,
+          getModule: this.#getModule,
+        })
       } else if (entry.isFile) {
         const extension = extname(entry.name).slice(1)
 
         if (isJavaScriptLikeExtension(extension)) {
           if (typeof this.#getModule === 'function') {
-            entries.push(
-              new JavaScriptFileWithRuntime({
-                directory: this,
-                path: entry.path,
-                absolutePath: entry.absolutePath,
-                getModule: this.#getModule,
-                schema: this.#schema,
-                isVirtualFileSystem: fileSystem instanceof VirtualFileSystem,
-              })
-            )
-          } else {
-            entries.push(
-              new JavaScriptFile({
-                directory: this,
-                path: entry.path,
-                absolutePath: entry.absolutePath,
-                schema: this.#schema,
-                isVirtualFileSystem: fileSystem instanceof VirtualFileSystem,
-              })
-            )
-          }
-        } else {
-          entries.push(
-            new File({
+            fileSystemEntry = new JavaScriptFileWithRuntime({
               directory: this,
               path: entry.path,
               absolutePath: entry.absolutePath,
+              getModule: this.#getModule,
+              schema: this.#schema,
+              isVirtualFileSystem: fileSystem instanceof VirtualFileSystem,
             })
-          )
+          } else {
+            fileSystemEntry = new JavaScriptFile({
+              directory: this,
+              path: entry.path,
+              absolutePath: entry.absolutePath,
+              schema: this.#schema,
+              isVirtualFileSystem: fileSystem instanceof VirtualFileSystem,
+            })
+          }
+        } else {
+          fileSystemEntry = new File({
+            directory: this,
+            path: entry.path,
+            absolutePath: entry.absolutePath,
+          })
         }
+      }
+
+      if (fileSystemEntry) {
+        entries.push(fileSystemEntry)
       }
     }
 
