@@ -2,12 +2,13 @@ import { getFileExports } from '../project/client.js'
 import { getEditPath } from '../utils/get-edit-path.js'
 import { getGitMetadata } from '../utils/get-git-metadata.js'
 import type { FileSystem } from './FileSystem.js'
+import { NodeFileSystem } from './NodeFileSystem.js'
 import { VirtualFileSystem } from './VirtualFileSystem.js'
 import {
   isJavaScriptLikeExtension,
   type IsJavaScriptLikeExtension,
 } from './is-javascript-like-extension.js'
-import { basename, extname, join, relative } from './path.js'
+import { basename, extname, join, relative, removeExtension } from './path.js'
 
 export type FileSystemEntry<Types extends ExtensionTypes> =
   | File
@@ -66,8 +67,14 @@ export class File {
     return extname(this.#path).slice(1)
   }
 
-  /** Get the relative path of the file. */
+  /** Get a URL-friendly path to the file. */
   getPath() {
+    const fileSystem = this.#directory.getFileSystem()
+    return fileSystem.getUrlPathRelativeTo(removeExtension(this.#path))
+  }
+
+  /** Get the relative path to the file. */
+  getRelativePath() {
     return this.#path
   }
 
@@ -122,7 +129,7 @@ export class File {
 
     const entries = await this.#directory.getEntries()
     const index = entries.findIndex((file) => {
-      return file.getPath() === this.getPath()
+      return file.getRelativePath() === this.getRelativePath()
     })
     const previous = index > 0 ? entries[index - 1] : undefined
     const next = index < entries.length - 1 ? entries[index + 1] : undefined
@@ -188,7 +195,7 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
         } catch (error) {
           if (error instanceof Error) {
             throw new Error(
-              `[renoun] Schema validation failed to parse export "${name}" at file path "${this.getPath()}"`,
+              `[renoun] Schema validation failed to parse export "${name}" at file path "${this.getRelativePath()}"`,
               { cause: error }
             )
           }
@@ -243,9 +250,9 @@ export class JavaScriptFileExportWithRuntime<
    */
   async getRuntimeValue(): Promise<Value> {
     const exportName = this.getName()
-    const fileSystem = await this.#file.getDirectory().getFileSystem()
+    const fileSystem = this.#file.getDirectory().getFileSystem()
     const fileModule = await this.#getModule(
-      this.#file.getPathRelativeTo(fileSystem.getPath())
+      this.#file.getPathRelativeTo(fileSystem.getRootPath())
     )
     const fileModuleExport = fileModule[this.getName()]
 
@@ -310,6 +317,7 @@ type ExtensionSchemas<Types extends ExtensionTypes> = {
 
 interface DirectoryOptions<Types extends ExtensionTypes = ExtensionTypes> {
   path?: string
+  basePath?: string
   fileSystem?: FileSystem
   directory?: Directory<any, any>
   schema?: ExtensionSchemas<Types>
@@ -322,6 +330,7 @@ export class Directory<
   const Options extends DirectoryOptions<Types> = DirectoryOptions<Types>,
 > {
   #path: string
+  #basePath?: string
   #fileSystem: FileSystem | undefined
   #directory?: Directory<any, any>
   #schema?: ExtensionSchemas<Types>
@@ -333,18 +342,21 @@ export class Directory<
         ? options.path
         : join('.', options.path)
       : '.'
+    this.#basePath = options.basePath
     this.#fileSystem = options.fileSystem
     this.#directory = options.directory
     this.#schema = options.schema
     this.#getModule = options.getModule
   }
 
-  async getFileSystem() {
+  getFileSystem() {
     if (this.#fileSystem) {
       return this.#fileSystem
     }
-    const { NodeFileSystem } = await import('./NodeFileSystem.js')
-    this.#fileSystem = new NodeFileSystem({ basePath: this.#path })
+    this.#fileSystem = new NodeFileSystem({
+      rootPath: this.#path,
+      basePath: this.#basePath,
+    })
     return this.#fileSystem
   }
 
@@ -536,7 +548,7 @@ export class Directory<
    */
   async getEntries(): Promise<FileSystemEntry<any>[]> {
     const includeIndexAndReadme = arguments[0]
-    const fileSystem = await this.getFileSystem()
+    const fileSystem = this.getFileSystem()
     const directoryEntries = await fileSystem.readDirectory(this.#path)
     const entries: FileSystemEntry<any>[] = []
 
@@ -616,9 +628,9 @@ export class Directory<
     }
 
     const entries = await this.#directory.getEntries()
-    const index = entries.findIndex(
-      (entryToCompare) => entryToCompare.getPath() === this.getPath()
-    )
+    const index = entries.findIndex((entryToCompare) => {
+      return entryToCompare.getRelativePath() === this.getRelativePath()
+    })
     const previous = index > 0 ? entries[index - 1] : undefined
     const next = index < entries.length - 1 ? entries[index + 1] : undefined
 
@@ -639,8 +651,14 @@ export class Directory<
     )
   }
 
-  /** Get the relative path of the directory. */
+  /** Get a URL-friendly path of the directory. */
   getPath() {
+    const fileSystem = this.getFileSystem()
+    return fileSystem.getUrlPathRelativeTo(this.#path)
+  }
+
+  /** Get the relative path of the directory. */
+  getRelativePath() {
     return this.#path
   }
 

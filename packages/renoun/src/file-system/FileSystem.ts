@@ -1,9 +1,13 @@
 import { minimatch } from 'minimatch'
 
+import { relative } from './path.js'
 import type { DirectoryEntry } from './types.js'
 
 interface FileSystemOptions {
-  /** Base path to use when reading files. */
+  /** Root path to use when reading files. */
+  rootPath?: string
+
+  /** Base path to prepend to all paths. */
   basePath?: string
 
   /**
@@ -12,12 +16,14 @@ interface FileSystemOptions {
 }
 
 export abstract class FileSystem {
-  #basePath: string
+  #rootPath: string
+  #basePath?: string
   #tsConfigPath: string
   #tsConfig?: any
 
   constructor(options: FileSystemOptions = {}) {
-    this.#basePath = options.basePath || '.'
+    this.#rootPath = options.rootPath || '.'
+    this.#basePath = options.basePath
     this.#tsConfigPath = options.tsConfigPath || 'tsconfig.json'
   }
 
@@ -26,8 +32,27 @@ export abstract class FileSystem {
   abstract readDirectory(path?: string): Promise<DirectoryEntry[]>
   abstract isFilePathGitIgnored(filePath: string): boolean
 
-  getPath() {
+  getRootPath() {
+    return this.#rootPath
+  }
+
+  getBasePath() {
     return this.#basePath
+  }
+
+  getUrlPathRelativeTo(path: string) {
+    const parsedPath = relative(this.getRootPath(), path)
+      // remove leading dot
+      .replace(/^\.\//, '')
+      // remove trailing slash
+      .replace(/\/$/, '')
+    const basePath = this.getBasePath()
+
+    if (basePath) {
+      return `/${basePath}/${parsedPath}`
+    }
+
+    return `/${parsedPath}`
   }
 
   #getTsConfig() {
