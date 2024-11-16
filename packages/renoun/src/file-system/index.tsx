@@ -631,8 +631,9 @@ export class Directory<Types extends ExtensionTypes = ExtensionTypes> {
    * that are not excluded by Git ignore rules or the closest `tsconfig` file.
    * Additionally, `index` and `readme` files are excluded as they represent the directory.
    */
-  async getEntries(): Promise<FileSystemEntry<Types>[]> {
-    const includeIndexAndReadme = arguments[0]
+  async getEntries(options?: {
+    includeIndexAndReadme: boolean
+  }): Promise<FileSystemEntry<Types>[]> {
     const fileSystem = this.getFileSystem()
     const directoryEntries = await fileSystem.readDirectory(this.#path)
     const entries: FileSystemEntry<any>[] = []
@@ -677,7 +678,7 @@ export class Directory<Types extends ExtensionTypes = ExtensionTypes> {
 
         // Skip `index` and `readme` files if not explicitly included since they represent the directory
         if (
-          !includeIndexAndReadme &&
+          !options?.includeIndexAndReadme &&
           ['index', 'readme'].includes(
             fileSystemEntry.getBaseName().toLowerCase()
           )
