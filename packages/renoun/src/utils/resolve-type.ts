@@ -1485,7 +1485,9 @@ function getFilePathRelativeToProject(declaration: Node) {
     )
   }
 
-  return trimmedFilePath.slice(1)
+  return trimmedFilePath.startsWith('/')
+    ? trimmedFilePath.slice(1)
+    : trimmedFilePath
 }
 
 const rootFilePaths = new WeakMap<Project, string>()
