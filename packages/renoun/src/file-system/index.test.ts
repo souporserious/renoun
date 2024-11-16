@@ -431,4 +431,17 @@ describe('file system', () => {
       expectTypeOf(file).toMatchTypeOf<JavaScriptFile<{ metadata: {} }>>()
     }
   })
+
+  test('hasExtension', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'index.ts': 'export const index = 1',
+      'readme.md': '# Readme',
+    })
+    const directory = new Directory<{ ts: { title: string } }>({ fileSystem })
+    const files = await directory.getFiles({ includeIndexAndReadme: true })
+    const tsFiles = files.filter((file) => file.hasExtension('ts'))
+
+    expect(tsFiles).toHaveLength(1)
+    expectTypeOf(tsFiles).toMatchTypeOf<JavaScriptFile<{ title: string }>[]>()
+  })
 })
