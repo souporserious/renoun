@@ -13,7 +13,7 @@ import {
 } from '../utils/get-file-exports.js'
 import { getRootDirectory } from '../utils/get-root-directory.js'
 import type { SymbolFilter } from '../utils/resolve-type.js'
-import { resolveTypeAtLocation } from '../utils/resolve-type-at-location.js'
+import { resolveTypeAtLocation as baseResolveTypeAtLocation } from '../utils/resolve-type-at-location.js'
 import { WebSocketServer } from './rpc/server.js'
 import { getProject } from './get-project.js'
 import { ProjectOptions } from './types.js'
@@ -85,8 +85,8 @@ export function createServer() {
   )
 
   server.registerMethod(
-    'resolveType',
-    async function resolveType({
+    'resolveTypeAtLocation',
+    async function resolveTypeAtLocation({
       projectOptions,
       filter,
       ...options
@@ -115,11 +115,12 @@ export function createServer() {
           ) as SymbolFilter)
         : undefined
 
-      return resolveTypeAtLocation(
+      return baseResolveTypeAtLocation(
         project,
         options.filePath,
         options.position,
-        filterFn
+        filterFn,
+        projectOptions?.useInMemoryFileSystem
       )
     }
   )

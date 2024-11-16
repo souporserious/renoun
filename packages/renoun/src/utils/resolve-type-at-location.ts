@@ -1,5 +1,4 @@
 import type { Project } from 'ts-morph'
-import { statSync } from 'node:fs'
 
 import {
   resolveType,
@@ -20,7 +19,8 @@ export async function resolveTypeAtLocation(
   project: Project,
   filePath: string,
   position: number,
-  filter?: SymbolFilter
+  filter?: SymbolFilter,
+  isVirtualFileSystem = false
 ) {
   const typeId = `${filePath}:${position}`
   const sourceFile = project.addSourceFileAtPath(filePath)
@@ -41,6 +41,20 @@ export async function resolveTypeAtLocation(
 
   const exportDeclaration = declaration.getParentOrThrow()
   const exportDeclarationType = exportDeclaration.getType()
+
+  if (isVirtualFileSystem) {
+    // Skip dependency tracking and caching for virtual file systems
+    return resolveType(
+      exportDeclarationType,
+      exportDeclaration,
+      filter,
+      true,
+      undefined,
+      false
+    )
+  }
+
+  const { statSync } = await import('node:fs')
   const cacheEntry = resolvedTypeCache.get(typeId)
 
   if (cacheEntry) {

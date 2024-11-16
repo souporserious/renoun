@@ -1,6 +1,11 @@
-import { getFileExports, getFileExportMetadata } from '../project/client.js'
+import {
+  getFileExports,
+  getFileExportMetadata,
+  resolveTypeAtLocation,
+} from '../project/client.js'
 import { getEditPath } from '../utils/get-edit-path.js'
 import { getGitMetadata } from '../utils/get-git-metadata.js'
+import type { SymbolFilter } from '../utils/resolve-type.js'
 import type { FileSystem } from './FileSystem.js'
 import { NodeFileSystem } from './NodeFileSystem.js'
 import { VirtualFileSystem } from './VirtualFileSystem.js'
@@ -212,13 +217,14 @@ export class JavaScriptFileExport<
       return this.#metadata
     }
 
+    const position = await this.#getPosition()
     const fileSystem = this.#file.getDirectory().getFileSystem()
     const isVirtualFileSystem = fileSystem instanceof VirtualFileSystem
 
     this.#metadata = await getFileExportMetadata(
       this.#file.getAbsolutePath(),
       this.#name,
-      this.#position!,
+      position!,
       { useInMemoryFileSystem: isVirtualFileSystem }
     )
 
@@ -270,6 +276,26 @@ export class JavaScriptFileExport<
   getEditPath() {
     // TODO: add position to the edit path as well
     return getEditPath(this.#file.getAbsolutePath())
+  }
+
+  /** Get the resolved type of the export. */
+  async getType(filter?: SymbolFilter) {
+    if (await this.#isNotStatic()) {
+      throw new Error(
+        `[renoun] Export can not be statically analyzed from source file at "${this.#file.getRelativePath()}".`
+      )
+    }
+
+    const position = await this.#getPosition()
+    const fileSystem = this.#file.getDirectory().getFileSystem()
+    const isVirtualFileSystem = fileSystem instanceof VirtualFileSystem
+
+    return resolveTypeAtLocation(
+      this.#file.getAbsolutePath(),
+      position!,
+      filter,
+      { useInMemoryFileSystem: isVirtualFileSystem }
+    )
   }
 
   /**

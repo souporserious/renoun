@@ -238,6 +238,36 @@ describe('file system', () => {
     )
   })
 
+  test('file export metadata', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'index.ts': `/**\n * Say hello.\n * @category greetings\n */\nexport default function hello() {}`,
+    })
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFileOrThrow('index', 'ts')
+    const fileExport = file.getExport('default')
+
+    expect(fileExport).toBeInstanceOf(JavaScriptFileExport)
+    expect(await fileExport.getName()).toBe('hello')
+    expect(await fileExport.getDescription()).toBe('Say hello.')
+    expect(await fileExport.getTags()).toMatchObject([
+      { tagName: 'category', text: 'greetings' },
+    ])
+  })
+
+  test('file export type reference', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'index.ts': 'export type Metadata = { title: string }',
+    })
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFileOrThrow('index', 'ts')
+    const fileExport = file.getExport('Metadata')
+    const type = await fileExport.getType()
+
+    expect(type).toBeDefined()
+    expect(type!.kind).toBe('Object')
+    expect(type!.name).toBe('Metadata')
+  })
+
   test('getRuntimeValue resolves export runtime value from getModule', async () => {
     const fileSystemDirectory = new Directory({
       path: 'src/file-system',
@@ -417,22 +447,6 @@ describe('file system', () => {
     ).getPathSegments()
 
     expect(segments).toEqual(['rpc'])
-  })
-
-  test('file export metadata', async () => {
-    const fileSystem = new VirtualFileSystem({
-      'index.ts': `/**\n * Say hello.\n * @category greetings\n */\nexport default function hello() {}`,
-    })
-    const directory = new Directory({ fileSystem })
-    const file = await directory.getFileOrThrow('index', 'ts')
-    const fileExport = file.getExport('default')
-
-    expect(fileExport).toBeInstanceOf(JavaScriptFileExport)
-    expect(await fileExport.getName()).toBe('hello')
-    expect(await fileExport.getDescription()).toBe('Say hello.')
-    expect(await fileExport.getTags()).toMatchObject([
-      { tagName: 'category', text: 'greetings' },
-    ])
   })
 
   test('uses file name for anonymous default export metadata', async () => {

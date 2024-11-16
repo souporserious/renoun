@@ -81,7 +81,41 @@ export async function analyzeSourceText(
 }
 
 /**
+ * Resolve the type of an expression at a specific location.
+ * @internal
+ */
+export async function resolveTypeAtLocation(
+  filePath: string,
+  position: number,
+  filter?: SymbolFilter,
+  projectOptions?: ProjectOptions
+): Promise<ResolvedType | undefined> {
+  if (client) {
+    return client.callMethod<ResolvedType>('resolveTypeAtLocation', {
+      filePath,
+      position: position.toString(),
+      filter: filter?.toString(),
+      projectOptions,
+    })
+  }
+
+  return import('../utils/resolve-type-at-location.js').then(
+    async ({ resolveTypeAtLocation }) => {
+      const project = getProject(projectOptions)
+      return resolveTypeAtLocation(
+        project,
+        filePath,
+        position,
+        filter,
+        projectOptions?.useInMemoryFileSystem
+      )
+    }
+  )
+}
+
+/**
  * Resolve the type of an expression.
+ * TODO: remove after `Collection` is removed.
  * @internal
  */
 export async function resolveType({
@@ -98,21 +132,7 @@ export async function resolveType({
   const filePath = declaration.getSourceFile().getFilePath()
   const position = declaration.getPos()
 
-  if (client) {
-    return client.callMethod<ResolvedType>('resolveType', {
-      filePath,
-      position,
-      filter: filter?.toString(),
-      tsConfigFilePath: projectOptions?.tsConfigFilePath,
-    })
-  }
-
-  return import('../utils/resolve-type-at-location.js').then(
-    async ({ resolveTypeAtLocation }) => {
-      const project = getProject(projectOptions)
-      return resolveTypeAtLocation(project, filePath, position, filter)
-    }
-  )
+  return resolveTypeAtLocation(filePath, position, filter, projectOptions)
 }
 
 /**
