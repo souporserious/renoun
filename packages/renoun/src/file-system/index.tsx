@@ -716,6 +716,18 @@ export class Directory<
     return entries
   }
 
+  /** Get all files within the directory. */
+  async getFiles() {
+    const entries = await this.getEntries()
+    return entries.filter(isFile)
+  }
+
+  /** Get all directories within the directory. */
+  async getDirectories() {
+    const entries = await this.getEntries()
+    return entries.filter(isDirectory)
+  }
+
   /** Get the previous and next sibling entries (files or directories) of the parent directory. */
   async getSiblings(): Promise<
     [File | Directory | undefined, File | Directory | undefined]
