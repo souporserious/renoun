@@ -41,6 +41,21 @@ describe('file system', () => {
     expect(entries).toHaveLength(2)
   })
 
+  test('recursive entries', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'index.ts': '',
+      'components/Button/index.tsx': '',
+      'components/Link.tsx': '',
+    })
+    const directory = new Directory({ fileSystem })
+    const entries = await directory.getEntries({
+      recursive: true,
+      includeIndexAndReadme: true,
+    })
+
+    expect(entries).toHaveLength(5)
+  })
+
   test('filters out index and readme from entries', async () => {
     const fileSystem = new VirtualFileSystem({
       'index.tsx': '',

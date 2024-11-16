@@ -37,29 +37,47 @@ export class VirtualFileSystem extends FileSystem {
     return this.#files
   }
 
-  async readDirectory(path: string = '.'): Promise<DirectoryEntry[]> {
+  async readDirectory(
+    path: string = '.',
+    { recursive = false }: { recursive?: boolean }
+  ): Promise<DirectoryEntry[]> {
     const entries: DirectoryEntry[] = []
     const directories = new Set<string>()
 
     for (const filePath of this.#files.keys()) {
       if (filePath.startsWith(path)) {
-        const relativePath = filePath.slice(path.length).replace(/^\//, '')
-        const segments = relativePath.split('/').filter(Boolean)
+        let relativePath = filePath.slice(path.length)
 
-        // Store all directories in the path
-        let currentPath = path
-        for (let index = 0; index < segments.length - 1; index++) {
-          currentPath += `/${segments[index]}`
-          directories.add(currentPath)
+        if (relativePath.startsWith('/')) {
+          relativePath = relativePath.slice(1)
         }
 
-        entries.push({
-          name: segments.at(-1)!,
-          isFile: true,
-          isDirectory: false,
-          path: filePath,
-          absolutePath: filePath,
-        })
+        const segments = relativePath.split('/').filter(Boolean)
+
+        if (recursive || segments.length === 1) {
+          if (segments.length > 0) {
+            entries.push({
+              name: segments.at(-1)!,
+              isFile: true,
+              isDirectory: false,
+              path: filePath,
+              absolutePath: filePath,
+            })
+          }
+        }
+
+        if (recursive) {
+          let currentPath = path
+          for (let index = 0; index < segments.length - 1; index++) {
+            currentPath += `/${segments[index]}`
+            directories.add(currentPath)
+          }
+        } else if (segments.length > 1) {
+          const subDirectoryPath = path.endsWith('/')
+            ? `${path}${segments[0]}`
+            : `${path}/${segments[0]}`
+          directories.add(subDirectoryPath)
+        }
       }
     }
 

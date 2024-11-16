@@ -10,8 +10,14 @@ import type { DirectoryEntry } from './types.js'
 let ignoreManager: ReturnType<typeof ignore>
 
 export class NodeFileSystem extends FileSystem {
-  async readDirectory(path: string = '.'): Promise<DirectoryEntry[]> {
-    const entries = await readdir(path, { withFileTypes: true })
+  async readDirectory(
+    path: string = '.',
+    options?: { recursive?: boolean }
+  ): Promise<DirectoryEntry[]> {
+    const entries = await readdir(path, {
+      recursive: options?.recursive,
+      withFileTypes: true,
+    })
 
     return entries.map((entry) => {
       let entryPath = join(path, entry.name)

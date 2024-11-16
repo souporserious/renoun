@@ -627,17 +627,27 @@ export class Directory<Types extends ExtensionTypes = ExtensionTypes> {
   /**
    * Retrieves all entries (files and directories) within the current directory
    * that are not excluded by Git ignore rules or the closest `tsconfig` file.
-   * Additionally, `index` and `readme` files are excluded as they represent the directory.
+   * Additionally, `index` and `readme` files are excluded by default.
    */
   async getEntries(options?: {
-    includeIndexAndReadme: boolean
+    recursive?: boolean
+    includeIndexAndReadme?: boolean
   }): Promise<FileSystemEntry<Types>[]> {
     const fileSystem = this.getFileSystem()
-    const directoryEntries = await fileSystem.readDirectory(this.#path)
+    const directoryEntries = await fileSystem.readDirectory(this.#path, {
+      recursive: options?.recursive,
+    })
     const entries: FileSystemEntry<any>[] = []
 
     for (const entry of directoryEntries) {
+      const shouldSkipIndexOrReadme = options?.includeIndexAndReadme
+        ? false
+        : ['index', 'readme'].some((name) =>
+            entry.name.toLowerCase().startsWith(name)
+          )
+
       if (
+        shouldSkipIndexOrReadme ||
         fileSystem.isFilePathGitIgnored(entry.path) ||
         fileSystem.isFilePathExcludedFromTsConfig(entry.path)
       ) {
@@ -673,16 +683,6 @@ export class Directory<Types extends ExtensionTypes = ExtensionTypes> {
             absolutePath: entry.absolutePath,
           })
         }
-
-        // Skip `index` and `readme` files if not explicitly included since they represent the directory
-        if (
-          !options?.includeIndexAndReadme &&
-          ['index', 'readme'].includes(
-            fileSystemEntry.getBaseName().toLowerCase()
-          )
-        ) {
-          continue
-        }
       }
 
       if (fileSystemEntry) {
@@ -694,14 +694,17 @@ export class Directory<Types extends ExtensionTypes = ExtensionTypes> {
   }
 
   /** Get all files within the directory. */
-  async getFiles(options?: { includeIndexAndReadme: boolean }) {
+  async getFiles(options?: {
+    recursive?: boolean
+    includeIndexAndReadme: boolean
+  }) {
     const entries = await this.getEntries(options)
     return entries.filter(isFile) as File<Types>[]
   }
 
   /** Get all directories within the directory. */
-  async getDirectories() {
-    const entries = await this.getEntries()
+  async getDirectories(options?: { recursive?: boolean }) {
+    const entries = await this.getEntries(options)
     return entries.filter(isDirectory) as Directory<Types>[]
   }
 

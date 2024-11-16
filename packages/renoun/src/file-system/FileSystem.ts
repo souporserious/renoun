@@ -29,7 +29,10 @@ export abstract class FileSystem {
 
   abstract readFileSync(path: string): string
   abstract readFile(path: string): Promise<string>
-  abstract readDirectory(path?: string): Promise<DirectoryEntry[]>
+  abstract readDirectory(
+    path?: string,
+    options?: { recursive?: boolean }
+  ): Promise<DirectoryEntry[]>
   abstract isFilePathGitIgnored(filePath: string): boolean
 
   getRootPath() {
