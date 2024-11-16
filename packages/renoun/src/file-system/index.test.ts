@@ -4,6 +4,7 @@ import { runInNewContext } from 'node:vm'
 import { VirtualFileSystem } from './VirtualFileSystem'
 import {
   isFile,
+  isFileWithExtension,
   File,
   Directory,
   JavaScriptFile,
@@ -416,5 +417,18 @@ describe('file system', () => {
     const fileExport = file.getExport('default')
 
     expect(await fileExport.getName()).toBe(file.getName())
+  })
+
+  test('isFileWithExtension', async () => {
+    const fileSystem = new VirtualFileSystem({ 'Button.tsx': '' })
+    const directory = new Directory<{ tsx: { metadata: {} } }>({ fileSystem })
+    const file = await directory.getFileOrThrow('Button')
+    const hasTsxExtension = isFileWithExtension(file, 'tsx')
+
+    expect(hasTsxExtension).toBe(true)
+
+    if (hasTsxExtension) {
+      expectTypeOf(file).toMatchTypeOf<JavaScriptFile<{ metadata: {} }>>()
+    }
   })
 })

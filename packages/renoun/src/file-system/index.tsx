@@ -784,6 +784,11 @@ export class Directory<Types extends ExtensionTypes = ExtensionTypes> {
   }
 }
 
+/** Determines if a `FileSystemEntry` is a `Directory`. */
+export function isDirectory(entry: FileSystemEntry<any>): entry is Directory {
+  return entry instanceof Directory
+}
+
 /** Determines if a `FileSystemEntry` is a `File`. */
 export function isFile<Types extends ExtensionTypes>(
   entry: FileSystemEntry<any>
@@ -798,7 +803,17 @@ export function isJavaScriptFile<Schema extends ExtensionSchema>(
   return entry instanceof JavaScriptFile
 }
 
-/** Determines if a `FileSystemEntry` is a `Directory`. */
-export function isDirectory(entry: FileSystemEntry<any>): entry is Directory {
-  return entry instanceof Directory
+/** Determines if a `FileSystemEntry` is a `File` with a specific extension. */
+export function isFileWithExtension<
+  Types extends ExtensionTypes,
+  Extension extends string,
+>(
+  entry: FileSystemEntry<Types>,
+  extension: Extension
+): entry is Extension extends string
+  ? IsJavaScriptLikeExtension<Extension> extends true
+    ? JavaScriptFile<Types[Extension]>
+    : File<Types>
+  : File<Types> {
+  return isFile(entry) && entry.hasExtension<Extension>(extension)
 }
