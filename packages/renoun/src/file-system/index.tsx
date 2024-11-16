@@ -694,8 +694,8 @@ export class Directory<Types extends ExtensionTypes = ExtensionTypes> {
   }
 
   /** Get all files within the directory. */
-  async getFiles() {
-    const entries = await this.getEntries()
+  async getFiles(options?: { includeIndexAndReadme: boolean }) {
+    const entries = await this.getEntries(options)
     return entries.filter(isFile) as File<Types>[]
   }
 
