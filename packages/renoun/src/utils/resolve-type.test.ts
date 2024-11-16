@@ -1220,8 +1220,7 @@ describe('resolveType', () => {
           {
             "context": "property",
             "defaultValue": undefined,
-            "description": "
-      a number",
+            "description": "a number",
             "filePath": "test.ts",
             "isOptional": false,
             "isReadonly": false,
@@ -4599,7 +4598,7 @@ describe('resolveType', () => {
 
     expect(types).toMatchInlineSnapshot(`
       {
-        "description": "Provides a counter state. ",
+        "description": "Provides a counter state.",
         "filePath": "test.ts",
         "kind": "Function",
         "name": "useCounter",
@@ -8346,8 +8345,7 @@ describe('resolveType', () => {
 
     expect(types).toMatchInlineSnapshot(`
       {
-        "description": "
-      The initial count of the counter.",
+        "description": "The initial count of the counter.",
         "filePath": "test.ts",
         "kind": "Number",
         "name": "initialCount",
