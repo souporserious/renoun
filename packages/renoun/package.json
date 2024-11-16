@@ -108,7 +108,7 @@
     "@types/react-dom": "catalog:",
     "@types/resolve": "^1.20.6",
     "@types/title": "^3.4.3",
-    "@types/ws": "^8.5.12",
+    "@types/ws": "^8.5.13",
     "dedent": "^1.5.3",
     "react": "catalog:",
     "react-dom": "catalog:"

@@ -37,7 +37,7 @@
   },
   "dependencies": {
     "@types/mdx": "catalog:",
-    "estree-util-value-to-estree": "^3.1.2",
+    "estree-util-value-to-estree": "^3.2.1",
     "hast-util-to-string": "3.0.1",
     "mdast": "^3.0.0",
     "mdast-util-to-string": "^4.0.0",
