@@ -1,4 +1,4 @@
-import { getFileExports } from '../project/client.js'
+import { getFileExports, getFileExportMetadata } from '../project/client.js'
 import { getEditPath } from '../utils/get-edit-path.js'
 import { getGitMetadata } from '../utils/get-git-metadata.js'
 import type { FileSystem } from './FileSystem.js'
@@ -47,7 +47,11 @@ export class File {
 
     // Use the directory name if the file is an index or readme file
     if (['index', 'readme'].includes(name.toLowerCase())) {
-      name = this.#directory.getName()
+      const directoryName = this.#directory.getName()
+      // Use the directory name if it's not the root directory
+      if (directoryName !== '.') {
+        name = directoryName
+      }
     }
 
     return name.split('.').at(0)!
@@ -147,15 +151,87 @@ export class File {
 export class JavaScriptFileExport<Exports extends ExtensionType> {
   #name: string
   #file: JavaScriptFile<Exports>
+  #position: number | undefined
+  #metadata: Awaited<ReturnType<typeof getFileExportMetadata>> | undefined
 
   constructor(name: string, file: JavaScriptFile<Exports>) {
     this.#name = name
     this.#file = file
   }
 
-  /** Get the name of the export. */
-  getName() {
+  async #getPosition() {
+    if (this.#position === undefined) {
+      this.#position = await this.#file.getExportPosition(this.#name)
+    }
+    return this.#position
+  }
+
+  async #isNotStatic() {
+    const position = await this.#getPosition()
+    return position === undefined
+  }
+
+  async #getMetadata() {
+    if (await this.#isNotStatic()) {
+      return undefined
+    }
+
+    if (this.#metadata !== undefined) {
+      return this.#metadata
+    }
+
+    const fileSystem = this.#file.getDirectory().getFileSystem()
+    const isVirtualFileSystem = fileSystem instanceof VirtualFileSystem
+
+    this.#metadata = await getFileExportMetadata(
+      this.#file.getAbsolutePath(),
+      this.#name,
+      this.#position!,
+      { useInMemoryFileSystem: isVirtualFileSystem }
+    )
+
+    return this.#metadata
+  }
+
+  /** Get the name of the export. Default exports will use the declaration name if available or the file name. */
+  async getName() {
+    if (await this.#isNotStatic()) {
+      return this.#name === 'default' ? this.#file.getName() : this.#name
+    }
+    const metadata = await this.#getMetadata()
+    return metadata?.name || this.#name
+  }
+
+  /** Get the base name of the export. */
+  getBaseName() {
     return this.#name
+  }
+
+  /** Get the JS Doc description of the export. */
+  async getDescription() {
+    if (await this.#isNotStatic()) {
+      return undefined
+    }
+    const metadata = await this.#getMetadata()
+    return metadata?.jsDocMetadata?.description
+  }
+
+  /** Get the JS Doc tags of the export. */
+  async getTags() {
+    if (await this.#isNotStatic()) {
+      return undefined
+    }
+    const metadata = await this.#getMetadata()
+    return metadata?.jsDocMetadata?.tags
+  }
+
+  /** Get the environment of the export. */
+  async getEnvironment() {
+    if (await this.#isNotStatic()) {
+      return undefined
+    }
+    const metadata = await this.#getMetadata()
+    return metadata?.environment
   }
 }
 
@@ -184,7 +260,7 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
   }
 
   /** Parse and validate an export value using the configured schema. */
-  parseSchemaExportValue(name: string, value: any): any {
+  parseExportValue(name: string, value: any): any {
     if (!this.#schema) {
       return value
     }
@@ -211,7 +287,7 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
     return value
   }
 
-  /** Get all exports from the JavaScript file. */
+  /** Get all export names and positions from the JavaScript file. */
   async getExports() {
     return getFileExports(this.getAbsolutePath(), {
       tsConfigFilePath: this.#tsConfigFilePath,
@@ -219,10 +295,22 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
     })
   }
 
-  /** Get a JavaScript file export by name. */
-  async getExport<ExportName extends Extract<keyof Exports, string>>(
+  /** Get the start position of an export in the JavaScript file. */
+  async getExportPosition(name: string) {
+    const fileExports = await this.getExports()
+    const fileExport = fileExports.find(
+      (exportMetadata) => exportMetadata.name === name
+    )
+    return fileExport?.position
+  }
+
+  /**
+   * Get a JavaScript file export by name. Note, an export will always be returned.
+   * This is due to exports not always being statically analyzable due to loaders like MDX.
+   */
+  getExport<ExportName extends Extract<keyof Exports, string>>(
     name: ExportName
-  ): Promise<JavaScriptFileExport<Exports>> {
+  ): JavaScriptFileExport<Exports> {
     return new JavaScriptFileExport(name, this)
   }
 }
@@ -254,20 +342,20 @@ export class JavaScriptFileExportWithRuntime<
    * is not found or the configured schema validation for this file extension fails.
    */
   async getRuntimeValue(): Promise<Value> {
-    const exportName = this.getName()
+    const exportName = this.getBaseName()
     const fileSystem = this.#file.getDirectory().getFileSystem()
     const fileModule = await this.#getModule(
       this.#file.getPathRelativeTo(fileSystem.getRootPath())
     )
-    const fileModuleExport = fileModule[this.getName()]
+    const fileModuleExport = fileModule[this.getBaseName()]
 
     if (fileModuleExport === undefined) {
       throw new Error(
-        `[renoun] JavaScript file export "${String(this.getName())}" not found in ${this.#file.getAbsolutePath()}`
+        `[renoun] JavaScript file export "${String(this.getBaseName())}" not found in ${this.#file.getAbsolutePath()}`
       )
     }
 
-    return this.#file.parseSchemaExportValue(exportName, fileModuleExport)
+    return this.#file.parseExportValue(exportName, fileModuleExport)
   }
 }
 
@@ -287,11 +375,9 @@ export class JavaScriptFileWithRuntime<
   }
 
   /** Get a JavaScript file export by name. */
-  async getExport<ExportName extends Extract<keyof Exports, string>>(
+  getExport<ExportName extends Extract<keyof Exports, string>>(
     name: ExportName
-  ): Promise<
-    JavaScriptFileExportWithRuntime<Exports[ExportName], Exports, ExportName>
-  > {
+  ): JavaScriptFileExportWithRuntime<Exports[ExportName], Exports, ExportName> {
     return new JavaScriptFileExportWithRuntime(name, this, this.getModule)
   }
 }

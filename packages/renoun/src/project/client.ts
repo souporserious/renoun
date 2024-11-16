@@ -8,7 +8,10 @@ import {
   createHighlighter,
   type Highlighter,
 } from '../utils/create-highlighter.js'
-import type { FileExport } from '../utils/get-file-exports.js'
+import type {
+  FileExport,
+  getFileExportMetadata as baseGetFileExportMetadata,
+} from '../utils/get-file-exports.js'
 import type { ResolvedType, SymbolFilter } from '../utils/resolve-type.js'
 import type { DistributiveOmit } from '../types.js'
 import { WebSocketClient } from './rpc/client.js'
@@ -131,6 +134,35 @@ export async function getFileExports(
     const project = getProject(projectOptions)
     return getFileExports(filePath, project)
   })
+}
+
+/**
+ * Get a specific export of a file.
+ * @internal
+ */
+export async function getFileExportMetadata(
+  filePath: string,
+  name: string,
+  position: number,
+  projectOptions?: ProjectOptions
+) {
+  if (client) {
+    return client.callMethod<
+      Awaited<ReturnType<typeof baseGetFileExportMetadata>>
+    >('getFileExportMetadata', {
+      filePath,
+      name,
+      position: position.toString(),
+      projectOptions,
+    })
+  }
+
+  return import('../utils/get-file-exports.js').then(
+    ({ getFileExportMetadata }) => {
+      const project = getProject(projectOptions)
+      return getFileExportMetadata(filePath, name, position, project)
+    }
+  )
 }
 
 /**

@@ -7,7 +7,10 @@ import {
   createHighlighter,
   type Highlighter,
 } from '../utils/create-highlighter.js'
-import { getFileExports as baseGetFileExports } from '../utils/get-file-exports.js'
+import {
+  getFileExports as baseGetFileExports,
+  getFileExportMetadata as baseGetFileExportMetadata,
+} from '../utils/get-file-exports.js'
 import { getRootDirectory } from '../utils/get-root-directory.js'
 import type { SymbolFilter } from '../utils/resolve-type.js'
 import { resolveTypeAtLocation } from '../utils/resolve-type-at-location.js'
@@ -132,6 +135,24 @@ export function createServer() {
     }) {
       const project = getProject(projectOptions)
       return baseGetFileExports(filePath, project)
+    }
+  )
+
+  server.registerMethod(
+    'getFileExportMetadata',
+    async function getFileExportMetadata({
+      filePath,
+      name,
+      position,
+      projectOptions,
+    }: {
+      filePath: string
+      name: string
+      position: number
+      projectOptions?: ProjectOptions
+    }) {
+      const project = getProject(projectOptions)
+      return baseGetFileExportMetadata(filePath, name, position, project)
     }
   )
 

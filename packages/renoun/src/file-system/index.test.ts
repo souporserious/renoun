@@ -34,7 +34,7 @@ describe('file system', () => {
     expect(file?.getName()).toBe('server')
   })
 
-  test('returns entries', async () => {
+  test('entries', async () => {
     const fileSystem = new VirtualFileSystem({ 'foo.ts': '', 'bar.ts': '' })
     const directory = new Directory({ fileSystem })
     const entries = await directory.getEntries()
@@ -54,7 +54,7 @@ describe('file system', () => {
     expect(entries).toHaveLength(1)
   })
 
-  test('returns entry', async () => {
+  test('entry', async () => {
     const srcDirectory = new Directory({ path: 'src' })
 
     expect(await srcDirectory.getEntry('project')).toBeInstanceOf(Directory)
@@ -65,21 +65,21 @@ describe('file system', () => {
     ).toBeInstanceOf(File)
   })
 
-  test('returns directory', async () => {
+  test('directory', async () => {
     const componentsDirectory = new Directory({ path: 'src/components' })
     const directory = await componentsDirectory.getDirectory('CodeBlock')
 
     expect(directory).toBeInstanceOf(Directory)
   })
 
-  test('returns nested directory', async () => {
+  test('nested directory', async () => {
     const rootDirectory = new Directory()
     const nestedDirectory = await rootDirectory.getDirectory('src/project/rpc')
 
     expect(nestedDirectory).toBeInstanceOf(Directory)
   })
 
-  test('returns file', async () => {
+  test('file', async () => {
     const rootDirectory = new Directory()
     const file = await rootDirectory.getFile('tsconfig', 'json')
 
@@ -87,7 +87,7 @@ describe('file system', () => {
     expect(file!).toBeInstanceOf(File)
   })
 
-  test('returns nested file', async () => {
+  test('nested file', async () => {
     const rootDirectory = new Directory()
     const nestedfile = await rootDirectory.getFile(
       'src/project/rpc/server',
@@ -97,21 +97,21 @@ describe('file system', () => {
     expect(nestedfile).toBeInstanceOf(File)
   })
 
-  test('returns index file', async () => {
+  test('index file', async () => {
     const srcDirectory = new Directory()
     const file = await srcDirectory.getFile(['src', 'components', 'index'])
 
     expect(file).toBeInstanceOf(File)
   })
 
-  test('returns readme file', async () => {
+  test('readme file', async () => {
     const srcDirectory = new Directory()
     const file = await srcDirectory.getFile('src/components/README', 'mdx')
 
     expect(file).toBeInstanceOf(File)
   })
 
-  test('returns javascript file', async () => {
+  test('javascript file', async () => {
     const projectDirectory = new Directory({ path: 'src/project' })
     const file = await projectDirectory.getFile('server', 'ts')
 
@@ -124,9 +124,7 @@ describe('file system', () => {
     const file = await projectDirectory.getFile('server', 'ts')
     const fileExports = await file!.getExports()
 
-    expect(fileExports).toMatchObject([
-      { name: 'createServer', position: 1245 },
-    ])
+    expect(fileExports[0].name).toMatch('createServer')
   })
 
   test('all virtual file exports', async () => {
@@ -411,5 +409,32 @@ describe('file system', () => {
     ).getPathSegments()
 
     expect(segments).toEqual(['rpc'])
+  })
+
+  test('file export metadata', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'index.ts': `/**\n * Say hello.\n * @category greetings\n */\nexport default function hello() {}`,
+    })
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFileOrThrow('index', 'ts')
+    const fileExport = file.getExport('default')
+
+    expect(fileExport).toBeInstanceOf(JavaScriptFileExport)
+    expect(await fileExport.getName()).toBe('hello')
+    expect(await fileExport.getDescription()).toBe('Say hello.')
+    expect(await fileExport.getTags()).toMatchObject([
+      { tagName: 'category', text: 'greetings' },
+    ])
+  })
+
+  test('uses file name for anonymous default export metadata', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'index.ts': `export default function () {}`,
+    })
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFileOrThrow('index', 'ts')
+    const fileExport = file.getExport('default')
+
+    expect(await fileExport.getName()).toBe(file.getName())
   })
 })

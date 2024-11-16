@@ -49,7 +49,7 @@ export function getJsDocMetadata(node: Node): {
 
     if (description || tags.length > 0) {
       return {
-        description: description || undefined,
+        description: description ? description.trim() : undefined,
         tags: tags.length > 0 ? tags : undefined,
       }
     }
