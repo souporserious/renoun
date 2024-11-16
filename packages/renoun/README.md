@@ -38,7 +38,10 @@ To get started with the File System API, instantiate the `Directory` class to ta
 ```tsx
 import { Directory } from 'renoun/file-system'
 
-const posts = new Directory({ path: 'posts' })
+const posts = new Directory({
+  path: 'posts',
+  getModule: (path) => import(`@/posts/${path}`),
+})
 
 export default async function Page({
   params,
@@ -67,6 +70,7 @@ const posts = new Directory<{
   mdx: { default: MDXContent }
 }>({
   path: 'posts',
+  getModule: (path) => import(`@/posts/${path}`),
 })
 ```
 
@@ -85,27 +89,30 @@ const posts = new Directory<{
   }
 }>({
   path: 'posts',
+  getModule: (path) => import(`@/posts/${path}`),
 })
 
 export default async function Page() {
-  const allPosts = await posts.getEntries()
+  const allPosts = await posts.getFiles()
 
   return (
     <>
       <h1>Blog</h1>
       <ul>
-        {allPosts.map(async (post) => {
-          const path = post.getPath()
-          const frontmatter = await post
-            .getExport('frontmatter')
-            .getRuntimeValue()
+        {allPosts
+          .filter((post) => post.hasExtension('mdx'))
+          .map(async (post) => {
+            const path = post.getPath()
+            const frontmatter = await post
+              .getExport('frontmatter')
+              .getRuntimeValue()
 
-          return (
-            <li key={path}>
-              <a href={path}>{frontmatter.title}</a>
-            </li>
-          )
-        })}
+            return (
+              <li key={path}>
+                <a href={path}>{frontmatter.title}</a>
+              </li>
+            )
+          })}
       </ul>
     </>
   )
