@@ -141,7 +141,7 @@ const CodeFallback = styled('code', {
 })
 
 /** Renders an inline `code` element with optional syntax highlighting and copy button. */
-export async function CodeInline({
+export function CodeInline({
   paddingX = '0.25em',
   paddingY = '0.1em',
   ...props
