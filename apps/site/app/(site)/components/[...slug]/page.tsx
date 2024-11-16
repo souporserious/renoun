@@ -21,9 +21,10 @@ export async function generateStaticParams() {
 export default async function Component({
   params,
 }: {
-  params: { slug: string[] }
+  params: Promise<{ slug: string[] }>
 }) {
-  const componentsPathname = ['components', ...params.slug]
+  const slug = (await params).slug
+  const componentsPathname = ['components', ...slug]
   const componentSource = await AllCollections.getSource(componentsPathname)
 
   if (!ComponentsCollection.hasSource(componentSource)) {
@@ -35,7 +36,7 @@ export default async function Component({
   const Content = await mdxSource?.getExport('default').getValue()
   const examplesSource = await componentSource.getSource('examples')
   const examplesSources = await examplesSource?.getSources()
-  const isExamplesPage = params.slug.at(-1) === 'examples'
+  const isExamplesPage = slug.at(-1) === 'examples'
   const examplesExports = isExamplesPage
     ? componentSource.getExports()
     : examplesSource

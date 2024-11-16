@@ -8,8 +8,15 @@ export async function generateStaticParams() {
   return sources.map((source) => ({ slug: source.getPathSegments() }))
 }
 
-export default async function Doc({ params }: { params: { slug: string[] } }) {
-  const docSource = await AllCollections.getSource(['docs', ...params.slug])
+export default async function Doc({
+  params,
+}: {
+  params: Promise<{ slug: string[] }>
+}) {
+  const docSource = await AllCollections.getSource([
+    'docs',
+    ...(await params).slug,
+  ])
 
   if (!DocsCollection.hasSource(docSource)) {
     notFound()
