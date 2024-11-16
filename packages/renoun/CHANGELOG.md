@@ -1,5 +1,45 @@
 # renoun
 
+## 7.2.0
+
+### Minor Changes
+
+- 9d67bdf: Add `getFiles` and `getDirectories` to `Directory`.
+- 1bd1de3: Adds `hasExtension` method to `File` to help constrain the type:
+
+  ```ts
+  import { Directory } from 'renoun/file-system'
+
+  const posts = new Directory<{
+    mdx: { frontmatter: { title: string } }
+  }>({
+    path: 'posts',
+  })
+
+  const mdxFiles = await posts
+    .getFiles()
+    .filter((post) => post.hasExtension('mdx'))
+  ```
+
+- 4d263fe: Add `includeIndexAndReadme` option to `getEntries` for controlling default filtering of `index` and `readme` files.
+- e09a837: Adds `isFileWithExtension` utility:
+
+  ```ts
+  const fileSystem = new VirtualFileSystem({
+    'Button.tsx': '',
+  })
+  const directory = new Directory<{ tsx: { metadata: {} } }>({
+    fileSystem,
+  })
+  const file = await directory.getFileOrThrow('Button')
+
+  if (isFileWithExtension(file, 'tsx')) {
+    // file is typed as File<{ tsx: { metadata: {} } }>
+  }
+  ```
+
+- a36058f: Add `getEditPath` method to `JavaScriptFileExport`.
+
 ## 7.1.0
 
 ### Minor Changes
