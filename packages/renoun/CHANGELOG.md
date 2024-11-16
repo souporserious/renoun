@@ -1,5 +1,17 @@
 # renoun
 
+## 7.3.0
+
+### Minor Changes
+
+- 4c1f7d5: Adds `recursive` option to `getEntries`, `getDirectories`, and `getFiles`.
+- ff8d9ae: Implements `getType` for `JavaScriptFileExport`.
+
+### Patch Changes
+
+- 51506d8: Fixes internal `resolveType` utility trimming the `filePath` in `getType` incorrectly.
+- d83d265: Fixes order prefixes being added to File System `getPath` methods.
+
 ## 7.2.0
 
 ### Minor Changes
