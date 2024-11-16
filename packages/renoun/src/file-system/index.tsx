@@ -94,7 +94,7 @@ export class File {
 
   /** Get the file path to the editor in local development and the configured git repository in production. */
   getEditPath() {
-    return getEditPath(this.#path)
+    return getEditPath(this.#absolutePath)
   }
 
   /** Get the path of the file relative to another path. */
@@ -232,6 +232,12 @@ export class JavaScriptFileExport<Exports extends ExtensionType> {
     }
     const metadata = await this.#getMetadata()
     return metadata?.environment
+  }
+
+  /** Get the export path to the editor in local development and the configured git repository in production. */
+  getEditPath() {
+    // TODO: add position to the edit path as well
+    return getEditPath(this.#file.getAbsolutePath())
   }
 }
 
