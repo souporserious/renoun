@@ -47,6 +47,12 @@ export function dirname(path: string): string {
   return path.substring(0, slashIndex)
 }
 
+/** Remove the extension from a file path e.g. readme.md -> readme */
 export function removeExtension(filePath: string): string {
   return join(dirname(filePath), basename(filePath, extname(filePath)))
+}
+
+/** Remove order prefixes from a file path e.g. 01.intro -> intro */
+export function removeOrderPrefixes(filePath: string): string {
+  return filePath.replace(/(^|\/)\d+\./g, '$1')
 }

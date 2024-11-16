@@ -8,7 +8,14 @@ import {
   isJavaScriptLikeExtension,
   type IsJavaScriptLikeExtension,
 } from './is-javascript-like-extension.js'
-import { basename, extname, join, relative, removeExtension } from './path.js'
+import {
+  basename,
+  extname,
+  join,
+  relative,
+  removeExtension,
+  removeOrderPrefixes,
+} from './path.js'
 
 export type FileSystemEntry<Types extends ExtensionTypes> =
   | Directory<Types>
@@ -70,11 +77,7 @@ export class File<Types extends ExtensionTypes = ExtensionTypes> {
 
   /** Get the base name of the file excluding the extension. */
   getBaseName() {
-    return (
-      basename(this.#path, extname(this.#path))
-        // remove leading numbers e.g. 01.intro -> intro
-        .replace(/^\d+\./, '')
-    )
+    return removeOrderPrefixes(basename(this.#path, extname(this.#path)))
   }
 
   /** Get the extension of the file. */
@@ -85,7 +88,9 @@ export class File<Types extends ExtensionTypes = ExtensionTypes> {
   /** Get a URL-friendly path to the file. */
   getPath() {
     const fileSystem = this.#directory.getFileSystem()
-    return fileSystem.getUrlPathRelativeTo(removeExtension(this.#path))
+    return fileSystem.getUrlPathRelativeTo(
+      removeOrderPrefixes(removeExtension(this.#path))
+    )
   }
 
   /** Get the path segments of the file. */
@@ -736,17 +741,13 @@ export class Directory<Types extends ExtensionTypes = ExtensionTypes> {
 
   /** Get the base name of the directory. */
   getBaseName() {
-    return (
-      basename(this.#path)
-        // remove leading numbers e.g. 01.intro -> intro
-        .replace(/^\d+\./, '')
-    )
+    return removeOrderPrefixes(basename(this.#path))
   }
 
   /** Get a URL-friendly path of the directory. */
   getPath() {
     const fileSystem = this.getFileSystem()
-    return fileSystem.getUrlPathRelativeTo(this.#path)
+    return fileSystem.getUrlPathRelativeTo(removeOrderPrefixes(this.#path))
   }
 
   /** Get the path segments of the directory. */

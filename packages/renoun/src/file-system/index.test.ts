@@ -133,6 +133,18 @@ describe('file system', () => {
     expectTypeOf(file!).toMatchTypeOf<JavaScriptFile<any>>()
   })
 
+  test('removes order prefix from file name and path', async () => {
+    const fileSystem = new VirtualFileSystem({
+      '01.server.ts': '',
+    })
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFileOrThrow('server', 'ts')
+
+    expect(file).toBeInstanceOf(File)
+    expect(file.getName()).toBe('server')
+    expect(file.getPath()).toBe('/server')
+  })
+
   test('all file exports', async () => {
     const projectDirectory = new Directory({ path: 'src/project' })
     const file = await projectDirectory.getFile('server', 'ts')
