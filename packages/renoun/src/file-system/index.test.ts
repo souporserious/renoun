@@ -7,9 +7,7 @@ import {
   File,
   Directory,
   JavaScriptFile,
-  JavaScriptFileWithRuntime,
   JavaScriptFileExport,
-  JavaScriptFileExportWithRuntime,
   type FileSystemEntry,
 } from './index'
 
@@ -153,8 +151,7 @@ describe('file system', () => {
       },
     })
     const file = await rootDirectory.getFileOrThrow('use-hover', 'ts')
-    const fileExport = await file.getExport('useHover')
-    const value = await fileExport.getRuntimeValue()
+    const value = await file.getExport('useHover').getRuntimeValue()
 
     expectTypeOf(value).toMatchTypeOf<Function>()
     expect(value).toBeInstanceOf(Function)
@@ -168,8 +165,7 @@ describe('file system', () => {
       getModule: (path) => import(`../project/${path}`),
     })
     const file = await projectDirectory.getFileOrThrow('server', 'ts')
-    const fileExport = await file.getExport('createServer')
-    const value = await fileExport.getRuntimeValue()
+    const value = await file.getExport('createServer').getRuntimeValue()
 
     expectTypeOf(value).toMatchTypeOf<Function>()
   })
@@ -205,29 +201,13 @@ describe('file system', () => {
       },
     })
     const file = await directory.getFileOrThrow('index', 'ts')
-    const fileExport = await file.getExport('metadata')
+    const fileExport = file.getExport('metadata')
 
     await expect(
       fileExport!.getRuntimeValue()
     ).rejects.toThrowErrorMatchingInlineSnapshot(
       `[TypeError: Cannot read properties of undefined (reading 'getText')]`
     )
-  })
-
-  test('getRuntimeValue is not typed when getModule is not defined', async () => {
-    const fileSystemDirectory = new Directory({ path: 'src/file-system' })
-    const file = await fileSystemDirectory.getFileOrThrow('path', 'ts')
-
-    expectTypeOf(file!).toMatchTypeOf<JavaScriptFile<any>>()
-    expect(file).toBeInstanceOf(JavaScriptFile)
-
-    const fileExport = await file.getExport('basename')
-
-    expectTypeOf(fileExport).not.toHaveProperty('getRuntimeValue')
-    expect(fileExport).toBeInstanceOf(JavaScriptFileExport)
-
-    // @ts-expect-error
-    fileExport!.getRuntimeValue
   })
 
   test('getRuntimeValue resolves export runtime value from getModule', async () => {
@@ -237,13 +217,13 @@ describe('file system', () => {
     })
     const file = await fileSystemDirectory.getFileOrThrow('path', 'ts')
 
-    expectTypeOf(file).toMatchTypeOf<JavaScriptFileWithRuntime<any>>()
-    expect(file).toBeInstanceOf(JavaScriptFileWithRuntime)
+    expectTypeOf(file).toMatchTypeOf<JavaScriptFile<any>>()
+    expect(file).toBeInstanceOf(JavaScriptFile)
 
-    const fileExport = await file.getExport('basename')
+    const fileExport = file.getExport('basename')
 
     expectTypeOf(fileExport).toHaveProperty('getRuntimeValue')
-    expect(fileExport).toBeInstanceOf(JavaScriptFileExportWithRuntime)
+    expect(fileExport).toBeInstanceOf(JavaScriptFileExport)
 
     const basename = await fileExport.getRuntimeValue()
 
