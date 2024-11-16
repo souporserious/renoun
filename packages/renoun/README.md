@@ -51,7 +51,7 @@ export default async function Page({
     return <div>Post not found</div>
   }
 
-  const Content = await (await post.getExport('default')).getValue()
+  const Content = await post.getExport('default').getRuntimeValue()
 
   return <Content />
 }
@@ -96,9 +96,9 @@ export default async function Page() {
       <ul>
         {allPosts.map(async (post) => {
           const path = post.getPath()
-          const frontmatter = await (
-            await post.getExport('frontmatter')
-          ).getRuntimeValue()
+          const frontmatter = await post
+            .getExport('frontmatter')
+            .getRuntimeValue()
 
           return (
             <li key={path}>
