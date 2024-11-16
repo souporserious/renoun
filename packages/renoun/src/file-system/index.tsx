@@ -467,10 +467,9 @@ export class Directory<Types extends ExtensionTypes = ExtensionTypes> {
 
     while (segments.length > 0) {
       const currentSegment = segments.shift()
-      const allEntries = await currentDirectory.getEntries(
-        // @ts-expect-error - private argument to enable adding `index` and `readme` files
-        true
-      )
+      const allEntries = await currentDirectory.getEntries({
+        includeIndexAndReadme: true,
+      })
 
       // Find the entry matching the current segment
       entry = allEntries.find((entry) => entry.getBaseName() === currentSegment)
@@ -494,10 +493,9 @@ export class Directory<Types extends ExtensionTypes = ExtensionTypes> {
           }
         } else if (entry instanceof Directory) {
           // Check if `index` or `readme` exists in the directory
-          const entries = await entry.getEntries(
-            // @ts-expect-error - private argument to enable adding `index` and `readme` files
-            true
-          )
+          const entries = await entry.getEntries({
+            includeIndexAndReadme: true,
+          })
           const targetFiles = ['index', 'readme']
 
           for (const subEntry of entries) {
