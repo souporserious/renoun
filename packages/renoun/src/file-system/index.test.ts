@@ -1,4 +1,5 @@
 import { describe, test, expect, expectTypeOf } from 'vitest'
+import type { MDXContent } from '@renoun/mdx'
 import { runInNewContext } from 'node:vm'
 
 import { VirtualFileSystem } from './VirtualFileSystem'
