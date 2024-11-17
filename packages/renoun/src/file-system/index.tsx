@@ -11,7 +11,9 @@ import { NodeFileSystem } from './NodeFileSystem.js'
 import { VirtualFileSystem } from './VirtualFileSystem.js'
 import {
   isJavaScriptLikeExtension,
+  type HasJavaScriptLikeExtensions,
   type IsJavaScriptLikeExtension,
+  type JavaScriptLikeExtensions,
 } from './is-javascript-like-extension.js'
 import {
   basename,
@@ -46,14 +48,31 @@ export class File<Types extends ExtensionTypes = ExtensionTypes> {
   }
 
   /** Narrow the file type based on its extension. */
-  hasExtension<Extension extends keyof Types>(
+  hasExtension<Extension extends keyof Types | (keyof Types)[]>(
     extension: Extension
   ): this is Extension extends string
     ? IsJavaScriptLikeExtension<Extension> extends true
       ? JavaScriptFile<Types[Extension]>
       : File<Types>
-    : File<Types> {
-    return this.getExtension() === extension
+    : Extension extends string[]
+      ? HasJavaScriptLikeExtensions<Extension> extends true
+        ? JavaScriptFile<
+            Types[Extract<Extension[number], JavaScriptLikeExtensions>]
+          >
+        : File<Types>
+      : File<Types> {
+    const fileExtension = this.getExtension()
+
+    if (extension instanceof Array) {
+      for (const possibleExtension of extension) {
+        if (fileExtension === possibleExtension) {
+          return true
+        }
+      }
+      return false
+    }
+
+    return fileExtension === extension
   }
 
   /** Get the directory containing this file. */
@@ -836,7 +855,7 @@ export function isJavaScriptFile<Schema extends ExtensionSchema>(
 /** Determines if a `FileSystemEntry` is a `File` with a specific extension. */
 export function isFileWithExtension<
   Types extends ExtensionTypes,
-  Extension extends string,
+  const Extension extends string | string[],
 >(
   entry: FileSystemEntry<Types>,
   extension: Extension
@@ -844,6 +863,25 @@ export function isFileWithExtension<
   ? IsJavaScriptLikeExtension<Extension> extends true
     ? JavaScriptFile<Types[Extension]>
     : File<Types>
-  : File<Types> {
-  return isFile(entry) && entry.hasExtension<Extension>(extension)
+  : Extension extends string[]
+    ? HasJavaScriptLikeExtensions<Extension> extends true
+      ? JavaScriptFile<
+          Types[Extract<Extension[number], JavaScriptLikeExtensions>]
+        >
+      : File<Types>
+    : File<Types> {
+  if (!isFile(entry)) {
+    return false
+  }
+
+  if (extension instanceof Array) {
+    for (const possibleExtension of extension) {
+      if (entry.hasExtension(possibleExtension)) {
+        return true
+      }
+    }
+    return false
+  }
+
+  return entry.hasExtension(extension)
 }

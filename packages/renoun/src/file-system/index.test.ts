@@ -460,29 +460,69 @@ describe('file system', () => {
     expect(await fileExport.getName()).toBe(file.getName())
   })
 
+  test('hasExtension', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'index.ts': 'export const index = 1',
+      'readme.md': '# Readme',
+    })
+    type Metadata = { title: string }
+    const directory = new Directory<{ ts: Metadata }>({ fileSystem })
+    const files = await directory.getFiles({ includeIndexAndReadme: true })
+    const tsFiles = files.filter((file) => file.hasExtension('ts'))
+
+    expect(tsFiles).toHaveLength(1)
+    expectTypeOf(tsFiles).toMatchTypeOf<JavaScriptFile<Metadata>[]>()
+  })
+
+  test('hasExtension array', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'index.ts': 'export const index = 1',
+      'readme.md': '# Readme',
+    })
+    type Metadata = { title: string }
+    type FileTypes = { ts: Metadata; md: Metadata }
+    const directory = new Directory<FileTypes>({ fileSystem })
+    const files = await directory.getFiles({ includeIndexAndReadme: true })
+    const tsLikeFiles = files.filter((file) => file.hasExtension(['ts', 'md']))
+
+    expect(tsLikeFiles).toHaveLength(2)
+    expectTypeOf(tsLikeFiles).toMatchTypeOf<JavaScriptFile<Metadata>[]>()
+  })
+
   test('isFileWithExtension', async () => {
+    type Metadata = { title: string }
     const fileSystem = new VirtualFileSystem({ 'Button.tsx': '' })
-    const directory = new Directory<{ tsx: { metadata: {} } }>({ fileSystem })
+    const directory = new Directory<{ tsx: Metadata }>({ fileSystem })
     const file = await directory.getFileOrThrow('Button')
     const hasTsxExtension = isFileWithExtension(file, 'tsx')
 
     expect(hasTsxExtension).toBe(true)
 
     if (hasTsxExtension) {
-      expectTypeOf(file).toMatchTypeOf<JavaScriptFile<{ metadata: {} }>>()
+      expectTypeOf(file).toMatchTypeOf<JavaScriptFile<Metadata>>()
     }
   })
 
-  test('hasExtension', async () => {
-    const fileSystem = new VirtualFileSystem({
-      'index.ts': 'export const index = 1',
-      'readme.md': '# Readme',
-    })
-    const directory = new Directory<{ ts: { title: string } }>({ fileSystem })
-    const files = await directory.getFiles({ includeIndexAndReadme: true })
-    const tsFiles = files.filter((file) => file.hasExtension('ts'))
+  test('isFileWithExtension array', async () => {
+    type Metadata = { title: string }
+    type FileTypes = { ts: Metadata; tsx: Metadata }
+    const fileSystem = new VirtualFileSystem({ 'Button.tsx': '' })
+    const directory = new Directory<FileTypes>({ fileSystem })
+    const file = await directory.getFileOrThrow('Button')
+    const hasTsLikeExtension = isFileWithExtension(file, ['ts', 'tsx'])
 
-    expect(tsFiles).toHaveLength(1)
-    expectTypeOf(tsFiles).toMatchTypeOf<JavaScriptFile<{ title: string }>[]>()
+    expect(hasTsLikeExtension).toBe(true)
+
+    if (hasTsLikeExtension) {
+      expectTypeOf(file).toMatchTypeOf<JavaScriptFile<Metadata>>()
+    }
+
+    const hasCssExtension = isFileWithExtension(file, ['css'])
+
+    expect(hasCssExtension).toBe(false)
+
+    if (hasCssExtension) {
+      expectTypeOf(file).toMatchTypeOf<File<FileTypes>>()
+    }
   })
 })
