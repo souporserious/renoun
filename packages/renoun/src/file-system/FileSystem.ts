@@ -1,6 +1,6 @@
 import { minimatch } from 'minimatch'
 
-import { relative } from './path.js'
+import { relative } from '../utils/path.js'
 import type { DirectoryEntry } from './types.js'
 
 interface FileSystemOptions {

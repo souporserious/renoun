@@ -109,7 +109,7 @@ export async function parseSourceTextMetadata({
     isGeneratedFilename = true
   }
 
-  // Format JavaScript code blocks.
+  // Format JavaScript and HTML code blocks.
   if (isJavaScriptLikeLanguage || isHtmlLanguage) {
     try {
       finalValue = await formatSourceText(filename, finalValue)

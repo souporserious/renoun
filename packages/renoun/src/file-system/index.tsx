@@ -5,6 +5,14 @@ import {
 } from '../project/client.js'
 import { getEditPath } from '../utils/get-edit-path.js'
 import { getGitMetadata } from '../utils/get-git-metadata.js'
+import {
+  baseName,
+  extensionName,
+  join,
+  relative,
+  removeExtension,
+  removeOrderPrefixes,
+} from '../utils/path.js'
 import type { SymbolFilter } from '../utils/resolve-type.js'
 import type { FileSystem } from './FileSystem.js'
 import { NodeFileSystem } from './NodeFileSystem.js'
@@ -15,14 +23,6 @@ import {
   type IsJavaScriptLikeExtension,
   type JavaScriptLikeExtensions,
 } from './is-javascript-like-extension.js'
-import {
-  basename,
-  extname,
-  join,
-  relative,
-  removeExtension,
-  removeOrderPrefixes,
-} from './path.js'
 
 export type FileSystemEntry<Types extends ExtensionTypes> =
   | Directory<Types>
@@ -90,12 +90,12 @@ export class File<Types extends ExtensionTypes = ExtensionTypes> {
 
   /** Get the base name of the file excluding the extension. */
   getBaseName() {
-    return removeOrderPrefixes(basename(this.#path, extname(this.#path)))
+    return removeOrderPrefixes(baseName(this.#path, extensionName(this.#path)))
   }
 
   /** Get the extension of the file. */
   getExtension() {
-    return extname(this.#path).slice(1)
+    return extensionName(this.#path).slice(1)
   }
 
   /** Get a URL-friendly path to the file. */
@@ -710,7 +710,7 @@ export class Directory<Types extends ExtensionTypes = ExtensionTypes> {
           }
         }
       } else if (entry.isFile) {
-        const extension = extname(entry.name).slice(1)
+        const extension = extensionName(entry.name).slice(1)
 
         const file = isJavaScriptLikeExtension(extension)
           ? new JavaScriptFile({
@@ -777,7 +777,7 @@ export class Directory<Types extends ExtensionTypes = ExtensionTypes> {
 
   /** Get the base name of the directory. */
   getBaseName() {
-    return removeOrderPrefixes(basename(this.#path))
+    return removeOrderPrefixes(baseName(this.#path))
   }
 
   /** Get a URL-friendly path of the directory. */
