@@ -54,18 +54,23 @@ export class VirtualFileSystem extends FileSystem {
 
         const segments = relativePath.split('/').filter(Boolean)
 
-        if (recursive || segments.length === 1) {
-          if (segments.length > 0) {
-            entries.push({
-              name: segments.at(-1)!,
-              isFile: true,
-              isDirectory: false,
-              path: filePath,
-              absolutePath: filePath,
-            })
-          }
+        // Skip files that are not in the directory
+        if (segments.length === 0) {
+          continue
         }
 
+        // Add file entry if it matches
+        if (segments.length === 1 || recursive) {
+          entries.push({
+            name: segments.at(-1)!,
+            isFile: true,
+            isDirectory: false,
+            path: filePath,
+            absolutePath: filePath,
+          })
+        }
+
+        // Track directories when recursive
         if (recursive) {
           let currentPath = path
           for (let index = 0; index < segments.length - 1; index++) {
@@ -81,6 +86,7 @@ export class VirtualFileSystem extends FileSystem {
       }
     }
 
+    // Add directory entries
     for (const directoryPath of directories) {
       if (!entries.some((entry) => entry.path === directoryPath)) {
         const segments = directoryPath.split('/').filter(Boolean)

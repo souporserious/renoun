@@ -676,7 +676,7 @@ export class Directory<Types extends ExtensionTypes = ExtensionTypes> {
     const directoryEntries = await fileSystem.readDirectory(this.#path, {
       recursive: options?.recursive,
     })
-    const entries: FileSystemEntry<any>[] = []
+    const entriesMap = new Map<string, FileSystemEntry<any>>()
 
     for (const entry of directoryEntries) {
       const shouldSkipIndexOrReadme = options?.includeIndexAndReadme
@@ -693,43 +693,45 @@ export class Directory<Types extends ExtensionTypes = ExtensionTypes> {
         continue
       }
 
-      let fileSystemEntry: FileSystemEntry<any> | undefined
-
       if (entry.isDirectory) {
-        fileSystemEntry = new Directory<Types>({
+        const directory = new Directory<Types>({
           fileSystem,
           directory: this,
           path: entry.path,
           schema: this.#schema,
           getModule: this.#getModule,
         })
+        entriesMap.set(entry.path, directory)
+
+        if (options?.recursive) {
+          const nestedEntries = await directory.getEntries(options)
+          for (const nestedEntry of nestedEntries) {
+            entriesMap.set(nestedEntry.getRelativePath(), nestedEntry)
+          }
+        }
       } else if (entry.isFile) {
         const extension = extname(entry.name).slice(1)
 
-        if (isJavaScriptLikeExtension(extension)) {
-          fileSystemEntry = new JavaScriptFile({
-            directory: this,
-            path: entry.path,
-            absolutePath: entry.absolutePath,
-            schema: this.#schema,
-            getModule: this.#getModule,
-            isVirtualFileSystem: fileSystem instanceof VirtualFileSystem,
-          })
-        } else {
-          fileSystemEntry = new File({
-            directory: this,
-            path: entry.path,
-            absolutePath: entry.absolutePath,
-          })
-        }
-      }
+        const file = isJavaScriptLikeExtension(extension)
+          ? new JavaScriptFile({
+              directory: this,
+              path: entry.path,
+              absolutePath: entry.absolutePath,
+              schema: this.#schema,
+              getModule: this.#getModule,
+              isVirtualFileSystem: fileSystem instanceof VirtualFileSystem,
+            })
+          : new File({
+              directory: this,
+              path: entry.path,
+              absolutePath: entry.absolutePath,
+            })
 
-      if (fileSystemEntry) {
-        entries.push(fileSystemEntry)
+        entriesMap.set(entry.path, file)
       }
     }
 
-    return entries
+    return Array.from(entriesMap.values())
   }
 
   /** Get all files within the directory. */

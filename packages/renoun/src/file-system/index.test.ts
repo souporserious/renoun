@@ -43,6 +43,27 @@ describe('file system', () => {
   })
 
   test('recursive entries', async () => {
+    const directory = new Directory({ path: 'src/project' })
+    const entries = await directory.getEntries({
+      recursive: true,
+      includeIndexAndReadme: true,
+    })
+
+    expect(entries.map((entry) => entry.getPath())).toMatchInlineSnapshot(`
+      [
+        "/client",
+        "/get-project",
+        "/refresh",
+        "/rpc",
+        "/rpc/client",
+        "/rpc/server",
+        "/server",
+        "/types",
+      ]
+    `)
+  })
+
+  test('virtual recursive entries', async () => {
     const fileSystem = new VirtualFileSystem({
       'index.ts': '',
       'components/Button/index.tsx': '',
@@ -55,6 +76,15 @@ describe('file system', () => {
     })
 
     expect(entries).toHaveLength(5)
+    expect(entries.map((entry) => entry.getPath())).toMatchInlineSnapshot(`
+      [
+        "/index",
+        "/components/Button/index",
+        "/components/Link",
+        "/components",
+        "/components/Button",
+      ]
+    `)
   })
 
   test('filters out index and readme from entries', async () => {
