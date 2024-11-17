@@ -27,7 +27,6 @@ import {
 export type FileSystemEntry<Types extends ExtensionTypes> =
   | Directory<Types>
   | File<Types>
-  | JavaScriptFile<any>
 
 interface FileOptions {
   directory: Directory<any>
@@ -48,7 +47,7 @@ export class File<Types extends ExtensionTypes = ExtensionTypes> {
   }
 
   /** Narrow the file type based on its extension. */
-  hasExtension<Extension extends keyof Types | (keyof Types)[]>(
+  hasExtension<const Extension extends keyof Types | (keyof Types)[]>(
     extension: Extension
   ): this is FileWithExtension<Types, Extension> {
     const fileExtension = this.getExtension()
@@ -867,7 +866,7 @@ export function isFileWithExtension<
   extension: Extension
 ): entry is FileWithExtension<Types, Extension> {
   if (isFile(entry)) {
-    return (entry as File<Types>).hasExtension(extension)
+    return entry.hasExtension(extension)
   }
   return false
 }
