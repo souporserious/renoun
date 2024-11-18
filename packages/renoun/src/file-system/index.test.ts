@@ -84,7 +84,7 @@ describe('file system', () => {
     `)
   })
 
-  test('filters out index and readme from entries', async () => {
+  test('filters out index and readme from entries by default', async () => {
     const fileSystem = new VirtualFileSystem({
       'index.tsx': '',
       'README.mdx': '',
@@ -94,6 +94,33 @@ describe('file system', () => {
     const entries = await directory.getEntries()
 
     expect(entries).toHaveLength(1)
+  })
+
+  test('filter entries', async () => {
+    type PostType = { frontmatter: { title: string } }
+    const fileSystem = new VirtualFileSystem({
+      'posts/getting-started.mdx': '# Getting Started',
+      'posts/meta.json': '{ "title": "Posts" }',
+    })
+    const posts = new Directory<{ mdx: PostType }>({
+      path: 'posts',
+      fileSystem,
+    }).filter((entry) => entry.getName() !== 'meta')
+    const files = await posts.getFiles()
+
+    expectTypeOf(files).toMatchTypeOf<File<{ mdx: PostType }>[]>()
+    expect(files).toHaveLength(1)
+  })
+
+  test('filter entries with type guard', async () => {
+    type PostType = { frontmatter: { title: string } }
+    const posts = new Directory<{ mdx: PostType }>({
+      path: 'fixtures/posts',
+    }).filter((entry) => isFileWithExtension(entry, 'mdx'))
+    const files = await posts.getFiles()
+
+    expectTypeOf(files).toMatchTypeOf<JavaScriptFile<PostType>[]>()
+    expect(files).toHaveLength(1)
   })
 
   test('entry', async () => {

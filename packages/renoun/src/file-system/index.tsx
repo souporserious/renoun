@@ -450,19 +450,24 @@ interface DirectoryOptions<Types extends ExtensionTypes = ExtensionTypes> {
   path?: string
   basePath?: string
   fileSystem?: FileSystem
-  directory?: Directory<any>
   schema?: ExtensionSchemas<Types>
   getModule?: (path: string) => Promise<any>
 }
 
 /** A directory containing files and subdirectories in the file system. */
-export class Directory<Types extends ExtensionTypes = ExtensionTypes> {
+export class Directory<
+  Types extends ExtensionTypes = ExtensionTypes,
+  Entry extends FileSystemEntry<Types> = FileSystemEntry<Types>,
+> {
   #path: string
   #basePath?: string
   #fileSystem: FileSystem | undefined
-  #directory?: Directory<any>
+  #directory?: Directory<any, any>
   #schema?: ExtensionSchemas<Types>
   #getModule?: (path: string) => Promise<any>
+  #isEntryFiltered?:
+    | ((entry: FileSystemEntry<Types>) => entry is Entry)
+    | ((entry: FileSystemEntry<Types>) => boolean)
 
   constructor(options: DirectoryOptions<Types> = {}) {
     this.#path = options.path
@@ -472,7 +477,6 @@ export class Directory<Types extends ExtensionTypes = ExtensionTypes> {
       : '.'
     this.#basePath = options.basePath
     this.#fileSystem = options.fileSystem
-    this.#directory = options.directory
     this.#schema = options.schema
     this.#getModule = options.getModule
   }
@@ -486,6 +490,39 @@ export class Directory<Types extends ExtensionTypes = ExtensionTypes> {
       basePath: this.#basePath,
     })
     return this.#fileSystem
+  }
+
+  /** Set a filter to exclude entries from the directory. */
+  protected setFilter(
+    filter:
+      | ((entry: FileSystemEntry<Types>) => entry is Entry)
+      | ((entry: FileSystemEntry<Types>) => boolean)
+  ) {
+    this.#isEntryFiltered = filter
+  }
+
+  /** Returns a new `Directory` with a narrowed type and filter applied to all descendant entries. */
+  filter<FilteredEntry extends Entry>(
+    filterFn: (entry: FileSystemEntry<Types>) => entry is FilteredEntry
+  ): Directory<Types, FilteredEntry>
+  filter<FilteredEntry extends Entry>(
+    filterFn: (entry: FileSystemEntry<Types>) => boolean
+  ): Directory<Types, Entry>
+  filter<FilteredEntry extends Entry>(
+    filterFn: (entry: FileSystemEntry<Types>) => boolean
+  ): Directory<Types, Entry | FilteredEntry> {
+    const filteredDirectory = new Directory<Types, FilteredEntry>({
+      path: this.#path,
+      basePath: this.#basePath,
+      fileSystem: this.#fileSystem,
+      schema: this.#schema,
+      getModule: this.#getModule,
+    })
+
+    filteredDirectory.setDirectory(this)
+    filteredDirectory.setFilter(filterFn)
+
+    return filteredDirectory
   }
 
   /** Get a file at the specified `path` and optional extensions. */
@@ -502,7 +539,7 @@ export class Directory<Types extends ExtensionTypes = ExtensionTypes> {
   > {
     const segments = Array.isArray(path) ? path.slice(0) : path.split('/')
     let currentDirectory: Directory<Types> = this
-    let entry: FileSystemEntry<any> | undefined
+    let entry: FileSystemEntry<Types> | undefined
 
     while (segments.length > 0) {
       const currentSegment = segments.shift()
@@ -583,6 +620,11 @@ export class Directory<Types extends ExtensionTypes = ExtensionTypes> {
     return file as any
   }
 
+  /** Set the parent directory of the current directory. */
+  protected setDirectory(directory: Directory<any, any>) {
+    this.#directory = directory
+  }
+
   /** Get the parent directory or a directory at the specified `path`. */
   async getDirectory(
     path?: string | string[]
@@ -592,7 +634,7 @@ export class Directory<Types extends ExtensionTypes = ExtensionTypes> {
     }
 
     const segments = Array.isArray(path) ? path.slice(0) : path.split('/')
-    let currentDirectory: Directory<Types> = this
+    let currentDirectory: Directory<Types> = this as Directory<Types>
 
     while (segments.length > 0) {
       const currentSegment = segments.shift()
@@ -671,7 +713,7 @@ export class Directory<Types extends ExtensionTypes = ExtensionTypes> {
   async getEntries(options?: {
     recursive?: boolean
     includeIndexAndReadme?: boolean
-  }): Promise<FileSystemEntry<Types>[]> {
+  }): Promise<Entry[]> {
     const fileSystem = this.getFileSystem()
     const directoryEntries = await fileSystem.readDirectory(this.#path, {
       recursive: options?.recursive,
@@ -694,13 +736,19 @@ export class Directory<Types extends ExtensionTypes = ExtensionTypes> {
       }
 
       if (entry.isDirectory) {
-        const directory = new Directory<Types>({
+        const directory = new Directory({
           fileSystem,
-          directory: this,
           path: entry.path,
           schema: this.#schema,
           getModule: this.#getModule,
         })
+
+        directory.setDirectory(this)
+
+        if (this.#isEntryFiltered && !this.#isEntryFiltered(directory)) {
+          continue
+        }
+
         entriesMap.set(entry.path, directory)
 
         if (options?.recursive) {
@@ -711,7 +759,6 @@ export class Directory<Types extends ExtensionTypes = ExtensionTypes> {
         }
       } else if (entry.isFile) {
         const extension = extensionName(entry.name).slice(1)
-
         const file = isJavaScriptLikeExtension(extension)
           ? new JavaScriptFile({
               directory: this,
@@ -727,20 +774,27 @@ export class Directory<Types extends ExtensionTypes = ExtensionTypes> {
               absolutePath: entry.absolutePath,
             })
 
+        if (this.#isEntryFiltered && !this.#isEntryFiltered(file)) {
+          continue
+        }
+
         entriesMap.set(entry.path, file)
       }
     }
 
-    return Array.from(entriesMap.values())
+    return Array.from(entriesMap.values()) as Entry[]
   }
 
   /** Get all files within the directory. */
   async getFiles(options?: {
     recursive?: boolean
-    includeIndexAndReadme: boolean
-  }) {
+    includeIndexAndReadme?: boolean
+  }): Promise<Extract<Entry, File<any>>[]> {
     const entries = await this.getEntries(options)
-    return entries.filter(isFile) as File<Types>[]
+
+    return entries.filter((entry): entry is Extract<Entry, File<any>> =>
+      isFile(entry)
+    )
   }
 
   /** Get all directories within the directory. */
@@ -751,10 +805,7 @@ export class Directory<Types extends ExtensionTypes = ExtensionTypes> {
 
   /** Get the previous and next sibling entries (files or directories) of the parent directory. */
   async getSiblings(): Promise<
-    [
-      File<Types> | Directory<Types> | undefined,
-      File<Types> | Directory<Types> | undefined,
-    ]
+    [FileSystemEntry<Types> | undefined, FileSystemEntry<Types> | undefined]
   > {
     if (!this.#directory) {
       return [undefined, undefined]
