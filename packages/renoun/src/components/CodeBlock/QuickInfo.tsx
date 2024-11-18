@@ -31,6 +31,7 @@ export async function QuickInfo({
     const { tokens } = await analyzeSourceText({
       value: quickInfo.displayText,
       language: 'typescript',
+      shouldFormat: false,
     })
     displayTextTokens = tokens
   }
