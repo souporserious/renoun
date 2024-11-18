@@ -113,7 +113,7 @@ export async function parseSourceTextMetadata({
   // Format source text if enabled.
   if (shouldFormat) {
     try {
-      finalValue = await formatSourceText(filename, finalValue)
+      finalValue = await formatSourceText(filename, finalValue, finalLanguage)
     } catch (error) {
       throw new Error(
         `[renoun] Error formatting "${componentName}" source text${filename ? ` at filename "${filename}"` : ''} ${error}`

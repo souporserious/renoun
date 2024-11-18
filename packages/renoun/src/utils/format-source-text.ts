@@ -41,28 +41,17 @@ const extensionToParser = {
   yml: 'yaml',
   graphql: 'graphql',
   mdx: 'mdx',
-  php: 'php',
-  pug: 'pug',
-  ruby: 'ruby',
-  swift: 'swift',
-  xml: 'xml',
-  java: 'java',
-  c: 'c',
-  cpp: 'cpp',
-  cs: 'cs',
-  go: 'go',
-  kotlin: 'kotlin',
-  perl: 'perl',
-  python: 'python',
-  r: 'r',
-  rust: 'rust',
-  shell: 'sh',
-  sql: 'sql',
-  toml: 'toml',
 }
 
 /** Returns the prettier parser for the provided file path. */
-function getPrettierParser(filePath: string) {
+function getPrettierParser(filePath: string, language?: string) {
+  if (language) {
+    const parser = extensionToParser[language as keyof typeof extensionToParser]
+    if (parser) {
+      return parser
+    }
+  }
+
   const extension = extensionName(filePath).slice(1)
   return extensionToParser[extension as keyof typeof extensionToParser]
 }
@@ -78,7 +67,11 @@ function loadPrettier() {
 let formatter: (sourceText: string, options?: Record<string, unknown>) => string
 
 /** Formats the provided source text using the installed formatter. */
-export async function formatSourceText(filePath: string, sourceText: string) {
+export async function formatSourceText(
+  filePath: string,
+  sourceText: string,
+  language?: string
+) {
   // TODO: Add support for other formatters like dprint and biome
 
   if (formatter === undefined) {
@@ -86,7 +79,7 @@ export async function formatSourceText(filePath: string, sourceText: string) {
 
     if (prettier) {
       const config = (await prettier.resolveConfig(filePath)) || {}
-      const parser = getPrettierParser(filePath)
+      const parser = getPrettierParser(filePath, language)
 
       if (parser) {
         config.parser = parser
