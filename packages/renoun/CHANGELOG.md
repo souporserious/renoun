@@ -1299,18 +1299,20 @@
   Using a subset of the `mdxts` `package.json` exports as an example:
 
   ```json
-  "exports": {
-    ".": {
-      "types": "./dist/src/index.d.ts",
-      "import": "./dist/src/index.js",
-      "require": "./dist/cjs/index.js"
-    },
-    "./components": {
-      "types": "./dist/src/components/index.d.ts",
-      "import": "./dist/src/components/index.js",
-      "require": "./dist/cjs/components/index.js"
-    },
-  },
+  {
+    "exports": {
+      ".": {
+        "types": "./dist/src/index.d.ts",
+        "import": "./dist/src/index.js",
+        "require": "./dist/cjs/index.js"
+      },
+      "./components": {
+        "types": "./dist/src/components/index.d.ts",
+        "import": "./dist/src/components/index.js",
+        "require": "./dist/cjs/components/index.js"
+      }
+    }
+  }
   ```
 
   These would be remapped to their original source files, filtering out any paths gathered from the `createSource` pattern not explicitly exported:
