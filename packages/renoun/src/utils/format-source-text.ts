@@ -2,6 +2,8 @@ import resolvePackage from 'resolve'
 import { fileURLToPath } from 'node:url'
 import { dirname } from 'node:path'
 
+import { extensionName } from './path.js'
+
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
@@ -19,6 +21,49 @@ function loadPackage<Value>(name: string, getImport: () => any) {
       }
     })
   })
+}
+
+const extensionToParser = {
+  js: 'babel',
+  jsx: 'babel',
+  ts: 'typescript',
+  tsx: 'typescript',
+  json: 'json',
+  css: 'css',
+  scss: 'scss',
+  less: 'less',
+  html: 'html',
+  vue: 'vue',
+  angular: 'angular',
+  md: 'markdown',
+  yaml: 'yaml',
+  yml: 'yaml',
+  graphql: 'graphql',
+  mdx: 'mdx',
+  php: 'php',
+  pug: 'pug',
+  ruby: 'ruby',
+  swift: 'swift',
+  xml: 'xml',
+  java: 'java',
+  c: 'c',
+  cpp: 'cpp',
+  cs: 'cs',
+  go: 'go',
+  kotlin: 'kotlin',
+  perl: 'perl',
+  python: 'python',
+  r: 'r',
+  rust: 'rust',
+  shell: 'sh',
+  sql: 'sql',
+  toml: 'toml',
+}
+
+/** Returns the prettier parser for the provided file path. */
+function getPrettierParser(filePath: string) {
+  const extension = extensionName(filePath)
+  return extensionToParser[extension as keyof typeof extensionToParser]
 }
 
 /** Attempts to load the prettier package if it is installed. */
@@ -40,8 +85,13 @@ export async function formatSourceText(filePath: string, sourceText: string) {
 
     if (prettier) {
       const config = (await prettier.resolveConfig(filePath)) || {}
+      const parser = getPrettierParser(filePath)
 
-      config.filepath = filePath
+      if (parser) {
+        config.parser = parser
+      } else {
+        config.filepath = filePath
+      }
 
       if (config.printWidth === undefined) {
         config.printWidth = 80
