@@ -64,7 +64,12 @@ function loadPrettier() {
   }>('prettier', () => import('prettier').then((module) => module.default))
 }
 
-let formatter: (sourceText: string, options?: Record<string, unknown>) => string
+type Formatter = (
+  sourceText: string,
+  options: Record<string, unknown>
+) => string
+
+let formatter: Formatter | null | undefined
 
 /** Formats the provided source text using the installed formatter. */
 export async function formatSourceText(
@@ -74,29 +79,38 @@ export async function formatSourceText(
 ) {
   // TODO: Add support for other formatters like dprint and biome
 
+  if (formatter === null) {
+    return sourceText
+  }
+
   if (formatter === undefined) {
     const prettier = await loadPrettier()
 
     if (prettier) {
       const config = (await prettier.resolveConfig(filePath)) || {}
-      const parser = getPrettierParser(filePath, language)
-
-      if (parser) {
-        config.parser = parser
-      } else {
-        config.filepath = filePath
-      }
 
       if (config.printWidth === undefined) {
         config.printWidth = 80
       }
 
-      formatter = (sourceText: string) => prettier.format(sourceText, config)
+      formatter = (sourceText: string, options: Record<string, unknown>) => {
+        return prettier.format(sourceText, {
+          ...config,
+          ...options,
+        })
+      }
+    } else {
+      // No parser found for the provided language, use the default formatter.
+      formatter = null
     }
   }
 
   if (formatter) {
-    return formatter(sourceText)
+    const parser = getPrettierParser(filePath, language)
+
+    if (parser) {
+      return formatter(sourceText, { parser })
+    }
   }
 
   return sourceText
