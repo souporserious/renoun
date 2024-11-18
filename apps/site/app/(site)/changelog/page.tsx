@@ -11,6 +11,7 @@ export default function Page() {
             // @ts-expect-error
             <MDXComponents.pre
               allowErrors
+              shouldFormat={false}
               {...props}
               style={{
                 container: {
