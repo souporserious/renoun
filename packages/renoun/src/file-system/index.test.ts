@@ -1,5 +1,4 @@
 import { describe, test, expect, expectTypeOf } from 'vitest'
-import type { MDXContent } from '@renoun/mdx'
 import { runInNewContext } from 'node:vm'
 
 import { VirtualFileSystem } from './VirtualFileSystem'
@@ -16,19 +15,19 @@ import {
 describe('file system', () => {
   test('virtual file system', async () => {
     const fileSystem = new VirtualFileSystem({
-      'src/project/server.ts': '',
-      'src/project/types.ts': '',
+      'fixtures/project/server.ts': '',
+      'fixtures/project/types.ts': '',
     })
-    const srcDirectory = new Directory({
-      path: 'src',
+    const fixturesDirectory = new Directory({
+      path: 'fixtures',
       fileSystem,
     })
-    const directory = await srcDirectory.getDirectory('project')
+    const directory = await fixturesDirectory.getDirectory('project')
 
     expect(directory).toBeInstanceOf(Directory)
     expect(directory?.getName()).toBe('project')
 
-    const file = await srcDirectory.getFile('project/server', 'ts')
+    const file = await fixturesDirectory.getFile('project/server', 'ts')
 
     expect(file).toBeInstanceOf(File)
     expect(file?.getName()).toBe('server')
@@ -43,7 +42,7 @@ describe('file system', () => {
   })
 
   test('recursive entries', async () => {
-    const directory = new Directory({ path: 'src/project' })
+    const directory = new Directory({ path: 'fixtures/project' })
     const entries = await directory.getEntries({
       recursive: true,
       includeIndexAndReadme: true,
@@ -51,14 +50,12 @@ describe('file system', () => {
 
     expect(entries.map((entry) => entry.getPath())).toMatchInlineSnapshot(`
       [
-        "/client",
-        "/get-project",
-        "/refresh",
         "/rpc",
         "/rpc/client",
         "/rpc/server",
         "/server",
         "/types",
+        "/client",
       ]
     `)
   })
@@ -100,18 +97,20 @@ describe('file system', () => {
   })
 
   test('entry', async () => {
-    const srcDirectory = new Directory({ path: 'src' })
+    const fixturesDirectory = new Directory({ path: 'fixtures' })
 
-    expect(await srcDirectory.getEntry('project')).toBeInstanceOf(Directory)
+    expect(await fixturesDirectory.getEntry('project')).toBeInstanceOf(
+      Directory
+    )
     expect(
       await (
-        await srcDirectory.getDirectoryOrThrow('project')
+        await fixturesDirectory.getDirectoryOrThrow('project')
       ).getEntry('server')
     ).toBeInstanceOf(File)
   })
 
   test('directory', async () => {
-    const componentsDirectory = new Directory({ path: 'src/components' })
+    const componentsDirectory = new Directory({ path: 'fixtures/components' })
     const directory = await componentsDirectory.getDirectory('CodeBlock')
 
     expect(directory).toBeInstanceOf(Directory)
@@ -119,7 +118,9 @@ describe('file system', () => {
 
   test('nested directory', async () => {
     const rootDirectory = new Directory()
-    const nestedDirectory = await rootDirectory.getDirectory('src/project/rpc')
+    const nestedDirectory = await rootDirectory.getDirectory(
+      'fixtures/project/rpc'
+    )
 
     expect(nestedDirectory).toBeInstanceOf(Directory)
   })
@@ -135,7 +136,7 @@ describe('file system', () => {
   test('nested file', async () => {
     const rootDirectory = new Directory()
     const nestedfile = await rootDirectory.getFile(
-      'src/project/rpc/server',
+      'fixtures/project/rpc/server',
       'ts'
     )
 
@@ -143,21 +144,28 @@ describe('file system', () => {
   })
 
   test('index file', async () => {
-    const srcDirectory = new Directory()
-    const file = await srcDirectory.getFile(['src', 'components', 'index'])
+    const fixturesDirectory = new Directory()
+    const file = await fixturesDirectory.getFile([
+      'fixtures',
+      'components',
+      'index',
+    ])
 
     expect(file).toBeInstanceOf(File)
   })
 
   test('readme file', async () => {
-    const srcDirectory = new Directory()
-    const file = await srcDirectory.getFile('src/components/README', 'mdx')
+    const fixturesDirectory = new Directory()
+    const file = await fixturesDirectory.getFile(
+      'fixtures/components/README',
+      'mdx'
+    )
 
     expect(file).toBeInstanceOf(File)
   })
 
   test('javascript file', async () => {
-    const projectDirectory = new Directory({ path: 'src/project' })
+    const projectDirectory = new Directory({ path: 'fixtures/project' })
     const file = await projectDirectory.getFile('server', 'ts')
 
     expect(file!).toBeInstanceOf(JavaScriptFile)
@@ -177,7 +185,7 @@ describe('file system', () => {
   })
 
   test('all file exports', async () => {
-    const projectDirectory = new Directory({ path: 'src/project' })
+    const projectDirectory = new Directory({ path: 'fixtures/project' })
     const file = await projectDirectory.getFile('server', 'ts')
     const fileExports = await file!.getExports()
 
@@ -220,7 +228,7 @@ describe('file system', () => {
     const projectDirectory = new Directory<{
       ts: { createServer: () => void }
     }>({
-      path: 'src/project',
+      path: 'fixtures/project',
       getModule: (path) => import(`../project/${path}`),
     })
     const file = await projectDirectory.getFileOrThrow('server', 'ts')
@@ -301,8 +309,8 @@ describe('file system', () => {
 
   test('getRuntimeValue resolves export runtime value from getModule', async () => {
     const fileSystemDirectory = new Directory({
-      path: 'src/file-system',
-      getModule: (path) => import(`./${path}`),
+      path: 'fixtures/utils',
+      getModule: (path) => import(`#fixtures/utils/${path}`),
     })
     const file = await fileSystemDirectory.getFileOrThrow('path', 'ts')
 
@@ -321,7 +329,7 @@ describe('file system', () => {
   })
 
   test('uses first file found when no file extension present', async () => {
-    const projectDirectory = new Directory({ path: 'src/project' })
+    const projectDirectory = new Directory({ path: 'fixtures/project' })
     const file = await projectDirectory.getFile('server')
 
     expect(file).toBeDefined()
@@ -329,26 +337,26 @@ describe('file system', () => {
 
   test('attempts to load index file when targeting directory path', async () => {
     const fileSystem = new VirtualFileSystem({
-      'src/project/index.ts': 'export const project = 1',
+      'fixtures/project/index.ts': 'export const project = 1',
     })
     const rootDirectory = new Directory({ fileSystem })
-    const file = await rootDirectory.getFile('src/project')
+    const file = await rootDirectory.getFile('fixtures/project')
 
     expect(file).toBeInstanceOf(File)
   })
 
   test('attempts to load readme file when targeting directory path', async () => {
     const fileSystem = new VirtualFileSystem({
-      'src/project/README.mdx': '# Project',
+      'fixtures/project/README.mdx': '# Project',
     })
-    const projectDirectory = new Directory({ path: 'src', fileSystem })
+    const projectDirectory = new Directory({ path: 'fixtures', fileSystem })
     const file = await projectDirectory.getFile('project')
 
     expect(file).toBeInstanceOf(File)
   })
 
   test('generates sibling navigation from file', async () => {
-    const projectDirectory = new Directory({ path: 'src/project' })
+    const projectDirectory = new Directory({ path: 'fixtures/project' })
     const file = await projectDirectory.getFile('server', 'ts')
     const [previousEntry, nextEntry] = await file!.getSiblings()
 
@@ -357,11 +365,11 @@ describe('file system', () => {
   })
 
   test('generates sibling navigation from directory', async () => {
-    const projectDirectory = new Directory({ path: 'src/project' })
+    const projectDirectory = new Directory({ path: 'fixtures/project' })
     const directory = await projectDirectory.getDirectory('rpc')
     const [previousEntry, nextEntry] = await directory!.getSiblings()
 
-    expect(previousEntry?.getName()).toBe('refresh')
+    expect(previousEntry).toBe(undefined)
     expect(nextEntry?.getName()).toBe('server')
   })
 
@@ -381,7 +389,7 @@ describe('file system', () => {
 
   test('generates tree navigation', async () => {
     const projectDirectory = new Directory({
-      path: 'src/project',
+      path: 'fixtures/project',
       basePath: 'project',
     })
 
@@ -410,18 +418,6 @@ describe('file system', () => {
     expect(tree).toMatchInlineSnapshot(`
       [
         {
-          "name": "client",
-          "path": "/project/client",
-        },
-        {
-          "name": "get-project",
-          "path": "/project/get-project",
-        },
-        {
-          "name": "refresh",
-          "path": "/project/refresh",
-        },
-        {
           "children": [
             {
               "name": "client",
@@ -448,7 +444,7 @@ describe('file system', () => {
   })
 
   test('uses directory name when index or readme file', async () => {
-    const projectDirectory = new Directory({ path: 'src/components' })
+    const projectDirectory = new Directory({ path: 'fixtures/components' })
     const indexFile = await projectDirectory.getFile('index')
     const readmeFile = await projectDirectory.getFile('README')
 
@@ -458,7 +454,7 @@ describe('file system', () => {
 
   test('adds basePath to file and directory getPath', async () => {
     const projectDirectory = new Directory({
-      path: 'src/project',
+      path: 'fixtures/project',
       basePath: 'renoun',
     })
     const file = await projectDirectory.getFileOrThrow('server', 'ts')
@@ -470,7 +466,7 @@ describe('file system', () => {
 
   test('does not add basePath to getPathSegments', async () => {
     const projectDirectory = new Directory({
-      path: 'src/project',
+      path: 'fixtures/project',
       basePath: 'renoun',
     })
     const segments = (

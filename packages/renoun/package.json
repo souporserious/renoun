@@ -31,6 +31,9 @@
     "renoun": "./dist/cli/index.js"
   },
   "type": "module",
+  "imports": {
+    "#fixtures/*": "./fixtures/*"
+  },
   "exports": {
     "./assets": {
       "types": "./dist/assets/index.d.ts",
