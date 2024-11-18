@@ -17,6 +17,9 @@ export type CodeInlineProps = {
   /** Show or hide a persistent button that copies the `value` to the clipboard. */
   allowCopy?: boolean
 
+  /** Whether or not to allow errors. Accepts a boolean or comma-separated list of allowed error codes. */
+  allowErrors?: boolean | string
+
   /** Horizontal padding to apply to the wrapping element. */
   paddingX?: string
 
@@ -31,9 +34,6 @@ export type CodeInlineProps = {
 
   /** Style to apply to the wrapping element. */
   style?: React.CSSProperties
-
-  /** Whether or not to allow errors. Accepts a boolean or comma-separated list of allowed error codes. */
-  allowErrors?: boolean | string
 }
 
 function Token({ token }: { token: Token }) {
@@ -69,6 +69,7 @@ async function CodeInlineAsync({
 }: CodeInlineProps) {
   const { tokens } = await analyzeSourceText({
     isInline: true,
+    shouldFormat: false,
     value,
     language,
     allowErrors,

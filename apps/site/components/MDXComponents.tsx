@@ -104,6 +104,6 @@ export const MDXComponents = {
     )
   },
   pre: ({ children, ...restProps }) => {
-    return <CodeBlock {...restProps} />
+    return <CodeBlock shouldFormat={false} {...restProps} />
   },
 } satisfies MDXComponentsType

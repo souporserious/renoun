@@ -13,6 +13,7 @@ type BaseParseMetadataOptions = {
   filename?: string
   language?: Languages
   allowErrors?: boolean | string
+  shouldFormat?: boolean
   isInline?: boolean
 }
 
@@ -43,6 +44,7 @@ export async function parseSourceTextMetadata({
   filename: filenameProp,
   language,
   allowErrors = false,
+  shouldFormat = true,
   isInline = false,
   ...props
 }: ParseMetadataOptions): Promise<ParseMetadataResult> {
@@ -99,7 +101,6 @@ export async function parseSourceTextMetadata({
   const isJavaScriptLikeLanguage = ['js', 'jsx', 'ts', 'tsx'].includes(
     finalLanguage
   )
-  const isHtmlLanguage = 'html' === finalLanguage
   const jsxOnly = isJavaScriptLikeLanguage ? isJsxOnly(finalValue) : false
   let filename = 'source' in props ? props.source : filenameProp
   let sourceFile: SourceFile | undefined
@@ -109,12 +110,12 @@ export async function parseSourceTextMetadata({
     isGeneratedFilename = true
   }
 
-  // Format JavaScript and HTML code blocks.
-  if (isJavaScriptLikeLanguage || isHtmlLanguage) {
+  // Format source text if enabled.
+  if (shouldFormat) {
     try {
       finalValue = await formatSourceText(filename, finalValue)
     } catch (error) {
-      console.log(
+      throw new Error(
         `[renoun] Error formatting "${componentName}" source text${filename ? ` at filename "${filename}"` : ''} ${error}`
       )
     }

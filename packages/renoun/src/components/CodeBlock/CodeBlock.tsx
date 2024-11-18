@@ -51,6 +51,9 @@ export type BaseCodeBlockProps = {
   /** Show or hide the toolbar. */
   showToolbar?: boolean
 
+  /** Whether or not to format the source code using `prettier` if installed. */
+  shouldFormat?: boolean
+
   /** CSS styles to apply to code block elements. */
   css?: {
     container?: CSSObject
@@ -106,6 +109,7 @@ async function CodeBlockAsync({
   showErrors,
   showLineNumbers,
   showToolbar,
+  shouldFormat,
   ...props
 }: CodeBlockProps) {
   const containerPadding = computeDirectionalStyles(
@@ -138,6 +142,7 @@ async function CodeBlockAsync({
     language,
     allowErrors,
     showErrors,
+    shouldFormat,
     ...options,
   })
   const contextValue = {
