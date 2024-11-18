@@ -1,5 +1,28 @@
 # renoun
 
+## 7.4.0
+
+### Minor Changes
+
+- e71de2f: Adds `shouldFormat` prop to `CodeBlock` component to allow disabling code formatting. This is useful for MDX code blocks that are already formatted by an IDE or CI environment.
+
+  ```tsx
+  export function useMDXComponents() {
+    return {
+      pre: (props) => {
+        return <CodeBlock shouldFormat={false} {...restProps} />
+      },
+    }
+  }
+  ```
+
+- f44b9c5: Adds support for passing an array to `isFileWithExtension` and `<File>.hasExtension`.
+
+### Patch Changes
+
+- bf0c510: Fixes File System `recursive` options not calculating the appropriate relative paths.
+- eab583f: Explicitly sets the prettier `parser` option instead of relying on inference from `filepath` to avoid false-positive errors when parsing code blocks without a provided `filename`.
+
 ## 7.3.0
 
 ### Minor Changes
