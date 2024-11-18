@@ -28,6 +28,7 @@ const extensionToParser = {
   jsx: 'babel',
   ts: 'typescript',
   tsx: 'typescript',
+  typescript: 'typescript',
   json: 'json',
   css: 'css',
   scss: 'scss',
@@ -62,7 +63,7 @@ const extensionToParser = {
 
 /** Returns the prettier parser for the provided file path. */
 function getPrettierParser(filePath: string) {
-  const extension = extensionName(filePath)
+  const extension = extensionName(filePath).slice(1)
   return extensionToParser[extension as keyof typeof extensionToParser]
 }
 
