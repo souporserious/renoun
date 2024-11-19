@@ -465,7 +465,8 @@ export class Directory<
   #directory?: Directory<any, any>
   #schema?: ExtensionSchemas<Types>
   #getModule?: (path: string) => Promise<any>
-  #isEntryFiltered?:
+  #sortCallback?: (a: Entry, b: Entry) => Promise<number> | number
+  #filterCallback?:
     | ((entry: FileSystemEntry<Types>) => entry is Entry)
     | ((entry: FileSystemEntry<Types>) => boolean)
 
@@ -493,12 +494,12 @@ export class Directory<
   }
 
   /** Set a filter to exclude entries from the directory. */
-  protected setFilter(
+  protected setFilterCallback(
     filter:
       | ((entry: FileSystemEntry<Types>) => entry is Entry)
       | ((entry: FileSystemEntry<Types>) => boolean)
   ) {
-    this.#isEntryFiltered = filter
+    this.#filterCallback = filter
   }
 
   /** Returns a new `Directory` with a narrowed type and filter applied to all descendant entries. */
@@ -511,7 +512,7 @@ export class Directory<
   filter<FilteredEntry extends Entry>(
     filterFn: (entry: FileSystemEntry<Types>) => boolean
   ): Directory<Types, Entry | FilteredEntry> {
-    const filteredDirectory = new Directory<Types, FilteredEntry>({
+    const filteredDirectory = new Directory<Types, Entry | FilteredEntry>({
       path: this.#path,
       basePath: this.#basePath,
       fileSystem: this.#fileSystem,
@@ -520,9 +521,43 @@ export class Directory<
     })
 
     filteredDirectory.setDirectory(this)
-    filteredDirectory.setFilter(filterFn)
+    filteredDirectory.setFilterCallback(filterFn)
+    if (this.#sortCallback) {
+      filteredDirectory.setSortCallback(this.#sortCallback)
+    }
 
     return filteredDirectory
+  }
+
+  /** Set a sorting function for directory entries. */
+  protected setSortCallback<Entry extends FileSystemEntry<Types>>(
+    sortCallback: (a: Entry, b: Entry) => Promise<number> | number
+  ) {
+    this.#sortCallback = sortCallback as (
+      a: FileSystemEntry<Types>,
+      b: FileSystemEntry<Types>
+    ) => Promise<number> | number
+  }
+
+  /** Returns a new `Directory` with a sorting function applied to all descendant entries. */
+  sort(
+    sortCallback: (a: Entry, b: Entry) => Promise<number> | number
+  ): Directory<Types, Entry> {
+    const sortedDirectory = new Directory<Types, Entry>({
+      path: this.#path,
+      basePath: this.#basePath,
+      fileSystem: this.#fileSystem,
+      schema: this.#schema,
+      getModule: this.#getModule,
+    })
+
+    sortedDirectory.setDirectory(this)
+    sortedDirectory.setSortCallback(sortCallback)
+    if (this.#filterCallback) {
+      sortedDirectory.setFilterCallback(this.#filterCallback)
+    }
+
+    return sortedDirectory
   }
 
   /** Get a file at the specified `path` and optional extensions. */
@@ -538,7 +573,7 @@ export class Directory<
     | undefined
   > {
     const segments = Array.isArray(path) ? path.slice(0) : path.split('/')
-    let currentDirectory: Directory<Types> = this
+    let currentDirectory: Directory<Types> = this as Directory<Types>
     let entry: FileSystemEntry<Types> | undefined
 
     while (segments.length > 0) {
@@ -736,16 +771,24 @@ export class Directory<
       }
 
       if (entry.isDirectory) {
-        const directory = new Directory({
+        const directory = new Directory<Types, FileSystemEntry<Types>>({
           fileSystem,
           path: entry.path,
           schema: this.#schema,
           getModule: this.#getModule,
         })
 
+        if (this.#filterCallback) {
+          directory.setFilterCallback(this.#filterCallback)
+        }
+
+        if (this.#sortCallback) {
+          directory.setSortCallback(this.#sortCallback)
+        }
+
         directory.setDirectory(this)
 
-        if (this.#isEntryFiltered && !this.#isEntryFiltered(directory)) {
+        if (this.#filterCallback && !this.#filterCallback(directory)) {
           continue
         }
 
@@ -761,7 +804,7 @@ export class Directory<
         const extension = extensionName(entry.name).slice(1)
         const file = isJavaScriptLikeExtension(extension)
           ? new JavaScriptFile({
-              directory: this,
+              directory: this as Directory<Types>,
               path: entry.path,
               absolutePath: entry.absolutePath,
               schema: this.#schema,
@@ -769,12 +812,15 @@ export class Directory<
               isVirtualFileSystem: fileSystem instanceof VirtualFileSystem,
             })
           : new File({
-              directory: this,
+              directory: this as Directory<Types>,
               path: entry.path,
               absolutePath: entry.absolutePath,
             })
 
-        if (this.#isEntryFiltered && !this.#isEntryFiltered(file)) {
+        if (
+          this.#filterCallback &&
+          !this.#filterCallback(file as File<Types>)
+        ) {
           continue
         }
 
@@ -782,7 +828,40 @@ export class Directory<
       }
     }
 
-    return Array.from(entriesMap.values()) as Entry[]
+    const entries = Array.from(entriesMap.values()) as Entry[]
+
+    if (this.#sortCallback) {
+      try {
+        const entryCount = entries.length
+        for (let outerIndex = 0; outerIndex < entryCount; outerIndex++) {
+          for (
+            let currentIndex = 0;
+            currentIndex < entryCount - outerIndex - 1;
+            currentIndex++
+          ) {
+            const a = entries[currentIndex]
+            const b = entries[currentIndex + 1]
+            const comparison = await this.#sortCallback(a, b)
+
+            if (comparison > 0) {
+              ;[entries[currentIndex], entries[currentIndex + 1]] = [b, a]
+            }
+          }
+        }
+      } catch (error) {
+        const badge = '[renoun] '
+        if (error instanceof Error && error.message.includes(badge)) {
+          throw new Error(
+            `[renoun] Error occurred while sorting entries for directory at "${
+              this.#path
+            }". \n\n${error.message.slice(badge.length)}`
+          )
+        }
+        throw error
+      }
+    }
+
+    return entries
   }
 
   /** Get all files within the directory. */

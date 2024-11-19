@@ -105,7 +105,9 @@ describe('file system', () => {
     const posts = new Directory<{ mdx: PostType }>({
       path: 'posts',
       fileSystem,
-    }).filter((entry) => entry.getName() !== 'meta')
+    })
+      .filter((entry) => entry.getName() !== 'meta')
+      .sort((a, b) => a.getName().localeCompare(b.getName()))
     const files = await posts.getFiles()
 
     expectTypeOf(files).toMatchTypeOf<File<{ mdx: PostType }>[]>()
@@ -121,6 +123,56 @@ describe('file system', () => {
 
     expectTypeOf(files).toMatchTypeOf<JavaScriptFile<PostType>[]>()
     expect(files).toHaveLength(1)
+  })
+
+  test('sort entries', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'foo.ts': '',
+      'bar.ts': '',
+    })
+    const directory = new Directory({ fileSystem }).sort((a, b) =>
+      a.getName().localeCompare(b.getName())
+    )
+    const entries = await directory.getEntries()
+
+    expect(entries.map((entry) => entry.getName())).toMatchInlineSnapshot(`
+      [
+        "bar",
+        "foo",
+      ]
+    `)
+  })
+
+  test('filter and sort entries', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'foo.ts': 'const sort = 2',
+      'bar.ts': 'const sort = 1',
+    })
+    const directory = new Directory<{ ts: { sort: number } }>({
+      fileSystem,
+      getModule: async (path) => {
+        if (path === 'foo.ts') {
+          return { sort: 2 }
+        }
+        if (path === 'bar.ts') {
+          return { sort: 1 }
+        }
+      },
+    })
+      .filter((entry) => isFileWithExtension(entry, 'ts'))
+      .sort(async (a, b) => {
+        const aSort = await a.getExport('sort').getRuntimeValue()
+        const bSort = await b.getExport('sort').getRuntimeValue()
+        return aSort - bSort
+      })
+    const entries = await directory.getEntries()
+
+    expect(entries.map((entry) => entry.getName())).toMatchInlineSnapshot(`
+      [
+        "bar",
+        "foo",
+      ]
+    `)
   })
 
   test('entry', async () => {
