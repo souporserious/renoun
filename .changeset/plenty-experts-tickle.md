@@ -7,9 +7,9 @@ Adds `filter` method to `Directory` to allow filtering all entries within a dire
 ```ts
 type PostType = { frontmatter: { title: string } }
 
-const posts = new Directory<{ mdx: PostType }>({
-  path: 'fixtures/posts',
-}).filter((entry) => isFileWithExtension(entry, 'mdx'))
+const posts = new Directory<{ mdx: PostType }>({ path: 'posts' }).filter(
+  (entry) => isFileWithExtension(entry, 'mdx')
+)
 
 const files = await posts.getFiles() // JavaScriptFile<PostType>[]
 ```
