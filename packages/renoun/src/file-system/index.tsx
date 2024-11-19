@@ -468,7 +468,7 @@ export class Directory<
   #sortCallback?: (a: Entry, b: Entry) => Promise<number> | number
   #filterCallback?:
     | ((entry: FileSystemEntry<Types>) => entry is Entry)
-    | ((entry: FileSystemEntry<Types>) => boolean)
+    | ((entry: FileSystemEntry<Types>) => Promise<boolean> | boolean)
 
   constructor(options: DirectoryOptions<Types> = {}) {
     this.#path = options.path
@@ -497,7 +497,7 @@ export class Directory<
   protected setFilterCallback(
     filter:
       | ((entry: FileSystemEntry<Types>) => entry is Entry)
-      | ((entry: FileSystemEntry<Types>) => boolean)
+      | ((entry: FileSystemEntry<Types>) => Promise<boolean> | boolean)
   ) {
     this.#filterCallback = filter
   }
@@ -507,10 +507,10 @@ export class Directory<
     filterFn: (entry: FileSystemEntry<Types>) => entry is FilteredEntry
   ): Directory<Types, FilteredEntry>
   filter<FilteredEntry extends Entry>(
-    filterFn: (entry: FileSystemEntry<Types>) => boolean
+    filterFn: (entry: FileSystemEntry<Types>) => Promise<boolean> | boolean
   ): Directory<Types, Entry>
   filter<FilteredEntry extends Entry>(
-    filterFn: (entry: FileSystemEntry<Types>) => boolean
+    filterFn: (entry: FileSystemEntry<Types>) => Promise<boolean> | boolean
   ): Directory<Types, Entry | FilteredEntry> {
     const filteredDirectory = new Directory<Types, Entry | FilteredEntry>({
       path: this.#path,
@@ -788,7 +788,7 @@ export class Directory<
 
         directory.setDirectory(this)
 
-        if (this.#filterCallback && !this.#filterCallback(directory)) {
+        if (this.#filterCallback && !(await this.#filterCallback(directory))) {
           continue
         }
 
@@ -819,7 +819,7 @@ export class Directory<
 
         if (
           this.#filterCallback &&
-          !this.#filterCallback(file as File<Types>)
+          !(await this.#filterCallback(file as File<Types>))
         ) {
           continue
         }
