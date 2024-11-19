@@ -735,9 +735,7 @@ export class Directory<
     includeIndexAndReadme?: boolean
   }): Promise<Entry[]> {
     const fileSystem = this.getFileSystem()
-    const directoryEntries = await fileSystem.readDirectory(this.#path, {
-      recursive: options?.recursive,
-    })
+    const directoryEntries = await fileSystem.readDirectory(this.#path)
     const entriesMap = new Map<string, FileSystemEntry<any>>()
 
     for (const entry of directoryEntries) {

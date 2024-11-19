@@ -46,10 +46,7 @@ export class VirtualFileSystem extends FileSystem {
     return this.#files
   }
 
-  async readDirectory(
-    path: string = '.',
-    { recursive = false }: { recursive?: boolean }
-  ): Promise<DirectoryEntry[]> {
+  async readDirectory(path: string = '.'): Promise<DirectoryEntry[]> {
     const entries: DirectoryEntry[] = []
     const directories = new Set<string>()
 
@@ -63,13 +60,11 @@ export class VirtualFileSystem extends FileSystem {
 
         const segments = relativePath.split('/').filter(Boolean)
 
-        // Skip files that are not in the directory
         if (segments.length === 0) {
           continue
         }
 
-        // Add file entry if it matches
-        if (segments.length === 1 || recursive) {
+        if (segments.length === 1) {
           entries.push({
             name: segments.at(-1)!,
             isFile: true,
@@ -79,19 +74,10 @@ export class VirtualFileSystem extends FileSystem {
           })
         }
 
-        // Track directories when recursive
-        if (recursive) {
-          let currentPath = path
-          for (let index = 0; index < segments.length - 1; index++) {
-            currentPath += `/${segments[index]}`
-            directories.add(currentPath)
-          }
-        } else if (segments.length > 1) {
-          const subDirectoryPath = path.endsWith('/')
-            ? `${path}${segments[0]}`
-            : `${path}/${segments[0]}`
-          directories.add(subDirectoryPath)
-        }
+        const subDirectoryPath = path.endsWith('/')
+          ? `${path}${segments[0]}`
+          : `${path}/${segments[0]}`
+        directories.add(subDirectoryPath)
       }
     }
 

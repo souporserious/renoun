@@ -56,9 +56,16 @@ describe('file system', () => {
         "/rpc/server",
         "/server",
         "/types",
-        "/client",
       ]
     `)
+  })
+
+  test('recursive entries does not error', async () => {
+    const fixturesDirectory = new Directory({ path: 'fixtures' })
+
+    await expect(
+      fixturesDirectory.getEntries({ recursive: true })
+    ).resolves.toBeDefined()
   })
 
   test('virtual recursive entries', async () => {
@@ -77,10 +84,10 @@ describe('file system', () => {
     expect(entries.map((entry) => entry.getPath())).toMatchInlineSnapshot(`
       [
         "/index",
-        "/components/Button/index",
-        "/components/Link",
         "/components",
+        "/components/Link",
         "/components/Button",
+        "/components/Button/index",
       ]
     `)
   })
