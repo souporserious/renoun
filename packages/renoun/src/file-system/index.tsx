@@ -379,8 +379,7 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
         } catch (error) {
           if (error instanceof Error) {
             throw new Error(
-              `[renoun] Schema validation failed to parse export "${name}" at file path "${this.getRelativePath()}"`,
-              { cause: error }
+              `[renoun] Schema validation failed to parse export "${name}" at file path "${this.getRelativePath()}" errored with: ${error.message}`
             )
           }
         }
