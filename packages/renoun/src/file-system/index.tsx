@@ -1,8 +1,4 @@
-import {
-  getFileExports,
-  getFileExportMetadata,
-  resolveTypeAtLocation,
-} from '../project/client.js'
+import { getFileExportMetadata } from '../project/client.js'
 import { getEditPath } from '../utils/get-edit-path.js'
 import { getGitMetadata } from '../utils/get-git-metadata.js'
 import {
@@ -227,13 +223,11 @@ export class JavaScriptFileExport<
 
     const position = await this.#getPosition()
     const fileSystem = this.#file.getDirectory().getFileSystem()
-    const isVirtualFileSystem = fileSystem instanceof VirtualFileSystem
 
-    this.#metadata = await getFileExportMetadata(
+    this.#metadata = await fileSystem.getFileExportMetadata(
       this.#file.getAbsolutePath(),
       this.#name,
-      position!,
-      { useInMemoryFileSystem: isVirtualFileSystem }
+      position!
     )
 
     return this.#metadata
@@ -296,13 +290,11 @@ export class JavaScriptFileExport<
 
     const position = await this.#getPosition()
     const fileSystem = this.#file.getDirectory().getFileSystem()
-    const isVirtualFileSystem = fileSystem instanceof VirtualFileSystem
 
-    return resolveTypeAtLocation(
+    return fileSystem.resolveTypeAtLocation(
       this.#file.getAbsolutePath(),
       position!,
-      filter,
-      { useInMemoryFileSystem: isVirtualFileSystem }
+      filter
     )
   }
 
@@ -345,8 +337,6 @@ interface JavaScriptFileOptions extends FileOptions {
 export class JavaScriptFile<Exports extends ExtensionType> extends File {
   #getModule?: (path: string) => Promise<any>
   #schema?: DirectoryOptions<any>['schema']
-  #tsConfigFilePath?: string
-  #isVirtualFileSystem: boolean
 
   constructor({
     getModule,
@@ -358,8 +348,6 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
     super(fileOptions)
     this.#getModule = getModule
     this.#schema = schema
-    this.#tsConfigFilePath = tsConfigFilePath
-    this.#isVirtualFileSystem = isVirtualFileSystem
   }
 
   /** Parse and validate an export value using the configured schema. */
@@ -391,10 +379,8 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
 
   /** Get all export names and positions from the JavaScript file. */
   async getExports() {
-    return getFileExports(this.getAbsolutePath(), {
-      tsConfigFilePath: this.#tsConfigFilePath,
-      useInMemoryFileSystem: this.#isVirtualFileSystem,
-    })
+    const fileSystem = this.getDirectory().getFileSystem()
+    return fileSystem.getFileExports(this.getAbsolutePath())
   }
 
   /** Get the start position of an export in the JavaScript file. */

@@ -32,5 +32,5 @@ export function transpileSourceFile(filePath: string, project: Project) {
     return outputFile.getText()
   }
 
-  //   throw new Error(`[renoun] Failed to transpile "${filePath}"`)
+  throw new Error(`[renoun] Failed to transpile "${filePath}"`)
 }

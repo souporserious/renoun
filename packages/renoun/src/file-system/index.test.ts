@@ -353,7 +353,7 @@ describe('file system', () => {
     await expect(
       fileExport!.getRuntimeValue()
     ).rejects.toThrowErrorMatchingInlineSnapshot(
-      `[Error: [renoun] JavaScript file export "metadata" not found in ./index.ts]`
+      `[Error: [renoun] Schema validation failed to parse export "metadata" at file path "./index.ts" errored with: Expected a title]`
     )
   })
 

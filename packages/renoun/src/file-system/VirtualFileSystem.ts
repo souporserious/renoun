@@ -2,17 +2,20 @@ import ignore from 'ignore'
 
 import { createSourceFile, transpileSourceFile } from '../project/client.js'
 import { isJavaScriptLikeExtension } from './is-javascript-like-extension.js'
-import { FileSystem } from './FileSystem.js'
+import { FileSystem, generateProjectId } from './FileSystem.js'
 import type { DirectoryEntry } from './types.js'
 
-// TODO: generate an identifier that can be associated with each file system instance
-
 export class VirtualFileSystem extends FileSystem {
+  #projectId: string
   #files: Map<string, string>
   #ignore: ReturnType<typeof ignore> | undefined
 
   constructor(files: { [path: string]: string }) {
-    super()
+    const projectId = generateProjectId()
+
+    super({ projectId, isVirtualFileSystem: true })
+
+    this.#projectId = projectId
     this.#files = new Map(
       Object.entries(files).map(([path, content]) => [
         path.startsWith('.') ? path : `./${path}`,
@@ -24,13 +27,19 @@ export class VirtualFileSystem extends FileSystem {
     for (const [path, content] of this.#files) {
       const extension = path.split('.').at(-1)
       if (extension && isJavaScriptLikeExtension(extension)) {
-        createSourceFile(path, content, { useInMemoryFileSystem: true })
+        createSourceFile(path, content, {
+          projectId: projectId,
+          useInMemoryFileSystem: true,
+        })
       }
     }
   }
 
   transpileFile(path: string) {
-    return transpileSourceFile(path, { useInMemoryFileSystem: true })
+    return transpileSourceFile(path, {
+      projectId: this.#projectId,
+      useInMemoryFileSystem: true,
+    })
   }
 
   getFiles() {
