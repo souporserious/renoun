@@ -222,12 +222,10 @@ export async function transpileSourceFile(
   }
 
   const project = getProject(projectOptions)
-  const sourceFile = project.getSourceFile(filePath)
 
-  if (!sourceFile) {
-    throw new Error(`Source file "${filePath}" not found`)
-  }
-
-  const [outputFile] = sourceFile.getEmitOutput().getOutputFiles()
-  return outputFile.getText()
+  return import('../utils/transpile-source-file.js').then(
+    ({ transpileSourceFile }) => {
+      return transpileSourceFile(filePath, project)
+    }
+  )
 }

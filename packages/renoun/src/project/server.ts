@@ -14,6 +14,7 @@ import {
 import { getRootDirectory } from '../utils/get-root-directory.js'
 import type { SymbolFilter } from '../utils/resolve-type.js'
 import { resolveTypeAtLocation as baseResolveTypeAtLocation } from '../utils/resolve-type-at-location.js'
+import { transpileSourceFile as baseTranspileSourceFile } from '../utils/transpile-source-file.js'
 import { WebSocketServer } from './rpc/server.js'
 import { getProject } from './get-project.js'
 import { ProjectOptions } from './types.js'
@@ -185,14 +186,7 @@ export function createServer() {
       projectOptions?: ProjectOptions
     }) {
       const project = getProject(projectOptions)
-      const sourceFile = project.getSourceFile(filePath)
-
-      if (!sourceFile) {
-        throw new Error(`Source file "${filePath}" not found`)
-      }
-
-      const [outputFile] = sourceFile.getEmitOutput().getOutputFiles()
-      return outputFile.getText()
+      return baseTranspileSourceFile(filePath, project)
     }
   )
 
