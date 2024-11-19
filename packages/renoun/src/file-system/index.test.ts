@@ -276,7 +276,7 @@ describe('file system', () => {
     const file = await projectDirectory.getFile('server', 'ts')
     const fileExports = await file!.getExports()
 
-    expect(fileExports[0].name).toMatch('createServer')
+    expect(await fileExports[0].getName()).toMatch('createServer')
   })
 
   test('all virtual file exports', async () => {
@@ -284,10 +284,14 @@ describe('file system', () => {
       'use-hover.ts': 'export const useHover = () => {}',
     })
     const rootDirectory = new Directory({ fileSystem })
-    const file = await rootDirectory.getFile('use-hover', 'ts')
-    const fileExports = await file!.getExports()
+    const file = await rootDirectory.getFileOrThrow('use-hover', 'ts')
+    const fileExports = await Promise.all(
+      (await file.getExports()).map(async (fileExport) => ({
+        name: await fileExport.getName(),
+      }))
+    )
 
-    expect(fileExports).toMatchObject([{ name: 'useHover', position: 12 }])
+    expect(fileExports).toMatchObject([{ name: 'useHover' }])
   })
 
   test('single virtual file export', async () => {

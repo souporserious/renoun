@@ -335,6 +335,7 @@ interface JavaScriptFileOptions extends FileOptions {
 
 /** A JavaScript file in the file system. */
 export class JavaScriptFile<Exports extends ExtensionType> extends File {
+  #exports = new Map<string, JavaScriptFileExport<any, Exports>>()
   #getModule?: (path: string) => Promise<any>
   #schema?: DirectoryOptions<any>['schema']
 
@@ -378,23 +379,34 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
   }
 
   /** Get all export names and positions from the JavaScript file. */
-  async getExports() {
+  async #getExports() {
     const fileSystem = this.getDirectory().getFileSystem()
     return fileSystem.getFileExports(this.getAbsolutePath())
   }
 
   /** Get the start position of an export in the JavaScript file. */
   async getExportPosition(name: string) {
-    const fileExports = await this.getExports()
+    const fileExports = await this.#getExports()
     const fileExport = fileExports.find(
       (exportMetadata) => exportMetadata.name === name
     )
     return fileExport?.position
   }
 
+  /** Get all exports from the JavaScript file. */
+  async getExports() {
+    const fileExports = await this.#getExports()
+
+    return fileExports.map((exportMetadata) =>
+      this.getExport(exportMetadata.name as Extract<keyof Exports, string>)
+    )
+  }
+
   /**
-   * Get a JavaScript file export by name. Note, an export will always be returned.
-   * This is due to exports not always being statically analyzable due to loaders like MDX.
+   * Get a JavaScript file export by name.
+   *
+   * Note, exports are not always statically analyzable due to loaders like MDX
+   * so an export instance will always be returned.
    */
   getExport<ExportName extends Extract<keyof Exports, string>>(
     name: ExportName
@@ -403,7 +415,14 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
     Exports,
     Extract<keyof Exports, string>
   > {
-    return new JavaScriptFileExport(name, this, this.#getModule)
+    if (this.#exports.has(name)) {
+      return this.#exports.get(name)!
+    }
+
+    const fileExport = new JavaScriptFileExport(name, this, this.#getModule)
+    this.#exports.set(name, fileExport)
+
+    return fileExport
   }
 }
 
