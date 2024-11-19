@@ -1,5 +1,50 @@
 # renoun
 
+## 7.5.0
+
+### Minor Changes
+
+- abb441d: Improves error handling for the `CodeBlock` component when falsey values are provided.
+- 0b6e426: Adds `sort` method to `Directory` to allow sorting all entries within each directory:
+
+  ```ts
+  import { Directory, isFileWithExtension } from 'renoun'
+
+  type PostType = { frontmatter: { title: string } }
+
+  const posts = new Directory<{ mdx: PostType }>({ path: 'posts' })
+    .filter((entry) => isFileWithExtension(entry, 'mdx'))
+    .sort(async (a, b) => {
+      const aFrontmatter = await a.getExport('frontmatter').getRuntimeValue()
+      const bFrontmatter = await b.getExport('frontmatter').getRuntimeValue()
+
+      return aFrontmatter.title.localeCompare(bFrontmatter.title)
+    })
+
+  const files = await posts.getEntries() // JavaScriptFile<PostType>[] sorted by front matter title
+  ```
+
+- cac71c1: Improves `<VirtualFileSystem>.transpileFile` error handling.
+- 2c55b51: Adds `filter` method to `Directory` to allow filtering all entries within each directory:
+
+  ```ts
+  import { Directory, isFileWithExtension } from 'renoun'
+
+  type PostType = { frontmatter: { title: string } }
+
+  const posts = new Directory<{ mdx: PostType }>({ path: 'posts' }).filter(
+    (entry) => isFileWithExtension(entry, 'mdx')
+  )
+
+  const files = await posts.getEntries() // JavaScriptFile<PostType>[]
+  ```
+
+- 40c6cdd: Scopes `VirtualFileSystem` using a `projectId` added to the base `FileSystem` class. This ensures the TypeScript project is unique to the virtual file system it is instantiated with.
+
+### Patch Changes
+
+- 1c77620: Fixes the `<Directory>.getEntries` method `recursive` option to only recurse in `getEntries` instead of the file system.
+
 ## 7.4.0
 
 ### Minor Changes
