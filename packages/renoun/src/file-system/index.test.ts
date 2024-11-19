@@ -1,5 +1,6 @@
 import { describe, test, expect, expectTypeOf } from 'vitest'
 import { runInNewContext } from 'node:vm'
+import { z } from 'zod'
 
 import { VirtualFileSystem } from './VirtualFileSystem'
 import {
@@ -352,8 +353,48 @@ describe('file system', () => {
     await expect(
       fileExport!.getRuntimeValue()
     ).rejects.toThrowErrorMatchingInlineSnapshot(
-      `[TypeError: Cannot read properties of undefined (reading 'getText')]`
+      `[Error: [renoun] JavaScript file export "metadata" not found in ./index.ts]`
     )
+  })
+
+  test('schema transforms export value', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'hello-world.ts': `export const metadata = { title: 'Hello, World!', date: '2022-01-01' }`,
+    })
+    const metadataSchema = z.object({
+      title: z.string(),
+      date: z.coerce.date(),
+    })
+    const directory = new Directory<{
+      ts: {
+        metadata: z.infer<typeof metadataSchema>
+      }
+    }>({
+      fileSystem,
+      schema: {
+        ts: {
+          metadata: metadataSchema.parse,
+        },
+      },
+      getModule: async (path) => {
+        const transpiledCode = await fileSystem.transpileFile(path)
+        const module = { exports: {} }
+
+        runInNewContext(
+          `(function(module, exports) { ${transpiledCode} })(module, module.exports);`,
+          { module }
+        )
+
+        return module.exports
+      },
+    })
+    const file = await directory.getFileOrThrow('hello-world', 'ts')
+    const metadata = await file.getExport('metadata').getRuntimeValue()
+
+    expect(metadata).toMatchObject({
+      title: 'Hello, World!',
+      date: new Date('2022-01-01'),
+    })
   })
 
   test('file export metadata', async () => {

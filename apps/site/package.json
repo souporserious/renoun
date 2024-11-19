@@ -27,7 +27,7 @@
     "serve": "^14.2.4",
     "shiki": "catalog:",
     "webpack": "catalog:",
-    "zod": "3.23.8",
+    "zod": "catalog:",
     "zod-to-json-schema": "3.23.5"
   }
 }
