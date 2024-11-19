@@ -233,7 +233,7 @@ export class JavaScriptFileExport<
     return this.#metadata
   }
 
-  /** Get the name of the export. Default exports will use the declaration name if available or the file name. */
+  /** Get the name of the export. Default exports will use the file name or declaration name if available. */
   async getName() {
     if (await this.#isNotStatic()) {
       return this.#name === 'default' ? this.#file.getName() : this.#name
