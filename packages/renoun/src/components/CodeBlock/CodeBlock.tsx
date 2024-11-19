@@ -123,6 +123,12 @@ async function CodeBlockAsync({
   const options: any = {}
 
   if (hasValue) {
+    if (props.value === undefined || props.value === '') {
+      throw new Error(
+        '[renoun] The `CodeBlock` component `value` prop cannot be `undefined` or an empty string.'
+      )
+    }
+
     options.value = props.value
   } else if (hasSource) {
     options.source = props.source
@@ -135,6 +141,10 @@ async function CodeBlockAsync({
         options.workingDirectory = props.workingDirectory
       }
     }
+  } else {
+    throw new Error(
+      '[renoun] The `CodeBlock` component requires a `value` or `source` prop.'
+    )
   }
 
   const { tokens, value, label } = await analyzeSourceText({

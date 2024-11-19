@@ -22,7 +22,7 @@ export function CopyButton({
 
   if (!value) {
     throw new Error(
-      '[renoun] No value was provided to <CopyButton />. Use the `value` prop or use <CopyButton /> within a <CodeBlock /> component.'
+      '[renoun] The calculated value for the `CopyButton` component was `undefined` or an empty string. Use the `value` prop or use the `CopyButton` component within a `CodeBlock` component.'
     )
   }
 
