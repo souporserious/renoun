@@ -9,6 +9,12 @@ import {
   type ExportSource,
 } from '../collections/index.js'
 import { getExportedTypes } from '../collections/get-exported-types.js'
+import {
+  isFileSystemEntry,
+  isJavaScriptFile,
+  type JavaScriptFile,
+  type JavaScriptFileExport,
+} from '../file-system/index.js'
 import { createSlug } from '../utils/create-slug.js'
 import type {
   AllTypes,
@@ -36,7 +42,11 @@ interface SourceString {
 
 interface SourceExport {
   /** The export source from a collection export source to get types from. */
-  source: FileSystemSource<any> | ExportSource<any>
+  source:
+    | FileSystemSource<any>
+    | ExportSource<any>
+    | JavaScriptFile<any>
+    | JavaScriptFileExport<any>
 }
 
 interface Filter {
@@ -62,10 +72,16 @@ async function APIReferenceAsync({
   filter,
   ...props
 }: APIReferenceProps) {
-  if (isFileSystemSource(source) || typeof source === 'string') {
+  if (
+    (isFileSystemEntry(source) && isJavaScriptFile(source)) ||
+    isFileSystemSource(source) ||
+    typeof source === 'string'
+  ) {
     let filePath
 
-    if (typeof source === 'string') {
+    if (isFileSystemEntry(source)) {
+      filePath = source.getRelativePath()
+    } else if (typeof source === 'string') {
       filePath = source
     } else if (source.isDirectory()) {
       const indexSource = await source.getSource('index')
@@ -91,11 +107,13 @@ async function APIReferenceAsync({
       }
     }
 
-    const exportedTypes = await getExportedTypes(
-      filePath,
-      filter,
-      workingDirectory
-    )
+    const exportedTypes = isFileSystemEntry(source)
+      ? await Promise.all(
+          (await source.getExports()).map((exportSource) =>
+            exportSource.getType(filter)
+          )
+        )
+      : await getExportedTypes(filePath, filter, workingDirectory)
 
     return exportedTypes
       .filter((type): type is ResolvedType => Boolean(type))
