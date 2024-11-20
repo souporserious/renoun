@@ -330,7 +330,7 @@ describe('file system', () => {
       ts: { createServer: () => void }
     }>({
       path: 'fixtures/project',
-      getModule: (path) => import(`../project/${path}`),
+      getModule: (path) => import(`#fixtures/project/${path}`),
     })
     const file = await projectDirectory.getFileOrThrow('server', 'ts')
     const value = await file.getExport('createServer').getRuntimeValue()
