@@ -71,10 +71,10 @@ export class VirtualFileSystem extends FileSystem {
         if (segments.length === 1) {
           entries.push({
             name: segments.at(-1)!,
-            isFile: true,
-            isDirectory: false,
             path: filePath,
             absolutePath: filePath,
+            isDirectory: false,
+            isFile: true,
           })
         }
 
