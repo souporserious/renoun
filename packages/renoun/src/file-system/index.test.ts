@@ -189,7 +189,7 @@ describe('file system', () => {
     )
     const entries = await docs.getEntries({ recursive: true })
 
-    expect(entries.every((entry) => entry.hasExtension('mdx'))).toBe(true)
+    expect(entries.every((entry) => entry.getExtension() === 'mdx')).toBe(true)
     expect(entries).toHaveLength(2)
   })
 
@@ -626,35 +626,6 @@ describe('file system', () => {
     const fileExport = file.getExport('default')
 
     expect(await fileExport.getName()).toBe(file.getName())
-  })
-
-  test('hasExtension', async () => {
-    const fileSystem = new VirtualFileSystem({
-      'index.ts': 'export const index = 1',
-      'readme.md': '# Readme',
-    })
-    type Metadata = { title: string }
-    const directory = new Directory<{ ts: Metadata }>({ fileSystem })
-    const files = await directory.getFiles({ includeIndexAndReadme: true })
-    const tsFiles = files.filter((file) => file.hasExtension('ts'))
-
-    expect(tsFiles).toHaveLength(1)
-    expectTypeOf(tsFiles).toMatchTypeOf<JavaScriptFile<Metadata>[]>()
-  })
-
-  test('hasExtension array', async () => {
-    const fileSystem = new VirtualFileSystem({
-      'index.ts': 'export const index = 1',
-      'readme.md': '# Readme',
-    })
-    type Metadata = { title: string }
-    type FileTypes = { ts: Metadata; md: Metadata }
-    const directory = new Directory<FileTypes>({ fileSystem })
-    const files = await directory.getFiles({ includeIndexAndReadme: true })
-    const tsLikeFiles = files.filter((file) => file.hasExtension(['ts', 'md']))
-
-    expect(tsLikeFiles).toHaveLength(2)
-    expectTypeOf(tsLikeFiles).toMatchTypeOf<JavaScriptFile<Metadata>[]>()
   })
 
   test('isFileWithExtension', async () => {

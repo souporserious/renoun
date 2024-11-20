@@ -43,24 +43,6 @@ export class File<Types extends ExtensionTypes = ExtensionTypes> {
     this.#absolutePath = options.absolutePath
   }
 
-  /** Narrow the file type based on its extension. */
-  hasExtension<const Extension extends keyof Types | (keyof Types)[]>(
-    extension: Extension
-  ): this is FileWithExtension<Types, Extension> {
-    const fileExtension = this.getExtension()
-
-    if (extension instanceof Array) {
-      for (const possibleExtension of extension) {
-        if (fileExtension === possibleExtension) {
-          return true
-        }
-      }
-      return false
-    }
-
-    return fileExtension === extension
-  }
-
   /** Get the directory containing this file. */
   getDirectory() {
     return this.#directory
@@ -1043,13 +1025,25 @@ export type FileWithExtension<
 /** Determines if a `FileSystemEntry` is a `File` with a specific extension. */
 export function isFileWithExtension<
   Types extends ExtensionTypes,
-  const Extension extends string | string[],
+  Type extends keyof Types | (string & {}),
+  const Extension extends Type | Type[],
 >(
   entry: FileSystemEntry<Types>,
   extension: Extension
 ): entry is FileWithExtension<Types, Extension> {
   if (isFile(entry)) {
-    return entry.hasExtension(extension)
+    const fileExtension = entry.getExtension()
+
+    if (extension instanceof Array) {
+      for (const possibleExtension of extension) {
+        if (fileExtension === possibleExtension) {
+          return true
+        }
+      }
+      return false
+    }
+
+    return fileExtension === extension
   }
   return false
 }
