@@ -3,7 +3,6 @@ import {
   isFileWithExtension,
   isDirectory,
   type JavaScriptFileExport,
-  isJavaScriptFile,
 } from 'renoun/file-system'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -32,8 +31,8 @@ export default async function Component({
     ? componentEntry
     : componentEntry.getDirectory()
   const mainEntry =
-    (await componentDirectory.getEntry(slug)) ||
-    (await componentDirectory.getEntry('index'))
+    (await componentDirectory.getFile(slug, ['ts', 'tsx'])) ||
+    (await componentDirectory.getFile('index', ['ts', 'tsx']))
   const examplesEntry = await componentDirectory.getEntry('examples')
   const exampleFiles = examplesEntry
     ? isDirectory(examplesEntry)
@@ -65,7 +64,7 @@ export default async function Component({
         {Readme ? <Readme /> : null}
       </div>
 
-      {mainEntry && isJavaScriptFile(mainEntry) ? (
+      {mainEntry ? (
         <div>
           <h2>API Reference</h2>
           <APIReference source={mainEntry} />
