@@ -974,13 +974,6 @@ export function isFile<Types extends ExtensionTypes>(
   return entry instanceof File
 }
 
-/** Determines if a `FileSystemEntry` is a `JavaScriptFile`. */
-export function isJavaScriptFile<Exports extends ExtensionType>(
-  entry: FileSystemEntry<Exports>
-): entry is JavaScriptFile<Exports> {
-  return entry instanceof JavaScriptFile
-}
-
 /** Determines the type of a `FileSystemEntry` based on its extension. */
 export type FileWithExtension<
   Types extends ExtensionTypes,
