@@ -294,6 +294,7 @@ describe('file system', () => {
     expect(file).toBeInstanceOf(File)
     expect(file.getName()).toBe('server')
     expect(file.getPath()).toBe('/server')
+    expect(file.getPathSegments()).toStrictEqual(['server'])
   })
 
   test('all file exports', async () => {
