@@ -431,7 +431,7 @@ class Export<Value, AllExports extends FileExports = FileExports>
       if (isReactComponent) {
         const Component = exportValue as React.ComponentType
         const WrappedComponent = async (props: Record<string, unknown>) => {
-          const { Refresh } = await import('./Refresh.js')
+          const { Refresh } = await import('../file-system/Refresh.js')
 
           return (
             <>

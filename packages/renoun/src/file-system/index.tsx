@@ -1,3 +1,4 @@
+import * as React from 'react'
 import { getFileExportMetadata } from '../project/client.js'
 import { getEditPath } from '../utils/get-edit-path.js'
 import { getGitMetadata } from '../utils/get-git-metadata.js'
@@ -322,7 +323,35 @@ export class JavaScriptFileExport<
       )
     }
 
-    return this.#file.parseExportValue(exportName, fileModuleExport)
+    const exportValue = this.#file.parseExportValue(
+      exportName,
+      fileModuleExport
+    )
+
+    /* Enable hot module reloading in development for Next.js component exports. */
+    if (process.env.NODE_ENV === 'development') {
+      const isReactComponent = exportValue
+        ? /^[A-Z]/.test(exportValue.name) && String(exportValue).includes('jsx')
+        : false
+
+      if (isReactComponent) {
+        const Component = exportValue as React.ComponentType
+        const WrappedComponent = async (props: Record<string, unknown>) => {
+          const { Refresh } = await import('./Refresh.js')
+
+          return (
+            <>
+              <Refresh />
+              <Component {...props} />
+            </>
+          )
+        }
+
+        return WrappedComponent as Value
+      }
+    }
+
+    return exportValue
   }
 }
 
