@@ -10,9 +10,7 @@ import {
 } from '../collections/index.js'
 import { getExportedTypes } from '../collections/get-exported-types.js'
 import {
-  isFileSystemEntry,
-  isJavaScriptFile,
-  type JavaScriptFile,
+  JavaScriptFile,
   type JavaScriptFileExport,
 } from '../file-system/index.js'
 import { createSlug } from '../utils/create-slug.js'
@@ -73,13 +71,13 @@ async function APIReferenceAsync({
   ...props
 }: APIReferenceProps) {
   if (
-    (isFileSystemEntry(source) && isJavaScriptFile(source)) ||
+    source instanceof JavaScriptFile ||
     isFileSystemSource(source) ||
     typeof source === 'string'
   ) {
     let filePath
 
-    if (isFileSystemEntry(source)) {
+    if (source instanceof JavaScriptFile) {
       filePath = source.getRelativePath()
     } else if (typeof source === 'string') {
       filePath = source
@@ -107,13 +105,14 @@ async function APIReferenceAsync({
       }
     }
 
-    const exportedTypes = isFileSystemEntry(source)
-      ? await Promise.all(
-          (await source.getExports()).map((exportSource) =>
-            exportSource.getType(filter)
+    const exportedTypes =
+      source instanceof JavaScriptFile
+        ? await Promise.all(
+            (await source.getExports()).map((exportSource) =>
+              exportSource.getType(filter)
+            )
           )
-        )
-      : await getExportedTypes(filePath, filter, workingDirectory)
+        : await getExportedTypes(filePath, filter, workingDirectory)
 
     return exportedTypes
       .filter((type): type is ResolvedType => Boolean(type))
