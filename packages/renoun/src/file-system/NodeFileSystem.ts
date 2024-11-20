@@ -10,6 +10,10 @@ import type { DirectoryEntry } from './types.js'
 let ignoreManager: ReturnType<typeof ignore>
 
 export class NodeFileSystem extends FileSystem {
+  getAbsolutePath(path: string): string {
+    return resolve(path)
+  }
+
   async readDirectory(path: string = '.'): Promise<DirectoryEntry[]> {
     const entries = await readdir(path, { withFileTypes: true })
 
@@ -23,7 +27,6 @@ export class NodeFileSystem extends FileSystem {
       return {
         name: entry.name,
         path: entryPath,
-        absolutePath: resolve(entryPath),
         isDirectory: entry.isDirectory(),
         isFile: entry.isFile(),
       } satisfies DirectoryEntry

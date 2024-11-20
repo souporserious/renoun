@@ -42,6 +42,10 @@ export class VirtualFileSystem extends FileSystem {
     })
   }
 
+  getAbsolutePath(path: string) {
+    return path.startsWith('./') ? path.slice(1) : path
+  }
+
   getFiles() {
     return this.#files
   }
@@ -72,7 +76,6 @@ export class VirtualFileSystem extends FileSystem {
           entries.push({
             name: segments.at(-1)!,
             path: filePath,
-            absolutePath: filePath,
             isDirectory: false,
             isFile: true,
           })
@@ -85,17 +88,15 @@ export class VirtualFileSystem extends FileSystem {
       }
     }
 
-    // Add directory entries
     for (const directoryPath of directories) {
       if (!entries.some((entry) => entry.path === directoryPath)) {
         const segments = directoryPath.split('/').filter(Boolean)
 
         entries.push({
           name: segments.at(-1)!,
-          isFile: false,
-          isDirectory: true,
           path: directoryPath,
-          absolutePath: directoryPath,
+          isDirectory: true,
+          isFile: false,
         })
       }
     }

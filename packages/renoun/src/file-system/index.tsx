@@ -28,19 +28,16 @@ export type FileSystemEntry<Types extends ExtensionTypes> =
 interface FileOptions {
   directory: Directory<any>
   path: string
-  absolutePath: string
 }
 
 /** A file in the file system. */
 export class File<Types extends ExtensionTypes = ExtensionTypes> {
   #directory: Directory
   #path: string
-  #absolutePath: string
 
   constructor(options: FileOptions) {
     this.#directory = options.directory
     this.#path = options.path
-    this.#absolutePath = options.absolutePath
   }
 
   /** Get the directory containing this file. */
@@ -95,24 +92,25 @@ export class File<Types extends ExtensionTypes = ExtensionTypes> {
     return path.split('/').filter(Boolean)
   }
 
-  /** Get the relative path to the file. */
-  getRelativePath() {
-    return this.#path
-  }
-
-  /** Get the file path to the editor in local development and the configured git repository in production. */
-  getEditPath() {
-    return getEditPath(this.#absolutePath)
-  }
-
   /** Get the path of the file relative to another path. */
   getPathRelativeTo(path: string) {
     return relative(path, this.#path)
   }
 
+  /** Get the relative path to the file. */
+  getRelativePath() {
+    return this.#path
+  }
+
   /** Get the absolute path of the file. */
   getAbsolutePath() {
-    return this.#absolutePath
+    const fileSystem = this.#directory.getFileSystem()
+    return fileSystem.getAbsolutePath(this.#path)
+  }
+
+  /** Get the file path to the editor in local development and the configured git repository in production. */
+  getEditPath() {
+    return getEditPath(this.getAbsolutePath())
   }
 
   async getCreatedAt() {
@@ -832,7 +830,6 @@ export class Directory<
           ? new JavaScriptFile({
               directory: this as Directory<Types>,
               path: entry.path,
-              absolutePath: entry.absolutePath,
               schema: this.#schema,
               getModule: this.#getModule,
               isVirtualFileSystem: fileSystem instanceof VirtualFileSystem,
@@ -840,7 +837,6 @@ export class Directory<
           : new File({
               directory: this as Directory<Types>,
               path: entry.path,
-              absolutePath: entry.absolutePath,
             })
 
         if (
@@ -927,7 +923,10 @@ export class Directory<
   /** Get the path segments of the directory. */
   getPathSegments() {
     const fileSystem = this.getFileSystem()
-    const path = fileSystem.getUrlPathRelativeTo(removeOrderPrefixes(this.#path), false)
+    const path = fileSystem.getUrlPathRelativeTo(
+      removeOrderPrefixes(this.#path),
+      false
+    )
     return path.split('/').filter(Boolean)
   }
 
@@ -936,14 +935,14 @@ export class Directory<
     return this.#path
   }
 
-  /** Get the directory path to the editor in local development and the configured git repository in production. */
-  getEditPath() {
-    return getEditPath(this.#path)
-  }
-
   /** Get the absolute path of the directory. */
   getAbsolutePath() {
-    return this.#path
+    return this.getFileSystem().getAbsolutePath(this.#path)
+  }
+
+  /** Get the directory path to the editor in local development and the configured git repository in production. */
+  getEditPath() {
+    return getEditPath(this.getAbsolutePath())
   }
 
   async getCreatedAt() {

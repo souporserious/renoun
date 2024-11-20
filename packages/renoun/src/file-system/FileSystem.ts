@@ -47,6 +47,7 @@ export abstract class FileSystem {
     }
   }
 
+  abstract getAbsolutePath(path: string): string
   abstract readFileSync(path: string): string
   abstract readFile(path: string): Promise<string>
   abstract readDirectory(
