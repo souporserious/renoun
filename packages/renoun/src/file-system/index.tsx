@@ -890,24 +890,6 @@ export class Directory<
     return entries
   }
 
-  /** Get all files within the directory. */
-  async getFiles(options?: {
-    recursive?: boolean
-    includeIndexAndReadme?: boolean
-  }): Promise<Extract<Entry, File<any>>[]> {
-    const entries = await this.getEntries(options)
-
-    return entries.filter((entry): entry is Extract<Entry, File<any>> =>
-      isFile(entry)
-    )
-  }
-
-  /** Get all directories within the directory. */
-  async getDirectories(options?: { recursive?: boolean }) {
-    const entries = await this.getEntries(options)
-    return entries.filter(isDirectory) as Directory<Types>[]
-  }
-
   /** Get the previous and next sibling entries (files or directories) of the parent directory. */
   async getSiblings(): Promise<
     [FileSystemEntry<Types> | undefined, FileSystemEntry<Types> | undefined]

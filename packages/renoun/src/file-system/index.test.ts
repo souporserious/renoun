@@ -114,11 +114,11 @@ describe('file system', () => {
       path: 'posts',
       fileSystem,
     })
-      .filter((entry) => entry.getName() !== 'meta')
+      .filter((entry) => isFileWithExtension(entry, 'mdx'))
       .sort((a, b) => a.getName().localeCompare(b.getName()))
-    const files = await posts.getFiles()
+    const files = await posts.getEntries()
 
-    expectTypeOf(files).toMatchTypeOf<File<{ mdx: PostType }>[]>()
+    expectTypeOf(files).toMatchTypeOf<JavaScriptFile<PostType>[]>()
     expect(files).toHaveLength(1)
   })
 
@@ -127,7 +127,7 @@ describe('file system', () => {
     const posts = new Directory<{ mdx: PostType }>({
       path: 'fixtures/posts',
     }).filter((entry) => isFileWithExtension(entry, 'mdx'))
-    const files = await posts.getFiles()
+    const files = await posts.getEntries()
 
     expectTypeOf(files).toMatchTypeOf<JavaScriptFile<PostType>[]>()
     expect(files).toHaveLength(1)
