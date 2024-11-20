@@ -1,10 +1,10 @@
 import { styled } from 'restyle'
 import Link from 'next/link'
 
-import { ComponentsCollection, type ComponentSource } from '@/collections'
+import { ComponentsCollection, type ComponentEntry } from '@/collections'
 
 export default async function Components() {
-  const sources = await ComponentsCollection.getSources({ depth: 1 })
+  const entries = await ComponentsCollection.getEntries()
 
   return (
     <main
@@ -22,8 +22,8 @@ export default async function Components() {
           margin: 0,
         }}
       >
-        {sources.map((source) => (
-          <ComponentItem key={source.getPath()} source={source} />
+        {entries.map((entry) => (
+          <ComponentEntry key={entry.getPath()} entry={entry} />
         ))}
       </ul>
     </main>
@@ -32,11 +32,11 @@ export default async function Components() {
 
 const StyledLink = styled(Link, { display: 'block', padding: '1rem' })
 
-async function ComponentItem({ source }: { source: ComponentSource }) {
+async function ComponentEntry({ entry }: { entry: ComponentEntry }) {
   return (
     <li>
-      <StyledLink href={source.getPath()}>
-        <h2 css={{ margin: 0 }}>{source.getName()}</h2>
+      <StyledLink href={entry.getPath()}>
+        <h2 css={{ margin: 0 }}>{entry.getName()}</h2>
       </StyledLink>
     </li>
   )

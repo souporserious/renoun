@@ -1,53 +1,55 @@
-import { APIReference, CodeBlock, Tokens } from 'renoun/components'
-import { Collection, type ExportSource } from 'renoun/collections'
-import type { MDXContent } from 'renoun/mdx'
+import { APIReference } from 'renoun/components'
+import {
+  isFileWithExtension,
+  isDirectory,
+  type JavaScriptFileExport,
+  isJavaScriptFile,
+} from 'renoun/file-system'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
-import { ComponentsCollection, type ComponentSource } from '@/collections'
+import { ComponentsCollection, type ComponentEntry } from '@/collections'
 import { Stack } from '@/components'
 
 export async function generateStaticParams() {
-  const sources = await ComponentsCollection.getSources()
-  return sources.map((source) => ({ slug: source.getPathSegments() }))
+  const entries = await ComponentsCollection.getEntries()
+  return entries.map((entry) => ({ slug: entry.getName() }))
 }
-
-const ComponentsReadmeCollection = new Collection<{ default: MDXContent }>(
-  {
-    filePattern: '**/README.mdx',
-    baseDirectory: 'components',
-    basePath: 'components',
-  },
-  (slug) => import(`../../../components/${slug}.mdx`)
-)
 
 export default async function Component({
   params,
 }: {
-  params: Promise<{ slug: string[] }>
+  params: Promise<{ slug: string }>
 }) {
   const slug = (await params).slug
-  const componentsPathname = ['components', ...slug]
-  const componentSource =
-    await ComponentsCollection.getSource(componentsPathname)
+  const componentEntry = await ComponentsCollection.getEntry(slug)
 
-  if (!componentSource) {
+  if (!componentEntry) {
     notFound()
   }
 
-  const readmeSource = await ComponentsReadmeCollection.getSource([
-    ...componentsPathname,
-    'readme',
-  ])
-  const Readme = await readmeSource?.getExport('default').getValue()
-  const examplesSource = await componentSource.getSource('examples')
-  const examples = await examplesSource?.getSources()
+  const componentDirectory = isDirectory(componentEntry)
+    ? componentEntry
+    : componentEntry.getDirectory()
+  const mainEntry =
+    (await componentDirectory.getEntry(slug)) ||
+    (await componentDirectory.getEntry('index'))
+  const examplesEntry = await componentDirectory.getEntry('examples')
+  const exampleFiles = examplesEntry
+    ? isDirectory(examplesEntry)
+      ? await examplesEntry
+          .filter((entry) => isFileWithExtension(entry, 'tsx'))
+          .getEntries()
+      : isFileWithExtension(examplesEntry, 'tsx')
+        ? [examplesEntry]
+        : null
+    : null
   const isExamplesPage = slug.at(-1) === 'examples'
-  const updatedAt = await componentSource.getUpdatedAt()
-  const editPath = componentSource.getEditPath()
-  const [previousSource, nextSource] = await componentSource.getSiblings({
-    depth: 0,
-  })
+  const readmeFile = await componentDirectory.getFileOrThrow('README', 'mdx')
+  const Readme = await readmeFile.getExport('default').getRuntimeValue()
+  const updatedAt = await componentEntry.getUpdatedAt()
+  const editPath = componentEntry.getEditPath()
+  const [previousEntry, nextEntry] = await componentEntry.getSiblings()
 
   return (
     <div
@@ -59,18 +61,18 @@ export default async function Component({
       }}
     >
       <div>
-        <h1>{componentSource.getName()}</h1>
+        <h1>{componentEntry.getName()}</h1>
         {Readme ? <Readme /> : null}
       </div>
 
-      {isExamplesPage ? null : (
+      {mainEntry && isJavaScriptFile(mainEntry) ? (
         <div>
           <h2>API Reference</h2>
-          <APIReference source={componentSource} />
+          <APIReference source={mainEntry} />
         </div>
-      )}
+      ) : null}
 
-      {isExamplesPage || !examples ? null : (
+      {isExamplesPage || !exampleFiles ? null : (
         <div>
           <h2 css={{ margin: '0 0 2rem' }}>Examples</h2>
           <ul
@@ -82,13 +84,20 @@ export default async function Component({
               gap: '2rem',
             }}
           >
-            {examples.map((examplesSource) =>
-              examplesSource.getExports().map((exportSource) => (
-                <li key={exportSource.getName()}>
-                  <Preview source={exportSource} />
-                </li>
-              ))
-            )}
+            {exampleFiles.map(async (file) => {
+              const fileExports = await file.getExports()
+
+              return Promise.all(
+                fileExports.map(async (fileExport) => {
+                  const exportName = await fileExport.getName()
+                  return (
+                    <li key={exportName}>
+                      <Preview fileExport={fileExport} />
+                    </li>
+                  )
+                })
+              )
+            })}
           </ul>
         </div>
       )}
@@ -139,11 +148,11 @@ export default async function Component({
             padding: '1rem',
           }}
         >
-          {previousSource ? (
-            <SiblingLink source={previousSource} direction="previous" />
+          {previousEntry ? (
+            <SiblingLink entry={previousEntry} direction="previous" />
           ) : null}
-          {nextSource ? (
-            <SiblingLink source={nextSource} direction="next" />
+          {nextEntry ? (
+            <SiblingLink entry={nextEntry} direction="next" />
           ) : null}
         </nav>
       </div>
@@ -152,14 +161,14 @@ export default async function Component({
 }
 
 async function Preview({
-  source,
+  fileExport,
 }: {
-  source: ExportSource<React.ComponentType>
+  fileExport: JavaScriptFileExport<React.ComponentType>
 }) {
-  const name = source.getName()
-  const description = source.getDescription()
-  const editPath = source.getEditPath()
-  const Value = await source.getValue()
+  const name = await fileExport.getName()
+  const description = await fileExport.getDescription()
+  const editPath = fileExport.getEditPath()
+  const Value = await fileExport.getRuntimeValue()
   const isUppercase = name[0] === name[0].toUpperCase()
   const isComponent = typeof Value === 'function' && isUppercase
 
@@ -193,43 +202,28 @@ async function Preview({
             <Value />
           </div>
         ) : null}
-        <CodeBlock allowErrors value={source.getText()} language="tsx">
-          <pre
-            css={{
-              position: 'relative',
-              whiteSpace: 'pre',
-              wordWrap: 'break-word',
-              padding: '0.5lh',
-              margin: 0,
-              overflow: 'auto',
-              backgroundColor: '#09121b',
-            }}
-          >
-            <Tokens />
-          </pre>
-        </CodeBlock>
       </div>
     </section>
   )
 }
 
 async function SiblingLink({
-  source,
+  entry,
   direction,
 }: {
-  source: ComponentSource
+  entry: ComponentEntry
   direction: 'previous' | 'next'
 }) {
   return (
     <Link
-      href={source.getPath()}
+      href={entry.getPath()}
       style={{
         gridColumn: direction === 'previous' ? 1 : 2,
         textAlign: direction === 'previous' ? 'left' : 'right',
       }}
     >
       <div>{direction === 'previous' ? 'Previous' : 'Next'}</div>
-      {source.getName()}
+      {entry.getName()}
     </Link>
   )
 }
