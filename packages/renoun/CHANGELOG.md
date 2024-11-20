@@ -1,5 +1,30 @@
 # renoun
 
+## 7.6.0
+
+### Minor Changes
+
+- 0c67c7c: Removes `isJavaScriptFile` type guard in favor of `isFileWithExtension` that narrows types better.
+- bf56af0: Adds support for passing `JavaScriptFile` and `JavaScriptFileExport` to the `APIReference` component.
+- 4fc9781: Returns a `JavaScriptExport` instance now from `getExports` to align with `getExport`.
+- 73bb769: Adds Fast Refresh to `<JavaScriptExport>.getRuntimeValue` for Next.js.
+- 3eec7ff: Removes `getDirectories` and `getFiles` from `Directory` now that the `filter` method is available:
+
+  ```ts
+  import { Directory, isFileWithExtension } from 'renoun/file-system'
+
+  const directory = new Directory()
+  const files = directory
+    .filter((entry) => isFileWithExtension(entry, ['ts', 'tsx']))
+    .getEntries()
+  ```
+
+- 5390b16: Removes `<File>.hasExtension` method in favor of the `isFileWithExtension` type guard to consolidate the API.
+
+### Patch Changes
+
+- 8d2b7f3: Fixes the `<Directory>.getEntries` method `recursive` option not considering nested entries.
+
 ## 7.5.0
 
 ### Minor Changes
