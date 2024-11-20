@@ -8,20 +8,18 @@ export default async function Page() {
     <>
       <h1>Blog</h1>
       <ul>
-        {allPosts
-          .filter((post) => post.hasExtension('mdx'))
-          .map(async (post) => {
-            const path = post.getPath()
-            const frontmatter = await post
-              .getExport('frontmatter')
-              .getRuntimeValue()
+        {allPosts.map(async (post) => {
+          const path = post.getPath()
+          const frontmatter = await post
+            .getExport('frontmatter')
+            .getRuntimeValue()
 
-            return (
-              <li key={path}>
-                <Link href={path}>{frontmatter.title}</Link>
-              </li>
-            )
-          })}
+          return (
+            <li key={path}>
+              <Link href={path}>{frontmatter.title}</Link>
+            </li>
+          )
+        })}
       </ul>
     </>
   )
