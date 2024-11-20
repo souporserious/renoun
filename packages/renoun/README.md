@@ -13,12 +13,12 @@ Meticulously crafted React components and utilities to<br/>help you write better
 
 ## Features
 
-- 📝 Quickly start authoring technincal content
+- 📝 Easily start authoring technical content
 - 📊 Query file and directory metadata
-- 🛟 Validate module exports
-- 📘 Display API references
+- 🛟 Validate JavaScript module exports
+- 📘 Generate JavaScript API references
 - 🌈 Accurately highlight code blocks
-- ✅ Type-check code blocks
+- ✅ Type-check JavaScript code blocks
 - 🖼️ Render source code examples
 
 ## Getting Started
