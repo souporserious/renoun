@@ -969,6 +969,13 @@ export class Directory<
   }
 }
 
+/** Determines if a value is a `FileSystemEntry`. */
+export function isFileSystemEntry<Types extends ExtensionTypes>(
+  entry: any
+): entry is FileSystemEntry<Types> {
+  return entry instanceof Directory || entry instanceof File
+}
+
 /** Determines if a `FileSystemEntry` is a `Directory`. */
 export function isDirectory(entry: FileSystemEntry<any>): entry is Directory {
   return entry instanceof Directory
@@ -983,7 +990,7 @@ export function isFile<Types extends ExtensionTypes>(
 
 /** Determines if a `FileSystemEntry` is a `JavaScriptFile`. */
 export function isJavaScriptFile<Exports extends ExtensionType>(
-  entry: FileSystemEntry<any>
+  entry: FileSystemEntry<Exports>
 ): entry is JavaScriptFile<Exports> {
   return entry instanceof JavaScriptFile
 }
