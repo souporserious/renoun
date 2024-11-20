@@ -587,7 +587,12 @@ export class Directory<
       })
 
       // Find the entry matching the current segment
-      entry = allEntries.find((entry) => entry.getBaseName() === currentSegment)
+      for (const currentEntry of allEntries) {
+        if (currentEntry.getBaseName() === currentSegment) {
+          entry = currentEntry
+          break
+        }
+      }
 
       if (!entry) {
         return undefined
@@ -678,11 +683,17 @@ export class Directory<
     while (segments.length > 0) {
       const currentSegment = segments.shift()
       const allEntries = await currentDirectory.getEntries()
-      const entry = allEntries.find((entry) => {
-        return (
-          entry instanceof Directory && entry.getBaseName() === currentSegment
-        )
-      })
+      let entry: FileSystemEntry<Types> | undefined
+
+      for (const currentEntry of allEntries) {
+        if (
+          currentEntry instanceof Directory &&
+          currentEntry.getBaseName() === currentSegment
+        ) {
+          entry = currentEntry
+          break
+        }
+      }
 
       if (!entry || !(entry instanceof Directory)) {
         return undefined
