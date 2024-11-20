@@ -1,8 +1,8 @@
-import { PostsCollection } from '@/collections'
+import { posts } from '@/collections'
 
 export async function generateStaticParams() {
-  const sources = await PostsCollection.getSources()
-  return sources.map((source) => ({ slug: source.getPathSegments().at(0) }))
+  const allPosts = await posts.getEntries()
+  return allPosts.map((post) => ({ slug: post.getName() }))
 }
 
 export default async function Page({
@@ -10,15 +10,15 @@ export default async function Page({
 }: {
   params: Promise<{ slug: string }>
 }) {
-  const PostSource = await PostsCollection.getSource((await params).slug)
-  const Content = await PostSource.getExport('default').getValue()
-  const frontmatter = await PostSource.getExport('frontmatter').getValue()
+  const post = await posts.getFileOrThrow((await params).slug, 'mdx')
+  const frontmatter = await post.getExport('frontmatter').getRuntimeValue()
   const formattedDate = new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
     timeZone: 'UTC',
   }).format(frontmatter.date)
+  const Content = await post.getExport('default').getRuntimeValue()
 
   return (
     <>

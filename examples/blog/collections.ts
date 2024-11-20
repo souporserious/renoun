@@ -1,4 +1,4 @@
-import { Collection } from 'renoun/collections'
+import { Directory, isFileWithExtension } from 'renoun/file-system'
 import type { MDXContent } from 'renoun/mdx'
 import { z } from 'zod'
 
@@ -9,26 +9,20 @@ const frontmatterSchema = z.object({
   tags: z.array(z.string()).optional(),
 })
 
-export const PostsCollection = new Collection<{
+interface PostType {
   default: MDXContent
   frontmatter: z.infer<typeof frontmatterSchema>
-}>(
-  {
-    filePattern: '*.mdx',
-    baseDirectory: 'posts',
-    schema: {
-      frontmatter: frontmatterSchema.parse,
-    },
-    sort: async (a, b) => {
-      if (a.isDirectory() || b.isDirectory()) {
-        return 0
-      }
+}
 
-      const aFrontmatter = await a.getExport('frontmatter').getValue()
-      const bFrontmatter = await b.getExport('frontmatter').getValue()
+export const posts = new Directory<{ mdx: PostType }>({
+  path: 'posts',
+  schema: { mdx: { frontmatter: frontmatterSchema.parse } },
+  getModule: (path) => import(`./posts/${path}`),
+})
+  .filter((entry) => isFileWithExtension(entry, 'mdx'))
+  .sort(async (a, b) => {
+    const aFrontmatter = await a.getExport('frontmatter').getRuntimeValue()
+    const bFrontmatter = await b.getExport('frontmatter').getRuntimeValue()
 
-      return bFrontmatter.date.getTime() - aFrontmatter.date.getTime()
-    },
-  },
-  (slug) => import(`./posts/${slug}.mdx`)
-)
+    return bFrontmatter.date.getTime() - aFrontmatter.date.getTime()
+  })
