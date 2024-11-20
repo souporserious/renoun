@@ -801,17 +801,19 @@ export class Directory<
 
         directory.setDirectory(this)
 
-        if (this.#filterCallback && !(await this.#filterCallback(directory))) {
-          continue
-        }
-
-        entriesMap.set(entry.path, directory)
-
         if (options?.recursive) {
           const nestedEntries = await directory.getEntries(options)
           for (const nestedEntry of nestedEntries) {
             entriesMap.set(nestedEntry.getRelativePath(), nestedEntry)
           }
+        }
+
+        if (this.#filterCallback) {
+          if (await this.#filterCallback(directory)) {
+            entriesMap.set(entry.path, directory)
+          }
+        } else {
+          entriesMap.set(entry.path, directory)
         }
       } else if (entry.isFile) {
         const extension = extensionName(entry.name).slice(1)

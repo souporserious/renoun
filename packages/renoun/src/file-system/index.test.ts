@@ -51,9 +51,9 @@ describe('file system', () => {
 
     expect(entries.map((entry) => entry.getPath())).toMatchInlineSnapshot(`
       [
-        "/rpc",
         "/rpc/client",
         "/rpc/server",
+        "/rpc",
         "/server",
         "/types",
       ]
@@ -84,10 +84,10 @@ describe('file system', () => {
     expect(entries.map((entry) => entry.getPath())).toMatchInlineSnapshot(`
       [
         "/index",
-        "/components",
         "/components/Link",
-        "/components/Button",
         "/components/Button/index",
+        "/components/Button",
+        "/components",
       ]
     `)
   })
@@ -181,6 +181,16 @@ describe('file system', () => {
         "foo",
       ]
     `)
+  })
+
+  test('filter and recursive entries', async () => {
+    const docs = new Directory({ path: 'fixtures/docs' }).filter((entry) =>
+      isFileWithExtension(entry, 'mdx')
+    )
+    const entries = await docs.getEntries({ recursive: true })
+
+    expect(entries.every((entry) => entry.hasExtension('mdx'))).toBe(true)
+    expect(entries).toHaveLength(2)
   })
 
   test('entry', async () => {
