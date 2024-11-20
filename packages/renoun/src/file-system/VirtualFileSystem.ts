@@ -47,6 +47,10 @@ export class VirtualFileSystem extends FileSystem {
   }
 
   async readDirectory(path: string = '.'): Promise<DirectoryEntry[]> {
+    if (!path.startsWith('.')) {
+      path = `./${path}`
+    }
+
     const entries: DirectoryEntry[] = []
     const directories = new Set<string>()
 

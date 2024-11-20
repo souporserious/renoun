@@ -2,6 +2,7 @@ import { describe, test, expect, expectTypeOf } from 'vitest'
 import { runInNewContext } from 'node:vm'
 import { z } from 'zod'
 
+import { NodeFileSystem } from './NodeFileSystem'
 import { VirtualFileSystem } from './VirtualFileSystem'
 import {
   isFile,
@@ -14,7 +15,21 @@ import {
 } from './index'
 
 describe('file system', () => {
-  test('virtual file system', async () => {
+  test('node file system read directory', async () => {
+    const fileSystem = new NodeFileSystem()
+    const entries = await fileSystem.readDirectory('fixtures/utils')
+    expect(entries).toHaveLength(1)
+    expect(entries[0].name).toBe('path.ts')
+  })
+
+  test('virtual file system read directory', async () => {
+    const fileSystem = new VirtualFileSystem({ 'fixtures/utils/path.ts': '' })
+    const entries = await fileSystem.readDirectory('fixtures/utils')
+    expect(entries).toHaveLength(1)
+    expect(entries[0].name).toBe('path.ts')
+  })
+
+  test('directory with virtual file system', async () => {
     const fileSystem = new VirtualFileSystem({
       'fixtures/project/server.ts': '',
       'fixtures/project/types.ts': '',
