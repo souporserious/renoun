@@ -89,7 +89,7 @@ export class File<Types extends ExtensionTypes = ExtensionTypes> {
   getPathSegments() {
     const fileSystem = this.#directory.getFileSystem()
     const path = fileSystem.getUrlPathRelativeTo(
-      removeExtension(this.#path),
+      removeOrderPrefixes(removeExtension(this.#path)),
       false
     )
     return path.split('/').filter(Boolean)
@@ -927,7 +927,7 @@ export class Directory<
   /** Get the path segments of the directory. */
   getPathSegments() {
     const fileSystem = this.getFileSystem()
-    const path = fileSystem.getUrlPathRelativeTo(this.#path, false)
+    const path = fileSystem.getUrlPathRelativeTo(removeOrderPrefixes(this.#path), false)
     return path.split('/').filter(Boolean)
   }
 
