@@ -1,7 +1,6 @@
 import { watch } from 'node:fs'
 import { minimatch } from 'minimatch'
 
-import { writeCollectionImports } from '../collections/write-collection-imports.js'
 import { analyzeSourceText as baseAnalyzeSourceText } from '../utils/analyze-source-text.js'
 import {
   createHighlighter,
@@ -53,11 +52,8 @@ export function createServer() {
         return
       }
 
-      /* Update all collection import maps when files change. */
-      writeCollectionImports(filename).then(() => {
-        /* Notify the client to refresh when files change. */
-        server.sendNotification({ type: 'refresh' })
-      })
+      /* Notify the client to refresh when files change. */
+      server.sendNotification({ type: 'refresh' })
     })
   }
 

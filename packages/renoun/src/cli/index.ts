@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
 
-import { writeCollectionImports } from '../collections/write-collection-imports.js'
 import { createServer } from '../project/server.js'
 
 const [firstArgument, secondArgument, ...restArguments] = process.argv.slice(2)
@@ -14,9 +13,6 @@ if (firstArgument === 'help') {
 
 /* Disable the buffer util for WebSocket. */
 process.env.WS_NO_BUFFER_UTIL = 'true'
-
-/* Generate the initial imports for all collections and then start the server. */
-writeCollectionImports()
 
 if (firstArgument === 'next' || firstArgument === 'waku') {
   let subProcess: ReturnType<typeof spawn> | undefined
