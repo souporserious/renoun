@@ -1,5 +1,17 @@
 # renoun
 
+## 7.7.0
+
+### Minor Changes
+
+- a1aa042: Removes managing of auto-generated dynamic imports for collections as this was causing issues with build processes.
+
+### Patch Changes
+
+- f2e5608: Fixes `getAbsolutePath` and `getEditPath` for `Directory`.
+- c59cd9c: Normalizes `pathSegments` to remove order prefix.
+- 784945a: Normalizes incoming `path` for `readDirectory` in `VirtualFileSystem` to match Node.js behavior.
+
 ## 7.6.0
 
 ### Minor Changes
