@@ -1,4 +1,4 @@
-import { Directory, isFileWithExtension } from 'renoun/file-system'
+import { Directory, isFile } from 'renoun/file-system'
 import type { MDXContent } from 'renoun/mdx'
 import { z } from 'zod'
 
@@ -19,7 +19,7 @@ export const posts = new Directory<{ mdx: PostType }>({
   schema: { mdx: { frontmatter: frontmatterSchema.parse } },
   getModule: (path) => import(`./posts/${path}`),
 })
-  .filter((entry) => isFileWithExtension(entry, 'mdx'))
+  .filter((entry) => isFile(entry, 'mdx'))
   .sort(async (a, b) => {
     const aFrontmatter = await a.getExport('frontmatter').getRuntimeValue()
     const bFrontmatter = await b.getExport('frontmatter').getRuntimeValue()

@@ -1,6 +1,6 @@
 import { APIReference } from 'renoun/components'
 import {
-  isFileWithExtension,
+  isFile,
   isDirectory,
   type JavaScriptFileExport,
 } from 'renoun/file-system'
@@ -29,17 +29,15 @@ export default async function Component({
 
   const componentDirectory = isDirectory(componentEntry)
     ? componentEntry
-    : componentEntry.getDirectory()
+    : await componentEntry.getDirectory()
   const mainEntry =
     (await componentDirectory.getFile(slug, ['ts', 'tsx'])) ||
     (await componentDirectory.getFile('index', ['ts', 'tsx']))
   const examplesEntry = await componentDirectory.getEntry('examples')
   const exampleFiles = examplesEntry
     ? isDirectory(examplesEntry)
-      ? await examplesEntry
-          .filter((entry) => isFileWithExtension(entry, 'tsx'))
-          .getEntries()
-      : isFileWithExtension(examplesEntry, 'tsx')
+      ? await examplesEntry.filter((entry) => isFile(entry, 'tsx')).getEntries()
+      : isFile(examplesEntry, 'tsx')
         ? [examplesEntry]
         : null
     : null
