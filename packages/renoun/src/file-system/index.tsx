@@ -1273,7 +1273,9 @@ export class EntryGroup<
 }
 
 /** Determines if a `FileSystemEntry` is a `Directory`. */
-export function isDirectory(entry: FileSystemEntry<any>): entry is Directory {
+export function isDirectory<Types extends ExtensionTypes>(
+  entry: FileSystemEntry<Types>
+): entry is Directory<Types> {
   return entry instanceof Directory
 }
 
