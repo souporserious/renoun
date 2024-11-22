@@ -15,7 +15,6 @@ import {
   EntryGroup,
   isDirectory,
   isFile,
-  isFileWithExtension,
 } from './index'
 
 describe('file system', () => {
@@ -133,7 +132,7 @@ describe('file system', () => {
       path: 'posts',
       fileSystem,
     })
-      .filter((entry) => isFileWithExtension(entry, 'mdx'))
+      .filter((entry) => isFile(entry, 'mdx'))
       .sort((a, b) => a.getName().localeCompare(b.getName()))
     const files = await posts.getEntries()
 
@@ -145,7 +144,7 @@ describe('file system', () => {
     type PostType = { frontmatter: { title: string } }
     const posts = new Directory<{ mdx: PostType }>({
       path: 'fixtures/posts',
-    }).filter((entry) => isFileWithExtension(entry, 'mdx'))
+    }).filter((entry) => isFile(entry, 'mdx'))
     const files = await posts.getEntries()
 
     expectTypeOf(files).toMatchTypeOf<JavaScriptFile<PostType>[]>()
@@ -186,7 +185,7 @@ describe('file system', () => {
         }
       },
     })
-      .filter((entry) => isFileWithExtension(entry, 'ts'))
+      .filter((entry) => isFile(entry, 'ts'))
       .sort(async (a, b) => {
         const aSort = await a.getExport('sort').getRuntimeValue()
         const bSort = await b.getExport('sort').getRuntimeValue()
@@ -204,7 +203,7 @@ describe('file system', () => {
 
   test('filter and recursive entries', async () => {
     const docs = new Directory({ path: 'fixtures/docs' }).filter((entry) =>
-      isFileWithExtension(entry, 'mdx')
+      isFile(entry, 'mdx')
     )
     const entries = await docs.getEntries({ recursive: true })
 
@@ -702,7 +701,7 @@ describe('file system', () => {
     const fileSystem = new VirtualFileSystem({ 'Button.tsx': '' })
     const directory = new Directory<{ tsx: Metadata }>({ fileSystem })
     const file = await directory.getFileOrThrow('Button')
-    const hasTsxExtension = isFileWithExtension(file, 'tsx')
+    const hasTsxExtension = isFile(file, 'tsx')
 
     expect(hasTsxExtension).toBe(true)
 
@@ -711,13 +710,13 @@ describe('file system', () => {
     }
   })
 
-  test('isFileWithExtension array', async () => {
+  test('isFile array', async () => {
     type Metadata = { title: string }
     type FileTypes = { ts: Metadata; tsx: Metadata }
     const fileSystem = new VirtualFileSystem({ 'Button.tsx': '' })
     const directory = new Directory<FileTypes>({ fileSystem })
     const file = await directory.getFileOrThrow('Button')
-    const hasTsLikeExtension = isFileWithExtension(file, ['ts', 'tsx'])
+    const hasTsLikeExtension = isFile(file, ['ts', 'tsx'])
 
     expect(hasTsLikeExtension).toBe(true)
 
@@ -725,7 +724,7 @@ describe('file system', () => {
       expectTypeOf(file).toMatchTypeOf<JavaScriptFile<Metadata>>()
     }
 
-    const hasCssExtension = isFileWithExtension(file, ['css'])
+    const hasCssExtension = isFile(file, ['css'])
 
     expect(hasCssExtension).toBe(false)
 

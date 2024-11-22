@@ -1279,13 +1279,6 @@ export function isDirectory<Types extends ExtensionTypes>(
   return entry instanceof Directory
 }
 
-/** Determines if a `FileSystemEntry` is a `File`. */
-export function isFile<Types extends ExtensionTypes>(
-  entry: FileSystemEntry<Types>
-): entry is File<Types> {
-  return entry instanceof File
-}
-
 /** Determines the type of a `FileSystemEntry` based on its extension. */
 export type FileWithExtension<
   Types extends ExtensionTypes,
@@ -1302,16 +1295,16 @@ export type FileWithExtension<
       : File<Types>
     : File<Types>
 
-/** Determines if a `FileSystemEntry` is a `File` with a specific extension. */
-export function isFileWithExtension<
+/** Determines if a `FileSystemEntry` is a `File`, optionally with specific extensions. */
+export function isFile<
   Types extends ExtensionTypes,
   Type extends keyof Types | (string & {}),
   const Extension extends Type | Type[],
 >(
   entry: FileSystemEntry<Types>,
-  extension: Extension
+  extension?: Extension
 ): entry is FileWithExtension<Types, Extension> {
-  if (isFile(entry)) {
+  if (entry instanceof File) {
     const fileExtension = entry.getExtension()
 
     if (extension instanceof Array) {
@@ -1321,9 +1314,12 @@ export function isFileWithExtension<
         }
       }
       return false
+    } else if (extension) {
+      return fileExtension === extension
     }
 
-    return fileExtension === extension
+    return true
   }
+
   return false
 }
