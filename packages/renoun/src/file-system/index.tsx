@@ -495,6 +495,20 @@ export class Directory<
     this.#getModule = options.getModule
   }
 
+  /** Duplicate the directory with the same initial options. */
+  duplicate<Entry extends FileSystemEntry<Types> = FileSystemEntry<Types>>(
+    options?: DirectoryOptions<Types>
+  ): Directory<Types, Entry> {
+    return new Directory<Types, Entry>({
+      path: this.#path,
+      basePath: this.#basePath,
+      fileSystem: this.#fileSystem,
+      schema: this.#schema,
+      getModule: this.#getModule,
+      ...options,
+    })
+  }
+
   getFileSystem() {
     if (this.#fileSystem) {
       return this.#fileSystem

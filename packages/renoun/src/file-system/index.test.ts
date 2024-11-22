@@ -238,6 +238,17 @@ describe('file system', () => {
     expect(nestedDirectory).toBeInstanceOf(Directory)
   })
 
+  test('duplicate directory', async () => {
+    const fixtures = new Directory<{ ts: { title: string } }>({
+      path: 'fixtures',
+    })
+    const duplicate = fixtures.duplicate()
+
+    expect(duplicate).toBeInstanceOf(Directory)
+    expect(duplicate).not.toBe(fixtures)
+    expect(duplicate.getRelativePath()).toBe(fixtures.getRelativePath())
+  })
+
   test('file', async () => {
     const rootDirectory = new Directory()
     const file = await rootDirectory.getFile('tsconfig', 'json')
