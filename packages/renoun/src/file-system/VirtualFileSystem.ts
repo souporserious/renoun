@@ -2,9 +2,10 @@ import ignore from 'ignore'
 
 import { createSourceFile, transpileSourceFile } from '../project/client.js'
 import { isJavaScriptLikeExtension } from './is-javascript-like-extension.js'
-import { FileSystem, generateProjectId } from './FileSystem.js'
+import { FileSystem } from './FileSystem.js'
 import type { DirectoryEntry } from './types.js'
 
+/** A virtual file system that stores files in memory. */
 export class VirtualFileSystem extends FileSystem {
   #projectId: string
   #files: Map<string, string>
@@ -13,7 +14,10 @@ export class VirtualFileSystem extends FileSystem {
   constructor(files: { [path: string]: string }) {
     const projectId = generateProjectId()
 
-    super({ projectId, isVirtualFileSystem: true })
+    super({
+      projectId,
+      isVirtualFileSystem: true,
+    })
 
     this.#projectId = projectId
     this.#files = new Map(
@@ -143,4 +147,9 @@ export class VirtualFileSystem extends FileSystem {
 
     return this.#ignore.ignores(filePath)
   }
+}
+
+/** Generate a random project ID. */
+function generateProjectId(): string {
+  return Math.random().toString(36).slice(2, 9)
 }

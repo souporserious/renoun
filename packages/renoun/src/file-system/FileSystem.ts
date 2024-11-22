@@ -134,8 +134,3 @@ export abstract class FileSystem {
     )
   }
 }
-
-/** Generate a random project ID. */
-export function generateProjectId(): string {
-  return Math.random().toString(36).slice(2, 9)
-}
