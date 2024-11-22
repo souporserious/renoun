@@ -5,13 +5,14 @@ import { z } from 'zod'
 import { NodeFileSystem } from './NodeFileSystem'
 import { VirtualFileSystem } from './VirtualFileSystem'
 import {
-  isFile,
-  isFileWithExtension,
+  type FileSystemEntry,
   File,
   Directory,
   JavaScriptFile,
   JavaScriptFileExport,
-  type FileSystemEntry,
+  EntryGroup,
+  isFile,
+  isFileWithExtension,
 } from './index'
 
 describe('file system', () => {
@@ -235,6 +236,17 @@ describe('file system', () => {
     )
 
     expect(nestedDirectory).toBeInstanceOf(Directory)
+  })
+
+  test('duplicate directory', async () => {
+    const fixtures = new Directory<{ ts: { title: string } }>({
+      path: 'fixtures',
+    })
+    const duplicate = fixtures.duplicate()
+
+    expect(duplicate).toBeInstanceOf(Directory)
+    expect(duplicate).not.toBe(fixtures)
+    expect(duplicate.getRelativePath()).toBe(fixtures.getRelativePath())
   })
 
   test('file', async () => {
@@ -678,6 +690,88 @@ describe('file system', () => {
 
     if (hasCssExtension) {
       expectTypeOf(file).toMatchTypeOf<File<FileTypes>>()
+    }
+  })
+
+  test('entry group', async () => {
+    const memoryFileSystem = new VirtualFileSystem({
+      'posts/building-a-button-component.mdx': '# Building a Button Component',
+      'posts/meta.js': 'export default { "title": "Posts" }',
+    })
+    type FrontMatter = { frontmatter: { title: string } }
+    const posts = new Directory<{ mdx: FrontMatter }>({
+      path: 'posts',
+      fileSystem: memoryFileSystem,
+    })
+    const docs = new Directory<{ mdx: FrontMatter }>({
+      path: 'fixtures/docs',
+    })
+    const group = new EntryGroup({
+      entries: [posts, docs],
+    })
+    const entries = await group.getEntries()
+
+    expect(entries).toHaveLength(2)
+    expect(entries[1].getName()).toBe('docs')
+
+    const entry = await group.getEntry('posts/building-a-button-component')
+
+    expect(entry).toBeInstanceOf(File)
+    expect(entry?.getName()).toBe('building-a-button-component')
+
+    const directory = await group.getDirectory('docs')
+
+    expect(directory).toBeInstanceOf(Directory)
+
+    const jsFile = await group.getFileOrThrow('posts/meta', 'js')
+
+    expect(jsFile).toBeInstanceOf(JavaScriptFile)
+    expectTypeOf(jsFile).toMatchTypeOf<JavaScriptFile<any>>()
+
+    const mdxFile = await group.getFileOrThrow(
+      'posts/building-a-button-component',
+      'mdx'
+    )
+
+    expect(mdxFile).toBeInstanceOf(JavaScriptFile)
+    expectTypeOf(mdxFile).toMatchTypeOf<JavaScriptFile<FrontMatter>>()
+
+    const file = await group.getFileOrThrow('meta', 'js')
+    const [previousEntry, nextEntry] = await file.getSiblings()
+
+    expect(previousEntry?.getName()).toBe('building-a-button-component')
+    expect(nextEntry?.getName()).toBe('docs')
+  })
+
+  test('has entry', async () => {
+    type MDXTypes = { metadata: { title: string } }
+    type TSXTypes = { title: string }
+
+    const directoryA = new Directory<{ mdx: MDXTypes }>({
+      fileSystem: new VirtualFileSystem({ 'Button.mdx': '' }),
+    })
+    const directoryB = new Directory<{ tsx: TSXTypes }>({
+      path: 'fixtures/components',
+    })
+    const group = new EntryGroup({
+      entries: [directoryA, directoryB],
+    })
+    const file = await group.getFileOrThrow('Button', 'mdx')
+
+    expectTypeOf(file).toMatchTypeOf<JavaScriptFile<MDXTypes>>()
+
+    const entry = await group.getEntryOrThrow('Button')
+    const hasEntry = await directoryA.getHasEntry(entry)
+
+    expect(hasEntry(entry)).toBe(true)
+    expectTypeOf(entry).toMatchTypeOf<FileSystemEntry<{ mdx: MDXTypes }>>()
+
+    const hasFile = await directoryA.getHasFile(entry)
+
+    expect(hasFile(entry, 'mdx')).toBe(true)
+
+    if (hasFile(entry, 'mdx')) {
+      expectTypeOf(entry).toMatchTypeOf<JavaScriptFile<MDXTypes>>()
     }
   })
 })
