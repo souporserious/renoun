@@ -1,7 +1,9 @@
+import type { ComponentType } from 'react'
 import { describe, test, expect, expectTypeOf } from 'vitest'
 import { runInNewContext } from 'node:vm'
 import { z } from 'zod'
 
+import type { MDXContent } from '../mdx'
 import { NodeFileSystem } from './NodeFileSystem'
 import { VirtualFileSystem } from './VirtualFileSystem'
 import {
@@ -11,6 +13,7 @@ import {
   JavaScriptFile,
   JavaScriptFileExport,
   EntryGroup,
+  isDirectory,
   isFile,
   isFileWithExtension,
 } from './index'
@@ -656,7 +659,45 @@ describe('file system', () => {
     expect(await fileExport.getName()).toBe(file.getName())
   })
 
-  test('isFileWithExtension', async () => {
+  test('isDirectory', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'Button/index.ts': '',
+      'Button/Button.tsx': '',
+      'Button/README.mdx': '',
+    })
+    type FileTypes = {
+      tsx: {
+        default: ComponentType
+      }
+      mdx: {
+        default: MDXContent
+      }
+    }
+    const directory = new Directory<FileTypes>({ fileSystem })
+    const entry = await directory.getEntryOrThrow('Button')
+
+    expect(isDirectory(entry)).toBe(false)
+    expect(isFile(entry)).toBe(true)
+
+    if (isDirectory(entry)) {
+      expectTypeOf(entry).toMatchTypeOf<
+        Directory<FileTypes, FileSystemEntry<FileTypes>>
+      >()
+    }
+
+    const normalizedDirectory = isFile(entry)
+      ? await entry.getDirectory()
+      : entry
+
+    expect(isDirectory(normalizedDirectory)).toBe(true)
+
+    const file = await normalizedDirectory.getFileOrThrow('README', 'mdx')
+
+    expect(isDirectory(file)).toBe(false)
+    expectTypeOf(file).toMatchTypeOf<JavaScriptFile<{ default: MDXContent }>>()
+  })
+
+  test('isFile', async () => {
     type Metadata = { title: string }
     const fileSystem = new VirtualFileSystem({ 'Button.tsx': '' })
     const directory = new Directory<{ tsx: Metadata }>({ fileSystem })

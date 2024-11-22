@@ -55,7 +55,7 @@ export class File<Types extends ExtensionTypes = ExtensionTypes> {
   }
 
   /** Get the directory containing this file. */
-  getDirectory() {
+  async getDirectory(): Promise<Directory<Types>> {
     return this.#directory
   }
 
@@ -219,7 +219,7 @@ export class JavaScriptFileExport<
     }
 
     const position = await this.#getPosition()
-    const fileSystem = this.#file.getDirectory().getFileSystem()
+    const fileSystem = (await this.#file.getDirectory()).getFileSystem()
 
     this.#metadata = await fileSystem.getFileExportMetadata(
       this.#file.getAbsolutePath(),
@@ -286,7 +286,7 @@ export class JavaScriptFileExport<
     }
 
     const position = await this.#getPosition()
-    const fileSystem = this.#file.getDirectory().getFileSystem()
+    const fileSystem = (await this.#file.getDirectory()).getFileSystem()
 
     return fileSystem.resolveTypeAtLocation(
       this.#file.getAbsolutePath(),
@@ -307,7 +307,7 @@ export class JavaScriptFileExport<
     }
 
     const exportName = this.getBaseName()
-    const fileSystem = this.#file.getDirectory().getFileSystem()
+    const fileSystem = (await this.#file.getDirectory()).getFileSystem()
     const fileModule = await this.#getModule(
       this.#file.getPathRelativeTo(fileSystem.getRootPath())
     )
@@ -405,7 +405,7 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
 
   /** Get all export names and positions from the JavaScript file. */
   async #getExports() {
-    const fileSystem = this.getDirectory().getFileSystem()
+    const fileSystem = (await this.getDirectory()).getFileSystem()
     return fileSystem.getFileExports(this.getAbsolutePath())
   }
 
