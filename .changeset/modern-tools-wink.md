@@ -2,7 +2,7 @@
 'renoun': minor
 ---
 
-Adds an `EntryGroup` utility to `renoun/file-system` that provides an interface for querying and navigating a group of entries.
+Adds an `EntryGroup` utility to `renoun/file-system` that provides an interface for querying and navigating a group of entries:
 
 ```ts
 import { Directory, EntryGroup } from 'renoun/file-system'
@@ -30,7 +30,7 @@ const group = new EntryGroup({
 const entries = await group.getEntries()
 ```
 
-This also adds `getHasEntry` and `getHasFile` methods to `Directory` which can be used to check if an entry or file exists in an `EntryGroup`.
+This also adds `getHasEntry` and `getHasFile` methods to `Directory` which can be used to check if an entry or file exists in an `EntryGroup`:
 
 ```ts
 type MDXTypes = { metadata: { title: string } }
