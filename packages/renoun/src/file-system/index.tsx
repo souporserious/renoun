@@ -574,7 +574,7 @@ export class Directory<
   }
 
   /** Get a file at the specified `path` and optional extensions. */
-  async getFile<Extension extends string | undefined = undefined>(
+  async getFile<const Extension extends string | undefined = undefined>(
     path: string | string[],
     extension?: Extension | Extension[]
   ): Promise<
@@ -585,7 +585,9 @@ export class Directory<
         : File<Types>)
     | undefined
   > {
-    const segments = Array.isArray(path) ? path.slice(0) : path.split('/')
+    const segments = Array.isArray(path)
+      ? path.slice(0)
+      : path.split('/').filter(Boolean)
     let currentDirectory: Directory<Types> = this as Directory<Types>
     let entry: FileSystemEntry<Types> | undefined
 
@@ -664,12 +666,18 @@ export class Directory<
       : File<Types>
   > {
     const file = await this.getFile(path, extension)
+
     if (!file) {
       const normalizedPath = Array.isArray(path) ? join(...path) : path
+      const normalizedExtension = Array.isArray(extension)
+        ? extension
+        : [extension]
+
       throw new Error(
-        `[renoun] File not found at path "${normalizedPath}" with extension "${extension}"`
+        `[renoun] File not found at path "${normalizedPath}" with extension${normalizedExtension.length > 1 ? 's' : ''}: ${normalizedExtension.join(',')}`
       )
     }
+
     return file as any
   }
 
@@ -686,7 +694,9 @@ export class Directory<
       return this.#directory
     }
 
-    const segments = Array.isArray(path) ? path.slice(0) : path.split('/')
+    const segments = Array.isArray(path)
+      ? path.slice(0)
+      : path.split('/').filter(Boolean)
     let currentDirectory: Directory<Types> = this as Directory<Types>
 
     while (segments.length > 0) {
@@ -722,6 +732,7 @@ export class Directory<
     path?: string | string[]
   ): Promise<Directory<Types>> {
     const directory = await this.getDirectory(path)
+
     if (!directory) {
       throw new Error(
         path
@@ -729,13 +740,14 @@ export class Directory<
           : `[renoun] Parent directory not found`
       )
     }
+
     return directory
   }
 
   /** Get a file or directory at the specified `path`. Files will be prioritized over directories. */
   async getEntry(
     path: string | string[]
-  ): Promise<FileSystemEntry<any> | undefined> {
+  ): Promise<FileSystemEntry<Types> | undefined> {
     const file = await this.getFile(path)
 
     if (file) {
@@ -754,7 +766,7 @@ export class Directory<
   /** Get a file or directory at the specified `path`. An error will be thrown if the entry is not found. */
   async getEntryOrThrow(
     path: string | string[]
-  ): Promise<FileSystemEntry<any>> {
+  ): Promise<FileSystemEntry<Types>> {
     const entry = await this.getEntry(path)
 
     if (!entry) {
@@ -958,6 +970,265 @@ export class Directory<
   async getAuthors() {
     const gitMetadata = await getGitMetadata(this.#path)
     return gitMetadata.authors
+  }
+
+  /** Returns a type guard that checks if this directory contains the provided entry. */
+  async getHasEntry(entry: FileSystemEntry<any> | undefined) {
+    let exists = false
+
+    if (entry) {
+      const path = entry.getPath()
+      const directoryEntry = await this.getEntry(path)
+
+      if (directoryEntry) {
+        exists = true
+      }
+    }
+
+    function hasEntry(entry: FileSystemEntry<any>): entry is Entry {
+      return exists
+    }
+
+    return hasEntry
+  }
+
+  /** Returns a type guard that check if this directory contains the provided file with a specific extension. */
+  async getHasFile(entry: FileSystemEntry<any>) {
+    const hasEntry = await this.getHasEntry(entry)
+
+    function hasFileWith<
+      Type extends keyof Types | (string & {}),
+      const Extension extends Type | Type[],
+    >(
+      entry: FileSystemEntry<any>,
+      extension?: Extension
+    ): entry is FileWithExtension<Types, Extension> {
+      const extensions = Array.isArray(extension) ? extension : [extension]
+
+      if (hasEntry(entry) && entry instanceof File) {
+        if (extension) {
+          for (const fileExtension of extensions) {
+            if (entry.getExtension() === fileExtension) {
+              return true
+            }
+          }
+        } else {
+          return true
+        }
+      }
+
+      return false
+    }
+
+    return hasFileWith
+  }
+}
+
+type InferExtensionTypes<Entries extends readonly FileSystemEntry<any>[]> =
+  Entries extends readonly [infer First, ...infer Rest]
+    ? First extends FileSystemEntry<infer Types>
+      ? Rest extends readonly FileSystemEntry<any>[]
+        ? Types & InferExtensionTypes<Rest>
+        : Types
+      : never
+    : {}
+
+interface EntryGroupOptions<Entries extends FileSystemEntry<any>[]> {
+  entries?: Entries
+}
+
+/** A group of file system entries. */
+export class EntryGroup<
+  const Entries extends FileSystemEntry<any>[] = FileSystemEntry<any>[],
+  Types extends ExtensionTypes = InferExtensionTypes<Entries>,
+> {
+  #entries: Entries
+
+  constructor(options: EntryGroupOptions<Entries>) {
+    this.#entries = (options.entries || []) as Entries
+  }
+
+  /** Get all entries in the group. */
+  async getEntries(options?: {
+    recursive?: boolean
+    includeIndexAndReadme?: boolean
+  }): Promise<Entries> {
+    const allEntries: FileSystemEntry<Types>[] = []
+
+    async function findEntries(entries: FileSystemEntry<any>[]) {
+      for (const entry of entries) {
+        const lowerCaseBaseName = entry.getBaseName().toLowerCase()
+        const shouldSkipIndexOrReadme = options?.includeIndexAndReadme
+          ? false
+          : ['index', 'readme'].some((name) =>
+              lowerCaseBaseName.startsWith(name)
+            )
+
+        if (shouldSkipIndexOrReadme) {
+          continue
+        }
+
+        allEntries.push(entry)
+
+        if (options?.recursive && entry instanceof Directory) {
+          allEntries.push(...(await entry.getEntries(options)))
+        }
+      }
+    }
+
+    await findEntries(this.#entries)
+
+    return allEntries as Entries
+  }
+
+  /** Get an entry in the group by its path. */
+  async getEntry(
+    path: string | string[]
+  ): Promise<FileSystemEntry<Types> | undefined> {
+    const segments = Array.isArray(path)
+      ? path
+      : path.split('/').filter(Boolean)
+    const [targetSegment, ...remainingSegments] = segments
+
+    for (const entry of this.#entries) {
+      if (entry instanceof Directory) {
+        const entryBaseName = entry.getBaseName()
+
+        if (entryBaseName === targetSegment) {
+          if (remainingSegments.length === 0) {
+            return entry
+          }
+          if (entry instanceof Directory) {
+            return entry.getEntry(remainingSegments)
+          }
+          return undefined
+        }
+
+        const childEntries = await entry.getEntries()
+        const childEntry = childEntries.find((childEntry) => {
+          return childEntry.getBaseName() === targetSegment
+        })
+
+        if (childEntry) {
+          if (remainingSegments.length === 0) {
+            return childEntry
+          }
+          if (childEntry instanceof Directory) {
+            return childEntry.getEntry(remainingSegments)
+          }
+        }
+      } else {
+        if (entry.getBaseName() === targetSegment) {
+          if (remainingSegments.length === 0) {
+            return entry
+          }
+          if (isDirectory(entry)) {
+            return entry.getEntry(remainingSegments)
+          }
+        }
+      }
+    }
+
+    return undefined
+  }
+
+  /** Get an entry in the group by its path or throw an error if not found. */
+  async getEntryOrThrow(
+    path: string | string[]
+  ): Promise<FileSystemEntry<Types>> {
+    const entry = await this.getEntry(path)
+
+    if (!entry) {
+      throw new Error(`[renoun] Entry not found at path: ${path}`)
+    }
+
+    return entry
+  }
+
+  /** Get a file at the specified path and optional extension(s). */
+  async getFile<const Extension extends string | undefined = undefined>(
+    path: string | string[],
+    extension?: Extension | Extension[]
+  ): Promise<
+    | (Extension extends string
+        ? IsJavaScriptLikeExtension<Extension> extends true
+          ? JavaScriptFile<Types[Extension]>
+          : File<Types>
+        : File<Types>)
+    | undefined
+  > {
+    const entry = await this.getEntry(path)
+
+    if (entry instanceof File) {
+      if (extension) {
+        const fileExtensions = Array.isArray(extension)
+          ? extension
+          : [extension]
+
+        for (const fileExtension of fileExtensions) {
+          if (entry.getExtension() === fileExtension) {
+            return entry as any
+          }
+        }
+
+        return undefined
+      }
+
+      return entry as any
+    }
+
+    return undefined
+  }
+
+  /** Get a file at the specified path and optional extension(s), or throw an error if not found. */
+  async getFileOrThrow<Extension extends string | undefined = undefined>(
+    path: string | string[],
+    extension?: Extension | Extension[]
+  ): Promise<
+    Extension extends string
+      ? IsJavaScriptLikeExtension<Extension> extends true
+        ? JavaScriptFile<Types[Extension]>
+        : File<Types>
+      : File<Types>
+  > {
+    const file = await this.getFile(path, extension)
+
+    if (!file) {
+      const normalizedPath = Array.isArray(path) ? join(...path) : path
+      const normalizedExtension = Array.isArray(extension)
+        ? extension
+        : [extension]
+
+      throw new Error(
+        `[renoun] File not found at path "${normalizedPath}" with extension${normalizedExtension.length > 1 ? 's' : ''}: ${normalizedExtension.join(',')}`
+      )
+    }
+
+    return file as any
+  }
+
+  /** Get a directory at the specified path. */
+  async getDirectory(
+    path: string | string[]
+  ): Promise<Directory<Types> | undefined> {
+    const entry = await this.getEntry(path)
+
+    if (entry instanceof Directory) {
+      return entry
+    }
+  }
+
+  /** Get a directory at the specified path or throw an error if not found. */
+  async getDirectoryOrThrow(
+    path: string | string[]
+  ): Promise<Directory<Types>> {
+    const directory = await this.getDirectory(path)
+
+    if (!directory) {
+      throw new Error(`[renoun] Directory not found at path: ${path}`)
+    }
+
+    return directory
   }
 }
 
