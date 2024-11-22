@@ -26,18 +26,32 @@ export type FileSystemEntry<Types extends ExtensionTypes> =
   | File<Types>
 
 interface FileOptions {
-  directory: Directory<any>
   path: string
+  directory: Directory<any>
+  entryGroup?: EntryGroup<FileSystemEntry<any>[]>
 }
 
 /** A file in the file system. */
 export class File<Types extends ExtensionTypes = ExtensionTypes> {
-  #directory: Directory
   #path: string
+  #directory: Directory
+  #entryGroup?: EntryGroup<FileSystemEntry<Types>[]>
 
   constructor(options: FileOptions) {
-    this.#directory = options.directory
     this.#path = options.path
+    this.#directory = options.directory
+    this.#entryGroup = options.entryGroup
+  }
+
+  /** Duplicate the file with the same initial options. */
+  duplicate(options?: {
+    entryGroup: EntryGroup<FileSystemEntry<Types>[]>
+  }): File<Types> {
+    return new File<Types>({
+      directory: this.#directory,
+      path: this.#path,
+      ...options,
+    })
   }
 
   /** Get the directory containing this file. */
@@ -145,7 +159,9 @@ export class File<Types extends ExtensionTypes = ExtensionTypes> {
       return this.#directory.getSiblings()
     }
 
-    const entries = await this.#directory.getEntries()
+    const entries = await (this.#entryGroup
+      ? this.#entryGroup.getEntries({ recursive: true })
+      : this.#directory.getEntries())
     const index = entries.findIndex((file) => {
       return file.getRelativePath() === this.getRelativePath()
     })
@@ -462,9 +478,10 @@ type ExtensionSchemas<Types extends ExtensionTypes> = {
 interface DirectoryOptions<Types extends ExtensionTypes = ExtensionTypes> {
   path?: string
   basePath?: string
-  fileSystem?: FileSystem
   schema?: ExtensionSchemas<Types>
   getModule?: (path: string) => Promise<any>
+  fileSystem?: FileSystem
+  entryGroup?: EntryGroup<FileSystemEntry<Types>[]>
 }
 
 /** A directory containing files and subdirectories in the file system. */
@@ -475,6 +492,7 @@ export class Directory<
   #path: string
   #basePath?: string
   #fileSystem: FileSystem | undefined
+  #entryGroup?: EntryGroup<FileSystemEntry<Types>[]> | undefined
   #directory?: Directory<any, any>
   #schema?: ExtensionSchemas<Types>
   #getModule?: (path: string) => Promise<any>
@@ -490,9 +508,10 @@ export class Directory<
         : join('.', options.path)
       : '.'
     this.#basePath = options.basePath
-    this.#fileSystem = options.fileSystem
     this.#schema = options.schema
     this.#getModule = options.getModule
+    this.#fileSystem = options.fileSystem
+    this.#entryGroup = options.entryGroup
   }
 
   /** Duplicate the directory with the same initial options. */
@@ -822,6 +841,7 @@ export class Directory<
         const directory = new Directory<Types, FileSystemEntry<Types>>({
           fileSystem,
           path: entry.path,
+          entryGroup: this.#entryGroup,
           schema: this.#schema,
           getModule: this.#getModule,
         })
@@ -854,15 +874,17 @@ export class Directory<
         const extension = extensionName(entry.name).slice(1)
         const file = isJavaScriptLikeExtension(extension)
           ? new JavaScriptFile({
-              directory: this as Directory<Types>,
               path: entry.path,
+              directory: this as Directory<Types>,
+              entryGroup: this.#entryGroup,
               schema: this.#schema,
               getModule: this.#getModule,
               isVirtualFileSystem: fileSystem instanceof VirtualFileSystem,
             })
           : new File({
-              directory: this as Directory<Types>,
               path: entry.path,
+              directory: this as Directory<Types>,
+              entryGroup: this.#entryGroup,
             })
 
         if (
@@ -920,7 +942,9 @@ export class Directory<
       return [undefined, undefined]
     }
 
-    const entries = await this.#directory.getEntries()
+    const entries = await (this.#entryGroup
+      ? this.#entryGroup.getEntries({ recursive: true })
+      : this.#directory.getEntries())
     const index = entries.findIndex((entryToCompare) => {
       return entryToCompare.getRelativePath() === this.getRelativePath()
     })
@@ -1048,7 +1072,7 @@ type InferExtensionTypes<Entries extends readonly FileSystemEntry<any>[]> =
     : {}
 
 interface EntryGroupOptions<Entries extends FileSystemEntry<any>[]> {
-  entries?: Entries
+  entries: Entries
 }
 
 /** A group of file system entries. */
@@ -1059,7 +1083,9 @@ export class EntryGroup<
   #entries: Entries
 
   constructor(options: EntryGroupOptions<Entries>) {
-    this.#entries = (options.entries || []) as Entries
+    this.#entries = options.entries.map((entry) =>
+      entry.duplicate({ entryGroup: this })
+    ) as Entries
   }
 
   /** Get all entries in the group. */

@@ -707,7 +707,7 @@ describe('file system', () => {
       path: 'fixtures/docs',
     })
     const group = new EntryGroup({
-      entries: [posts, docs], // TODO: add entry duplicate method to pass down group for getSiblings
+      entries: [posts, docs],
     })
     const entries = await group.getEntries()
 
@@ -736,10 +736,11 @@ describe('file system', () => {
     expect(mdxFile).toBeInstanceOf(JavaScriptFile)
     expectTypeOf(mdxFile).toMatchTypeOf<JavaScriptFile<FrontMatter>>()
 
-    // const [previousEntry, nextEntry] = await file.getSiblings()
+    const file = await group.getFileOrThrow('meta', 'js')
+    const [previousEntry, nextEntry] = await file.getSiblings()
 
-    // expect(previousEntry?.getName()).toBe('building-a-button-component')
-    // expect(nextEntry?.getName()).toBe('docs')
+    expect(previousEntry?.getName()).toBe('building-a-button-component')
+    expect(nextEntry?.getName()).toBe('docs')
   })
 
   test('has entry', async () => {
