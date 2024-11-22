@@ -843,7 +843,11 @@ You can fix this error by taking one of the following actions:
   }
 }
 
-/** Creates a collection of file system sources based on a file pattern. */
+/**
+ * Creates a collection of file system sources based on a file pattern.
+ *
+ * @deprecated Use `Directory` from `renoun/file-system`.
+ */
 export class Collection<AllExports extends FileExports>
   implements CollectionSource<AllExports>
 {
@@ -1198,6 +1202,8 @@ type FileSystemSourceUnion<Collections extends CollectionSource<any>[]> = {
 /**
  * Combines multiple collections into a single source provider that can be queried together.
  * This is useful for creating feeds or navigations that span multiple collections.
+ *
+ * @deprecated Use `EntryGroup` from `renoun/file-system`.
  */
 export class CompositeCollection<Collections extends CollectionSource<any>[]>
   implements SourceProvider<any>
@@ -1298,18 +1304,21 @@ function isValidDepth(depth: number) {
   return (depth >= 0 && Number.isInteger(depth)) || depth === Infinity
 }
 
+/** @deprecated Use `<export> instanceof JavaScriptFileExport` from `renoun/file-system`. */
 export const isExportSource = (
   source: unknown
 ): source is ExportSource<any> => {
   return source instanceof Export
 }
 
+/** @deprecated Use `isDirectory` and `isFile` from `renoun/file-system`. */
 export const isFileSystemSource = (
   source: unknown
 ): source is FileSystemSource<any> => {
   return source instanceof Source
 }
 
+/** @deprecated Use `isDirectory` from `renoun/file-system`. */
 export const isCollectionSource = (
   source: unknown
 ): source is CollectionSource<any> => {
