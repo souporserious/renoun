@@ -21,11 +21,13 @@ import {
   type JavaScriptLikeExtensions,
 } from './is-javascript-like-extension.js'
 
+/** A directory or file entry. */
 export type FileSystemEntry<Types extends ExtensionTypes> =
   | Directory<Types>
   | File<Types>
 
-interface FileOptions {
+/** Options for a file in the file system. */
+export interface FileOptions {
   path: string
   directory: Directory<any>
   entryGroup?: EntryGroup<FileSystemEntry<any>[]>
@@ -127,16 +129,19 @@ export class File<Types extends ExtensionTypes = ExtensionTypes> {
     return getEditPath(this.getAbsolutePath())
   }
 
+  /** Get the created date of the file. */
   async getCreatedAt() {
     const gitMetadata = await getGitMetadata(this.#path)
     return gitMetadata.createdAt ? new Date(gitMetadata.createdAt) : undefined
   }
 
+  /** Get the updated date of the file. */
   async getUpdatedAt() {
     const gitMetadata = await getGitMetadata(this.#path)
     return gitMetadata.updatedAt ? new Date(gitMetadata.updatedAt) : undefined
   }
 
+  /** Get the git authors of the file. */
   async getAuthors() {
     const gitMetadata = await getGitMetadata(this.#path)
     return gitMetadata.authors
@@ -351,7 +356,8 @@ export class JavaScriptFileExport<
   }
 }
 
-interface JavaScriptFileOptions extends FileOptions {
+/** Options for a JavaScript file in the file system. */
+export interface JavaScriptFileOptions extends FileOptions {
   schema?: DirectoryOptions<any>['schema']
   tsConfigFilePath?: string
   isVirtualFileSystem?: boolean
@@ -451,23 +457,21 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
   }
 }
 
-interface ExtensionType {
+/** An object representing file export values. */
+export interface ExtensionType {
   [exportName: string]: any
 }
 
-/** Types that are associated with a file extension. */
-interface ExtensionTypes {
+/** Types associated with a specific file extension. */
+export interface ExtensionTypes {
   [extension: string]: ExtensionType
 }
 
-type SchemaFunction<Value> = (value: Value) => any
-
-interface ExtensionSchema {
-  [exportName: string]: SchemaFunction<any>
-}
+/** A function that validates and transforms export values. */
+export type SchemaFunction<Value> = (value: Value) => any
 
 /** Functions that validate and transform export values for specific extensions. */
-type ExtensionSchemas<Types extends ExtensionTypes> = {
+export type ExtensionSchemas<Types extends ExtensionTypes> = {
   [Extension in keyof Types]?: {
     [ExportName in keyof Types[Extension]]?: SchemaFunction<
       Types[Extension][ExportName]
@@ -475,12 +479,24 @@ type ExtensionSchemas<Types extends ExtensionTypes> = {
   }
 }
 
+/** The options for a `Directory`. */
 interface DirectoryOptions<Types extends ExtensionTypes = ExtensionTypes> {
+  /** The path to the directory in the file system. */
   path?: string
+
+  /** The base path used for all entry `getPath` methods. */
   basePath?: string
+
+  /** The schemas to validate and transform export values across different file extensions. */
   schema?: ExtensionSchemas<Types>
+
+  /** A function to get the module for a JavaScript file. */
   getModule?: (path: string) => Promise<any>
+
+  /** The file system to use for reading directory entries. */
   fileSystem?: FileSystem
+
+  /** The entry group containing this directory. */
   entryGroup?: EntryGroup<FileSystemEntry<Types>[]>
 }
 
@@ -528,6 +544,7 @@ export class Directory<
     })
   }
 
+  /** Get the file system for this directory. */
   getFileSystem() {
     if (this.#fileSystem) {
       return this.#fileSystem
@@ -539,7 +556,7 @@ export class Directory<
     return this.#fileSystem
   }
 
-  /** Set a filter to exclude entries from the directory. */
+  /** Set a filter to exclude entries from this directory. */
   protected setFilterCallback(
     filter:
       | ((entry: FileSystemEntry<Types>) => entry is Entry)
@@ -995,16 +1012,19 @@ export class Directory<
     return getEditPath(this.getAbsolutePath())
   }
 
+  /** Get the created date of the directory. */
   async getCreatedAt() {
     const gitMetadata = await getGitMetadata(this.#path)
     return gitMetadata.createdAt ? new Date(gitMetadata.createdAt) : undefined
   }
 
+  /** Get the updated date of the directory. */
   async getUpdatedAt() {
     const gitMetadata = await getGitMetadata(this.#path)
     return gitMetadata.updatedAt ? new Date(gitMetadata.updatedAt) : undefined
   }
 
+  /** Get the git authors of the directory. */
   async getAuthors() {
     const gitMetadata = await getGitMetadata(this.#path)
     return gitMetadata.authors
@@ -1071,7 +1091,8 @@ type InferExtensionTypes<Entries extends readonly FileSystemEntry<any>[]> =
       : never
     : {}
 
-interface EntryGroupOptions<Entries extends FileSystemEntry<any>[]> {
+/** Options for an `EntryGroup`. */
+export interface EntryGroupOptions<Entries extends FileSystemEntry<any>[]> {
   entries: Entries
 }
 
@@ -1090,7 +1111,10 @@ export class EntryGroup<
 
   /** Get all entries in the group. */
   async getEntries(options?: {
+    /** Include all entries in the group recursively. */
     recursive?: boolean
+
+    /** Include index and readme files in the group. */
     includeIndexAndReadme?: boolean
   }): Promise<Entries> {
     const allEntries: FileSystemEntry<Types>[] = []
@@ -1123,6 +1147,7 @@ export class EntryGroup<
 
   /** Get an entry in the group by its path. */
   async getEntry(
+    /** The path to the entry excluding leading numbers. */
     path: string | string[]
   ): Promise<FileSystemEntry<Types> | undefined> {
     const segments = Array.isArray(path)
@@ -1174,6 +1199,7 @@ export class EntryGroup<
 
   /** Get an entry in the group by its path or throw an error if not found. */
   async getEntryOrThrow(
+    /** The path to the entry excluding leading numbers. */
     path: string | string[]
   ): Promise<FileSystemEntry<Types>> {
     const entry = await this.getEntry(path)
@@ -1187,7 +1213,10 @@ export class EntryGroup<
 
   /** Get a file at the specified path and optional extension(s). */
   async getFile<const Extension extends string | undefined = undefined>(
+    /** The path to the entry excluding leading numbers and the extension. */
     path: string | string[],
+
+    /** The extension or extensions to match. */
     extension?: Extension | Extension[]
   ): Promise<
     | (Extension extends string
@@ -1222,7 +1251,10 @@ export class EntryGroup<
 
   /** Get a file at the specified path and optional extension(s), or throw an error if not found. */
   async getFileOrThrow<Extension extends string | undefined = undefined>(
+    /** The path to the entry excluding leading numbers and the extension. */
     path: string | string[],
+
+    /** The extension or extensions to match. */
     extension?: Extension | Extension[]
   ): Promise<
     Extension extends string
@@ -1249,6 +1281,7 @@ export class EntryGroup<
 
   /** Get a directory at the specified path. */
   async getDirectory(
+    /** The path to the entry excluding leading numbers. */
     path: string | string[]
   ): Promise<Directory<Types> | undefined> {
     const entry = await this.getEntry(path)
@@ -1260,6 +1293,7 @@ export class EntryGroup<
 
   /** Get a directory at the specified path or throw an error if not found. */
   async getDirectoryOrThrow(
+    /** The path to the entry excluding leading numbers. */
     path: string | string[]
   ): Promise<Directory<Types>> {
     const directory = await this.getDirectory(path)
