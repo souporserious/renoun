@@ -1043,7 +1043,7 @@ export class Directory<
       }
     }
 
-    function hasEntry(entry: FileSystemEntry<any>): entry is Entry {
+    function hasEntry(entry: FileSystemEntry<any> | undefined): entry is Entry {
       return exists
     }
 
@@ -1051,14 +1051,14 @@ export class Directory<
   }
 
   /** Returns a type guard that check if this directory contains the provided file with a specific extension. */
-  async getHasFile(entry: FileSystemEntry<any>) {
+  async getHasFile(entry: FileSystemEntry<any> | undefined) {
     const hasEntry = await this.getHasEntry(entry)
 
     function hasFileWith<
       Type extends keyof Types | (string & {}),
       const Extension extends Type | Type[],
     >(
-      entry: FileSystemEntry<any>,
+      entry: FileSystemEntry<any> | undefined,
       extension?: Extension
     ): entry is FileWithExtension<Types, Extension> {
       const extensions = Array.isArray(extension) ? extension : [extension]
