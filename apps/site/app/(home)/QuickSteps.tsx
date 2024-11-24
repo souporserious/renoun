@@ -23,8 +23,7 @@ import type { MDXContent } from 'renoun/mdx'
 
 const posts = new Directory<{ mdx: { default: MDXContent } }>({
   path: 'posts',
-  getModule: (path) => import(\`./posts/\${path}\`)
-})
+}).withModule((path) => import(\`./posts/\${path}\`))
 
 export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
   const post = await posts.getFile((await params).slug, 'mdx')
