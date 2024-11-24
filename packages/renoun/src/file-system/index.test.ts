@@ -132,8 +132,8 @@ describe('file system', () => {
       path: 'posts',
       fileSystem,
     })
-      .filter((entry) => isFile(entry, 'mdx'))
-      .sort((a, b) => a.getName().localeCompare(b.getName()))
+      .withFilter((entry) => isFile(entry, 'mdx'))
+      .withSort((a, b) => a.getName().localeCompare(b.getName()))
     const files = await posts.getEntries()
 
     expectTypeOf(files).toMatchTypeOf<JavaScriptFile<PostType>[]>()
@@ -144,7 +144,7 @@ describe('file system', () => {
     type PostType = { frontmatter: { title: string } }
     const posts = new Directory<{ mdx: PostType }>({
       path: 'fixtures/posts',
-    }).filter((entry) => isFile(entry, 'mdx'))
+    }).withFilter((entry) => isFile(entry, 'mdx'))
     const files = await posts.getEntries()
 
     expectTypeOf(files).toMatchTypeOf<JavaScriptFile<PostType>[]>()
@@ -156,7 +156,7 @@ describe('file system', () => {
       'foo.ts': '',
       'bar.ts': '',
     })
-    const directory = new Directory({ fileSystem }).sort((a, b) =>
+    const directory = new Directory({ fileSystem }).withSort((a, b) =>
       a.getName().localeCompare(b.getName())
     )
     const entries = await directory.getEntries()
@@ -185,8 +185,8 @@ describe('file system', () => {
         }
       },
     })
-      .filter((entry) => isFile(entry, 'ts'))
-      .sort(async (a, b) => {
+      .withFilter((entry) => isFile(entry, 'ts'))
+      .withSort(async (a, b) => {
         const aSort = await a.getExport('sort').getRuntimeValue()
         const bSort = await b.getExport('sort').getRuntimeValue()
         return aSort - bSort
@@ -202,7 +202,7 @@ describe('file system', () => {
   })
 
   test('filter and recursive entries', async () => {
-    const docs = new Directory({ path: 'fixtures/docs' }).filter((entry) =>
+    const docs = new Directory({ path: 'fixtures/docs' }).withFilter((entry) =>
       isFile(entry, 'mdx')
     )
     const entries = await docs.getEntries({ recursive: true })

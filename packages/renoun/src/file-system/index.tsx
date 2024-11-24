@@ -566,14 +566,14 @@ export class Directory<
   }
 
   /** Returns a new `Directory` with a narrowed type and filter applied to all descendant entries. */
-  filter<FilteredEntry extends Entry>(
-    filterFn: (entry: FileSystemEntry<Types>) => entry is FilteredEntry
+  withFilter<FilteredEntry extends Entry>(
+    filter: (entry: FileSystemEntry<Types>) => entry is FilteredEntry
   ): Directory<Types, FilteredEntry>
-  filter<FilteredEntry extends Entry>(
-    filterFn: (entry: FileSystemEntry<Types>) => Promise<boolean> | boolean
+  withFilter<FilteredEntry extends Entry>(
+    filter: (entry: FileSystemEntry<Types>) => Promise<boolean> | boolean
   ): Directory<Types, Entry>
-  filter<FilteredEntry extends Entry>(
-    filterFn: (entry: FileSystemEntry<Types>) => Promise<boolean> | boolean
+  withFilter<FilteredEntry extends Entry>(
+    filter: (entry: FileSystemEntry<Types>) => Promise<boolean> | boolean
   ): Directory<Types, Entry | FilteredEntry> {
     const filteredDirectory = new Directory<Types, Entry | FilteredEntry>({
       path: this.#path,
@@ -584,7 +584,7 @@ export class Directory<
     })
 
     filteredDirectory.setDirectory(this)
-    filteredDirectory.setFilterCallback(filterFn)
+    filteredDirectory.setFilterCallback(filter)
     if (this.#sortCallback) {
       filteredDirectory.setSortCallback(this.#sortCallback)
     }
@@ -603,8 +603,8 @@ export class Directory<
   }
 
   /** Returns a new `Directory` with a sorting function applied to all descendant entries. */
-  sort(
-    sortCallback: (a: Entry, b: Entry) => Promise<number> | number
+  withSort(
+    sort: (a: Entry, b: Entry) => Promise<number> | number
   ): Directory<Types, Entry> {
     const sortedDirectory = new Directory<Types, Entry>({
       path: this.#path,
@@ -615,7 +615,7 @@ export class Directory<
     })
 
     sortedDirectory.setDirectory(this)
-    sortedDirectory.setSortCallback(sortCallback)
+    sortedDirectory.setSortCallback(sort)
     if (this.#filterCallback) {
       sortedDirectory.setFilterCallback(this.#filterCallback)
     }
