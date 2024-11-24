@@ -22,9 +22,10 @@ import {
 } from './is-javascript-like-extension.js'
 
 /** A directory or file entry. */
-export type FileSystemEntry<Types extends ExtensionTypes> =
-  | Directory<Types>
-  | File<Types>
+export type FileSystemEntry<
+  Types extends ExtensionTypes = ExtensionTypes,
+  HasModule extends boolean = false,
+> = Directory<Types, HasModule> | File<Types>
 
 /** Options for a file in the file system. */
 export interface FileOptions {
@@ -179,27 +180,16 @@ export class File<Types extends ExtensionTypes = ExtensionTypes> {
 
 /** A JavaScript file export. */
 export class JavaScriptFileExport<
-  Value extends Exports[ExportName] = any,
   Exports extends ExtensionType = ExtensionType,
-  ExportName extends Extract<keyof Exports, string> = Extract<
-    keyof Exports,
-    string
-  >,
 > {
   #name: string
-  #file: JavaScriptFile<Exports>
+  #file: JavaScriptFile<Exports, false>
   #position: number | undefined
   #metadata: Awaited<ReturnType<typeof getFileExportMetadata>> | undefined
-  #getModule?: (path: string) => Promise<any>
 
-  constructor(
-    name: string,
-    file: JavaScriptFile<Exports>,
-    getModule?: (path: string) => Promise<any>
-  ) {
+  constructor(name: string, file: JavaScriptFile<Exports, false>) {
     this.#name = name
     this.#file = file
-    this.#getModule = getModule
   }
 
   async #getPosition() {
@@ -299,6 +289,31 @@ export class JavaScriptFileExport<
       filter
     )
   }
+}
+
+/** A JavaScript file export with runtime value. */
+export class JavaScriptFileExportWithRuntime<
+  Value extends Exports[ExportName] = any,
+  Exports extends ExtensionType = ExtensionType,
+  ExportName extends Extract<keyof Exports, string> = Extract<
+    keyof Exports,
+    string
+  >,
+> extends JavaScriptFileExport<Exports> {
+  #name: string
+  #file: JavaScriptFile<Exports, true>
+  #getModule: (path: string) => Promise<any>
+
+  constructor(
+    name: string,
+    file: JavaScriptFile<Exports, any>,
+    getModule: (path: string) => Promise<any>
+  ) {
+    super(name, file)
+    this.#name = name
+    this.#file = file
+    this.#getModule = getModule
+  }
 
   /**
    * Get the runtime value of the export. An error will be thrown if the export
@@ -365,8 +380,11 @@ export interface JavaScriptFileOptions extends FileOptions {
 }
 
 /** A JavaScript file in the file system. */
-export class JavaScriptFile<Exports extends ExtensionType> extends File {
-  #exports = new Map<string, JavaScriptFileExport<any, Exports>>()
+export class JavaScriptFile<
+  Exports extends ExtensionType,
+  HasModule extends boolean = false,
+> extends File {
+  #exports = new Map<string, JavaScriptFileExport<Exports>>()
   #getModule?: (path: string) => Promise<any>
   #schema?: DirectoryOptions<any>['schema']
 
@@ -441,19 +459,24 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
    */
   getExport<ExportName extends Extract<keyof Exports, string>>(
     name: ExportName
-  ): JavaScriptFileExport<
-    Exports[ExportName],
-    Exports,
-    Extract<keyof Exports, string>
-  > {
+  ): HasModule extends true
+    ? JavaScriptFileExportWithRuntime<
+        Exports[ExportName],
+        Exports,
+        Extract<keyof Exports, string>
+      >
+    : JavaScriptFileExport<Exports> {
     if (this.#exports.has(name)) {
-      return this.#exports.get(name)!
+      return this.#exports.get(name)! as any
     }
 
-    const fileExport = new JavaScriptFileExport(name, this, this.#getModule)
+    const fileExport = this.#getModule
+      ? new JavaScriptFileExportWithRuntime(name, this, this.#getModule)
+      : new JavaScriptFileExport(name, this as any)
+
     this.#exports.set(name, fileExport)
 
-    return fileExport
+    return fileExport as any
   }
 }
 
@@ -490,9 +513,6 @@ interface DirectoryOptions<Types extends ExtensionTypes = ExtensionTypes> {
   /** The schemas to validate and transform export values across different file extensions. */
   schema?: ExtensionSchemas<Types>
 
-  /** A function to get the module for a JavaScript file. */
-  getModule?: (path: string) => Promise<any>
-
   /** The file system to use for reading directory entries. */
   fileSystem?: FileSystem
 
@@ -503,7 +523,8 @@ interface DirectoryOptions<Types extends ExtensionTypes = ExtensionTypes> {
 /** A directory containing files and subdirectories in the file system. */
 export class Directory<
   Types extends ExtensionTypes = ExtensionTypes,
-  Entry extends FileSystemEntry<Types> = FileSystemEntry<Types>,
+  HasModule extends boolean = false,
+  Entry extends FileSystemEntry<any, any> = FileSystemEntry<Types, HasModule>,
 > {
   #path: string
   #basePath?: string
@@ -525,7 +546,6 @@ export class Directory<
       : '.'
     this.#basePath = options.basePath
     this.#schema = options.schema
-    this.#getModule = options.getModule
     this.#fileSystem = options.fileSystem
     this.#entryGroup = options.entryGroup
   }
@@ -533,15 +553,16 @@ export class Directory<
   /** Duplicate the directory with the same initial options. */
   duplicate<Entry extends FileSystemEntry<Types> = FileSystemEntry<Types>>(
     options?: DirectoryOptions<Types>
-  ): Directory<Types, Entry> {
-    return new Directory<Types, Entry>({
+  ): Directory<Types, HasModule, Entry> {
+    const directory = new Directory<Types, HasModule, Entry>({
       path: this.#path,
       basePath: this.#basePath,
       fileSystem: this.#fileSystem,
       schema: this.#schema,
-      getModule: this.#getModule,
       ...options,
     })
+
+    return directory
   }
 
   /** Get the file system for this directory. */
@@ -556,6 +577,34 @@ export class Directory<
     return this.#fileSystem
   }
 
+  /** Set the module getter for JavaScript files in the directory. */
+  protected setModuleGetter(getModule: (path: string) => Promise<any>) {
+    this.#getModule = getModule
+  }
+
+  /** Returns a new `Directory` with a module getter applied to all JavaScript files. */
+  withModule(
+    getModule: (path: string) => Promise<any>
+  ): Directory<Types, true, Entry> {
+    const directory = new Directory<Types, true, Entry>({
+      path: this.#path,
+      basePath: this.#basePath,
+      fileSystem: this.#fileSystem,
+      schema: this.#schema,
+    })
+
+    directory.setDirectory(this)
+    directory.setModuleGetter(getModule)
+    if (this.#filterCallback) {
+      directory.setFilterCallback(this.#filterCallback)
+    }
+    if (this.#sortCallback) {
+      directory.setSortCallback(this.#sortCallback)
+    }
+
+    return directory
+  }
+
   /** Set a filter to exclude entries from this directory. */
   protected setFilterCallback(
     filter:
@@ -567,29 +616,35 @@ export class Directory<
 
   /** Returns a new `Directory` with a narrowed type and filter applied to all descendant entries. */
   withFilter<FilteredEntry extends Entry>(
-    filter: (entry: FileSystemEntry<Types>) => entry is FilteredEntry
-  ): Directory<Types, FilteredEntry>
+    filter: (entry: FileSystemEntry<Types, HasModule>) => entry is FilteredEntry
+  ): Directory<Types, HasModule, FilteredEntry>
   withFilter<FilteredEntry extends Entry>(
-    filter: (entry: FileSystemEntry<Types>) => Promise<boolean> | boolean
-  ): Directory<Types, Entry>
+    filter: (
+      entry: FileSystemEntry<Types, HasModule>
+    ) => Promise<boolean> | boolean
+  ): Directory<Types, HasModule, FilteredEntry>
   withFilter<FilteredEntry extends Entry>(
-    filter: (entry: FileSystemEntry<Types>) => Promise<boolean> | boolean
-  ): Directory<Types, Entry | FilteredEntry> {
-    const filteredDirectory = new Directory<Types, Entry | FilteredEntry>({
+    filter: (
+      entry: FileSystemEntry<Types, HasModule>
+    ) => Promise<boolean> | boolean
+  ): Directory<Types, HasModule, FilteredEntry> {
+    const directory = new Directory<Types, HasModule, FilteredEntry>({
       path: this.#path,
       basePath: this.#basePath,
       fileSystem: this.#fileSystem,
       schema: this.#schema,
-      getModule: this.#getModule,
     })
 
-    filteredDirectory.setDirectory(this)
-    filteredDirectory.setFilterCallback(filter)
+    directory.setDirectory(this)
+    directory.setFilterCallback(filter)
+    if (this.#getModule) {
+      directory.setModuleGetter(this.#getModule)
+    }
     if (this.#sortCallback) {
-      filteredDirectory.setSortCallback(this.#sortCallback)
+      directory.setSortCallback(this.#sortCallback)
     }
 
-    return filteredDirectory
+    return directory
   }
 
   /** Set a sorting function for directory entries. */
@@ -605,22 +660,24 @@ export class Directory<
   /** Returns a new `Directory` with a sorting function applied to all descendant entries. */
   withSort(
     sort: (a: Entry, b: Entry) => Promise<number> | number
-  ): Directory<Types, Entry> {
-    const sortedDirectory = new Directory<Types, Entry>({
+  ): Directory<Types, HasModule, Entry> {
+    const directory = new Directory<Types, HasModule, Entry>({
       path: this.#path,
       basePath: this.#basePath,
       fileSystem: this.#fileSystem,
       schema: this.#schema,
-      getModule: this.#getModule,
     })
 
-    sortedDirectory.setDirectory(this)
-    sortedDirectory.setSortCallback(sort)
+    directory.setDirectory(this)
+    directory.setSortCallback(sort)
+    if (this.#getModule) {
+      directory.setModuleGetter(this.#getModule)
+    }
     if (this.#filterCallback) {
-      sortedDirectory.setFilterCallback(this.#filterCallback)
+      directory.setFilterCallback(this.#filterCallback)
     }
 
-    return sortedDirectory
+    return directory
   }
 
   /** Get a file at the specified `path` and optional extensions. */
@@ -630,7 +687,7 @@ export class Directory<
   ): Promise<
     | (Extension extends string
         ? IsJavaScriptLikeExtension<Extension> extends true
-          ? JavaScriptFile<Types[Extension]>
+          ? JavaScriptFile<Types[Extension], HasModule>
           : File<Types>
         : File<Types>)
     | undefined
@@ -711,7 +768,7 @@ export class Directory<
   ): Promise<
     Extension extends string
       ? IsJavaScriptLikeExtension<Extension> extends true
-        ? JavaScriptFile<Types[Extension]>
+        ? JavaScriptFile<Types[Extension], HasModule>
         : File<Types>
       : File<Types>
   > {
@@ -732,7 +789,7 @@ export class Directory<
   }
 
   /** Set the parent directory of the current directory. */
-  protected setDirectory(directory: Directory<any, any>) {
+  protected setDirectory(directory: Directory<any, any, any>) {
     this.#directory = directory
   }
 
@@ -855,13 +912,20 @@ export class Directory<
       }
 
       if (entry.isDirectory) {
-        const directory = new Directory<Types, FileSystemEntry<Types>>({
+        const directory = new Directory<
+          Types,
+          HasModule,
+          FileSystemEntry<Types>
+        >({
           fileSystem,
           path: entry.path,
           entryGroup: this.#entryGroup,
           schema: this.#schema,
-          getModule: this.#getModule,
         })
+
+        if (this.#getModule) {
+          directory.setModuleGetter(this.#getModule)
+        }
 
         if (this.#filterCallback) {
           directory.setFilterCallback(this.#filterCallback)
@@ -1060,7 +1124,7 @@ export class Directory<
     >(
       entry: FileSystemEntry<any> | undefined,
       extension?: Extension
-    ): entry is FileWithExtension<Types, Extension> {
+    ): entry is FileWithExtension<Types, Extension, HasModule> {
       const extensions = Array.isArray(extension) ? extension : [extension]
 
       if (hasEntry(entry) && entry instanceof File) {
@@ -1105,7 +1169,7 @@ export class EntryGroup<
 
   constructor(options: EntryGroupOptions<Entries>) {
     this.#entries = options.entries.map((entry) =>
-      entry.duplicate({ entryGroup: this })
+      entry.duplicate({ entryGroup: this as any })
     ) as Entries
   }
 
@@ -1221,7 +1285,7 @@ export class EntryGroup<
   ): Promise<
     | (Extension extends string
         ? IsJavaScriptLikeExtension<Extension> extends true
-          ? JavaScriptFile<Types[Extension]>
+          ? JavaScriptFile<Types[Extension], false>
           : File<Types>
         : File<Types>)
     | undefined
@@ -1259,7 +1323,7 @@ export class EntryGroup<
   ): Promise<
     Extension extends string
       ? IsJavaScriptLikeExtension<Extension> extends true
-        ? JavaScriptFile<Types[Extension]>
+        ? JavaScriptFile<Types[Extension], false>
         : File<Types>
       : File<Types>
   > {
@@ -1317,14 +1381,16 @@ export function isDirectory<Types extends ExtensionTypes>(
 export type FileWithExtension<
   Types extends ExtensionTypes,
   Extension extends keyof Types | (keyof Types)[],
+  HasModule extends boolean = false,
 > = Extension extends string
   ? IsJavaScriptLikeExtension<Extension> extends true
-    ? JavaScriptFile<Types[Extension]>
+    ? JavaScriptFile<Types[Extension], HasModule>
     : File<Types>
   : Extension extends string[]
     ? HasJavaScriptLikeExtensions<Extension> extends true
       ? JavaScriptFile<
-          Types[Extract<Extension[number], JavaScriptLikeExtensions>]
+          Types[Extract<Extension[number], JavaScriptLikeExtensions>],
+          HasModule
         >
       : File<Types>
     : File<Types>
@@ -1334,10 +1400,11 @@ export function isFile<
   Types extends ExtensionTypes,
   Type extends keyof Types | (string & {}),
   const Extension extends Type | Type[],
+  HasModule extends boolean,
 >(
-  entry: FileSystemEntry<Types>,
+  entry: FileSystemEntry<Types, HasModule>,
   extension?: Extension
-): entry is FileWithExtension<Types, Extension> {
+): entry is FileWithExtension<Types, Extension, HasModule> {
   if (entry instanceof File) {
     const fileExtension = entry.getExtension()
 

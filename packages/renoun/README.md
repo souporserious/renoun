@@ -40,8 +40,7 @@ import { Directory } from 'renoun/file-system'
 
 const posts = new Directory({
   path: 'posts',
-  getModule: (path) => import(`@/posts/${path}`),
-})
+}).withModule((path) => import(`posts/${path}`))
 
 export default async function Page({
   params,
@@ -70,8 +69,7 @@ const posts = new Directory<{
   mdx: { default: MDXContent }
 }>({
   path: 'posts',
-  getModule: (path) => import(`@/posts/${path}`),
-})
+}).withModule((path) => import(`posts/${path}`))
 ```
 
 Now when we call `getExport`, we will get better type checking and intellisense.
@@ -89,8 +87,7 @@ const posts = new Directory<{
   }
 }>({
   path: 'posts',
-  getModule: (path) => import(`@/posts/${path}`),
-})
+}).withModule((path) => import(`posts/${path}`))
 
 export default async function Page() {
   const allPosts = await posts.getFiles()

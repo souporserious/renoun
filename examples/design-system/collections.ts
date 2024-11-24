@@ -12,5 +12,4 @@ export const ComponentsCollection = new Directory<{
 }>({
   path: 'components',
   basePath: 'components',
-  getModule: (path) => import(`./components/${path}`),
-})
+}).withModule((path) => import(`./components/${path}`))

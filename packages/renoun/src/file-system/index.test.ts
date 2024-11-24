@@ -176,16 +176,18 @@ describe('file system', () => {
     })
     const directory = new Directory<{ ts: { sort: number } }>({
       fileSystem,
-      getModule: async (path) => {
+    })
+      .withModule(async (path) => {
         if (path === 'foo.ts') {
           return { sort: 2 }
         }
         if (path === 'bar.ts') {
           return { sort: 1 }
         }
-      },
-    })
-      .withFilter((entry) => isFile(entry, 'ts'))
+      })
+      .withFilter((entry) => {
+        return isFile(entry, 'ts')
+      })
       .withSort(async (a, b) => {
         const aSort = await a.getExport('sort').getRuntimeValue()
         const bSort = await b.getExport('sort').getRuntimeValue()
@@ -340,14 +342,7 @@ describe('file system', () => {
     })
     const rootDirectory = new Directory<{
       ts: { useHover: Function }
-    }>({
-      fileSystem,
-      getModule: async () => {
-        return {
-          useHover: () => {},
-        }
-      },
-    })
+    }>({ fileSystem }).withModule(async () => ({ useHover: () => {} }))
     const file = await rootDirectory.getFileOrThrow('use-hover', 'ts')
     const value = await file.getExport('useHover').getRuntimeValue()
 
@@ -360,8 +355,7 @@ describe('file system', () => {
       ts: { createServer: () => void }
     }>({
       path: 'fixtures/project',
-      getModule: (path) => import(`#fixtures/project/${path}`),
-    })
+    }).withModule((path) => import(`#fixtures/project/${path}`))
     const file = await projectDirectory.getFileOrThrow('server', 'ts')
     const value = await file.getExport('createServer').getRuntimeValue()
 
@@ -386,17 +380,16 @@ describe('file system', () => {
           },
         },
       },
-      getModule: async (path) => {
-        const transpiledCode = await fileSystem.transpileFile(path)
-        const module = { exports: {} }
+    }).withModule(async (path) => {
+      const transpiledCode = await fileSystem.transpileFile(path)
+      const module = { exports: {} }
 
-        runInNewContext(
-          `(function(module, exports) { ${transpiledCode} })(module, module.exports);`,
-          { module }
-        )
+      runInNewContext(
+        `(function(module, exports) { ${transpiledCode} })(module, module.exports);`,
+        { module }
+      )
 
-        return module.exports
-      },
+      return module.exports
     })
     const file = await directory.getFileOrThrow('index', 'ts')
     const fileExport = file.getExport('metadata')
@@ -427,17 +420,16 @@ describe('file system', () => {
           metadata: metadataSchema.parse,
         },
       },
-      getModule: async (path) => {
-        const transpiledCode = await fileSystem.transpileFile(path)
-        const module = { exports: {} }
+    }).withModule(async (path) => {
+      const transpiledCode = await fileSystem.transpileFile(path)
+      const module = { exports: {} }
 
-        runInNewContext(
-          `(function(module, exports) { ${transpiledCode} })(module, module.exports);`,
-          { module }
-        )
+      runInNewContext(
+        `(function(module, exports) { ${transpiledCode} })(module, module.exports);`,
+        { module }
+      )
 
-        return module.exports
-      },
+      return module.exports
     })
     const file = await directory.getFileOrThrow('hello-world', 'ts')
     const metadata = await file.getExport('metadata').getRuntimeValue()
@@ -481,11 +473,10 @@ describe('file system', () => {
   test('getRuntimeValue resolves export runtime value from getModule', async () => {
     const fileSystemDirectory = new Directory({
       path: 'fixtures/utils',
-      getModule: (path) => import(`#fixtures/utils/${path}`),
-    })
+    }).withModule((path) => import(`#fixtures/utils/${path}`))
     const file = await fileSystemDirectory.getFileOrThrow('path', 'ts')
 
-    expectTypeOf(file).toMatchTypeOf<JavaScriptFile<any>>()
+    expectTypeOf(file).toMatchTypeOf<JavaScriptFile<any, true>>()
     expect(file).toBeInstanceOf(JavaScriptFile)
 
     const fileExport = file.getExport('basename')
@@ -680,7 +671,7 @@ describe('file system', () => {
 
     if (isDirectory(entry)) {
       expectTypeOf(entry).toMatchTypeOf<
-        Directory<FileTypes, FileSystemEntry<FileTypes>>
+        Directory<FileTypes, false, FileSystemEntry<FileTypes>>
       >()
     }
 
