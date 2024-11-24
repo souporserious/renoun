@@ -370,27 +370,26 @@ describe('file system', () => {
       ts: { metadata: { title: string } }
     }>({
       fileSystem,
-      schema: {
-        ts: {
-          metadata: (value) => {
-            if (typeof value.title === 'string') {
-              return value
-            }
-            throw new Error('Expected a title')
-          },
-        },
-      },
-    }).withModule(async (path) => {
-      const transpiledCode = await fileSystem.transpileFile(path)
-      const module = { exports: {} }
-
-      runInNewContext(
-        `(function(module, exports) { ${transpiledCode} })(module, module.exports);`,
-        { module }
-      )
-
-      return module.exports
     })
+      .withSchema('ts', {
+        metadata: (value) => {
+          if (typeof value.title === 'string') {
+            return value
+          }
+          throw new Error('Expected a title')
+        },
+      })
+      .withModule(async (path) => {
+        const transpiledCode = await fileSystem.transpileFile(path)
+        const module = { exports: {} }
+
+        runInNewContext(
+          `(function(module, exports) { ${transpiledCode} })(module, module.exports);`,
+          { module }
+        )
+
+        return module.exports
+      })
     const file = await directory.getFileOrThrow('index', 'ts')
     const fileExport = file.getExport('metadata')
 
@@ -415,22 +414,21 @@ describe('file system', () => {
       }
     }>({
       fileSystem,
-      schema: {
-        ts: {
-          metadata: metadataSchema.parse,
-        },
-      },
-    }).withModule(async (path) => {
-      const transpiledCode = await fileSystem.transpileFile(path)
-      const module = { exports: {} }
-
-      runInNewContext(
-        `(function(module, exports) { ${transpiledCode} })(module, module.exports);`,
-        { module }
-      )
-
-      return module.exports
     })
+      .withSchema('ts', {
+        metadata: metadataSchema.parse,
+      })
+      .withModule(async (path) => {
+        const transpiledCode = await fileSystem.transpileFile(path)
+        const module = { exports: {} }
+
+        runInNewContext(
+          `(function(module, exports) { ${transpiledCode} })(module, module.exports);`,
+          { module }
+        )
+
+        return module.exports
+      })
     const file = await directory.getFileOrThrow('hello-world', 'ts')
     const metadata = await file.getExport('metadata').getRuntimeValue()
 

@@ -16,8 +16,8 @@ interface PostType {
 
 export const posts = new Directory<{ mdx: PostType }>({
   path: 'posts',
-  schema: { mdx: { frontmatter: frontmatterSchema.parse } },
 })
+  .withSchema('mdx', { frontmatter: frontmatterSchema.parse })
   .withModule((path) => import(`./posts/${path}`))
   .withFilter((entry) => isFile(entry, 'mdx'))
   .withSort(async (a, b) => {
