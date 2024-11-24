@@ -2,7 +2,7 @@ import { APIReference } from 'renoun/components'
 import {
   isFile,
   isDirectory,
-  type JavaScriptFileExport,
+  type JavaScriptFileExportWithRuntime,
 } from 'renoun/file-system'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -36,7 +36,9 @@ export default async function Component({
   const examplesEntry = await componentDirectory.getEntry('examples')
   const exampleFiles = examplesEntry
     ? isDirectory(examplesEntry)
-      ? await examplesEntry.filter((entry) => isFile(entry, 'tsx')).getEntries()
+      ? await examplesEntry
+          .withFilter((entry) => isFile(entry, 'tsx'))
+          .getEntries()
       : isFile(examplesEntry, 'tsx')
         ? [examplesEntry]
         : null
@@ -160,7 +162,7 @@ export default async function Component({
 async function Preview({
   fileExport,
 }: {
-  fileExport: JavaScriptFileExport<React.ComponentType>
+  fileExport: JavaScriptFileExportWithRuntime<React.ComponentType>
 }) {
   const name = await fileExport.getName()
   const description = await fileExport.getDescription()
