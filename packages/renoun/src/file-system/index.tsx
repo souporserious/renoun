@@ -372,8 +372,9 @@ export class JavaScriptFileExportWithRuntime<
 }
 
 /** Options for a JavaScript file in the file system. */
-export interface JavaScriptFileOptions extends FileOptions {
-  schema?: DirectoryOptions<any>['schema']
+export interface JavaScriptFileOptions<Exports extends ExtensionType>
+  extends FileOptions {
+  schema?: ExtensionSchema<Exports>
   tsConfigFilePath?: string
   isVirtualFileSystem?: boolean
   getModule?: (path: string) => Promise<any>
@@ -386,7 +387,7 @@ export class JavaScriptFile<
 > extends File {
   #exports = new Map<string, JavaScriptFileExport<Exports>>()
   #getModule?: (path: string) => Promise<any>
-  #schema?: DirectoryOptions<any>['schema']
+  #schema?: ExtensionSchema<Exports>
 
   constructor({
     getModule,
@@ -394,7 +395,7 @@ export class JavaScriptFile<
     tsConfigFilePath,
     isVirtualFileSystem = false,
     ...fileOptions
-  }: JavaScriptFileOptions) {
+  }: JavaScriptFileOptions<Exports>) {
     super(fileOptions)
     this.#getModule = getModule
     this.#schema = schema
@@ -406,20 +407,16 @@ export class JavaScriptFile<
       return value
     }
 
-    const extensionSchema = this.#schema[this.getExtension()]
+    const parseExportValue = this.#schema[name]
 
-    if (extensionSchema) {
-      const parseExportValue = extensionSchema[name]
-
-      if (parseExportValue) {
-        try {
-          value = parseExportValue(value)
-        } catch (error) {
-          if (error instanceof Error) {
-            throw new Error(
-              `[renoun] Schema validation failed to parse export "${name}" at file path "${this.getRelativePath()}" errored with: ${error.message}`
-            )
-          }
+    if (parseExportValue) {
+      try {
+        value = parseExportValue(value)
+      } catch (error) {
+        if (error instanceof Error) {
+          throw new Error(
+            `[renoun] Schema validation failed to parse export "${name}" at file path "${this.getRelativePath()}" errored with: ${error.message}`
+          )
         }
       }
     }
@@ -493,13 +490,16 @@ export interface ExtensionTypes {
 /** A function that validates and transforms export values. */
 export type SchemaFunction<Value> = (value: Value) => any
 
+/** A map of file export names to their respective schema function. */
+export type ExtensionSchema<Exports extends ExtensionTypes> = {
+  [ExportName in keyof Exports[string]]?: SchemaFunction<
+    Exports[string][ExportName]
+  >
+}
+
 /** Functions that validate and transform export values for specific extensions. */
 export type ExtensionSchemas<Types extends ExtensionTypes> = {
-  [Extension in keyof Types]?: {
-    [ExportName in keyof Types[Extension]]?: SchemaFunction<
-      Types[Extension][ExportName]
-    >
-  }
+  [Extension in keyof Types]?: ExtensionSchema<Types[Extension]>
 }
 
 /** The options for a `Directory`. */
@@ -509,9 +509,6 @@ interface DirectoryOptions<Types extends ExtensionTypes = ExtensionTypes> {
 
   /** The base path used for all entry `getPath` methods. */
   basePath?: string
-
-  /** The schemas to validate and transform export values across different file extensions. */
-  schema?: ExtensionSchemas<Types>
 
   /** The file system to use for reading directory entries. */
   fileSystem?: FileSystem
@@ -531,7 +528,7 @@ export class Directory<
   #fileSystem: FileSystem | undefined
   #entryGroup?: EntryGroup<FileSystemEntry<Types>[]> | undefined
   #directory?: Directory<any, any>
-  #schema?: ExtensionSchemas<Types>
+  #schemas: ExtensionSchemas<Types> = {}
   #getModule?: (path: string) => Promise<any>
   #sortCallback?: (a: Entry, b: Entry) => Promise<number> | number
   #filterCallback?:
@@ -545,7 +542,6 @@ export class Directory<
         : join('.', options.path)
       : '.'
     this.#basePath = options.basePath
-    this.#schema = options.schema
     this.#fileSystem = options.fileSystem
     this.#entryGroup = options.entryGroup
   }
@@ -558,9 +554,19 @@ export class Directory<
       path: this.#path,
       basePath: this.#basePath,
       fileSystem: this.#fileSystem,
-      schema: this.#schema,
       ...options,
     })
+
+    directory.#schemas = this.#schemas
+    if (this.#getModule) {
+      directory.setModuleGetter(this.#getModule)
+    }
+    if (this.#filterCallback) {
+      directory.setFilterCallback(this.#filterCallback)
+    }
+    if (this.#sortCallback) {
+      directory.setSortCallback(this.#sortCallback)
+    }
 
     return directory
   }
@@ -590,11 +596,11 @@ export class Directory<
       path: this.#path,
       basePath: this.#basePath,
       fileSystem: this.#fileSystem,
-      schema: this.#schema,
     })
 
     directory.setDirectory(this)
     directory.setModuleGetter(getModule)
+    directory.#schemas = this.#schemas
     if (this.#filterCallback) {
       directory.setFilterCallback(this.#filterCallback)
     }
@@ -632,11 +638,11 @@ export class Directory<
       path: this.#path,
       basePath: this.#basePath,
       fileSystem: this.#fileSystem,
-      schema: this.#schema,
     })
 
     directory.setDirectory(this)
     directory.setFilterCallback(filter)
+    directory.#schemas = this.#schemas
     if (this.#getModule) {
       directory.setModuleGetter(this.#getModule)
     }
@@ -665,16 +671,56 @@ export class Directory<
       path: this.#path,
       basePath: this.#basePath,
       fileSystem: this.#fileSystem,
-      schema: this.#schema,
     })
 
     directory.setDirectory(this)
     directory.setSortCallback(sort)
+    directory.#schemas = this.#schemas
     if (this.#getModule) {
       directory.setModuleGetter(this.#getModule)
     }
     if (this.#filterCallback) {
       directory.setFilterCallback(this.#filterCallback)
+    }
+
+    return directory
+  }
+
+  /** Set an extension schema for all JavaScript files in the directory. */
+  protected setSchema<Extension extends keyof Types>(
+    extension: Extension,
+    schema: ExtensionSchemas<Types>[Extension]
+  ) {
+    if (this.#schemas[extension]) {
+      throw new Error(
+        `[renoun] Schema for extension "${String(extension)}" is already defined in the directory "${this.#path}".`
+      )
+    }
+
+    this.#schemas[extension] = schema
+  }
+
+  /** Configure schema for a specific extension. */
+  withSchema<Extension extends keyof Types>(
+    extension: Extension,
+    schema: ExtensionSchemas<Types>[Extension]
+  ): Directory<Types, HasModule, Entry> {
+    const directory = new Directory<Types, HasModule, Entry>({
+      path: this.#path,
+      basePath: this.#basePath,
+      fileSystem: this.#fileSystem,
+    })
+
+    directory.setDirectory(this)
+    directory.setSchema(extension, schema)
+    if (this.#getModule) {
+      directory.setModuleGetter(this.#getModule)
+    }
+    if (this.#filterCallback) {
+      directory.setFilterCallback(this.#filterCallback)
+    }
+    if (this.#sortCallback) {
+      directory.setSortCallback(this.#sortCallback)
     }
 
     return directory
@@ -920,8 +966,9 @@ export class Directory<
           fileSystem,
           path: entry.path,
           entryGroup: this.#entryGroup,
-          schema: this.#schema,
         })
+
+        directory.#schemas = this.#schemas
 
         if (this.#getModule) {
           directory.setModuleGetter(this.#getModule)
@@ -953,12 +1000,13 @@ export class Directory<
         }
       } else if (entry.isFile) {
         const extension = extensionName(entry.name).slice(1)
+        const schema = this.#schemas[extension]
         const file = isJavaScriptLikeExtension(extension)
-          ? new JavaScriptFile({
+          ? new JavaScriptFile<Types, HasModule>({
               path: entry.path,
               directory: this as Directory<Types>,
               entryGroup: this.#entryGroup,
-              schema: this.#schema,
+              schema,
               getModule: this.#getModule,
               isVirtualFileSystem: fileSystem instanceof VirtualFileSystem,
             })
