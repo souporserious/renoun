@@ -17,10 +17,10 @@ interface PostType {
 export const posts = new Directory<{ mdx: PostType }>({
   path: 'posts',
   schema: { mdx: { frontmatter: frontmatterSchema.parse } },
-  getModule: (path) => import(`./posts/${path}`),
 })
-  .filter((entry) => isFile(entry, 'mdx'))
-  .sort(async (a, b) => {
+  .withModule((path) => import(`./posts/${path}`))
+  .withFilter((entry) => isFile(entry, 'mdx'))
+  .withSort(async (a, b) => {
     const aFrontmatter = await a.getExport('frontmatter').getRuntimeValue()
     const bFrontmatter = await b.getExport('frontmatter').getRuntimeValue()
 
