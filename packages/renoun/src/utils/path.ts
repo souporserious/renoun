@@ -46,7 +46,7 @@ export function removeOrderPrefixes(filePath: string): string {
 }
 
 /** Join multiple paths together */
-export function join(...paths: string[]): string {
+export function join(...paths: (string | undefined)[]): string {
   if (paths.length === 0) {
     return '.'
   }
