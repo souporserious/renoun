@@ -396,7 +396,7 @@ describe('file system', () => {
     await expect(
       fileExport!.getRuntimeValue()
     ).rejects.toThrowErrorMatchingInlineSnapshot(
-      `[Error: [renoun] Schema validation failed to parse export "metadata" at file path "./index.ts" errored with: Expected a title]`
+      `[Error: [renoun] Schema validation failed to parse export "metadata" at file path "index.ts" errored with: Expected a title]`
     )
   })
 
@@ -550,7 +550,6 @@ describe('file system', () => {
   test('generates tree navigation', async () => {
     const projectDirectory = new Directory({
       path: 'fixtures/project',
-      basePath: 'project',
     })
 
     async function buildTreeNavigation<Entry extends FileSystemEntry<any>>(
@@ -581,23 +580,23 @@ describe('file system', () => {
           "children": [
             {
               "name": "client",
-              "path": "/project/rpc/client",
+              "path": "/rpc/client",
             },
             {
               "name": "server",
-              "path": "/project/rpc/server",
+              "path": "/rpc/server",
             },
           ],
           "name": "rpc",
-          "path": "/project/rpc",
+          "path": "/rpc",
         },
         {
           "name": "server",
-          "path": "/project/server",
+          "path": "/server",
         },
         {
           "name": "types",
-          "path": "/project/types",
+          "path": "/types",
         },
       ]
     `)
@@ -612,28 +611,24 @@ describe('file system', () => {
     expect(readmeFile?.getName()).toBe('components')
   })
 
-  test('adds basePath to file and directory getPath', async () => {
+  test('adds base path to entry getPath and getPathSegments', async () => {
     const projectDirectory = new Directory({
       path: 'fixtures/project',
-      basePath: 'renoun',
-    })
+    }).withBasePath('renoun')
+
+    expect(projectDirectory.getBasePath()).toBe('renoun')
+
     const file = await projectDirectory.getFileOrThrow('server', 'ts')
-    const directory = await projectDirectory.getDirectoryOrThrow('rpc')
 
     expect(file.getPath()).toBe('/renoun/server')
-    expect(directory.getPath()).toBe('/renoun/rpc')
-  })
+    expect(file.getPathSegments()).toEqual(['renoun', 'server'])
 
-  test('does not add basePath to getPathSegments', async () => {
-    const projectDirectory = new Directory({
-      path: 'fixtures/project',
-      basePath: 'renoun',
-    })
-    const segments = (
-      await projectDirectory.getDirectoryOrThrow('rpc')
-    ).getPathSegments()
+    const directory = await projectDirectory.getDirectoryOrThrow('rpc')
 
-    expect(segments).toEqual(['rpc'])
+    expect(directory.getPath({ includeBasePath: false })).toBe('/rpc')
+    expect(directory.getPathSegments({ includeBasePath: false })).toEqual([
+      'rpc',
+    ])
   })
 
   test('uses file name for anonymous default export metadata', async () => {

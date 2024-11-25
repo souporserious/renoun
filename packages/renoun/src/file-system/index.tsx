@@ -13,7 +13,6 @@ import {
 import type { SymbolFilter } from '../utils/resolve-type.js'
 import type { FileSystem } from './FileSystem.js'
 import { NodeFileSystem } from './NodeFileSystem.js'
-import { VirtualFileSystem } from './VirtualFileSystem.js'
 import {
   isJavaScriptLikeExtension,
   type HasJavaScriptLikeExtensions,
@@ -94,35 +93,33 @@ export class File<
     return extensionName(this.#path).slice(1)
   }
 
-  /** Get a URL-friendly path to the file. */
-  getPath() {
+  /** Get the path of the file. */
+  getPath(options: { includeBasePath?: boolean } = { includeBasePath: true }) {
     const fileSystem = this.#directory.getFileSystem()
-    return fileSystem.getUrlPathRelativeTo(
-      removeOrderPrefixes(removeExtension(this.#path))
+    const basePath = this.#directory.getBasePath()
+
+    return removeExtension(
+      fileSystem.getPathRelativeTo(
+        this.#path,
+        options.includeBasePath ? { basePath } : undefined
+      )
     )
   }
 
   /** Get the path segments of the file. */
-  getPathSegments() {
-    const fileSystem = this.#directory.getFileSystem()
-    const path = fileSystem.getUrlPathRelativeTo(
-      removeOrderPrefixes(removeExtension(this.#path)),
-      false
-    )
-    return path.split('/').filter(Boolean)
+  getPathSegments(
+    options: { includeBasePath?: boolean } = { includeBasePath: true }
+  ) {
+    return this.getPath(options).split('/').filter(Boolean)
   }
 
-  /** Get the path of the file relative to another path. */
-  getPathRelativeTo(path: string) {
-    return relative(path, this.#path)
-  }
-
-  /** Get the relative path to the file. */
+  /** Get the relative file system path of the file. */
   getRelativePath() {
-    return this.#path
+    const fileSystem = this.#directory.getFileSystem()
+    return relative(fileSystem.getRootPath(), this.#path)
   }
 
-  /** Get the absolute path of the file. */
+  /** Get the absolute file system path of the file. */
   getAbsolutePath() {
     const fileSystem = this.#directory.getFileSystem()
     return fileSystem.getAbsolutePath(this.#path)
@@ -330,10 +327,7 @@ export class JavaScriptFileExportWithRuntime<
     }
 
     const exportName = this.getBaseName()
-    const fileSystem = (await this.#file.getDirectory()).getFileSystem()
-    const fileModule = await this.#getModule(
-      this.#file.getPathRelativeTo(fileSystem.getRootPath())
-    )
+    const fileModule = await this.#getModule(this.#file.getRelativePath())
     const fileModuleExport = fileModule[this.getBaseName()]
 
     if (fileModuleExport === undefined) {
@@ -506,9 +500,6 @@ interface DirectoryOptions<Types extends ExtensionTypes = ExtensionTypes> {
   /** The path to the directory in the file system. */
   path?: string
 
-  /** The base path used for all entry `getPath` methods. */
-  basePath?: string
-
   /** The file system to use for reading directory entries. */
   fileSystem?: FileSystem
 
@@ -540,7 +531,6 @@ export class Directory<
         ? options.path
         : join('.', options.path)
       : '.'
-    this.#basePath = options.basePath
     this.#fileSystem = options.fileSystem
     this.#entryGroup = options.entryGroup
   }
@@ -554,11 +544,11 @@ export class Directory<
   >(options?: DirectoryOptions<Types>): Directory<Types, HasModule, Entry> {
     const directory = new Directory<Types, HasModule, Entry>({
       path: this.#path,
-      basePath: this.#basePath,
       fileSystem: this.#fileSystem,
       ...options,
     })
 
+    directory.#basePath = this.#basePath
     directory.#schemas = this.#schemas
     if (this.#getModule) {
       directory.setModuleGetter(this.#getModule)
@@ -578,11 +568,31 @@ export class Directory<
     if (this.#fileSystem) {
       return this.#fileSystem
     }
-    this.#fileSystem = new NodeFileSystem({
-      rootPath: this.#path,
-      basePath: this.#basePath,
-    })
+    this.#fileSystem = new NodeFileSystem({ rootPath: this.#path })
     return this.#fileSystem
+  }
+
+  /** Returns a new `Directory` with a base path applied to all descendant entries. */
+  withBasePath(path: string) {
+    const directory = new Directory<Types, true, Entry>({
+      path: this.#path,
+      fileSystem: this.#fileSystem,
+    })
+
+    directory.setDirectory(this)
+    directory.#basePath = path
+    directory.#schemas = this.#schemas
+    if (this.#getModule) {
+      directory.setModuleGetter(this.#getModule)
+    }
+    if (this.#filterCallback) {
+      directory.setFilterCallback(this.#filterCallback)
+    }
+    if (this.#sortCallback) {
+      directory.setSortCallback(this.#sortCallback)
+    }
+
+    return directory
   }
 
   /** Set the module getter for JavaScript files in the directory. */
@@ -596,12 +606,12 @@ export class Directory<
   ): Directory<Types, true, Entry> {
     const directory = new Directory<Types, true, Entry>({
       path: this.#path,
-      basePath: this.#basePath,
       fileSystem: this.#fileSystem,
     })
 
     directory.setDirectory(this)
     directory.setModuleGetter(getModule)
+    directory.#basePath = this.#basePath
     directory.#schemas = this.#schemas
     if (this.#filterCallback) {
       directory.setFilterCallback(this.#filterCallback)
@@ -640,12 +650,12 @@ export class Directory<
   ): Directory<Types, HasModule, FilteredEntry> {
     const directory = new Directory<Types, HasModule, FilteredEntry>({
       path: this.#path,
-      basePath: this.#basePath,
       fileSystem: this.#fileSystem,
     })
 
     directory.setDirectory(this)
     directory.setFilterCallback(filter)
+    directory.#basePath = this.#basePath
     directory.#schemas = this.#schemas
     if (this.#getModule) {
       directory.setModuleGetter(this.#getModule)
@@ -673,12 +683,12 @@ export class Directory<
   ): Directory<Types, HasModule, Entry> {
     const directory = new Directory<Types, HasModule, Entry>({
       path: this.#path,
-      basePath: this.#basePath,
       fileSystem: this.#fileSystem,
     })
 
     directory.setDirectory(this)
     directory.setSortCallback(sort)
+    directory.#basePath = this.#basePath
     directory.#schemas = this.#schemas
     if (this.#getModule) {
       directory.setModuleGetter(this.#getModule)
@@ -711,12 +721,12 @@ export class Directory<
   ): Directory<Types, HasModule, Entry> {
     const directory = new Directory<Types, HasModule, Entry>({
       path: this.#path,
-      basePath: this.#basePath,
       fileSystem: this.#fileSystem,
     })
 
     directory.setDirectory(this)
     directory.setSchema(extension, schema)
+    directory.#basePath = this.#basePath
     if (this.#getModule) {
       directory.setModuleGetter(this.#getModule)
     }
@@ -1099,19 +1109,25 @@ export class Directory<
   }
 
   /** Get a URL-friendly path of the directory. */
-  getPath() {
+  getPath(options: { includeBasePath?: boolean } = { includeBasePath: true }) {
     const fileSystem = this.getFileSystem()
-    return fileSystem.getUrlPathRelativeTo(removeOrderPrefixes(this.#path))
+
+    return fileSystem.getPathRelativeTo(
+      this.#path,
+      options.includeBasePath ? { basePath: this.#basePath } : undefined
+    )
   }
 
   /** Get the path segments of the directory. */
-  getPathSegments() {
-    const fileSystem = this.getFileSystem()
-    const path = fileSystem.getUrlPathRelativeTo(
-      removeOrderPrefixes(this.#path),
-      false
-    )
-    return path.split('/').filter(Boolean)
+  getPathSegments(
+    options: { includeBasePath?: boolean } = { includeBasePath: true }
+  ) {
+    return this.getPath(options).split('/').filter(Boolean)
+  }
+
+  /** Get the configured base path of the directory. */
+  getBasePath() {
+    return this.#basePath
   }
 
   /** Get the relative path of the directory. */
