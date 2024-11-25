@@ -2,7 +2,7 @@
 'renoun': minor
 ---
 
-Moves the `Directory` `basePath` option to `<Directory>.withBasePath`. This aligns with the other recent refactor of `Directory` options.
+Moves the `Directory` `basePath` option to `<Directory>.withBasePath`. This aligns with the recent refactor of other `Directory` options.
 
 ### Breaking Changes
 
