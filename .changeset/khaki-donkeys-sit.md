@@ -2,7 +2,7 @@
 'renoun': minor
 ---
 
-Moves the `Directory` `schema` option to `<Directory>.withSchema`. This aligns with the recent refactor of the `getImport` option to `<Directory>.withModule`.
+Moves the `Directory` `schema` option to `<Directory>.withSchema`. This aligns with the other recent refactor of `Directory` options.
 
 ### Breaking Changes
 
