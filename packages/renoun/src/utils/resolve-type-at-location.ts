@@ -35,7 +35,7 @@ export async function resolveTypeAtLocation(
 
   if (!declaration) {
     throw new Error(
-      `[renoun] Could not resolve type at position: ${position}. Try restarting the server or file an issue if you continue to encounter this error.`
+      `[renoun] Could not resolve type for file path "${filePath}" at position "${position}". Try restarting the server or file an issue if you continue to encounter this error.`
     )
   }
 
