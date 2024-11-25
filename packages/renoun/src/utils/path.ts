@@ -27,10 +27,17 @@ export function directoryName(path: string): string {
 
 /** Remove the extension from a file path e.g. readme.md -> readme */
 export function removeExtension(filePath: string): string {
-  return join(
-    directoryName(filePath),
-    baseName(filePath, extensionName(filePath))
+  const lastDotIndex = filePath.lastIndexOf('.')
+  const lastSlashIndex = Math.max(
+    filePath.lastIndexOf('/'),
+    filePath.lastIndexOf('\\')
   )
+
+  if (lastDotIndex > lastSlashIndex) {
+    return filePath.slice(0, lastDotIndex)
+  }
+
+  return filePath
 }
 
 /** Remove order prefixes from a file path e.g. 01.intro -> intro */
