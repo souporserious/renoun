@@ -550,7 +550,7 @@ describe('file system', () => {
   test('generates tree navigation', async () => {
     const projectDirectory = new Directory({
       path: 'fixtures/project',
-    })
+    }).withBasePath('project')
 
     async function buildTreeNavigation<Entry extends FileSystemEntry<any>>(
       entry: Entry
@@ -580,23 +580,23 @@ describe('file system', () => {
           "children": [
             {
               "name": "client",
-              "path": "/rpc/client",
+              "path": "/project/rpc/client",
             },
             {
               "name": "server",
-              "path": "/rpc/server",
+              "path": "/project/rpc/server",
             },
           ],
           "name": "rpc",
-          "path": "/rpc",
+          "path": "/project/rpc",
         },
         {
           "name": "server",
-          "path": "/server",
+          "path": "/project/server",
         },
         {
           "name": "types",
-          "path": "/types",
+          "path": "/project/types",
         },
       ]
     `)

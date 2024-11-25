@@ -573,13 +573,12 @@ export class Directory<
   }
 
   /** Returns a new `Directory` with a base path applied to all descendant entries. */
-  withBasePath(path: string) {
-    const directory = new Directory<Types, true, Entry>({
+  withBasePath(path: string): Directory<Types, HasModule, Entry> {
+    const directory = new Directory<Types, HasModule, Entry>({
       path: this.#path,
       fileSystem: this.#fileSystem,
     })
 
-    directory.setDirectory(this)
     directory.#basePath = path
     directory.#schemas = this.#schemas
     if (this.#getModule) {
@@ -609,7 +608,6 @@ export class Directory<
       fileSystem: this.#fileSystem,
     })
 
-    directory.setDirectory(this)
     directory.setModuleGetter(getModule)
     directory.#basePath = this.#basePath
     directory.#schemas = this.#schemas
@@ -653,7 +651,6 @@ export class Directory<
       fileSystem: this.#fileSystem,
     })
 
-    directory.setDirectory(this)
     directory.setFilterCallback(filter)
     directory.#basePath = this.#basePath
     directory.#schemas = this.#schemas
@@ -686,7 +683,6 @@ export class Directory<
       fileSystem: this.#fileSystem,
     })
 
-    directory.setDirectory(this)
     directory.setSortCallback(sort)
     directory.#basePath = this.#basePath
     directory.#schemas = this.#schemas
@@ -724,7 +720,6 @@ export class Directory<
       fileSystem: this.#fileSystem,
     })
 
-    directory.setDirectory(this)
     directory.setSchema(extension, schema)
     directory.#basePath = this.#basePath
     if (this.#getModule) {
@@ -982,6 +977,7 @@ export class Directory<
           entryGroup: this.#entryGroup,
         })
 
+        directory.#basePath = this.#basePath
         directory.#schemas = this.#schemas
 
         if (this.#getModule) {
