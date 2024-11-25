@@ -40,10 +40,31 @@ export function removeOrderPrefixes(filePath: string): string {
 
 /** Join multiple paths together */
 export function join(...paths: string[]): string {
-  return paths
-    .join('/')
-    .replace(/\/+/g, '/') // Remove any duplicate slashes
-    .replace(/\/$/, '') // Remove trailing slash if present
+  if (paths.length === 0) {
+    return '.'
+  }
+
+  const isAbsolute = paths[0]?.startsWith('/')
+  const segments: string[] = []
+
+  for (const path of paths) {
+    if (!path) {
+      continue
+    }
+
+    for (const segment of path.split('/')) {
+      if (segment === '..') {
+        if (isAbsolute || segments.length > 0) {
+          segments.pop() // Go up one directory
+        }
+      } else if (segment && segment !== '.') {
+        segments.push(segment)
+      }
+    }
+  }
+
+  const resolvedPath = segments.join('/')
+  return isAbsolute ? `/${resolvedPath}` : resolvedPath || '.'
 }
 
 /** Get the relative path from one file to another */
