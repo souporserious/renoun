@@ -14,9 +14,7 @@ interface PostType {
   frontmatter: z.infer<typeof frontmatterSchema>
 }
 
-export const posts = new Directory<{ mdx: PostType }>({
-  path: 'posts',
-})
+export const posts = new Directory<{ mdx: PostType }>('posts')
   .withSchema('mdx', { frontmatter: frontmatterSchema.parse })
   .withModule((path) => import(`./posts/${path}`))
   .withFilter((entry) => isFile(entry, 'mdx'))

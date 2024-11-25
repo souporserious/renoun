@@ -4,6 +4,7 @@ import { getEditPath } from '../utils/get-edit-path.js'
 import { getGitMetadata } from '../utils/get-git-metadata.js'
 import {
   baseName,
+  ensureRelativePath,
   extensionName,
   join,
   relative,
@@ -525,14 +526,18 @@ export class Directory<
     | ((entry: FileSystemEntry<Types, HasModule>) => entry is Entry)
     | ((entry: FileSystemEntry<Types, HasModule>) => Promise<boolean> | boolean)
 
-  constructor(options: DirectoryOptions<Types> = {}) {
-    this.#path = options.path
-      ? options.path.startsWith('.')
-        ? options.path
-        : join('.', options.path)
-      : '.'
-    this.#fileSystem = options.fileSystem
-    this.#entryGroup = options.entryGroup
+  constructor(path?: string)
+  constructor(path?: DirectoryOptions<Types>)
+  constructor(path?: any) {
+    if (path === undefined) {
+      this.#path = '.'
+    } else if (typeof path === 'string') {
+      this.#path = ensureRelativePath(path)
+    } else {
+      this.#path = ensureRelativePath(path.path)
+      this.#fileSystem = path.fileSystem
+      this.#entryGroup = path.entryGroup
+    }
   }
 
   /** Get the file system for this directory. */
