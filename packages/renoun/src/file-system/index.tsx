@@ -477,7 +477,7 @@ export interface ExtensionType {
 
 /** Types associated with a specific file extension. */
 export interface ExtensionTypes {
-  [extension: string]: ExtensionType
+  [extension: string]: any
 }
 
 /** A function that validates and transforms export values. */
