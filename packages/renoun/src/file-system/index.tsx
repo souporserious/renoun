@@ -535,6 +535,15 @@ export class Directory<
     this.#entryGroup = options.entryGroup
   }
 
+  /** Get the file system for this directory. */
+  getFileSystem() {
+    if (this.#fileSystem) {
+      return this.#fileSystem
+    }
+    this.#fileSystem = new NodeFileSystem({ rootPath: this.#path })
+    return this.#fileSystem
+  }
+
   /** Duplicate the directory with the same initial options. */
   duplicate<
     Entry extends FileSystemEntry<Types, HasModule> = FileSystemEntry<
@@ -550,164 +559,82 @@ export class Directory<
 
     directory.#basePath = this.#basePath
     directory.#schemas = this.#schemas
-    if (this.#getModule) {
-      directory.setModuleGetter(this.#getModule)
-    }
-    if (this.#filterCallback) {
-      directory.setFilterCallback(this.#filterCallback)
-    }
-    if (this.#sortCallback) {
-      directory.setSortCallback(this.#sortCallback)
-    }
+    directory.#getModule = this.#getModule
+    directory.#sortCallback = this.#sortCallback as any
+    directory.#filterCallback = this.#filterCallback
 
     return directory
   }
 
-  /** Get the file system for this directory. */
-  getFileSystem() {
-    if (this.#fileSystem) {
-      return this.#fileSystem
-    }
-    this.#fileSystem = new NodeFileSystem({ rootPath: this.#path })
-    return this.#fileSystem
+  #withOptions(options: {
+    basePath?: string
+    fileSystem?: FileSystem
+    entryGroup?: EntryGroup<FileSystemEntry<Types, HasModule>[]>
+    directory?: Directory<any, any>
+    schemas?: ExtensionSchemas<Types>
+    getModule?: (path: string) => Promise<any>
+    sortCallback?: (a: Entry, b: Entry) => Promise<number> | number
+    filterCallback?:
+      | ((entry: FileSystemEntry<Types, HasModule>) => entry is Entry)
+      | ((
+          entry: FileSystemEntry<Types, HasModule>
+        ) => Promise<boolean> | boolean)
+  }) {
+    const directory = new Directory<Types, HasModule, Entry>({
+      path: this.#path,
+    })
+
+    directory.#fileSystem = options.fileSystem ?? this.#fileSystem
+    directory.#entryGroup = options.entryGroup ?? this.#entryGroup
+    directory.#basePath = options.basePath ?? this.#basePath
+    directory.#schemas = options.schemas ?? this.#schemas
+    directory.#getModule = options.getModule ?? this.#getModule
+    directory.#sortCallback = options.sortCallback ?? this.#sortCallback
+    directory.#filterCallback = options.filterCallback ?? this.#filterCallback
+
+    return directory
   }
 
   /** Returns a new `Directory` with a base path applied to all descendant entries. */
-  withBasePath(path: string): Directory<Types, HasModule, Entry> {
-    const directory = new Directory<Types, HasModule, Entry>({
-      path: this.#path,
-      fileSystem: this.#fileSystem,
-    })
-
-    directory.#basePath = path
-    directory.#schemas = this.#schemas
-    if (this.#getModule) {
-      directory.setModuleGetter(this.#getModule)
-    }
-    if (this.#filterCallback) {
-      directory.setFilterCallback(this.#filterCallback)
-    }
-    if (this.#sortCallback) {
-      directory.setSortCallback(this.#sortCallback)
-    }
-
-    return directory
-  }
-
-  /** Set the module getter for JavaScript files in the directory. */
-  protected setModuleGetter(getModule: (path: string) => Promise<any>) {
-    this.#getModule = getModule
+  withBasePath(basePath: string): Directory<Types, HasModule, Entry> {
+    return this.#withOptions({ basePath })
   }
 
   /** Returns a new `Directory` with a module getter applied to all JavaScript files. */
   withModule(
     getModule: (path: string) => Promise<any>
   ): Directory<Types, true, Entry> {
-    const directory = new Directory<Types, true, Entry>({
-      path: this.#path,
-      fileSystem: this.#fileSystem,
-    })
-
-    directory.setModuleGetter(getModule)
-    directory.#basePath = this.#basePath
-    directory.#schemas = this.#schemas
-    if (this.#filterCallback) {
-      directory.setFilterCallback(this.#filterCallback)
-    }
-    if (this.#sortCallback) {
-      directory.setSortCallback(this.#sortCallback)
-    }
-
-    return directory
-  }
-
-  /** Set a filter to exclude entries from this directory. */
-  protected setFilterCallback(
-    filter:
-      | ((entry: FileSystemEntry<Types, HasModule>) => entry is Entry)
-      | ((
-          entry: FileSystemEntry<Types, HasModule>
-        ) => Promise<boolean> | boolean)
-  ) {
-    this.#filterCallback = filter
+    return this.#withOptions({ getModule })
   }
 
   /** Returns a new `Directory` with a narrowed type and filter applied to all descendant entries. */
   withFilter<FilteredEntry extends Entry>(
-    filter: (entry: FileSystemEntry<Types, HasModule>) => entry is FilteredEntry
+    filterCallback: (
+      entry: FileSystemEntry<Types, HasModule>
+    ) => entry is FilteredEntry
   ): Directory<Types, HasModule, FilteredEntry>
   withFilter<FilteredEntry extends Entry>(
-    filter: (
+    filterCallback: (
       entry: FileSystemEntry<Types, HasModule>
     ) => Promise<boolean> | boolean
   ): Directory<Types, HasModule, FilteredEntry>
   withFilter<FilteredEntry extends Entry>(
-    filter: (
+    filterCallback: (
       entry: FileSystemEntry<Types, HasModule>
     ) => Promise<boolean> | boolean
   ): Directory<Types, HasModule, FilteredEntry> {
-    const directory = new Directory<Types, HasModule, FilteredEntry>({
-      path: this.#path,
-      fileSystem: this.#fileSystem,
-    })
-
-    directory.setFilterCallback(filter)
-    directory.#basePath = this.#basePath
-    directory.#schemas = this.#schemas
-    if (this.#getModule) {
-      directory.setModuleGetter(this.#getModule)
-    }
-    if (this.#sortCallback) {
-      directory.setSortCallback(this.#sortCallback)
-    }
-
-    return directory
-  }
-
-  /** Set a sorting function for directory entries. */
-  protected setSortCallback<Entry extends FileSystemEntry<Types, HasModule>>(
-    sortCallback: (a: Entry, b: Entry) => Promise<number> | number
-  ) {
-    this.#sortCallback = sortCallback as (
-      a: FileSystemEntry<Types, HasModule>,
-      b: FileSystemEntry<Types, HasModule>
-    ) => Promise<number> | number
+    return this.#withOptions({ filterCallback }) as Directory<
+      Types,
+      HasModule,
+      FilteredEntry
+    >
   }
 
   /** Returns a new `Directory` with a sorting function applied to all descendant entries. */
   withSort(
-    sort: (a: Entry, b: Entry) => Promise<number> | number
+    sortCallback: (a: Entry, b: Entry) => Promise<number> | number
   ): Directory<Types, HasModule, Entry> {
-    const directory = new Directory<Types, HasModule, Entry>({
-      path: this.#path,
-      fileSystem: this.#fileSystem,
-    })
-
-    directory.setSortCallback(sort)
-    directory.#basePath = this.#basePath
-    directory.#schemas = this.#schemas
-    if (this.#getModule) {
-      directory.setModuleGetter(this.#getModule)
-    }
-    if (this.#filterCallback) {
-      directory.setFilterCallback(this.#filterCallback)
-    }
-
-    return directory
-  }
-
-  /** Set an extension schema for all JavaScript files in the directory. */
-  protected setSchema<Extension extends keyof Types>(
-    extension: Extension,
-    schema: ExtensionSchemas<Types>[Extension]
-  ) {
-    if (this.#schemas[extension]) {
-      throw new Error(
-        `[renoun] Schema for extension "${String(extension)}" is already defined in the directory "${this.#path}".`
-      )
-    }
-
-    this.#schemas[extension] = schema
+    return this.#withOptions({ sortCallback })
   }
 
   /** Configure schema for a specific extension. */
@@ -715,24 +642,18 @@ export class Directory<
     extension: Extension,
     schema: ExtensionSchemas<Types>[Extension]
   ): Directory<Types, HasModule, Entry> {
-    const directory = new Directory<Types, HasModule, Entry>({
-      path: this.#path,
-      fileSystem: this.#fileSystem,
+    if (this.#schemas[extension]) {
+      throw new Error(
+        `[renoun] Schema for extension "${String(extension)}" is already defined in the directory "${this.#path}".`
+      )
+    }
+
+    return this.#withOptions({
+      schemas: {
+        ...this.#schemas,
+        [extension]: schema,
+      },
     })
-
-    directory.setSchema(extension, schema)
-    directory.#basePath = this.#basePath
-    if (this.#getModule) {
-      directory.setModuleGetter(this.#getModule)
-    }
-    if (this.#filterCallback) {
-      directory.setFilterCallback(this.#filterCallback)
-    }
-    if (this.#sortCallback) {
-      directory.setSortCallback(this.#sortCallback)
-    }
-
-    return directory
   }
 
   /** Get a file at the specified `path` and optional extensions. */
@@ -841,11 +762,6 @@ export class Directory<
     }
 
     return file as any
-  }
-
-  /** Set the parent directory of the current directory. */
-  protected setDirectory(directory: Directory<any, any, any>) {
-    this.#directory = directory
   }
 
   /** Get the parent directory or a directory at the specified `path`. */
@@ -967,32 +883,13 @@ export class Directory<
       }
 
       if (entry.isDirectory) {
-        const directory = new Directory<
-          Types,
-          HasModule,
-          FileSystemEntry<Types>
-        >({
+        const directory = this.duplicate({
           fileSystem,
           path: entry.path,
           entryGroup: this.#entryGroup,
         })
 
-        directory.#basePath = this.#basePath
-        directory.#schemas = this.#schemas
-
-        if (this.#getModule) {
-          directory.setModuleGetter(this.#getModule)
-        }
-
-        if (this.#filterCallback) {
-          directory.setFilterCallback(this.#filterCallback)
-        }
-
-        if (this.#sortCallback) {
-          directory.setSortCallback(this.#sortCallback)
-        }
-
-        directory.setDirectory(this)
+        directory.#directory = this as Directory<Types>
 
         if (options?.recursive) {
           const nestedEntries = await directory.getEntries(options)
