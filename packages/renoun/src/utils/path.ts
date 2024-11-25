@@ -85,3 +85,8 @@ export function relative(from: string, to: string): string {
 
   return [...fromRemaining, ...toRemaining].join('/')
 }
+
+/** Ensure a path is relative */
+export function ensureRelativePath(path: string = '.') {
+  return path.startsWith('.') ? path : `./${path}`
+}
