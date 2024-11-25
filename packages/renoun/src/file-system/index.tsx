@@ -53,7 +53,7 @@ export class File<
   duplicate(options?: {
     entryGroup: EntryGroup<FileSystemEntry<Types, HasModule>[]>
   }): File<Types, HasModule> {
-    return new File<Types>({
+    return new File({
       directory: this.#directory,
       path: this.#path,
       ...options,
@@ -377,10 +377,8 @@ export class JavaScriptFileExportWithRuntime<
 /** Options for a JavaScript file in the file system. */
 export interface JavaScriptFileOptions<Exports extends ExtensionType>
   extends FileOptions {
-  schema?: ExtensionSchema<Exports>
-  tsConfigFilePath?: string
-  isVirtualFileSystem?: boolean
   getModule?: (path: string) => Promise<any>
+  schema?: ExtensionSchema<Exports>
 }
 
 /** A JavaScript file in the file system. */
@@ -395,13 +393,11 @@ export class JavaScriptFile<
   constructor({
     getModule,
     schema,
-    tsConfigFilePath,
-    isVirtualFileSystem = false,
     ...fileOptions
   }: JavaScriptFileOptions<Exports>) {
     super(fileOptions)
-    this.#getModule = getModule
     this.#schema = schema
+    this.#getModule = getModule
   }
 
   /** Parse and validate an export value using the configured schema. */
@@ -529,14 +525,14 @@ export class Directory<
   #path: string
   #basePath?: string
   #fileSystem: FileSystem | undefined
-  #entryGroup?: EntryGroup<FileSystemEntry<Types>[]> | undefined
+  #entryGroup?: EntryGroup<FileSystemEntry<Types, HasModule>[]> | undefined
   #directory?: Directory<any, any>
   #schemas: ExtensionSchemas<Types> = {}
   #getModule?: (path: string) => Promise<any>
   #sortCallback?: (a: Entry, b: Entry) => Promise<number> | number
   #filterCallback?:
-    | ((entry: FileSystemEntry<Types>) => entry is Entry)
-    | ((entry: FileSystemEntry<Types>) => Promise<boolean> | boolean)
+    | ((entry: FileSystemEntry<Types, HasModule>) => entry is Entry)
+    | ((entry: FileSystemEntry<Types, HasModule>) => Promise<boolean> | boolean)
 
   constructor(options: DirectoryOptions<Types> = {}) {
     this.#path = options.path
@@ -620,8 +616,10 @@ export class Directory<
   /** Set a filter to exclude entries from this directory. */
   protected setFilterCallback(
     filter:
-      | ((entry: FileSystemEntry<Types>) => entry is Entry)
-      | ((entry: FileSystemEntry<Types>) => Promise<boolean> | boolean)
+      | ((entry: FileSystemEntry<Types, HasModule>) => entry is Entry)
+      | ((
+          entry: FileSystemEntry<Types, HasModule>
+        ) => Promise<boolean> | boolean)
   ) {
     this.#filterCallback = filter
   }
@@ -660,12 +658,12 @@ export class Directory<
   }
 
   /** Set a sorting function for directory entries. */
-  protected setSortCallback<Entry extends FileSystemEntry<Types>>(
+  protected setSortCallback<Entry extends FileSystemEntry<Types, HasModule>>(
     sortCallback: (a: Entry, b: Entry) => Promise<number> | number
   ) {
     this.#sortCallback = sortCallback as (
-      a: FileSystemEntry<Types>,
-      b: FileSystemEntry<Types>
+      a: FileSystemEntry<Types, HasModule>,
+      b: FileSystemEntry<Types, HasModule>
     ) => Promise<number> | number
   }
 
@@ -1006,15 +1004,13 @@ export class Directory<
         }
       } else if (entry.isFile) {
         const extension = extensionName(entry.name).slice(1)
-        const schema = this.#schemas[extension]
         const file = isJavaScriptLikeExtension(extension)
           ? new JavaScriptFile<Types, HasModule>({
               path: entry.path,
               directory: this as Directory<Types>,
               entryGroup: this.#entryGroup,
-              schema,
               getModule: this.#getModule,
-              isVirtualFileSystem: fileSystem instanceof VirtualFileSystem,
+              schema: this.#schemas[extension],
             })
           : new File({
               path: entry.path,
@@ -1152,7 +1148,7 @@ export class Directory<
   }
 
   /** Returns a type guard that checks if this directory contains the provided entry. */
-  async getHasEntry(entry: FileSystemEntry<any> | undefined) {
+  async getHasEntry(entry: FileSystemEntry<any, boolean> | undefined) {
     let exists = false
 
     if (entry) {
@@ -1164,7 +1160,9 @@ export class Directory<
       }
     }
 
-    function hasEntry(entry: FileSystemEntry<any> | undefined): entry is Entry {
+    function hasEntry(
+      entry: FileSystemEntry<any, boolean> | undefined
+    ): entry is Entry {
       return exists
     }
 
@@ -1172,14 +1170,14 @@ export class Directory<
   }
 
   /** Returns a type guard that check if this directory contains the provided file with a specific extension. */
-  async getHasFile(entry: FileSystemEntry<any> | undefined) {
+  async getHasFile(entry: FileSystemEntry<any, boolean> | undefined) {
     const hasEntry = await this.getHasEntry(entry)
 
     function hasFileWith<
       Type extends keyof Types | (string & {}),
       const Extension extends Type | Type[],
     >(
-      entry: FileSystemEntry<any> | undefined,
+      entry: FileSystemEntry<any, boolean> | undefined,
       extension?: Extension
     ): entry is FileWithExtension<Types, Extension, HasModule> {
       const extensions = Array.isArray(extension) ? extension : [extension]
