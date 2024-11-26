@@ -109,7 +109,7 @@ export class File<
     const basePath = this.#directory.getBasePath()
 
     return removeExtension(
-      fileSystem.getPathRelativeTo(
+      fileSystem.getPath(
         this.#path,
         options.includeBasePath ? { basePath } : undefined
       )
@@ -125,8 +125,7 @@ export class File<
 
   /** Get the relative file system path of the file. */
   getRelativePath() {
-    const fileSystem = this.#directory.getFileSystem()
-    return relative(fileSystem.getRootPath(), this.#path)
+    return this.#directory.getFileSystem().getRelativePath(this.#path)
   }
 
   /** Get the absolute file system path of the file. */
@@ -1187,7 +1186,7 @@ export class Directory<
   getPath(options: { includeBasePath?: boolean } = { includeBasePath: true }) {
     const fileSystem = this.getFileSystem()
 
-    return fileSystem.getPathRelativeTo(
+    return fileSystem.getPath(
       this.#path,
       options.includeBasePath ? { basePath: this.#basePath } : undefined
     )
@@ -1207,7 +1206,7 @@ export class Directory<
 
   /** Get the relative path of the directory. */
   getRelativePath() {
-    return this.#path
+    return this.getFileSystem().getRelativePath(this.#path)
   }
 
   /** Get the absolute path of the directory. */

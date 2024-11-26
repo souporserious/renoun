@@ -48,21 +48,14 @@ export abstract class FileSystem {
   }
 
   abstract getAbsolutePath(path: string): string
-  abstract readFileSync(path: string): string
-  abstract readFile(path: string): Promise<string>
-  abstract readDirectory(
-    path?: string,
-    options?: { recursive?: boolean }
-  ): Promise<DirectoryEntry[]>
-  abstract isFilePathGitIgnored(filePath: string): boolean
 
-  getRootPath() {
-    return ensureRelativePath(this.#rootPath)
+  getRelativePath(path: string) {
+    const rootPath = ensureRelativePath(this.#rootPath)
+    return relative(rootPath, path)
   }
 
-  getPathRelativeTo(path: string, options: { basePath?: string } = {}) {
-    const rootPath = this.getRootPath()
-    const relativePath = relative(rootPath, removeOrderPrefixes(path))
+  getPath(path: string, options: { basePath?: string } = {}) {
+    const relativePath = this.getRelativePath(removeOrderPrefixes(path))
       // remove leading dot
       .replace(/^\.\//, '')
       // remove trailing slash
@@ -70,6 +63,15 @@ export abstract class FileSystem {
 
     return join('/', options.basePath, relativePath)
   }
+
+  abstract readFileSync(path: string): string
+
+  abstract readFile(path: string): Promise<string>
+
+  abstract readDirectory(
+    path?: string,
+    options?: { recursive?: boolean }
+  ): Promise<DirectoryEntry[]>
 
   #getTsConfig() {
     try {
@@ -104,6 +106,8 @@ export abstract class FileSystem {
 
     return false
   }
+
+  abstract isFilePathGitIgnored(filePath: string): boolean
 
   getFileExports(filePath: string) {
     return getFileExports(filePath, this.#projectOptions)
