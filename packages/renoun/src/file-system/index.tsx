@@ -1154,13 +1154,16 @@ export class Directory<
       FileSystemEntry<Types, HasModule> | undefined,
     ]
   > {
-    if (!this.#directory) {
+    let entries: FileSystemEntry<Types, HasModule>[] = []
+
+    if (this.#entryGroup) {
+      entries = await this.#entryGroup.getEntries({ recursive: true })
+    } else if (this.#directory) {
+      entries = await this.#directory.getEntries()
+    } else {
       return [undefined, undefined]
     }
 
-    const entries = await (this.#entryGroup
-      ? this.#entryGroup.getEntries({ recursive: true })
-      : this.#directory.getEntries())
     const index = entries.findIndex((entryToCompare) => {
       return entryToCompare.getRelativePath() === this.getRelativePath()
     })

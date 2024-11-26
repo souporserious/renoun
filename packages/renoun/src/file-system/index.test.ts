@@ -816,6 +816,37 @@ describe('file system', () => {
     expect(nextEntry?.getName()).toBe('docs')
   })
 
+  test('getSiblings in entry group', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'docs/intro.mdx': '',
+      'docs/next-steps.mdx': '',
+      'guides/intro.mdx': '',
+      'guides/next-steps.mdx': '',
+    })
+    const docs = new Directory({ path: 'docs', fileSystem })
+    const guides = new Directory({ path: 'guides', fileSystem })
+    const group = new EntryGroup({ entries: [docs, guides] })
+
+    const directory = await group.getDirectoryOrThrow('guides')
+    const [previousDirectoryEntry, nextDirectoryEntry] =
+      await directory.getSiblings()
+
+    expect(previousDirectoryEntry).toBeDefined()
+    expect(previousDirectoryEntry!.getPath()).toBe('/docs/next-steps')
+
+    expect(nextDirectoryEntry).toBeDefined()
+    expect(nextDirectoryEntry!.getPath()).toBe('/guides/intro')
+
+    const file = await group.getFileOrThrow('guides/intro')
+    const [previousFileEntry, nextFileEntry] = await file.getSiblings()
+
+    expect(previousFileEntry).toBeDefined()
+    expect(previousFileEntry!.getPath()).toBe('/guides')
+
+    expect(nextFileEntry).toBeDefined()
+    expect(nextFileEntry!.getPath()).toBe('/guides/next-steps')
+  })
+
   test('has entry', async () => {
     type MDXTypes = { metadata: { title: string } }
     type TSXTypes = { title: string }
