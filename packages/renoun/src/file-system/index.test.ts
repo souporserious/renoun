@@ -466,11 +466,32 @@ describe('file system', () => {
     expect(type!.name).toBe('Metadata')
   })
 
-  test('getRuntimeValue resolves export runtime value from getModule', async () => {
-    const fileSystemDirectory = new Directory('fixtures/utils').withModule(
+  test('getRuntimeValue resolves export runtime value from withModule', async () => {
+    const directory = new Directory('fixtures/utils').withModule(
       (path) => import(`#fixtures/utils/${path}`)
     )
-    const file = await fileSystemDirectory.getFileOrThrow('path', 'ts')
+    const file = await directory.getFileOrThrow('path', 'ts')
+
+    expectTypeOf(file).toMatchTypeOf<JavaScriptFile<any, true>>()
+    expect(file).toBeInstanceOf(JavaScriptFile)
+
+    const fileExport = file.getExport('basename')
+
+    expectTypeOf(fileExport).toHaveProperty('getRuntimeValue')
+    expect(fileExport).toBeInstanceOf(JavaScriptFileExport)
+
+    const basename = await fileExport.getRuntimeValue()
+
+    expect(basename).toBeDefined()
+    expect(basename('/path/to/file.ts', '.ts')).toBe('file')
+  })
+
+  test('getRuntimeValue resolves export runtime value from withModule with extension', async () => {
+    const directory = new Directory('fixtures/utils').withModule(
+      'ts',
+      (path) => import(`#fixtures/utils/${path}.ts`)
+    )
+    const file = await directory.getFileOrThrow('path', 'ts')
 
     expectTypeOf(file).toMatchTypeOf<JavaScriptFile<any, true>>()
     expect(file).toBeInstanceOf(JavaScriptFile)

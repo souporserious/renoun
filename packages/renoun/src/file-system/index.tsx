@@ -303,17 +303,28 @@ export class JavaScriptFileExportWithRuntime<
 > extends JavaScriptFileExport<Exports> {
   #name: string
   #file: JavaScriptFile<Exports, true>
-  #getModule: (path: string) => Promise<any>
+  #moduleGetters: Map<string, (path: string) => Promise<any>>
 
   constructor(
     name: string,
     file: JavaScriptFile<Exports, any>,
-    getModule: (path: string) => Promise<any>
+    moduleGetters: Map<string, (path: string) => Promise<any>>
   ) {
     super(name, file)
     this.#name = name
     this.#file = file
-    this.#getModule = getModule
+    this.#moduleGetters = moduleGetters
+  }
+
+  #getModule(path: string) {
+    if (this.#moduleGetters.has('default')) {
+      return this.#moduleGetters.get('default')!(path)
+    }
+
+    const extension = this.#file.getExtension()
+    const getModule = this.#moduleGetters.get(extension)!
+
+    return getModule(removeExtension(path))
   }
 
   /**
@@ -321,7 +332,7 @@ export class JavaScriptFileExportWithRuntime<
    * is not found or the configured schema validation for this file extension fails.
    */
   async getRuntimeValue(): Promise<Value> {
-    if (this.#getModule === undefined) {
+    if (this.#moduleGetters === undefined) {
       throw new Error(
         `[renoun] JavaScript file export "${String(this.#name)}" does not have a runtime value. The "getModule" function for the nearest Directory definition is not defined.`
       )
@@ -372,7 +383,7 @@ export class JavaScriptFileExportWithRuntime<
 /** Options for a JavaScript file in the file system. */
 export interface JavaScriptFileOptions<Exports extends ExtensionType>
   extends FileOptions {
-  getModule?: (path: string) => Promise<any>
+  moduleGetters?: Map<string, (path: string) => Promise<any>>
   schema?: ExtensionSchema<Exports>
 }
 
@@ -382,17 +393,17 @@ export class JavaScriptFile<
   HasModule extends boolean = any,
 > extends File {
   #exports = new Map<string, JavaScriptFileExport<Exports>>()
-  #getModule?: (path: string) => Promise<any>
+  #moduleGetters?: Map<string, (path: string) => Promise<any>>
   #schema?: ExtensionSchema<Exports>
 
   constructor({
-    getModule,
+    moduleGetters,
     schema,
     ...fileOptions
   }: JavaScriptFileOptions<Exports>) {
     super(fileOptions)
+    this.#moduleGetters = moduleGetters
     this.#schema = schema
-    this.#getModule = getModule
   }
 
   /** Parse and validate an export value using the configured schema. */
@@ -461,8 +472,8 @@ export class JavaScriptFile<
       return this.#exports.get(name)! as any
     }
 
-    const fileExport = this.#getModule
-      ? new JavaScriptFileExportWithRuntime(name, this, this.#getModule)
+    const fileExport = this.#moduleGetters
+      ? new JavaScriptFileExportWithRuntime(name, this, this.#moduleGetters)
       : new JavaScriptFileExport(name, this as any)
 
     this.#exports.set(name, fileExport)
@@ -520,7 +531,7 @@ export class Directory<
   #entryGroup?: EntryGroup<FileSystemEntry<Types, HasModule>[]> | undefined
   #directory?: Directory<any, any>
   #schemas: ExtensionSchemas<Types> = {}
-  #getModule?: (path: string) => Promise<any>
+  #moduleGetters?: Map<string, (path: string) => Promise<any>>
   #sortCallback?: (a: Entry, b: Entry) => Promise<number> | number
   #filterCallback?:
     | ((entry: FileSystemEntry<Types, HasModule>) => entry is Entry)
@@ -564,7 +575,7 @@ export class Directory<
 
     directory.#basePath = this.#basePath
     directory.#schemas = this.#schemas
-    directory.#getModule = this.#getModule
+    directory.#moduleGetters = this.#moduleGetters
     directory.#sortCallback = this.#sortCallback as any
     directory.#filterCallback = this.#filterCallback
 
@@ -577,7 +588,7 @@ export class Directory<
     entryGroup?: EntryGroup<FileSystemEntry<Types, HasModule>[]>
     directory?: Directory<any, any>
     schemas?: ExtensionSchemas<Types>
-    getModule?: (path: string) => Promise<any>
+    moduleGetters?: Map<string, (path: string) => Promise<any>>
     sortCallback?: (a: Entry, b: Entry) => Promise<number> | number
     filterCallback?:
       | ((entry: FileSystemEntry<Types, HasModule>) => entry is Entry)
@@ -593,7 +604,7 @@ export class Directory<
     directory.#entryGroup = options.entryGroup ?? this.#entryGroup
     directory.#basePath = options.basePath ?? this.#basePath
     directory.#schemas = options.schemas ?? this.#schemas
-    directory.#getModule = options.getModule ?? this.#getModule
+    directory.#moduleGetters = options.moduleGetters ?? this.#moduleGetters
     directory.#sortCallback = options.sortCallback ?? this.#sortCallback
     directory.#filterCallback = options.filterCallback ?? this.#filterCallback
 
@@ -608,8 +619,33 @@ export class Directory<
   /** Returns a new `Directory` with a module getter applied to all JavaScript files. */
   withModule(
     getModule: (path: string) => Promise<any>
+  ): Directory<Types, true, Entry>
+
+  /** Returns a new `Directory` with a module getter applied to files with the specified extension. */
+  withModule(
+    extension: string,
+    getModule: (path: string) => Promise<any>
+  ): Directory<Types, true, Entry>
+
+  withModule(
+    extension: string | ((path: string) => Promise<any>),
+    getModule?: (path: string) => Promise<any>
   ): Directory<Types, true, Entry> {
-    return this.#withOptions({ getModule })
+    const moduleGetters = this.#moduleGetters ?? new Map()
+
+    if (typeof extension === 'string') {
+      moduleGetters.set(extension, getModule!)
+    } else {
+      if (moduleGetters.has('default')) {
+        throw new Error(
+          `[renoun] Module getter for this directory is already defined.`
+        )
+      }
+
+      moduleGetters.set('default', extension)
+    }
+
+    return this.#withOptions({ moduleGetters })
   }
 
   /** Returns a new `Directory` with a narrowed type and filter applied to all descendant entries. */
@@ -917,7 +953,7 @@ export class Directory<
               path: entry.path,
               directory: this as Directory<Types>,
               entryGroup: this.#entryGroup,
-              getModule: this.#getModule,
+              moduleGetters: this.#moduleGetters,
               schema: this.#schemas[extension],
             })
           : new File({
