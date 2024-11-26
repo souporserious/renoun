@@ -1437,12 +1437,13 @@ export class EntryGroup<
 
     if (entry instanceof File) {
       if (extension) {
+        const entryExtension = entry.getExtension()
         const fileExtensions = Array.isArray(extension)
           ? extension
           : [extension]
 
         for (const fileExtension of fileExtensions) {
-          if (entry.getExtension() === fileExtension) {
+          if (entryExtension === fileExtension) {
             return entry as any
           }
         }
