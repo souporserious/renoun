@@ -1102,7 +1102,7 @@ export class Directory<
     let exists = false
 
     if (entry) {
-      const path = entry.getPath()
+      const path = entry.getPath({ includeBasePath: false })
       const directoryEntry = await this.getEntry(path)
 
       if (directoryEntry) {
