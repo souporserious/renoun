@@ -11,10 +11,12 @@ import {
   File,
   Directory,
   JavaScriptFile,
+  JavaScriptFileWithRuntime,
   JavaScriptFileExport,
   EntryGroup,
   isDirectory,
   isFile,
+  isJavaScriptFileWithRuntime,
 } from './index'
 
 describe('file system', () => {
@@ -298,6 +300,29 @@ describe('file system', () => {
     expectTypeOf(file!).toMatchTypeOf<JavaScriptFile<any>>()
   })
 
+  test('javascript file with runtime', async () => {
+    const projectDirectory = new Directory('fixtures/project').withModule(
+      (path) => import(`#fixtures/project/${path}`)
+    )
+    const file = await projectDirectory.getFileOrThrow('server', 'ts')
+
+    expect(file).toBeInstanceOf(JavaScriptFileWithRuntime)
+    expectTypeOf(file).toMatchTypeOf<JavaScriptFileWithRuntime<any>>()
+  })
+
+  test('is javascript file with runtime', async () => {
+    const projectDirectory = new Directory('fixtures/project').withModule(
+      (path) => import(`#fixtures/project/${path}`)
+    )
+    const entry = await projectDirectory.getEntryOrThrow('server')
+
+    expect(isJavaScriptFileWithRuntime(entry)).toBe(true)
+
+    if (isJavaScriptFileWithRuntime(entry)) {
+      expectTypeOf(entry).toMatchTypeOf<JavaScriptFileWithRuntime<any>>()
+    }
+  })
+
   test('removes order prefix from file name and path', async () => {
     const fileSystem = new VirtualFileSystem({
       '01.server.ts': '',
@@ -472,7 +497,7 @@ describe('file system', () => {
     )
     const file = await directory.getFileOrThrow('path', 'ts')
 
-    expectTypeOf(file).toMatchTypeOf<JavaScriptFile<any, true>>()
+    expectTypeOf(file).toMatchTypeOf<JavaScriptFileWithRuntime<any>>()
     expect(file).toBeInstanceOf(JavaScriptFile)
 
     const fileExport = file.getExport('basename')
@@ -493,7 +518,7 @@ describe('file system', () => {
     )
     const file = await directory.getFileOrThrow('path', 'ts')
 
-    expectTypeOf(file).toMatchTypeOf<JavaScriptFile<any, true>>()
+    expectTypeOf(file).toMatchTypeOf<JavaScriptFileWithRuntime<any>>()
     expect(file).toBeInstanceOf(JavaScriptFile)
 
     const fileExport = file.getExport('basename')
