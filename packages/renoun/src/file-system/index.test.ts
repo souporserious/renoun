@@ -601,9 +601,10 @@ describe('file system', () => {
     ) {
       const name = entry.getName()
       const path = entry.getPath()
+      const depth = entry.getDepth()
 
       if (isFile(entry)) {
-        return { name, path }
+        return { name, path, depth }
       }
 
       const entries = await entry.getEntries()
@@ -611,6 +612,7 @@ describe('file system', () => {
       return {
         name,
         path,
+        depth,
         children: await Promise.all(entries.map(buildTreeNavigation)),
       }
     }
@@ -623,22 +625,27 @@ describe('file system', () => {
         {
           "children": [
             {
+              "depth": 1,
               "name": "client",
               "path": "/project/rpc/client",
             },
             {
+              "depth": 1,
               "name": "server",
               "path": "/project/rpc/server",
             },
           ],
+          "depth": 0,
           "name": "rpc",
           "path": "/project/rpc",
         },
         {
+          "depth": 0,
           "name": "server",
           "path": "/project/server",
         },
         {
+          "depth": 0,
           "name": "types",
           "path": "/project/types",
         },

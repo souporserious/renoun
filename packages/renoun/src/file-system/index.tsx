@@ -30,6 +30,7 @@ export type FileSystemEntry<
 /** Options for a file in the file system. */
 export interface FileOptions {
   path: string
+  depth: number
   directory: Directory<any, any>
   entryGroup?: EntryGroup<FileSystemEntry<any, any>[]>
 }
@@ -40,11 +41,13 @@ export class File<
   HasModule extends boolean = false,
 > {
   #path: string
+  #depth: number
   #directory: Directory<Types, HasModule>
   #entryGroup?: EntryGroup<FileSystemEntry<Types, HasModule>[]>
 
   constructor(options: FileOptions) {
     this.#path = options.path
+    this.#depth = options.depth
     this.#directory = options.directory
     this.#entryGroup = options.entryGroup
   }
@@ -56,6 +59,7 @@ export class File<
     return new File({
       directory: this.#directory,
       path: this.#path,
+      depth: this.#depth,
       ...options,
     })
   }
@@ -63,6 +67,11 @@ export class File<
   /** Get the directory containing this file. */
   async getDirectory(): Promise<Directory<Types, HasModule>> {
     return this.#directory
+  }
+
+  /** Get the depth of the file starting from the root directory. */
+  getDepth() {
+    return this.#depth
   }
 
   /**
@@ -630,6 +639,7 @@ export class Directory<
   >,
 > {
   #path: string
+  #depth: number = -1
   #basePath?: string
   #fileSystem: FileSystem | undefined
   #entryGroup?: EntryGroup<FileSystemEntry<Types, HasModule>[]> | undefined
@@ -655,15 +665,6 @@ export class Directory<
     }
   }
 
-  /** Get the file system for this directory. */
-  getFileSystem() {
-    if (this.#fileSystem) {
-      return this.#fileSystem
-    }
-    this.#fileSystem = new NodeFileSystem({ rootPath: this.#path })
-    return this.#fileSystem
-  }
-
   /** Duplicate the directory with the same initial options. */
   duplicate<
     Entry extends FileSystemEntry<Types, HasModule> = FileSystemEntry<
@@ -677,6 +678,7 @@ export class Directory<
       ...options,
     })
 
+    directory.#depth = this.#depth
     directory.#basePath = this.#basePath
     directory.#schemas = this.#schemas
     directory.#moduleGetters = this.#moduleGetters
@@ -704,6 +706,7 @@ export class Directory<
       path: this.#path,
     })
 
+    directory.#depth = this.#depth
     directory.#fileSystem = options.fileSystem ?? this.#fileSystem
     directory.#entryGroup = options.entryGroup ?? this.#entryGroup
     directory.#basePath = options.basePath ?? this.#basePath
@@ -799,6 +802,20 @@ export class Directory<
         [extension]: schema,
       },
     })
+  }
+
+  /** Get the file system for this directory. */
+  getFileSystem() {
+    if (this.#fileSystem) {
+      return this.#fileSystem
+    }
+    this.#fileSystem = new NodeFileSystem({ rootPath: this.#path })
+    return this.#fileSystem
+  }
+
+  /** Get the depth of the directory starting from the root directory. */
+  getDepth() {
+    return this.#depth
   }
 
   /** Get a file at the specified `path` and optional extensions. */
@@ -1016,6 +1033,7 @@ export class Directory<
     const directoryEntries = await fileSystem.readDirectory(this.#path)
     const entriesMap = new Map<string, FileSystemEntry<any>>()
     const thisDirectory = this as Directory<Types>
+    const nextDepth = this.#depth + 1
 
     for (const entry of directoryEntries) {
       const shouldSkipIndexOrReadme = options?.includeIndexAndReadme
@@ -1040,6 +1058,7 @@ export class Directory<
         })
 
         directory.#directory = thisDirectory
+        directory.#depth = nextDepth
 
         if (options?.recursive) {
           const nestedEntries = await directory.getEntries(options)
@@ -1061,6 +1080,7 @@ export class Directory<
           ? this.#moduleGetters
             ? new JavaScriptFileWithRuntime<Types>({
                 path: entry.path,
+                depth: nextDepth,
                 directory: thisDirectory,
                 entryGroup: this.#entryGroup,
                 moduleGetters: this.#moduleGetters,
@@ -1068,12 +1088,14 @@ export class Directory<
               })
             : new JavaScriptFile<Types>({
                 path: entry.path,
+                depth: nextDepth,
                 directory: thisDirectory,
                 entryGroup: this.#entryGroup,
                 schema: this.#schemas[extension],
               })
           : new File({
               path: entry.path,
+              depth: nextDepth,
               directory: thisDirectory,
               entryGroup: this.#entryGroup,
             })
