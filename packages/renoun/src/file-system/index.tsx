@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { getFileExportMetadata } from '../project/client.js'
+import { createSlug } from '../utils/create-slug.js'
 import { getEditPath } from '../utils/get-edit-path.js'
 import { getGitMetadata } from '../utils/get-git-metadata.js'
 import {
@@ -7,7 +8,6 @@ import {
   ensureRelativePath,
   extensionName,
   join,
-  relative,
   removeExtension,
   removeOrderPrefixes,
 } from '../utils/path.js'
@@ -72,6 +72,11 @@ export class File<
   /** Get the depth of the file starting from the root directory. */
   getDepth() {
     return this.#depth
+  }
+
+  /** Get the slug of the file. */
+  getSlug() {
+    return createSlug(this.getName())
   }
 
   /**
@@ -232,6 +237,11 @@ export class JavaScriptFileExport<
     )
 
     return this.#metadata
+  }
+
+  /** Get the slug of the file export. */
+  async getSlug() {
+    return createSlug(await this.getName())
   }
 
   /** Get the name of the export. Default exports will use the file name or declaration name if available. */
@@ -1195,6 +1205,11 @@ export class Directory<
     const next = index < entries.length - 1 ? entries[index + 1] : undefined
 
     return [previous, next]
+  }
+
+  /** Get the slug of the directory. */
+  getSlug() {
+    return createSlug(this.getName())
   }
 
   /** Get the base name of the directory. */
