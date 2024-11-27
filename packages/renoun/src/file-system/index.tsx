@@ -566,6 +566,11 @@ export class JavaScriptFileWithRuntime<
     return exportValue
   }
 
+  /** Get all exports from the JavaScript file. */
+  async getExports(): Promise<JavaScriptFileExportWithRuntime<Exports>[]> {
+    return super.getExports() as any
+  }
+
   /**
    * Get a JavaScript file export by name.
    *
