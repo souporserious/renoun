@@ -621,6 +621,9 @@ interface DirectoryOptions<Types extends ExtensionTypes = ExtensionTypes> {
   /** The path to the directory in the file system. */
   path?: string
 
+  /** The tsconfig.json file path to use for type checking and analysis. */
+  tsConfigPath?: string
+
   /** The file system to use for reading directory entries. */
   fileSystem?: FileSystem
 
@@ -640,6 +643,7 @@ export class Directory<
   #path: string
   #depth: number = -1
   #basePath?: string
+  #tsConfigPath?: string
   #fileSystem: FileSystem | undefined
   #entryGroup?: EntryGroup<FileSystemEntry<Types, HasModule>[]> | undefined
   #directory?: Directory<any, any>
@@ -659,6 +663,7 @@ export class Directory<
       this.#path = ensureRelativePath(path)
     } else {
       this.#path = ensureRelativePath(path.path)
+      this.#tsConfigPath = path.tsConfigPath
       this.#fileSystem = path.fileSystem
       this.#entryGroup = path.entryGroup
     }
@@ -678,6 +683,7 @@ export class Directory<
     })
 
     directory.#depth = this.#depth
+    directory.#tsConfigPath = this.#tsConfigPath
     directory.#basePath = this.#basePath
     directory.#schemas = this.#schemas
     directory.#moduleGetters = this.#moduleGetters
@@ -706,9 +712,10 @@ export class Directory<
     })
 
     directory.#depth = this.#depth
+    directory.#tsConfigPath = this.#tsConfigPath
+    directory.#basePath = options.basePath ?? this.#basePath
     directory.#fileSystem = options.fileSystem ?? this.#fileSystem
     directory.#entryGroup = options.entryGroup ?? this.#entryGroup
-    directory.#basePath = options.basePath ?? this.#basePath
     directory.#schemas = options.schemas ?? this.#schemas
     directory.#moduleGetters = options.moduleGetters ?? this.#moduleGetters
     directory.#sortCallback = options.sortCallback ?? this.#sortCallback
@@ -810,7 +817,12 @@ export class Directory<
     if (this.#fileSystem) {
       return this.#fileSystem
     }
-    this.#fileSystem = new NodeFileSystem({ rootPath: this.#path })
+
+    this.#fileSystem = new NodeFileSystem({
+      rootPath: this.#path,
+      tsConfigPath: this.#tsConfigPath,
+    })
+
     return this.#fileSystem
   }
 
