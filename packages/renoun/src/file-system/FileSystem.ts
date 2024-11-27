@@ -7,6 +7,7 @@ import {
 } from '../project/client.js'
 import type { ProjectOptions } from '../project/types.js'
 import {
+  directoryName,
   join,
   relative,
   ensureRelativePath,
@@ -88,6 +89,12 @@ export abstract class FileSystem {
   }
 
   isFilePathExcludedFromTsConfig(filePath: string) {
+    const absoluteFilePath = this.getAbsolutePath(filePath)
+    const absoluteTsConfigDirectory = this.getAbsolutePath(
+      directoryName(this.#tsConfigPath)
+    )
+    const relativePath = relative(absoluteTsConfigDirectory, absoluteFilePath)
+
     if (this.#tsConfig === undefined) {
       this.#tsConfig = this.#getTsConfig()
     }
@@ -98,7 +105,7 @@ export abstract class FileSystem {
 
     if (this.#tsConfig.exclude?.length) {
       for (const exclude of this.#tsConfig.exclude) {
-        if (minimatch(filePath, exclude)) {
+        if (minimatch(relativePath, exclude)) {
           return true
         }
       }
