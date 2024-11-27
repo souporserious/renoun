@@ -7,7 +7,7 @@ import {
   baseName,
   ensureRelativePath,
   extensionName,
-  join,
+  joinPaths,
   removeExtension,
   removeOrderPrefixes,
 } from '../utils/path.js'
@@ -951,7 +951,7 @@ export class Directory<
     const file = await this.getFile(path, extension)
 
     if (!file) {
-      const normalizedPath = Array.isArray(path) ? join(...path) : path
+      const normalizedPath = Array.isArray(path) ? joinPaths(...path) : path
       const normalizedExtension = Array.isArray(extension)
         ? extension
         : [extension]
@@ -1014,7 +1014,7 @@ export class Directory<
     if (!directory) {
       throw new Error(
         path
-          ? `[renoun] Directory not found at path "${join(...path)}"`
+          ? `[renoun] Directory not found at path "${joinPaths(...path)}"`
           : `[renoun] Parent directory not found`
       )
     }
@@ -1048,7 +1048,9 @@ export class Directory<
     const entry = await this.getEntry(path)
 
     if (!entry) {
-      throw new Error(`[renoun] Entry not found at path "${join(...path)}"`)
+      throw new Error(
+        `[renoun] Entry not found at path "${joinPaths(...path)}"`
+      )
     }
 
     return entry
@@ -1516,7 +1518,7 @@ export class EntryGroup<
     const file = await this.getFile(path, extension)
 
     if (!file) {
-      const normalizedPath = Array.isArray(path) ? join(...path) : path
+      const normalizedPath = Array.isArray(path) ? joinPaths(...path) : path
       const normalizedExtension = Array.isArray(extension)
         ? extension
         : [extension]

@@ -8,8 +8,8 @@ import {
 import type { ProjectOptions } from '../project/types.js'
 import {
   directoryName,
-  join,
-  relative,
+  joinPaths,
+  relativePath,
   ensureRelativePath,
   removeOrderPrefixes,
 } from '../utils/path.js'
@@ -52,7 +52,7 @@ export abstract class FileSystem {
 
   getRelativePath(path: string) {
     const rootPath = ensureRelativePath(this.#rootPath)
-    return relative(rootPath, path)
+    return relativePath(rootPath, path)
   }
 
   getPath(path: string, options: { basePath?: string } = {}) {
@@ -62,7 +62,7 @@ export abstract class FileSystem {
       // remove trailing slash
       .replace(/\/$/, '')
 
-    return join('/', options.basePath, relativePath)
+    return joinPaths('/', options.basePath, relativePath)
   }
 
   abstract readFileSync(path: string): string
@@ -93,7 +93,10 @@ export abstract class FileSystem {
     const absoluteTsConfigDirectory = this.getAbsolutePath(
       directoryName(this.#tsConfigPath)
     )
-    const relativePath = relative(absoluteTsConfigDirectory, absoluteFilePath)
+    const relativeFilePath = relativePath(
+      absoluteTsConfigDirectory,
+      absoluteFilePath
+    )
 
     if (this.#tsConfig === undefined) {
       this.#tsConfig = this.#getTsConfig()
@@ -105,7 +108,7 @@ export abstract class FileSystem {
 
     if (this.#tsConfig.exclude?.length) {
       for (const exclude of this.#tsConfig.exclude) {
-        if (minimatch(relativePath, exclude)) {
+        if (minimatch(relativeFilePath, exclude)) {
           return true
         }
       }

@@ -46,7 +46,7 @@ export function removeOrderPrefixes(filePath: string): string {
 }
 
 /** Join multiple paths together */
-export function join(...paths: (string | undefined)[]): string {
+export function joinPaths(...paths: (string | undefined)[]): string {
   if (paths.length === 0) {
     return '.'
   }
@@ -75,7 +75,7 @@ export function join(...paths: (string | undefined)[]): string {
 }
 
 /** Get the relative path from one file to another */
-export function relative(from: string, to: string): string {
+export function relativePath(from: string, to: string): string {
   const fromParts = from.split('/').filter(Boolean)
   const toParts = to.split('/').filter(Boolean)
 
