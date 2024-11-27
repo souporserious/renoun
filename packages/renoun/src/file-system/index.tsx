@@ -443,15 +443,6 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
     return fileSystem.getFileExports(this.getAbsolutePath())
   }
 
-  /** Get the start position of an export in the JavaScript file. */
-  async getExportPosition(name: string) {
-    const fileExports = await this.#getExports()
-    const fileExport = fileExports.find(
-      (exportMetadata) => exportMetadata.name === name
-    )
-    return fileExport?.position
-  }
-
   /** Get all exports from the JavaScript file. */
   async getExports() {
     const fileExports = await this.#getExports()
@@ -496,6 +487,15 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
       name,
       (exportName) => new JavaScriptFileExport(exportName, this)
     )
+  }
+
+  /** Get the start position of an export in the JavaScript file. */
+  async getExportPosition(name: string) {
+    const fileExports = await this.#getExports()
+    const fileExport = fileExports.find(
+      (exportMetadata) => exportMetadata.name === name
+    )
+    return fileExport?.position
   }
 }
 
