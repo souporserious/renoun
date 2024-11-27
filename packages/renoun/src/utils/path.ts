@@ -1,6 +1,6 @@
-/** Get the base name of a file system path e.g. /path/to/file -> file */
+/** Get the base name of a file system path e.g. /path/to/file.ts -> file */
 export function baseName(path: string, extension: string = ''): string {
-  const base = path.substring(path.lastIndexOf('/') + 1)
+  const base = path.slice(path.lastIndexOf('/') + 1)
   if (extension && base.endsWith(extension)) {
     return base.slice(0, -extension.length)
   }
@@ -12,17 +12,17 @@ export function extensionName(path: string): string {
   const dotIndex = path.lastIndexOf('.')
   const slashIndex = path.lastIndexOf('/')
   if (dotIndex > slashIndex) {
-    return path.substring(dotIndex)
+    return path.slice(dotIndex)
   }
   return ''
 }
 
-/** Get the directory name from a file path e.g. /path/to/file -> /path/to */
+/** Get the directory name from a file path e.g. /path/to/file.ts -> /path/to */
 export function directoryName(path: string): string {
   const slashIndex = path.lastIndexOf('/')
   if (slashIndex === -1) return '.'
   if (slashIndex === 0) return '/'
-  return path.substring(0, slashIndex)
+  return path.slice(0, slashIndex)
 }
 
 /** Remove the extension from a file path e.g. readme.md -> readme */
@@ -51,7 +51,7 @@ export function join(...paths: (string | undefined)[]): string {
     return '.'
   }
 
-  const isAbsolute = paths[0]?.startsWith('/')
+  const isAbsolute = paths.at(0)?.startsWith('/')
   const segments: string[] = []
 
   for (const path of paths) {
