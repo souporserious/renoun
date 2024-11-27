@@ -760,11 +760,13 @@ export class Directory<
       entry: FileSystemEntry<Types, HasModule>
     ) => entry is FilteredEntry
   ): Directory<Types, HasModule, FilteredEntry>
+
   withFilter<FilteredEntry extends Entry>(
     filterCallback: (
       entry: FileSystemEntry<Types, HasModule>
     ) => Promise<boolean> | boolean
   ): Directory<Types, HasModule, FilteredEntry>
+
   withFilter<FilteredEntry extends Entry>(
     filterCallback: (
       entry: FileSystemEntry<Types, HasModule>
@@ -818,7 +820,10 @@ export class Directory<
   }
 
   /** Get a file at the specified `path` and optional extensions. */
-  async getFile<const Extension extends string | undefined = undefined>(
+  async getFile<
+    Type extends keyof Types | (string & {}),
+    const Extension extends Type | Type[],
+  >(
     path: string | string[],
     extension?: Extension | Extension[]
   ): Promise<
@@ -901,7 +906,10 @@ export class Directory<
    * Get a file at the specified `path` and optional extensions.
    * An error will be thrown if the file is not found.
    */
-  async getFileOrThrow<Extension extends string | undefined = undefined>(
+  async getFileOrThrow<
+    Type extends keyof Types | (string & {}),
+    const Extension extends Type | Type[],
+  >(
     path: string | string[],
     extension?: Extension | Extension[]
   ): Promise<
