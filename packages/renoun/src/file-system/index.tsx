@@ -878,8 +878,22 @@ export class Directory<
       // Find the entry matching the current segment
       for (const currentEntry of allEntries) {
         if (currentEntry.getBaseName() === currentSegment) {
-          entry = currentEntry
-          break
+          // Check if the entry is a file and matches the extension
+          if (extension && currentEntry instanceof File) {
+            const fileExtensions = Array.isArray(extension)
+              ? extension
+              : [extension]
+
+            if (
+              fileExtensions.includes(currentEntry.getExtension() as Extension)
+            ) {
+              entry = currentEntry
+              break
+            }
+          } else {
+            entry = currentEntry
+            break
+          }
         }
       }
 
