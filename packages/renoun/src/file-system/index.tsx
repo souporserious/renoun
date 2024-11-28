@@ -872,6 +872,7 @@ export class Directory<
     while (segments.length > 0) {
       const currentSegment = segments.shift()
       const allEntries = await currentDirectory.getEntries({
+        includeDuplicates: true,
         includeIndexAndReadme: true,
       })
 
@@ -917,6 +918,7 @@ export class Directory<
         } else if (entry instanceof Directory) {
           // Check if `index` or `readme` exists in the directory
           const entries = await entry.getEntries({
+            includeDuplicates: true,
             includeIndexAndReadme: true,
           })
           const targetFiles = ['index', 'readme']
@@ -993,7 +995,9 @@ export class Directory<
 
     while (segments.length > 0) {
       const currentSegment = segments.shift()
-      const allEntries = await currentDirectory.getEntries()
+      const allEntries = await currentDirectory.getEntries({
+        includeDuplicates: true,
+      })
       let entry: FileSystemEntry<Types> | undefined
 
       for (const currentEntry of allEntries) {
@@ -1078,6 +1082,7 @@ export class Directory<
   async getEntries(options?: {
     recursive?: boolean
     includeIndexAndReadme?: boolean
+    includeDuplicates?: boolean
   }): Promise<Entry[]> {
     const fileSystem = this.getFileSystem()
     const directoryEntries = await fileSystem.readDirectory(this.#path)
@@ -1100,6 +1105,14 @@ export class Directory<
         continue
       }
 
+      const entryKey = options?.includeDuplicates
+        ? entry.path
+        : removeExtension(entry.path)
+
+      if (entriesMap.has(entryKey)) {
+        continue
+      }
+
       if (entry.isDirectory) {
         const directory = this.duplicate({
           fileSystem,
@@ -1119,10 +1132,10 @@ export class Directory<
 
         if (this.#filterCallback) {
           if (await this.#filterCallback(directory)) {
-            entriesMap.set(entry.path, directory)
+            entriesMap.set(entryKey, directory)
           }
         } else {
-          entriesMap.set(entry.path, directory)
+          entriesMap.set(entryKey, directory)
         }
       } else if (entry.isFile) {
         const extension = extensionName(entry.name).slice(1)
@@ -1157,7 +1170,7 @@ export class Directory<
           continue
         }
 
-        entriesMap.set(entry.path, file)
+        entriesMap.set(entryKey, file)
       }
     }
 
@@ -1183,6 +1196,7 @@ export class Directory<
         }
       } catch (error) {
         const badge = '[renoun] '
+
         if (error instanceof Error && error.message.includes(badge)) {
           throw new Error(
             `[renoun] Error occurred while sorting entries for directory at "${
@@ -1190,6 +1204,7 @@ export class Directory<
             }". \n\n${error.message.slice(badge.length)}`
           )
         }
+
         throw error
       }
     }

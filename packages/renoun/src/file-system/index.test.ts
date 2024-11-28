@@ -215,6 +215,21 @@ describe('file system', () => {
     expect(entries).toHaveLength(2)
   })
 
+  test('deduplicates entries', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'Button.tsx': '',
+      'Button.mdx': '',
+    })
+    const directory = new Directory({ fileSystem })
+    const entries = await directory.getEntries()
+
+    expect(entries).toHaveLength(1)
+
+    const entry = entries.at(0) as File
+
+    expect(entry.getExtension()).toBe('tsx')
+  })
+
   test('entry', async () => {
     const fixturesDirectory = new Directory('fixtures')
 
