@@ -7,32 +7,6 @@ import {
 import type { MDXContent, Headings } from 'renoun/mdx'
 import { z } from 'zod'
 
-// function filterInternalSources(
-//   source: ExportSource<any> | FileSystemSource<ComponentSchema>
-// ) {
-//   if (isFileSystemSource(source)) {
-//     if (source.isFile()) {
-//       const allInternal = source
-//         .getExports()
-//         .every((exportSource) =>
-//           exportSource.getTags()?.every((tag) => tag.tagName === 'internal')
-//         )
-
-//       if (allInternal) {
-//         return false
-//       }
-//     }
-//   }
-
-//   if (isExportSource(source)) {
-//     if (source.getTags()?.find((tag) => tag.tagName === 'internal')) {
-//       return false
-//     }
-//   }
-
-//   return true
-// }
-
 function getRenounImport(path: string) {
   return import(`../../../packages/renoun/src/${path}`)
 }
@@ -86,6 +60,21 @@ export const ComponentsCollection = new Directory<
 })
   .withBasePath('components')
   .withModule((path) => getRenounImport(`components/${path}`))
-  .withFilter(
-    (entry) => isDirectory(entry) || isFile(entry, ['mdx', 'ts', 'tsx'])
-  )
+  .withFilter(async (entry) => {
+    if (isFile(entry, ['ts', 'tsx'])) {
+      const fileExports = await entry.getExports()
+      const allTags = await Promise.all(
+        fileExports.map((exportSource) => exportSource.getTags())
+      )
+      const allInternal = fileExports.every((_, index) => {
+        const tags = allTags[index]
+        return tags?.every((tag) => tag.tagName === 'internal')
+      })
+
+      if (allInternal) {
+        return false
+      }
+    }
+
+    return isDirectory(entry) || isFile(entry, 'mdx')
+  })
