@@ -1415,51 +1415,31 @@ export class EntryGroup<
     /** The path to the entry excluding leading numbers. */
     path: string | string[]
   ): Promise<FileSystemEntry<Types> | undefined> {
-    const segments = Array.isArray(path)
+    const normalizedPath = Array.isArray(path)
       ? path
       : path.split('/').filter(Boolean)
-    const [targetSegment, ...remainingSegments] = segments
+    const rootPath = normalizedPath.at(0)
 
     for (const entry of this.#entries) {
-      if (entry instanceof Directory) {
-        const entryBaseName = entry.getBaseName()
+      const baseName = entry.getBaseName()
+      const isRootDirectory = baseName === '.'
 
-        if (entryBaseName === targetSegment) {
-          if (remainingSegments.length === 0) {
+      if (isRootDirectory || baseName === rootPath) {
+        if (entry instanceof Directory) {
+          const directoryEntry = await entry.getEntry(
+            isRootDirectory ? normalizedPath : normalizedPath.slice(1)
+          )
+
+          if (directoryEntry) {
+            return directoryEntry
+          }
+        } else if (entry instanceof File) {
+          if (baseName === rootPath) {
             return entry
-          }
-          if (entry instanceof Directory) {
-            return entry.getEntry(remainingSegments)
-          }
-          return undefined
-        }
-
-        const childEntries = await entry.getEntries()
-        const childEntry = childEntries.find((childEntry) => {
-          return childEntry.getBaseName() === targetSegment
-        })
-
-        if (childEntry) {
-          if (remainingSegments.length === 0) {
-            return childEntry
-          }
-          if (childEntry instanceof Directory) {
-            return childEntry.getEntry(remainingSegments)
-          }
-        }
-      } else {
-        if (entry.getBaseName() === targetSegment) {
-          if (remainingSegments.length === 0) {
-            return entry
-          }
-          if (isDirectory(entry)) {
-            return entry.getEntry(remainingSegments)
           }
         }
       }
     }
-
-    return undefined
   }
 
   /** Get an entry in the group by its path or throw an error if not found. */
@@ -1491,28 +1471,38 @@ export class EntryGroup<
         : File<Types>)
     | undefined
   > {
-    const entry = await this.getEntry(path)
+    const normalizedPath = Array.isArray(path)
+      ? path
+      : path.split('/').filter(Boolean)
+    const rootPath = normalizedPath.at(0)
 
-    if (entry instanceof File) {
-      if (extension) {
-        const entryExtension = entry.getExtension()
-        const fileExtensions = Array.isArray(extension)
-          ? extension
-          : [extension]
+    for (const entry of this.#entries) {
+      const baseName = entry.getBaseName()
+      const isRootDirectory = baseName === '.'
 
-        for (const fileExtension of fileExtensions) {
-          if (entryExtension === fileExtension) {
-            return entry as any
+      if (isRootDirectory || baseName === rootPath) {
+        if (entry instanceof Directory) {
+          const directoryFile = (await entry.getFile(
+            isRootDirectory ? normalizedPath : normalizedPath.slice(1),
+            extension as any
+          )) as any
+
+          if (directoryFile) {
+            return directoryFile
+          }
+        } else if (entry instanceof File) {
+          if (extension) {
+            const fileExtensions = Array.isArray(extension)
+              ? extension
+              : [extension]
+
+            if (fileExtensions.includes(entry.getExtension() as Extension)) {
+              return entry as any
+            }
           }
         }
-
-        return undefined
       }
-
-      return entry as any
     }
-
-    return undefined
   }
 
   /** Get a file at the specified path and optional extension(s), or throw an error if not found. */
@@ -1536,9 +1526,12 @@ export class EntryGroup<
       const normalizedExtension = Array.isArray(extension)
         ? extension
         : [extension]
+      const extensionMessage = extension
+        ? ` with extension${normalizedExtension.length > 1 ? 's' : ''}`
+        : ''
 
       throw new Error(
-        `[renoun] File not found at path "${normalizedPath}" with extension${normalizedExtension.length > 1 ? 's' : ''}: ${normalizedExtension.join(',')}`
+        `[renoun] File not found at path "${normalizedPath}"${extensionMessage}: ${normalizedExtension.join(',')}`
       )
     }
 
@@ -1550,10 +1543,26 @@ export class EntryGroup<
     /** The path to the entry excluding leading numbers. */
     path: string | string[]
   ): Promise<Directory<Types> | undefined> {
-    const entry = await this.getEntry(path)
+    const normalizedPath = Array.isArray(path)
+      ? path
+      : path.split('/').filter(Boolean)
+    const rootPath = normalizedPath.at(0)
 
-    if (entry instanceof Directory) {
-      return entry
+    for (const entry of this.#entries) {
+      const baseName = entry.getBaseName()
+      const isRootDirectory = baseName === '.'
+
+      if (isRootDirectory || baseName === rootPath) {
+        if (entry instanceof Directory) {
+          const directory = await entry.getDirectory(
+            isRootDirectory ? normalizedPath : normalizedPath.slice(1)
+          )
+
+          if (directory) {
+            return directory
+          }
+        }
+      }
     }
   }
 

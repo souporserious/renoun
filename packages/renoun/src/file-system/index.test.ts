@@ -778,7 +778,9 @@ describe('file system', () => {
       path: 'posts',
       fileSystem: memoryFileSystem,
     })
-    const docs = new Directory<{ mdx: FrontMatter }>('fixtures/docs')
+    const docs = new Directory<{ mdx: FrontMatter }>({
+      path: 'fixtures/docs',
+    })
     const group = new EntryGroup({
       entries: [posts, docs],
     })
@@ -809,7 +811,7 @@ describe('file system', () => {
     expect(mdxFile).toBeInstanceOf(JavaScriptFile)
     expectTypeOf(mdxFile).toMatchTypeOf<JavaScriptFile<FrontMatter>>()
 
-    const file = await group.getFileOrThrow('meta', 'js')
+    const file = await group.getFileOrThrow(['posts', 'meta'], 'js')
     const [previousEntry, nextEntry] = await file.getSiblings()
 
     expect(previousEntry?.getName()).toBe('building-a-button-component')
@@ -845,6 +847,58 @@ describe('file system', () => {
 
     expect(nextFileEntry).toBeDefined()
     expect(nextFileEntry!.getPath()).toBe('/guides/next-steps')
+  })
+
+  test('multiple extensions in entry group', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'components/Button.mdx': '',
+      'components/Button.tsx': '',
+    })
+    const directory = new Directory({
+      fileSystem,
+    })
+    const entryGroup = new EntryGroup({
+      entries: [directory],
+    })
+    const directoryEntry = await directory.getFileOrThrow(
+      ['components', 'Button'],
+      'tsx'
+    )
+
+    expect(directoryEntry).toBeDefined()
+    expect(directoryEntry?.getExtension()).toBe('tsx')
+
+    const groupEntry = await entryGroup.getFile(
+      ['components', 'Button'],
+      ['ts', 'tsx']
+    )
+
+    expect(groupEntry).toBeDefined()
+    expect(groupEntry?.getExtension()).toBe('tsx')
+  })
+
+  test('same base file name in entry group with root directories', async () => {
+    const directoryOne = new Directory({
+      fileSystem: new VirtualFileSystem({ 'components/Button.tsx': '' }),
+    })
+    const directoryTwo = new Directory({
+      fileSystem: new VirtualFileSystem({ 'docs/Button.mdx': '' }),
+    })
+    const entryGroup = new EntryGroup({
+      entries: [directoryOne, directoryTwo],
+    })
+    const componentEntry = await entryGroup.getEntryOrThrow(['docs', 'Button'])
+
+    expect(componentEntry).toBeDefined()
+    expect(componentEntry.getPath()).toBe('/docs/Button')
+
+    const componentFile = await entryGroup.getFileOrThrow(
+      ['docs', 'Button'],
+      'mdx'
+    )
+
+    expect(componentFile).toBeDefined()
+    expect(componentFile.getPath()).toBe('/docs/Button')
   })
 
   test('has entry', async () => {
