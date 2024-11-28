@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import type { FileSystemSource } from 'renoun/collections'
+import { isFile, type FileSystemEntry } from 'renoun/file-system'
 import { styled } from 'restyle'
 
 const StyledLink = styled(Link, {
@@ -20,23 +20,23 @@ const StyledLink = styled(Link, {
 })
 
 export async function SiblingLink({
-  source,
+  entry,
   direction,
   variant,
 }: {
-  source: FileSystemSource<any>
+  entry: FileSystemEntry<any, true>
   direction: 'previous' | 'next'
   variant?: 'name' | 'title'
 }) {
-  if (source.isDirectory()) {
+  if (!isFile(entry, ['mdx', 'ts', 'tsx'])) {
     return null
   }
 
-  const metadata = await source.getExport('metadata').getValue()
+  const metadata = await entry.getExport('metadata').getRuntimeValue()
 
   return (
     <StyledLink
-      href={source.getPath()}
+      href={entry.getPath()}
       css={{
         gridTemplateColumns:
           direction === 'previous' ? 'min-content auto' : 'auto min-content',
@@ -86,8 +86,8 @@ export async function SiblingLink({
         ) : null}
         <span>
           {variant === 'title'
-            ? metadata?.label || metadata?.title || source.getTitle()
-            : source.getName()}
+            ? metadata?.label || metadata?.title || entry.getName()
+            : entry.getName()}
         </span>
         {direction === 'next' ? (
           <svg

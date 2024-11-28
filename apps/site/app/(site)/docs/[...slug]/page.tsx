@@ -1,11 +1,14 @@
 import { notFound } from 'next/navigation'
 
-import { AllCollections, DocsCollection } from '@/collections'
-import { DocumentSource } from '@/components/DocumentSource'
+import { CollectionGroup, DocsCollection } from '@/collections'
+import { DocumentEntry } from '@/components/DocumentEntry'
 
 export async function generateStaticParams() {
-  const sources = await DocsCollection.getSources()
-  return sources.map((source) => ({ slug: source.getPathSegments() }))
+  const entries = await DocsCollection.getEntries()
+
+  return entries.map((entry) => ({
+    slug: entry.getPathSegments({ includeBasePath: false }),
+  }))
 }
 
 export default async function Doc({
@@ -13,14 +16,12 @@ export default async function Doc({
 }: {
   params: Promise<{ slug: string[] }>
 }) {
-  const docSource = await AllCollections.getSource([
-    'docs',
-    ...(await params).slug,
-  ])
+  const file = await CollectionGroup.getFile(['docs', ...(await params).slug])
+  const hasEntry = await DocsCollection.getHasEntry(file)
 
-  if (!DocsCollection.hasSource(docSource)) {
+  if (!hasEntry(file)) {
     notFound()
   }
 
-  return <DocumentSource source={docSource} />
+  return <DocumentEntry file={file} />
 }

@@ -4,21 +4,21 @@ import { CollectionsCollection, CollectionsDocsCollection } from '@/collections'
 import { TableOfContents } from '@/components/TableOfContents'
 
 export default async function Page() {
-  const source = await CollectionsCollection.getSource()
+  const file = await CollectionsCollection.getFile('index', 'tsx')
 
-  if (!source) {
+  if (!file) {
     return null
   }
 
-  const sourceExports = source.getExports()
-  const docSource = await CollectionsDocsCollection.getSource()
+  const docFile = await CollectionsDocsCollection.getFile('index', 'mdx')
 
-  if (!docSource) {
+  if (!docFile) {
     return null
   }
 
-  const Content = await docSource.getExport('default').getValue()
-  const headings = await docSource.getExport('headings').getValue()
+  const Content = await docFile.getExport('default').getRuntimeValue()
+  const headings = await docFile.getExport('headings').getRuntimeValue()
+  const fileExports = await file.getExports()
 
   return (
     <>
@@ -52,8 +52,11 @@ export default async function Page() {
           >
             API Reference
           </h2>
-          {sourceExports.map((exportSource) => (
-            <APIReference key={exportSource.getSlug()} source={exportSource} />
+          {fileExports.map(async (exportSource) => (
+            <APIReference
+              key={await exportSource.getName()}
+              source={exportSource}
+            />
           ))}
         </div>
       </div>
@@ -76,11 +79,13 @@ export default async function Page() {
               text: 'API Reference',
               depth: 2,
             },
-            ...sourceExports.map((source) => ({
-              id: source.getSlug(),
-              text: source.getName(),
-              depth: 3,
-            })),
+            ...(await Promise.all(
+              fileExports.map(async (source) => ({
+                id: await source.getSlug(),
+                text: await source.getName(),
+                depth: 3,
+              }))
+            )),
           ]}
         />
       </div>

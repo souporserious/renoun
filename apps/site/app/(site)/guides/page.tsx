@@ -1,18 +1,12 @@
-import { notFound } from 'next/navigation'
-
 import { GuidesCollection } from '@/collections'
-import { DocumentSource } from '@/components/DocumentSource'
+import { DocumentEntry } from '@/components/DocumentEntry'
 
-export default async function Doc() {
-  const docSource = await GuidesCollection.getSource()
-
-  if (!docSource) {
-    notFound()
-  }
+export default async function Guides() {
+  const file = await GuidesCollection.getFileOrThrow('index', 'mdx')
 
   return (
-    <DocumentSource
-      source={docSource}
+    <DocumentEntry
+      file={file}
       shouldRenderTableOfContents={false}
       shouldRenderUpdatedAt={false}
     />

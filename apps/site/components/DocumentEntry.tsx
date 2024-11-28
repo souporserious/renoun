@@ -1,32 +1,31 @@
-import type { FileSystemSource } from 'renoun/collections'
+import type { JavaScriptFileWithRuntime } from 'renoun/file-system'
 import type { MDXContent, Headings } from 'renoun/mdx'
 
 import { SiblingLink } from './SiblingLink'
 import { TableOfContents } from './TableOfContents'
 
-export async function DocumentSource<
-  Source extends FileSystemSource<{
-    default: MDXContent
-    metadata: { title: string; description: string }
-    headings: Headings
-  }>,
->({
-  source,
+export async function DocumentEntry({
+  file,
   shouldRenderTableOfContents = true,
   shouldRenderUpdatedAt = true,
 }: {
-  source: Source
+  file: JavaScriptFileWithRuntime<{
+    default: MDXContent
+    headings: Headings
+    metadata: {
+      title: string
+      description: string
+    }
+  }>
   shouldRenderTableOfContents?: boolean
   shouldRenderUpdatedAt?: boolean
 }) {
-  const Content = await source.getExport('default').getValue()
-  const metadata = await source.getExport('metadata').getValue()
-  const headings = await source.getExport('headings').getValue()
-  const updatedAt = shouldRenderUpdatedAt ? await source.getUpdatedAt() : null
-  const editPath = source.getEditPath()
-  const [previousSource, nextSource] = await source.getSiblings({
-    depth: 0,
-  })
+  const Content = await file.getExport('default').getRuntimeValue()
+  const metadata = await file.getExport('metadata').getRuntimeValue()
+  const headings = await file.getExport('headings').getRuntimeValue()
+  const updatedAt = shouldRenderUpdatedAt ? await file.getUpdatedAt() : null
+  const editPath = file.getEditPath()
+  const [previousFile, nextFile] = await file.getSiblings()
 
   return (
     <>
@@ -73,19 +72,15 @@ export async function DocumentSource<
               gap: '2rem',
             }}
           >
-            {previousSource ? (
+            {previousFile ? (
               <SiblingLink
-                source={previousSource}
+                entry={previousFile}
                 direction="previous"
                 variant="title"
               />
             ) : null}
-            {nextSource ? (
-              <SiblingLink
-                source={nextSource}
-                direction="next"
-                variant="title"
-              />
+            {nextFile ? (
+              <SiblingLink entry={nextFile} direction="next" variant="title" />
             ) : null}
           </nav>
         </div>
