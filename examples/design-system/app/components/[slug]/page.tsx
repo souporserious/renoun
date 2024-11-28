@@ -162,7 +162,7 @@ export default async function Component({
 async function Preview({
   fileExport,
 }: {
-  fileExport: JavaScriptFileExportWithRuntime<React.ComponentType>
+  fileExport: JavaScriptFileExportWithRuntime<any>
 }) {
   const name = await fileExport.getName()
   const description = await fileExport.getDescription()
