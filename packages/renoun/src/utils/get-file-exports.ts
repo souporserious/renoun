@@ -48,12 +48,12 @@ export async function getFileExportMetadata(
 ) {
   const sourceFile = project.getSourceFile(filePath)
   if (!sourceFile) {
-    throw new Error(`Source file not found: ${filePath}`)
+    throw new Error(`[renoun] Source file not found: ${filePath}`)
   }
 
   const declaration = sourceFile.getDescendantAtPos(position)
   if (!declaration) {
-    throw new Error(`Declaration not found at position ${position}`)
+    throw new Error(`[renoun] Declaration not found at position ${position}`)
   }
 
   const exportDeclaration = declaration.getFirstAncestorByKindOrThrow(kind)
