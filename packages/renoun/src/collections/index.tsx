@@ -230,7 +230,7 @@ export interface CollectionOptions<Exports extends FileExports> {
 class Export<Value, AllExports extends FileExports = FileExports>
   implements ExportSource<Value>
 {
-  #jsDocMetadata: ReturnType<typeof getJsDocMetadata> | null = null
+  #jsDocMetadata?: ReturnType<typeof getJsDocMetadata>
 
   constructor(
     private source: Source<AllExports>,
@@ -300,7 +300,7 @@ class Export<Value, AllExports extends FileExports = FileExports>
       )
     }
 
-    if (this.#jsDocMetadata === null) {
+    if (this.#jsDocMetadata === undefined) {
       this.#jsDocMetadata = getJsDocMetadata(this.exportDeclaration)
     }
 
@@ -314,7 +314,7 @@ class Export<Value, AllExports extends FileExports = FileExports>
       )
     }
 
-    if (this.#jsDocMetadata === null) {
+    if (this.#jsDocMetadata === undefined) {
       this.#jsDocMetadata = getJsDocMetadata(this.exportDeclaration)
     }
 

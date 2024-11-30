@@ -1,4 +1,5 @@
 import { minimatch } from 'minimatch'
+import type { SyntaxKind } from 'ts-morph'
 
 import {
   getFileExports,
@@ -123,18 +124,31 @@ export abstract class FileSystem {
     return getFileExports(filePath, this.#projectOptions)
   }
 
-  getFileExportMetadata(filePath: string, name: string, position: number) {
-    return getFileExportMetadata(filePath, name, position, this.#projectOptions)
+  getFileExportMetadata(
+    filePath: string,
+    name: string,
+    position: number,
+    kind: SyntaxKind
+  ) {
+    return getFileExportMetadata(
+      filePath,
+      name,
+      position,
+      kind,
+      this.#projectOptions
+    )
   }
 
   resolveTypeAtLocation(
     filePath: string,
     position: number,
+    kind: SyntaxKind,
     filter?: SymbolFilter
   ) {
     return resolveTypeAtLocation(
       filePath,
       position,
+      kind,
       filter,
       this.#projectOptions
     )

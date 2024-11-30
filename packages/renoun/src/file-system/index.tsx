@@ -1,4 +1,6 @@
 import * as React from 'react'
+import type { SyntaxKind } from 'ts-morph'
+
 import { getFileExportMetadata } from '../project/client.js'
 import { createSlug } from '../utils/create-slug.js'
 import { getEditPath } from '../utils/get-edit-path.js'
@@ -198,7 +200,7 @@ export class JavaScriptFileExport<
 > {
   #name: string
   #file: JavaScriptFile<Exports>
-  #position: number | undefined
+  #location: { position: number; kind: SyntaxKind } | undefined
   #metadata: Awaited<ReturnType<typeof getFileExportMetadata>> | undefined
 
   constructor(name: string, file: JavaScriptFile<Exports>) {
@@ -206,15 +208,15 @@ export class JavaScriptFileExport<
     this.#file = file
   }
 
-  async #getPosition() {
-    if (this.#position === undefined) {
-      this.#position = await this.#file.getExportPosition(this.#name)
+  async #getLocation() {
+    if (this.#location === undefined) {
+      this.#location = await this.#file.getExportLocation(this.#name)
     }
-    return this.#position
+    return this.#location
   }
 
   async #isNotStatic() {
-    const position = await this.#getPosition()
+    const position = await this.#getLocation()
     return position === undefined
   }
 
@@ -227,13 +229,14 @@ export class JavaScriptFileExport<
       return this.#metadata
     }
 
-    const position = await this.#getPosition()
+    const location = await this.#getLocation()
     const fileSystem = (await this.#file.getDirectory()).getFileSystem()
 
     this.#metadata = await fileSystem.getFileExportMetadata(
       this.#file.getAbsolutePath(),
       this.#name,
-      position!
+      location.position,
+      location.kind
     )
 
     return this.#metadata
@@ -299,12 +302,13 @@ export class JavaScriptFileExport<
       )
     }
 
-    const position = await this.#getPosition()
+    const location = await this.#getLocation()
     const fileSystem = (await this.#file.getDirectory()).getFileSystem()
 
     return fileSystem.resolveTypeAtLocation(
       this.#file.getAbsolutePath(),
-      position!,
+      location.position,
+      location.kind,
       filter
     )
   }
@@ -490,12 +494,22 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
   }
 
   /** Get the start position of an export in the JavaScript file. */
-  async getExportPosition(name: string) {
+  async getExportLocation(name: string) {
     const fileExports = await this.#getExports()
     const fileExport = fileExports.find(
       (exportMetadata) => exportMetadata.name === name
     )
-    return fileExport?.position
+
+    if (!fileExport) {
+      throw new Error(
+        `[renoun] JavaScript file export "${name}" not found in ${this.getAbsolutePath()}`
+      )
+    }
+
+    return {
+      position: fileExport.position,
+      kind: fileExport.kind,
+    }
   }
 }
 

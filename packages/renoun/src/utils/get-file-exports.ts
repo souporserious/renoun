@@ -6,10 +6,18 @@ import { getJsDocMetadata } from './get-js-doc-metadata.js'
 export interface FileExport {
   name: string
   position: number
+  kind: tsMorph.SyntaxKind
 }
 
 /** Returns metadata about the exports of a file. */
-export function getFileExports(filePath: string, project: Project) {
+export function getFileExports(
+  filePath: string,
+  project: Project
+): {
+  name: string
+  position: number
+  kind: tsMorph.SyntaxKind
+}[] {
   let sourceFile = project.getSourceFile(filePath)
 
   if (!sourceFile) {
@@ -21,6 +29,7 @@ export function getFileExports(filePath: string, project: Project) {
       return declarations.map((declaration) => ({
         name,
         position: declaration.getPos(),
+        kind: declaration.getKind(),
       }))
     }
   )
@@ -31,6 +40,7 @@ export async function getFileExportMetadata(
   filePath: string,
   name: string,
   position: number,
+  kind: tsMorph.SyntaxKind,
   project: Project
 ) {
   const sourceFile = project.getSourceFile(filePath)
@@ -43,7 +53,7 @@ export async function getFileExportMetadata(
     throw new Error(`Declaration not found at position ${position}`)
   }
 
-  const exportDeclaration = declaration.getParentOrThrow()
+  const exportDeclaration = declaration.getFirstAncestorByKindOrThrow(kind)
 
   return {
     name: getName(

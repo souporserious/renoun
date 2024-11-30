@@ -2,13 +2,15 @@ import type { Node } from 'ts-morph'
 import tsMorph from 'ts-morph'
 
 /** Gets the description and tags from a JSDoc comment for a node. */
-export function getJsDocMetadata(node: Node): {
-  description?: string
-  tags?: {
-    tagName: string
-    text?: string
-  }[]
-} | null {
+export function getJsDocMetadata(node: Node):
+  | {
+      description?: string
+      tags?: {
+        tagName: string
+        text?: string
+      }[]
+    }
+  | undefined {
   if (tsMorph.Node.isVariableDeclaration(node)) {
     const declarationList = node.getParent()
 
@@ -54,6 +56,4 @@ export function getJsDocMetadata(node: Node): {
       }
     }
   }
-
-  return null
 }

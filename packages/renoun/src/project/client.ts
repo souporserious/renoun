@@ -1,4 +1,4 @@
-import type { Node } from 'ts-morph'
+import type { Node, SyntaxKind } from 'ts-morph'
 
 import type {
   AnalyzeSourceTextOptions,
@@ -13,6 +13,7 @@ import type {
   getFileExportMetadata as baseGetFileExportMetadata,
 } from '../utils/get-file-exports.js'
 import type { ResolvedType, SymbolFilter } from '../utils/resolve-type.js'
+import type { resolveTypeAtLocation as baseResolveTypeAtLocation } from '../utils/resolve-type-at-location.js'
 import type { DistributiveOmit } from '../types.js'
 import { WebSocketClient } from './rpc/client.js'
 import { getProject } from './get-project.js'
@@ -51,10 +52,12 @@ export async function analyzeSourceText(
   }
 ): Promise<AnalyzeSourceTextResult> {
   if (client) {
-    return client.callMethod<AnalyzeSourceTextResult>(
-      'analyzeSourceText',
-      options
-    )
+    return client.callMethod<
+      DistributiveOmit<AnalyzeSourceTextOptions, 'project'> & {
+        projectOptions?: ProjectOptions
+      },
+      AnalyzeSourceTextResult
+    >('analyzeSourceText', options)
   }
 
   /* Switch to synchronous analysis when building for production to prevent timeouts. */
@@ -87,14 +90,23 @@ export async function analyzeSourceText(
 export async function resolveTypeAtLocation(
   filePath: string,
   position: number,
+  kind: SyntaxKind,
   filter?: SymbolFilter,
   projectOptions?: ProjectOptions
 ): Promise<ResolvedType | undefined> {
   if (client) {
-    return client.callMethod<ResolvedType>('resolveTypeAtLocation', {
+    return client.callMethod<
+      {
+        filePath: string
+        position: number
+        filter?: SymbolFilter
+        projectOptions?: ProjectOptions
+      },
+      ReturnType<typeof baseResolveTypeAtLocation>
+    >('resolveTypeAtLocation', {
       filePath,
-      position: position.toString(),
-      filter: filter?.toString(),
+      position,
+      filter,
       projectOptions,
     })
   }
@@ -102,10 +114,12 @@ export async function resolveTypeAtLocation(
   return import('../utils/resolve-type-at-location.js').then(
     async ({ resolveTypeAtLocation }) => {
       const project = getProject(projectOptions)
+
       return resolveTypeAtLocation(
         project,
         filePath,
         position,
+        kind,
         filter,
         projectOptions?.useInMemoryFileSystem
       )
@@ -131,8 +145,9 @@ export async function resolveType({
 
   const filePath = declaration.getSourceFile().getFilePath()
   const position = declaration.getPos()
+  const kind = declaration.getKind()
 
-  return resolveTypeAtLocation(filePath, position, filter, projectOptions)
+  return resolveTypeAtLocation(filePath, position, kind, filter, projectOptions)
 }
 
 /**
@@ -144,7 +159,13 @@ export async function getFileExports(
   projectOptions?: ProjectOptions
 ) {
   if (client) {
-    return client.callMethod<FileExport[]>('getFileExports', {
+    return client.callMethod<
+      {
+        filePath: string
+        projectOptions?: ProjectOptions
+      },
+      FileExport[]
+    >('getFileExports', {
       filePath,
       projectOptions,
     })
@@ -164,15 +185,24 @@ export async function getFileExportMetadata(
   filePath: string,
   name: string,
   position: number,
+  kind: SyntaxKind,
   projectOptions?: ProjectOptions
 ) {
   if (client) {
     return client.callMethod<
+      {
+        filePath: string
+        name: string
+        position: number
+        kind: SyntaxKind
+        projectOptions?: ProjectOptions
+      },
       Awaited<ReturnType<typeof baseGetFileExportMetadata>>
     >('getFileExportMetadata', {
       filePath,
       name,
-      position: position.toString(),
+      position,
+      kind,
       projectOptions,
     })
   }
@@ -180,7 +210,7 @@ export async function getFileExportMetadata(
   return import('../utils/get-file-exports.js').then(
     ({ getFileExportMetadata }) => {
       const project = getProject(projectOptions)
-      return getFileExportMetadata(filePath, name, position, project)
+      return getFileExportMetadata(filePath, name, position, kind, project)
     }
   )
 }
@@ -195,7 +225,14 @@ export async function createSourceFile(
   projectOptions?: ProjectOptions
 ) {
   if (client) {
-    return client.callMethod<void>('createSourceFile', {
+    return client.callMethod<
+      {
+        filePath: string
+        sourceText: string
+        projectOptions?: ProjectOptions
+      },
+      void
+    >('createSourceFile', {
       filePath,
       sourceText,
       projectOptions,
@@ -215,7 +252,13 @@ export async function transpileSourceFile(
   projectOptions?: ProjectOptions
 ) {
   if (client) {
-    return client.callMethod<string>('transpileSourceFile', {
+    return client.callMethod<
+      {
+        filePath: string
+        projectOptions?: ProjectOptions
+      },
+      string
+    >('transpileSourceFile', {
       filePath,
       projectOptions,
     })
