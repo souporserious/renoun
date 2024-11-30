@@ -99,6 +99,7 @@ export async function resolveTypeAtLocation(
       {
         filePath: string
         position: number
+        kind: SyntaxKind
         filter?: SymbolFilter
         projectOptions?: ProjectOptions
       },
@@ -106,6 +107,7 @@ export async function resolveTypeAtLocation(
     >('resolveTypeAtLocation', {
       filePath,
       position,
+      kind,
       filter,
       projectOptions,
     })
