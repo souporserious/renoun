@@ -153,6 +153,35 @@ describe('file system', () => {
     expect(files).toHaveLength(1)
   })
 
+  test('filter entries with file exports that have internal tags', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'Button.tsx': '/** @internal */ export const Button = () => {}',
+      'Link.tsx': 'export const Link = () => {}',
+    })
+    const directory = new Directory({ fileSystem }).withFilter(
+      async (entry) => {
+        if (isFile(entry, 'tsx')) {
+          const fileExports = await entry.getExports()
+
+          for (const fileExport of fileExports) {
+            const tags = await fileExport.getTags()
+
+            if (tags?.some((tag) => tag.tagName === 'internal')) {
+              return false
+            }
+          }
+
+          return true
+        }
+
+        return false
+      }
+    )
+    const entries = await directory.getEntries()
+
+    expect(entries).toHaveLength(1)
+  })
+
   test('sort entries', async () => {
     const fileSystem = new VirtualFileSystem({
       'foo.ts': '',
@@ -353,10 +382,11 @@ describe('file system', () => {
 
   test('all file exports', async () => {
     const projectDirectory = new Directory('fixtures/project')
-    const file = await projectDirectory.getFile('server', 'ts')
-    const fileExports = await file!.getExports()
+    const file = await projectDirectory.getFileOrThrow('server', 'ts')
+    const fileExports = await file.getExports()
+    const fileExport = fileExports.at(0)!
 
-    expect(await fileExports[0].getName()).toMatch('createServer')
+    expect(await fileExport.getName()).toMatch('createServer')
   })
 
   test('all virtual file exports', async () => {
