@@ -99,9 +99,9 @@ export class WebSocketClient {
     }
   }
 
-  async callMethod<Value>(
+  async callMethod<Params, Value>(
     method: string,
-    params: any,
+    params: Params,
     timeout = 60000
   ): Promise<Value> {
     const id = performance.now()

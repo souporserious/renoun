@@ -1,4 +1,4 @@
-import type { Project } from 'ts-morph'
+import type { Project, SyntaxKind } from 'ts-morph'
 
 import {
   resolveType,
@@ -19,10 +19,11 @@ export async function resolveTypeAtLocation(
   project: Project,
   filePath: string,
   position: number,
+  kind: SyntaxKind,
   filter?: SymbolFilter,
   isVirtualFileSystem = false
 ) {
-  const typeId = `${filePath}:${position}`
+  const typeId = `${filePath}:${position}:${kind}`
   const sourceFile = project.addSourceFileAtPath(filePath)
 
   // TODO: there is a bug in the `getProject` watch implementation and the `waitForRefreshingProjects` utility
@@ -31,7 +32,7 @@ export async function resolveTypeAtLocation(
     await sourceFile.refreshFromFileSystem()
   }
 
-  const declaration = sourceFile.getDescendantAtPos(position)
+  let declaration = sourceFile.getDescendantAtPos(position)
 
   if (!declaration) {
     throw new Error(
@@ -39,7 +40,7 @@ export async function resolveTypeAtLocation(
     )
   }
 
-  const exportDeclaration = declaration.getParentOrThrow()
+  const exportDeclaration = declaration.getFirstAncestorByKindOrThrow(kind)
   const exportDeclarationType = exportDeclaration.getType()
 
   if (isVirtualFileSystem) {

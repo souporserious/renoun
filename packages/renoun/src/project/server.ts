@@ -1,5 +1,6 @@
 import { watch } from 'node:fs'
 import { minimatch } from 'minimatch'
+import type { SyntaxKind } from 'ts-morph'
 
 import { analyzeSourceText as baseAnalyzeSourceText } from '../utils/analyze-source-text.js'
 import {
@@ -90,6 +91,7 @@ export function createServer() {
     }: {
       filePath: string
       position: number
+      kind: SyntaxKind
       filter?: string
       projectOptions?: ProjectOptions
     }) {
@@ -116,6 +118,7 @@ export function createServer() {
         project,
         options.filePath,
         options.position,
+        options.kind,
         filterFn,
         projectOptions?.useInMemoryFileSystem
       )
@@ -142,15 +145,17 @@ export function createServer() {
       filePath,
       name,
       position,
+      kind,
       projectOptions,
     }: {
       filePath: string
       name: string
       position: number
+      kind: SyntaxKind
       projectOptions?: ProjectOptions
     }) {
       const project = getProject(projectOptions)
-      return baseGetFileExportMetadata(filePath, name, position, project)
+      return baseGetFileExportMetadata(filePath, name, position, kind, project)
     }
   )
 
