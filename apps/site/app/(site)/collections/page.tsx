@@ -4,9 +4,9 @@ import { CollectionsCollection, CollectionsDocsCollection } from '@/collections'
 import { TableOfContents } from '@/components/TableOfContents'
 
 export default async function Page() {
-  const file = await CollectionsCollection.getFile('index', 'tsx')
+  const sourceFile = await CollectionsCollection.getFile('index', 'tsx')
 
-  if (!file) {
+  if (!sourceFile) {
     return null
   }
 
@@ -18,7 +18,7 @@ export default async function Page() {
 
   const Content = await docFile.getExport('default').getRuntimeValue()
   const headings = await docFile.getExport('headings').getRuntimeValue()
-  const fileExports = await file.getExports()
+  const fileExports = await sourceFile.getExports()
 
   return (
     <>
