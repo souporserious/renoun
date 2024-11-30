@@ -6,7 +6,7 @@ import { getJsDocMetadata } from './get-js-doc-metadata.js'
 describe('getJsDocMetadata', () => {
   const project = new Project()
 
-  test('gathers function description and tags', () => {
+  test('function description and tags', () => {
     const description = 'Returns a div element.'
     const tag = '@deprecated use another component instead.'
     const sourceFile = project.createSourceFile(
@@ -45,11 +45,11 @@ describe('getJsDocMetadata', () => {
     expect(metadata?.description).toBe(description)
   })
 
-  test('gathers variable declaration description', () => {
+  test('variable declaration description', () => {
     const description = 'A div element.'
     const sourceFile = project.createSourceFile(
       'test.ts',
-      `/** ${description} */\nconst element = <div />`,
+      `/** ${description} */ const element = <div />`,
       { overwrite: true }
     )
     const metadata = getJsDocMetadata(
