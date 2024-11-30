@@ -522,6 +522,19 @@ describe('file system', () => {
     ])
   })
 
+  test('barrel file export metadata', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'index.ts': `export { Button } from './Button.tsx'`,
+      'Button.tsx': `/**\n * A button component.\n * @category components\n */\nexport function Button() {}`,
+    })
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFileOrThrow('index', 'ts')
+    const fileExport = file.getExport('Button')
+
+    expect(fileExport).toBeInstanceOf(JavaScriptFileExport)
+    expect(await fileExport.getName()).toBe('Button')
+  })
+
   test('file export type reference', async () => {
     const fileSystem = new VirtualFileSystem({
       'index.ts': 'export type Metadata = { title: string }',

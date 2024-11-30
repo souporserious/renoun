@@ -5,6 +5,7 @@ import { getJsDocMetadata } from './get-js-doc-metadata.js'
 
 export interface FileExport {
   name: string
+  path: string
   position: number
   kind: tsMorph.SyntaxKind
 }
@@ -15,6 +16,7 @@ export function getFileExports(
   project: Project
 ): {
   name: string
+  path: string
   position: number
   kind: tsMorph.SyntaxKind
 }[] {
@@ -28,6 +30,7 @@ export function getFileExports(
     ([name, declarations]) => {
       return declarations.map((declaration) => ({
         name,
+        path: declaration.getSourceFile().getFilePath(),
         position: declaration.getPos(),
         kind: declaration.getKind(),
       }))

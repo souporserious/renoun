@@ -1,9 +1,9 @@
 import * as React from 'react'
-import type { SyntaxKind } from 'ts-morph'
 
 import { getFileExportMetadata } from '../project/client.js'
 import { createSlug } from '../utils/create-slug.js'
 import { getEditPath } from '../utils/get-edit-path.js'
+import type { FileExport } from '../utils/get-file-exports.js'
 import { getGitMetadata } from '../utils/get-git-metadata.js'
 import {
   baseName,
@@ -200,7 +200,7 @@ export class JavaScriptFileExport<
 > {
   #name: string
   #file: JavaScriptFile<Exports>
-  #location: { position: number; kind: SyntaxKind } | undefined
+  #location: Omit<FileExport, 'name'> | undefined
   #metadata: Awaited<ReturnType<typeof getFileExportMetadata>> | undefined
 
   constructor(name: string, file: JavaScriptFile<Exports>) {
@@ -216,8 +216,8 @@ export class JavaScriptFileExport<
   }
 
   async #isNotStatic() {
-    const position = await this.#getLocation()
-    return position === undefined
+    const location = await this.#getLocation()
+    return location === undefined
   }
 
   async #getMetadata() {
@@ -233,7 +233,7 @@ export class JavaScriptFileExport<
     const fileSystem = (await this.#file.getDirectory()).getFileSystem()
 
     this.#metadata = await fileSystem.getFileExportMetadata(
-      this.#file.getAbsolutePath(),
+      location.path,
       this.#name,
       location.position,
       location.kind
@@ -507,6 +507,7 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
     }
 
     return {
+      path: fileExport.path,
       position: fileExport.position,
       kind: fileExport.kind,
     }
