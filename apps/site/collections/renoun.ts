@@ -74,6 +74,8 @@ export const ComponentsCollection = new Directory<
       if (allInternal) {
         return false
       }
+
+      return true
     }
 
     return isDirectory(entry) || isFile(entry, 'mdx')
