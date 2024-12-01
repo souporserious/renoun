@@ -1,5 +1,5 @@
 /** Get the base name of a file system path e.g. /path/to/file.ts -> file */
-export function baseName(path: string, extension: string = ''): string {
+export function baseName(path: string, extension?: string): string {
   const base = path.slice(path.lastIndexOf('/') + 1)
   if (extension && base.endsWith(extension)) {
     return base.slice(0, -extension.length)
@@ -40,6 +40,26 @@ export function removeExtension(filePath: string): string {
   return filePath
 }
 
+/** Remove all extensions from a file path e.g. Button.examples.tsx -> Button */
+export function removeAllExtensions(filePath: string): string {
+  const lastSlashIndex = Math.max(
+    filePath.lastIndexOf('/'),
+    filePath.lastIndexOf('\\')
+  )
+  const filenNameStartOffset = 1
+  const fileName = filePath.slice(lastSlashIndex + filenNameStartOffset)
+  const firstDotIndex = fileName.indexOf('.')
+
+  if (firstDotIndex === -1) {
+    return filePath // No extension found
+  }
+
+  return filePath.slice(
+    0,
+    lastSlashIndex + filenNameStartOffset + firstDotIndex
+  )
+}
+
 /** Remove order prefixes from a file path e.g. 01.intro -> intro */
 export function removeOrderPrefixes(filePath: string): string {
   return filePath.replace(/(^|\/)\d+\./g, '$1')
@@ -53,10 +73,18 @@ export function joinPaths(...paths: (string | undefined)[]): string {
 
   const isAbsolute = paths.at(0)?.startsWith('/')
   const segments: string[] = []
+  const lastSegmentIndex = paths.length - 1
+  let hasTrailingSlash = false
 
-  for (const path of paths) {
+  for (let index = 0; index < paths.length; index++) {
+    const path = paths[index]
+
     if (!path) {
       continue
+    }
+
+    if (index === lastSegmentIndex) {
+      hasTrailingSlash = path.endsWith('/')
     }
 
     for (const segment of path.split('/')) {
@@ -71,7 +99,13 @@ export function joinPaths(...paths: (string | undefined)[]): string {
   }
 
   const resolvedPath = segments.join('/')
-  return isAbsolute ? `/${resolvedPath}` : resolvedPath || '.'
+  let finalPath = isAbsolute ? `/${resolvedPath}` : resolvedPath || '.'
+
+  if (hasTrailingSlash && finalPath !== '/') {
+    finalPath += '/'
+  }
+
+  return finalPath
 }
 
 /** Get the relative path from one file to another */

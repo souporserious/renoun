@@ -1,6 +1,7 @@
 import ignore from 'ignore'
 
 import { createSourceFile, transpileSourceFile } from '../project/client.js'
+import { joinPaths } from '../utils/path.js'
 import { isJavaScriptLikeExtension } from './is-javascript-like-extension.js'
 import { FileSystem } from './FileSystem.js'
 import type { DirectoryEntry } from './types.js'
@@ -47,7 +48,13 @@ export class VirtualFileSystem extends FileSystem {
   }
 
   getAbsolutePath(path: string) {
-    return path.startsWith('./') ? path.slice(1) : path
+    if (path.startsWith('/')) {
+      return path
+    }
+    if (path.startsWith('./')) {
+      return path.slice(1)
+    }
+    return joinPaths('/', path)
   }
 
   getFiles() {
@@ -86,8 +93,8 @@ export class VirtualFileSystem extends FileSystem {
         }
 
         const subDirectoryPath = path.endsWith('/')
-          ? `${path}${segments[0]}`
-          : `${path}/${segments[0]}`
+          ? `${path}${segments.at(0)}`
+          : `${path}/${segments.at(0)}`
         directories.add(subDirectoryPath)
       }
     }

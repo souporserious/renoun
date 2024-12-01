@@ -248,15 +248,43 @@ describe('file system', () => {
     const fileSystem = new VirtualFileSystem({
       'Button.tsx': '',
       'Button.mdx': '',
+      'CodeBlock/CodeBlock.tsx': '',
+      'CodeBlock/CodeBlock.mdx': '',
+      'CodeBlock/index.ts': '',
     })
     const directory = new Directory({ fileSystem })
     const entries = await directory.getEntries()
 
-    expect(entries).toHaveLength(1)
+    expect(entries).toHaveLength(2)
 
-    const entry = entries.at(0) as File
+    const fileEntry = entries.at(0) as File
 
-    expect(entry.getExtension()).toBe('tsx')
+    expect(fileEntry.getName()).toBe('Button')
+    expect(fileEntry.getExtension()).toBe('tsx')
+
+    const directoryEntry = entries.at(1) as Directory
+
+    expect(directoryEntry.getName()).toBe('CodeBlock')
+  })
+
+  test('excludes entries based on tsconfig', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'Button/Button.tsx': '',
+      'Button/examples/BasicUsage.tsx': '',
+      'CodeBlock.tsx': '',
+      'CodeBlock.examples.tsx': '',
+      'tsconfig.json': '{ "exclude": ["**/*.examples.tsx", "**/examples/**"] }',
+    })
+    const directory = new Directory({ fileSystem })
+    const entries = await directory.getEntries({ recursive: true })
+
+    expect(entries.map((entry) => entry.getPath())).toMatchInlineSnapshot(`
+      [
+        "/CodeBlock",
+        "/tsconfig",
+        "/Button",
+      ]
+    `)
   })
 
   test('entry', async () => {
