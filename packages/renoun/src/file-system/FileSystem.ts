@@ -38,7 +38,7 @@ export abstract class FileSystem {
   #projectOptions: ProjectOptions
 
   constructor(options: FileSystemOptions = {}) {
-    this.#rootPath = options.rootPath || '.'
+    this.#rootPath = options.rootPath || '/'
     this.#tsConfigPath = options.tsConfigPath || 'tsconfig.json'
     this.#projectOptions = {
       projectId: options.projectId,
@@ -89,15 +89,19 @@ export abstract class FileSystem {
     }
   }
 
-  isFilePathExcludedFromTsConfig(filePath: string) {
+  isFilePathExcludedFromTsConfig(filePath: string, isDirectory = false) {
     const absoluteFilePath = this.getAbsolutePath(filePath)
-    const absoluteTsConfigDirectory = this.getAbsolutePath(
-      directoryName(this.#tsConfigPath)
+    const absoluteTsConfigDirectory = directoryName(
+      this.getAbsolutePath(this.#tsConfigPath)
     )
-    const relativeFilePath = relativePath(
+    let relativeFilePath = relativePath(
       absoluteTsConfigDirectory,
       absoluteFilePath
     )
+
+    if (isDirectory) {
+      relativeFilePath = joinPaths(relativeFilePath, '/')
+    }
 
     if (this.#tsConfig === undefined) {
       this.#tsConfig = this.#getTsConfig()

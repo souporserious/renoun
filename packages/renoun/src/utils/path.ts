@@ -53,10 +53,18 @@ export function joinPaths(...paths: (string | undefined)[]): string {
 
   const isAbsolute = paths.at(0)?.startsWith('/')
   const segments: string[] = []
+  const lastSegmentIndex = paths.length - 1
+  let hasTrailingSlash = false
 
-  for (const path of paths) {
+  for (let index = 0; index < paths.length; index++) {
+    const path = paths[index]
+
     if (!path) {
       continue
+    }
+
+    if (index === lastSegmentIndex) {
+      hasTrailingSlash = path.endsWith('/')
     }
 
     for (const segment of path.split('/')) {
@@ -71,7 +79,13 @@ export function joinPaths(...paths: (string | undefined)[]): string {
   }
 
   const resolvedPath = segments.join('/')
-  return isAbsolute ? `/${resolvedPath}` : resolvedPath || '.'
+  let finalPath = isAbsolute ? `/${resolvedPath}` : resolvedPath || '.'
+
+  if (hasTrailingSlash && finalPath !== '/') {
+    finalPath += '/'
+  }
+
+  return finalPath
 }
 
 /** Get the relative path from one file to another */

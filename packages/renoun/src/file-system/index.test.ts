@@ -259,6 +259,27 @@ describe('file system', () => {
     expect(entry.getExtension()).toBe('tsx')
   })
 
+  test('excludes entries based on tsconfig', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'Button/Button.tsx': '',
+      'Button/examples/BasicUsage.tsx': '',
+      'CodeBlock.tsx': '',
+      'CodeBlock.examples.tsx': '',
+      'tsconfig.json': '{ "exclude": ["**/*.examples.tsx", "**/examples/**"] }',
+    })
+    const directory = new Directory({ fileSystem })
+    const entries = await directory.getEntries({ recursive: true })
+
+    expect(entries.map((entry) => entry.getPath())).toMatchInlineSnapshot(`
+      [
+        "/CodeBlock",
+        "/tsconfig",
+        "/Button/Button",
+        "/Button",
+      ]
+    `)
+  })
+
   test('entry', async () => {
     const fixturesDirectory = new Directory('fixtures')
 

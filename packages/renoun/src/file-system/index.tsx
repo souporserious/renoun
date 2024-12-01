@@ -1115,7 +1115,7 @@ export class Directory<
       if (
         shouldSkipIndexOrReadme ||
         fileSystem.isFilePathGitIgnored(entry.path) ||
-        fileSystem.isFilePathExcludedFromTsConfig(entry.path)
+        fileSystem.isFilePathExcludedFromTsConfig(entry.path, entry.isDirectory)
       ) {
         continue
       }
