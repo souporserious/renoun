@@ -1,5 +1,5 @@
 /** Get the base name of a file system path e.g. /path/to/file.ts -> file */
-export function baseName(path: string, extension: string = ''): string {
+export function baseName(path: string, extension?: string): string {
   const base = path.slice(path.lastIndexOf('/') + 1)
   if (extension && base.endsWith(extension)) {
     return base.slice(0, -extension.length)

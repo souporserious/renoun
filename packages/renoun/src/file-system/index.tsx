@@ -15,6 +15,7 @@ import {
   removeOrderPrefixes,
 } from '../utils/path.js'
 import type { SymbolFilter } from '../utils/resolve-type.js'
+import { FileName } from './FileName.js'
 import type { FileSystem } from './FileSystem.js'
 import { NodeFileSystem } from './NodeFileSystem.js'
 import {
@@ -42,13 +43,15 @@ export interface FileOptions {
 export class File<
   Types extends ExtensionTypes = ExtensionTypes,
   HasModule extends boolean = false,
-> {
+> extends FileName {
   #path: string
   #depth: number
   #directory: Directory<Types, HasModule>
   #entryGroup?: EntryGroup<FileSystemEntry<Types, HasModule>[]>
 
   constructor(options: FileOptions) {
+    super(baseName(options.path))
+
     this.#path = options.path
     this.#depth = options.depth
     this.#directory = options.directory
@@ -86,7 +89,7 @@ export class File<
    * Get the base name of the file excluding the extension. The directory name
    * will be used if the file is an index or readme file.
    */
-  getName() {
+  override getName() {
     let name = this.getBaseName()
 
     // Use the directory name if the file is an index or readme file
@@ -99,16 +102,6 @@ export class File<
     }
 
     return name.split('.').at(0)!
-  }
-
-  /** Get the base name of the file excluding the extension. */
-  getBaseName() {
-    return removeOrderPrefixes(baseName(this.#path, extensionName(this.#path)))
-  }
-
-  /** Get the extension of the file. */
-  getExtension() {
-    return extensionName(this.#path).slice(1)
   }
 
   /** Get the path of the file. */
@@ -344,7 +337,7 @@ export class JavaScriptFileExportWithRuntime<
       return this.#moduleGetters.get('default')!(path)
     }
 
-    const extension = this.#file.getExtension()
+    const extension = this.#file.getExtension()!
     const getModule = this.#moduleGetters.get(extension)!
 
     return getModule(removeExtension(path))
@@ -541,7 +534,7 @@ export class JavaScriptFileWithRuntime<
       return this.#moduleGetters.get('default')!(path)
     }
 
-    const extension = this.getExtension()
+    const extension = this.getExtension()!
     const getModule = this.#moduleGetters.get(extension)!
 
     return getModule(removeExtension(path))
