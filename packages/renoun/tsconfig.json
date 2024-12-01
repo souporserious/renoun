@@ -17,9 +17,10 @@
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": [
-    "src/**/*.examples.tsx",
-    "src/**/examples/**/*",
+    "**/*.examples.tsx",
+    "**/examples/**",
     "**/*.test.ts",
+    "**/tests/**",
     "dist",
     "node_modules"
   ]
