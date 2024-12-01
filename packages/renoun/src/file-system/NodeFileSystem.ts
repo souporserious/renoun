@@ -4,6 +4,7 @@ import { join, resolve, relative } from 'node:path'
 import ignore from 'ignore'
 
 import { getRootDirectory } from '../utils/get-root-directory.js'
+import { ensureRelativePath } from '../utils/path.js'
 import { FileSystem } from './FileSystem.js'
 import type { DirectoryEntry } from './types.js'
 
@@ -16,21 +17,20 @@ export class NodeFileSystem extends FileSystem {
 
   async readDirectory(path: string = '.'): Promise<DirectoryEntry[]> {
     const entries = await readdir(path, { withFileTypes: true })
+    const directoryEntries: DirectoryEntry[] = []
 
-    return entries.map((entry) => {
-      let entryPath = join(path, entry.name)
+    for (const entry of entries) {
+      const entryPath = join(path, entry.name)
 
-      if (!entryPath.startsWith('.')) {
-        entryPath = `./${entryPath}`
-      }
-
-      return {
+      directoryEntries.push({
         name: entry.name,
-        path: entryPath,
+        path: ensureRelativePath(entryPath),
         isDirectory: entry.isDirectory(),
         isFile: entry.isFile(),
-      } satisfies DirectoryEntry
-    })
+      } satisfies DirectoryEntry)
+    }
+
+    return directoryEntries
   }
 
   readFileSync(path: string): string {
