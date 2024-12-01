@@ -248,15 +248,23 @@ describe('file system', () => {
     const fileSystem = new VirtualFileSystem({
       'Button.tsx': '',
       'Button.mdx': '',
+      'CodeBlock/CodeBlock.tsx': '',
+      'CodeBlock/CodeBlock.mdx': '',
+      'CodeBlock/index.ts': '',
     })
     const directory = new Directory({ fileSystem })
     const entries = await directory.getEntries()
 
-    expect(entries).toHaveLength(1)
+    expect(entries).toHaveLength(2)
 
-    const entry = entries.at(0) as File
+    const fileEntry = entries.at(0) as File
 
-    expect(entry.getExtension()).toBe('tsx')
+    expect(fileEntry.getName()).toBe('Button')
+    expect(fileEntry.getExtension()).toBe('tsx')
+
+    const directoryEntry = entries.at(1) as Directory
+
+    expect(directoryEntry.getName()).toBe('CodeBlock')
   })
 
   test('excludes entries based on tsconfig', async () => {
@@ -274,7 +282,6 @@ describe('file system', () => {
       [
         "/CodeBlock",
         "/tsconfig",
-        "/Button/Button",
         "/Button",
       ]
     `)

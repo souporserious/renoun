@@ -11,6 +11,7 @@ import {
   extensionName,
   joinPaths,
   removeExtension,
+  removeAllExtensions,
   removeOrderPrefixes,
 } from '../utils/path.js'
 import type { SymbolFilter } from '../utils/resolve-type.js'
@@ -115,7 +116,7 @@ export class File<
     const fileSystem = this.#directory.getFileSystem()
     const basePath = this.#directory.getBasePath()
 
-    return removeExtension(
+    return removeAllExtensions(
       fileSystem.getPath(
         this.#path,
         options.includeBasePath ? { basePath } : undefined
@@ -1103,6 +1104,7 @@ export class Directory<
     const directoryEntries = await fileSystem.readDirectory(this.#path)
     const entriesMap = new Map<string, FileSystemEntry<any>>()
     const thisDirectory = this as Directory<Types>
+    const directoryBaseName = this.getBaseName()
     const nextDepth = this.#depth + 1
 
     for (const entry of directoryEntries) {
@@ -1122,7 +1124,7 @@ export class Directory<
 
       const entryKey = options?.includeDuplicates
         ? entry.path
-        : removeExtension(entry.path)
+        : removeAllExtensions(entry.path)
 
       if (entriesMap.has(entryKey)) {
         continue
@@ -1177,6 +1179,13 @@ export class Directory<
               directory: thisDirectory,
               entryGroup: this.#entryGroup,
             })
+
+        if (
+          !options?.includeDuplicates &&
+          file.getBaseName() === directoryBaseName
+        ) {
+          continue
+        }
 
         if (
           this.#filterCallback &&

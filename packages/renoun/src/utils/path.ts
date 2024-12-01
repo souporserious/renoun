@@ -40,6 +40,26 @@ export function removeExtension(filePath: string): string {
   return filePath
 }
 
+/** Remove all extensions from a file path e.g. Button.examples.tsx -> Button */
+export function removeAllExtensions(filePath: string): string {
+  const lastSlashIndex = Math.max(
+    filePath.lastIndexOf('/'),
+    filePath.lastIndexOf('\\')
+  )
+  const filenNameStartOffset = 1
+  const fileName = filePath.slice(lastSlashIndex + filenNameStartOffset)
+  const firstDotIndex = fileName.indexOf('.')
+
+  if (firstDotIndex === -1) {
+    return filePath // No extension found
+  }
+
+  return filePath.slice(
+    0,
+    lastSlashIndex + filenNameStartOffset + firstDotIndex
+  )
+}
+
 /** Remove order prefixes from a file path e.g. 01.intro -> intro */
 export function removeOrderPrefixes(filePath: string): string {
   return filePath.replace(/(^|\/)\d+\./g, '$1')
