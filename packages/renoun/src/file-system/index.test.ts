@@ -395,6 +395,19 @@ describe('file system', () => {
     }
   })
 
+  test('finds file with specific extension starting at directory', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'PackageInstall/index.ts': '',
+      'PackageInstall/PackageInstall.mdx': '',
+      'PackageInstall/PackageInstall.tsx': '',
+    })
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFileOrThrow('PackageInstall', 'mdx')
+
+    expect(file).toBeInstanceOf(File)
+    expect(file.getExtension()).toBe('mdx')
+  })
+
   test('removes order prefix from file name and path', async () => {
     const fileSystem = new VirtualFileSystem({
       '01.server.ts': '',
