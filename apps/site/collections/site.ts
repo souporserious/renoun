@@ -16,10 +16,10 @@ export type DocsEntry = FileSystemEntry<DocsSchema>
 
 export const DocsCollection = new Directory<{ mdx: DocsSchema }>('docs')
   .withBasePath('docs')
-  .withModule((path) => import(`../docs/${path}`))
+  .withModule((path) => import(`@/docs/${path}`))
   .withFilter((entry) => isFile(entry, 'mdx'))
 
 export const GuidesCollection = new Directory<{ mdx: DocsSchema }>('guides')
   .withBasePath('guides')
-  .withModule((path) => import(`../guides/${path}`))
+  .withModule((path) => import(`@/guides/${path}`))
   .withFilter((entry) => isFile(entry, 'mdx'))
