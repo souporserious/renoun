@@ -350,7 +350,7 @@ export class JavaScriptFileExportWithRuntime<
   async getRuntimeValue(): Promise<Value> {
     if (this.#moduleGetters === undefined) {
       throw new Error(
-        `[renoun] JavaScript file export "${String(this.#name)}" does not have a runtime value. The "getModule" function for the nearest Directory definition is not defined.`
+        `[renoun] JavaScript file export "${String(this.#name)}" does not have a runtime value. The "getModule" function for the closest Directory definition is not defined.`
       )
     }
 
@@ -918,6 +918,7 @@ export class Directory<
             const fileExtensions = Array.isArray(extension)
               ? extension
               : [extension]
+
             if (fileExtensions.includes(entry.getExtension() as Extension)) {
               return entry as any
             }
@@ -925,17 +926,37 @@ export class Directory<
             return entry as any
           }
         } else if (entry instanceof Directory) {
-          // Check if `index` or `readme` exists in the directory
           const entries = await entry.getEntries({
             includeDuplicates: true,
             includeIndexAndReadme: true,
           })
-          const targetFiles = ['index', 'readme']
 
-          for (const subEntry of entries) {
-            const name = subEntry.getBaseName().toLowerCase()
-            if (targetFiles.includes(name)) {
-              return subEntry as any
+          // If extension is provided, check for a file with the extension
+          if (extension) {
+            const fileExtensions = Array.isArray(extension)
+              ? extension
+              : [extension]
+
+            for (const subEntry of entries) {
+              if (
+                subEntry instanceof File &&
+                subEntry.getBaseName() === entry.getBaseName() &&
+                fileExtensions.includes(subEntry.getExtension() as Extension)
+              ) {
+                return subEntry as any
+              }
+            }
+          }
+          // Otherwise, check for an index or readme file
+          else {
+            const targetFiles = ['index', 'readme']
+
+            for (const subEntry of entries) {
+              const name = subEntry.getBaseName().toLowerCase()
+
+              if (targetFiles.includes(name)) {
+                return subEntry as any
+              }
             }
           }
         }
