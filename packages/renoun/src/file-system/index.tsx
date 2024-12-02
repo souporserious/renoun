@@ -178,9 +178,8 @@ export class File<
     const entries = await (this.#entryGroup
       ? this.#entryGroup.getEntries({ recursive: true })
       : this.#directory.getEntries())
-    const index = entries.findIndex((file) => {
-      return file.getRelativePath() === this.getRelativePath()
-    })
+    const path = this.getPath()
+    const index = entries.findIndex((entry) => entry.getPath() === path)
     const previous = index > 0 ? entries[index - 1] : undefined
     const next = index < entries.length - 1 ? entries[index + 1] : undefined
 
@@ -292,7 +291,7 @@ export class JavaScriptFileExport<
   async getType(filter?: SymbolFilter) {
     if (await this.#isNotStatic()) {
       throw new Error(
-        `[renoun] Export can not be statically analyzed from source file at "${this.#file.getRelativePath()}".`
+        `[renoun] Export can not be statically analyzed at file path "${this.#file.getRelativePath()}".`
       )
     }
 
@@ -553,7 +552,7 @@ export class JavaScriptFileWithRuntime<
 
     if (fileModuleExport === undefined) {
       throw new Error(
-        `[renoun] JavaScript file export "${String(exportName)}" not found in ${this.getAbsolutePath()}`
+        `[renoun] JavaScript file export "${String(exportName)}" not found at file path "${this.getRelativePath()}"`
       )
     }
 
@@ -1157,7 +1156,7 @@ export class Directory<
         if (options?.recursive) {
           const nestedEntries = await directory.getEntries(options)
           for (const nestedEntry of nestedEntries) {
-            entriesMap.set(nestedEntry.getRelativePath(), nestedEntry)
+            entriesMap.set(nestedEntry.getPath(), nestedEntry)
           }
         }
 
@@ -1267,9 +1266,8 @@ export class Directory<
       return [undefined, undefined]
     }
 
-    const index = entries.findIndex((entryToCompare) => {
-      return entryToCompare.getRelativePath() === this.getRelativePath()
-    })
+    const path = this.getPath()
+    const index = entries.findIndex((entry) => entry.getPath() === path)
     const previous = index > 0 ? entries[index - 1] : undefined
     const next = index < entries.length - 1 ? entries[index + 1] : undefined
 
