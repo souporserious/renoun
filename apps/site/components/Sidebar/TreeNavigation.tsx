@@ -16,7 +16,7 @@ async function ListNavigation({
   variant?: 'name' | 'title'
 }) {
   const path = entry.getPath()
-  const depth = entry.getDepth() + 1
+  const depth = entry.getDepth()
   const metadata =
     variant === 'title' && isJavaScriptFileWithRuntime(entry)
       ? await entry.getExport('metadata').getRuntimeValue()
@@ -26,6 +26,7 @@ async function ListNavigation({
     return (
       <li>
         <SidebarLink
+          css={{ paddingLeft: `${depth * 0.8}rem` }}
           pathname={path}
           label={
             variant === 'title'
@@ -38,21 +39,12 @@ async function ListNavigation({
   }
 
   const entries = await entry.getEntries()
-  const listStyles: CSSObject = {
-    fontSize: 'var(--font-size-body-2)',
-    display: 'flex',
-    flexDirection: 'column',
-    listStyle: 'none',
-    paddingLeft: `${depth}rem`,
-    marginLeft: '0.25rem',
-    borderLeft: '1px solid var(--color-separator)',
-  }
 
   if (entries.length === 0) {
     return (
       <li>
         <SidebarLink
-          css={listStyles}
+          css={{ paddingLeft: `${depth * 0.8}rem` }}
           pathname={path}
           label={
             variant === 'title'
@@ -62,6 +54,16 @@ async function ListNavigation({
         />
       </li>
     )
+  }
+
+  const listStyles: CSSObject = {
+    fontSize: 'var(--font-size-body-2)',
+    display: 'flex',
+    flexDirection: 'column',
+    listStyle: 'none',
+    paddingLeft: `${depth}rem`,
+    marginLeft: '0.25rem',
+    borderLeft: '1px solid var(--color-separator)',
   }
 
   return (
