@@ -56,11 +56,8 @@ export default async function Page() {
           >
             API Reference
           </h2>
-          {fileExports.map(async (exportSource) => (
-            <APIReference
-              key={await exportSource.getName()}
-              source={exportSource}
-            />
+          {fileExports.map((fileExport) => (
+            <APIReference key={fileExport.getName()} source={fileExport} />
           ))}
         </div>
       </div>
@@ -83,13 +80,11 @@ export default async function Page() {
               text: 'API Reference',
               depth: 2,
             },
-            ...(await Promise.all(
-              fileExports.map(async (source) => ({
-                id: await source.getSlug(),
-                text: await source.getName(),
-                depth: 3,
-              }))
-            )),
+            ...fileExports.map((fileExport) => ({
+              id: fileExport.getSlug(),
+              text: fileExport.getName(),
+              depth: 3,
+            })),
           ]}
         />
       </div>

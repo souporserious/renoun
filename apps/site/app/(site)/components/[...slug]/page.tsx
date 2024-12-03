@@ -99,13 +99,11 @@ export default async function Component({
   }
 
   if (examplesExports.length) {
-    const parsedExports = await Promise.all(
-      examplesExports.map(async (source) => ({
-        id: await source.getSlug(),
-        text: await source.getName(),
-        depth: 3,
-      }))
-    )
+    const parsedExports = examplesExports.map((exampleExport) => ({
+      id: exampleExport.getSlug(),
+      text: exampleExport.getName(),
+      depth: 3,
+    }))
 
     headings.push(
       {
@@ -124,13 +122,11 @@ export default async function Component({
         text: 'API Reference',
         depth: 2,
       },
-      ...(await Promise.all(
-        componentExports.map(async (source) => ({
-          id: await source.getSlug(),
-          text: await source.getName(),
-          depth: 3,
-        }))
-      ))
+      ...componentExports.map((componentExport) => ({
+        id: componentExport.getSlug(),
+        text: componentExport.getName(),
+        depth: 3,
+      }))
     )
   }
 
@@ -181,9 +177,9 @@ export default async function Component({
             <h2 id="api-reference" css={{ margin: '0 0 2rem' }}>
               API Reference
             </h2>
-            {componentExports.map(async (exportSource) => (
+            {componentExports.map((exportSource) => (
               <APIReference
-                key={await exportSource.getSlug()}
+                key={exportSource.getSlug()}
                 source={exportSource}
               />
             ))}
@@ -248,11 +244,10 @@ async function Preview({
 }: {
   fileExport: JavaScriptFileExportWithRuntime<React.ComponentType>
 }) {
-  const name = await fileExport.getName()
-  const title = await fileExport.getName()
-  // const title = fileExport.getTitle()
-  const description = await fileExport.getDescription()
-  const slug = await fileExport.getSlug()
+  const name = fileExport.getName()
+  const title = fileExport.getName() // fileExport.getTitle()
+  const description = fileExport.getDescription()
+  const slug = fileExport.getSlug()
   const editPath = fileExport.getEditPath()
   const Value = await fileExport.getRuntimeValue()
   const isUppercase = name[0] === name[0].toUpperCase()
