@@ -467,12 +467,7 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
     )
   }
 
-  /**
-   * Get or create a JavaScript file export by name.
-   *
-   * Note, exports are not always statically analyzable due to loaders like MDX
-   * so an export instance will always be returned.
-   */
+  /** Get or create a JavaScript file export by name. */
   protected async getOrCreateExport<
     ExportName extends Extract<keyof Exports, string>,
   >(
@@ -573,12 +568,7 @@ export class JavaScriptFileWithRuntime<
     return super.getExports() as any
   }
 
-  /**
-   * Get a JavaScript file export by name.
-   *
-   * Note, exports are not always statically analyzable due to bundler transformations
-   * so an export instance will always be returned.
-   */
+  /** Get a JavaScript file export by name. */
   override async getExport<ExportName extends Extract<keyof Exports, string>>(
     name: ExportName
   ): Promise<
