@@ -129,14 +129,14 @@ export abstract class FileSystem {
   }
 
   getFileExportMetadata(
-    filePath: string,
     name: string,
+    filePath: string,
     position: number,
     kind: SyntaxKind
   ) {
     return getFileExportMetadata(
-      filePath,
       name,
+      filePath,
       position,
       kind,
       this.#projectOptions

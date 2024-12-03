@@ -142,20 +142,20 @@ export function createServer() {
   server.registerMethod(
     'getFileExportMetadata',
     async function getFileExportMetadata({
-      filePath,
       name,
+      filePath,
       position,
       kind,
       projectOptions,
     }: {
-      filePath: string
       name: string
+      filePath: string
       position: number
       kind: SyntaxKind
       projectOptions?: ProjectOptions
     }) {
       const project = getProject(projectOptions)
-      return baseGetFileExportMetadata(filePath, name, position, kind, project)
+      return baseGetFileExportMetadata(name, filePath, position, kind, project)
     }
   )
 

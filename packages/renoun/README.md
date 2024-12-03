@@ -53,7 +53,8 @@ export default async function Page({
     return <div>Post not found</div>
   }
 
-  const Content = await post.getExport('default').getValue()
+  const defaultExport = await post.getExportOrThrow('default')
+  const Content = await defaultExport.getRuntimeValue()
 
   return <Content />
 }
@@ -68,7 +69,7 @@ import type { MDXContent } from 'renoun/mdx'
 interface PostTypes {
   mdx: {
     default: MDXContent
-    frontmatter: { title: string }
+    frontmatter: { title: string; date: Date }
   }
 }
 
@@ -88,7 +89,7 @@ import type { MDXContent } from 'renoun/mdx'
 interface PostTypes {
   mdx: {
     default: MDXContent
-    frontmatter: { title: string }
+    frontmatter: { title: string; date: Date }
   }
 }
 
@@ -107,7 +108,9 @@ export default async function Page() {
       <ul>
         {allPosts.map(async (post) => {
           const path = post.getPath()
-          const frontmatter = await post.getExport('frontmatter').getValue()
+          const frontmatter = await (
+            await post.getExportOrThrow('frontmatter')
+          ).getRuntimeValue()
 
           return (
             <li key={path}>

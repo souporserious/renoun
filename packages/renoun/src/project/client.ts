@@ -184,8 +184,8 @@ export async function getFileExports(
  * @internal
  */
 export async function getFileExportMetadata(
-  filePath: string,
   name: string,
+  filePath: string,
   position: number,
   kind: SyntaxKind,
   projectOptions?: ProjectOptions
@@ -193,16 +193,16 @@ export async function getFileExportMetadata(
   if (client) {
     return client.callMethod<
       {
-        filePath: string
         name: string
+        filePath: string
         position: number
         kind: SyntaxKind
         projectOptions?: ProjectOptions
       },
       Awaited<ReturnType<typeof baseGetFileExportMetadata>>
     >('getFileExportMetadata', {
-      filePath,
       name,
+      filePath,
       position,
       kind,
       projectOptions,
@@ -212,7 +212,7 @@ export async function getFileExportMetadata(
   return import('../utils/get-file-exports.js').then(
     ({ getFileExportMetadata }) => {
       const project = getProject(projectOptions)
-      return getFileExportMetadata(filePath, name, position, kind, project)
+      return getFileExportMetadata(name, filePath, position, kind, project)
     }
   )
 }

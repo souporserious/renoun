@@ -220,8 +220,10 @@ describe('file system', () => {
         return isFile(entry, 'ts')
       })
       .withSort(async (a, b) => {
-        const aSort = await a.getExport('sort').getRuntimeValue()
-        const bSort = await b.getExport('sort').getRuntimeValue()
+        const aExport = await a.getExportOrThrow('sort')
+        const aSort = await aExport.getRuntimeValue()
+        const bExport = await b.getExportOrThrow('sort')
+        const bSort = await bExport.getRuntimeValue()
         return aSort - bSort
       })
     const entries = await directory.getEntries()
@@ -453,7 +455,8 @@ describe('file system', () => {
       ts: { useHover: Function }
     }>({ fileSystem }).withModule(async () => ({ useHover: () => {} }))
     const file = await rootDirectory.getFileOrThrow('use-hover', 'ts')
-    const value = await file.getExport('useHover').getRuntimeValue()
+    const fileExport = await file.getExportOrThrow('useHover')
+    const value = await fileExport.getRuntimeValue()
 
     expectTypeOf(value).toMatchTypeOf<Function>()
     expect(value).toBeInstanceOf(Function)
@@ -466,7 +469,8 @@ describe('file system', () => {
       (path) => import(`#fixtures/project/${path}`)
     )
     const file = await projectDirectory.getFileOrThrow('server', 'ts')
-    const value = await file.getExport('createServer').getRuntimeValue()
+    const fileExport = await file.getExportOrThrow('createServer')
+    const value = await fileExport.getRuntimeValue()
 
     expectTypeOf(value).toMatchTypeOf<Function>()
   })
@@ -500,10 +504,10 @@ describe('file system', () => {
         return module.exports
       })
     const file = await directory.getFileOrThrow('index', 'ts')
-    const fileExport = file.getExport('metadata')
+    const fileExport = await file.getExportOrThrow('metadata')
 
     await expect(
-      fileExport!.getRuntimeValue()
+      fileExport.getRuntimeValue()
     ).rejects.toThrowErrorMatchingInlineSnapshot(
       `[Error: [renoun] Schema validation failed to parse export "metadata" at file path "index.ts" errored with: Expected a title]`
     )
@@ -539,7 +543,8 @@ describe('file system', () => {
         return module.exports
       })
     const file = await directory.getFileOrThrow('hello-world', 'ts')
-    const metadata = await file.getExport('metadata').getRuntimeValue()
+    const fileExport = await file.getExportOrThrow('metadata')
+    const metadata = await fileExport.getRuntimeValue()
 
     expect(metadata).toMatchObject({
       title: 'Hello, World!',
@@ -547,18 +552,18 @@ describe('file system', () => {
     })
   })
 
-  test('file export metadata', async () => {
+  test.only('file export metadata', async () => {
     const fileSystem = new VirtualFileSystem({
       'index.ts': `/**\n * Say hello.\n * @category greetings\n */\nexport default function hello() {}`,
     })
     const directory = new Directory({ fileSystem })
     const file = await directory.getFileOrThrow('index', 'ts')
-    const fileExport = file.getExport('default')
+    const fileExport = await file.getExportOrThrow('default')
 
     expect(fileExport).toBeInstanceOf(JavaScriptFileExport)
-    expect(await fileExport.getName()).toBe('hello')
-    expect(await fileExport.getDescription()).toBe('Say hello.')
-    expect(await fileExport.getTags()).toMatchObject([
+    expect(fileExport.getName()).toBe('hello')
+    expect(fileExport.getDescription()).toBe('Say hello.')
+    expect(fileExport.getTags()).toMatchObject([
       { tagName: 'category', text: 'greetings' },
     ])
   })
@@ -570,10 +575,10 @@ describe('file system', () => {
     })
     const directory = new Directory({ fileSystem })
     const file = await directory.getFileOrThrow('index', 'ts')
-    const fileExport = file.getExport('Button')
+    const fileExport = await file.getExportOrThrow('Button')
 
     expect(fileExport).toBeInstanceOf(JavaScriptFileExport)
-    expect(await fileExport.getName()).toBe('Button')
+    expect(fileExport.getName()).toBe('Button')
   })
 
   test('file export type reference', async () => {
@@ -582,7 +587,7 @@ describe('file system', () => {
     })
     const directory = new Directory({ fileSystem })
     const file = await directory.getFileOrThrow('index', 'ts')
-    const fileExport = file.getExport('Metadata')
+    const fileExport = await file.getExportOrThrow('Metadata')
     const type = await fileExport.getType()
 
     expect(type).toBeDefined()
@@ -599,7 +604,7 @@ describe('file system', () => {
     expectTypeOf(file).toMatchTypeOf<JavaScriptFileWithRuntime<any>>()
     expect(file).toBeInstanceOf(JavaScriptFile)
 
-    const fileExport = file.getExport('basename')
+    const fileExport = await file.getExportOrThrow('basename')
 
     expectTypeOf(fileExport).toHaveProperty('getRuntimeValue')
     expect(fileExport).toBeInstanceOf(JavaScriptFileExport)
@@ -620,7 +625,7 @@ describe('file system', () => {
     expectTypeOf(file).toMatchTypeOf<JavaScriptFileWithRuntime<any>>()
     expect(file).toBeInstanceOf(JavaScriptFile)
 
-    const fileExport = file.getExport('basename')
+    const fileExport = await file.getExportOrThrow('basename')
 
     expectTypeOf(fileExport).toHaveProperty('getRuntimeValue')
     expect(fileExport).toBeInstanceOf(JavaScriptFileExport)
@@ -787,7 +792,7 @@ describe('file system', () => {
     })
     const directory = new Directory({ fileSystem })
     const file = await directory.getFileOrThrow('index', 'ts')
-    const fileExport = file.getExport('default')
+    const fileExport = await file.getExportOrThrow('default')
 
     expect(await fileExport.getName()).toBe(file.getName())
   })

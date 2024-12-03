@@ -40,8 +40,8 @@ export function getFileExports(
 
 /** Returns metadata about a specific export of a file. */
 export async function getFileExportMetadata(
-  filePath: string,
   name: string,
+  filePath: string,
   position: number,
   kind: tsMorph.SyntaxKind,
   project: Project
