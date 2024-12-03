@@ -552,7 +552,7 @@ describe('file system', () => {
     })
   })
 
-  test.only('file export metadata', async () => {
+  test('file export metadata', async () => {
     const fileSystem = new VirtualFileSystem({
       'index.ts': `/**\n * Say hello.\n * @category greetings\n */\nexport default function hello() {}`,
     })
