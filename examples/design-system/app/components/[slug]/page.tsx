@@ -45,7 +45,9 @@ export default async function Component({
     : null
   const isExamplesPage = slug.at(-1) === 'examples'
   const readmeFile = await componentDirectory.getFileOrThrow('README', 'mdx')
-  const Readme = await readmeFile.getExport('default').getRuntimeValue()
+  const Readme = await (
+    await readmeFile.getExportOrThrow('default')
+  ).getRuntimeValue()
   const updatedAt = await componentEntry.getUpdatedAt()
   const editPath = componentEntry.getEditPath()
   const [previousEntry, nextEntry] = await componentEntry.getSiblings()
@@ -86,16 +88,13 @@ export default async function Component({
             {exampleFiles.map(async (file) => {
               const fileExports = await file.getExports()
 
-              return Promise.all(
-                fileExports.map(async (fileExport) => {
-                  const exportName = await fileExport.getName()
-                  return (
-                    <li key={exportName}>
-                      <Preview fileExport={fileExport} />
-                    </li>
-                  )
-                })
-              )
+              return fileExports.map((fileExport) => {
+                return (
+                  <li key={fileExport.getName()}>
+                    <Preview fileExport={fileExport} />
+                  </li>
+                )
+              })
             })}
           </ul>
         </div>
@@ -162,10 +161,10 @@ export default async function Component({
 async function Preview({
   fileExport,
 }: {
-  fileExport: JavaScriptFileExportWithRuntime<React.ComponentType>
+  fileExport: JavaScriptFileExportWithRuntime<any>
 }) {
-  const name = await fileExport.getName()
-  const description = await fileExport.getDescription()
+  const name = fileExport.getName()
+  const description = fileExport.getDescription()
   const editPath = fileExport.getEditPath()
   const Value = await fileExport.getRuntimeValue()
   const isUppercase = name[0] === name[0].toUpperCase()

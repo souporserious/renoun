@@ -201,6 +201,12 @@ export class JavaScriptFileExport<
     this.#file = file
   }
 
+  static async init(name: string, file: JavaScriptFile<any>, _?: any) {
+    const fileExport = new JavaScriptFileExport(name, file)
+    await fileExport.getStaticMetadata()
+    return fileExport
+  }
+
   async #getLocation() {
     if (this.#location === undefined) {
       this.#location = await this.#file.getExportLocation(this.#name)
@@ -213,7 +219,7 @@ export class JavaScriptFileExport<
     return location === undefined
   }
 
-  async #getMetadata() {
+  protected async getStaticMetadata() {
     if (await this.#isNotStatic()) {
       return undefined
     }
@@ -223,11 +229,16 @@ export class JavaScriptFileExport<
     }
 
     const location = await this.#getLocation()
+
+    if (location === undefined) {
+      return undefined
+    }
+
     const fileSystem = (await this.#file.getDirectory()).getFileSystem()
 
     this.#metadata = await fileSystem.getFileExportMetadata(
-      location.path,
       this.#name,
+      location.path,
       location.position,
       location.kind
     )
@@ -236,17 +247,16 @@ export class JavaScriptFileExport<
   }
 
   /** Get the slug of the file export. */
-  async getSlug() {
-    return createSlug(await this.getName())
+  getSlug() {
+    return createSlug(this.getName())
   }
 
   /** Get the name of the export. Default exports will use the file name or declaration name if available. */
-  async getName() {
-    if (await this.#isNotStatic()) {
+  getName() {
+    if (this.#metadata === undefined) {
       return this.#name === 'default' ? this.#file.getName() : this.#name
     }
-    const metadata = await this.#getMetadata()
-    return metadata?.name || this.#name
+    return this.#metadata?.name || this.#name
   }
 
   /** Get the base name of the export. */
@@ -255,30 +265,18 @@ export class JavaScriptFileExport<
   }
 
   /** Get the JS Doc description of the export. */
-  async getDescription() {
-    if (await this.#isNotStatic()) {
-      return undefined
-    }
-    const metadata = await this.#getMetadata()
-    return metadata?.jsDocMetadata?.description
+  getDescription() {
+    return this.#metadata?.jsDocMetadata?.description
   }
 
   /** Get the JS Doc tags of the export. */
-  async getTags() {
-    if (await this.#isNotStatic()) {
-      return undefined
-    }
-    const metadata = await this.#getMetadata()
-    return metadata?.jsDocMetadata?.tags
+  getTags() {
+    return this.#metadata?.jsDocMetadata?.tags
   }
 
   /** Get the environment of the export. */
-  async getEnvironment() {
-    if (await this.#isNotStatic()) {
-      return undefined
-    }
-    const metadata = await this.#getMetadata()
-    return metadata?.environment
+  getEnvironment() {
+    return this.#metadata?.environment
   }
 
   /** Get the export path to the editor in local development and the configured git repository in production. */
@@ -289,13 +287,14 @@ export class JavaScriptFileExport<
 
   /** Get the resolved type of the export. */
   async getType(filter?: SymbolFilter) {
-    if (await this.#isNotStatic()) {
+    const location = await this.#getLocation()
+
+    if (location === undefined) {
       throw new Error(
         `[renoun] Export can not be statically analyzed at file path "${this.#file.getRelativePath()}".`
       )
     }
 
-    const location = await this.#getLocation()
     const fileSystem = (await this.#file.getDirectory()).getFileSystem()
 
     return fileSystem.resolveTypeAtLocation(
@@ -331,7 +330,23 @@ export class JavaScriptFileExportWithRuntime<
     this.#moduleGetters = moduleGetters
   }
 
-  #getModule(path: string) {
+  static async init(
+    name: string,
+    file: JavaScriptFileWithRuntime<any>,
+    moduleGetters: Map<string, (path: string) => Promise<any>>
+  ) {
+    const fileExport = new JavaScriptFileExportWithRuntime(
+      name,
+      file,
+      moduleGetters
+    )
+    await fileExport.getStaticMetadata()
+    return fileExport
+  }
+
+  #getModule() {
+    const path = this.#file.getRelativePath()
+
     if (this.#moduleGetters.has('default')) {
       return this.#moduleGetters.get('default')!(path)
     }
@@ -353,18 +368,17 @@ export class JavaScriptFileExportWithRuntime<
       )
     }
 
-    const exportName = this.getBaseName()
-    const fileModule = await this.#getModule(this.#file.getRelativePath())
-    const fileModuleExport = fileModule[this.getBaseName()]
+    const fileModule = await this.#getModule()
+    const fileModuleExport = fileModule[this.#name]
 
     if (fileModuleExport === undefined) {
       throw new Error(
-        `[renoun] JavaScript file export "${String(this.getBaseName())}" not found in ${this.#file.getAbsolutePath()}`
+        `[renoun] JavaScript file export "${this.#name}" not found in ${this.#file.getAbsolutePath()}`
       )
     }
 
     const exportValue = this.#file.parseExportValue(
-      exportName,
+      this.#name,
       fileModuleExport
     )
 
@@ -444,8 +458,12 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
   async getExports() {
     const fileExports = await this.#getExports()
 
-    return fileExports.map((exportMetadata) =>
-      this.getExport(exportMetadata.name as Extract<keyof Exports, string>)
+    return Promise.all(
+      fileExports.map((exportMetadata) =>
+        this.getExportOrThrow(
+          exportMetadata.name as Extract<keyof Exports, string>
+        )
+      )
     )
   }
 
@@ -455,54 +473,61 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
    * Note, exports are not always statically analyzable due to loaders like MDX
    * so an export instance will always be returned.
    */
-  protected getOrCreateExport<
+  protected async getOrCreateExport<
     ExportName extends Extract<keyof Exports, string>,
   >(
     name: ExportName,
-    createExport: (name: ExportName) => JavaScriptFileExport<Exports>
-  ): JavaScriptFileExport<Exports> {
+    createExport: () => Promise<JavaScriptFileExport<Exports>>
+  ): Promise<JavaScriptFileExport<Exports>> {
     if (this.#exports.has(name)) {
       return this.#exports.get(name)!
     }
 
-    const fileExport = createExport(name)
+    const fileExport = await createExport()
     this.#exports.set(name, fileExport)
 
     return fileExport
   }
 
-  /**
-   * Get a JavaScript file export by name.
-   *
-   * Note, exports are not always statically analyzable due to bundler transformations
-   * so an export instance will always be returned.
-   */
-  getExport<ExportName extends Extract<keyof Exports, string>>(
+  /** Get a JavaScript file export by name. */
+  async getExport<ExportName extends Extract<keyof Exports, string>>(
     name: ExportName
-  ): JavaScriptFileExport<Exports> {
-    return this.getOrCreateExport(
-      name,
-      (exportName) => new JavaScriptFileExport(exportName, this)
-    )
+  ): Promise<JavaScriptFileExport<Exports> | undefined> {
+    if (await this.hasExport(name)) {
+      return this.getOrCreateExport(name, () =>
+        JavaScriptFileExport.init(name, this)
+      )
+    }
+  }
+
+  /** Get a JavaScript file export by name or throw an error if it does not exist. */
+  async getExportOrThrow<ExportName extends Extract<keyof Exports, string>>(
+    name: ExportName
+  ): Promise<JavaScriptFileExport<Exports>> {
+    const fileExport = await this.getExport(name)
+
+    if (fileExport === undefined) {
+      throw new Error(
+        `[renoun] JavaScript file export "${name}" not found in path "${this.getAbsolutePath()}"`
+      )
+    }
+
+    return fileExport
   }
 
   /** Get the start position of an export in the JavaScript file. */
   async getExportLocation(name: string) {
     const fileExports = await this.#getExports()
-    const fileExport = fileExports.find(
-      (exportMetadata) => exportMetadata.name === name
-    )
+    return fileExports.find((exportMetadata) => exportMetadata.name === name)
+  }
 
-    if (!fileExport) {
-      throw new Error(
-        `[renoun] JavaScript file export "${name}" not found in ${this.getAbsolutePath()}`
-      )
-    }
-
-    return {
-      path: fileExport.path,
-      position: fileExport.position,
-      kind: fileExport.kind,
+  /** Check if an export exists in the JavaScript file. */
+  async hasExport(name: string): Promise<boolean> {
+    try {
+      const location = await this.getExportLocation(name)
+      return location !== undefined
+    } catch {
+      return false
     }
   }
 }
@@ -528,7 +553,9 @@ export class JavaScriptFileWithRuntime<
     this.#moduleGetters = moduleGetters
   }
 
-  #getModule(path: string) {
+  #getModule() {
+    const path = this.getRelativePath()
+
     if (this.#moduleGetters.has('default')) {
       return this.#moduleGetters.get('default')!(path)
     }
@@ -539,53 +566,10 @@ export class JavaScriptFileWithRuntime<
     return getModule(removeExtension(path))
   }
 
-  /**
-   * Get the runtime value of the export. An error will be thrown if the export
-   * is not found or the configured schema validation for this file extension fails.
-   */
-  async getRuntimeValue<ExportName extends Extract<keyof Exports, string>>(
-    name: ExportName
-  ): Promise<Exports[ExportName]> {
-    const exportName = this.getExport(name).getBaseName()
-    const fileModule = await this.#getModule(this.getRelativePath())
-    const fileModuleExport = fileModule[exportName]
-
-    if (fileModuleExport === undefined) {
-      throw new Error(
-        `[renoun] JavaScript file export "${String(exportName)}" not found at file path "${this.getRelativePath()}"`
-      )
-    }
-
-    const exportValue = this.parseExportValue(exportName, fileModuleExport)
-
-    /* Enable hot module reloading in development for Next.js component exports. */
-    if (process.env.NODE_ENV === 'development') {
-      const isReactComponent = exportValue
-        ? /^[A-Z]/.test(exportValue.name) && String(exportValue).includes('jsx')
-        : false
-
-      if (isReactComponent) {
-        const Component = exportValue as React.ComponentType
-        const WrappedComponent = async (props: Record<string, unknown>) => {
-          const { Refresh } = await import('./Refresh.js')
-
-          return (
-            <>
-              <Refresh />
-              <Component {...props} />
-            </>
-          )
-        }
-
-        return WrappedComponent as Exports[ExportName]
-      }
-    }
-
-    return exportValue
-  }
-
   /** Get all exports from the JavaScript file. */
-  async getExports(): Promise<JavaScriptFileExportWithRuntime<Exports>[]> {
+  override async getExports(): Promise<
+    JavaScriptFileExportWithRuntime<Exports>[]
+  > {
     return super.getExports() as any
   }
 
@@ -595,22 +579,52 @@ export class JavaScriptFileWithRuntime<
    * Note, exports are not always statically analyzable due to bundler transformations
    * so an export instance will always be returned.
    */
-  getExport<ExportName extends Extract<keyof Exports, string>>(
+  override async getExport<ExportName extends Extract<keyof Exports, string>>(
     name: ExportName
-  ): JavaScriptFileExportWithRuntime<
-    Exports[ExportName],
-    Exports,
-    Extract<keyof Exports, string>
+  ): Promise<
+    | JavaScriptFileExportWithRuntime<
+        Exports[ExportName],
+        Exports,
+        Extract<keyof Exports, string>
+      >
+    | undefined
   > {
-    return this.getOrCreateExport(
-      name,
-      (exportName) =>
-        new JavaScriptFileExportWithRuntime(
-          exportName,
-          this,
-          this.#moduleGetters
-        )
-    ) as any
+    if (await this.hasExport(name)) {
+      return this.getOrCreateExport(name, () =>
+        JavaScriptFileExportWithRuntime.init(name, this, this.#moduleGetters)
+      ) as any
+    }
+  }
+
+  /** Get a JavaScript file export by name or throw an error if it does not exist. */
+  override async getExportOrThrow<
+    ExportName extends Extract<keyof Exports, string>,
+  >(
+    name: ExportName
+  ): Promise<
+    JavaScriptFileExportWithRuntime<
+      Exports[ExportName],
+      Exports,
+      Extract<keyof Exports, string>
+    >
+  > {
+    return super.getExportOrThrow(name) as any
+  }
+
+  /** Check if an export exists in the JavaScript file. */
+  override async hasExport(name: string): Promise<boolean> {
+    // First, attempt to statically analyze the export
+    if (await super.hasExport(name)) {
+      return true
+    }
+
+    // Fallback to runtime check
+    try {
+      const fileModule = await this.#getModule()
+      return name in fileModule
+    } catch {
+      return false
+    }
   }
 }
 
