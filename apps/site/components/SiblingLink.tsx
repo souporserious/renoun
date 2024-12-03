@@ -32,7 +32,10 @@ export async function SiblingLink({
     return null
   }
 
-  const metadata = await entry.getExport('metadata').getRuntimeValue()
+  const metadataExport = await entry.getExport('metadata')
+  const metadata = metadataExport
+    ? await metadataExport.getRuntimeValue()
+    : null
 
   return (
     <StyledLink

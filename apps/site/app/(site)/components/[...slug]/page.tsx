@@ -14,18 +14,21 @@ import { SiblingLink } from '@/components/SiblingLink'
 import { TableOfContents } from '@/components/TableOfContents'
 
 export async function generateStaticParams() {
-  const entries = await ComponentsCollection.getEntries()
-  return entries.map((entry) => ({ slug: entry.getName() }))
+  const entries = await ComponentsCollection.getEntries({ recursive: true })
+
+  return entries.map((entry) => ({
+    slug: entry.getPathSegments({ includeBasePath: false }),
+  }))
 }
 
 export default async function Component({
   params,
 }: {
-  params: Promise<{ slug: string }>
+  params: Promise<{ slug: string[] }>
 }) {
   const slug = (await params).slug
   const componentEntry = await CollectionGroup.getFile(
-    ['components', slug],
+    ['components', ...slug],
     ['ts', 'tsx']
   )
   const hasEntry = await ComponentsCollection.getHasEntry(componentEntry)
@@ -35,8 +38,11 @@ export default async function Component({
   }
 
   const mdxFile = await ComponentsCollection.getFile(slug, 'mdx')
-  const mdxHeadings = await mdxFile?.getExport('headings').getRuntimeValue()
-  const Content = await mdxFile?.getExport('default').getRuntimeValue()
+  const mdxHeadingsExport = await mdxFile?.getExport('headings')
+  const mdxHeadings = await mdxHeadingsExport?.getRuntimeValue()
+  const defaultExport = await mdxFile?.getExport('default')
+  const Content = await defaultExport?.getRuntimeValue()
+
   // const examplesSource = await componentEntry.getSource('examples')
   // const examplesSources = await examplesSource?.getSources()
   // const isExamplesPage = slug.at(-1) === 'examples'
@@ -59,8 +65,8 @@ export default async function Component({
   // const mainEntry =
   //   (await componentDirectory.getFile(slug, ['ts', 'tsx'])) ||
   //   (await componentDirectory.getFile('index', ['ts', 'tsx']))
-  const mainExport = componentEntry.getExport<any>(slug)
-  const description = mainExport ? await mainExport.getDescription() : null
+  const mainExport = await componentEntry.getExport<any>(slug)
+  const description = mainExport ? mainExport.getDescription() : null
   const examplesEntry = await componentDirectory.getEntry('examples')
   const exampleFiles = examplesEntry
     ? isDirectory(examplesEntry)

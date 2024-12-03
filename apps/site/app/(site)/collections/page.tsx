@@ -16,8 +16,12 @@ export default async function Page() {
     return null
   }
 
-  const Content = await docFile.getExport('default').getRuntimeValue()
-  const headings = await docFile.getExport('headings').getRuntimeValue()
+  const Content = await (
+    await docFile.getExportOrThrow('default')
+  ).getRuntimeValue()
+  const headings = await (
+    await docFile.getExportOrThrow('headings')
+  ).getRuntimeValue()
   const fileExports = await sourceFile.getExports()
 
   return (

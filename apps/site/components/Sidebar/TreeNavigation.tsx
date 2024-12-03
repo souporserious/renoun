@@ -19,7 +19,7 @@ async function ListNavigation({
   const depth = entry.getDepth()
   const metadata =
     variant === 'title' && isJavaScriptFileWithRuntime(entry)
-      ? await entry.getExport('metadata').getRuntimeValue()
+      ? await (await entry.getExportOrThrow('metadata')).getRuntimeValue()
       : null
 
   if (isFile(entry)) {

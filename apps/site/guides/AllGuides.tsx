@@ -5,7 +5,9 @@ export async function AllGuides() {
   const entries = await GuidesCollection.getEntries()
 
   return entries.map(async (entry, index) => {
-    const metadata = await entry.getExport('metadata').getRuntimeValue()
+    const metadata = await (
+      await entry.getExportOrThrow('metadata')
+    ).getRuntimeValue()
 
     return (
       <Card
