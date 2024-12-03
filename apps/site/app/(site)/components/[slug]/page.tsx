@@ -14,10 +14,7 @@ import { SiblingLink } from '@/components/SiblingLink'
 import { TableOfContents } from '@/components/TableOfContents'
 
 export async function generateStaticParams() {
-  const entries = await ComponentsCollection.withFilter((entry) =>
-    isFile(entry, ['ts', 'tsx'])
-  ).getEntries()
-
+  const entries = await ComponentsCollection.getEntries()
   return entries.map((entry) => ({ slug: entry.getName() }))
 }
 
