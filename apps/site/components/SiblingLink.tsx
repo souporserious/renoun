@@ -1,23 +1,11 @@
 import Link from 'next/link'
-import { isFile, type FileSystemEntry } from 'renoun/file-system'
+import {
+  isDirectory,
+  isJavaScriptFileWithRuntime,
+  type FileSystemEntry,
+  type JavaScriptFileWithRuntime,
+} from 'renoun/file-system'
 import { styled } from 'restyle'
-
-const StyledLink = styled(Link, {
-  fontSize: 'var(--font-size-body-2)',
-  display: 'grid',
-  gridTemplateRows: 'auto auto',
-  padding: '1.5rem 1rem',
-  gap: '0.25rem',
-  borderRadius: '0.25rem',
-  backgroundColor: 'var(--color-surface-interactive)',
-  color: 'var(--color-foreground-interactive)',
-  stroke: 'var(--color-foreground-interactive)',
-  ':hover': {
-    backgroundColor: 'var(--color-surface-interactive-highlighted)',
-    color: 'var(--color-foreground-interactive-highlighted)',
-    stroke: 'var(--color-foreground-interactive-highlighted)',
-  },
-})
 
 export async function SiblingLink({
   entry,
@@ -28,14 +16,7 @@ export async function SiblingLink({
   direction: 'previous' | 'next'
   variant?: 'name' | 'title'
 }) {
-  if (!isFile(entry, ['mdx', 'ts', 'tsx'])) {
-    return null
-  }
-
-  const metadataExport = await entry.getExport('metadata')
-  const metadata = metadataExport
-    ? await metadataExport.getRuntimeValue()
-    : null
+  const metadata = await resolveEntryMetadata(entry)
 
   return (
     <StyledLink
@@ -113,4 +94,74 @@ export async function SiblingLink({
       </div>
     </StyledLink>
   )
+}
+
+const StyledLink = styled(Link, {
+  fontSize: 'var(--font-size-body-2)',
+  display: 'grid',
+  gridTemplateRows: 'auto auto',
+  padding: '1.5rem 1rem',
+  gap: '0.25rem',
+  borderRadius: '0.25rem',
+  backgroundColor: 'var(--color-surface-interactive)',
+  color: 'var(--color-foreground-interactive)',
+  stroke: 'var(--color-foreground-interactive)',
+  ':hover': {
+    backgroundColor: 'var(--color-surface-interactive-highlighted)',
+    color: 'var(--color-foreground-interactive-highlighted)',
+    stroke: 'var(--color-foreground-interactive-highlighted)',
+  },
+})
+
+interface Metadata {
+  metadata: {
+    title: string
+    label?: string
+  }
+}
+
+interface ExtensionTypes {
+  mdx: Metadata
+  ts: Metadata
+  tsx: Metadata
+}
+
+/** Resolves metadata from a file system entry. */
+async function resolveEntryMetadata(
+  entry: FileSystemEntry<ExtensionTypes, true>
+) {
+  let file: JavaScriptFileWithRuntime<{
+    metadata: {
+      title: string
+      label?: string
+    }
+  }>
+
+  if (isDirectory(entry)) {
+    const indexFile = await entry.getFile('index', ['ts', 'tsx'])
+
+    if (indexFile) {
+      file = indexFile
+    } else {
+      const readmeFile = await entry.getFile('readme', 'mdx')
+
+      if (readmeFile) {
+        file = readmeFile
+      } else {
+        return
+      }
+    }
+  } else if (isJavaScriptFileWithRuntime<Metadata>(entry)) {
+    file = entry
+  } else {
+    return
+  }
+
+  const metadataExport = await file.getExport('metadata')
+
+  if (metadataExport) {
+    return metadataExport.getRuntimeValue()
+  }
+
+  return
 }
