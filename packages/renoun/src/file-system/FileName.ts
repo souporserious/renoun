@@ -1,3 +1,5 @@
+import { formatNameAsTitle } from '../utils/format-name-as-title.js'
+
 export class FileName {
   #name: string
   #order?: string
@@ -22,22 +24,32 @@ export class FileName {
     }
   }
 
+  /** The intrinsic name of the file. */
   getName(): string {
     return this.#name
   }
 
+  /** The file name without the extension. */
   getBaseName(): string {
     return this.#base
   }
 
+  /** The file name formatted as a title. */
+  getTitle() {
+    return formatNameAsTitle(this.getName())
+  }
+
+  /** The order of the file if defined. */
   getOrder(): string | undefined {
     return this.#order
   }
 
+  /** The modifier of the file if defined. */
   getModifier(): string | undefined {
     return this.#modifier
   }
 
+  /** The extension of the file if defined. */
   getExtension(): string | undefined {
     return this.#extension
   }

@@ -2,6 +2,7 @@ import * as React from 'react'
 
 import { getFileExportMetadata } from '../project/client.js'
 import { createSlug } from '../utils/create-slug.js'
+import { formatNameAsTitle } from '../utils/format-name-as-title.js'
 import { getEditPath } from '../utils/get-edit-path.js'
 import type { FileExport } from '../utils/get-file-exports.js'
 import { getGitMetadata } from '../utils/get-git-metadata.js'
@@ -1291,6 +1292,11 @@ export class Directory<
   /** Get the base name of the directory. */
   getBaseName() {
     return removeOrderPrefixes(baseName(this.#path))
+  }
+
+  /** The directory name formatted as a title. */
+  getTitle() {
+    return formatNameAsTitle(this.getName())
   }
 
   /** Get a URL-friendly path of the directory. */
