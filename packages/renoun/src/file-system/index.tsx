@@ -1345,7 +1345,13 @@ export class Directory<
   }
 
   /** Checks if this directory contains the provided entry. */
-  hasEntry(entry: FileSystemEntry<Types, HasModule>): entry is Entry {
+  hasEntry(
+    entry: FileSystemEntry<Types, HasModule> | undefined
+  ): entry is Entry {
+    if (entry === undefined) {
+      return false
+    }
+
     let directory = entry.getParentDirectory()
 
     while (directory) {
