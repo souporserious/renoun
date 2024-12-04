@@ -22,5 +22,5 @@ export default async function Guide({
     notFound()
   }
 
-  return <DocumentEntry file={file} />
+  return <DocumentEntry file={file} entryGroup={CollectionGroup} />
 }

@@ -1,4 +1,4 @@
-import type { JavaScriptFileWithRuntime } from 'renoun/file-system'
+import type { EntryGroup, JavaScriptFileWithRuntime } from 'renoun/file-system'
 import type { MDXContent, Headings } from 'renoun/mdx'
 
 import { SiblingLink } from './SiblingLink'
@@ -6,6 +6,7 @@ import { TableOfContents } from './TableOfContents'
 
 export async function DocumentEntry({
   file,
+  entryGroup,
   shouldRenderTableOfContents = true,
   shouldRenderUpdatedAt = true,
 }: {
@@ -17,6 +18,7 @@ export async function DocumentEntry({
       description: string
     }
   }>
+  entryGroup?: EntryGroup
   shouldRenderTableOfContents?: boolean
   shouldRenderUpdatedAt?: boolean
 }) {
@@ -31,7 +33,7 @@ export async function DocumentEntry({
   ).getRuntimeValue()
   const updatedAt = shouldRenderUpdatedAt ? await file.getUpdatedAt() : null
   const editPath = file.getEditPath()
-  const [previousFile, nextFile] = await file.getSiblings()
+  const [previousFile, nextFile] = await file.getSiblings({ entryGroup })
 
   return (
     <>

@@ -22,5 +22,5 @@ export default async function Doc({
     notFound()
   }
 
-  return <DocumentEntry file={file} />
+  return <DocumentEntry file={file} entryGroup={CollectionGroup} />
 }
