@@ -27,12 +27,9 @@ export default async function Component({
   params: Promise<{ slug: string[] }>
 }) {
   const slug = (await params).slug
-  const componentEntry = await CollectionGroup.getFile(
-    ['components', ...slug],
-    ['ts', 'tsx']
-  )
+  const componentEntry = await ComponentsCollection.getFile(slug, ['ts', 'tsx'])
 
-  if (!ComponentsCollection.hasEntry(componentEntry)) {
+  if (!componentEntry) {
     notFound()
   }
 
