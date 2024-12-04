@@ -1,21 +1,24 @@
+import {
+  isFile,
+  isDirectory,
+  type JavaScriptFileExportWithRuntime,
+} from 'renoun/file-system'
 import { APIReference, CodeBlock, Tokens } from 'renoun/components'
 import type { Headings } from 'renoun/mdx'
-import type { ExportSource } from 'renoun/collections'
 import { notFound } from 'next/navigation'
 import { GeistMono } from 'geist/font/mono'
 
-import {
-  AllCollections,
-  ComponentsCollection,
-  ComponentsMDXCollection,
-} from '@/collections'
+import { CollectionGroup, ComponentsCollection } from '@/collections'
 import { MDXContent } from '@/components/MDXContent'
 import { SiblingLink } from '@/components/SiblingLink'
 import { TableOfContents } from '@/components/TableOfContents'
 
 export async function generateStaticParams() {
-  const sources = await ComponentsCollection.getSources()
-  return sources.map((source) => ({ slug: source.getPathSegments() }))
+  const entries = await ComponentsCollection.getEntries({ recursive: true })
+
+  return entries.map((entry) => ({
+    slug: entry.getPathSegments({ includeBasePath: false }),
+  }))
 }
 
 export default async function Component({
@@ -24,36 +27,47 @@ export default async function Component({
   params: Promise<{ slug: string[] }>
 }) {
   const slug = (await params).slug
-  const componentsPathname = ['components', ...slug]
-  const componentSource = await AllCollections.getSource(componentsPathname)
+  const componentEntry = await ComponentsCollection.getFile(slug, ['ts', 'tsx'])
 
-  if (!ComponentsCollection.hasSource(componentSource)) {
+  if (!componentEntry) {
     notFound()
   }
 
-  const mdxSource = await ComponentsMDXCollection.getSource(componentsPathname)
-  const mdxHeadings = await mdxSource?.getExport('headings').getValue()
-  const Content = await mdxSource?.getExport('default').getValue()
-  const examplesSource = await componentSource.getSource('examples')
-  const examplesSources = await examplesSource?.getSources()
+  const mdxFile = await ComponentsCollection.getFile(slug, 'mdx')
+  const mdxHeadings = await (
+    await mdxFile?.getExport('headings')
+  )?.getRuntimeValue()
+  const Content = await (await mdxFile?.getExport('default'))?.getRuntimeValue()
+  const componentDirectory = isDirectory(componentEntry)
+    ? componentEntry
+    : componentEntry.getParentDirectory()
+  const mainExport = await componentEntry.getExport<any>(slug)
+  const description = mainExport ? mainExport.getDescription() : null
+  const examplesEntry = await componentDirectory.getEntry('examples')
+  const exampleFiles = examplesEntry
+    ? isDirectory(examplesEntry)
+      ? await examplesEntry
+          .withFilter((entry) => isFile(entry, 'tsx'))
+          .getEntries()
+      : isFile(examplesEntry, 'tsx')
+        ? [examplesEntry]
+        : null
+    : null
+  const examplesExports = exampleFiles
+    ? (
+        await Promise.all(exampleFiles.map(async (file) => file.getExports()))
+      ).flat()
+    : []
   const isExamplesPage = slug.at(-1) === 'examples'
-  const examplesExports = isExamplesPage
-    ? componentSource.getExports()
-    : examplesSource
-      ? examplesSources?.length
-        ? examplesSources.flatMap((source) => source.getExports())
-        : examplesSource.getExports()
-      : []
-  const sourceExports = isExamplesPage
+  const componentExports = isExamplesPage
     ? undefined
-    : componentSource.getExports()
-  const mainExport = componentSource.getMainExport()
-  const description = mainExport?.getDescription()
-  const updatedAt = await componentSource.getUpdatedAt()
-  const editPath = componentSource.getEditPath()
-  const [previousSource, nextSource] = await componentSource.getSiblings({
-    depth: 0,
+    : await componentEntry.getExports()
+  const updatedAt = await componentEntry.getUpdatedAt()
+  const editPath = componentEntry.getEditPath()
+  const [previousEntry, nextEntry] = await componentEntry.getSiblings({
+    entryGroup: CollectionGroup,
   })
+
   let headings: Headings = []
 
   if (mdxHeadings) {
@@ -61,30 +75,32 @@ export default async function Component({
   }
 
   if (examplesExports.length) {
+    const parsedExports = examplesExports.map((exampleExport) => ({
+      id: exampleExport.getSlug(),
+      text: exampleExport.getName(),
+      depth: 3,
+    }))
+
     headings.push(
       {
         id: 'examples',
         text: 'Examples',
         depth: 2,
       },
-      ...examplesExports.map((source) => ({
-        id: source.getSlug(),
-        text: source.getTitle(),
-        depth: 3,
-      }))
+      ...parsedExports
     )
   }
 
-  if (sourceExports) {
+  if (componentExports) {
     headings.push(
       {
         id: 'api-reference',
         text: 'API Reference',
         depth: 2,
       },
-      ...sourceExports.map((source) => ({
-        id: source.getSlug(),
-        text: source.getName(),
+      ...componentExports.map((componentExport) => ({
+        id: componentExport.getSlug(),
+        text: componentExport.getName(),
         depth: 3,
       }))
     )
@@ -97,14 +113,14 @@ export default async function Component({
           {description || Content ? (
             <div className="prose">
               <h1 css={{ fontSize: '3rem', margin: 0 }}>
-                {componentSource.getName()} {isExamplesPage ? 'Examples' : ''}
+                {componentEntry.getName()} {isExamplesPage ? 'Examples' : ''}
               </h1>
               {description ? <MDXContent value={description} /> : null}
               {Content ? <Content /> : null}
             </div>
           ) : (
             <h1 css={{ fontSize: '3rem', margin: 0 }}>
-              {componentSource.getName()} {isExamplesPage ? 'Examples' : ''}
+              {componentEntry.getName()} {isExamplesPage ? 'Examples' : ''}
             </h1>
           )}
         </div>
@@ -123,21 +139,23 @@ export default async function Component({
                 gap: '2rem',
               }}
             >
-              {examplesExports.map((exportSource) => (
-                <li key={exportSource.getSlug()}>
-                  <Preview source={exportSource} />
+              {examplesExports.map((fileExport) => (
+                <li key={fileExport.getName()}>
+                  <Preview
+                    fileExport={fileExport as JavaScriptFileExportWithRuntime}
+                  />
                 </li>
               ))}
             </ul>
           </div>
         ) : null}
 
-        {sourceExports ? (
+        {componentExports ? (
           <div>
             <h2 id="api-reference" css={{ margin: '0 0 2rem' }}>
               API Reference
             </h2>
-            {sourceExports.map((exportSource) => (
+            {componentExports.map((exportSource) => (
               <APIReference
                 key={exportSource.getSlug()}
                 source={exportSource}
@@ -176,23 +194,23 @@ export default async function Component({
               gap: '2rem',
             }}
           >
-            {previousSource ? (
+            {previousEntry ? (
               <SiblingLink
-                source={previousSource}
+                entry={previousEntry}
                 direction="previous"
                 variant={
-                  ComponentsCollection.hasSource(previousSource)
+                  ComponentsCollection.hasEntry(previousEntry)
                     ? 'name'
                     : 'title'
                 }
               />
             ) : null}
-            {nextSource ? (
+            {nextEntry ? (
               <SiblingLink
-                source={nextSource}
+                entry={nextEntry}
                 direction="next"
                 variant={
-                  ComponentsCollection.hasSource(nextSource) ? 'name' : 'title'
+                  ComponentsCollection.hasEntry(nextEntry) ? 'name' : 'title'
                 }
               />
             ) : null}
@@ -206,16 +224,16 @@ export default async function Component({
 }
 
 async function Preview({
-  source,
+  fileExport,
 }: {
-  source: ExportSource<React.ComponentType>
+  fileExport: JavaScriptFileExportWithRuntime<React.ComponentType>
 }) {
-  const name = source.getName()
-  const title = source.getTitle()
-  const description = source.getDescription()
-  const slug = source.getSlug()
-  const editPath = source.getEditPath()
-  const Value = await source.getValue()
+  const name = fileExport.getName()
+  const title = fileExport.getName() // fileExport.getTitle()
+  const description = fileExport.getDescription()
+  const slug = fileExport.getSlug()
+  const editPath = fileExport.getEditPath()
+  const Value = await fileExport.getRuntimeValue()
   const isUppercase = name[0] === name[0].toUpperCase()
   const isComponent = typeof Value === 'function' && isUppercase
 
@@ -266,7 +284,7 @@ async function Preview({
             <Value />
           </div>
         ) : null}
-        <CodeBlock allowErrors value={source.getText()} language="tsx">
+        {/* <CodeBlock allowErrors value={fileExport.getText()} language="tsx">
           <pre
             css={{
               position: 'relative',
@@ -285,7 +303,7 @@ async function Preview({
           >
             <Tokens />
           </pre>
-        </CodeBlock>
+        </CodeBlock> */}
       </div>
     </section>
   )

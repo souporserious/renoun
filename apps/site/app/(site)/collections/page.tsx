@@ -4,21 +4,25 @@ import { CollectionsCollection, CollectionsDocsCollection } from '@/collections'
 import { TableOfContents } from '@/components/TableOfContents'
 
 export default async function Page() {
-  const source = await CollectionsCollection.getSource()
+  const sourceFile = await CollectionsCollection.getFile('index', 'tsx')
 
-  if (!source) {
+  if (!sourceFile) {
     return null
   }
 
-  const sourceExports = source.getExports()
-  const docSource = await CollectionsDocsCollection.getSource()
+  const docFile = await CollectionsDocsCollection.getFile('index', 'mdx')
 
-  if (!docSource) {
+  if (!docFile) {
     return null
   }
 
-  const Content = await docSource.getExport('default').getValue()
-  const headings = await docSource.getExport('headings').getValue()
+  const Content = await (
+    await docFile.getExportOrThrow('default')
+  ).getRuntimeValue()
+  const headings = await (
+    await docFile.getExportOrThrow('headings')
+  ).getRuntimeValue()
+  const fileExports = await sourceFile.getExports()
 
   return (
     <>
@@ -52,8 +56,8 @@ export default async function Page() {
           >
             API Reference
           </h2>
-          {sourceExports.map((exportSource) => (
-            <APIReference key={exportSource.getSlug()} source={exportSource} />
+          {fileExports.map((fileExport) => (
+            <APIReference key={fileExport.getName()} source={fileExport} />
           ))}
         </div>
       </div>
@@ -76,9 +80,9 @@ export default async function Page() {
               text: 'API Reference',
               depth: 2,
             },
-            ...sourceExports.map((source) => ({
-              id: source.getSlug(),
-              text: source.getName(),
+            ...fileExports.map((fileExport) => ({
+              id: fileExport.getSlug(),
+              text: fileExport.getName(),
               depth: 3,
             })),
           ]}

@@ -1,5 +1,4 @@
 import type { CSSObject } from 'restyle'
-import type { CollectionSource, FileSystemSource } from 'renoun/collections'
 import { GitProviderLink } from 'renoun/components'
 
 import {
@@ -9,108 +8,7 @@ import {
 } from '@/collections'
 import { NavigationBoundary } from './NavigationBoundary'
 import { SidebarLink } from './SidebarLink'
-
-async function TreeNavigation({
-  source,
-  variant = 'title',
-}: {
-  source: FileSystemSource<any>
-  variant?: 'name' | 'title'
-}) {
-  const sources = await source.getSources({ depth: 1 })
-  const depth = source.getDepth()
-  const path = source.getPath()
-  const metadata = source.isDirectory()
-    ? null
-    : await source.getExport('metadata').getValue()
-
-  if (sources.length === 0) {
-    return (
-      <li>
-        <SidebarLink
-          pathname={path}
-          label={
-            variant === 'title'
-              ? metadata?.label || metadata?.title || source.getTitle()
-              : source.getName()
-          }
-        />
-      </li>
-    )
-  }
-
-  const childrenSources = sources.map((childSource) => (
-    <TreeNavigation
-      key={childSource.getPath()}
-      source={childSource}
-      variant={variant}
-    />
-  ))
-
-  const listStyles: CSSObject = {
-    fontSize: 'var(--font-size-body-2)',
-    display: 'flex',
-    flexDirection: 'column',
-    listStyle: 'none',
-    paddingLeft: 0,
-  }
-
-  if (depth > 0) {
-    if (depth === 1) {
-      listStyles.paddingLeft = '0.8rem'
-      listStyles.marginLeft = '0.25rem'
-      listStyles.borderLeft = '1px solid var(--color-separator)'
-    } else {
-      listStyles.paddingLeft = depth * 0.4 + 'rem'
-    }
-
-    return (
-      <li>
-        <SidebarLink
-          pathname={path}
-          label={
-            variant === 'title'
-              ? metadata?.label || metadata?.title || source.getTitle()
-              : source.getName()
-          }
-        />
-        <ul css={listStyles}>{childrenSources}</ul>
-      </li>
-    )
-  }
-
-  return <ul css={listStyles}>{childrenSources}</ul>
-}
-
-async function Navigation({
-  collection,
-  variant,
-}: {
-  collection: CollectionSource<any>
-  variant?: 'name' | 'title'
-}) {
-  const sources = await collection.getSources({ depth: 1 })
-
-  return (
-    <ul
-      css={{
-        fontSize: 'var(--font-size-body-2)',
-        display: 'flex',
-        flexDirection: 'column',
-        listStyle: 'none',
-        paddingLeft: 0,
-      }}
-    >
-      {sources.map((source) => (
-        <TreeNavigation
-          key={source.getPath()}
-          source={source}
-          variant={variant}
-        />
-      ))}
-    </ul>
-  )
-}
+import { TreeNavigation } from './TreeNavigation'
 
 export function Sidebar() {
   return (
@@ -158,7 +56,7 @@ export function Sidebar() {
             }}
           >
             <h3 className="title">Docs</h3>
-            <Navigation collection={DocsCollection} />
+            <TreeNavigation collection={DocsCollection} />
           </li>
 
           <li
@@ -195,7 +93,7 @@ export function Sidebar() {
             }}
           >
             <h3 className="title">Components</h3>
-            <Navigation collection={ComponentsCollection} variant="name" />
+            <TreeNavigation collection={ComponentsCollection} variant="name" />
           </li>
 
           <li
@@ -206,7 +104,7 @@ export function Sidebar() {
             }}
           >
             <h3 className="title">Guides</h3>
-            <Navigation collection={GuidesCollection} />
+            <TreeNavigation collection={GuidesCollection} />
           </li>
 
           <li css={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>

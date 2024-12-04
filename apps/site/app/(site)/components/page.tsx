@@ -3,7 +3,7 @@ import { Card } from '@/components/Card'
 import { Row } from '@/components/Row'
 
 export default async function Components() {
-  const sources = await ComponentsCollection.getSources({ depth: 1 })
+  const entries = await ComponentsCollection.getEntries()
 
   return (
     <div
@@ -27,11 +27,11 @@ export default async function Components() {
         </p>
       </div>
       <Row>
-        {sources.map((source) => (
+        {entries.map((entry) => (
           <Card
-            key={source.getPath()}
-            href={source.getPath()}
-            label={source.getName()}
+            key={entry.getPath()}
+            href={entry.getPath()}
+            label={entry.getName()}
           />
         ))}
       </Row>

@@ -1,26 +1,26 @@
 import { notFound } from 'next/navigation'
 
-import { AllCollections, GuidesCollection } from '@/collections'
-import { DocumentSource } from '@/components/DocumentSource'
+import { CollectionGroup, GuidesCollection } from '@/collections'
+import { DocumentEntry } from '@/components/DocumentEntry'
 
 export async function generateStaticParams() {
-  const sources = await GuidesCollection.getSources()
-  return sources.map((source) => ({ slug: source.getPathSegments() }))
+  const entries = await GuidesCollection.getEntries()
+
+  return entries.map((entry) => ({
+    slug: entry.getPathSegments({ includeBasePath: false }),
+  }))
 }
 
-export default async function Doc({
+export default async function Guide({
   params,
 }: {
   params: Promise<{ slug: string[] }>
 }) {
-  const docSource = await AllCollections.getSource([
-    'guides',
-    ...(await params).slug,
-  ])
+  const file = await CollectionGroup.getFile(['guides', ...(await params).slug])
 
-  if (!GuidesCollection.hasSource(docSource)) {
+  if (!GuidesCollection.hasEntry(file)) {
     notFound()
   }
 
-  return <DocumentSource source={docSource} />
+  return <DocumentEntry file={file} entryGroup={CollectionGroup} />
 }

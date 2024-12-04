@@ -1,42 +1,26 @@
 import Link from 'next/link'
-import type { FileSystemSource } from 'renoun/collections'
+import {
+  isDirectory,
+  isJavaScriptFileWithRuntime,
+  type FileSystemEntry,
+  type JavaScriptFileWithRuntime,
+} from 'renoun/file-system'
 import { styled } from 'restyle'
 
-const StyledLink = styled(Link, {
-  fontSize: 'var(--font-size-body-2)',
-  display: 'grid',
-  gridTemplateRows: 'auto auto',
-  padding: '1.5rem 1rem',
-  gap: '0.25rem',
-  borderRadius: '0.25rem',
-  backgroundColor: 'var(--color-surface-interactive)',
-  color: 'var(--color-foreground-interactive)',
-  stroke: 'var(--color-foreground-interactive)',
-  ':hover': {
-    backgroundColor: 'var(--color-surface-interactive-highlighted)',
-    color: 'var(--color-foreground-interactive-highlighted)',
-    stroke: 'var(--color-foreground-interactive-highlighted)',
-  },
-})
-
 export async function SiblingLink({
-  source,
+  entry,
   direction,
   variant,
 }: {
-  source: FileSystemSource<any>
+  entry: FileSystemEntry<any, true>
   direction: 'previous' | 'next'
   variant?: 'name' | 'title'
 }) {
-  if (source.isDirectory()) {
-    return null
-  }
-
-  const metadata = await source.getExport('metadata').getValue()
+  const metadata = await resolveEntryMetadata(entry)
 
   return (
     <StyledLink
-      href={source.getPath()}
+      href={entry.getPath()}
       css={{
         gridTemplateColumns:
           direction === 'previous' ? 'min-content auto' : 'auto min-content',
@@ -86,8 +70,8 @@ export async function SiblingLink({
         ) : null}
         <span>
           {variant === 'title'
-            ? metadata?.label || metadata?.title || source.getTitle()
-            : source.getName()}
+            ? metadata?.label || metadata?.title || entry.getTitle()
+            : entry.getName()}
         </span>
         {direction === 'next' ? (
           <svg
@@ -110,4 +94,74 @@ export async function SiblingLink({
       </div>
     </StyledLink>
   )
+}
+
+const StyledLink = styled(Link, {
+  fontSize: 'var(--font-size-body-2)',
+  display: 'grid',
+  gridTemplateRows: 'auto auto',
+  padding: '1.5rem 1rem',
+  gap: '0.25rem',
+  borderRadius: '0.25rem',
+  backgroundColor: 'var(--color-surface-interactive)',
+  color: 'var(--color-foreground-interactive)',
+  stroke: 'var(--color-foreground-interactive)',
+  ':hover': {
+    backgroundColor: 'var(--color-surface-interactive-highlighted)',
+    color: 'var(--color-foreground-interactive-highlighted)',
+    stroke: 'var(--color-foreground-interactive-highlighted)',
+  },
+})
+
+interface Metadata {
+  metadata: {
+    title: string
+    label?: string
+  }
+}
+
+interface ExtensionTypes {
+  mdx: Metadata
+  ts: Metadata
+  tsx: Metadata
+}
+
+/** Resolves metadata from a file system entry. */
+async function resolveEntryMetadata(
+  entry: FileSystemEntry<ExtensionTypes, true>
+) {
+  let file: JavaScriptFileWithRuntime<{
+    metadata: {
+      title: string
+      label?: string
+    }
+  }>
+
+  if (isDirectory(entry)) {
+    const indexFile = await entry.getFile('index', ['ts', 'tsx'])
+
+    if (indexFile) {
+      file = indexFile
+    } else {
+      const readmeFile = await entry.getFile('readme', 'mdx')
+
+      if (readmeFile) {
+        file = readmeFile
+      } else {
+        return
+      }
+    }
+  } else if (isJavaScriptFileWithRuntime<Metadata>(entry)) {
+    file = entry
+  } else {
+    return
+  }
+
+  const metadataExport = await file.getExport('metadata')
+
+  if (metadataExport) {
+    return metadataExport.getRuntimeValue()
+  }
+
+  return
 }
