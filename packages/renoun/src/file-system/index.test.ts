@@ -437,6 +437,24 @@ describe('file system', () => {
     expect(file.getPathSegments()).toStrictEqual(['server'])
   })
 
+  test('deduplicate file path segments', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'Button/Button.tsx': '',
+    })
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFileOrThrow('Button/Button', 'tsx')
+
+    expect(file.getPath()).toEqual('/Button')
+    expect(file.getPathSegments()).toStrictEqual(['Button'])
+
+    expect(file.getPath({ includeDuplicateSegments: true })).toEqual(
+      '/Button/Button'
+    )
+    expect(
+      file.getPathSegments({ includeDuplicateSegments: true })
+    ).toStrictEqual(['Button', 'Button'])
+  })
+
   test('all file exports', async () => {
     const projectDirectory = new Directory('fixtures/project')
     const file = await projectDirectory.getFileOrThrow('server', 'ts')

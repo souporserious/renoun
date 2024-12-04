@@ -12,6 +12,7 @@ import {
   joinPaths,
   relativePath,
   ensureRelativePath,
+  removeAllExtensions,
   removeOrderPrefixes,
 } from '../utils/path.js'
 import type { SymbolFilter } from '../utils/resolve-type.js'
@@ -57,7 +58,9 @@ export abstract class FileSystem {
   }
 
   getPath(path: string, options: { basePath?: string } = {}) {
-    const relativePath = this.getRelativePath(removeOrderPrefixes(path))
+    const relativePath = this.getRelativePath(
+      removeAllExtensions(removeOrderPrefixes(path))
+    )
       // remove leading dot
       .replace(/^\.\//, '')
       // remove trailing slash
