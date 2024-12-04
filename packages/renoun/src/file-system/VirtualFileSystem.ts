@@ -67,49 +67,51 @@ export class VirtualFileSystem extends FileSystem {
     }
 
     const entries: DirectoryEntry[] = []
-    const directories = new Set<string>()
+    const addedPaths = new Set<string>()
 
     for (const filePath of this.#files.keys()) {
-      if (filePath.startsWith(path)) {
-        let relativePath = filePath.slice(path.length)
-
-        if (relativePath.startsWith('/')) {
-          relativePath = relativePath.slice(1)
-        }
-
-        const segments = relativePath.split('/').filter(Boolean)
-
-        if (segments.length === 0) {
-          continue
-        }
-
-        if (segments.length === 1) {
-          entries.push({
-            name: segments.at(-1)!,
-            path: filePath,
-            isDirectory: false,
-            isFile: true,
-          })
-        }
-
-        const subDirectoryPath = path.endsWith('/')
-          ? `${path}${segments.at(0)}`
-          : `${path}/${segments.at(0)}`
-        directories.add(subDirectoryPath)
+      if (!filePath.startsWith(path)) {
+        continue
       }
-    }
 
-    for (const directoryPath of directories) {
-      if (!entries.some((entry) => entry.path === directoryPath)) {
-        const segments = directoryPath.split('/').filter(Boolean)
+      let relativePath = filePath.slice(path.length)
 
+      if (relativePath.startsWith('/')) {
+        relativePath = relativePath.slice(1)
+      }
+
+      const segments = relativePath.split('/').filter(Boolean)
+
+      if (segments.length === 0) {
+        continue
+      }
+
+      const entryName = segments.at(0)!
+      const entryPath = path.endsWith('/')
+        ? `${path}${entryName}`
+        : `${path}/${entryName}`
+
+      if (addedPaths.has(entryPath)) {
+        continue
+      }
+
+      if (segments.length === 1) {
         entries.push({
-          name: segments.at(-1)!,
-          path: directoryPath,
+          name: entryName,
+          path: entryPath,
+          isDirectory: false,
+          isFile: true,
+        })
+      } else {
+        entries.push({
+          name: entryName,
+          path: entryPath,
           isDirectory: true,
           isFile: false,
         })
       }
+
+      addedPaths.add(entryPath)
     }
 
     return entries

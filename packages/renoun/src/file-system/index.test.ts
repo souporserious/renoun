@@ -105,9 +105,9 @@ describe('file system', () => {
       [
         "/index",
         "/components",
-        "/components/Link",
         "/components/Button",
         "/components/Button/index",
+        "/components/Link",
       ]
     `)
   })
@@ -296,9 +296,9 @@ describe('file system', () => {
 
     expect(entries.map((entry) => entry.getPath())).toMatchInlineSnapshot(`
       [
+        "/Button",
         "/CodeBlock",
         "/tsconfig",
-        "/Button",
       ]
     `)
   })
