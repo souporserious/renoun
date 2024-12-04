@@ -14,7 +14,6 @@ import {
   removeExtension,
   removeAllExtensions,
   removeOrderPrefixes,
-  directoryName,
 } from '../utils/path.js'
 import type { SymbolFilter } from '../utils/resolve-type.js'
 import { FileName } from './FileName.js'
