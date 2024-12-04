@@ -100,23 +100,45 @@ export class File<
   }
 
   /** Get the path of the file. */
-  getPath(options: { includeBasePath?: boolean } = { includeBasePath: true }) {
+  getPath(options?: {
+    includeBasePath?: boolean
+    includeDuplicateSegments?: boolean
+  }) {
+    const includeBasePath = options?.includeBasePath ?? true
+    const includeDuplicateSegments = options?.includeDuplicateSegments ?? false
     const fileSystem = this.#directory.getFileSystem()
     const basePath = this.#directory.getBasePath()
-
-    return removeAllExtensions(
-      fileSystem.getPath(
-        this.#path,
-        options.includeBasePath ? { basePath } : undefined
-      )
+    const path = fileSystem.getPath(
+      this.#path,
+      includeBasePath ? { basePath } : undefined
     )
+
+    if (includeDuplicateSegments) {
+      return path
+    }
+
+    const parsedPath = path.split('/')
+
+    for (let index = 0; index < parsedPath.length; index++) {
+      if (parsedPath[index] === parsedPath[index + 1]) {
+        parsedPath.splice(index, 1)
+      }
+    }
+
+    return parsedPath.join('/')
   }
 
   /** Get the path segments of the file. */
-  getPathSegments(
-    options: { includeBasePath?: boolean } = { includeBasePath: true }
-  ) {
-    return this.getPath(options).split('/').filter(Boolean)
+  getPathSegments(options?: {
+    includeBasePath?: boolean
+    includeDuplicateSegments?: boolean
+  }) {
+    const includeBasePath = options?.includeBasePath ?? true
+    const includeDuplicateSegments = options?.includeDuplicateSegments ?? false
+
+    return this.getPath({ includeBasePath, includeDuplicateSegments })
+      .split('/')
+      .filter(Boolean)
   }
 
   /** Get the relative file system path of the file. */
@@ -159,6 +181,7 @@ export class File<
    */
   async getSiblings(options?: {
     entryGroup?: EntryGroup<FileSystemEntry<Types, HasModule>[]>
+    includeDuplicateSegments?: boolean
   }): Promise<
     [
       File<Types, HasModule> | Directory<Types, HasModule> | undefined,
@@ -175,7 +198,9 @@ export class File<
     const entries = await (options?.entryGroup
       ? options.entryGroup.getEntries({ recursive: true })
       : this.#directory.getEntries())
-    const path = this.getPath()
+    const path = this.getPath({
+      includeDuplicateSegments: options?.includeDuplicateSegments,
+    })
     const index = entries.findIndex((entry) => entry.getPath() === path)
     const previous = index > 0 ? entries[index - 1] : undefined
     const next = index < entries.length - 1 ? entries[index + 1] : undefined
@@ -1147,19 +1172,19 @@ export class Directory<
         directory.#directory = thisDirectory
         directory.#depth = nextDepth
 
-        if (options?.recursive) {
-          const nestedEntries = await directory.getEntries(options)
-          for (const nestedEntry of nestedEntries) {
-            entriesMap.set(nestedEntry.getPath(), nestedEntry)
-          }
-        }
-
         if (this.#filterCallback) {
           if (await this.#filterCallback(directory)) {
             entriesMap.set(entryKey, directory)
           }
         } else {
           entriesMap.set(entryKey, directory)
+        }
+
+        if (options?.recursive) {
+          const nestedEntries = await directory.getEntries(options)
+          for (const nestedEntry of nestedEntries) {
+            entriesMap.set(nestedEntry.getPath(), nestedEntry)
+          }
         }
       } else if (entry.isFile) {
         const extension = extensionName(entry.name).slice(1)
@@ -1290,20 +1315,21 @@ export class Directory<
   }
 
   /** Get a URL-friendly path of the directory. */
-  getPath(options: { includeBasePath?: boolean } = { includeBasePath: true }) {
+  getPath(options?: { includeBasePath?: boolean }) {
+    const includeBasePath = options?.includeBasePath ?? true
     const fileSystem = this.getFileSystem()
 
     return fileSystem.getPath(
       this.#path,
-      options.includeBasePath ? { basePath: this.#basePath } : undefined
+      includeBasePath ? { basePath: this.#basePath } : undefined
     )
   }
 
   /** Get the path segments of the directory. */
-  getPathSegments(
-    options: { includeBasePath?: boolean } = { includeBasePath: true }
-  ) {
-    return this.getPath(options).split('/').filter(Boolean)
+  getPathSegments(options?: { includeBasePath?: boolean }) {
+    const includeBasePath = options?.includeBasePath ?? true
+
+    return this.getPath({ includeBasePath }).split('/').filter(Boolean)
   }
 
   /** Get the configured base path of the directory. */
@@ -1355,7 +1381,6 @@ export class Directory<
     let directory = entry.getParentDirectory()
 
     while (directory) {
-      console.log(directory.getName())
       if (directory === this) {
         return true
       }

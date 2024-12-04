@@ -71,9 +71,9 @@ describe('file system', () => {
 
     expect(entries.map((entry) => entry.getPath())).toMatchInlineSnapshot(`
       [
+        "/rpc",
         "/rpc/client",
         "/rpc/server",
-        "/rpc",
         "/server",
         "/types",
       ]
@@ -104,10 +104,10 @@ describe('file system', () => {
     expect(entries.map((entry) => entry.getPath())).toMatchInlineSnapshot(`
       [
         "/index",
-        "/components/Link",
-        "/components/Button/index",
-        "/components/Button",
         "/components",
+        "/components/Button",
+        "/components/Button/index",
+        "/components/Link",
       ]
     `)
   })
@@ -122,6 +122,20 @@ describe('file system', () => {
     const entries = await directory.getEntries()
 
     expect(entries).toHaveLength(1)
+  })
+
+  test('orders directory before its descendants by default', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'Button/Button.tsx': '',
+      'Button/IconButton.tsx': '',
+    })
+    const directory = new Directory({ fileSystem })
+    const entries = await directory.getEntries({ recursive: true })
+
+    expect(entries.map((entry) => entry.getPath())).toEqual([
+      '/Button',
+      '/Button/IconButton',
+    ])
   })
 
   test('filter entries', async () => {
@@ -282,9 +296,9 @@ describe('file system', () => {
 
     expect(entries.map((entry) => entry.getPath())).toMatchInlineSnapshot(`
       [
+        "/Button",
         "/CodeBlock",
         "/tsconfig",
-        "/Button",
       ]
     `)
   })
@@ -423,13 +437,31 @@ describe('file system', () => {
     expect(file.getPathSegments()).toStrictEqual(['server'])
   })
 
+  test('deduplicate file path segments', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'Button/Button.tsx': '',
+    })
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFileOrThrow('Button/Button', 'tsx')
+
+    expect(file.getPath()).toEqual('/Button')
+    expect(file.getPathSegments()).toStrictEqual(['Button'])
+
+    expect(file.getPath({ includeDuplicateSegments: true })).toEqual(
+      '/Button/Button'
+    )
+    expect(
+      file.getPathSegments({ includeDuplicateSegments: true })
+    ).toStrictEqual(['Button', 'Button'])
+  })
+
   test('all file exports', async () => {
     const projectDirectory = new Directory('fixtures/project')
     const file = await projectDirectory.getFileOrThrow('server', 'ts')
     const fileExports = await file.getExports()
     const fileExport = fileExports.at(0)!
 
-    expect(await fileExport.getName()).toMatch('createServer')
+    expect(fileExport.getName()).toMatch('createServer')
   })
 
   test('all virtual file exports', async () => {
@@ -438,11 +470,9 @@ describe('file system', () => {
     })
     const rootDirectory = new Directory({ fileSystem })
     const file = await rootDirectory.getFileOrThrow('use-hover', 'ts')
-    const fileExports = await Promise.all(
-      (await file.getExports()).map(async (fileExport) => ({
-        name: await fileExport.getName(),
-      }))
-    )
+    const fileExports = (await file.getExports()).map((fileExport) => ({
+      name: fileExport.getName(),
+    }))
 
     expect(fileExports).toMatchObject([{ name: 'useHover' }])
   })
