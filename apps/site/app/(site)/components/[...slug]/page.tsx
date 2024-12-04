@@ -34,33 +34,13 @@ export default async function Component({
   }
 
   const mdxFile = await ComponentsCollection.getFile(slug, 'mdx')
-  const mdxHeadingsExport = await mdxFile?.getExport('headings')
-  const mdxHeadings = await mdxHeadingsExport?.getRuntimeValue()
-  const defaultExport = await mdxFile?.getExport('default')
-  const Content = await defaultExport?.getRuntimeValue()
-
-  // const examplesSource = await componentEntry.getSource('examples')
-  // const examplesSources = await examplesSource?.getSources()
-  // const isExamplesPage = slug.at(-1) === 'examples'
-  // const examplesExports = isExamplesPage
-  //   ? componentEntry.getExports()
-  //   : examplesSource
-  //     ? examplesSources?.length
-  //       ? examplesSources.flatMap((source) => source.getExports())
-  //       : examplesSource.getExports()
-  //     : []
-  // const sourceExports = isExamplesPage ? undefined : componentEntry.getExports()
-  // const mainExport = componentEntry.getMainExport()
-  // const description = mainExport?.getDescription()
-  // const updatedAt = await componentEntry.getUpdatedAt()
-  // const editPath = componentEntry.getEditPath()
-  // const [previousEntry, nextEntry] = await componentEntry.getSiblings()
+  const mdxHeadings = await (
+    await mdxFile?.getExport('headings')
+  )?.getRuntimeValue()
+  const Content = await (await mdxFile?.getExport('default'))?.getRuntimeValue()
   const componentDirectory = isDirectory(componentEntry)
     ? componentEntry
     : componentEntry.getParentDirectory()
-  // const mainEntry =
-  //   (await componentDirectory.getFile(slug, ['ts', 'tsx'])) ||
-  //   (await componentDirectory.getFile('index', ['ts', 'tsx']))
   const mainExport = await componentEntry.getExport<any>(slug)
   const description = mainExport ? mainExport.getDescription() : null
   const examplesEntry = await componentDirectory.getEntry('examples')
@@ -82,8 +62,6 @@ export default async function Component({
   const componentExports = isExamplesPage
     ? undefined
     : await componentEntry.getExports()
-  // const readmeFile = await componentDirectory.getFileOrThrow('README', 'mdx')
-  // const Readme = await readmeFile.getExport('default').getRuntimeValue()
   const updatedAt = await componentEntry.getUpdatedAt()
   const editPath = componentEntry.getEditPath()
   const [previousEntry, nextEntry] = await componentEntry.getSiblings({
@@ -147,7 +125,7 @@ export default async function Component({
           )}
         </div>
 
-        {/* {examplesExports.length ? (
+        {examplesExports.length ? (
           <div>
             <h2 id="examples" css={{ margin: '0 0 2rem' }}>
               Examples
@@ -161,14 +139,16 @@ export default async function Component({
                 gap: '2rem',
               }}
             >
-              {examplesExports.map((exportSource) => (
-                <li key={exportSource}>
-                  <Preview source={exportSource} />
+              {examplesExports.map((fileExport) => (
+                <li key={fileExport.getName()}>
+                  <Preview
+                    fileExport={fileExport as JavaScriptFileExportWithRuntime}
+                  />
                 </li>
               ))}
             </ul>
           </div>
-        ) : null} */}
+        ) : null}
 
         {componentExports ? (
           <div>
