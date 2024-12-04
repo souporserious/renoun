@@ -70,7 +70,7 @@ export async function SiblingLink({
         ) : null}
         <span>
           {variant === 'title'
-            ? metadata?.label || metadata?.title || entry.getName()
+            ? metadata?.label || metadata?.title || entry.getTitle()
             : entry.getName()}
         </span>
         {direction === 'next' ? (

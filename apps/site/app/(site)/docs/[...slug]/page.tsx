@@ -17,9 +17,8 @@ export default async function Doc({
   params: Promise<{ slug: string[] }>
 }) {
   const file = await CollectionGroup.getFile(['docs', ...(await params).slug])
-  const hasEntry = await DocsCollection.getHasEntry(file)
 
-  if (!hasEntry(file)) {
+  if (!DocsCollection.hasEntry(file)) {
     notFound()
   }
 

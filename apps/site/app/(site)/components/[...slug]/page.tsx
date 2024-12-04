@@ -31,9 +31,8 @@ export default async function Component({
     ['components', ...slug],
     ['ts', 'tsx']
   )
-  const hasEntry = await ComponentsCollection.getHasEntry(componentEntry)
 
-  if (!hasEntry(componentEntry)) {
+  if (!ComponentsCollection.hasEntry(componentEntry)) {
     notFound()
   }
 
@@ -61,7 +60,7 @@ export default async function Component({
   // const [previousEntry, nextEntry] = await componentEntry.getSiblings()
   const componentDirectory = isDirectory(componentEntry)
     ? componentEntry
-    : await componentEntry.getDirectory()
+    : componentEntry.getParentDirectory()
   // const mainEntry =
   //   (await componentDirectory.getFile(slug, ['ts', 'tsx'])) ||
   //   (await componentDirectory.getFile('index', ['ts', 'tsx']))
@@ -90,7 +89,9 @@ export default async function Component({
   // const Readme = await readmeFile.getExport('default').getRuntimeValue()
   const updatedAt = await componentEntry.getUpdatedAt()
   const editPath = componentEntry.getEditPath()
-  const [previousEntry, nextEntry] = await componentEntry.getSiblings()
+  const [previousEntry, nextEntry] = await componentEntry.getSiblings({
+    entryGroup: CollectionGroup,
+  })
 
   let headings: Headings = []
 
@@ -220,14 +221,20 @@ export default async function Component({
               <SiblingLink
                 entry={previousEntry}
                 direction="previous"
-                variant={hasEntry(previousEntry) ? 'name' : 'title'}
+                variant={
+                  ComponentsCollection.hasEntry(previousEntry)
+                    ? 'name'
+                    : 'title'
+                }
               />
             ) : null}
             {nextEntry ? (
               <SiblingLink
                 entry={nextEntry}
                 direction="next"
-                variant={hasEntry(nextEntry) ? 'name' : 'title'}
+                variant={
+                  ComponentsCollection.hasEntry(nextEntry) ? 'name' : 'title'
+                }
               />
             ) : null}
           </nav>
