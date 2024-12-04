@@ -66,14 +66,19 @@ export abstract class FileSystem {
     return joinPaths('/', options.basePath, relativePath)
   }
 
-  abstract readFileSync(path: string): string
-
-  abstract readFile(path: string): Promise<string>
+  abstract readDirectorySync(
+    path?: string,
+    options?: { recursive?: boolean }
+  ): DirectoryEntry[]
 
   abstract readDirectory(
     path?: string,
     options?: { recursive?: boolean }
   ): Promise<DirectoryEntry[]>
+
+  abstract readFileSync(path: string): string
+
+  abstract readFile(path: string): Promise<string>
 
   #getTsConfig() {
     try {

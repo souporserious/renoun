@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync, type Dirent } from 'node:fs'
 import { readdir, readFile } from 'node:fs/promises'
 import { join, resolve, relative } from 'node:path'
 import ignore from 'ignore'
@@ -15,12 +15,14 @@ export class NodeFileSystem extends FileSystem {
     return resolve(path)
   }
 
-  async readDirectory(path: string = '.'): Promise<DirectoryEntry[]> {
-    const entries = await readdir(path, { withFileTypes: true })
+  #processDirectoryEntries(
+    entries: Dirent[],
+    basePath: string
+  ): DirectoryEntry[] {
     const directoryEntries: DirectoryEntry[] = []
 
     for (const entry of entries) {
-      const entryPath = join(path, entry.name)
+      const entryPath = join(basePath, entry.name)
 
       directoryEntries.push({
         name: entry.name,
@@ -31,6 +33,16 @@ export class NodeFileSystem extends FileSystem {
     }
 
     return directoryEntries
+  }
+
+  readDirectorySync(path: string = '.'): DirectoryEntry[] {
+    const entries = readdirSync(path, { withFileTypes: true })
+    return this.#processDirectoryEntries(entries, path)
+  }
+
+  async readDirectory(path: string = '.'): Promise<DirectoryEntry[]> {
+    const entries = await readdir(path, { withFileTypes: true })
+    return this.#processDirectoryEntries(entries, path)
   }
 
   readFileSync(path: string): string {

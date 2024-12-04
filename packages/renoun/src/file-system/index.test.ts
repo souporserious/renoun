@@ -665,8 +665,8 @@ describe('file system', () => {
 
   test('generates sibling navigation from file', async () => {
     const projectDirectory = new Directory('fixtures/project')
-    const file = await projectDirectory.getFile('server', 'ts')
-    const [previousEntry, nextEntry] = await file!.getSiblings()
+    const file = await projectDirectory.getFileOrThrow('server', 'ts')
+    const [previousEntry, nextEntry] = await file.getSiblings()
 
     expect(previousEntry?.getName()).toBe('rpc')
     expect(nextEntry?.getName()).toBe('types')
@@ -674,10 +674,10 @@ describe('file system', () => {
 
   test('generates sibling navigation from directory', async () => {
     const projectDirectory = new Directory('fixtures/project')
-    const directory = await projectDirectory.getDirectory('rpc')
-    const [previousEntry, nextEntry] = await directory!.getSiblings()
+    const directory = await projectDirectory.getDirectoryOrThrow('rpc')
+    const [previousEntry, nextEntry] = await directory.getSiblings()
 
-    expect(previousEntry).toBe(undefined)
+    expect(previousEntry).toBeUndefined()
     expect(nextEntry?.getName()).toBe('server')
   })
 
@@ -690,7 +690,7 @@ describe('file system', () => {
     const indexFile = await rootDirectory.getFileOrThrow('components/index')
     const [previousEntry, nextEntry] = await indexFile.getSiblings()
 
-    expect(previousEntry).toBe(undefined)
+    expect(previousEntry).toBeUndefined()
     expect(nextEntry?.getName()).toBe('utils')
     expect(nextEntry).toBeInstanceOf(Directory)
   })
@@ -824,7 +824,7 @@ describe('file system', () => {
     }
 
     const normalizedDirectory = isFile(entry)
-      ? await entry.getDirectory()
+      ? entry.getParentDirectory()
       : entry
 
     expect(isDirectory(normalizedDirectory)).toBe(true)
@@ -916,7 +916,9 @@ describe('file system', () => {
     expectTypeOf(mdxFile).toMatchTypeOf<JavaScriptFile<FrontMatter>>()
 
     const file = await group.getFileOrThrow(['posts', 'meta'], 'js')
-    const [previousEntry, nextEntry] = await file.getSiblings()
+    const [previousEntry, nextEntry] = await file.getSiblings({
+      entryGroup: group,
+    })
 
     expect(previousEntry?.getName()).toBe('building-a-button-component')
     expect(nextEntry?.getName()).toBe('docs')
@@ -935,7 +937,7 @@ describe('file system', () => {
 
     const directory = await group.getDirectoryOrThrow('guides')
     const [previousDirectoryEntry, nextDirectoryEntry] =
-      await directory.getSiblings()
+      await directory.getSiblings({ entryGroup: group })
 
     expect(previousDirectoryEntry).toBeDefined()
     expect(previousDirectoryEntry!.getPath()).toBe('/docs/next-steps')
@@ -944,7 +946,9 @@ describe('file system', () => {
     expect(nextDirectoryEntry!.getPath()).toBe('/guides/intro')
 
     const file = await group.getFileOrThrow('guides/intro')
-    const [previousFileEntry, nextFileEntry] = await file.getSiblings()
+    const [previousFileEntry, nextFileEntry] = await file.getSiblings({
+      entryGroup: group,
+    })
 
     expect(previousFileEntry).toBeDefined()
     expect(previousFileEntry!.getPath()).toBe('/guides')
@@ -1006,8 +1010,8 @@ describe('file system', () => {
   })
 
   test('has entry', async () => {
-    type MDXTypes = { metadata: { title: string } }
-    type TSXTypes = { title: string }
+    type MDXTypes = { frontmatter: { title: string } }
+    type TSXTypes = { metadata: { title: string } }
 
     const directoryA = new Directory<{ mdx: MDXTypes }>({
       fileSystem: new VirtualFileSystem({ 'Button.mdx': '' }),
@@ -1021,16 +1025,13 @@ describe('file system', () => {
     expectTypeOf(file).toMatchTypeOf<JavaScriptFile<MDXTypes>>()
 
     const entry = await group.getEntryOrThrow('Button')
-    const hasEntry = await directoryA.getHasEntry(entry)
 
-    expect(hasEntry(entry)).toBe(true)
+    expect(directoryA.hasEntry(entry)).toBe(true)
     expectTypeOf(entry).toMatchTypeOf<FileSystemEntry<{ mdx: MDXTypes }>>()
 
-    const hasFile = await directoryA.getHasFile(entry)
+    expect(directoryA.hasFile(entry, 'mdx')).toBe(true)
 
-    expect(hasFile(entry, 'mdx')).toBe(true)
-
-    if (hasFile(entry, 'mdx')) {
+    if (directoryA.hasFile(entry, 'mdx')) {
       expectTypeOf(entry).toMatchTypeOf<JavaScriptFile<MDXTypes>>()
     }
   })

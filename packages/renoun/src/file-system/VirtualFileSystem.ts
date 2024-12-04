@@ -61,7 +61,7 @@ export class VirtualFileSystem extends FileSystem {
     return this.#files
   }
 
-  async readDirectory(path: string = '.'): Promise<DirectoryEntry[]> {
+  readDirectorySync(path: string = '.'): DirectoryEntry[] {
     if (!path.startsWith('.')) {
       path = `./${path}`
     }
@@ -113,6 +113,10 @@ export class VirtualFileSystem extends FileSystem {
     }
 
     return entries
+  }
+
+  async readDirectory(path: string = '.'): Promise<DirectoryEntry[]> {
+    return this.readDirectorySync(path)
   }
 
   readFileSync(path: string): string {
