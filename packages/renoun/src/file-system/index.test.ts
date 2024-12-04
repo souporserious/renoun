@@ -443,7 +443,7 @@ describe('file system', () => {
     const fileExports = await file.getExports()
     const fileExport = fileExports.at(0)!
 
-    expect(await fileExport.getName()).toMatch('createServer')
+    expect(fileExport.getName()).toMatch('createServer')
   })
 
   test('all virtual file exports', async () => {
@@ -452,11 +452,9 @@ describe('file system', () => {
     })
     const rootDirectory = new Directory({ fileSystem })
     const file = await rootDirectory.getFileOrThrow('use-hover', 'ts')
-    const fileExports = await Promise.all(
-      (await file.getExports()).map(async (fileExport) => ({
-        name: await fileExport.getName(),
-      }))
-    )
+    const fileExports = (await file.getExports()).map((fileExport) => ({
+      name: fileExport.getName(),
+    }))
 
     expect(fileExports).toMatchObject([{ name: 'useHover' }])
   })
