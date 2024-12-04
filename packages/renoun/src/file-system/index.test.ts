@@ -71,9 +71,9 @@ describe('file system', () => {
 
     expect(entries.map((entry) => entry.getPath())).toMatchInlineSnapshot(`
       [
+        "/rpc",
         "/rpc/client",
         "/rpc/server",
-        "/rpc",
         "/server",
         "/types",
       ]
@@ -104,10 +104,10 @@ describe('file system', () => {
     expect(entries.map((entry) => entry.getPath())).toMatchInlineSnapshot(`
       [
         "/index",
-        "/components/Link",
-        "/components/Button/index",
-        "/components/Button",
         "/components",
+        "/components/Link",
+        "/components/Button",
+        "/components/Button/index",
       ]
     `)
   })
@@ -122,6 +122,20 @@ describe('file system', () => {
     const entries = await directory.getEntries()
 
     expect(entries).toHaveLength(1)
+  })
+
+  test('orders directory before its descendants by default', async () => {
+    const fileSystem = new VirtualFileSystem({
+      'Button/Button.tsx': '',
+      'Button/IconButton.tsx': '',
+    })
+    const directory = new Directory({ fileSystem })
+    const entries = await directory.getEntries({ recursive: true })
+
+    expect(entries.map((entry) => entry.getPath())).toEqual([
+      '/Button',
+      '/Button/IconButton',
+    ])
   })
 
   test('filter entries', async () => {

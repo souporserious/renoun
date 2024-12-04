@@ -1147,19 +1147,19 @@ export class Directory<
         directory.#directory = thisDirectory
         directory.#depth = nextDepth
 
-        if (options?.recursive) {
-          const nestedEntries = await directory.getEntries(options)
-          for (const nestedEntry of nestedEntries) {
-            entriesMap.set(nestedEntry.getPath(), nestedEntry)
-          }
-        }
-
         if (this.#filterCallback) {
           if (await this.#filterCallback(directory)) {
             entriesMap.set(entryKey, directory)
           }
         } else {
           entriesMap.set(entryKey, directory)
+        }
+
+        if (options?.recursive) {
+          const nestedEntries = await directory.getEntries(options)
+          for (const nestedEntry of nestedEntries) {
+            entriesMap.set(nestedEntry.getPath(), nestedEntry)
+          }
         }
       } else if (entry.isFile) {
         const extension = extensionName(entry.name).slice(1)
