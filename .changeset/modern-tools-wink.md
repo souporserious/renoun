@@ -30,7 +30,14 @@ const group = new EntryGroup({
 const entries = await group.getEntries()
 ```
 
-This also adds `getHasEntry` and `getHasFile` methods to `Directory` which can be used to check if an entry or file exists in an `EntryGroup`:
+Sibling entries can be queried using the `getSiblings` method and passing the `EntryGroup` instance to get the siblings for. This is useful for querying siblings across sets of entries:
+
+```ts
+const entry = await group.getEntryOrThrow('Button')
+const siblings = await entry.getSiblings({ entryGroup: group })
+```
+
+This also adds `hasEntry` and `hasFile` methods to `Directory` which can be used to check if an entry or file exists in an `EntryGroup`:
 
 ```ts
 type MDXTypes = { metadata: { title: string } }
@@ -46,9 +53,8 @@ const group = new EntryGroup({
   entries: [directoryA, directoryB],
 })
 const entry = await group.getEntryOrThrow('Button')
-const hasFile = await directoryA.getHasFile(entry)
 
-if (hasFile(entry, 'mdx')) {
+if (directoryA.hasFile(entry, 'mdx')) {
   entry // JavaScriptFile<MDXTypes>
 }
 ```

@@ -14,6 +14,7 @@ import {
   removeExtension,
   removeAllExtensions,
   removeOrderPrefixes,
+  directoryName,
 } from '../utils/path.js'
 import type { SymbolFilter } from '../utils/resolve-type.js'
 import { FileName } from './FileName.js'
@@ -29,7 +30,7 @@ import {
 /** A directory or file entry. */
 export type FileSystemEntry<
   Types extends ExtensionTypes = ExtensionTypes,
-  HasModule extends boolean = false,
+  HasModule extends boolean = boolean,
 > = Directory<Types, HasModule> | File<Types, HasModule>
 
 /** Options for a file in the file system. */
@@ -37,7 +38,6 @@ export interface FileOptions {
   path: string
   depth: number
   directory: Directory<any, any>
-  entryGroup?: EntryGroup<FileSystemEntry<any, any>[]>
 }
 
 /** A file in the file system. */
@@ -48,7 +48,6 @@ export class File<
   #path: string
   #depth: number
   #directory: Directory<Types, HasModule>
-  #entryGroup?: EntryGroup<FileSystemEntry<Types, HasModule>[]>
 
   constructor(options: FileOptions) {
     super(baseName(options.path))
@@ -56,23 +55,19 @@ export class File<
     this.#path = options.path
     this.#depth = options.depth
     this.#directory = options.directory
-    this.#entryGroup = options.entryGroup
   }
 
   /** Duplicate the file with the same initial options. */
-  duplicate(options?: {
-    entryGroup: EntryGroup<FileSystemEntry<Types, HasModule>[]>
-  }): File<Types, HasModule> {
+  duplicate(): File<Types, HasModule> {
     return new File({
       directory: this.#directory,
       path: this.#path,
       depth: this.#depth,
-      ...options,
     })
   }
 
   /** Get the directory containing this file. */
-  async getDirectory(): Promise<Directory<Types, HasModule>> {
+  getParentDirectory(): Directory<Types, HasModule> {
     return this.#directory
   }
 
@@ -163,7 +158,9 @@ export class File<
    * Get the previous and next sibling entries (files or directories) of the parent directory.
    * If the file is an index or readme file, the siblings will be retrieved from the parent directory.
    */
-  async getSiblings(): Promise<
+  async getSiblings(options?: {
+    entryGroup?: EntryGroup<FileSystemEntry<Types, HasModule>[]>
+  }): Promise<
     [
       File<Types, HasModule> | Directory<Types, HasModule> | undefined,
       File<Types, HasModule> | Directory<Types, HasModule> | undefined,
@@ -176,8 +173,8 @@ export class File<
       return this.#directory.getSiblings()
     }
 
-    const entries = await (this.#entryGroup
-      ? this.#entryGroup.getEntries({ recursive: true })
+    const entries = await (options?.entryGroup
+      ? options.entryGroup.getEntries({ recursive: true })
       : this.#directory.getEntries())
     const path = this.getPath()
     const index = entries.findIndex((entry) => entry.getPath() === path)
@@ -235,7 +232,7 @@ export class JavaScriptFileExport<
       return undefined
     }
 
-    const fileSystem = (await this.#file.getDirectory()).getFileSystem()
+    const fileSystem = this.#file.getParentDirectory().getFileSystem()
 
     this.#metadata = await fileSystem.getFileExportMetadata(
       this.#name,
@@ -296,7 +293,7 @@ export class JavaScriptFileExport<
       )
     }
 
-    const fileSystem = (await this.#file.getDirectory()).getFileSystem()
+    const fileSystem = this.#file.getParentDirectory().getFileSystem()
 
     return fileSystem.resolveTypeAtLocation(
       this.#file.getAbsolutePath(),
@@ -451,7 +448,7 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
 
   /** Get all export names and positions from the JavaScript file. */
   async #getExports() {
-    const fileSystem = (await this.getDirectory()).getFileSystem()
+    const fileSystem = this.getParentDirectory().getFileSystem()
     return fileSystem.getFileExports(this.getAbsolutePath())
   }
 
@@ -654,9 +651,6 @@ interface DirectoryOptions<Types extends ExtensionTypes = ExtensionTypes> {
 
   /** The file system to use for reading directory entries. */
   fileSystem?: FileSystem
-
-  /** The entry group containing this directory. */
-  entryGroup?: EntryGroup<FileSystemEntry<Types>[]>
 }
 
 /** A directory containing files and subdirectories in the file system. */
@@ -673,7 +667,6 @@ export class Directory<
   #basePath?: string
   #tsConfigPath?: string
   #fileSystem: FileSystem | undefined
-  #entryGroup?: EntryGroup<FileSystemEntry<Types, HasModule>[]> | undefined
   #directory?: Directory<any, any>
   #schemas: ExtensionSchemas<Types> = {}
   #moduleGetters?: Map<string, (path: string) => Promise<any>>
@@ -693,7 +686,6 @@ export class Directory<
       this.#path = ensureRelativePath(path.path)
       this.#tsConfigPath = path.tsConfigPath
       this.#fileSystem = path.fileSystem
-      this.#entryGroup = path.entryGroup
     }
   }
 
@@ -724,7 +716,6 @@ export class Directory<
   #withOptions(options: {
     basePath?: string
     fileSystem?: FileSystem
-    entryGroup?: EntryGroup<FileSystemEntry<Types, HasModule>[]>
     directory?: Directory<any, any>
     schemas?: ExtensionSchemas<Types>
     moduleGetters?: Map<string, (path: string) => Promise<any>>
@@ -743,7 +734,6 @@ export class Directory<
     directory.#tsConfigPath = this.#tsConfigPath
     directory.#basePath = options.basePath ?? this.#basePath
     directory.#fileSystem = options.fileSystem ?? this.#fileSystem
-    directory.#entryGroup = options.entryGroup ?? this.#entryGroup
     directory.#schemas = options.schemas ?? this.#schemas
     directory.#moduleGetters = options.moduleGetters ?? this.#moduleGetters
     directory.#sortCallback = options.sortCallback ?? this.#sortCallback
@@ -1014,14 +1004,15 @@ export class Directory<
     return file as any
   }
 
-  /** Get the parent directory or a directory at the specified `path`. */
-  async getDirectory(
-    path?: string | string[]
-  ): Promise<Directory<Types, HasModule> | undefined> {
-    if (path === undefined) {
-      return this.#directory
-    }
+  /** Get the directory containing this directory. */
+  getParentDirectory() {
+    return this.#directory
+  }
 
+  /** Get a directory at the specified `path`. */
+  async getDirectory(
+    path: string | string[]
+  ): Promise<Directory<Types, HasModule> | undefined> {
     const segments = Array.isArray(path)
       ? path.slice(0)
       : path.split('/').filter(Boolean)
@@ -1059,7 +1050,7 @@ export class Directory<
    * directory is not found.
    */
   async getDirectoryOrThrow(
-    path?: string | string[]
+    path: string | string[]
   ): Promise<Directory<Types, HasModule>> {
     const directory = await this.getDirectory(path)
 
@@ -1152,7 +1143,6 @@ export class Directory<
         const directory = this.duplicate({
           fileSystem,
           path: entry.path,
-          entryGroup: this.#entryGroup,
         })
 
         directory.#directory = thisDirectory
@@ -1180,7 +1170,6 @@ export class Directory<
                 path: entry.path,
                 depth: nextDepth,
                 directory: thisDirectory,
-                entryGroup: this.#entryGroup,
                 moduleGetters: this.#moduleGetters,
                 schema: this.#schemas[extension],
               })
@@ -1188,14 +1177,12 @@ export class Directory<
                 path: entry.path,
                 depth: nextDepth,
                 directory: thisDirectory,
-                entryGroup: this.#entryGroup,
                 schema: this.#schemas[extension],
               })
           : new File({
               path: entry.path,
               depth: nextDepth,
               directory: thisDirectory,
-              entryGroup: this.#entryGroup,
             })
 
         if (
@@ -1255,16 +1242,18 @@ export class Directory<
   }
 
   /** Get the previous and next sibling entries (files or directories) of the parent directory. */
-  async getSiblings(): Promise<
+  async getSiblings(options?: {
+    entryGroup?: EntryGroup<FileSystemEntry<Types, HasModule>[]>
+  }): Promise<
     [
       FileSystemEntry<Types, HasModule> | undefined,
       FileSystemEntry<Types, HasModule> | undefined,
     ]
   > {
-    let entries: FileSystemEntry<Types, HasModule>[] = []
+    let entries: FileSystemEntry<Types, HasModule>[]
 
-    if (this.#entryGroup) {
-      entries = await this.#entryGroup.getEntries({ recursive: true })
+    if (options?.entryGroup) {
+      entries = await options.entryGroup.getEntries({ recursive: true })
     } else if (this.#directory) {
       entries = await this.#directory.getEntries()
     } else {
@@ -1272,7 +1261,9 @@ export class Directory<
     }
 
     const path = this.getPath()
-    const index = entries.findIndex((entry) => entry.getPath() === path)
+    const index = entries.findIndex(
+      (entryToCompare) => entryToCompare.getPath() === path
+    )
     const previous = index > 0 ? entries[index - 1] : undefined
     const next = index < entries.length - 1 ? entries[index + 1] : undefined
 
@@ -1354,57 +1345,44 @@ export class Directory<
     return gitMetadata.authors
   }
 
-  /** Returns a type guard that checks if this directory contains the provided entry. */
-  async getHasEntry(entry: FileSystemEntry<any, boolean> | undefined) {
-    let exists = false
+  /** Checks if this directory contains the provided entry. */
+  hasEntry(entry: FileSystemEntry<Types, HasModule>): entry is Entry {
+    let directory = entry.getParentDirectory()
 
-    if (entry) {
-      const path = entry.getPath({ includeBasePath: false })
-      const directoryEntry = await this.getEntry(path)
-
-      if (directoryEntry) {
-        exists = true
+    while (directory) {
+      console.log(directory.getName())
+      if (directory === this) {
+        return true
       }
+      directory = directory.getParentDirectory()
     }
 
-    function hasEntry(
-      entry: FileSystemEntry<any, boolean> | undefined
-    ): entry is Entry {
-      return exists
-    }
-
-    return hasEntry
+    return false
   }
 
-  /** Returns a type guard that check if this directory contains the provided file with a specific extension. */
-  async getHasFile(entry: FileSystemEntry<any, boolean> | undefined) {
-    const hasEntry = await this.getHasEntry(entry)
+  /** Checks if this directory contains the provided file. */
+  hasFile<
+    Type extends keyof Types | (string & {}),
+    const Extension extends Type | Type[],
+  >(
+    entry: FileSystemEntry<any, boolean> | undefined,
+    extension?: Extension
+  ): entry is FileWithExtension<Types, Extension, HasModule> {
+    const extensions = Array.isArray(extension) ? extension : [extension]
 
-    function hasFileWith<
-      Type extends keyof Types | (string & {}),
-      const Extension extends Type | Type[],
-    >(
-      entry: FileSystemEntry<any, boolean> | undefined,
-      extension?: Extension
-    ): entry is FileWithExtension<Types, Extension, HasModule> {
-      const extensions = Array.isArray(extension) ? extension : [extension]
-
-      if (hasEntry(entry) && entry instanceof File) {
-        if (extension) {
-          for (const fileExtension of extensions) {
-            if (entry.getExtension() === fileExtension) {
-              return true
-            }
+    if (entry instanceof File && this.hasEntry(entry)) {
+      if (extension) {
+        for (const fileExtension of extensions) {
+          if (entry.getExtension() === fileExtension) {
+            return true
           }
-        } else {
-          return true
         }
+      } else {
+        return true
       }
-
-      return false
     }
 
-    return hasFileWith
+    return false
   }
 }
 
@@ -1430,9 +1408,7 @@ export class EntryGroup<
   #entries: Entries
 
   constructor(options: EntryGroupOptions<Entries>) {
-    this.#entries = options.entries.map((entry) =>
-      entry.duplicate({ entryGroup: this as any })
-    ) as Entries
+    this.#entries = options.entries
   }
 
   /** Get all entries in the group. */
