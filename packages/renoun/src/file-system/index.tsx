@@ -654,10 +654,8 @@ export interface ExtensionTypes {
 export type SchemaFunction<Value> = (value: Value) => any
 
 /** A map of file export names to their respective schema function. */
-export type ExtensionSchema<Exports extends ExtensionTypes> = {
-  [ExportName in keyof Exports[string]]?: SchemaFunction<
-    Exports[string][ExportName]
-  >
+export type ExtensionSchema<Exports extends ExtensionType> = {
+  [ExportName in keyof Exports]?: SchemaFunction<Exports[ExportName]>
 }
 
 /** Functions that validate and transform export values for specific extensions. */

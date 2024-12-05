@@ -526,9 +526,18 @@ describe('file system', () => {
     })
       .withSchema('ts', {
         metadata: (value) => {
+          // assert that the inferred value matches the type above
+          type IsAny<T> = 0 extends 1 & T ? true : false
+          type InferredValue = typeof value
+
+          const inferredValue = {
+            title: '',
+          } satisfies IsAny<InferredValue> extends true ? never : InferredValue
+
           if (typeof value.title === 'string') {
             return value
           }
+
           throw new Error('Expected a title')
         },
       })
