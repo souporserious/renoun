@@ -286,6 +286,11 @@ export class JavaScriptFileExport<
     return this.#name
   }
 
+  /** The export name formatted as a title. */
+  getTitle() {
+    return formatNameAsTitle(this.getName())
+  }
+
   /** Get the JS Doc description of the export. */
   getDescription() {
     return this.#metadata?.jsDocMetadata?.description

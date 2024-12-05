@@ -227,7 +227,7 @@ async function Preview({
   fileExport: JavaScriptFileExportWithRuntime<React.ComponentType>
 }) {
   const name = fileExport.getName()
-  const title = fileExport.getName() // fileExport.getTitle()
+  const title = fileExport.getTitle()
   const description = fileExport.getDescription()
   const slug = fileExport.getSlug()
   const editPath = fileExport.getEditPath()
