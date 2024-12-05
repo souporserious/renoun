@@ -5,7 +5,7 @@ import { z } from 'zod'
 
 import type { MDXContent } from '../mdx'
 import { NodeFileSystem } from './NodeFileSystem'
-import { VirtualFileSystem } from './VirtualFileSystem'
+import { MemoryFileSystem } from './MemoryFileSystem'
 import {
   type FileSystemEntry,
   File,
@@ -28,14 +28,14 @@ describe('file system', () => {
   })
 
   test('virtual file system read directory', async () => {
-    const fileSystem = new VirtualFileSystem({ 'fixtures/utils/path.ts': '' })
+    const fileSystem = new MemoryFileSystem({ 'fixtures/utils/path.ts': '' })
     const entries = await fileSystem.readDirectory('fixtures/utils')
     expect(entries).toHaveLength(1)
     expect(entries[0].name).toBe('path.ts')
   })
 
   test('directory with virtual file system', async () => {
-    const fileSystem = new VirtualFileSystem({
+    const fileSystem = new MemoryFileSystem({
       'fixtures/project/server.ts': '',
       'fixtures/project/types.ts': '',
     })
@@ -55,7 +55,7 @@ describe('file system', () => {
   })
 
   test('entries', async () => {
-    const fileSystem = new VirtualFileSystem({ 'foo.ts': '', 'bar.ts': '' })
+    const fileSystem = new MemoryFileSystem({ 'foo.ts': '', 'bar.ts': '' })
     const directory = new Directory({ fileSystem })
     const entries = await directory.getEntries()
 
@@ -89,7 +89,7 @@ describe('file system', () => {
   })
 
   test('virtual recursive entries', async () => {
-    const fileSystem = new VirtualFileSystem({
+    const fileSystem = new MemoryFileSystem({
       'index.ts': '',
       'components/Button/index.tsx': '',
       'components/Link.tsx': '',
@@ -113,7 +113,7 @@ describe('file system', () => {
   })
 
   test('filters out index and readme from entries by default', async () => {
-    const fileSystem = new VirtualFileSystem({
+    const fileSystem = new MemoryFileSystem({
       'index.tsx': '',
       'README.mdx': '',
       'server.ts': '',
@@ -125,7 +125,7 @@ describe('file system', () => {
   })
 
   test('orders directory before its descendants by default', async () => {
-    const fileSystem = new VirtualFileSystem({
+    const fileSystem = new MemoryFileSystem({
       'Button/Button.tsx': '',
       'Button/IconButton.tsx': '',
     })
@@ -140,7 +140,7 @@ describe('file system', () => {
 
   test('filter entries', async () => {
     type PostType = { frontmatter: { title: string } }
-    const fileSystem = new VirtualFileSystem({
+    const fileSystem = new MemoryFileSystem({
       'posts/getting-started.mdx': '# Getting Started',
       'posts/meta.json': '{ "title": "Posts" }',
     })
@@ -168,7 +168,7 @@ describe('file system', () => {
   })
 
   test('filter entries with file exports that have internal tags', async () => {
-    const fileSystem = new VirtualFileSystem({
+    const fileSystem = new MemoryFileSystem({
       'Button.tsx': '/** @internal */ export const Button = () => {}',
       'Link.tsx': 'export const Link = () => {}',
     })
@@ -197,7 +197,7 @@ describe('file system', () => {
   })
 
   test('sort entries', async () => {
-    const fileSystem = new VirtualFileSystem({
+    const fileSystem = new MemoryFileSystem({
       'foo.ts': '',
       'bar.ts': '',
     })
@@ -215,7 +215,7 @@ describe('file system', () => {
   })
 
   test('filter and sort entries', async () => {
-    const fileSystem = new VirtualFileSystem({
+    const fileSystem = new MemoryFileSystem({
       'foo.ts': 'const sort = 2',
       'bar.ts': 'const sort = 1',
     })
@@ -261,7 +261,7 @@ describe('file system', () => {
   })
 
   test('deduplicates entries', async () => {
-    const fileSystem = new VirtualFileSystem({
+    const fileSystem = new MemoryFileSystem({
       'Button.tsx': '',
       'Button.mdx': '',
       'CodeBlock/CodeBlock.tsx': '',
@@ -284,7 +284,7 @@ describe('file system', () => {
   })
 
   test('excludes entries based on tsconfig', async () => {
-    const fileSystem = new VirtualFileSystem({
+    const fileSystem = new MemoryFileSystem({
       'Button/Button.tsx': '',
       'Button/examples/BasicUsage.tsx': '',
       'CodeBlock.tsx': '',
@@ -412,7 +412,7 @@ describe('file system', () => {
   })
 
   test('finds file with specific extension starting at directory', async () => {
-    const fileSystem = new VirtualFileSystem({
+    const fileSystem = new MemoryFileSystem({
       'PackageInstall/index.ts': '',
       'PackageInstall/PackageInstall.mdx': '',
       'PackageInstall/PackageInstall.tsx': '',
@@ -425,7 +425,7 @@ describe('file system', () => {
   })
 
   test('removes order prefix from file name and path', async () => {
-    const fileSystem = new VirtualFileSystem({
+    const fileSystem = new MemoryFileSystem({
       '01.server.ts': '',
     })
     const directory = new Directory({ fileSystem })
@@ -438,7 +438,7 @@ describe('file system', () => {
   })
 
   test('deduplicate file path segments', async () => {
-    const fileSystem = new VirtualFileSystem({
+    const fileSystem = new MemoryFileSystem({
       'Button/Button.tsx': '',
     })
     const directory = new Directory({ fileSystem })
@@ -465,7 +465,7 @@ describe('file system', () => {
   })
 
   test('all virtual file exports', async () => {
-    const fileSystem = new VirtualFileSystem({
+    const fileSystem = new MemoryFileSystem({
       'use-hover.ts': 'export const useHover = () => {}',
     })
     const rootDirectory = new Directory({ fileSystem })
@@ -488,7 +488,7 @@ describe('file system', () => {
   })
 
   test('single virtual file export', async () => {
-    const fileSystem = new VirtualFileSystem({
+    const fileSystem = new MemoryFileSystem({
       'use-hover.ts': 'export const useHover = () => {}',
     })
     const rootDirectory = new Directory<{
@@ -516,7 +516,7 @@ describe('file system', () => {
   })
 
   test('file export schema', async () => {
-    const fileSystem = new VirtualFileSystem({
+    const fileSystem = new MemoryFileSystem({
       'index.ts': 'export const metadata = 1',
     })
     const directory = new Directory<{
@@ -554,7 +554,7 @@ describe('file system', () => {
   })
 
   test('schema transforms export value', async () => {
-    const fileSystem = new VirtualFileSystem({
+    const fileSystem = new MemoryFileSystem({
       'hello-world.ts': `export const metadata = { title: 'Hello, World!', date: '2022-01-01' }`,
     })
     const metadataSchema = z.object({
@@ -593,7 +593,7 @@ describe('file system', () => {
   })
 
   test('file export metadata', async () => {
-    const fileSystem = new VirtualFileSystem({
+    const fileSystem = new MemoryFileSystem({
       'index.ts': `/**\n * Say hello.\n * @category greetings\n */\nexport default function hello() {}`,
     })
     const directory = new Directory({ fileSystem })
@@ -609,7 +609,7 @@ describe('file system', () => {
   })
 
   test('barrel file export metadata', async () => {
-    const fileSystem = new VirtualFileSystem({
+    const fileSystem = new MemoryFileSystem({
       'index.ts': `export { Button } from './Button.tsx'`,
       'Button.tsx': `/**\n * A button component.\n * @category components\n */\nexport function Button() {}`,
     })
@@ -622,7 +622,7 @@ describe('file system', () => {
   })
 
   test('file export type reference', async () => {
-    const fileSystem = new VirtualFileSystem({
+    const fileSystem = new MemoryFileSystem({
       'index.ts': 'export type Metadata = { title: string }',
     })
     const directory = new Directory({ fileSystem })
@@ -684,7 +684,7 @@ describe('file system', () => {
   })
 
   test('attempts to load index file when targeting directory path', async () => {
-    const fileSystem = new VirtualFileSystem({
+    const fileSystem = new MemoryFileSystem({
       'fixtures/project/index.ts': 'export const project = 1',
     })
     const rootDirectory = new Directory({ fileSystem })
@@ -694,7 +694,7 @@ describe('file system', () => {
   })
 
   test('attempts to load readme file when targeting directory path', async () => {
-    const fileSystem = new VirtualFileSystem({
+    const fileSystem = new MemoryFileSystem({
       'fixtures/project/README.mdx': '# Project',
     })
     const projectDirectory = new Directory({ path: 'fixtures', fileSystem })
@@ -722,7 +722,7 @@ describe('file system', () => {
   })
 
   test('generates sibling navigation from index as directory', async () => {
-    const fileSystem = new VirtualFileSystem({
+    const fileSystem = new MemoryFileSystem({
       'components/index.ts': '',
       'utils/index.ts': '',
     })
@@ -827,7 +827,7 @@ describe('file system', () => {
   })
 
   test('uses file name for anonymous default export metadata', async () => {
-    const fileSystem = new VirtualFileSystem({
+    const fileSystem = new MemoryFileSystem({
       'index.ts': `export default function () {}`,
     })
     const directory = new Directory({ fileSystem })
@@ -838,7 +838,7 @@ describe('file system', () => {
   })
 
   test('isDirectory', async () => {
-    const fileSystem = new VirtualFileSystem({
+    const fileSystem = new MemoryFileSystem({
       'Button/index.ts': '',
       'Button/Button.tsx': '',
       'Button/README.mdx': '',
@@ -877,7 +877,7 @@ describe('file system', () => {
 
   test('isFile', async () => {
     type Metadata = { title: string }
-    const fileSystem = new VirtualFileSystem({ 'Button.tsx': '' })
+    const fileSystem = new MemoryFileSystem({ 'Button.tsx': '' })
     const directory = new Directory<{ tsx: Metadata }>({ fileSystem })
     const file = await directory.getFileOrThrow('Button')
     const hasTsxExtension = isFile(file, 'tsx')
@@ -892,7 +892,7 @@ describe('file system', () => {
   test('isFile array', async () => {
     type Metadata = { title: string }
     type FileTypes = { ts: Metadata; tsx: Metadata }
-    const fileSystem = new VirtualFileSystem({ 'Button.tsx': '' })
+    const fileSystem = new MemoryFileSystem({ 'Button.tsx': '' })
     const directory = new Directory<FileTypes>({ fileSystem })
     const file = await directory.getFileOrThrow('Button')
     const hasTsLikeExtension = isFile(file, ['ts', 'tsx'])
@@ -913,7 +913,7 @@ describe('file system', () => {
   })
 
   test('entry group', async () => {
-    const memoryFileSystem = new VirtualFileSystem({
+    const memoryFileSystem = new MemoryFileSystem({
       'posts/building-a-button-component.mdx': '# Building a Button Component',
       'posts/meta.js': 'export default { "title": "Posts" }',
     })
@@ -965,7 +965,7 @@ describe('file system', () => {
   })
 
   test('getSiblings in entry group', async () => {
-    const fileSystem = new VirtualFileSystem({
+    const fileSystem = new MemoryFileSystem({
       'docs/intro.mdx': '',
       'docs/next-steps.mdx': '',
       'guides/intro.mdx': '',
@@ -998,7 +998,7 @@ describe('file system', () => {
   })
 
   test('multiple extensions in entry group', async () => {
-    const fileSystem = new VirtualFileSystem({
+    const fileSystem = new MemoryFileSystem({
       'components/Button.mdx': '',
       'components/Button.tsx': '',
     })
@@ -1027,10 +1027,10 @@ describe('file system', () => {
 
   test('same base file name in entry group with root directories', async () => {
     const directoryOne = new Directory({
-      fileSystem: new VirtualFileSystem({ 'components/Button.tsx': '' }),
+      fileSystem: new MemoryFileSystem({ 'components/Button.tsx': '' }),
     })
     const directoryTwo = new Directory({
-      fileSystem: new VirtualFileSystem({ 'docs/Button.mdx': '' }),
+      fileSystem: new MemoryFileSystem({ 'docs/Button.mdx': '' }),
     })
     const entryGroup = new EntryGroup({
       entries: [directoryOne, directoryTwo],
@@ -1054,7 +1054,7 @@ describe('file system', () => {
     type TSXTypes = { metadata: { title: string } }
 
     const directoryA = new Directory<{ mdx: MDXTypes }>({
-      fileSystem: new VirtualFileSystem({ 'Button.mdx': '' }),
+      fileSystem: new MemoryFileSystem({ 'Button.mdx': '' }),
     })
     const directoryB = new Directory<{ tsx: TSXTypes }>('fixtures/components')
     const group = new EntryGroup({

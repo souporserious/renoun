@@ -28,8 +28,8 @@ interface FileSystemOptions {
   /** The unique identifier for the TypeScript project. */
   projectId?: string
 
-  /** Whether the file system is virtual. */
-  isVirtualFileSystem?: boolean
+  /** Whether or not the file system is in-memory. */
+  isMemoryFileSystem?: boolean
 }
 
 export abstract class FileSystem {
@@ -43,8 +43,8 @@ export abstract class FileSystem {
     this.#tsConfigPath = options.tsConfigPath || 'tsconfig.json'
     this.#projectOptions = {
       projectId: options.projectId,
-      useInMemoryFileSystem: options.isVirtualFileSystem,
-      tsConfigFilePath: options.isVirtualFileSystem
+      useInMemoryFileSystem: options.isMemoryFileSystem,
+      tsConfigFilePath: options.isMemoryFileSystem
         ? undefined
         : this.#tsConfigPath,
     }

@@ -21,7 +21,7 @@ export async function resolveTypeAtLocation(
   position: number,
   kind: SyntaxKind,
   filter?: SymbolFilter,
-  isVirtualFileSystem = false
+  isMemoryFileSystem = false
 ) {
   const typeId = `${filePath}:${position}:${kind}`
   const sourceFile = project.addSourceFileAtPath(filePath)
@@ -43,8 +43,8 @@ export async function resolveTypeAtLocation(
   const exportDeclaration = declaration.getFirstAncestorByKindOrThrow(kind)
   const exportDeclarationType = exportDeclaration.getType()
 
-  if (isVirtualFileSystem) {
-    // Skip dependency tracking and caching for virtual file systems
+  if (isMemoryFileSystem) {
+    // Skip dependency tracking and caching for memory file systems
     return resolveType(
       exportDeclarationType,
       exportDeclaration,

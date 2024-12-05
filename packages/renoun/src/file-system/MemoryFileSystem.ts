@@ -6,8 +6,8 @@ import { isJavaScriptLikeExtension } from './is-javascript-like-extension.js'
 import { FileSystem } from './FileSystem.js'
 import type { DirectoryEntry } from './types.js'
 
-/** A virtual file system that stores files in memory. */
-export class VirtualFileSystem extends FileSystem {
+/** A file system that stores files in memory. */
+export class MemoryFileSystem extends FileSystem {
   #projectId: string
   #files: Map<string, string>
   #ignore: ReturnType<typeof ignore> | undefined
@@ -17,7 +17,7 @@ export class VirtualFileSystem extends FileSystem {
 
     super({
       projectId,
-      isVirtualFileSystem: true,
+      isMemoryFileSystem: true,
     })
 
     this.#projectId = projectId
