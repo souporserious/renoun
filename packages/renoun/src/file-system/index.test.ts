@@ -351,12 +351,23 @@ describe('file system', () => {
 
   test('nested file', async () => {
     const rootDirectory = new Directory()
-    const nestedfile = await rootDirectory.getFile(
+    const nestedFile = await rootDirectory.getFile(
       'fixtures/project/rpc/server',
       'ts'
     )
 
-    expect(nestedfile).toBeInstanceOf(File)
+    expect(nestedFile).toBeInstanceOf(File)
+
+    const missingNestedFile = await new Directory({
+      path: 'components',
+      fileSystem: new MemoryFileSystem({
+        'components/CodeBlock/CodeBlock.tsx': '',
+        'components/CodeBlock/CodeBlock.mdx': '',
+        'components/CodeBlock/CopyButton.tsx': '',
+      }),
+    }).getFile(['CodeBlock', 'CopyButton'], 'mdx')
+
+    expect(missingNestedFile).toBeUndefined()
   })
 
   test('index file', async () => {

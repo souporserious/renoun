@@ -913,9 +913,9 @@ export class Directory<
       ? path.slice(0)
       : path.split('/').filter(Boolean)
     let currentDirectory: Directory<Types> = this as Directory<Types>
-    let entry: FileSystemEntry<Types> | undefined
 
     while (segments.length > 0) {
+      let entry: FileSystemEntry<Types> | undefined
       const currentSegment = segments.shift()
       const allEntries = await currentDirectory.getEntries({
         includeDuplicates: true,
@@ -946,7 +946,7 @@ export class Directory<
       }
 
       if (!entry) {
-        return undefined
+        return
       }
 
       // If this is the last segment, check for file or extension match
@@ -999,18 +999,18 @@ export class Directory<
           }
         }
 
-        return undefined
+        return
       }
 
       // If the entry is a directory, continue with the next segment
       if (entry instanceof Directory) {
         currentDirectory = entry
       } else {
-        return undefined
+        return
       }
     }
 
-    return undefined
+    return
   }
 
   /**
