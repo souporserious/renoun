@@ -1,5 +1,3 @@
-import { notFound } from 'next/navigation'
-
 import { CollectionGroup, DocsCollection } from '@/collections'
 import { DocumentEntry } from '@/components/DocumentEntry'
 
@@ -16,14 +14,7 @@ export default async function Doc({
 }: {
   params: Promise<{ slug: string[] }>
 }) {
-  const file = await DocsCollection.getFile(
-    ['docs', ...(await params).slug],
-    'mdx'
-  )
-
-  if (!file) {
-    notFound()
-  }
+  const file = await DocsCollection.getFileOrThrow((await params).slug, 'mdx')
 
   return <DocumentEntry file={file} entryGroup={CollectionGroup} />
 }

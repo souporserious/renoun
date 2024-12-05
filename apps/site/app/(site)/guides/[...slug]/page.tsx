@@ -1,5 +1,3 @@
-import { notFound } from 'next/navigation'
-
 import { CollectionGroup, GuidesCollection } from '@/collections'
 import { DocumentEntry } from '@/components/DocumentEntry'
 
@@ -16,14 +14,7 @@ export default async function Guide({
 }: {
   params: Promise<{ slug: string[] }>
 }) {
-  const file = await GuidesCollection.getFile(
-    ['guides', ...(await params).slug],
-    'mdx'
-  )
-
-  if (!file) {
-    notFound()
-  }
+  const file = await GuidesCollection.getFileOrThrow((await params).slug, 'mdx')
 
   return <DocumentEntry file={file} entryGroup={CollectionGroup} />
 }
