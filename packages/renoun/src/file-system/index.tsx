@@ -920,6 +920,7 @@ export class Directory<
       const allEntries = await currentDirectory.getEntries({
         includeDuplicates: true,
         includeIndexAndReadme: true,
+        includeTsConfigIgnoredFiles: true,
       })
 
       // Find the entry matching the current segment
@@ -1065,6 +1066,7 @@ export class Directory<
       const currentSegment = segments.shift()
       const allEntries = await currentDirectory.getEntries({
         includeDuplicates: true,
+        includeTsConfigIgnoredFiles: true,
       })
       let entry: FileSystemEntry<Types> | undefined
 
@@ -1123,8 +1125,6 @@ export class Directory<
     if (directory) {
       return directory
     }
-
-    return undefined
   }
 
   /** Get a file or directory at the specified `path`. An error will be thrown if the entry is not found. */
@@ -1151,6 +1151,8 @@ export class Directory<
     recursive?: boolean
     includeIndexAndReadme?: boolean
     includeDuplicates?: boolean
+    includeGitIgnoredFiles?: boolean
+    includeTsConfigIgnoredFiles?: boolean
   }): Promise<Entry[]> {
     const fileSystem = this.getFileSystem()
     const directoryEntries = await fileSystem.readDirectory(this.#path)
@@ -1168,8 +1170,13 @@ export class Directory<
 
       if (
         shouldSkipIndexOrReadme ||
-        fileSystem.isFilePathGitIgnored(entry.path) ||
-        fileSystem.isFilePathExcludedFromTsConfig(entry.path, entry.isDirectory)
+        (!options?.includeGitIgnoredFiles &&
+          fileSystem.isFilePathGitIgnored(entry.path)) ||
+        (!options?.includeTsConfigIgnoredFiles &&
+          fileSystem.isFilePathExcludedFromTsConfig(
+            entry.path,
+            entry.isDirectory
+          ))
       ) {
         continue
       }

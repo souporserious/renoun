@@ -46,7 +46,7 @@ export default async function Component({
     ? isDirectory(examplesEntry)
       ? await examplesEntry
           .withFilter((entry) => isFile(entry, 'tsx'))
-          .getEntries()
+          .getEntries({ includeTsConfigIgnoredFiles: true })
       : isFile(examplesEntry, 'tsx')
         ? [examplesEntry]
         : null
