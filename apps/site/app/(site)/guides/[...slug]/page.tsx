@@ -16,9 +16,12 @@ export default async function Guide({
 }: {
   params: Promise<{ slug: string[] }>
 }) {
-  const file = await CollectionGroup.getFile(['guides', ...(await params).slug])
+  const file = await GuidesCollection.getFile(
+    ['guides', ...(await params).slug],
+    'mdx'
+  )
 
-  if (!GuidesCollection.hasEntry(file)) {
+  if (!file) {
     notFound()
   }
 
