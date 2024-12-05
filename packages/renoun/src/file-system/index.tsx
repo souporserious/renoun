@@ -680,7 +680,7 @@ export type ExtensionSchemas<Types extends ExtensionTypes> = {
 }
 
 /** The options for a `Directory`. */
-interface DirectoryOptions<Types extends ExtensionTypes = ExtensionTypes> {
+interface DirectoryOptions {
   /** The path to the directory in the file system. */
   path?: string
 
@@ -714,7 +714,7 @@ export class Directory<
     | ((entry: FileSystemEntry<Types, HasModule>) => Promise<boolean> | boolean)
 
   constructor(path?: string)
-  constructor(path?: DirectoryOptions<Types>)
+  constructor(path?: DirectoryOptions)
   constructor(path?: any) {
     if (path === undefined) {
       this.#path = '.'
@@ -733,7 +733,7 @@ export class Directory<
       Types,
       HasModule
     >,
-  >(options?: DirectoryOptions<Types>): Directory<Types, HasModule, Entry> {
+  >(options?: DirectoryOptions): Directory<Types, HasModule, Entry> {
     const directory = new Directory<Types, HasModule, Entry>({
       path: this.#path,
       fileSystem: this.#fileSystem,
