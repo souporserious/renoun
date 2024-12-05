@@ -26,16 +26,28 @@ export function getFileExports(
     sourceFile = project.addSourceFileAtPath(filePath)
   }
 
-  return Array.from(sourceFile.getExportedDeclarations()).flatMap(
-    ([name, declarations]) => {
-      return declarations.map((declaration) => ({
-        name,
-        path: declaration.getSourceFile().getFilePath(),
-        position: declaration.getPos(),
-        kind: declaration.getKind(),
-      }))
+  const exportDeclarations = []
+
+  for (const [name, declarations] of sourceFile.getExportedDeclarations()) {
+    for (const declaration of declarations) {
+      const isExportable = tsMorph.Node.isExportable(
+        tsMorph.Node.isVariableDeclaration(declaration)
+          ? declaration.getParentOrThrow().getParent()
+          : declaration
+      )
+
+      if (isExportable) {
+        exportDeclarations.push({
+          name,
+          path: declaration.getSourceFile().getFilePath(),
+          position: declaration.getPos(),
+          kind: declaration.getKind(),
+        })
+      }
     }
-  )
+  }
+
+  return exportDeclarations
 }
 
 /** Returns metadata about a specific export of a file. */

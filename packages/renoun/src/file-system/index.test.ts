@@ -477,6 +477,16 @@ describe('file system', () => {
     expect(fileExports).toMatchObject([{ name: 'useHover' }])
   })
 
+  test('deduplicates file exports', async () => {
+    const directory = new Directory('fixtures')
+    const file = await directory.getFileOrThrow('components/CodeBlock', 'tsx')
+    const fileExports = await file.getExports()
+
+    expect(fileExports.map((fileExport) => fileExport.getName())).toStrictEqual(
+      ['CodeBlock']
+    )
+  })
+
   test('single virtual file export', async () => {
     const fileSystem = new VirtualFileSystem({
       'use-hover.ts': 'export const useHover = () => {}',
