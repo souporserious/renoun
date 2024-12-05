@@ -1,4 +1,4 @@
-import { CSSProperties } from 'react'
+import type { CSSProperties } from 'react'
 
 import { createContext } from '../../utils/context.js'
 import type { getTokens } from '../../utils/get-tokens.js'

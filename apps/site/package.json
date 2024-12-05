@@ -1,6 +1,7 @@
 {
   "private": true,
   "name": "@apps/site",
+  "type": "module",
   "scripts": {
     "dev": "renoun next dev",
     "build": "node ../../packages/renoun/dist/cli next build",

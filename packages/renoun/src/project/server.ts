@@ -17,7 +17,7 @@ import { resolveTypeAtLocation as baseResolveTypeAtLocation } from '../utils/res
 import { transpileSourceFile as baseTranspileSourceFile } from '../utils/transpile-source-file.js'
 import { WebSocketServer } from './rpc/server.js'
 import { getProject } from './get-project.js'
-import { ProjectOptions } from './types.js'
+import type { ProjectOptions } from './types.js'
 
 const DEFAULT_IGNORED_PATTERNS = [
   '.git',
