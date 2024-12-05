@@ -11,9 +11,13 @@ const steps = [
     code: `import { Directory } from 'renoun/file-system'
 import type { MDXContent } from 'renoun/mdx'
 
-const posts = new Directory<{ mdx: { default: MDXContent } }>({
-  path: 'posts'
-})`,
+interface PostTypes {
+  mdx: {
+    default: MDXContent
+  }
+}
+
+const posts = new Directory<PostTypes>('posts')`,
   },
   {
     title: 'Render',
@@ -21,12 +25,17 @@ const posts = new Directory<{ mdx: { default: MDXContent } }>({
     code: `import { Directory } from 'renoun/file-system'
 import type { MDXContent } from 'renoun/mdx'
 
-const posts = new Directory<{ mdx: { default: MDXContent } }>({
-  path: 'posts',
-}).withModule((path) => import(\`./posts/\${path}\`))
+interface PostTypes {
+  mdx: {
+    default: MDXContent
+  }
+}
+
+const posts = new Directory<PostTypes>('posts').withModule((path) => import(\`./posts/\${path}\`))
 
 export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
-  const post = await posts.getFile((await params).slug, 'mdx')
+  const slug = (await params).slug
+  const post = await posts.getFile(slug, 'mdx')
 
   if (!post) {
     return <div>Post not found</div>
@@ -37,7 +46,7 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
   return <Content />
 }`,
     codeBlockProps: {
-      focusedLines: '6,9-23',
+      focusedLines: '10-30',
     },
   },
   {
