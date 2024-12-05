@@ -19,8 +19,8 @@ export const posts = new Directory<{ mdx: PostType }>('posts')
   .withModule((path) => import(`./posts/${path}`))
   .withFilter((entry) => isFile(entry, 'mdx'))
   .withSort(async (a, b) => {
-    const aFrontmatter = await a.getExport('frontmatter').getRuntimeValue()
-    const bFrontmatter = await b.getExport('frontmatter').getRuntimeValue()
+    const aFrontmatter = await a.getExportValueOrThrow('frontmatter')
+    const bFrontmatter = await b.getExportValueOrThrow('frontmatter')
 
     return bFrontmatter.date.getTime() - aFrontmatter.date.getTime()
   })
