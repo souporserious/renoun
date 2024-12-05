@@ -13,9 +13,11 @@ const directory = new Directory('path/to/directory')
 For more advanced use cases, you can still specify the `options`:
 
 ```ts
-import { Directory, VirtualFileSystem } from 'renoun/file-system'
+import { Directory, MemoryFileSystem } from 'renoun/file-system'
 
-const fileSystem = new VirtualFileSystem()
+const fileSystem = new MemoryFileSystem({
+  'Button.tsx': 'export const Button = () => {}',
+})
 const directory = new Directory({
   path: 'path/to/directory',
   fileSystem,
