@@ -1,6 +1,8 @@
 import ignore from 'ignore'
+import * as tsMorph from 'ts-morph'
 
 import { createSourceFile, transpileSourceFile } from '../project/client.js'
+import type { ProjectOptions } from '../project/types.js'
 import { joinPaths } from '../utils/path.js'
 import { isJavaScriptLikeExtension } from './is-javascript-like-extension.js'
 import { FileSystem } from './FileSystem.js'
@@ -8,19 +10,22 @@ import type { DirectoryEntry } from './types.js'
 
 /** A file system that stores files in memory. */
 export class MemoryFileSystem extends FileSystem {
-  #projectId: string
+  #projectOptions: ProjectOptions
   #files: Map<string, string>
   #ignore: ReturnType<typeof ignore> | undefined
 
   constructor(files: { [path: string]: string }) {
     const projectId = generateProjectId()
 
-    super({
-      projectId,
-      isMemoryFileSystem: true,
-    })
+    super()
 
-    this.#projectId = projectId
+    this.#projectOptions = {
+      projectId: projectId,
+      useInMemoryFileSystem: true,
+      compilerOptions: {
+        module: tsMorph.ts.ModuleKind.CommonJS,
+      },
+    }
     this.#files = new Map(
       Object.entries(files).map(([path, content]) => [
         path.startsWith('.') ? path : `./${path}`,
@@ -28,23 +33,21 @@ export class MemoryFileSystem extends FileSystem {
       ])
     )
 
-    // Create a TypeScript source file for each file
+    // Create a TypeScript source file for each JavaScript-like file
     for (const [path, content] of this.#files) {
       const extension = path.split('.').at(-1)
       if (extension && isJavaScriptLikeExtension(extension)) {
-        createSourceFile(path, content, {
-          projectId: projectId,
-          useInMemoryFileSystem: true,
-        })
+        createSourceFile(path, content, this.#projectOptions)
       }
     }
   }
 
+  getProjectOptions() {
+    return this.#projectOptions
+  }
+
   transpileFile(path: string) {
-    return transpileSourceFile(path, {
-      projectId: this.#projectId,
-      useInMemoryFileSystem: true,
-    })
+    return transpileSourceFile(path, this.#projectOptions)
   }
 
   getAbsolutePath(path: string) {

@@ -5,12 +5,25 @@ import ignore from 'ignore'
 
 import { getRootDirectory } from '../utils/get-root-directory.js'
 import { ensureRelativePath } from '../utils/path.js'
-import { FileSystem } from './FileSystem.js'
+import { FileSystem, type FileSystemOptions } from './FileSystem.js'
 import type { DirectoryEntry } from './types.js'
 
 let ignoreManager: ReturnType<typeof ignore>
 
 export class NodeFileSystem extends FileSystem {
+  #tsConfigPath: string
+
+  constructor(options: FileSystemOptions = {}) {
+    super(options)
+    this.#tsConfigPath = options.tsConfigPath || 'tsconfig.json'
+  }
+
+  getProjectOptions() {
+    return {
+      tsConfigFilePath: this.#tsConfigPath,
+    }
+  }
+
   getAbsolutePath(path: string): string {
     return resolve(path)
   }

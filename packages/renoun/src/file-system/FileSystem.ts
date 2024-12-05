@@ -18,37 +18,25 @@ import {
 import type { SymbolFilter } from '../utils/resolve-type.js'
 import type { DirectoryEntry } from './types.js'
 
-interface FileSystemOptions {
+export interface FileSystemOptions {
   /** Root path to use when reading files. */
   rootPath?: string
 
   /** Path to the tsconfig.json file to use when analyzing types and determining if a file is excluded. */
   tsConfigPath?: string
-
-  /** The unique identifier for the TypeScript project. */
-  projectId?: string
-
-  /** Whether or not the file system is in-memory. */
-  isMemoryFileSystem?: boolean
 }
 
 export abstract class FileSystem {
   #rootPath: string
   #tsConfigPath: string
   #tsConfig?: any
-  #projectOptions: ProjectOptions
 
   constructor(options: FileSystemOptions = {}) {
     this.#rootPath = options.rootPath || '/'
     this.#tsConfigPath = options.tsConfigPath || 'tsconfig.json'
-    this.#projectOptions = {
-      projectId: options.projectId,
-      useInMemoryFileSystem: options.isMemoryFileSystem,
-      tsConfigFilePath: options.isMemoryFileSystem
-        ? undefined
-        : this.#tsConfigPath,
-    }
   }
+
+  abstract getProjectOptions(): ProjectOptions
 
   abstract getAbsolutePath(path: string): string
 
@@ -133,7 +121,7 @@ export abstract class FileSystem {
   abstract isFilePathGitIgnored(filePath: string): boolean
 
   getFileExports(filePath: string) {
-    return getFileExports(filePath, this.#projectOptions)
+    return getFileExports(filePath, this.getProjectOptions())
   }
 
   getFileExportMetadata(
@@ -147,7 +135,7 @@ export abstract class FileSystem {
       filePath,
       position,
       kind,
-      this.#projectOptions
+      this.getProjectOptions()
     )
   }
 
@@ -162,7 +150,7 @@ export abstract class FileSystem {
       position,
       kind,
       filter,
-      this.#projectOptions
+      this.getProjectOptions()
     )
   }
 }

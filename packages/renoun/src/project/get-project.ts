@@ -8,7 +8,7 @@ import {
   startRefreshingProjects,
 } from './refresh.js'
 import { resolvedTypeCache } from '../utils/resolve-type-at-location.js'
-import { ProjectOptions } from './types.js'
+import type { ProjectOptions } from './types.js'
 
 const projects = new Map<string, Project>()
 
@@ -33,18 +33,19 @@ export function getProject(options?: ProjectOptions) {
   const project = new Project({
     compilerOptions: {
       allowJs: true,
-      resolveJsonModule: true,
       esModuleInterop: true,
+      isolatedModules: true,
+      resolveJsonModule: true,
       moduleResolution: ts.ModuleResolutionKind.Bundler,
       jsx: ts.JsxEmit.ReactJSX,
-      module: ts.ModuleKind.CommonJS,
+      module: ts.ModuleKind.ESNext,
       target: ts.ScriptTarget.ESNext,
-      isolatedModules: true,
+      ...options?.compilerOptions,
     },
     tsConfigFilePath: options?.useInMemoryFileSystem
       ? undefined
-      : 'tsconfig.json',
-    ...options,
+      : (options?.tsConfigFilePath ?? 'tsconfig.json'),
+    useInMemoryFileSystem: options?.useInMemoryFileSystem,
   })
   const projectDirectory = options?.tsConfigFilePath
     ? resolve(dirname(options.tsConfigFilePath))
