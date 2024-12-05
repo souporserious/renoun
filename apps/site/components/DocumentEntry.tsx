@@ -22,15 +22,9 @@ export async function DocumentEntry({
   shouldRenderTableOfContents?: boolean
   shouldRenderUpdatedAt?: boolean
 }) {
-  const Content = await (
-    await file.getExportOrThrow('default')
-  ).getRuntimeValue()
-  const metadata = await (
-    await file.getExportOrThrow('metadata')
-  ).getRuntimeValue()
-  const headings = await (
-    await file.getExportOrThrow('headings')
-  ).getRuntimeValue()
+  const Content = await file.getExportValueOrThrow('default')
+  const metadata = await file.getExportValueOrThrow('metadata')
+  const headings = await file.getExportValueOrThrow('headings')
   const updatedAt = shouldRenderUpdatedAt ? await file.getUpdatedAt() : null
   const editPath = file.getEditPath()
   const [previousFile, nextFile] = await file.getSiblings({ entryGroup })

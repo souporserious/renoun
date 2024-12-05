@@ -29,7 +29,7 @@ export default async function Component({
 
   const componentDirectory = isDirectory(componentEntry)
     ? componentEntry
-    : await componentEntry.getDirectory()
+    : componentEntry.getParentDirectory()
   const mainEntry =
     (await componentDirectory.getFile(slug, ['ts', 'tsx'])) ||
     (await componentDirectory.getFile('index', ['ts', 'tsx']))
@@ -45,9 +45,7 @@ export default async function Component({
     : null
   const isExamplesPage = slug.at(-1) === 'examples'
   const readmeFile = await componentDirectory.getFileOrThrow('README', 'mdx')
-  const Readme = await (
-    await readmeFile.getExportOrThrow('default')
-  ).getRuntimeValue()
+  const Readme = await readmeFile.getExportValue('default')
   const updatedAt = await componentEntry.getUpdatedAt()
   const editPath = componentEntry.getEditPath()
   const [previousEntry, nextEntry] = await componentEntry.getSiblings()

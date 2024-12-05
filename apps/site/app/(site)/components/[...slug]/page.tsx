@@ -34,10 +34,8 @@ export default async function Component({
   }
 
   const mdxFile = await ComponentsCollection.getFile(slug, 'mdx')
-  const mdxHeadings = await (
-    await mdxFile?.getExport('headings')
-  )?.getRuntimeValue()
-  const Content = await (await mdxFile?.getExport('default'))?.getRuntimeValue()
+  const mdxHeadings = await mdxFile?.getExportValue('headings')
+  const Content = await mdxFile?.getExportValue('default')
   const componentDirectory = isDirectory(componentEntry)
     ? componentEntry
     : componentEntry.getParentDirectory()

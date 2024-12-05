@@ -685,6 +685,19 @@ describe('file system', () => {
     expect(basename('/path/to/file.ts', '.ts')).toBe('file')
   })
 
+  test('getExportValue', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'index.ts': 'export const metadata = { title: "Hello, World!" }',
+    })
+    const directory = new Directory({ fileSystem }).withModule(async () => {
+      return { metadata: { title: 'Hello, World!' } }
+    })
+    const file = await directory.getFileOrThrow('index', 'ts')
+    const fileExport = await file.getExportValueOrThrow('metadata')
+
+    expect(fileExport).toMatchObject({ title: 'Hello, World!' })
+  })
+
   test('uses first file found when no file extension present', async () => {
     const projectDirectory = new Directory('fixtures/project')
     const file = await projectDirectory.getFile('server')

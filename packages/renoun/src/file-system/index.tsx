@@ -623,6 +623,22 @@ export class JavaScriptFileWithRuntime<
     return super.getExportOrThrow(name) as any
   }
 
+  /** Get the runtime value of an export in the JavaScript file. */
+  async getExportValue<ExportName extends Extract<keyof Exports, string>>(
+    name: ExportName
+  ): Promise<Exports[ExportName] | undefined> {
+    const fileExport = await this.getExport(name)
+    return fileExport?.getRuntimeValue()
+  }
+
+  /** Get the runtime value of an export in the JavaScript file or throw an error if it does not exist. */
+  async getExportValueOrThrow<
+    ExportName extends Extract<keyof Exports, string>,
+  >(name: ExportName): Promise<Exports[ExportName]> {
+    const fileExport = await this.getExportOrThrow(name)
+    return fileExport.getRuntimeValue()
+  }
+
   /** Check if an export exists in the JavaScript file. */
   override async hasExport(name: string): Promise<boolean> {
     // First, attempt to statically analyze the export

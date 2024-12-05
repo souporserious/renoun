@@ -47,14 +47,14 @@ export default async function Page({
 }: {
   params: Promise<{ slug: string }>
 }) {
-  const post = await posts.getFile((await params).slug, 'mdx')
+  const slug = (await params).slug
+  const post = await posts.getFile(slug, 'mdx')
 
   if (!post) {
     return <div>Post not found</div>
   }
 
-  const defaultExport = await post.getExportOrThrow('default')
-  const Content = await defaultExport.getRuntimeValue()
+  const Content = await post.getExportValueOrThrow('default')
 
   return <Content />
 }
@@ -108,9 +108,7 @@ export default async function Page() {
       <ul>
         {allPosts.map(async (post) => {
           const path = post.getPath()
-          const frontmatter = await (
-            await post.getExportOrThrow('frontmatter')
-          ).getRuntimeValue()
+          const frontmatter = await post.getExportValueOrThrow('frontmatter')
 
           return (
             <li key={path}>
