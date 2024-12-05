@@ -39,7 +39,7 @@ export default function Page() {
             margin: 0,
           }}
         >
-          Docs You Will Actually Use
+          Documentation You Want To Use
         </h1>
         <p
           css={{
