@@ -1,26 +1,10 @@
-import resolvePackage from 'resolve'
-import { fileURLToPath } from 'node:url'
-import { dirname } from 'node:path'
-
+import { findPackageDependency } from './find-package-dependency.js'
 import { extensionName } from './path.js'
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
-
 /** Attempts to load a package if it is installed. */
-function loadPackage<Value>(name: string, getImport: () => any) {
-  return new Promise<Value>((resolve, reject) => {
-    resolvePackage(name, { basedir: __dirname }, function (error) {
-      if (error) {
-        // @ts-expect-error
-        if (error.code !== 'MODULE_NOT_FOUND') {
-          reject(error)
-        }
-      } else {
-        resolve(getImport())
-      }
-    })
-  })
+async function loadPackage<Value>(name: string, getImport: () => any) {
+  const hasPackage = await findPackageDependency(name)
+  return hasPackage ? (getImport() as Value) : null
 }
 
 const extensionToParser = {
