@@ -306,9 +306,32 @@ export class JavaScriptFileExport<
     return this.#metadata?.environment
   }
 
+  /** Get the text of the export. */
+  getText() {
+    return this.#metadata?.text
+  }
+
+  /** Get the start and end position of the export in the file system. */
+  getPosition() {
+    return this.#metadata?.location.position
+  }
+
   /** Get the export path to the editor in local development and the configured git repository in production. */
   getEditPath() {
-    // TODO: add position to the edit path as well
+    if (this.#metadata?.location) {
+      const location = this.#metadata.location
+      const filePath =
+        process.env.NODE_ENV === 'development'
+          ? this.#file.getAbsolutePath()
+          : location.filePath
+
+      return getEditPath(
+        filePath,
+        location.position.start.line,
+        location.position.start.column
+      )
+    }
+
     return getEditPath(this.#file.getAbsolutePath())
   }
 

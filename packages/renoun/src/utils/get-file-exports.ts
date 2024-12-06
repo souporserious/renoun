@@ -1,6 +1,7 @@
 import type { Node, Project } from 'ts-morph'
 import * as tsMorph from 'ts-morph'
 
+import { getDeclarationLocation } from './get-declaration-location.js'
 import { getJsDocMetadata } from './get-js-doc-metadata.js'
 
 export interface FileExport {
@@ -78,6 +79,8 @@ export async function getFileExportMetadata(
     ),
     environment: getEnvironment(exportDeclaration),
     jsDocMetadata: getJsDocMetadata(exportDeclaration),
+    location: getDeclarationLocation(exportDeclaration),
+    text: exportDeclaration.getText(),
   }
 }
 

@@ -613,8 +613,9 @@ describe('file system', () => {
   })
 
   test('file export metadata', async () => {
+    const statementText = 'export default function hello() {}'
     const fileSystem = new MemoryFileSystem({
-      'index.ts': `/**\n * Say hello.\n * @category greetings\n */\nexport default function hello() {}`,
+      'index.ts': `/**\n * Say hello.\n * @category greetings\n */\n${statementText}`,
     })
     const directory = new Directory({ fileSystem })
     const file = await directory.getFileOrThrow('index', 'ts')
@@ -626,6 +627,19 @@ describe('file system', () => {
     expect(fileExport.getTags()).toMatchObject([
       { tagName: 'category', text: 'greetings' },
     ])
+    expect(fileExport.getText()).toBe(statementText)
+    expect(fileExport.getPosition()).toMatchInlineSnapshot(`
+      {
+        "end": {
+          "column": 35,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      }
+    `)
   })
 
   test('barrel file export metadata', async () => {
