@@ -1,5 +1,217 @@
 # renoun
 
+## 7.8.0
+
+### Minor Changes
+
+- 0f069c5: Implements `<JavaScriptFile>.getExport` as an async method that now resolves the metadata of the export when it is initialized. This removes the need to `await` all methods like `getName`, `getDescription`, and `getTags`. Additionally, this adds a new `<JavaScriptFile>.hasExport` method for checking if the file has a specific export.
+- 9cf4499: Deprecates `Collection`, `CompositeCollection`, `isExportSource`, `isFileSystemSource`, and `isCollectionSource`. These will be removed in the next major version.
+
+  ### Updating to File System utilities
+
+  The `Collection` and `CompositeCollection` classes have been deprecated in favor of the new `renoun/file-system` utilities. The `isExportSource`, `isFileSystemSource`, and `isCollectionSource` functions have also been deprecated.
+
+  To update your code, replace any instances of `Collection` with `Directory` and `CompositeCollection` with `EntryGroup`. For example, the following code:
+
+  ```ts
+  import { Collection, CompositeCollection } from 'renoun/collections'
+
+  const docs = new Collection({
+    filePattern: '*.mdx',
+    baseDirectory: 'docs',
+  })
+  const components = new Collection({
+    filePattern: '*.{ts,tsx}',
+    baseDirectory: 'src/components',
+  })
+  const compositeCollection = new CompositeCollection(docs, components)
+  ```
+
+  should be replaced with:
+
+  ```ts
+  import { Directory, EntryGroup, isFile } from 'renoun/file-system'
+
+  const docs = new Directory({ path: 'docs' }).filter((entry) =>
+    isFile(entry, 'mdx')
+  )
+  const components = new Directory({ path: 'src/components' }).filter((entry) =>
+    isFile(entry, ['ts', 'tsx'])
+  )
+  const entryGroup = new EntryGroup({ entries: [docs, components] })
+  ```
+
+- 95e56e2: Adds `includeDuplicates` option to `<Directory>.getEntries` that is set to `false` by default. This option allows control over deduplicating entries with the same base name e.g. `Button.mdx` and `Button.tsx`.
+- 7d56e9a: Adds `getSlug` method to `Directory`, `File`, and `JavaScriptExport`.
+- 3419623: Adds `getExportValue` and `getExportValueOrThrow` methods to `JavaScriptFile` as a shortcut to getting an export's runtime value since this is a common use case.
+- 91d9b51: Removes `isFileWithExtension` and reimplements it within `isFile` which now allows an optional second `extension` argument.
+
+  ### Breaking Changes
+
+  To upgrade, replace all instances of `isFileWithExtension` with `isFile`. Previous usage of `isFile` will still work as expected.
+
+- 4279d19: Adds `includeDuplicateSegments` configuration option for `<File>.getPath` method that is set to `false` by default. This option allows including consecutive duplicate segments in the returned path.
+- 92c5dee: Enables passing `tsConfigPath` option to `Directory`.
+- 4f843e4: Adds `isJavaScriptFile` and `isJavaScriptFileWithRuntime` type guards for JavaScript-like files.
+- 50e094b: Adds `getPosition` and `getText` methods to `JavaScriptExport`.
+- c4d274c: Moves the `Directory` `getImport` option to `<Directory>.withModule`. This provides stronger types for inferring the `getRuntimeValue` method.
+
+  ### Breaking Changes
+
+  Update the `getImport` option to `withModule`:
+
+  ```diff
+  export const posts = new Directory<{ mdx: PostType }>({
+      path: 'posts',
+      schema: { mdx: { frontmatter: frontmatterSchema.parse } },
+  --    getImport: (path) => import(`./posts/${path}`),
+  })
+  ++  .withModule((path) => import(`./posts/${path}`))
+  ```
+
+- 87ce75d: Moves the `Directory` `schema` option to `<Directory>.withSchema`. This aligns with the other recent refactor of `Directory` options.
+
+  ### Breaking Changes
+
+  Update the `schema` option to `withSchema`:
+
+  ```diff
+  export const posts = new Directory<{ mdx: PostType }>({
+      path: 'posts',
+  --    schema: { mdx: { frontmatter: frontmatterSchema.parse } },
+  })
+  ++  .withSchema('mdx', { frontmatter: frontmatterSchema.parse })
+  ```
+
+- 46f0807: Moves the `Directory` `basePath` option to `<Directory>.withBasePath`. This aligns with the recent refactor of other `Directory` options.
+
+  ### Breaking Changes
+
+  Update the `basePath` option to `withBasePath`:
+
+  ```diff
+  export const posts = new Directory<{ mdx: PostType }>({
+      path: 'posts',
+  --    basePath: 'blog',
+  })
+  ++  .withBasePath('blog')
+  ```
+
+- 8252c4b: Adds `getTitle` method to `Directory` and `FileName` classes.
+- 2e7f458: Adds an `EntryGroup` utility to `renoun/file-system` that provides an interface for querying and navigating a group of entries:
+
+  ```ts
+  import { Directory, EntryGroup } from 'renoun/file-system'
+
+  interface FrontMatter {
+    title: string
+    description?: string
+    date: string
+    tags?: string[]
+  }
+
+  interface MDXType {
+    frontmatter: FrontMatter
+  }
+
+  const posts = new Directory<{ mdx: MDXType }>({
+    path: 'posts',
+  })
+  const docs = new Directory<{ mdx: MDXType }>({
+    path: 'docs',
+  })
+  const group = new EntryGroup({
+    entries: [posts, docs],
+  })
+  const entries = await group.getEntries()
+  ```
+
+  Sibling entries can be queried using the `getSiblings` method and passing the `EntryGroup` instance to get the siblings for. This is useful for querying siblings across sets of entries:
+
+  ```ts
+  const entry = await group.getEntryOrThrow('Button')
+  const siblings = await entry.getSiblings({ entryGroup: group })
+  ```
+
+  This also adds `hasEntry` and `hasFile` methods to `Directory` which can be used to check if an entry or file exists in an `EntryGroup`:
+
+  ```ts
+  type MDXTypes = { metadata: { title: string } }
+  type TSXTypes = { title: string }
+
+  const directoryA = new Directory<{ mdx: MDXTypes }>({
+    fileSystem: new VirtualFileSystem({ 'Button.mdx': '' }),
+  })
+  const directoryB = new Directory<{ tsx: TSXTypes }>({
+    path: 'fixtures/components',
+  })
+  const group = new EntryGroup({
+    entries: [directoryA, directoryB],
+  })
+  const entry = await group.getEntryOrThrow('Button')
+
+  if (directoryA.hasFile(entry, 'mdx')) {
+    entry // JavaScriptFile<MDXTypes>
+  }
+  ```
+
+- da0ca4a: Adds `getDepth` method to `Directory` and `File`.
+- 1d62855: Fixes ts config exclude paths not being respected when using a relative path.
+- be4c6ae: Normalizes the `<File>.getDirectory` method to return an async value similar to `Directory`.
+- 155f2e7: Renames file system methods `filter` to `withFilter` and `sort` to `withSort` for better clarity since they are not immediately applied.
+
+  ### Breaking Changes
+
+  - `<Directory>.filter` method is now `<Directory>.withFilter`
+  - `<Directory>.sort` method is now `<Directory>.withSort`
+
+- 6e599bb: Adds `includeGitIgnoredFiles` and `includeTsConfigIgnoredFiles` options to `<Directory>.getEntries`. These options allow you to include files that are ignored by `.gitignore` and `tsconfig.json` respectively.
+- 66f8289: Adds the ability to specify only the `path` when initializing a `Directory` instance since this is the most common use case:
+
+  ```ts
+  import { Directory } from 'renoun/file-system'
+
+  const directory = new Directory('path/to/directory')
+  ```
+
+  For more advanced use cases, you can still specify the `options`:
+
+  ```ts
+  import { Directory, MemoryFileSystem } from 'renoun/file-system'
+
+  const fileSystem = new MemoryFileSystem({
+    'Button.tsx': 'export const Button = () => {}',
+  })
+  const directory = new Directory({
+    path: 'path/to/directory',
+    fileSystem,
+  })
+  ```
+
+### Patch Changes
+
+- 20d3bc5: Fixes an issue in the `<Directory>.getFile` method where the `entry` variable was not reset in each iteration of the while loop. This caused incorrect file resolutions when searching for nested files.
+- c29192b: Fixes nested files being ordered before directory when using `<Directory>.getEntries`. Now the directory will be ordered first by default before its descendants.
+- ce32d36: Fixes analyzing barrel file exports.
+- bb20d7e: Fixes duplicate file exports being returned. This was specifically happening when a file export attached a member to the function implementation:
+
+  ```tsx
+  export function CodeBlock() {
+    // ...
+  }
+
+  CodeBlock.displayName = 'CodeBlock' // This caused the file to be exported twice
+  ```
+
+- 76b2c80: Fixes package import error if `prettier` is not installed.
+- 23aba08: Fixes `Directory` and `File` `getSiblings` method not using a unique identifier to find a matching entry.
+- 97799b3: Fixes `<Directory>.getFile` not considering extensions.
+- f2326fd: Fixes `<Directory>.getFile` not considering extension when provided and matching a directory.
+- 50d8760: Fixes `VirtualFileSystem` not respecting provided files order.
+- f011668: Fixes `isDirectory` type guard inference.
+- 3da8602: Fixes not being able to set tsconfig `compilerOptions` to use `verbatimModuleSyntax`.
+- c160fba: Fixes filtering of `Directory` entries based on tsconfig `exclude` field.
+
 ## 7.7.0
 
 ### Minor Changes
