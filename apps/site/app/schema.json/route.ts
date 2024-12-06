@@ -13,7 +13,10 @@ const themeSchema = z.union([
 ])
 
 const languagesSchema = z.enum(
-  bundledLanguagesInfo.map((language) => language.id) as [string]
+  bundledLanguagesInfo.flatMap((language) => [
+    language.id,
+    ...(language.aliases ?? []),
+  ]) as [string]
 )
 
 const gitSchema = z.object({
