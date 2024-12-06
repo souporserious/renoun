@@ -3,8 +3,8 @@ import * as tsMorph from 'ts-morph'
 
 import { createSourceFile, transpileSourceFile } from '../project/client.js'
 import type { ProjectOptions } from '../project/types.js'
+import { isJavaScriptLikeExtension } from '../utils/is-javascript-like-extension.js'
 import { joinPaths } from '../utils/path.js'
-import { isJavaScriptLikeExtension } from './is-javascript-like-extension.js'
 import { FileSystem } from './FileSystem.js'
 import type { DirectoryEntry } from './types.js'
 

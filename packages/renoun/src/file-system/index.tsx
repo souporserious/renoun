@@ -7,6 +7,12 @@ import { getEditPath } from '../utils/get-edit-path.js'
 import type { FileExport } from '../utils/get-file-exports.js'
 import { getGitMetadata } from '../utils/get-git-metadata.js'
 import {
+  isJavaScriptLikeExtension,
+  type HasJavaScriptLikeExtensions,
+  type IsJavaScriptLikeExtension,
+  type JavaScriptLikeExtensions,
+} from '../utils/is-javascript-like-extension.js'
+import {
   baseName,
   ensureRelativePath,
   extensionName,
@@ -19,12 +25,6 @@ import type { SymbolFilter } from '../utils/resolve-type.js'
 import { FileName } from './FileName.js'
 import type { FileSystem } from './FileSystem.js'
 import { NodeFileSystem } from './NodeFileSystem.js'
-import {
-  isJavaScriptLikeExtension,
-  type HasJavaScriptLikeExtensions,
-  type IsJavaScriptLikeExtension,
-  type JavaScriptLikeExtensions,
-} from './is-javascript-like-extension.js'
 
 /** A directory or file entry. */
 export type FileSystemEntry<

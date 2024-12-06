@@ -1,38 +1,19 @@
-import type { bundledLanguages, bundledThemes } from 'shiki/bundle/web'
 import { join, posix } from 'node:path'
-
-import { getDiagnosticMessageText } from './get-diagnostic-message.js'
-import { getRootDirectory } from './get-root-directory.js'
-import { getThemeColors } from './get-theme-colors.js'
-import { isJsxOnly } from './is-jsx-only.js'
-import { generatedFilenames } from './parse-source-text-metadata.js'
-import type { Highlighter } from './create-highlighter.js'
-import { getTrimmedSourceFileText } from './get-trimmed-source-file-text.js'
-import { splitTokenByRanges } from './split-tokens-by-ranges.js'
+import type { bundledLanguages, bundledThemes } from 'shiki/bundle/web'
 import type { Diagnostic, Project, SourceFile, ts } from 'ts-morph'
 import tsMorph from 'ts-morph'
 
+import type { Highlighter } from './create-highlighter.js'
+import { getDiagnosticMessageText } from './get-diagnostic-message.js'
+import { getLanguage, type Languages } from './get-language.js'
+import { getRootDirectory } from './get-root-directory.js'
+import { getThemeColors } from './get-theme-colors.js'
+import { getTrimmedSourceFileText } from './get-trimmed-source-file-text.js'
+import { isJsxOnly } from './is-jsx-only.js'
+import { generatedFilenames } from './parse-source-text-metadata.js'
+import { splitTokenByRanges } from './split-tokens-by-ranges.js'
+
 const { Node, SyntaxKind } = tsMorph
-
-export const languageMap = {
-  mjs: 'js',
-} as const
-
-export type Languages =
-  | keyof typeof bundledLanguages
-  | keyof typeof languageMap
-  | 'plaintext'
-  | 'diff'
-
-/** Normalizes language to a specific grammar language key. */
-export function getLanguage(
-  language: Languages
-): keyof typeof bundledLanguages {
-  if (language in languageMap) {
-    return languageMap[language as keyof typeof languageMap]
-  }
-  return language as keyof typeof bundledLanguages
-}
 
 export type Themes = keyof typeof bundledThemes
 
