@@ -15,9 +15,10 @@ interface CodeMetaElement extends Element {
   }
 }
 
-const allBundledLanguages = bundledLanguagesInfo
-  .map((language) => language.id)
-  .concat(['js', 'ts'])
+const allBundledLanguages = bundledLanguagesInfo.flatMap((language) => [
+  language.id,
+  ...(language.aliases ?? []),
+]) as [string]
 
 /** Parses `CodeBlock` and `CodeInline` props and adds them to `pre` and `code` element properties respectively. */
 export function addCodeMetaProps() {
