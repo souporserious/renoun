@@ -34,7 +34,8 @@ const renounConfigSchema = z.object({
   theme: themeSchema.describe('Theme configuration object').optional(),
   languages: z
     .array(languagesSchema)
-    .describe('List of language grammars to load.'),
+    .describe('List of language grammars to load.')
+    .optional(),
   git: gitSchema.describe('Git configuration object').optional(),
   siteUrl: z.string().url().describe('URL of the site').optional(),
 })
