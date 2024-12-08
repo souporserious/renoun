@@ -60,8 +60,8 @@ export default async function Component({
   const componentExports = isExamplesPage
     ? undefined
     : await componentEntry.getExports()
-  const updatedAt = await componentEntry.getUpdatedAt()
-  const editPath = componentEntry.getEditPath()
+  const updatedAt = await componentEntry.getLastCommitDate()
+  const url = componentEntry.getRepositoryUrl({ type: 'edit' })
   const [previousEntry, nextEntry] = await componentEntry.getSiblings({
     entryGroup: CollectionGroup,
   })
@@ -216,7 +216,7 @@ export default async function Component({
         </div>
       </div>
 
-      <TableOfContents headings={headings} editPath={editPath} />
+      <TableOfContents headings={headings} editPath={url} />
     </>
   )
 }
@@ -230,7 +230,7 @@ async function Preview({
   const title = fileExport.getTitle()
   const description = fileExport.getDescription()
   const slug = fileExport.getSlug()
-  const editPath = fileExport.getEditPath()
+  const url = fileExport.getRepositoryUrl({ type: 'edit' })
   const Value = await fileExport.getRuntimeValue()
   const isUppercase = name[0] === name[0].toUpperCase()
   const isComponent = typeof Value === 'function' && isUppercase
@@ -252,7 +252,7 @@ async function Preview({
           }}
         >
           <h3 css={{ margin: 0 }}>{title}</h3>{' '}
-          <a href={editPath} css={{ fontSize: 'var(--font-size-body-3)' }}>
+          <a href={url} css={{ fontSize: 'var(--font-size-body-3)' }}>
             View Source
           </a>
         </div>

@@ -46,8 +46,13 @@ export default async function Component({
   const isExamplesPage = slug.at(-1) === 'examples'
   const readmeFile = await componentDirectory.getFileOrThrow('README', 'mdx')
   const Readme = await readmeFile.getExportValue('default')
-  const updatedAt = await componentEntry.getUpdatedAt()
-  const editPath = componentEntry.getEditPath()
+  const lastCommitDate = await componentEntry.getLastCommitDate()
+  const editUrl =
+    process.env.NODE_ENV === 'development'
+      ? componentEntry.getEditorUri()
+      : componentEntry.getRepositoryUrl({
+          type: isDirectory(componentEntry) ? 'blob' : 'edit',
+        })
   const [previousEntry, nextEntry] = await componentEntry.getSiblings()
 
   return (
@@ -106,7 +111,7 @@ export default async function Component({
             padding: '1rem',
           }}
         >
-          {updatedAt ? (
+          {lastCommitDate ? (
             <div
               style={{
                 gridColumn: 1,
@@ -117,11 +122,11 @@ export default async function Component({
             >
               Last updated{' '}
               <time
-                dateTime={updatedAt.toString()}
+                dateTime={lastCommitDate.toISOString()}
                 itemProp="dateModified"
                 style={{ fontWeight: 600 }}
               >
-                {updatedAt.toLocaleString('en', {
+                {lastCommitDate.toLocaleString('en', {
                   year: '2-digit',
                   month: '2-digit',
                   day: '2-digit',
@@ -130,8 +135,8 @@ export default async function Component({
             </div>
           ) : null}
 
-          {editPath ? (
-            <a href={editPath} style={{ gridColumn: 2, textAlign: 'right' }}>
+          {editUrl ? (
+            <a href={editUrl} style={{ gridColumn: 2, textAlign: 'right' }}>
               Edit this page
             </a>
           ) : null}
@@ -163,7 +168,7 @@ async function Preview({
 }) {
   const name = fileExport.getName()
   const description = fileExport.getDescription()
-  const editPath = fileExport.getEditPath()
+  const url = fileExport.getRepositoryUrl()
   const Value = await fileExport.getRuntimeValue()
   const isUppercase = name[0] === name[0].toUpperCase()
   const isComponent = typeof Value === 'function' && isUppercase
@@ -172,8 +177,7 @@ async function Preview({
     <section key={name}>
       <header>
         <Stack flexDirection="row" alignItems="baseline" gap="0.5rem">
-          <h3 css={{ margin: 0 }}>{name}</h3>{' '}
-          <a href={editPath}>Edit example</a>
+          <h3 css={{ margin: 0 }}>{name}</h3> <a href={url}>Edit example</a>
         </Stack>
         {description ? <p>{description}</p> : null}
       </header>

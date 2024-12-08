@@ -2,22 +2,30 @@ import { exec } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { getRootDirectory } from '../utils/get-root-directory.js'
+import { getRootDirectory } from './get-root-directory.js'
 
+export interface GitAuthor {
+  name: string
+  commitCount: number
+  firstCommitDate: Date
+  lastCommitDate: Date
+}
+
+export interface GitMetadata {
+  authors: GitAuthor[]
+  firstCommitDate?: Date
+  lastCommitDate?: Date
+}
+
+const cache = new Map<string, GitMetadata>()
 let isGitRepository: null | boolean = null
 let hasCheckedIfShallow = false
 let hadGitError = false
 
-interface GitMetadata {
-  authors: string[]
-  createdAt: string | undefined
-  updatedAt: string | undefined
-}
-
-const cache = new Map<string, GitMetadata>()
-
 /** Returns aggregated metadata about a file from git history. */
-export async function getGitMetadata(filePath: string): Promise<GitMetadata> {
+export async function getLocalGitFileMetadata(
+  filePath: string
+): Promise<GitMetadata> {
   if (cache.has(filePath)) {
     return cache.get(filePath)!
   }
@@ -71,7 +79,12 @@ export async function getGitMetadata(filePath: string): Promise<GitMetadata> {
 
   const authorContributions = new Map<
     string,
-    { name: string; commitCount: number; lastCommitDate: Date }
+    {
+      name: string
+      commitCount: number
+      firstCommitDate: Date
+      lastCommitDate: Date
+    }
   >()
   let firstCommitDate: Date | undefined = undefined
   let lastCommitDate: Date | undefined = undefined
@@ -99,14 +112,17 @@ export async function getGitMetadata(filePath: string): Promise<GitMetadata> {
       authorContributions.set(email, {
         name,
         commitCount: 1,
+        firstCommitDate: date,
         lastCommitDate: date,
       })
     } else {
       const author = authorContributions.get(email)!
       author.commitCount += 1
+      if (author.firstCommitDate > date) {
+        author.firstCommitDate = date
+      }
       if (author.lastCommitDate < date) {
         author.lastCommitDate = date
-        author.name = name
       }
     }
 
@@ -125,9 +141,9 @@ export async function getGitMetadata(filePath: string): Promise<GitMetadata> {
   )
 
   const result = {
-    authors: sortedAuthors.map((author) => author.name),
-    createdAt: firstCommitDate?.toISOString(),
-    updatedAt: lastCommitDate?.toISOString(),
+    authors: sortedAuthors,
+    firstCommitDate,
+    lastCommitDate,
   } satisfies GitMetadata
 
   cache.set(filePath, result)
