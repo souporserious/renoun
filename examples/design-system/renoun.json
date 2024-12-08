@@ -1,0 +1,7 @@
+{
+  "$schema": "https://renoun.dev/schema.json",
+  "git": {
+    "source": "https://github.com/souporserious/renoun"
+  },
+  "siteUrl": "https://renoun.dev"
+}

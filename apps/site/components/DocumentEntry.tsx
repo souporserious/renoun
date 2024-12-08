@@ -25,8 +25,10 @@ export async function DocumentEntry({
   const Content = await file.getExportValueOrThrow('default')
   const metadata = await file.getExportValueOrThrow('metadata')
   const headings = await file.getExportValueOrThrow('headings')
-  const updatedAt = shouldRenderUpdatedAt ? await file.getUpdatedAt() : null
-  const editPath = file.getEditPath()
+  const updatedAt = shouldRenderUpdatedAt
+    ? await file.getLastCommitDate()
+    : null
+  const editPath = file.getRepositoryUrl({ type: 'edit' })
   const [previousFile, nextFile] = await file.getSiblings({ entryGroup })
 
   return (

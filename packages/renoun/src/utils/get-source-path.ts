@@ -1,6 +1,6 @@
 import { join, posix } from 'node:path'
 
-import { getEditorPath } from './get-editor-path.js'
+import { getEditorUri } from './get-editor-uri.js'
 import { getGitFileUrl } from './get-git-file-url.js'
 import { getRootDirectory } from './get-root-directory.js'
 import { loadConfig } from './load-config.js'
@@ -34,7 +34,7 @@ export function getSourcePath(
   }
 
   if (process.env.NODE_ENV === 'development') {
-    return getEditorPath({ path, line, column })
+    return getEditorUri({ path, line, column })
   }
 
   if (process.env.NODE_ENV === 'production' && gitSource !== undefined) {
