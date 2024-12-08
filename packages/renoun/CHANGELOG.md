@@ -1,5 +1,12 @@
 # renoun
 
+## 7.8.1
+
+### Patch Changes
+
+- Updated dependencies [ece3cc2]
+  - @renoun/mdx@1.2.2
+
 ## 7.8.0
 
 ### Minor Changes
