@@ -50,9 +50,9 @@ export default async function Component({
   const editUrl =
     process.env.NODE_ENV === 'development'
       ? componentEntry.getEditorUri()
-      : componentEntry.getRepositoryUrl({
-          type: isDirectory(componentEntry) ? 'blob' : 'edit',
-        })
+      : isDirectory(componentEntry)
+        ? componentEntry.getRepositoryUrl()
+        : componentEntry.getRepositoryUrl({ type: 'edit' })
   const [previousEntry, nextEntry] = await componentEntry.getSiblings()
 
   return (
