@@ -49,8 +49,6 @@ export abstract class FileSystem {
   getPathRelativeToWorkspace(path: string) {
     const rootDirectory = getRootDirectory()
 
-    console.log(path)
-
     return relativePath(rootDirectory, this.getAbsolutePath(path))
   }
 
