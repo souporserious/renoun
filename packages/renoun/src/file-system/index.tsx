@@ -785,7 +785,7 @@ export class Directory<
   }
 
   /** Duplicate the directory with the same initial options. */
-  duplicate<
+  #duplicate<
     Entry extends FileSystemEntry<Types, HasModule> = FileSystemEntry<
       Types,
       HasModule
@@ -1264,7 +1264,7 @@ export class Directory<
       }
 
       if (entry.isDirectory) {
-        const directory = this.duplicate({
+        const directory = this.#duplicate({
           fileSystem,
           path: entry.path,
         })
