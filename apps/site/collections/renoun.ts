@@ -57,6 +57,7 @@ export const ComponentsCollection = new Directory<
 >({
   path: '../../packages/renoun/src/components',
   tsConfigPath: '../../packages/renoun/tsconfig.json',
+  pathCasing: 'kebab',
 })
   .withBasePath('components')
   .withModule((path) => getRenounImport(`components/${path}`))

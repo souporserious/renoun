@@ -342,7 +342,7 @@ class Export<Value, AllExports extends FileExports = FileExports>
   }
 
   getSlug() {
-    return createSlug(this.getName())
+    return createSlug(this.getName(), 'kebab')
   }
 
   getPath() {

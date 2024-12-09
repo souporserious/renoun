@@ -439,6 +439,24 @@ describe('file system', () => {
     expect(file.getPathSegments()).toStrictEqual(['server'])
   })
 
+  test('path casing', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'Button.tsx': '',
+      'Card/Card.tsx': '',
+    })
+    const rootDirectory = new Directory({
+      fileSystem,
+      pathCasing: 'kebab',
+    })
+    const file = await rootDirectory.getFileOrThrow('button')
+
+    expect(file.getPath()).toBe('/button')
+
+    const directory = await rootDirectory.getDirectoryOrThrow('card')
+
+    expect(directory.getPath()).toBe('/card')
+  })
+
   test('deduplicate file path segments', async () => {
     const fileSystem = new MemoryFileSystem({
       'Button/Button.tsx': '',

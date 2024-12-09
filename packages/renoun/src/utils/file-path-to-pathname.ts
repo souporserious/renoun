@@ -70,7 +70,9 @@ export function filePathToPathname(
   // Convert camel and pascal case names to kebab case for case-insensitive paths
   // e.g. "ButtonGroup" -> "button-group"
   if (kebabCase) {
-    segments = segments.map(createSlug).filter(Boolean)
+    segments = segments
+      .map((segment) => createSlug(segment, 'kebab'))
+      .filter(Boolean)
   }
 
   return posix.join(posix.sep, ...segments)

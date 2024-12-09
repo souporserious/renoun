@@ -12,7 +12,7 @@ import { Stack } from '@/components'
 
 export async function generateStaticParams() {
   const entries = await ComponentsCollection.getEntries()
-  return entries.map((entry) => ({ slug: entry.getName() }))
+  return entries.map((entry) => ({ slug: entry.getSlug() }))
 }
 
 export default async function Component({
@@ -44,7 +44,7 @@ export default async function Component({
         : null
     : null
   const isExamplesPage = slug.at(-1) === 'examples'
-  const readmeFile = await componentDirectory.getFileOrThrow('README', 'mdx')
+  const readmeFile = await componentDirectory.getFileOrThrow('readme', 'mdx')
   const Readme = await readmeFile.getExportValue('default')
   const lastCommitDate = await componentEntry.getLastCommitDate()
   const editUrl =

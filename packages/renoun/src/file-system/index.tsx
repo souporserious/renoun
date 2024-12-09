@@ -1,7 +1,7 @@
 import * as React from 'react'
 
 import { getFileExportMetadata } from '../project/client.js'
-import { createSlug } from '../utils/create-slug.js'
+import { createSlug, type SlugCasings } from '../utils/create-slug.js'
 import { formatNameAsTitle } from '../utils/format-name-as-title.js'
 import { getEditorUri } from '../utils/get-editor-uri.js'
 import type { FileExport } from '../utils/get-file-exports.js'
@@ -32,6 +32,8 @@ import {
   type GetDirectoryUrlOptions,
 } from './Repository.js'
 
+export type PathCasings = SlugCasings
+
 /** A directory or file entry. */
 export type FileSystemEntry<
   Types extends ExtensionTypes = ExtensionTypes,
@@ -41,6 +43,7 @@ export type FileSystemEntry<
 /** Options for a file in the file system. */
 export interface FileOptions {
   path: string
+  pathCasing: PathCasings
   depth: number
   directory: Directory<any, any>
 }
@@ -51,12 +54,14 @@ export class File<
   HasModule extends boolean = false,
 > extends FileName {
   #path: string
+  #pathCasing: PathCasings
   #depth: number
   #directory: Directory<Types, HasModule>
 
   constructor(options: FileOptions) {
     super(baseName(options.path))
     this.#path = options.path
+    this.#pathCasing = options.pathCasing
     this.#depth = options.depth
     this.#directory = options.directory
   }
@@ -66,6 +71,7 @@ export class File<
     return new File({
       directory: this.#directory,
       path: this.#path,
+      pathCasing: this.#pathCasing,
       depth: this.#depth,
     })
   }
@@ -82,7 +88,7 @@ export class File<
 
   /** Get the slug of the file. */
   getSlug() {
-    return createSlug(this.getName())
+    return createSlug(this.getName(), this.#pathCasing)
   }
 
   /**
@@ -113,24 +119,31 @@ export class File<
     const includeDuplicateSegments = options?.includeDuplicateSegments ?? false
     const fileSystem = this.#directory.getFileSystem()
     const basePath = this.#directory.getBasePath()
-    const path = fileSystem.getPath(
+    let path = fileSystem.getPath(
       this.#path,
       includeBasePath ? { basePath } : undefined
     )
 
-    if (includeDuplicateSegments) {
-      return path
-    }
+    if (!includeDuplicateSegments || this.#pathCasing !== 'none') {
+      const parsedPath = path.split('/')
+      const parsedSegments: string[] = []
 
-    const parsedPath = path.split('/')
+      for (let index = 0; index < parsedPath.length; index++) {
+        const segment = parsedPath[index]
 
-    for (let index = 0; index < parsedPath.length; index++) {
-      if (parsedPath[index] === parsedPath[index + 1]) {
-        parsedPath.splice(index, 1)
+        if (includeDuplicateSegments || segment !== parsedPath[index - 1]) {
+          parsedSegments.push(
+            this.#pathCasing === 'none'
+              ? segment
+              : createSlug(segment, this.#pathCasing)
+          )
+        }
       }
+
+      path = parsedSegments.join('/')
     }
 
-    return parsedPath.join('/')
+    return path
   }
 
   /** Get the path segments of the file. */
@@ -287,7 +300,7 @@ export class JavaScriptFileExport<
 
   /** Get the slug of the file export. */
   getSlug() {
-    return createSlug(this.getName())
+    return createSlug(this.getName(), 'kebab')
   }
 
   /** Get the name of the export. Default exports will use the file name or declaration name if available. */
@@ -730,6 +743,9 @@ interface DirectoryOptions {
   /** The path to the directory in the file system. */
   path?: string
 
+  /** The casing format for path segments. */
+  pathCasing?: PathCasings
+
   /** The tsconfig.json file path to use for type checking and analysis. */
   tsConfigPath?: string
 
@@ -748,6 +764,7 @@ export class Directory<
 > {
   #path: string
   #depth: number = -1
+  #pathCasing: PathCasings = 'none'
   #basePath?: string
   #tsConfigPath?: string
   #fileSystem: FileSystem | undefined
@@ -769,6 +786,7 @@ export class Directory<
       this.#path = ensureRelativePath(path)
     } else {
       this.#path = ensureRelativePath(path.path)
+      this.#pathCasing = path.pathCasing
       this.#tsConfigPath = path.tsConfigPath
       this.#fileSystem = path.fileSystem
     }
@@ -789,6 +807,7 @@ export class Directory<
 
     directory.#depth = this.#depth
     directory.#tsConfigPath = this.#tsConfigPath
+    directory.#pathCasing = this.#pathCasing
     directory.#basePath = this.#basePath
     directory.#schemas = this.#schemas
     directory.#moduleGetters = this.#moduleGetters
@@ -817,6 +836,7 @@ export class Directory<
 
     directory.#depth = this.#depth
     directory.#tsConfigPath = this.#tsConfigPath
+    directory.#pathCasing = this.#pathCasing
     directory.#basePath = options.basePath ?? this.#basePath
     directory.#fileSystem = options.fileSystem ?? this.#fileSystem
     directory.#schemas = options.schemas ?? this.#schemas
@@ -989,7 +1009,12 @@ export class Directory<
 
       // Find the entry matching the current segment
       for (const currentEntry of allEntries) {
-        if (currentEntry.getBaseName() === currentSegment) {
+        const baseSegment = createSlug(
+          currentEntry.getBaseName(),
+          this.#pathCasing
+        )
+
+        if (baseSegment === currentSegment) {
           // Check if the entry is a file and matches the extension
           if (extension && currentEntry instanceof File) {
             const fileExtensions = Array.isArray(extension)
@@ -1135,9 +1160,14 @@ export class Directory<
       let entry: FileSystemEntry<Types> | undefined
 
       for (const currentEntry of allEntries) {
+        const baseSegment = createSlug(
+          currentEntry.getBaseName(),
+          this.#pathCasing
+        )
+
         if (
           currentEntry instanceof Directory &&
-          currentEntry.getBaseName() === currentSegment
+          baseSegment === currentSegment
         ) {
           entry = currentEntry
           break
@@ -1285,6 +1315,7 @@ export class Directory<
                 path: entry.path,
                 depth: nextDepth,
                 directory: thisDirectory,
+                pathCasing: this.#pathCasing,
                 moduleGetters: this.#moduleGetters,
                 schema: this.#schemas[extension],
               })
@@ -1292,11 +1323,13 @@ export class Directory<
                 path: entry.path,
                 depth: nextDepth,
                 directory: thisDirectory,
+                pathCasing: this.#pathCasing,
                 schema: this.#schemas[extension],
               })
           : new File({
               path: entry.path,
               depth: nextDepth,
+              pathCasing: this.#pathCasing,
               directory: thisDirectory,
             })
 
@@ -1387,7 +1420,7 @@ export class Directory<
 
   /** Get the slug of the directory. */
   getSlug() {
-    return createSlug(this.getName())
+    return createSlug(this.getName(), this.#pathCasing)
   }
 
   /** Get the base name of the directory. */
@@ -1405,18 +1438,29 @@ export class Directory<
     return formatNameAsTitle(this.getName())
   }
 
-  /** Get a URL-friendly path of the directory. */
+  /** Get a URL-friendly path to the directory. */
   getPath(options?: { includeBasePath?: boolean }) {
     const includeBasePath = options?.includeBasePath ?? true
     const fileSystem = this.getFileSystem()
-
-    return fileSystem.getPath(
+    const path = fileSystem.getPath(
       this.#path,
       includeBasePath ? { basePath: this.#basePath } : undefined
     )
+
+    if (this.#pathCasing === 'none') {
+      return path
+    }
+
+    const segments = path.split('/')
+
+    for (let index = 0; index < segments.length; index++) {
+      segments[index] = createSlug(segments[index], this.#pathCasing)
+    }
+
+    return segments.join('/')
   }
 
-  /** Get the path segments of the directory. */
+  /** Get the path segments to the directory. */
   getPathSegments(options?: { includeBasePath?: boolean }) {
     const includeBasePath = options?.includeBasePath ?? true
 

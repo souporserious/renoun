@@ -141,7 +141,7 @@ async function APIReferenceAsync({
               }}
             >
               <h3
-                id={type.name ? createSlug(type.name) : undefined}
+                id={type.name ? createSlug(type.name, 'kebab') : undefined}
                 css={{ flexShrink: 0, margin: '0 !important' }}
               >
                 {type.name}
@@ -195,7 +195,7 @@ async function APIReferenceAsync({
           }}
         >
           <h3
-            id={type.name ? createSlug(type.name) : undefined}
+            id={type.name ? createSlug(type.name, 'kebab') : undefined}
             css={{ flexShrink: 0, margin: 0 }}
           >
             {type.name}

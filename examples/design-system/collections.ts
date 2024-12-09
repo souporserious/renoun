@@ -8,6 +8,9 @@ interface ComponentTypes {
 
 export type ComponentEntry = FileSystemEntry<ComponentTypes>
 
-export const ComponentsCollection = new Directory<ComponentTypes>('components')
+export const ComponentsCollection = new Directory<ComponentTypes>({
+  path: 'components',
+  pathCasing: 'kebab',
+})
   .withBasePath('components')
   .withModule((path) => import(`./components/${path}`))
