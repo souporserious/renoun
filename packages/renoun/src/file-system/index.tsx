@@ -146,11 +146,6 @@ export class File<
       .filter(Boolean)
   }
 
-  /** Get the intrinsic path of the file starting from the working directory. */
-  getIntrinsicPath() {
-    return this.#path
-  }
-
   /** Get the file path relative to the root directory. */
   getRelativePath() {
     const fileSystem = this.#directory.getFileSystem()
@@ -301,11 +296,6 @@ export class JavaScriptFileExport<
       return this.#name === 'default' ? this.#file.getName() : this.#name
     }
     return this.#metadata?.name || this.#name
-  }
-
-  /** Get the base name of the export. */
-  getBaseName() {
-    return this.#name
   }
 
   /** The export name formatted as a title. */
