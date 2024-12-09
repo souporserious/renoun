@@ -24,7 +24,7 @@ import {
 import { getDirectorySourceFile } from '../utils/get-directory-source-file.js'
 import { getEditPath } from '../utils/get-edit-path.js'
 import { getExportedDeclaration } from '../utils/get-exported-declaration.js'
-import { getGitMetadata } from '../utils/get-git-metadata.js'
+import { getLocalGitFileMetadata } from '../utils/get-local-git-file-metadata.js'
 import { getJsDocMetadata } from '../utils/get-js-doc-metadata.js'
 import { resolveType } from '../project/client.js'
 import { resolveTsConfigPath } from '../utils/resolve-ts-config-path.js'
@@ -630,18 +630,18 @@ class Source<AllExports extends FileExports>
   }
 
   async getCreatedAt() {
-    const gitMetadata = await getGitMetadata(this.#sourcePath)
-    return gitMetadata.createdAt ? new Date(gitMetadata.createdAt) : undefined
+    const gitMetadata = await getLocalGitFileMetadata(this.#sourcePath)
+    return gitMetadata.firstCommitDate
   }
 
   async getUpdatedAt() {
-    const gitMetadata = await getGitMetadata(this.#sourcePath)
-    return gitMetadata.updatedAt ? new Date(gitMetadata.updatedAt) : undefined
+    const gitMetadata = await getLocalGitFileMetadata(this.#sourcePath)
+    return gitMetadata.lastCommitDate
   }
 
   async getAuthors() {
-    const gitMetadata = await getGitMetadata(this.#sourcePath)
-    return gitMetadata.authors
+    const gitMetadata = await getLocalGitFileMetadata(this.#sourcePath)
+    return gitMetadata.authors?.map((author) => author.name) || []
   }
 
   async getSource(

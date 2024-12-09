@@ -3,15 +3,16 @@ import * as React from 'react'
 import { getFileExportMetadata } from '../project/client.js'
 import { createSlug } from '../utils/create-slug.js'
 import { formatNameAsTitle } from '../utils/format-name-as-title.js'
-import { getEditPath } from '../utils/get-edit-path.js'
+import { getEditorUri } from '../utils/get-editor-uri.js'
 import type { FileExport } from '../utils/get-file-exports.js'
-import { getGitMetadata } from '../utils/get-git-metadata.js'
+import { getLocalGitFileMetadata } from '../utils/get-local-git-file-metadata.js'
 import {
   isJavaScriptLikeExtension,
   type HasJavaScriptLikeExtensions,
   type IsJavaScriptLikeExtension,
   type JavaScriptLikeExtensions,
 } from '../utils/is-javascript-like-extension.js'
+import { loadConfig } from '../utils/load-config.js'
 import {
   baseName,
   ensureRelativePath,
@@ -25,6 +26,11 @@ import type { SymbolFilter } from '../utils/resolve-type.js'
 import { FileName } from './FileName.js'
 import type { FileSystem } from './FileSystem.js'
 import { NodeFileSystem } from './NodeFileSystem.js'
+import {
+  Repository,
+  type GetFileUrlOptions,
+  type GetDirectoryUrlOptions,
+} from './Repository.js'
 
 /** A directory or file entry. */
 export type FileSystemEntry<
@@ -50,7 +56,6 @@ export class File<
 
   constructor(options: FileOptions) {
     super(baseName(options.path))
-
     this.#path = options.path
     this.#depth = options.depth
     this.#directory = options.directory
@@ -141,37 +146,54 @@ export class File<
       .filter(Boolean)
   }
 
-  /** Get the relative file system path of the file. */
-  getRelativePath() {
-    return this.#directory.getFileSystem().getRelativePath(this.#path)
+  /** Get the intrinsic path of the file starting from the working directory. */
+  getIntrinsicPath() {
+    return this.#path
   }
 
-  /** Get the absolute file system path of the file. */
+  /** Get the file path relative to the root directory. */
+  getRelativePath() {
+    const fileSystem = this.#directory.getFileSystem()
+    return fileSystem.getRelativePath(this.#path)
+  }
+
+  /** Get the absolute file system path. */
   getAbsolutePath() {
     const fileSystem = this.#directory.getFileSystem()
     return fileSystem.getAbsolutePath(this.#path)
   }
 
-  /** Get the file path to the editor in local development and the configured git repository in production. */
-  getEditPath() {
-    return getEditPath(this.getAbsolutePath())
+  /** Get the URL to the file source code for the configured remote git repository. */
+  getRepositoryUrl(options?: Omit<GetFileUrlOptions, 'path'>) {
+    const repository = this.#directory.getRepository()
+    const fileSystem = this.#directory.getFileSystem()
+
+    return repository.getFileUrl({
+      path: fileSystem.getPathRelativeToWorkspace(this.#path),
+      ...options,
+    })
   }
 
-  /** Get the created date of the file. */
-  async getCreatedAt() {
-    const gitMetadata = await getGitMetadata(this.#path)
-    return gitMetadata.createdAt ? new Date(gitMetadata.createdAt) : undefined
+  /** Get the URI to the file source code for the configured editor. */
+  getEditorUri() {
+    return getEditorUri({ path: this.getAbsolutePath() })
   }
 
-  /** Get the updated date of the file. */
-  async getUpdatedAt() {
-    const gitMetadata = await getGitMetadata(this.#path)
-    return gitMetadata.updatedAt ? new Date(gitMetadata.updatedAt) : undefined
+  /** Get the first local git commit date of the file. */
+  async getFirstCommitDate() {
+    const gitMetadata = await getLocalGitFileMetadata(this.#path)
+    return gitMetadata.firstCommitDate
   }
 
-  /** Get the git authors of the file. */
+  /** Get the last local git commit date of the file. */
+  async getLastCommitDate() {
+    const gitMetadata = await getLocalGitFileMetadata(this.#path)
+    return gitMetadata.lastCommitDate
+  }
+
+  /** Get the local git authors of the file. */
   async getAuthors() {
-    const gitMetadata = await getGitMetadata(this.#path)
+    const gitMetadata = await getLocalGitFileMetadata(this.#path)
     return gitMetadata.authors
   }
 
@@ -316,23 +338,29 @@ export class JavaScriptFileExport<
     return this.#metadata?.location.position
   }
 
-  /** Get the export path to the editor in local development and the configured git repository in production. */
-  getEditPath() {
+  /** Get the URL to the file export source code for the configured remote git repository. */
+  getRepositoryUrl(options?: Omit<GetFileUrlOptions, 'path' | 'line'>) {
+    return this.#file.getRepositoryUrl({
+      line: this.#metadata?.location?.position.start.line,
+      ...options,
+    })
+  }
+
+  /** Get the URI to the file export source code for the configured editor. */
+  getEditorUri() {
+    const path = this.#file.getAbsolutePath()
+
     if (this.#metadata?.location) {
       const location = this.#metadata.location
-      const filePath =
-        process.env.NODE_ENV === 'development'
-          ? this.#file.getAbsolutePath()
-          : location.filePath
 
-      return getEditPath(
-        filePath,
-        location.position.start.line,
-        location.position.start.column
-      )
+      return getEditorUri({
+        path,
+        line: location.position.start.line,
+        column: location.position.start.column,
+      })
     }
 
-    return getEditPath(this.#file.getAbsolutePath())
+    return getEditorUri({ path })
   }
 
   /** Get the resolved type of the export. */
@@ -733,6 +761,7 @@ export class Directory<
   #basePath?: string
   #tsConfigPath?: string
   #fileSystem: FileSystem | undefined
+  #repository: Repository | undefined
   #directory?: Directory<any, any>
   #schemas: ExtensionSchemas<Types> = {}
   #moduleGetters?: Map<string, (path: string) => Promise<any>>
@@ -908,6 +937,28 @@ export class Directory<
     })
 
     return this.#fileSystem
+  }
+
+  /** Get the `Repository` for this directory. */
+  getRepository() {
+    if (this.#repository) {
+      return this.#repository
+    }
+
+    const config = loadConfig()
+
+    if (config.git) {
+      this.#repository = new Repository({
+        baseUrl: config.git.source,
+        provider: config.git.provider,
+      })
+
+      return this.#repository
+    }
+
+    throw new Error(
+      `[renoun] Git provider is not configured for directory "${this.#path}". Please provide a git provider to enable source links.`
+    )
   }
 
   /** Get the depth of the directory starting from the root directory. */
@@ -1218,6 +1269,7 @@ export class Directory<
           path: entry.path,
         })
 
+        directory.#repository = this.#repository
         directory.#directory = thisDirectory
         directory.#depth = nextDepth
 
@@ -1396,26 +1448,37 @@ export class Directory<
     return this.getFileSystem().getAbsolutePath(this.#path)
   }
 
-  /** Get the directory path to the editor in local development and the configured git repository in production. */
-  getEditPath() {
-    return getEditPath(this.getAbsolutePath())
+  /** Get the URL to the directory source code for the configured git repository. */
+  getRepositoryUrl(options?: Omit<GetDirectoryUrlOptions, 'path'>) {
+    const repository = this.getRepository()
+    const fileSystem = this.getFileSystem()
+
+    return repository.getDirectoryUrl({
+      path: fileSystem.getPathRelativeToWorkspace(this.#path),
+      ...options,
+    })
   }
 
-  /** Get the created date of the directory. */
-  async getCreatedAt() {
-    const gitMetadata = await getGitMetadata(this.#path)
-    return gitMetadata.createdAt ? new Date(gitMetadata.createdAt) : undefined
+  /** Get the URI to the directory source code for the configured editor. */
+  getEditorUri() {
+    return getEditorUri({ path: this.getAbsolutePath() })
   }
 
-  /** Get the updated date of the directory. */
-  async getUpdatedAt() {
-    const gitMetadata = await getGitMetadata(this.#path)
-    return gitMetadata.updatedAt ? new Date(gitMetadata.updatedAt) : undefined
+  /** Get the first local git commit date of the directory. */
+  async getFirstCommitDate() {
+    const gitMetadata = await getLocalGitFileMetadata(this.#path)
+    return gitMetadata.firstCommitDate
   }
 
-  /** Get the git authors of the directory. */
+  /** Get the last local git commit date of the directory. */
+  async getLastCommitDate() {
+    const gitMetadata = await getLocalGitFileMetadata(this.#path)
+    return gitMetadata.lastCommitDate
+  }
+
+  /** Get the local git authors of the directory. */
   async getAuthors() {
-    const gitMetadata = await getGitMetadata(this.#path)
+    const gitMetadata = await getLocalGitFileMetadata(this.#path)
     return gitMetadata.authors
   }
 
