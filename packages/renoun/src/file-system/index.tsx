@@ -26,7 +26,11 @@ import type { SymbolFilter } from '../utils/resolve-type.js'
 import { FileName } from './FileName.js'
 import type { FileSystem } from './FileSystem.js'
 import { NodeFileSystem } from './NodeFileSystem.js'
-import { Repository, type GetFileUrlOptions } from './Repository.js'
+import {
+  Repository,
+  type GetFileUrlOptions,
+  type GetDirectoryUrlOptions,
+} from './Repository.js'
 
 /** A directory or file entry. */
 export type FileSystemEntry<
@@ -1445,11 +1449,11 @@ export class Directory<
   }
 
   /** Get the URL to the directory source code for the configured git repository. */
-  getRepositoryUrl(options?: Omit<GetFileUrlOptions, 'path'>) {
+  getRepositoryUrl(options?: Omit<GetDirectoryUrlOptions, 'path'>) {
     const repository = this.getRepository()
     const fileSystem = this.getFileSystem()
 
-    return repository.getFileUrl({
+    return repository.getDirectoryUrl({
       path: fileSystem.getPathRelativeToWorkspace(this.#path),
       ...options,
     })
