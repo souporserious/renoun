@@ -12,22 +12,36 @@ export interface GetFileUrlOptions {
   /** The path to the file within the repository. */
   path: string
 
-  /** The file url type. */
-  type?: 'blob' | 'edit' | 'raw' | 'blame' | 'history'
+  /** The file URL type. */
+  type?: 'source' | 'edit' | 'raw' | 'blame' | 'history'
 
-  /**
-   * Branch or commit hash.
-   * - A branch name (defaults to 'main')
-   * - Or a commit hash (e.g. 'abcdef1234...')
-   */
-  branchOrCommitHash?: string
+  /** A reference to a branch, tag, or commit. */
+  ref?: string
 
-  /**
-   * Line or range of lines to link to.
-   * - A single line number: `line: 42`
-   * - A range: `[startLine, endLine]` e.g. `[42, 50]`
-   */
+  /** Single line or range of start and end lines to link to. */
   line?: number | [number, number]
+}
+
+export interface GetDirectoryUrlOptions {
+  /** The path to the directory within the repository. */
+  path: string
+
+  /** The directory URL type. */
+  type?: 'source' | 'history'
+
+  /** A reference to a branch, tag, or commit. */
+  ref?: string
+}
+
+export interface GetIssueUrlOptions {
+  /** The title of the issue. */
+  title: string
+
+  /** The description of the issue. */
+  description?: string
+
+  /** The labels to assign to the issue. */
+  labels?: string[]
 }
 
 export class Repository {
@@ -53,7 +67,7 @@ export class Repository {
     } else {
       const { baseUrl, provider } = repository
 
-      this.#baseUrl = baseUrl.replace(/\/+$/, '') // Trim trailing slashes
+      this.#baseUrl = baseUrl.replace(/\/+$/, '') // Remove trailing slashes
       this.#provider = provider.toLowerCase() as GitProviderType
 
       if (this.#provider === 'github') {
@@ -82,15 +96,15 @@ export class Repository {
     }
   }
 
-  /** Creates a new issue URL for the repository. */
-  createIssueUrl(
-    title: string,
-    description: string = '',
-    labels: string[] = []
-  ): string {
+  /** Constructs a new issue URL for the repository. */
+  getIssueUrl(options: GetIssueUrlOptions): string {
     if (!this.#owner || !this.#repo) {
       throw new Error('Cannot determine owner/repo for this repository.')
     }
+
+    const title = options.title
+    const description = options.description || ''
+    const labels = options.labels || []
 
     switch (this.#provider) {
       case 'github': {
@@ -134,15 +148,31 @@ export class Repository {
 
   /** Constructs a URL for a file in the repository. */
   getFileUrl(options: GetFileUrlOptions): string {
-    const { type = 'blob', path, line, branchOrCommitHash = 'main' } = options
+    const { type = 'source', path, line, ref: ref = 'main' } = options
 
     switch (this.#provider) {
       case 'github':
-        return this.#getGitHubUrl(type, branchOrCommitHash, path, line)
+        return this.#getGitHubUrl(type, ref, path, line)
       case 'gitlab':
-        return this.#getGitLabUrl(type, branchOrCommitHash, path, line)
+        return this.#getGitLabUrl(type, ref, path, line)
       case 'bitbucket':
-        return this.#getBitbucketUrl(type, branchOrCommitHash, path, line)
+        return this.#getBitbucketUrl(type, ref, path, line)
+      default:
+        throw new Error(`Unsupported provider: ${this.#provider}`)
+    }
+  }
+
+  /** Constructs a URL for a directory in the repository. */
+  getDirectoryUrl(options: GetDirectoryUrlOptions): string {
+    const { type = 'source', path, ref: ref = 'main' } = options
+
+    switch (this.#provider) {
+      case 'github':
+        return this.#getGitHubDirectoryUrl(type, ref, path)
+      case 'gitlab':
+        return this.#getGitLabDirectoryUrl(type, ref, path)
+      case 'bitbucket':
+        return this.#getBitbucketDirectoryUrl(type, ref, path)
       default:
         throw new Error(`Unsupported provider: ${this.#provider}`)
     }
@@ -150,7 +180,7 @@ export class Repository {
 
   #getGitHubUrl(
     type: string,
-    branchOrCommitHash: string,
+    ref: string,
     path: string,
     line?: number | [number, number]
   ): string {
@@ -160,26 +190,39 @@ export class Repository {
 
     switch (type) {
       case 'edit':
-        return `${this.#baseUrl}/edit/${branchOrCommitHash}/${path}`
+        return `${this.#baseUrl}/edit/${ref}/${path}`
       case 'raw':
-        // If we have owner/repo, use raw.githubusercontent.com directly
         if (this.#owner && this.#repo) {
-          return `https://raw.githubusercontent.com/${this.#owner}/${this.#repo}/${branchOrCommitHash}/${path}`
+          return `https://raw.githubusercontent.com/${this.#owner}/${this.#repo}/${ref}/${path}`
         }
-        throw new Error('[renoun] Cannot generate raw URL without owner/repo')
+        throw new Error('Cannot generate raw URL without owner/repo')
       case 'blame':
-        return `${this.#baseUrl}/blame/${branchOrCommitHash}/${path}${lineFragment}`
+        return `${this.#baseUrl}/blame/${ref}/${path}${lineFragment}`
       case 'history':
-        return `${this.#baseUrl}/commits/${branchOrCommitHash}/${path}`
-      case 'blob':
+        return `${this.#baseUrl}/commits/${ref}/${path}`
+      case 'source':
       default:
-        return `${this.#baseUrl}/blob/${branchOrCommitHash}/${path}${lineFragment}`
+        return `${this.#baseUrl}/blob/${ref}/${path}${lineFragment}`
+    }
+  }
+
+  #getGitHubDirectoryUrl(
+    type: 'source' | 'history',
+    ref: string,
+    path: string
+  ): string {
+    switch (type) {
+      case 'history':
+        return `${this.#baseUrl}/commits/${ref}/${path}`
+      case 'source':
+      default:
+        return `${this.#baseUrl}/tree/${ref}/${path}`
     }
   }
 
   #getGitLabUrl(
     type: string,
-    branchOrCommitHash: string,
+    ref: string,
     path: string,
     line?: number | [number, number]
   ): string {
@@ -189,22 +232,36 @@ export class Repository {
 
     switch (type) {
       case 'edit':
-        return `${this.#baseUrl}/-/edit/${branchOrCommitHash}/${path}`
+        return `${this.#baseUrl}/-/edit/${ref}/${path}`
       case 'raw':
-        return `${this.#baseUrl}/-/raw/${branchOrCommitHash}/${path}`
+        return `${this.#baseUrl}/-/raw/${ref}/${path}`
       case 'blame':
-        return `${this.#baseUrl}/-/blame/${branchOrCommitHash}/${path}${lineFragment}`
+        return `${this.#baseUrl}/-/blame/${ref}/${path}${lineFragment}`
       case 'history':
-        return `${this.#baseUrl}/-/commits/${branchOrCommitHash}/${path}`
-      case 'blob':
+        return `${this.#baseUrl}/-/commits/${ref}/${path}`
+      case 'source':
       default:
-        return `${this.#baseUrl}/-/blob/${branchOrCommitHash}/${path}${lineFragment}`
+        return `${this.#baseUrl}/-/blob/${ref}/${path}${lineFragment}`
+    }
+  }
+
+  #getGitLabDirectoryUrl(
+    type: 'source' | 'history',
+    ref: string,
+    path: string
+  ): string {
+    switch (type) {
+      case 'history':
+        return `${this.#baseUrl}/-/commits/${ref}/${path}`
+      case 'source':
+      default:
+        return `${this.#baseUrl}/-/tree/${ref}/${path}`
     }
   }
 
   #getBitbucketUrl(
     type: string,
-    branchOrCommitHash: string,
+    ref: string,
     path: string,
     line?: number | [number, number]
   ): string {
@@ -212,16 +269,30 @@ export class Repository {
 
     switch (type) {
       case 'edit':
-        return `${this.#baseUrl}/src/${branchOrCommitHash}/${path}?mode=edit`
+        return `${this.#baseUrl}/src/${ref}/${path}?mode=edit`
       case 'raw':
-        return `${this.#baseUrl}/raw/${branchOrCommitHash}/${path}`
+        return `${this.#baseUrl}/raw/${ref}/${path}`
       case 'blame':
-        return `${this.#baseUrl}/annotate/${branchOrCommitHash}/${path}${lineFragment}`
+        return `${this.#baseUrl}/annotate/${ref}/${path}${lineFragment}`
       case 'history':
-        return `${this.#baseUrl}/history/${branchOrCommitHash}/${path}`
-      case 'blob':
+        return `${this.#baseUrl}/history/${ref}/${path}`
+      case 'source':
       default:
-        return `${this.#baseUrl}/src/${branchOrCommitHash}/${path}${lineFragment}`
+        return `${this.#baseUrl}/src/${ref}/${path}${lineFragment}`
+    }
+  }
+
+  #getBitbucketDirectoryUrl(
+    type: 'source' | 'history',
+    ref: string,
+    path: string
+  ): string {
+    switch (type) {
+      case 'history':
+        return `${this.#baseUrl}/history/${ref}/${path}`
+      case 'source':
+      default:
+        return `${this.#baseUrl}/src/${ref}/${path}`
     }
   }
 
