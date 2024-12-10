@@ -413,6 +413,17 @@ describe('file system', () => {
     }
   })
 
+  test('prioritizes base file name over file name with modifier', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'APIReference.examples.tsx': '',
+      'APIReference.tsx': '',
+    })
+    const directory = new Directory({ fileSystem })
+    const entry = await directory.getEntryOrThrow('APIReference')
+
+    expect(entry.getAbsolutePath()).toBe('/APIReference.tsx')
+  })
+
   test('finds file with specific extension starting at directory', async () => {
     const fileSystem = new MemoryFileSystem({
       'PackageInstall/index.ts': '',

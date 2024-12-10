@@ -1024,12 +1024,21 @@ export class Directory<
             if (
               fileExtensions.includes(currentEntry.getExtension() as Extension)
             ) {
-              entry = currentEntry
-              break
+              // Prioritize files without a modifier
+              if (
+                !entry ||
+                (entry instanceof File && entry.getModifier() !== undefined)
+              ) {
+                entry = currentEntry
+              }
             }
           } else {
-            entry = currentEntry
-            break
+            if (
+              !entry ||
+              (entry instanceof File && entry.getModifier() !== undefined)
+            ) {
+              entry = currentEntry
+            }
           }
         }
       }
