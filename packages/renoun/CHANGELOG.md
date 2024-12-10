@@ -1,5 +1,70 @@
 # renoun
 
+## 7.9.0
+
+### Minor Changes
+
+- 3022d63: Renames `Directory` and `File` `getParentDirectory` methods to `getParent` to better align with `getSiblings`. This also aligns more closely with the web File System API's [getParent](https://developer.mozilla.org/en-US/docs/Web/API/FileSystemEntry/getParent) method.
+
+  ### Breaking Changes
+
+  - `Directory.getParentDirectory` is now `Directory.getParent`
+  - `File.getParentDirectory` is now `File.getParent`
+
+- ba2d5e1: Adds `pathCasing` option to `Directory` for setting the casing of all path methods. This is useful for ensuring that all paths are in a consistent casing, regardless of the underlying file system.
+
+  ```ts
+  import { Directory } from 'renoun/file-system'
+
+  const directory = new Directory({
+    path: 'components',
+    pathCasing: 'kebab',
+  })
+  const file = await directory.getFileOrThrow('button')
+
+  file.getPath() // '/button'
+
+  const directory = await directory.getDirectoryOrThrow('card')
+
+  directory.getPath() // '/card'
+  ```
+
+- 80ae7f2: Marks the `Directory#duplicate` method as private since this was previously only exposed for `EntryGroup` which no longer requires a new instance to be created.
+- 1f6603d: Removes `getEditPath` in favor of `getRepositoryUrl` and `getEditorUri` for a more explicit API. Prior, the `getEditPath` method switched between the editor and the git provider source based on the environment. This was confusing and not always the desired behavior. Now you can explicitly choose the behavior you want.
+
+  ### Breaking Changes
+
+  The `getEditPath` method has been removed. Use `getRepositoryUrl` and `getEditorUri` instead.
+
+  To get the same behavior as `getEditPath` you can use both `getRepositoryUrl` and `getEditorUri` together:
+
+  ```ts
+  import { Directory } from 'renoun/file-system'
+
+  const directory = new Directory('src/components')
+  const file = directory.getFileOrThrow('Button', 'tsx')
+  const editUrl =
+    process.env.NODE_ENV === 'development'
+      ? file.getEditorUri()
+      : file.getRepositoryUrl({ type: 'edit' })
+  ```
+
+### Patch Changes
+
+- 5d8bd25: Fixes nested ordered files not using a unique key causing them to be filtered.
+- 679da2c: Fixes `Directory#getFile` not considering file name modifiers.
+
+  ```ts
+  const directory = new Directory({ path: 'components' })
+  const file = await directory.getFileOrThrow(['APIReference', 'examples'])
+
+  file.getAbsolutePath() // '/APIReference.examples.tsx'
+  ```
+
+- 5b558c1: Fixes `Directory#getFile` not prioritizing base files over files with modifiers e.g. `Button.tsx` over `Button.examples.tsx`.
+- Updated dependencies [ece3cc2]
+  - @renoun/mdx@1.2.2
+
 ## 7.8.0
 
 ### Minor Changes
