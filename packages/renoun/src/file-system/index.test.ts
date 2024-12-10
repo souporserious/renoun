@@ -461,6 +461,21 @@ describe('file system', () => {
     expect(file.getPathSegments()).toStrictEqual(['server'])
   })
 
+  test('nested ordered files', async () => {
+    const fileSystem = new MemoryFileSystem({
+      '01.docs/01.getting-started.mdx': '',
+      '01.getting-started.mdx': '',
+    })
+    const directory = new Directory({ fileSystem })
+    const entries = await directory.getEntries({ recursive: true })
+
+    expect(entries.map((entry) => entry.getPath())).toMatchObject([
+      '/docs',
+      '/docs/getting-started',
+      '/getting-started',
+    ])
+  })
+
   test('path casing', async () => {
     const fileSystem = new MemoryFileSystem({
       'Button.tsx': '',

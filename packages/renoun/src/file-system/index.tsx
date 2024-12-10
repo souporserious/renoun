@@ -1287,9 +1287,10 @@ export class Directory<
         continue
       }
 
-      const entryKey = options?.includeDuplicates
-        ? entry.path
-        : removeAllExtensions(entry.path)
+      const entryKey =
+        entry.isDirectory || options?.includeDuplicates
+          ? entry.path
+          : removeAllExtensions(entry.path)
 
       if (entriesMap.has(entryKey)) {
         continue

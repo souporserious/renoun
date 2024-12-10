@@ -48,7 +48,7 @@ export function removeAllExtensions(filePath: string): string {
   )
   const filenNameStartOffset = 1
   const fileName = filePath.slice(lastSlashIndex + filenNameStartOffset)
-  const firstDotIndex = fileName.indexOf('.')
+  const firstDotIndex = fileName.lastIndexOf('.')
 
   if (firstDotIndex === -1) {
     return filePath // No extension found
