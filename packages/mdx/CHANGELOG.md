@@ -1,5 +1,11 @@
 # @renoun/mdx
 
+## 1.2.2
+
+### Patch Changes
+
+- ece3cc2: Fixes inline code language inference by considering language aliases.
+
 ## 1.2.1
 
 ### Patch Changes
