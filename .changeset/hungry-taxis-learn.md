@@ -2,7 +2,7 @@
 'renoun': patch
 ---
 
-Fixes `<Directory>.getFile` not considering file name modifiers.
+Fixes `Directory#getFile` not considering file name modifiers.
 
 ```ts
 const directory = new Directory({ path: 'components' })

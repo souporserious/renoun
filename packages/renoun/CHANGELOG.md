@@ -4,7 +4,7 @@
 
 ### Minor Changes
 
-- 0f069c5: Implements `<JavaScriptFile>.getExport` as an async method that now resolves the metadata of the export when it is initialized. This removes the need to `await` all methods like `getName`, `getDescription`, and `getTags`. Additionally, this adds a new `<JavaScriptFile>.hasExport` method for checking if the file has a specific export.
+- 0f069c5: Implements `JavaScriptFile#getExport` as an async method that now resolves the metadata of the export when it is initialized. This removes the need to `await` all methods like `getName`, `getDescription`, and `getTags`. Additionally, this adds a new `JavaScriptFile#hasExport` method for checking if the file has a specific export.
 - 9cf4499: Deprecates `Collection`, `CompositeCollection`, `isExportSource`, `isFileSystemSource`, and `isCollectionSource`. These will be removed in the next major version.
 
   ### Updating to File System utilities
@@ -41,7 +41,7 @@
   const entryGroup = new EntryGroup({ entries: [docs, components] })
   ```
 
-- 95e56e2: Adds `includeDuplicates` option to `<Directory>.getEntries` that is set to `false` by default. This option allows control over deduplicating entries with the same base name e.g. `Button.mdx` and `Button.tsx`.
+- 95e56e2: Adds `includeDuplicates` option to `Directory#getEntries` that is set to `false` by default. This option allows control over deduplicating entries with the same base name e.g. `Button.mdx` and `Button.tsx`.
 - 7d56e9a: Adds `getSlug` method to `Directory`, `File`, and `JavaScriptExport`.
 - 3419623: Adds `getExportValue` and `getExportValueOrThrow` methods to `JavaScriptFile` as a shortcut to getting an export's runtime value since this is a common use case.
 - 91d9b51: Removes `isFileWithExtension` and reimplements it within `isFile` which now allows an optional second `extension` argument.
@@ -50,11 +50,11 @@
 
   To upgrade, replace all instances of `isFileWithExtension` with `isFile`. Previous usage of `isFile` will still work as expected.
 
-- 4279d19: Adds `includeDuplicateSegments` configuration option for `<File>.getPath` method that is set to `false` by default. This option allows including consecutive duplicate segments in the returned path.
+- 4279d19: Adds `includeDuplicateSegments` configuration option for `File#getPath` method that is set to `false` by default. This option allows including consecutive duplicate segments in the returned path.
 - 92c5dee: Enables passing `tsConfigPath` option to `Directory`.
 - 4f843e4: Adds `isJavaScriptFile` and `isJavaScriptFileWithRuntime` type guards for JavaScript-like files.
 - 50e094b: Adds `getPosition` and `getText` methods to `JavaScriptExport`.
-- c4d274c: Moves the `Directory` `getImport` option to `<Directory>.withModule`. This provides stronger types for inferring the `getRuntimeValue` method.
+- c4d274c: Moves the `Directory` `getImport` option to `Directory#withModule`. This provides stronger types for inferring the `getRuntimeValue` method.
 
   ### Breaking Changes
 
@@ -69,7 +69,7 @@
   ++  .withModule((path) => import(`./posts/${path}`))
   ```
 
-- 87ce75d: Moves the `Directory` `schema` option to `<Directory>.withSchema`. This aligns with the other recent refactor of `Directory` options.
+- 87ce75d: Moves the `Directory` `schema` option to `Directory#withSchema`. This aligns with the other recent refactor of `Directory` options.
 
   ### Breaking Changes
 
@@ -83,7 +83,7 @@
   ++  .withSchema('mdx', { frontmatter: frontmatterSchema.parse })
   ```
 
-- 46f0807: Moves the `Directory` `basePath` option to `<Directory>.withBasePath`. This aligns with the recent refactor of other `Directory` options.
+- 46f0807: Moves the `Directory` `basePath` option to `Directory#withBasePath`. This aligns with the recent refactor of other `Directory` options.
 
   ### Breaking Changes
 
@@ -157,15 +157,15 @@
 
 - da0ca4a: Adds `getDepth` method to `Directory` and `File`.
 - 1d62855: Fixes ts config exclude paths not being respected when using a relative path.
-- be4c6ae: Normalizes the `<File>.getDirectory` method to return an async value similar to `Directory`.
+- be4c6ae: Normalizes the `File#getDirectory` method to return an async value similar to `Directory`.
 - 155f2e7: Renames file system methods `filter` to `withFilter` and `sort` to `withSort` for better clarity since they are not immediately applied.
 
   ### Breaking Changes
 
-  - `<Directory>.filter` method is now `<Directory>.withFilter`
-  - `<Directory>.sort` method is now `<Directory>.withSort`
+  - `Directory#filter` method is now `Directory#withFilter`
+  - `Directory#sort` method is now `Directory#withSort`
 
-- 6e599bb: Adds `includeGitIgnoredFiles` and `includeTsConfigIgnoredFiles` options to `<Directory>.getEntries`. These options allow you to include files that are ignored by `.gitignore` and `tsconfig.json` respectively.
+- 6e599bb: Adds `includeGitIgnoredFiles` and `includeTsConfigIgnoredFiles` options to `Directory#getEntries`. These options allow you to include files that are ignored by `.gitignore` and `tsconfig.json` respectively.
 - 66f8289: Adds the ability to specify only the `path` when initializing a `Directory` instance since this is the most common use case:
 
   ```ts
@@ -190,8 +190,8 @@
 
 ### Patch Changes
 
-- 20d3bc5: Fixes an issue in the `<Directory>.getFile` method where the `entry` variable was not reset in each iteration of the while loop. This caused incorrect file resolutions when searching for nested files.
-- c29192b: Fixes nested files being ordered before directory when using `<Directory>.getEntries`. Now the directory will be ordered first by default before its descendants.
+- 20d3bc5: Fixes an issue in the `Directory#getFile` method where the `entry` variable was not reset in each iteration of the while loop. This caused incorrect file resolutions when searching for nested files.
+- c29192b: Fixes nested files being ordered before directory when using `Directory#getEntries`. Now the directory will be ordered first by default before its descendants.
 - ce32d36: Fixes analyzing barrel file exports.
 - bb20d7e: Fixes duplicate file exports being returned. This was specifically happening when a file export attached a member to the function implementation:
 
@@ -205,8 +205,8 @@
 
 - 76b2c80: Fixes package import error if `prettier` is not installed.
 - 23aba08: Fixes `Directory` and `File` `getSiblings` method not using a unique identifier to find a matching entry.
-- 97799b3: Fixes `<Directory>.getFile` not considering extensions.
-- f2326fd: Fixes `<Directory>.getFile` not considering extension when provided and matching a directory.
+- 97799b3: Fixes `Directory#getFile` not considering extensions.
+- f2326fd: Fixes `Directory#getFile` not considering extension when provided and matching a directory.
 - 50d8760: Fixes `VirtualFileSystem` not respecting provided files order.
 - f011668: Fixes `isDirectory` type guard inference.
 - 3da8602: Fixes not being able to set tsconfig `compilerOptions` to use `verbatimModuleSyntax`.
@@ -243,11 +243,11 @@
     .getEntries()
   ```
 
-- 5390b16: Removes `<File>.hasExtension` method in favor of the `isFileWithExtension` type guard to consolidate the API.
+- 5390b16: Removes `File#hasExtension` method in favor of the `isFileWithExtension` type guard to consolidate the API.
 
 ### Patch Changes
 
-- 8d2b7f3: Fixes the `<Directory>.getEntries` method `recursive` option not considering nested entries.
+- 8d2b7f3: Fixes the `Directory#getEntries` method `recursive` option not considering nested entries.
 
 ## 7.5.0
 
@@ -292,7 +292,7 @@
 
 ### Patch Changes
 
-- 1c77620: Fixes the `<Directory>.getEntries` method `recursive` option to only recurse in `getEntries` instead of the file system.
+- 1c77620: Fixes the `Directory#getEntries` method `recursive` option to only recurse in `getEntries` instead of the file system.
 
 ## 7.4.0
 
@@ -310,7 +310,7 @@
   }
   ```
 
-- f44b9c5: Adds support for passing an array to `isFileWithExtension` and `<File>.hasExtension`.
+- f44b9c5: Adds support for passing an array to `isFileWithExtension` and `File#hasExtension`.
 
 ### Patch Changes
 
