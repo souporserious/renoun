@@ -38,7 +38,7 @@ export default async function Component({
   const Content = await mdxFile?.getExportValue('default')
   const componentDirectory = isDirectory(componentEntry)
     ? componentEntry
-    : componentEntry.getParentDirectory()
+    : componentEntry.getParent()
   const mainExport = await componentEntry.getExport<any>(slug)
   const description = mainExport ? mainExport.getDescription() : null
   const examplesEntry = await componentDirectory.getEntry('examples')

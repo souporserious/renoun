@@ -956,9 +956,7 @@ describe('file system', () => {
       >()
     }
 
-    const normalizedDirectory = isFile(entry)
-      ? entry.getParentDirectory()
-      : entry
+    const normalizedDirectory = isFile(entry) ? entry.getParent() : entry
 
     expect(isDirectory(normalizedDirectory)).toBe(true)
 

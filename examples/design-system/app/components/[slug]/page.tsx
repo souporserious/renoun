@@ -29,7 +29,7 @@ export default async function Component({
 
   const componentDirectory = isDirectory(componentEntry)
     ? componentEntry
-    : componentEntry.getParentDirectory()
+    : componentEntry.getParent()
   const mainEntry =
     (await componentDirectory.getFile(slug, ['ts', 'tsx'])) ||
     (await componentDirectory.getFile('index', ['ts', 'tsx']))

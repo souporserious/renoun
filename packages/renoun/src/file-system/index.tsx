@@ -77,7 +77,7 @@ export class File<
   }
 
   /** Get the directory containing this file. */
-  getParentDirectory(): Directory<Types, HasModule> {
+  getParent(): Directory<Types, HasModule> {
     return this.#directory
   }
 
@@ -286,7 +286,7 @@ export class JavaScriptFileExport<
       return undefined
     }
 
-    const fileSystem = this.#file.getParentDirectory().getFileSystem()
+    const fileSystem = this.#file.getParent().getFileSystem()
 
     this.#metadata = await fileSystem.getFileExportMetadata(
       this.#name,
@@ -376,7 +376,7 @@ export class JavaScriptFileExport<
       )
     }
 
-    const fileSystem = this.#file.getParentDirectory().getFileSystem()
+    const fileSystem = this.#file.getParent().getFileSystem()
 
     return fileSystem.resolveTypeAtLocation(
       this.#file.getAbsolutePath(),
@@ -531,7 +531,7 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
 
   /** Get all export names and positions from the JavaScript file. */
   async #getExports() {
-    const fileSystem = this.getParentDirectory().getFileSystem()
+    const fileSystem = this.getParent().getFileSystem()
     return fileSystem.getFileExports(this.getAbsolutePath())
   }
 
@@ -1150,7 +1150,7 @@ export class Directory<
   }
 
   /** Get the directory containing this directory. */
-  getParentDirectory() {
+  getParent() {
     return this.#directory
   }
 
@@ -1537,13 +1537,13 @@ export class Directory<
       return false
     }
 
-    let directory = entry.getParentDirectory()
+    let directory = entry.getParent()
 
     while (directory) {
       if (directory === this) {
         return true
       }
-      directory = directory.getParentDirectory()
+      directory = directory.getParent()
     }
 
     return false
