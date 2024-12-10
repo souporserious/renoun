@@ -11,11 +11,11 @@ const directory = new Directory({
   path: 'components',
   pathCasing: 'kebab',
 })
-const file = await rootDirectory.getFileOrThrow('button')
+const file = await directory.getFileOrThrow('button')
 
 file.getPath() // '/button'
 
-const directory = await rootDirectory.getDirectoryOrThrow('card')
+const directory = await directory.getDirectoryOrThrow('card')
 
 directory.getPath() // '/card'
 ```
