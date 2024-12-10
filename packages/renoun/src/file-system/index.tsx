@@ -1001,6 +1001,7 @@ export class Directory<
     while (segments.length > 0) {
       let entry: FileSystemEntry<Types> | undefined
       const currentSegment = segments.shift()
+      const lastSegment = segments.at(-1)
       const allEntries = await currentDirectory.getEntries({
         includeDuplicates: true,
         includeIndexAndReadme: true,
@@ -1015,6 +1016,10 @@ export class Directory<
         )
 
         if (baseSegment === currentSegment) {
+          const matchesModifier =
+            (currentEntry instanceof File && currentEntry.getModifier()) ===
+            lastSegment
+
           // Check if the entry is a file and matches the extension
           if (extension && currentEntry instanceof File) {
             const fileExtensions = Array.isArray(extension)
@@ -1024,21 +1029,19 @@ export class Directory<
             if (
               fileExtensions.includes(currentEntry.getExtension() as Extension)
             ) {
-              // Prioritize files without a modifier
-              if (
+              if (matchesModifier) {
+                return currentEntry as any
+              } else if (
                 !entry ||
-                (entry instanceof File && entry.getModifier() !== undefined)
+                (entry instanceof File && entry.getModifier())
               ) {
                 entry = currentEntry
               }
             }
-          } else {
-            if (
-              !entry ||
-              (entry instanceof File && entry.getModifier() !== undefined)
-            ) {
-              entry = currentEntry
-            }
+          } else if (matchesModifier) {
+            return currentEntry as any
+          } else if (!entry || (entry instanceof File && entry.getModifier())) {
+            entry = currentEntry
           }
         }
       }

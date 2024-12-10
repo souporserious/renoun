@@ -413,6 +413,17 @@ describe('file system', () => {
     }
   })
 
+  test('file name with modifier', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'APIReference.examples.tsx': '',
+      'APIReference.tsx': '',
+    })
+    const directory = new Directory({ fileSystem })
+    const entry = await directory.getEntryOrThrow(['APIReference', 'examples'])
+
+    expect(entry.getAbsolutePath()).toBe('/APIReference.examples.tsx')
+  })
+
   test('prioritizes base file name over file name with modifier', async () => {
     const fileSystem = new MemoryFileSystem({
       'APIReference.examples.tsx': '',
