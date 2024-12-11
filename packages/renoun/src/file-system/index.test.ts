@@ -12,12 +12,11 @@ import {
   File,
   Directory,
   JavaScriptFile,
-  JavaScriptFileWithRuntime,
   JavaScriptFileExport,
   EntryGroup,
   isDirectory,
   isFile,
-  isJavaScriptFileWithRuntime,
+  isJavaScriptFile,
 } from './index'
 
 describe('file system', () => {
@@ -397,8 +396,8 @@ describe('file system', () => {
     }).withModule((path) => import(`#fixtures/project/${path}`))
     const file = await projectDirectory.getFileOrThrow('server', 'ts')
 
-    expect(file).toBeInstanceOf(JavaScriptFileWithRuntime)
-    expectTypeOf(file).toMatchTypeOf<JavaScriptFileWithRuntime<any>>()
+    expect(file).toBeInstanceOf(JavaScriptFile)
+    expectTypeOf(file).toMatchTypeOf<JavaScriptFile<any>>()
   })
 
   test('is javascript file with runtime', async () => {
@@ -407,10 +406,10 @@ describe('file system', () => {
     }).withModule((path) => import(`#fixtures/project/${path}`))
     const entry = await projectDirectory.getEntryOrThrow('server')
 
-    expect(isJavaScriptFileWithRuntime(entry)).toBe(true)
+    expect(isJavaScriptFile(entry)).toBe(true)
 
-    if (isJavaScriptFileWithRuntime(entry)) {
-      expectTypeOf(entry).toMatchTypeOf<JavaScriptFileWithRuntime<any>>()
+    if (isJavaScriptFile(entry)) {
+      expectTypeOf(entry).toMatchTypeOf<JavaScriptFile<any>>()
     }
   })
 
@@ -722,7 +721,7 @@ describe('file system', () => {
     )
     const file = await directory.getFileOrThrow('path', 'ts')
 
-    expectTypeOf(file).toMatchTypeOf<JavaScriptFileWithRuntime<any>>()
+    expectTypeOf(file).toMatchTypeOf<JavaScriptFile<any>>()
     expect(file).toBeInstanceOf(JavaScriptFile)
 
     const fileExport = await file.getExportOrThrow('basename')
@@ -743,7 +742,7 @@ describe('file system', () => {
     )
     const file = await directory.getFileOrThrow('path', 'ts')
 
-    expectTypeOf(file).toMatchTypeOf<JavaScriptFileWithRuntime<any>>()
+    expectTypeOf(file).toMatchTypeOf<JavaScriptFile<any>>()
     expect(file).toBeInstanceOf(JavaScriptFile)
 
     const fileExport = await file.getExportOrThrow('basename')
@@ -955,7 +954,7 @@ describe('file system', () => {
 
     if (isDirectory(entry)) {
       expectTypeOf(entry).toMatchTypeOf<
-        Directory<FileTypes, false, FileSystemEntry<FileTypes>>
+        Directory<FileTypes, FileSystemEntry<FileTypes>>
       >()
     }
 

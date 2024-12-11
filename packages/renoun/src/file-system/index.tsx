@@ -38,10 +38,9 @@ export * from './Extension.js'
 export type PathCasings = SlugCasings
 
 /** A directory or file entry. */
-export type FileSystemEntry<
-  Types extends ExtensionTypes = ExtensionTypes,
-  HasModule extends boolean = boolean,
-> = Directory<Types, HasModule> | File<Types, HasModule>
+export type FileSystemEntry<Types extends ExtensionTypes = ExtensionTypes> =
+  | Directory<Types>
+  | File<Types>
 
 /** Options for a file in the file system. */
 export interface FileOptions {
@@ -59,7 +58,7 @@ export class File<
   #path: string
   #pathCasing: PathCasings
   #depth: number
-  #directory: Directory<Types, HasModule>
+  #directory: Directory<Types>
 
   constructor(options: FileOptions) {
     super(baseName(options.path))
@@ -70,7 +69,7 @@ export class File<
   }
 
   /** Duplicate the file with the same initial options. */
-  duplicate(): File<Types, HasModule> {
+  duplicate(): File<Types> {
     return new File({
       directory: this.#directory,
       path: this.#path,
@@ -80,7 +79,7 @@ export class File<
   }
 
   /** Get the directory containing this file. */
-  getParent(): Directory<Types, HasModule> {
+  getParent(): Directory<Types> {
     return this.#directory
   }
 
@@ -213,12 +212,12 @@ export class File<
    * If the file is an index or readme file, the siblings will be retrieved from the parent directory.
    */
   async getSiblings(options?: {
-    entryGroup?: EntryGroup<FileSystemEntry<Types, HasModule>[]>
+    entryGroup?: EntryGroup<FileSystemEntry<Types>[]>
     includeDuplicateSegments?: boolean
   }): Promise<
     [
-      File<Types, HasModule> | Directory<Types, HasModule> | undefined,
-      File<Types, HasModule> | Directory<Types, HasModule> | undefined,
+      File<Types> | Directory<Types> | undefined,
+      File<Types> | Directory<Types> | undefined,
     ]
   > {
     const isIndexOrReadme = ['index', 'readme'].includes(
@@ -244,20 +243,35 @@ export class File<
 
 /** A JavaScript file export. */
 export class JavaScriptFileExport<
+  Value extends Exports[ExportName] = any,
   Exports extends ExtensionType = ExtensionType,
+  ExportName extends Extract<keyof Exports, string> = Extract<
+    keyof Exports,
+    string
+  >,
 > {
   #name: string
   #file: JavaScriptFile<Exports>
   #location: Omit<FileExport, 'name'> | undefined
   #metadata: Awaited<ReturnType<typeof getFileExportMetadata>> | undefined
+  #moduleGetters?: Map<string, (path: string) => Promise<any>>
 
-  constructor(name: string, file: JavaScriptFile<Exports>) {
+  constructor(
+    name: string,
+    file: JavaScriptFile<Exports>,
+    moduleGetters?: Map<string, (path: string) => Promise<any>>
+  ) {
     this.#name = name
     this.#file = file
+    this.#moduleGetters = moduleGetters
   }
 
-  static async init(name: string, file: JavaScriptFile<any>, _?: any) {
-    const fileExport = new JavaScriptFileExport(name, file)
+  static async init(
+    name: string,
+    file: JavaScriptFile<any>,
+    moduleGetters?: Map<string, (path: string) => Promise<any>>
+  ) {
+    const fileExport = new JavaScriptFileExport(name, file, moduleGetters)
     await fileExport.getStaticMetadata()
     return fileExport
   }
@@ -388,47 +402,14 @@ export class JavaScriptFileExport<
       filter
     )
   }
-}
-
-/** A JavaScript file export with runtime value. */
-export class JavaScriptFileExportWithRuntime<
-  Value extends Exports[ExportName] = any,
-  Exports extends ExtensionType = ExtensionType,
-  ExportName extends Extract<keyof Exports, string> = Extract<
-    keyof Exports,
-    string
-  >,
-> extends JavaScriptFileExport<Exports> {
-  #name: string
-  #file: JavaScriptFileWithRuntime<Exports>
-  #moduleGetters: Map<string, (path: string) => Promise<any>>
-
-  constructor(
-    name: string,
-    file: JavaScriptFileWithRuntime<Exports>,
-    moduleGetters: Map<string, (path: string) => Promise<any>>
-  ) {
-    super(name, file)
-    this.#name = name
-    this.#file = file
-    this.#moduleGetters = moduleGetters
-  }
-
-  static async init(
-    name: string,
-    file: JavaScriptFileWithRuntime<any>,
-    moduleGetters: Map<string, (path: string) => Promise<any>>
-  ) {
-    const fileExport = new JavaScriptFileExportWithRuntime(
-      name,
-      file,
-      moduleGetters
-    )
-    await fileExport.getStaticMetadata()
-    return fileExport
-  }
 
   #getModule() {
+    if (this.#moduleGetters === undefined) {
+      throw new Error(
+        `[renoun] JavaScript file export "${this.#name}" does not have a runtime value. The "withModule" function for the closest Directory definition is not defined.`
+      )
+    }
+
     const path = this.#file.getRelativePath()
 
     if (this.#moduleGetters.has('default')) {
@@ -497,16 +478,42 @@ export class JavaScriptFileExportWithRuntime<
 export interface JavaScriptFileOptions<Exports extends ExtensionType>
   extends FileOptions {
   schema?: ExtensionSchema<Exports>
+  moduleGetters?: Map<string, (path: string) => Promise<any>>
 }
 
 /** A JavaScript file in the file system. */
 export class JavaScriptFile<Exports extends ExtensionType> extends File {
-  #exports = new Map<string, JavaScriptFileExport<Exports>>()
+  #exports = new Map<string, JavaScriptFileExport>()
   #schema?: ExtensionSchema<Exports>
+  #moduleGetters?: Map<string, (path: string) => Promise<any>>
 
-  constructor({ schema, ...fileOptions }: JavaScriptFileOptions<Exports>) {
+  constructor({
+    schema,
+    moduleGetters,
+    ...fileOptions
+  }: JavaScriptFileOptions<Exports>) {
     super(fileOptions)
     this.#schema = schema
+    this.#moduleGetters = moduleGetters
+  }
+
+  #getModule() {
+    if (this.#moduleGetters === undefined) {
+      throw new Error(
+        `[renoun] JavaScript file "${this.getAbsolutePath()}" does not have a runtime value. The "withModule" function for the closest Directory definition is not defined.`
+      )
+    }
+
+    const path = this.getRelativePath()
+
+    if (this.#moduleGetters.has('default')) {
+      return this.#moduleGetters.get('default')!(path)
+    }
+
+    const extension = this.getExtension()!
+    const getModule = this.#moduleGetters.get(extension)!
+
+    return getModule(removeExtension(path))
   }
 
   /** Parse and validate an export value using the configured schema. */
@@ -551,38 +558,39 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
     )
   }
 
-  /** Get or create a JavaScript file export by name. */
-  protected async getOrCreateExport<
-    ExportName extends Extract<keyof Exports, string>,
-  >(
-    name: ExportName,
-    createExport: () => Promise<JavaScriptFileExport<Exports>>
-  ): Promise<JavaScriptFileExport<Exports>> {
-    if (this.#exports.has(name)) {
-      return this.#exports.get(name)!
-    }
-
-    const fileExport = await createExport()
-    this.#exports.set(name, fileExport)
-
-    return fileExport
-  }
-
   /** Get a JavaScript file export by name. */
   async getExport<ExportName extends Extract<keyof Exports, string>>(
     name: ExportName
-  ): Promise<JavaScriptFileExport<Exports> | undefined> {
+  ): Promise<
+    | JavaScriptFileExport<
+        Exports[Extract<keyof Exports, string>],
+        ExtensionType,
+        Extract<keyof Exports, string>
+      >
+    | undefined
+  > {
     if (await this.hasExport(name)) {
-      return this.getOrCreateExport(name, () =>
-        JavaScriptFileExport.init(name, this)
-      )
+      if (this.#exports.has(name)) {
+        return this.#exports.get(name)!
+      }
+
+      const fileExport = await JavaScriptFileExport.init(name, this)
+      this.#exports.set(name, fileExport)
+
+      return fileExport
     }
   }
 
   /** Get a JavaScript file export by name or throw an error if it does not exist. */
   async getExportOrThrow<ExportName extends Extract<keyof Exports, string>>(
     name: ExportName
-  ): Promise<JavaScriptFileExport<Exports>> {
+  ): Promise<
+    JavaScriptFileExport<
+      Exports[Extract<keyof Exports, string>],
+      ExtensionType,
+      Extract<keyof Exports, string>
+    >
+  > {
     const fileExport = await this.getExport(name)
 
     if (fileExport === undefined) {
@@ -600,97 +608,12 @@ export class JavaScriptFile<Exports extends ExtensionType> extends File {
     return fileExports.find((exportMetadata) => exportMetadata.name === name)
   }
 
-  /** Check if an export exists in the JavaScript file. */
-  async hasExport(name: string): Promise<boolean> {
-    try {
-      const location = await this.getExportLocation(name)
-      return location !== undefined
-    } catch {
-      return false
-    }
-  }
-}
-
-interface JavaScriptFileWithRuntimeOptions<Exports extends ExtensionType>
-  extends JavaScriptFileOptions<Exports> {
-  moduleGetters?: Map<string, (path: string) => Promise<any>>
-}
-
-/** A JavaScript file in the file system with runtime support. */
-export class JavaScriptFileWithRuntime<
-  Exports extends ExtensionType,
-> extends JavaScriptFile<Exports> {
-  #moduleGetters: Map<string, (path: string) => Promise<any>>
-
-  constructor({
-    moduleGetters,
-    ...fileOptions
-  }: JavaScriptFileWithRuntimeOptions<Exports> & {
-    moduleGetters: Map<string, (path: string) => Promise<any>>
-  }) {
-    super(fileOptions)
-    this.#moduleGetters = moduleGetters
-  }
-
-  #getModule() {
-    const path = this.getRelativePath()
-
-    if (this.#moduleGetters.has('default')) {
-      return this.#moduleGetters.get('default')!(path)
-    }
-
-    const extension = this.getExtension()!
-    const getModule = this.#moduleGetters.get(extension)!
-
-    return getModule(removeExtension(path))
-  }
-
-  /** Get all exports from the JavaScript file. */
-  override async getExports(): Promise<
-    JavaScriptFileExportWithRuntime<Exports>[]
-  > {
-    return super.getExports() as any
-  }
-
-  /** Get a JavaScript file export by name. */
-  override async getExport<ExportName extends Extract<keyof Exports, string>>(
-    name: ExportName
-  ): Promise<
-    | JavaScriptFileExportWithRuntime<
-        Exports[ExportName],
-        Exports,
-        Extract<keyof Exports, string>
-      >
-    | undefined
-  > {
-    if (await this.hasExport(name)) {
-      return this.getOrCreateExport(name, () =>
-        JavaScriptFileExportWithRuntime.init(name, this, this.#moduleGetters)
-      ) as any
-    }
-  }
-
-  /** Get a JavaScript file export by name or throw an error if it does not exist. */
-  override async getExportOrThrow<
-    ExportName extends Extract<keyof Exports, string>,
-  >(
-    name: ExportName
-  ): Promise<
-    JavaScriptFileExportWithRuntime<
-      Exports[ExportName],
-      Exports,
-      Extract<keyof Exports, string>
-    >
-  > {
-    return super.getExportOrThrow(name) as any
-  }
-
   /** Get the runtime value of an export in the JavaScript file. */
   async getExportValue<ExportName extends Extract<keyof Exports, string>>(
     name: ExportName
   ): Promise<Exports[ExportName] | undefined> {
     const fileExport = await this.getExport(name)
-    return fileExport?.getRuntimeValue()
+    return fileExport?.getRuntimeValue() as Exports[ExportName] | undefined
   }
 
   /** Get the runtime value of an export in the JavaScript file or throw an error if it does not exist. */
@@ -698,13 +621,23 @@ export class JavaScriptFileWithRuntime<
     ExportName extends Extract<keyof Exports, string>,
   >(name: ExportName): Promise<Exports[ExportName]> {
     const fileExport = await this.getExportOrThrow(name)
-    return fileExport.getRuntimeValue()
+    return fileExport.getRuntimeValue() as Exports[ExportName]
   }
 
   /** Check if an export exists in the JavaScript file. */
-  override async hasExport(name: string): Promise<boolean> {
+  async #hasStaticExport(name: string): Promise<boolean> {
+    try {
+      const location = await this.getExportLocation(name)
+      return location !== undefined
+    } catch {
+      return false
+    }
+  }
+
+  /** Check if an export exists in the JavaScript file. */
+  async hasExport(name: string): Promise<boolean> {
     // First, attempt to statically analyze the export
-    if (await super.hasExport(name)) {
+    if (await this.#hasStaticExport(name)) {
       return true
     }
 
@@ -765,11 +698,7 @@ interface DirectoryOptions {
 /** A directory containing files and subdirectories in the file system. */
 export class Directory<
   Types extends ExtensionTypes = ExtensionTypes,
-  HasModule extends boolean = false,
-  Entry extends FileSystemEntry<Types, HasModule> = FileSystemEntry<
-    Types,
-    HasModule
-  >,
+  Entry extends FileSystemEntry<Types> = FileSystemEntry<Types>,
 > {
   #path: string
   #depth: number = -1
@@ -784,8 +713,8 @@ export class Directory<
   #moduleGetters?: Map<string, (path: string) => Promise<any>>
   #sortCallback?: (a: Entry, b: Entry) => Promise<number> | number
   #filterCallback?:
-    | ((entry: FileSystemEntry<Types, HasModule>) => entry is Entry)
-    | ((entry: FileSystemEntry<Types, HasModule>) => Promise<boolean> | boolean)
+    | ((entry: FileSystemEntry<Types>) => entry is Entry)
+    | ((entry: FileSystemEntry<Types>) => Promise<boolean> | boolean)
 
   constructor(path?: DirectoryOptions) {
     if (path === undefined) {
@@ -801,13 +730,10 @@ export class Directory<
   }
 
   /** Duplicate the directory with the same initial options. */
-  #duplicate<
-    Entry extends FileSystemEntry<Types, HasModule> = FileSystemEntry<
-      Types,
-      HasModule
-    >,
-  >(options?: DirectoryOptions): Directory<Types, HasModule, Entry> {
-    const directory = new Directory<Types, HasModule, Entry>({
+  #duplicate<Entry extends FileSystemEntry<Types> = FileSystemEntry<Types>>(
+    options?: DirectoryOptions
+  ): Directory<Types, Entry> {
+    const directory = new Directory<Types, Entry>({
       path: this.#path,
       fileSystem: this.#fileSystem,
       ...options,
@@ -833,12 +759,10 @@ export class Directory<
     moduleGetters?: Map<string, (path: string) => Promise<any>>
     sortCallback?: (a: Entry, b: Entry) => Promise<number> | number
     filterCallback?:
-      | ((entry: FileSystemEntry<Types, HasModule>) => entry is Entry)
-      | ((
-          entry: FileSystemEntry<Types, HasModule>
-        ) => Promise<boolean> | boolean)
+      | ((entry: FileSystemEntry<Types>) => entry is Entry)
+      | ((entry: FileSystemEntry<Types>) => Promise<boolean> | boolean)
   }) {
-    const directory = new Directory<Types, HasModule, Entry>({
+    const directory = new Directory<Types, Entry>({
       path: this.#path,
     })
 
@@ -856,20 +780,18 @@ export class Directory<
   }
 
   /** Returns a new `Directory` with a module getter applied to all JavaScript files. */
-  withModule(
-    getModule: (path: string) => Promise<any>
-  ): Directory<Types, true, Entry>
+  withModule(getModule: (path: string) => Promise<any>): Directory<Types, Entry>
 
   /** Returns a new `Directory` with a module getter applied to files with the specified extension. */
   withModule(
     extension: string,
     getModule: (path: string) => Promise<any>
-  ): Directory<Types, true, Entry>
+  ): Directory<Types, Entry>
 
   withModule(
     extension: string | ((path: string) => Promise<any>),
     getModule?: (path: string) => Promise<any>
-  ): Directory<Types, true, Entry> {
+  ): Directory<Types, Entry> {
     const moduleGetters = this.#moduleGetters ?? new Map()
 
     if (typeof extension === 'string') {
@@ -889,25 +811,22 @@ export class Directory<
 
   /** Returns a new `Directory` with a narrowed type and filter applied to all descendant entries. */
   withFilter<FilteredEntry extends Entry>(
-    filterCallback: (
-      entry: FileSystemEntry<Types, HasModule>
-    ) => entry is FilteredEntry
-  ): Directory<Types, HasModule, FilteredEntry>
+    filterCallback: (entry: FileSystemEntry<Types>) => entry is FilteredEntry
+  ): Directory<Types, FilteredEntry>
 
   withFilter<FilteredEntry extends Entry>(
     filterCallback: (
-      entry: FileSystemEntry<Types, HasModule>
+      entry: FileSystemEntry<Types>
     ) => Promise<boolean> | boolean
-  ): Directory<Types, HasModule, FilteredEntry>
+  ): Directory<Types, FilteredEntry>
 
   withFilter<FilteredEntry extends Entry>(
     filterCallback: (
-      entry: FileSystemEntry<Types, HasModule>
+      entry: FileSystemEntry<Types>
     ) => Promise<boolean> | boolean
-  ): Directory<Types, HasModule, FilteredEntry> {
+  ): Directory<Types, FilteredEntry> {
     return this.#withOptions({ filterCallback }) as Directory<
       Types,
-      HasModule,
       FilteredEntry
     >
   }
@@ -915,7 +834,7 @@ export class Directory<
   /** Returns a new `Directory` with a sorting function applied to all descendant entries. */
   withSort(
     sortCallback: (a: Entry, b: Entry) => Promise<number> | number
-  ): Directory<Types, HasModule, Entry> {
+  ): Directory<Types, Entry> {
     return this.#withOptions({ sortCallback })
   }
 
@@ -923,7 +842,7 @@ export class Directory<
   withSchema<Extension extends keyof Types>(
     extension: Extension,
     schema: ExtensionSchemas<Types>[Extension]
-  ): Directory<Types, HasModule, Entry> {
+  ): Directory<Types, Entry> {
     if (this.#schemas[extension]) {
       throw new Error(
         `[renoun] Schema for extension "${String(extension)}" is already defined in the directory "${this.#path}".`
@@ -989,9 +908,7 @@ export class Directory<
   ): Promise<
     | (Extension extends string
         ? IsJavaScriptLikeExtension<Extension> extends true
-          ? HasModule extends true
-            ? JavaScriptFileWithRuntime<Types[Extension]>
-            : JavaScriptFile<Types[Extension]>
+          ? JavaScriptFile<Types[Extension]>
           : File<Types>
         : File<Types>)
     | undefined
@@ -1130,9 +1047,7 @@ export class Directory<
   ): Promise<
     Extension extends string
       ? IsJavaScriptLikeExtension<Extension> extends true
-        ? HasModule extends true
-          ? JavaScriptFileWithRuntime<Types[Extension]>
-          : JavaScriptFile<Types[Extension]>
+        ? JavaScriptFile<Types[Extension]>
         : File<Types>
       : File<Types>
   > {
@@ -1160,7 +1075,7 @@ export class Directory<
   /** Get a directory at the specified `path`. */
   async getDirectory(
     path: string | string[]
-  ): Promise<Directory<Types, HasModule> | undefined> {
+  ): Promise<Directory<Types> | undefined> {
     const segments = Array.isArray(path)
       ? path.slice(0)
       : path.split('/').filter(Boolean)
@@ -1205,7 +1120,7 @@ export class Directory<
    */
   async getDirectoryOrThrow(
     path: string | string[]
-  ): Promise<Directory<Types, HasModule>> {
+  ): Promise<Directory<Types>> {
     const directory = await this.getDirectory(path)
 
     if (!directory) {
@@ -1222,7 +1137,7 @@ export class Directory<
   /** Get a file or directory at the specified `path`. Files will be prioritized over directories. */
   async getEntry(
     path: string | string[]
-  ): Promise<FileSystemEntry<Types, HasModule> | undefined> {
+  ): Promise<FileSystemEntry<Types> | undefined> {
     const file = await this.getFile(path)
 
     if (file) {
@@ -1239,7 +1154,7 @@ export class Directory<
   /** Get a file or directory at the specified `path`. An error will be thrown if the entry is not found. */
   async getEntryOrThrow(
     path: string | string[]
-  ): Promise<FileSystemEntry<Types, HasModule>> {
+  ): Promise<FileSystemEntry<Types>> {
     const entry = await this.getEntry(path)
 
     if (!entry) {
@@ -1326,22 +1241,14 @@ export class Directory<
       } else if (entry.isFile) {
         const extension = extensionName(entry.name).slice(1)
         const file = isJavaScriptLikeExtension(extension)
-          ? this.#moduleGetters
-            ? new JavaScriptFileWithRuntime<Types>({
-                path: entry.path,
-                depth: nextDepth,
-                directory: thisDirectory,
-                pathCasing: this.#pathCasing,
-                moduleGetters: this.#moduleGetters,
-                schema: this.#schemas[extension],
-              })
-            : new JavaScriptFile<Types>({
-                path: entry.path,
-                depth: nextDepth,
-                directory: thisDirectory,
-                pathCasing: this.#pathCasing,
-                schema: this.#schemas[extension],
-              })
+          ? new JavaScriptFile<Types>({
+              path: entry.path,
+              depth: nextDepth,
+              directory: thisDirectory,
+              pathCasing: this.#pathCasing,
+              schema: this.#schemas[extension],
+              moduleGetters: this.#moduleGetters,
+            })
           : new File({
               path: entry.path,
               depth: nextDepth,
@@ -1407,14 +1314,11 @@ export class Directory<
 
   /** Get the previous and next sibling entries (files or directories) of the parent directory. */
   async getSiblings(options?: {
-    entryGroup?: EntryGroup<FileSystemEntry<Types, HasModule>[]>
+    entryGroup?: EntryGroup<FileSystemEntry<Types>[]>
   }): Promise<
-    [
-      FileSystemEntry<Types, HasModule> | undefined,
-      FileSystemEntry<Types, HasModule> | undefined,
-    ]
+    [FileSystemEntry<Types> | undefined, FileSystemEntry<Types> | undefined]
   > {
-    let entries: FileSystemEntry<Types, HasModule>[]
+    let entries: FileSystemEntry<Types>[]
 
     if (options?.entryGroup) {
       entries = await options.entryGroup.getEntries({ recursive: true })
@@ -1533,9 +1437,7 @@ export class Directory<
   }
 
   /** Checks if this directory contains the provided entry. */
-  hasEntry(
-    entry: FileSystemEntry<Types, HasModule> | undefined
-  ): entry is Entry {
+  hasEntry(entry: FileSystemEntry<Types> | undefined): entry is Entry {
     if (entry === undefined) {
       return false
     }
@@ -1557,9 +1459,9 @@ export class Directory<
     Type extends keyof Types | (string & {}),
     const Extension extends Type | Type[],
   >(
-    entry: FileSystemEntry<any, boolean> | undefined,
+    entry: FileSystemEntry<any> | undefined,
     extension?: Extension
-  ): entry is FileWithExtension<Types, Extension, HasModule> {
+  ): entry is FileWithExtension<Types, Extension> {
     const extensions = Array.isArray(extension) ? extension : [extension]
 
     if (entry instanceof File && this.hasEntry(entry)) {
@@ -1821,22 +1723,15 @@ export function isDirectory<Types extends ExtensionTypes>(
 export type FileWithExtension<
   Types extends ExtensionTypes,
   Extension extends keyof Types | (keyof Types)[],
-  HasModule extends boolean = false,
 > = Extension extends string
   ? IsJavaScriptLikeExtension<Extension> extends true
-    ? HasModule extends true
-      ? JavaScriptFileWithRuntime<Types[Extension]>
-      : JavaScriptFile<Types[Extension]>
+    ? JavaScriptFile<Types[Extension]>
     : File<Types>
   : Extension extends string[]
     ? HasJavaScriptLikeExtensions<Extension> extends true
-      ? HasModule extends true
-        ? JavaScriptFileWithRuntime<
-            Types[Extract<Extension[number], JavaScriptLikeExtensions>]
-          >
-        : JavaScriptFile<
-            Types[Extract<Extension[number], JavaScriptLikeExtensions>]
-          >
+      ? JavaScriptFile<
+          Types[Extract<Extension[number], JavaScriptLikeExtensions>]
+        >
       : File<Types>
     : File<Types>
 
@@ -1848,11 +1743,10 @@ export function isFile<
   Types extends ExtensionTypes,
   Type extends keyof Types | (string & {}),
   const Extension extends Type | Type[],
-  HasModule extends boolean,
 >(
-  entry: FileSystemEntry<Types, HasModule>,
+  entry: FileSystemEntry<Types>,
   extension?: Extension
-): entry is FileWithExtension<Types, Extension, HasModule> {
+): entry is FileWithExtension<Types, Extension> {
   if (entry instanceof File) {
     const fileExtension = entry.getExtension()
 
@@ -1874,17 +1768,8 @@ export function isFile<
 }
 
 /** Determines if a `FileSystemEntry` is a `JavaScriptFile`. */
-export function isJavaScriptFile<HasModule extends boolean>(
-  entry: FileSystemEntry<any, HasModule>
-): entry is HasModule extends true
-  ? JavaScriptFileWithRuntime<any>
-  : JavaScriptFile<any> {
+export function isJavaScriptFile(
+  entry: FileSystemEntry<any>
+): entry is JavaScriptFile<any> {
   return entry instanceof JavaScriptFile
-}
-
-/** Determines if a `FileSystemEntry` is a `JavaScriptFileWithRuntime`. */
-export function isJavaScriptFileWithRuntime<Exports extends ExtensionTypes>(
-  entry: FileSystemEntry<any, true>
-): entry is JavaScriptFileWithRuntime<Exports> {
-  return entry instanceof JavaScriptFileWithRuntime
 }
