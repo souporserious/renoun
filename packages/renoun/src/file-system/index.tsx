@@ -767,7 +767,7 @@ export class Directory<
 > {
   #path: string
   #depth: number = -1
-  #pathCasing: PathCasings = 'none'
+  #pathCasing: PathCasings = 'kebab'
   #basePath?: string
   #tsConfigPath?: string
   #fileSystem: FileSystem | undefined
@@ -780,16 +780,12 @@ export class Directory<
     | ((entry: FileSystemEntry<Types, HasModule>) => entry is Entry)
     | ((entry: FileSystemEntry<Types, HasModule>) => Promise<boolean> | boolean)
 
-  constructor(path?: string)
-  constructor(path?: DirectoryOptions)
-  constructor(path?: any) {
+  constructor(path?: DirectoryOptions) {
     if (path === undefined) {
       this.#path = '.'
-    } else if (typeof path === 'string') {
-      this.#path = ensureRelativePath(path)
     } else {
       this.#path = ensureRelativePath(path.path)
-      this.#pathCasing = path.pathCasing
+      this.#pathCasing = path.pathCasing ?? 'kebab'
       this.#basePath = path.basePath
       this.#tsConfigPath = path.tsConfigPath
       this.#fileSystem = path.fileSystem
