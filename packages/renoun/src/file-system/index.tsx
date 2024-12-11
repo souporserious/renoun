@@ -743,7 +743,10 @@ interface DirectoryOptions {
   /** The path to the directory in the file system. */
   path?: string
 
-  /** The casing format for path segments. */
+  /** The base path to apply to all descendant entry `getPath` and `getPathSegments` methods. */
+  basePath?: string
+
+  /** The path casing to apply to all descendant entry `getPath` and `getPathSegments` methods. */
   pathCasing?: PathCasings
 
   /** The tsconfig.json file path to use for type checking and analysis. */
@@ -787,6 +790,7 @@ export class Directory<
     } else {
       this.#path = ensureRelativePath(path.path)
       this.#pathCasing = path.pathCasing
+      this.#basePath = path.basePath
       this.#tsConfigPath = path.tsConfigPath
       this.#fileSystem = path.fileSystem
     }
@@ -837,7 +841,7 @@ export class Directory<
     directory.#depth = this.#depth
     directory.#tsConfigPath = this.#tsConfigPath
     directory.#pathCasing = this.#pathCasing
-    directory.#basePath = options.basePath ?? this.#basePath
+    directory.#basePath = this.#basePath
     directory.#fileSystem = options.fileSystem ?? this.#fileSystem
     directory.#schemas = options.schemas ?? this.#schemas
     directory.#moduleGetters = options.moduleGetters ?? this.#moduleGetters
@@ -845,11 +849,6 @@ export class Directory<
     directory.#filterCallback = options.filterCallback ?? this.#filterCallback
 
     return directory
-  }
-
-  /** Returns a new `Directory` with a base path applied to all descendant entries. */
-  withBasePath(basePath: string): Directory<Types, HasModule, Entry> {
-    return this.#withOptions({ basePath })
   }
 
   /** Returns a new `Directory` with a module getter applied to all JavaScript files. */

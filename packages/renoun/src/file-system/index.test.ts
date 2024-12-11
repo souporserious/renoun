@@ -829,9 +829,10 @@ describe('file system', () => {
   })
 
   test('generates tree navigation', async () => {
-    const projectDirectory = new Directory('fixtures/project').withBasePath(
-      'project'
-    )
+    const projectDirectory = new Directory({
+      path: 'fixtures/project',
+      basePath: 'project',
+    })
 
     async function buildTreeNavigation<Entry extends FileSystemEntry<any>>(
       entry: Entry
@@ -900,9 +901,10 @@ describe('file system', () => {
   })
 
   test('adds base path to entry getPath and getPathSegments', async () => {
-    const projectDirectory = new Directory('fixtures/project').withBasePath(
-      'renoun'
-    )
+    const projectDirectory = new Directory({
+      path: 'fixtures/project',
+      basePath: 'renoun',
+    })
 
     expect(projectDirectory.getBasePath()).toBe('renoun')
 
