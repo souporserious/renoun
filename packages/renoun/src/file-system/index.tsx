@@ -31,6 +31,9 @@ import {
   type GetFileUrlOptions,
   type GetDirectoryUrlOptions,
 } from './Repository.js'
+import type { Extension } from './Extension.js'
+
+export * from './Extension.js'
 
 export type PathCasings = SlugCasings
 
@@ -749,8 +752,11 @@ interface DirectoryOptions {
   /** The path casing to apply to all descendant entry `getPath` and `getPathSegments` methods. */
   pathCasing?: PathCasings
 
-  /** The tsconfig.json file path to use for type checking and analysis. */
+  /** The tsconfig.json file path to use for type checking and analyzing JavaScript and TypeScript files. */
   tsConfigPath?: string
+
+  /** The extension definitions to use for loading and validating file exports. */
+  extensions?: Record<string, Extension>
 
   /** The file system to use for reading directory entries. */
   fileSystem?: FileSystem
@@ -770,6 +776,7 @@ export class Directory<
   #pathCasing: PathCasings = 'kebab'
   #basePath?: string
   #tsConfigPath?: string
+  #extensions?: Record<string, Extension>
   #fileSystem: FileSystem | undefined
   #repository: Repository | undefined
   #directory?: Directory<any, any>
@@ -786,6 +793,7 @@ export class Directory<
     } else {
       this.#path = ensureRelativePath(path.path)
       this.#pathCasing = path.pathCasing ?? 'kebab'
+      this.#extensions = path.extensions
       this.#basePath = path.basePath
       this.#tsConfigPath = path.tsConfigPath
       this.#fileSystem = path.fileSystem

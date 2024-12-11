@@ -4,6 +4,7 @@ import { runInNewContext } from 'node:vm'
 import { z } from 'zod'
 
 import type { MDXContent } from '../mdx'
+import { Extension } from './Extension'
 import { NodeFileSystem } from './NodeFileSystem'
 import { MemoryFileSystem } from './MemoryFileSystem'
 import {
@@ -1146,11 +1147,17 @@ describe('file system', () => {
     type MDXTypes = { frontmatter: { title: string } }
     type TSXTypes = { metadata: { title: string } }
 
-    const directoryA = new Directory<{ mdx: MDXTypes }>({
+    const directoryA = new Directory({
       fileSystem: new MemoryFileSystem({ 'Button.mdx': '' }),
+      extensions: {
+        mdx: new Extension<MDXTypes>(),
+      },
     })
-    const directoryB = new Directory<{ tsx: TSXTypes }>({
+    const directoryB = new Directory({
       path: 'fixtures/components',
+      extensions: {
+        tsx: new Extension<TSXTypes>(),
+      },
     })
     const group = new EntryGroup({
       entries: [directoryA, directoryB],
