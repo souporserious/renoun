@@ -13,11 +13,10 @@ function getRenounImport(path: string) {
 
 type CollectionsSchema = Record<string, React.ComponentType>
 
-export const CollectionsCollection = new Directory<{ tsx: CollectionsSchema }>(
-  '../../packages/renoun/src/collections'
-)
-  .withBasePath('collections')
-  .withFilter((entry) => isFile(entry, 'tsx'))
+export const CollectionsCollection = new Directory<{ tsx: CollectionsSchema }>({
+  path: '../../packages/renoun/src/collections',
+  basePath: 'collections',
+}).withFilter((entry) => isFile(entry, 'tsx'))
 
 const metadataSchema = z.object({
   title: z.string(),
@@ -32,8 +31,10 @@ type CollectionsDocsSchema = {
 
 export const CollectionsDocsCollection = new Directory<{
   mdx: CollectionsDocsSchema
-}>('../../packages/renoun/src/collections/docs')
-  .withBasePath('collections')
+}>({
+  path: '../../packages/renoun/src/collections/docs',
+  basePath: 'collections',
+})
   .withSchema('mdx', { metadata: metadataSchema.parse })
   .withModule((path) => getRenounImport(`collections/docs/${path}`))
   .withFilter((entry) => isFile(entry, 'mdx'))
@@ -58,8 +59,8 @@ export const ComponentsCollection = new Directory<
   path: '../../packages/renoun/src/components',
   tsConfigPath: '../../packages/renoun/tsconfig.json',
   pathCasing: 'kebab',
+  basePath: 'components',
 })
-  .withBasePath('components')
   .withModule((path) => getRenounImport(`components/${path}`))
   .withFilter(async (entry) => {
     if (isFile(entry, ['ts', 'tsx'])) {

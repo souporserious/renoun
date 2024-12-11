@@ -14,12 +14,16 @@ interface DocsSchema {
 
 export type DocsEntry = FileSystemEntry<DocsSchema>
 
-export const DocsCollection = new Directory<{ mdx: DocsSchema }>('docs')
-  .withBasePath('docs')
+export const DocsCollection = new Directory<{ mdx: DocsSchema }>({
+  path: 'docs',
+  basePath: 'docs',
+})
   .withModule((path) => import(`@/docs/${path}`))
   .withFilter((entry) => isFile(entry, 'mdx'))
 
-export const GuidesCollection = new Directory<{ mdx: DocsSchema }>('guides')
-  .withBasePath('guides')
+export const GuidesCollection = new Directory<{ mdx: DocsSchema }>({
+  path: 'guides',
+  basePath: 'guides',
+})
   .withModule((path) => import(`@/guides/${path}`))
   .withFilter((entry) => isFile(entry, 'mdx'))
