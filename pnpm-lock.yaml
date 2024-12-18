@@ -43,8 +43,8 @@ catalogs:
       specifier: 5.96.1
       version: 5.96.1
     zod:
-      specifier: 3.23.8
-      version: 3.23.8
+      specifier: 3.24.1
+      version: 3.24.1
 
 importers:
 
@@ -136,10 +136,10 @@ importers:
         version: 5.96.1(esbuild@0.24.0)
       zod:
         specifier: 'catalog:'
-        version: 3.23.8
+        version: 3.24.1
       zod-to-json-schema:
         specifier: 3.23.5
-        version: 3.23.5(zod@3.23.8)
+        version: 3.23.5(zod@3.24.1)
 
   examples/blog:
     dependencies:
@@ -184,7 +184,7 @@ importers:
         version: 5.96.1(esbuild@0.24.0)
       zod:
         specifier: 'catalog:'
-        version: 3.23.8
+        version: 3.24.1
 
   examples/design-system:
     dependencies:
@@ -337,6 +337,9 @@ importers:
         specifier: ^8.18.0
         version: 8.18.0
     devDependencies:
+      '@standard-schema/spec':
+        specifier: 1.0.0-beta.4
+        version: 1.0.0-beta.4
       '@types/glob-parent':
         specifier: 5.1.3
         version: 5.1.3
@@ -361,9 +364,12 @@ importers:
       react-dom:
         specifier: 'catalog:'
         version: 19.0.0-rc-02c0e824-20241028(react@19.0.0-rc-02c0e824-20241028)
+      valibot:
+        specifier: 1.0.0-beta.9
+        version: 1.0.0-beta.9(typescript@5.6.3)
       zod:
         specifier: 'catalog:'
-        version: 3.23.8
+        version: 3.24.1
 
 packages:
 
@@ -1273,6 +1279,9 @@ packages:
 
   '@shikijs/vscode-textmate@9.3.0':
     resolution: {integrity: sha512-jn7/7ky30idSkd/O5yDBfAnVt+JJpepofP/POZ1iMOxK59cOfqIgg/Dj0eFsjOTMw+4ycJN0uhZH/Eb0bs/EUA==}
+
+  '@standard-schema/spec@1.0.0-beta.4':
+    resolution: {integrity: sha512-d3IxtzLo7P1oZ8s8YNvxzBUXRXojSut8pbPrTYtzsc5sn4+53jVqbk66pQerSZbZSJZQux6LkclB/+8IDordHg==}
 
   '@swc/counter@0.1.3':
     resolution: {integrity: sha512-e2BR4lsJkkRlKZ/qCHPw9ZaSxc0MVUd7gtbtaB7aMvHeJVYe8sOB8DBZkP2DtISHGSku9sCK6T6cnY0CtXrOCQ==}
@@ -3321,6 +3330,14 @@ packages:
   uri-js@4.4.1:
     resolution: {integrity: sha512-7rKUyy33Q1yc98pQ1DAmLtwX109F7TIfWlW1Ydo8Wl1ii1SeHieeh0HHfPeL2fMXK6z0s8ecKs9frCuLJvndBg==}
 
+  valibot@1.0.0-beta.9:
+    resolution: {integrity: sha512-yEX8gMAZ2R1yI2uwOO4NCtVnJQx36zn3vD0omzzj9FhcoblvPukENIiRZXKZwCnqSeV80bMm8wNiGhQ0S8fiww==}
+    peerDependencies:
+      typescript: '>=5'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
+
   validate.io-array@1.0.6:
     resolution: {integrity: sha512-DeOy7CnPEziggrOO5CZhVKJw6S3Yi7e9e65R1Nl/RTN1vTQKnzjfvks0/8kQ40FP/dsjRAOd4hxmJ7uLa6vxkg==}
 
@@ -3489,8 +3506,8 @@ packages:
     peerDependencies:
       zod: ^3.23.3
 
-  zod@3.23.8:
-    resolution: {integrity: sha512-XBx9AXhXktjUqnepgTiE5flcKIYWi/rme0Eaj+5Y0lftuGBq+jyRu/md4WnuxqgP1ubdpNCsYEYPxrzVHD8d6g==}
+  zod@3.24.1:
+    resolution: {integrity: sha512-muH7gBL9sI1nciMZV67X5fTKKBLtwpZ5VBp1vsOQzj1MhrBZ4wlVCm3gedKZWLp0Oyel8sIGfeiz54Su+OVT+A==}
 
   zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
@@ -4220,6 +4237,8 @@ snapshots:
       '@types/hast': 3.0.4
 
   '@shikijs/vscode-textmate@9.3.0': {}
+
+  '@standard-schema/spec@1.0.0-beta.4': {}
 
   '@swc/counter@0.1.3': {}
 
@@ -6822,6 +6841,10 @@ snapshots:
     dependencies:
       punycode: 2.3.1
 
+  valibot@1.0.0-beta.9(typescript@5.6.3):
+    optionalDependencies:
+      typescript: 5.6.3
+
   validate.io-array@1.0.6: {}
 
   validate.io-boolean@1.0.4: {}
@@ -7001,10 +7024,10 @@ snapshots:
 
   yaml@2.5.1: {}
 
-  zod-to-json-schema@3.23.5(zod@3.23.8):
+  zod-to-json-schema@3.23.5(zod@3.24.1):
     dependencies:
-      zod: 3.23.8
+      zod: 3.24.1
 
-  zod@3.23.8: {}
+  zod@3.24.1: {}
 
   zwitch@2.0.4: {}
