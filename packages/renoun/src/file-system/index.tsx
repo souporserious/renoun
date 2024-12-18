@@ -38,39 +38,37 @@ type Loader = (path: string) => Promise<Record<string, unknown>>
 type FileExportsSchema = Record<string, StandardSchemaV1>
 
 /** Loader interface for an object of schemas. */
-interface LoaderWithSchema<Schema extends FileExportsSchema> {
+interface LoaderWithSchema<Schema> {
   loader: Loader
   schema: Schema
 }
 
 /** A loader with an object of schemas, or no schema. */
-type FileLoader<Schema = any> = Schema extends FileExportsSchema
-  ? LoaderWithSchema<Schema>
-  : Loader
+type FileLoader<Schema = any> = LoaderWithSchema<Schema> | Loader
 
 /** A set of functions that resolves a file's runtime based on its extension. */
 type FileLoaders<Schema = any> = Record<string, FileLoader<Schema>>
 
 /** Resolves the file export types from a loader. */
-type SchemaToExportsType<Schema> = Schema extends FileExportsSchema
-  ? { [Name in keyof Schema]: StandardSchemaV1.InferOutput<Schema[Name]> }
-  : Record<string, unknown>
+type SchemaToExportsType<Schema> =
+  Schema extends Record<string, StandardSchemaV1>
+    ? { [Name in keyof Schema]: StandardSchemaV1.InferOutput<Schema[Name]> }
+    : Schema extends Record<string, (value: unknown) => infer SchemaType>
+      ? { [Name in keyof Schema]: SchemaType }
+      : Schema
 
 /** Resolves the file exports type from a loader. */
 type LoaderToExportsType<Loader extends FileLoader> =
   Loader extends LoaderWithSchema<infer Schema>
     ? SchemaToExportsType<Schema>
-    : unknown
-
-/** Resolves the schema from a loader. */
-type ExtractLoaderSchema<Loader extends FileLoader> =
-  Loader extends LoaderWithSchema<infer Schema> ? Schema : never
+    : Record<string, unknown>
 
 /** Resolves the file exports type from an object of loaders. */
-type LoadersToExportsType<Loaders> = {
-  [Extension in keyof Loaders]: SchemaToExportsType<Loaders[Extension]>
+type LoadersToExportsType<Loaders extends FileLoaders> = {
+  [Extension in keyof Loaders]: LoaderToExportsType<Loaders[Extension]>
 }
 
+/** Resolves valid extension patterns from an object of loaders. */
 type LoadersToExtensions<
   DirectoryLoaders extends FileLoaders,
   ExtensionUnion = keyof DirectoryLoaders | (string & {}),
@@ -90,14 +88,27 @@ function isLoaderWithSchema<Schema extends FileExportsSchema>(
   return 'validateSchema' in loader
 }
 
+type CustomValidatorFunction<Output> = (value: Output) => Output
+
+type CustomSchema<Output> = {
+  [Key in keyof Output]?: CustomValidatorFunction<Output[Key]>
+}
+
 /**
  * Utility to combine a loader function with schema validation.
  * Supports both a single schema and an object of schemas.
  */
-export function withSchema<Schema extends FileExportsSchema>(
+export function withSchema<Schema extends Record<string, any>>(
+  schema: CustomSchema<Schema>,
+  loader: Loader
+): LoaderWithSchema<CustomSchema<Schema>>
+
+export function withSchema<Schema extends Record<string, StandardSchemaV1>>(
   schema: Schema,
   loader: Loader
-): LoaderWithSchema<Schema> {
+): LoaderWithSchema<Schema>
+
+export function withSchema(schema: any, loader: Loader): LoaderWithSchema<any> {
   return { schema, loader }
 }
 
@@ -224,6 +235,12 @@ export class File<
     return fileSystem.getRelativePath(this.#path)
   }
 
+  /** Get the file path relative to the workspace root. */
+  getRelativePathToWorkspace() {
+    const fileSystem = this.#directory.getFileSystem()
+    return fileSystem.getRelativePathToWorkspace(this.#path)
+  }
+
   /** Get the absolute file system path. */
   getAbsolutePath() {
     const fileSystem = this.#directory.getFileSystem()
@@ -236,7 +253,7 @@ export class File<
     const fileSystem = this.#directory.getFileSystem()
 
     return repository.getFileUrl({
-      path: fileSystem.getPathRelativeToWorkspace(this.#path),
+      path: fileSystem.getRelativePathToWorkspace(this.#path),
       ...options,
     })
   }
@@ -301,8 +318,8 @@ export class File<
 type ValueFromExport<
   DirectoryLoaders extends FileLoaders = FileLoaders,
   Extension extends string = string,
-> = LoadersToExportsType<DirectoryLoaders[Extension]>[Extract<
-  keyof LoadersToExportsType<DirectoryLoaders[Extension]>,
+> = LoaderToExportsType<DirectoryLoaders[Extension]>[Extract<
+  keyof LoaderToExportsType<DirectoryLoaders[Extension]>,
   string
 >]
 
@@ -463,8 +480,10 @@ export class JavaScriptFileExport<Value> {
 
   #getModule() {
     if (this.#loader === undefined) {
+      const parentPath = this.#file.getParent().getRelativePathToWorkspace()
+
       throw new Error(
-        `[renoun] JavaScript file export "${this.#name}" does not have a runtime value. A loader for the parent Directory is not defined.`
+        `[renoun] A loader for the parent Directory at ${parentPath} is not defined.`
       )
     }
 
@@ -482,13 +501,14 @@ export class JavaScriptFileExport<Value> {
    * is not found or the configured schema validation for this file extension fails.
    */
   async getRuntimeValue(): Promise<Value> {
-    if (this.#loader === undefined) {
+    const fileModule = await this.#getModule()
+
+    if (this.#name in fileModule === false) {
       throw new Error(
-        `[renoun] JavaScript file export "${String(this.#name)}" does not have a runtime value. A loader for the parent Directory is not defined.`
+        `[renoun] JavaScript file export "${String(this.#name)}" does not have a runtime value.`
       )
     }
 
-    const fileModule = await this.#getModule()
     const fileModuleExport = fileModule[this.#name]
 
     if (fileModuleExport === undefined) {
@@ -560,8 +580,10 @@ export class JavaScriptFile<
 
   #getModule() {
     if (this.#loader === undefined) {
+      const parentPath = this.getParent().getRelativePath()
+
       throw new Error(
-        `[renoun] JavaScript file "${this.getAbsolutePath()}" does not have a runtime value. The "withModule" function for the closest Directory definition is not defined.`
+        `[renoun] A loader for the parent Directory at ${parentPath} is not defined.`
       )
     }
 
@@ -633,7 +655,8 @@ export class JavaScriptFile<
 
       const fileExport = await JavaScriptFileExport.init<
         ValueFromExport<Loaders, Extension>
-      >(name, this as any)
+      >(name, this, this.#loader)
+
       this.#exports.set(name, fileExport)
 
       return fileExport
@@ -871,7 +894,7 @@ export class Directory<
     | (Extension extends string
         ? IsJavaScriptLikeExtension<Extension> extends true
           ? JavaScriptFile<
-              LoadersToExportsType<Loaders[Extension]>,
+              LoaderToExportsType<Loaders[Extension]>,
               Loaders,
               Extension
             >
@@ -1014,7 +1037,7 @@ export class Directory<
     Extension extends string
       ? IsJavaScriptLikeExtension<Extension> extends true
         ? JavaScriptFile<
-            LoadersToExportsType<Loaders[Extension]>,
+            LoaderToExportsType<Loaders[Extension]>,
             Loaders,
             Extension
           >
@@ -1370,6 +1393,11 @@ export class Directory<
     return this.getFileSystem().getRelativePath(this.#path)
   }
 
+  /** Get the relative path of the directory to the workspace. */
+  getRelativePathToWorkspace() {
+    return this.getFileSystem().getRelativePathToWorkspace(this.#path)
+  }
+
   /** Get the absolute path of the directory. */
   getAbsolutePath() {
     return this.getFileSystem().getAbsolutePath(this.#path)
@@ -1381,7 +1409,7 @@ export class Directory<
     const fileSystem = this.getFileSystem()
 
     return repository.getDirectoryUrl({
-      path: fileSystem.getPathRelativeToWorkspace(this.#path),
+      path: fileSystem.getRelativePathToWorkspace(this.#path),
       ...options,
     })
   }
@@ -1701,7 +1729,7 @@ export type FileWithExtension<
 > = Extension extends string
   ? IsJavaScriptLikeExtension<Extension> extends true
     ? JavaScriptFile<
-        LoadersToExportsType<DirectoryLoaders[Extension]>,
+        LoaderToExportsType<DirectoryLoaders[Extension]>,
         DirectoryLoaders,
         Extension
       >
@@ -1709,7 +1737,7 @@ export type FileWithExtension<
   : Extension extends string[]
     ? HasJavaScriptLikeExtensions<Extension> extends true
       ? JavaScriptFile<
-          LoadersToExportsType<DirectoryLoaders[Extension[number]]>,
+          LoaderToExportsType<DirectoryLoaders[Extension[number]]>,
           DirectoryLoaders,
           Extension[number]
         >
