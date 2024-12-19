@@ -83,10 +83,9 @@ function isLoaderWithSchema<Schema extends FileExportsSchema>(
   return 'schema' in loader
 }
 
-type CustomValidatorFunction<Output> = (value: Output) => Output
-
-type CustomSchema<Output> = {
-  [Key in keyof Output]?: CustomValidatorFunction<Output[Key]>
+/** Defines a mapping of validators for a custom schema. */
+type CustomSchema<Validators> = {
+  [Key in keyof Validators]: (value: Validators[Key]) => Validators[Key]
 }
 
 /**
