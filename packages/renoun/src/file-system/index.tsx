@@ -63,11 +63,6 @@ type LoaderToExportsType<Loader extends FileLoader> =
     ? SchemaToExportsType<Schema>
     : Record<string, unknown>
 
-/** Resolves the file exports type from an object of loaders. */
-type LoadersToExportsType<Loaders extends FileLoaders> = {
-  [Extension in keyof Loaders]: LoaderToExportsType<Loaders[Extension]>
-}
-
 /** Resolves valid extension patterns from an object of loaders. */
 type LoadersToExtensions<
   DirectoryLoaders extends FileLoaders,
