@@ -83,7 +83,7 @@ function isLoaderWithSchema<Schema extends FileExportsSchema>(
   return 'schema' in loader
 }
 
-/** Defines a mapping of validators for a custom schema. */
+/** Defines a mapping of custom validators for a schema. */
 type CustomSchema<Validators> = {
   [Key in keyof Validators]: (value: Validators[Key]) => Validators[Key]
 }
@@ -92,6 +92,10 @@ type CustomSchema<Validators> = {
  * Utility to combine a loader function with schema validation.
  * Supports both a single schema and an object of schemas.
  */
+export function withSchema<
+  Schema extends Record<string, any>,
+>(): LoaderWithSchema<CustomSchema<Schema>>
+
 export function withSchema<Schema extends Record<string, any>>(
   loader: Loader
 ): LoaderWithSchema<CustomSchema<Schema>>
@@ -107,7 +111,7 @@ export function withSchema<Schema extends Record<string, StandardSchemaV1>>(
 ): LoaderWithSchema<Schema>
 
 export function withSchema(
-  schema: any,
+  schema?: any,
   loader?: Loader
 ): LoaderWithSchema<any> {
   return loader ? { schema, loader } : schema
