@@ -606,7 +606,11 @@ export class JavaScriptFile<
     }
 
     if (isLoaderWithSchema(this.#loader)) {
-      const parseValue = this.#loader.schema[name]
+      let parseValue = this.#loader.schema[name]
+
+      if ('~standard' in parseValue) {
+        parseValue = parseValue['~standard'].validate
+      }
 
       if (parseValue) {
         try {
