@@ -85,7 +85,7 @@ function isLoaderWithSchema<Schema extends FileExportsSchema>(
 ): loader is Schema extends FileExportsSchema
   ? LoaderWithSchema<Schema>
   : never {
-  return 'validateSchema' in loader
+  return 'schema' in loader
 }
 
 type CustomValidatorFunction<Output> = (value: Output) => Output
