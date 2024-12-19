@@ -53,7 +53,7 @@ type FileLoaders<Schema = any> = Record<string, FileLoader<Schema>>
 type SchemaToExportsType<Schema> =
   Schema extends Record<string, StandardSchemaV1>
     ? { [Name in keyof Schema]: StandardSchemaV1.InferOutput<Schema[Name]> }
-    : Schema extends Record<string, (value: unknown) => infer SchemaType>
+    : Schema extends Record<string, (value: any) => infer SchemaType>
       ? { [Name in keyof Schema]: SchemaType }
       : Schema
 
