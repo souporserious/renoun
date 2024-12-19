@@ -99,6 +99,10 @@ type CustomSchema<Output> = {
  * Supports both a single schema and an object of schemas.
  */
 export function withSchema<Schema extends Record<string, any>>(
+  loader: Loader
+): LoaderWithSchema<CustomSchema<Schema>>
+
+export function withSchema<Schema extends Record<string, any>>(
   schema: CustomSchema<Schema>,
   loader: Loader
 ): LoaderWithSchema<CustomSchema<Schema>>
@@ -108,8 +112,11 @@ export function withSchema<Schema extends Record<string, StandardSchemaV1>>(
   loader: Loader
 ): LoaderWithSchema<Schema>
 
-export function withSchema(schema: any, loader: Loader): LoaderWithSchema<any> {
-  return { schema, loader }
+export function withSchema(
+  schema: any,
+  loader?: Loader
+): LoaderWithSchema<any> {
+  return loader ? { schema, loader } : schema
 }
 
 export type PathCasings = SlugCasings
