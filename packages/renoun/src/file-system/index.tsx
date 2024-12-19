@@ -7,9 +7,10 @@ import { formatNameAsTitle } from '../utils/format-name-as-title.js'
 import { getEditorUri } from '../utils/get-editor-uri.js'
 import type { FileExport } from '../utils/get-file-exports.js'
 import { getLocalGitFileMetadata } from '../utils/get-local-git-file-metadata.js'
-import type {
-  IsJavaScriptLikeExtension,
-  HasJavaScriptLikeExtensions,
+import {
+  isJavaScriptLikeExtension,
+  type IsJavaScriptLikeExtension,
+  type HasJavaScriptLikeExtensions,
 } from '../utils/is-javascript-like-extension.js'
 import { loadConfig } from '../utils/load-config.js'
 import {
@@ -559,7 +560,7 @@ export interface JavaScriptFileOptions<
   DirectoryLoaders extends FileLoaders,
   Extension extends string,
 > extends FileOptions<DirectoryLoaders> {
-  loader: FileLoader<DirectoryLoaders[Extension]>
+  loader?: FileLoader<DirectoryLoaders[Extension]>
 }
 
 /** A JavaScript file in the file system. */
@@ -573,7 +574,7 @@ export class JavaScriptFile<
     string,
     JavaScriptFileExport<ValueFromExport<Loaders, Extension>>
   >()
-  #loader: FileLoader<any>
+  #loader?: FileLoader<any>
 
   constructor({
     loader,
@@ -1251,20 +1252,21 @@ export class Directory<
       } else if (entry.isFile) {
         const extension = extensionName(entry.name).slice(1)
         const loader = this.#loaders?.[extension]
-        const file = loader
-          ? new JavaScriptFile({
-              path: entry.path,
-              depth: nextDepth,
-              directory: thisDirectory,
-              pathCasing: this.#pathCasing,
-              loader,
-            })
-          : new File({
-              path: entry.path,
-              depth: nextDepth,
-              pathCasing: this.#pathCasing,
-              directory: thisDirectory,
-            })
+        const file =
+          loader || isJavaScriptLikeExtension(extension)
+            ? new JavaScriptFile({
+                path: entry.path,
+                depth: nextDepth,
+                directory: thisDirectory,
+                pathCasing: this.#pathCasing,
+                loader,
+              })
+            : new File({
+                path: entry.path,
+                depth: nextDepth,
+                pathCasing: this.#pathCasing,
+                directory: thisDirectory,
+              })
 
         if (
           !options?.includeDuplicates &&
