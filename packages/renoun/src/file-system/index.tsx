@@ -923,7 +923,7 @@ export class Directory<
 
     while (segments.length > 0) {
       let entry: FileSystemEntry<any> | undefined
-      const currentSegment = segments.shift()
+      const currentSegment = createSlug(segments.shift()!, this.#pathCasing)
       const lastSegment = segments.at(-1)
       const allEntries = await currentDirectory.getEntries({
         includeDuplicates: true,
@@ -1086,10 +1086,10 @@ export class Directory<
     const segments = Array.isArray(path)
       ? path.slice(0)
       : path.split('/').filter(Boolean)
-    let currentDirectory = this as any
+    let currentDirectory = this as Directory<Loaders>
 
     while (segments.length > 0) {
-      const currentSegment = segments.shift()
+      const currentSegment = createSlug(segments.shift()!, this.#pathCasing)
       const allEntries = await currentDirectory.getEntries({
         includeDuplicates: true,
         includeTsConfigIgnoredFiles: true,
