@@ -613,13 +613,27 @@ export class JavaScriptFile<
     if (isLoaderWithSchema(this.#loader)) {
       let parseValue = this.#loader.schema[name]
 
-      if ('~standard' in parseValue) {
-        parseValue = parseValue['~standard'].validate
-      }
-
       if (parseValue) {
         try {
-          value = parseValue(value)
+          if ('~standard' in parseValue) {
+            const result = parseValue['~standard'].validate(
+              value
+            ) as StandardSchemaV1.Result<any>
+
+            if (result.issues) {
+              const issuesMessage = result.issues
+                .map((issue) => issue.message)
+                .join(', ')
+
+              throw new Error(
+                `[renoun] Schema validation failed for export "${name}" at file path "${this.getRelativePath()}" with the following issues: ${issuesMessage}`
+              )
+            }
+
+            value = result.value
+          } else {
+            value = parseValue(value)
+          }
         } catch (error) {
           if (error instanceof Error) {
             throw new Error(
