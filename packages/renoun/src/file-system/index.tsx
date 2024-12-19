@@ -61,7 +61,7 @@ type SchemaToExportsType<Schema> =
 type LoaderToExportsType<Loader extends FileLoader> =
   Loader extends LoaderWithSchema<infer Schema>
     ? SchemaToExportsType<Schema>
-    : Record<string, unknown>
+    : Record<string, any>
 
 /** Resolves valid extension patterns from an object of loaders. */
 type LoadersToExtensions<
