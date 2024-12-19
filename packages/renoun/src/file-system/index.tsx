@@ -662,6 +662,10 @@ export class JavaScriptFile<
 
       return fileExport
     }
+
+    throw new Error(
+      `[renoun] JavaScript file export "${name}" could not be determined statically or at runtime for path "${this.getRelativePathToWorkspace()}". Ensure the export exists, verify the file for syntax errors, and confirm that your bundler supports resolving "${this.getExtension()}" extensions.`
+    )
   }
 
   /** Get a JavaScript file export by name or throw an error if it does not exist. */
