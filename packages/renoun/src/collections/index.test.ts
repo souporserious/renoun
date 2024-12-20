@@ -71,7 +71,9 @@ describe('collections', () => {
       filter: filterInternalSources,
     })
 
-    async function buildTreeNavigation(source: FileSystemSource<any>) {
+    async function buildTreeNavigation(
+      source: FileSystemSource<any>
+    ): Promise<any> {
       const path = source.getPath()
       const sources = await source.getSources({ depth: 1 })
 
