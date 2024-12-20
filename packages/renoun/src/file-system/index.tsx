@@ -1,5 +1,6 @@
 import * as React from 'react'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
+import { minimatch } from 'minimatch'
 
 import { getFileExportMetadata } from '../project/client.js'
 import { createSlug, type SlugCasings } from '../utils/create-slug.js'
@@ -31,6 +32,7 @@ import {
   type GetFileUrlOptions,
   type GetDirectoryUrlOptions,
 } from './Repository.js'
+import type { ExtractFilePatternExtension } from './types.js'
 
 /** A function that resolves the file's runtime. */
 type Loader = (path: string) => Promise<Record<string, unknown>>
@@ -755,31 +757,39 @@ export class JavaScriptFile<
   }
 }
 
-export type EntryFilter<
+export type EntryInclude<
   Entry extends FileSystemEntry<any>,
   DirectoryLoaders extends FileLoaders,
 > =
   | ((entry: FileSystemEntry<DirectoryLoaders>) => entry is Entry)
   | ((entry: FileSystemEntry<DirectoryLoaders>) => Promise<boolean> | boolean)
+  | string
 
-export type FilteredEntry<
+export type IncludedEntry<
   DirectoryLoaders extends FileLoaders,
-  DirectoryFilter extends EntryFilter<FileSystemEntry, DirectoryLoaders>,
-> =
-  DirectoryFilter extends EntryFilter<infer Entry, DirectoryLoaders>
+  DirectoryFilter extends EntryInclude<FileSystemEntry, DirectoryLoaders>,
+> = DirectoryFilter extends string
+  ? FileWithExtension<
+      DirectoryLoaders,
+      ExtractFilePatternExtension<DirectoryFilter>
+    >
+  : DirectoryFilter extends EntryInclude<infer Entry, DirectoryLoaders>
     ? Entry
     : FileSystemEntry<DirectoryLoaders>
 
 /** The options for a `Directory`. */
 interface DirectoryOptions<
   DirectoryLoaders extends FileLoaders = FileLoaders,
-  DirectoryFilter extends EntryFilter<
+  DirectoryInclude extends EntryInclude<
     FileSystemEntry,
     DirectoryLoaders
-  > = EntryFilter<FileSystemEntry<DirectoryLoaders>, DirectoryLoaders>,
+  > = EntryInclude<FileSystemEntry<DirectoryLoaders>, DirectoryLoaders>,
 > {
   /** The path to the directory in the file system. */
   path?: string
+
+  /** An array of filenames or patterns to include when querying entries. The filenames are resolved relative to the working directory. */
+  include?: DirectoryInclude
 
   /** The base path to apply to all descendant entry `getPath` and `getPathSegments` methods. */
   basePath?: string
@@ -796,23 +806,20 @@ interface DirectoryOptions<
   /** The file system to use for reading directory entries. */
   fileSystem?: FileSystem
 
-  /** A filter callback applied to all descendant entries. */
-  filter?: DirectoryFilter
-
   /** A sort callback applied to all descendant entries. */
   sort?: (
-    a: FilteredEntry<DirectoryLoaders, DirectoryFilter>,
-    b: FilteredEntry<DirectoryLoaders, DirectoryFilter>
+    a: IncludedEntry<DirectoryLoaders, DirectoryInclude>,
+    b: IncludedEntry<DirectoryLoaders, DirectoryInclude>
   ) => Promise<number> | number
 }
 
 /** A directory containing files and subdirectories in the file system. */
 export class Directory<
   const Loaders extends FileLoaders = FileLoaders,
-  const Filter extends EntryFilter<
+  const Include extends EntryInclude<
     FileSystemEntry<Loaders>,
     Loaders
-  > = EntryFilter<FileSystemEntry<Loaders>, Loaders>,
+  > = EntryInclude<FileSystemEntry<Loaders>, Loaders>,
 > {
   #path: string
   #depth: number = -1
@@ -823,22 +830,23 @@ export class Directory<
   #fileSystem: FileSystem | undefined
   #repository: Repository | undefined
   #directory?: Directory<Loaders>
-  #filter?:
+  #include?:
     | ((entry: FileSystemEntry<any>) => entry is FileSystemEntry<any>)
     | ((entry: FileSystemEntry<any>) => Promise<boolean> | boolean)
+    | string
   #sort?: (
     a: FileSystemEntry<any>,
     b: FileSystemEntry<any>
   ) => Promise<number> | number
 
-  constructor(path?: DirectoryOptions<Loaders, Filter>) {
+  constructor(path?: DirectoryOptions<Loaders, Include>) {
     if (path === undefined) {
       this.#path = '.'
     } else {
       this.#path = ensureRelativePath(path.path)
       this.#pathCasing = path.pathCasing ?? 'kebab'
       this.#loaders = path.loaders
-      this.#filter = path.filter
+      this.#include = path.include
       this.#sort = path.sort as any
       this.#basePath = path.basePath
       this.#tsConfigPath = path.tsConfigPath
@@ -846,13 +854,25 @@ export class Directory<
     }
   }
 
+  async #shouldInclude(entry: FileSystemEntry<Loaders>): Promise<boolean> {
+    if (!this.#include) {
+      return true
+    }
+
+    if (typeof this.#include === 'string') {
+      return minimatch(entry.getRelativePath(), this.#include)
+    }
+
+    return this.#include(entry)
+  }
+
   /** Duplicate the directory with the same initial options. */
   #duplicate(
     options?: DirectoryOptions<
       Loaders,
-      EntryFilter<FileSystemEntry<Loaders>, Loaders>
+      EntryInclude<FileSystemEntry<Loaders>, Loaders>
     >
-  ): Directory<Loaders, EntryFilter<FileSystemEntry<Loaders>, Loaders>> {
+  ): Directory<Loaders, EntryInclude<FileSystemEntry<Loaders>, Loaders>> {
     const directory = new Directory({
       path: this.#path,
       fileSystem: this.#fileSystem,
@@ -865,7 +885,7 @@ export class Directory<
     directory.#basePath = this.#basePath
     directory.#loaders = this.#loaders
     directory.#sort = this.#sort
-    directory.#filter = this.#filter
+    directory.#include = this.#include
 
     return directory
   }
@@ -1199,9 +1219,11 @@ export class Directory<
     includeGitIgnoredFiles?: boolean
     includeTsConfigIgnoredFiles?: boolean
   }): Promise<
-    Filter extends EntryFilter<infer FilteredEntry, Loaders>
-      ? FilteredEntry[]
-      : FileSystemEntry<Loaders>[]
+    Include extends string
+      ? FileWithExtension<Loaders, ExtractFilePatternExtension<Include>>[]
+      : Include extends EntryInclude<infer FilteredEntry, Loaders>
+        ? FilteredEntry[]
+        : FileSystemEntry<Loaders>[]
   > {
     const fileSystem = this.getFileSystem()
     const directoryEntries = await fileSystem.readDirectory(this.#path)
@@ -1249,8 +1271,8 @@ export class Directory<
         directory.#directory = thisDirectory
         directory.#depth = nextDepth
 
-        if (this.#filter) {
-          if (await this.#filter(directory)) {
+        if (this.#include) {
+          if (await this.#shouldInclude(directory)) {
             entriesMap.set(entryKey, directory)
           }
         } else {
@@ -1289,7 +1311,7 @@ export class Directory<
           continue
         }
 
-        if (this.#filter && !(await this.#filter(file as File<any>))) {
+        if (this.#include && !(await this.#shouldInclude(file))) {
           continue
         }
 

@@ -298,7 +298,7 @@ describe('file system', () => {
           (path) => import(`#fixtures/posts/${path}.mdx`)
         ),
       },
-      filter: (entry) => isFile(entry, 'mdx'),
+      include: (entry) => isFile(entry, 'mdx'),
     })
     const files = await posts.getEntries()
 
@@ -318,7 +318,7 @@ describe('file system', () => {
       loaders: {
         mdx: withSchema<PostType>(),
       },
-      filter: (entry) => isFile(entry, 'mdx'),
+      include: (entry) => isFile(entry, 'mdx'),
     })
     const files = await posts.getEntries()
 
@@ -333,7 +333,7 @@ describe('file system', () => {
     })
     const directory = new Directory({
       fileSystem,
-      filter: async (entry) => {
+      include: async (entry) => {
         if (isFile(entry, 'tsx')) {
           const fileExports = await entry.getExports()
 
@@ -352,6 +352,23 @@ describe('file system', () => {
       },
     })
     const entries = await directory.getEntries()
+
+    expect(entries).toHaveLength(1)
+  })
+
+  test('string filter', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'foo.ts': '',
+      'bar.tsx': '',
+      'baz.mdx': '',
+    })
+    const directory = new Directory({
+      fileSystem,
+      include: '*.mdx',
+    })
+    const entries = await directory.getEntries()
+
+    expectTypeOf(entries).toMatchTypeOf<JavaScriptFile[]>()
 
     expect(entries).toHaveLength(1)
   })
@@ -392,7 +409,7 @@ describe('file system', () => {
           return imports[importPath]()
         }),
       },
-      filter: (entry) => {
+      include: (entry) => {
         return isFile(entry, 'ts')
       },
       sort: async (a, b) => {
@@ -414,7 +431,7 @@ describe('file system', () => {
   test('filter and recursive entries', async () => {
     const docs = new Directory({
       path: 'fixtures/docs',
-      filter(entry) {
+      include(entry) {
         return isFile(entry, 'mdx')
       },
     })
