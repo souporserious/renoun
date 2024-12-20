@@ -953,7 +953,7 @@ export class Directory<
     const segments = Array.isArray(path)
       ? path.slice(0)
       : path.split('/').filter(Boolean)
-    let currentDirectory = this as any
+    let currentDirectory = this as Directory<Loaders>
 
     while (segments.length > 0) {
       let entry: FileSystemEntry<any> | undefined
@@ -1026,6 +1026,7 @@ export class Directory<
             includeDuplicates: true,
             includeIndexAndReadme: true,
           })
+          const directoryName = entry.getBaseName()
 
           // If extension is provided, check for a file with the extension
           if (extension) {
@@ -1043,14 +1044,15 @@ export class Directory<
               }
             }
           }
-          // Otherwise, check for an index or readme file
+          // Otherwise, check for a file with the same name as the directory or an index/readme file
           else {
-            const targetFiles = ['index', 'readme']
-
             for (const subEntry of entries) {
-              const name = subEntry.getBaseName().toLowerCase()
+              const name = subEntry.getBaseName()
 
-              if (targetFiles.includes(name)) {
+              if (
+                name === directoryName ||
+                ['index', 'readme'].includes(name.toLowerCase())
+              ) {
                 return subEntry as any
               }
             }

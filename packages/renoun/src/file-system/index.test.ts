@@ -622,6 +622,16 @@ describe('file system', () => {
     expect(entry.getAbsolutePath()).toBe('/APIReference.tsx')
   })
 
+  test('chooses entry with same name as directory when bare file path', async () => {
+    const directory = new Directory({
+      path: 'fixtures/components',
+      basePath: 'components',
+    })
+    const file = await directory.getFileOrThrow('Box')
+
+    expect(file.getRelativePath()).toBe('Box/Box.tsx')
+  })
+
   test('finds file with specific extension starting at directory', async () => {
     const fileSystem = new MemoryFileSystem({
       'PackageInstall/index.ts': '',
