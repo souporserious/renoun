@@ -36,11 +36,7 @@ export function IncludeHtml() {
         <h2>Output</h2>
         <RenderedHTML>
           <h1>Hello World</h1>
-          <style
-            // @ts-expect-error
-            href="h1"
-            precedence="low"
-          >{`h1 { font-size: 6rem; }`}</style>
+          <style href="h1" precedence="low">{`h1 { font-size: 6rem; }`}</style>
         </RenderedHTML>
       </div>
     </div>
