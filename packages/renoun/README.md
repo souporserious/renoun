@@ -50,14 +50,6 @@ npm install renoun
 
 After installing the package, you can follow the [getting started guide](https://www.renoun.dev/docs/getting-started) or start creating content using your [favorite framework](https://www.renoun.dev/guides).
 
-- [File System](#file-system)
-  - [Querying file system entries](#querying-file-system-entries)
-  - [Type checking file exports](#type-checking-file-exports)
-  - [Schema Validation](#schema-validation)
-- [Components](#components)
-  - [Syntax Highlighting](#syntax-highlighting)
-  - [API References](#api-references)
-
 ### File System
 
 The File System API offers a way to organize and query file-system data in renoun. It is a powerful tool that allows you to define a schema for file exports and query those exports using a simple API.
