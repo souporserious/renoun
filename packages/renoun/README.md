@@ -11,6 +11,17 @@ Meticulously crafted React components and utilities to<br/>help you author techn
   </p>
 </div>
 
+- [Features](#features)
+- [Why renoun?](#why-renoun)
+- [Getting Started](#getting-started)
+  - [File System](#file-system)
+    - [Querying file system entries](#querying-file-system-entries)
+    - [Type checking file exports](#type-checking-file-exports)
+    - [Schema Validation](#schema-validation)
+  - [Components](#components)
+    - [Syntax Highlighting](#syntax-highlighting)
+    - [API References](#api-references)
+
 ## Features
 
 - 📝 Quickly start authoring MDX content
