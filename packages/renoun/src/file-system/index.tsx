@@ -1533,7 +1533,7 @@ export class Directory<
   >(
     entry: FileSystemEntry<any> | undefined,
     extension?: Extension | Extension[]
-  ): entry is File<FileTypes> {
+  ): entry is FileWithExtension<FileTypes, Extension> {
     const extensions = Array.isArray(extension) ? extension : [extension]
 
     if (entry instanceof File && this.hasEntry(entry)) {
