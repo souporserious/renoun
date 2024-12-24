@@ -314,13 +314,15 @@ export class File<
    * Get the previous and next sibling entries (files or directories) of the parent directory.
    * If the file is an index or readme file, the siblings will be retrieved from the parent directory.
    */
-  async getSiblings(options?: {
-    entryGroup?: EntryGroup<FileSystemEntry<FileTypes>[]>
+  async getSiblings<
+    GroupFileTypes extends Record<string, any> = FileTypes,
+  >(options?: {
+    entryGroup?: EntryGroup<FileSystemEntry<any>[], GroupFileTypes>
     includeDuplicateSegments?: boolean
   }): Promise<
     [
-      previous: FileSystemEntry<FileTypes> | undefined,
-      next: FileSystemEntry<FileTypes> | undefined,
+      FileSystemEntry<FileTypes> | undefined,
+      FileSystemEntry<FileTypes> | undefined,
     ]
   > {
     const isIndexOrReadme = ['index', 'readme'].includes(
@@ -1087,28 +1089,9 @@ export class Directory<
    * Get a file at the specified `path` and optional extensions.
    * An error will be thrown if the file is not found.
    */
-  async getFileOrThrow(path: string | string[]): Promise<File<FileTypes>>
-
   async getFileOrThrow<
-    ExtensionType extends Extract<keyof FileTypes, string> | (string & {}),
-    const Extension extends ExtensionType,
-  >(
-    path: string | string[],
-    extension: Extension
-  ): Promise<
-    IsJavaScriptLikeExtension<Extension> extends true
-      ? JavaScriptFile<FileTypes[Extension]>
-      : File<FileTypes>
-  >
-
-  async getFileOrThrow<
-    ExtensionType extends keyof FileTypes | (string & {}),
-    const Extension extends ExtensionType[],
-  >(path: string | string[], extension: Extension): Promise<File<FileTypes>>
-
-  async getFileOrThrow<
-    ExtensionType extends keyof FileTypes | (string & {}),
-    const Extension extends ExtensionType | ExtensionType[],
+    ExtensionType extends keyof FileTypes | string,
+    const Extension extends ExtensionType | Extension[],
   >(
     path: string | string[],
     extension?: Extension | Extension[]
@@ -1390,8 +1373,10 @@ export class Directory<
   }
 
   /** Get the previous and next sibling entries (files or directories) of the parent directory. */
-  async getSiblings(options?: {
-    entryGroup?: EntryGroup<FileSystemEntry<FileTypes>[]>
+  async getSiblings<
+    GroupFileTypes extends Record<string, any> = FileTypes,
+  >(options?: {
+    entryGroup?: EntryGroup<FileSystemEntry<any>[], GroupFileTypes>
   }): Promise<
     [
       FileSystemEntry<FileTypes> | undefined,
@@ -1523,7 +1508,7 @@ export class Directory<
 
   /** Checks if this directory contains the provided entry. */
   hasEntry(
-    entry: FileSystemEntry<FileTypes> | undefined
+    entry: FileSystemEntry<any> | undefined
   ): entry is FileSystemEntry<FileTypes> {
     if (entry === undefined) {
       return false
@@ -1543,12 +1528,12 @@ export class Directory<
 
   /** Checks if this directory contains the provided file. */
   hasFile<
-    Type extends keyof FileTypes | (string & {}),
-    const Extension extends Type | Type[],
+    ExtensionType extends keyof FileTypes | string,
+    const Extension extends ExtensionType | Extension[],
   >(
-    entry: FileSystemEntry<FileTypes> | undefined,
-    extension?: Extension
-  ): entry is FileSystemEntry<FileTypes> {
+    entry: FileSystemEntry<any> | undefined,
+    extension?: Extension | Extension[]
+  ): entry is File<FileTypes> {
     const extensions = Array.isArray(extension) ? extension : [extension]
 
     if (entry instanceof File && this.hasEntry(entry)) {
@@ -1858,11 +1843,18 @@ export function isFile(
   if (entry instanceof File) {
     const fileExtension = entry.getExtension()
 
-    if (Array.isArray(extension)) {
-      return extension.includes(fileExtension as any)
-    } else {
+    if (extension instanceof Array) {
+      for (const possibleExtension of extension) {
+        if (fileExtension === possibleExtension) {
+          return true
+        }
+      }
+      return false
+    } else if (extension) {
       return fileExtension === extension
     }
+
+    return true
   }
 
   return false
