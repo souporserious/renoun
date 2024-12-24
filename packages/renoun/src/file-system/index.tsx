@@ -67,7 +67,7 @@ interface ModuleLoaderWithStandardSchema<
       Exports[ExportName]
     >
   }
-  runtime: RuntimeLoader<NoInfer<Exports>>
+  runtime?: RuntimeLoader<NoInfer<Exports>>
 }
 
 export function withSchema<
@@ -520,6 +520,14 @@ export class JavaScriptFileExport<Value> {
       return this.#loader(path)
     }
 
+    if (this.#loader.runtime === undefined) {
+      const parentPath = this.#file.getParent().getRelativePathToWorkspace()
+
+      throw new Error(
+        `[renoun] A runtime loader for the parent Directory at ${parentPath} is not defined.`
+      )
+    }
+
     return this.#loader.runtime(path)
   }
 
@@ -609,6 +617,14 @@ export class JavaScriptFile<
       return this.#loader(path)
     }
 
+    if (this.#loader.runtime === undefined) {
+      const parentPath = this.getParent().getRelativePathToWorkspace()
+
+      throw new Error(
+        `[renoun] A runtime loader for the parent Directory at ${parentPath} is not defined.`
+      )
+    }
+
     return this.#loader.runtime(path)
   }
 
@@ -694,9 +710,15 @@ export class JavaScriptFile<
       return fileExport
     }
 
-    throw new Error(
-      `[renoun] JavaScript file export "${name}" could not be determined statically or at runtime for path "${this.getRelativePathToWorkspace()}". Ensure the export exists, verify the file for syntax errors, and confirm that your bundler supports resolving "${this.getExtension()}" extensions.`
-    )
+    if (this.#loader) {
+      throw new Error(
+        `[renoun] JavaScript file export "${name}" could not be determined statically or at runtime for path "${this.getRelativePathToWorkspace()}".\n    - Ensure the export exists\n    - Verify the file for syntax errors\n    - Confirm that your bundler supports resolving "${this.getExtension()}" extensions`
+      )
+    } else {
+      throw new Error(
+        `[renoun] JavaScript file export "${name}" could not be determined statically or at runtime for path "${this.getAbsolutePath()}". Ensure the directory has a loader defined for resolving "${this.getExtension()}" files.`
+      )
+    }
   }
 
   /** Get a JavaScript file export by name or throw an error if it does not exist. */
