@@ -232,15 +232,15 @@ describe('file system', () => {
       const directory = new Directory({
         path: 'fixtures/docs',
         loaders: {
-          ts: withSchema(
-            {
+          ts: {
+            schema: {
               metadata: v.object({
                 title: v.string(),
                 date: v.date(),
               }),
             },
-            (path) => import(`#fixtures/docs/${path}.ts`)
-          ),
+            runtime: (path) => import(`#fixtures/docs/${path}.ts`),
+          },
         },
       })
       const value = await (
@@ -258,15 +258,15 @@ describe('file system', () => {
       const directory = new Directory({
         path: 'fixtures/docs',
         loaders: {
-          ts: withSchema(
-            {
+          ts: {
+            schema: {
               metadata: z.object({
                 title: z.string(),
                 date: z.date().optional(),
               }),
             },
-            (path) => import(`#fixtures/docs/${path}.ts`)
-          ),
+            runtime: (path) => import(`#fixtures/docs/${path}.ts`),
+          },
         },
       })
       const value = await (
@@ -459,7 +459,7 @@ describe('file system', () => {
     expect(fileEntry.getName()).toBe('Button')
     expect(fileEntry.getExtension()).toBe('tsx')
 
-    const directoryEntry = entries.at(1) as Directory
+    const directoryEntry = entries.at(1) as Directory<any>
 
     expect(directoryEntry.getName()).toBe('CodeBlock')
   })
@@ -805,7 +805,7 @@ describe('file system', () => {
               { module }
             )
 
-            return module.exports
+            return module.exports as { metadata: { title: string } }
           }
         ),
       },
@@ -827,14 +827,14 @@ describe('file system', () => {
     const directory = new Directory({
       fileSystem,
       loaders: {
-        ts: withSchema(
-          {
+        ts: {
+          schema: {
             metadata: z.object({
               title: z.string(),
               date: z.coerce.date(),
             }),
           },
-          async (path) => {
+          runtime: async (path) => {
             const filePath = `${path}.ts`
             const transpiledCode = await fileSystem.transpileFile(filePath)
             const module = { exports: {} }
@@ -845,8 +845,8 @@ describe('file system', () => {
             )
 
             return module.exports
-          }
-        ),
+          },
+        },
       },
     })
     const file = await directory.getFileOrThrow('hello-world', 'ts')
@@ -1169,7 +1169,7 @@ describe('file system', () => {
     expect(isFile(entry)).toBe(true)
 
     if (isDirectory(entry)) {
-      expectTypeOf(entry).toMatchTypeOf<Directory>()
+      expectTypeOf(entry).toMatchTypeOf<Directory<any>>()
     }
 
     const normalizedDirectory = isFile(entry) ? entry.getParent() : entry
@@ -1372,37 +1372,39 @@ describe('file system', () => {
     expect(componentFile.getPath()).toBe('/docs/button')
   })
 
-  // test('has entry', async () => {
-  //   type MDXTypes = { frontmatter: { title: string } }
-  //   type TSXTypes = { metadata: { title: string } }
+  test('has entry', async () => {
+    type MDXTypes = { frontmatter: { title: string } }
+    type TSXTypes = { metadata: { title: string } }
 
-  //   const directoryA = new Directory({
-  //     fileSystem: new MemoryFileSystem({ 'Button.mdx': '' }),
-  //     loaders: {
-  //       mdx: withSchema<MDXTypes>(),
-  //     },
-  //   })
-  //   const directoryB = new Directory({
-  //     path: 'fixtures/components',
-  //     loaders: {
-  //       tsx: withSchema<TSXTypes>(),
-  //     },
-  //   })
-  //   const group = new EntryGroup({
-  //     entries: [directoryA, directoryB],
-  //   })
-  //   const file = await group.getFileOrThrow('Button', 'mdx')
+    const directoryA = new Directory({
+      fileSystem: new MemoryFileSystem({ 'Button.mdx': '' }),
+      loaders: {
+        mdx: withSchema<MDXTypes>(),
+      },
+    })
+    const directoryB = new Directory({
+      path: 'fixtures/components',
+      loaders: {
+        tsx: withSchema<TSXTypes>(),
+      },
+    })
+    const group = new EntryGroup({
+      entries: [directoryA, directoryB],
+    })
+    const file = await group.getFileOrThrow('Button', 'mdx')
 
-  //   expectTypeOf(file).toMatchTypeOf<JavaScriptFile<MDXTypes>>()
+    expectTypeOf(file).toMatchTypeOf<JavaScriptFile<MDXTypes>>()
 
-  //   const entry = await group.getEntryOrThrow('Button')
+    const entry = await group.getEntryOrThrow('Button')
 
-  //   expect(directoryA.hasEntry(entry)).toBe(true)
+    expect(directoryA.hasEntry(entry)).toBe(true)
 
-  //   expect(directoryA.hasFile(entry, 'mdx')).toBe(true)
+    expect(directoryA.hasFile(entry, 'mdx')).toBe(true)
 
-  //   if (directoryA.hasFile(entry, 'mdx')) {
-  //     expectTypeOf(entry).toMatchTypeOf<JavaScriptFile<MDXTypes>>()
-  //   }
-  // })
+    entry satisfies IsNotAny<typeof entry>
+
+    if (directoryA.hasFile(entry, 'mdx')) {
+      expectTypeOf(entry).toMatchTypeOf<JavaScriptFile<MDXTypes>>()
+    }
+  })
 })
