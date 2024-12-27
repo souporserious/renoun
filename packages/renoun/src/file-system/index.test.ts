@@ -10,6 +10,7 @@ import { NodeFileSystem } from './NodeFileSystem'
 import { MemoryFileSystem } from './MemoryFileSystem'
 import {
   type FileSystemEntry,
+  type InferModuleExports,
   File,
   Directory,
   JavaScriptFile,
@@ -22,6 +23,17 @@ import {
 } from './index'
 
 type IsNotAny<Type> = 0 extends 1 & Type ? never : Type
+
+type IsAny<Type> = 0 extends 1 & Type ? true : false
+
+type IsRecordOfAny<Type> =
+  Type extends Record<string, infer Type> ? IsAny<Type> : false
+
+type IsNever<Type> = Type extends never ? true : false
+
+type Expect<Type extends true> = Type
+
+type Not<_ extends false> = true
 
 describe('file system', () => {
   test('node file system read directory', async () => {
@@ -128,6 +140,42 @@ describe('file system', () => {
     expect(entries).toHaveLength(1)
   })
 
+  test('filters with schema', async () => {
+    const directory = new Directory({
+      path: 'posts',
+      loaders: {
+        mdx: withSchema(
+          {
+            frontmatter: z.object({
+              title: z.string(),
+              date: z.coerce.date(),
+            }),
+          },
+          (path) => import(`./posts/${path}.mdx`)
+        ),
+      },
+      include: async (entry) => {
+        if (isFile(entry, 'mdx')) {
+          const value = await entry.getExportValue('frontmatter')
+
+          value satisfies IsNotAny<typeof value>
+
+          value satisfies
+            | {
+                title: string
+                date: Date
+              }
+            | undefined
+        }
+
+        return true
+      },
+    })
+    const entries = await directory.getEntries()
+
+    expect(entries).toHaveLength(1)
+  })
+
   test('orders directory before its descendants by default', async () => {
     const fileSystem = new MemoryFileSystem({
       'Button/Button.tsx': '',
@@ -146,13 +194,15 @@ describe('file system', () => {
     const directory = new Directory({
       path: 'fixtures/utils',
       loaders: {
-        ts: withSchema<{ basename: typeof basename }>(
-          (path) => import(`#fixtures/utils/${path}.ts`)
-        ),
+        ts: withSchema<{
+          basename: typeof basename
+        }>((path) => import(`#fixtures/utils/${path}.ts`)),
       },
     })
     const file = await directory.getFileOrThrow('path', 'ts')
     const basenameFn = await file.getExportValueOrThrow('basename')
+
+    basenameFn satisfies IsNotAny<typeof basenameFn>
 
     expectTypeOf(basenameFn).toMatchTypeOf<
       (path: string, extension?: string) => string
@@ -232,15 +282,15 @@ describe('file system', () => {
       const directory = new Directory({
         path: 'fixtures/docs',
         loaders: {
-          ts: {
-            schema: {
+          ts: withSchema(
+            {
               metadata: v.object({
                 title: v.string(),
                 date: v.date(),
               }),
             },
-            runtime: (path) => import(`#fixtures/docs/${path}.ts`),
-          },
+            (path) => import(`#fixtures/docs/${path}.ts`)
+          ),
         },
       })
       const value = await (
@@ -258,15 +308,15 @@ describe('file system', () => {
       const directory = new Directory({
         path: 'fixtures/docs',
         loaders: {
-          ts: {
-            schema: {
+          ts: withSchema(
+            {
               metadata: z.object({
                 title: z.string(),
                 date: z.date().optional(),
               }),
             },
-            runtime: (path) => import(`#fixtures/docs/${path}.ts`),
-          },
+            (path) => import(`#fixtures/docs/${path}.ts`)
+          ),
         },
       })
       const value = await (
@@ -1179,7 +1229,14 @@ describe('file system', () => {
     const file = await normalizedDirectory.getFileOrThrow('README', 'mdx')
 
     expect(isDirectory(file)).toBe(false)
-    expectTypeOf(file).toMatchTypeOf<JavaScriptFile<{ default: MDXContent }>>()
+
+    expectTypeOf(file).toMatchTypeOf<
+      JavaScriptFile<
+        InferModuleExports<{
+          default: MDXContent
+        }>
+      >
+    >()
   })
 
   test('isFile', async () => {

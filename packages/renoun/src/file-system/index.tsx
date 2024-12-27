@@ -34,40 +34,47 @@ import {
 } from './Repository.js'
 import type { ExtractFilePatternExtension } from './types.js'
 
-type RuntimeLoader<Types> = (path: string) => Promise<Types>
+type IsNever<Type> = Type extends never ? true : false
 
-type ModuleExports = {
-  [exportName: string]: any
+/** A function that resolves the module runtime. */
+type ModuleRuntimeLoader<Value> = (path: string) => Promise<Value>
+
+/** A record of named exports in a module. */
+type ModuleExports<Value = any> = {
+  [exportName: string]: Value
 }
 
-type ModuleExportsWithStandardSchema = {
-  [exportName: string]: StandardSchemaV1
-}
+/** A function that validates and returns a specific type. */
+type ModuleExportValidator<Input = any, Output = Input> = (
+  value: Input
+) => Output
 
-type ModuleTypes = {
-  [extension: string]: ModuleExports | ModuleExportsWithStandardSchema
-}
-
+/** Utility type that maps a record of exports to a record of validators. */
 type ModuleExportValidators<Exports extends ModuleExports> = {
-  [ExportName in keyof Exports]: (
-    value: Exports[ExportName]
-  ) => Exports[ExportName]
+  [ExportName in keyof Exports]: ModuleExportValidator<Exports[ExportName]>
 }
 
-interface ModuleLoaderWithSchema<Exports extends ModuleExports> {
-  schema: ModuleExportValidators<Exports>
-  runtime: RuntimeLoader<NoInfer<Exports>>
+/** Utility type that infers the schema output from validator functions or a [Standard Schema](https://github.com/standard-schema/standard-schema?tab=readme-ov-file#standard-schema-spec). */
+export type InferModuleExports<Exports> = {
+  [ExportName in keyof Exports]: Exports[ExportName] extends StandardSchemaV1
+    ? StandardSchemaV1.InferOutput<Exports[ExportName]>
+    : Exports[ExportName] extends ModuleExportValidator<any, infer Output>
+      ? Output
+      : Exports[ExportName]
 }
 
-interface ModuleLoaderWithStandardSchema<
-  Exports extends ModuleExportsWithStandardSchema,
+/** A module loader with an optional schema and runtime. */
+interface ModuleLoaderWithSchema<
+  Types extends ModuleExports,
+  /**
+   * This is used exclusively for type inference in `InferModuleLoader` to prevent
+   * unwrapping the provided types and allow passing them through as-is. Without
+   * this TypeScript would attempt to infer the provided types and unwrap them.
+   */
+  _IsRuntimeOnly extends boolean = false,
 > {
-  schema: {
-    [ExportName in keyof Exports]: StandardSchemaV1.InferOutput<
-      Exports[ExportName]
-    >
-  }
-  runtime?: RuntimeLoader<NoInfer<Exports>>
+  schema?: Types
+  runtime?: ModuleRuntimeLoader<InferModuleExports<Types>>
 }
 
 export function withSchema<
@@ -75,66 +82,88 @@ export function withSchema<
 >(): ModuleLoaderWithSchema<Types>
 
 export function withSchema<Types extends ModuleExports>(
-  runtime: RuntimeLoader<NoInfer<Types>>
-): ModuleLoaderWithSchema<Types>
+  runtime: ModuleRuntimeLoader<NoInfer<Types>>
+): ModuleLoaderWithSchema<Types, true>
 
-export function withSchema<Types extends ModuleExports>(
-  schema: ModuleExportValidators<Types>,
-  runtime: RuntimeLoader<NoInfer<Types>>
-): ModuleLoaderWithSchema<Types>
+export function withSchema<
+  Types extends ModuleExports = never,
+  Schema extends ModuleExports = ModuleExports,
+>(
+  schema: IsNever<Types> extends true
+    ? Schema
+    : Partial<ModuleExportValidators<NoInfer<Types>>>,
+  runtime: ModuleRuntimeLoader<
+    IsNever<Types> extends true ? NoInfer<Schema> : NoInfer<Types>
+  >
+): ModuleLoaderWithSchema<
+  IsNever<Types> extends true ? Schema : ModuleExportValidators<NoInfer<Types>>
+>
 
 export function withSchema(schemaOrRuntime?: any, maybeRuntime?: any) {
   return maybeRuntime
-    ? {
-        schema: schemaOrRuntime,
-        runtime: maybeRuntime,
-      }
-    : schemaOrRuntime
+    ? { schema: schemaOrRuntime, runtime: maybeRuntime }
+    : { schema: undefined, runtime: schemaOrRuntime }
 }
 
-type FileLoader<Schema extends ModuleExports> =
-  | RuntimeLoader<Schema>
-  | ModuleLoaderWithSchema<Schema>
-  | ModuleLoaderWithStandardSchema<Schema>
+/**
+ * Type signature for the “withSchema” helper function.
+ *
+ * This prevents TypeScript from unifying `(path: string) => Promise<...>` with `withSchema(...)`,
+ * we define a distinct "helper function" shape that only matches the uninvoked `withSchema<...>`.
+ */
+type WithSchema<Types extends ModuleExports> = {
+  (runtime: ModuleRuntimeLoader<Types>): ModuleLoaderWithSchema<Types>
 
-type FileLoaders<Types extends ModuleTypes = ModuleTypes> = {
-  [Extension in keyof Types]: FileLoader<Types[Extension]>
+  <Schema extends ModuleExports>(
+    schema: Schema,
+    runtime: ModuleRuntimeLoader<Schema>
+  ): ModuleLoaderWithSchema<Schema>
 }
 
-type InferFileLoader<
-  Loader extends
-    | RuntimeLoader<any>
-    | ModuleLoaderWithSchema<any>
-    | ModuleLoaderWithStandardSchema<any>,
-> =
-  Loader extends RuntimeLoader<infer Value>
-    ? Value
-    : Loader extends ModuleLoaderWithSchema<infer Value>
-      ? Value
-      : Loader extends ModuleLoaderWithStandardSchema<any>
-        ? {
-            [ExportName in keyof Loader['schema']]: StandardSchemaV1.InferOutput<
-              Loader['schema'][ExportName]
-            >
-          }
+/**
+ * Union of all possible loader types:
+ * - A direct loader function (path) => Promise<...>
+ * - An already-invoked withSchema(...) object { schema?: ..., runtime?: ... }
+ * - The raw “withSchema<...>” factory function
+ */
+type ModuleLoader<Exports extends ModuleExports = ModuleExports> =
+  | ModuleRuntimeLoader<Exports>
+  | WithSchema<Exports>
+  | ModuleLoaderWithSchema<Exports>
+
+/** A record of loaders for different file extensions. */
+type ModuleLoaders = {
+  [extension: string]: ModuleLoader
+}
+
+/** Infer the type of a loader based on its schema or runtime. */
+type InferModuleLoader<Loader extends ModuleLoader> =
+  Loader extends WithSchema<infer Schema>
+    ? Schema
+    : Loader extends ModuleLoaderWithSchema<infer Schema, infer IsRuntimeOnly>
+      ? IsRuntimeOnly extends true
+        ? Schema
+        : InferModuleExports<Schema>
+      : Loader extends ModuleRuntimeLoader<infer Value>
+        ? Value
         : never
 
-type InferFileLoaders<Loaders extends FileLoaders> = {
-  [Extension in keyof Loaders]: InferFileLoader<Loaders[Extension]>
+type InferModuleLoaders<Loaders extends ModuleLoaders> = {
+  [Extension in keyof Loaders]: InferModuleLoader<Loaders[Extension]>
 }
 
 /** Determines if the loader is a resolver. */
-function isLoader(loader: FileLoader<any>): loader is RuntimeLoader<any> {
+function isLoader(
+  loader: ModuleLoader<any>
+): loader is ModuleRuntimeLoader<any> {
   return typeof loader === 'function'
 }
 
 /** Determines if the loader is a resolver with a schema. */
 function isLoaderWithSchema<Schema extends ModuleExports>(
-  loader: FileLoader<Schema>
-): loader is Schema extends ModuleExports
-  ? ModuleLoaderWithSchema<Schema> | ModuleLoaderWithStandardSchema<Schema>
-  : never {
-  return 'schema' in loader
+  loader: ModuleLoader<Schema>
+): loader is ModuleLoaderWithSchema<Schema> {
+  return 'schema' in loader && 'runtime' in loader
 }
 
 export type PathCasings = SlugCasings
@@ -153,7 +182,7 @@ export interface FileOptions<
   depth: number
   directory: Directory<
     FileTypes,
-    FileLoaders<FileTypes>,
+    ModuleLoaders,
     EntryInclude<FileSystemEntry<FileTypes>, FileTypes>
   >
 }
@@ -354,14 +383,14 @@ type ValueFromExport<
 export class JavaScriptFileExport<Value> {
   #name: string
   #file: JavaScriptFile<any>
-  #loader?: FileLoader<any>
+  #loader?: ModuleLoader<any>
   #location: Omit<FileExport, 'name'> | undefined
   #metadata: Awaited<ReturnType<typeof getFileExportMetadata>> | undefined
 
   constructor(
     name: string,
     file: JavaScriptFile<any>,
-    loader?: FileLoader<any>
+    loader?: ModuleLoader<any>
   ) {
     this.#name = name
     this.#file = file
@@ -371,7 +400,7 @@ export class JavaScriptFileExport<Value> {
   static async init<Value>(
     name: string,
     file: JavaScriptFile<any>,
-    loader?: FileLoader<any>
+    loader?: ModuleLoader<any>
   ): Promise<JavaScriptFileExport<Value>> {
     const fileExport = new JavaScriptFileExport<Value>(name, file, loader)
     await fileExport.getStaticMetadata()
@@ -520,15 +549,15 @@ export class JavaScriptFileExport<Value> {
       return this.#loader(path)
     }
 
-    if (this.#loader.runtime === undefined) {
-      const parentPath = this.#file.getParent().getRelativePathToWorkspace()
-
-      throw new Error(
-        `[renoun] A runtime loader for the parent Directory at ${parentPath} is not defined.`
-      )
+    if (isLoaderWithSchema(this.#loader) && this.#loader.runtime) {
+      return this.#loader.runtime(path)
     }
 
-    return this.#loader.runtime(path)
+    const parentPath = this.#file.getParent().getRelativePathToWorkspace()
+
+    throw new Error(
+      `[renoun] A runtime loader for the parent Directory at ${parentPath} is not defined.`
+    )
   }
 
   /**
@@ -587,7 +616,7 @@ export class JavaScriptFileExport<Value> {
 /** Options for a JavaScript file in the file system. */
 export interface JavaScriptFileOptions<FileTypes extends Record<string, any>>
   extends FileOptions<FileTypes> {
-  loader?: FileLoader<FileTypes>
+  loader?: ModuleLoader<FileTypes>
 }
 
 /** A JavaScript file in the file system. */
@@ -595,7 +624,7 @@ export class JavaScriptFile<
   FileTypes extends Record<string, any> = Record<string, any>,
 > extends File<FileTypes> {
   #exports = new Map<string, JavaScriptFileExport<ValueFromExport<FileTypes>>>()
-  #loader?: FileLoader<FileTypes>
+  #loader?: ModuleLoader<FileTypes>
 
   constructor({ loader, ...fileOptions }: JavaScriptFileOptions<FileTypes>) {
     super(fileOptions)
@@ -617,15 +646,21 @@ export class JavaScriptFile<
       return this.#loader(path)
     }
 
-    if (this.#loader.runtime === undefined) {
-      const parentPath = this.getParent().getRelativePathToWorkspace()
+    if (isLoaderWithSchema(this.#loader) && 'runtime' in this.#loader) {
+      if (this.#loader.runtime === undefined) {
+        const parentPath = this.getParent().getRelativePathToWorkspace()
 
-      throw new Error(
-        `[renoun] A runtime loader for the parent Directory at ${parentPath} is not defined.`
-      )
+        throw new Error(
+          `[renoun] A runtime loader for the parent Directory at ${parentPath} is not defined.`
+        )
+      }
+
+      return this.#loader.runtime(path)
     }
 
-    return this.#loader.runtime(path)
+    throw new Error(
+      `[renoun] This loader is missing a runtime for the parent Directory at ${this.getParent().getRelativePathToWorkspace()}.`
+    )
   }
 
   /** Parse and validate an export value using the configured schema if available. */
@@ -637,8 +672,7 @@ export class JavaScriptFile<
     }
 
     if (isLoaderWithSchema(this.#loader)) {
-      let parseValue = this.#loader.schema[name]
-
+      let parseValue = this.#loader.schema![name]
       if (parseValue) {
         try {
           if ('~standard' in parseValue) {
@@ -804,8 +838,8 @@ export type IncludedEntry<
 
 /** The options for a `Directory`. */
 interface DirectoryOptions<
-  FileTypes extends InferFileLoaders<Loaders> = any,
-  Loaders extends FileLoaders = FileLoaders,
+  FileTypes extends InferModuleLoaders<Loaders> = any,
+  Loaders extends ModuleLoaders = ModuleLoaders,
   Include extends EntryInclude<
     FileSystemEntry<FileTypes>,
     FileTypes
@@ -841,12 +875,12 @@ interface DirectoryOptions<
 
 /** A directory containing files and subdirectories in the file system. */
 export class Directory<
-  FileTypes extends InferFileLoaders<Loaders>,
-  Loaders extends FileLoaders = FileLoaders,
-  Include extends EntryInclude<
-    FileSystemEntry<FileTypes>,
-    FileTypes
-  > = EntryInclude<FileSystemEntry<FileTypes>, FileTypes>,
+  Types extends InferModuleLoaders<Loaders>,
+  Loaders extends ModuleLoaders = ModuleLoaders,
+  Include extends EntryInclude<FileSystemEntry<Types>, Types> = EntryInclude<
+    FileSystemEntry<Types>,
+    Types
+  >,
 > {
   #path: string
   #depth: number = -1
@@ -854,21 +888,19 @@ export class Directory<
   #basePath?: string
   #tsConfigPath?: string
   #loaders?: Loaders
-  #directory?: Directory<FileTypes>
+  #directory?: Directory<Types>
   #fileSystem: FileSystem | undefined
   #repository: Repository | undefined
   #include?:
-    | ((
-        entry: FileSystemEntry<FileTypes>
-      ) => entry is FileSystemEntry<FileTypes>)
-    | ((entry: FileSystemEntry<FileTypes>) => Promise<boolean> | boolean)
+    | ((entry: FileSystemEntry<Types>) => entry is FileSystemEntry<Types>)
+    | ((entry: FileSystemEntry<Types>) => Promise<boolean> | boolean)
     | string
   #sort?: (
-    a: FileSystemEntry<FileTypes>,
-    b: FileSystemEntry<FileTypes>
+    a: FileSystemEntry<Types>,
+    b: FileSystemEntry<Types>
   ) => Promise<number> | number
 
-  constructor(options?: DirectoryOptions<FileTypes, Loaders, Include>) {
+  constructor(options?: DirectoryOptions<Types, Loaders, Include>) {
     if (options === undefined) {
       this.#path = '.'
     } else {
@@ -883,7 +915,7 @@ export class Directory<
     }
   }
 
-  async #shouldInclude(entry: FileSystemEntry<FileTypes>): Promise<boolean> {
+  async #shouldInclude(entry: FileSystemEntry<Types>): Promise<boolean> {
     if (!this.#include) {
       return true
     }
@@ -898,19 +930,15 @@ export class Directory<
   /** Duplicate the directory with the same initial options. */
   #duplicate(
     options?: DirectoryOptions<
-      FileTypes,
+      Types,
       Loaders,
-      EntryInclude<FileSystemEntry<FileTypes>, FileTypes>
+      EntryInclude<FileSystemEntry<Types>, Types>
     >
-  ): Directory<
-    FileTypes,
-    Loaders,
-    EntryInclude<FileSystemEntry<FileTypes>, FileTypes>
-  > {
+  ): Directory<Types, Loaders, EntryInclude<FileSystemEntry<Types>, Types>> {
     const directory = new Directory<
-      FileTypes,
+      Types,
       Loaders,
-      EntryInclude<FileSystemEntry<FileTypes>, FileTypes>
+      EntryInclude<FileSystemEntry<Types>, Types>
     >({
       path: this.#path,
       fileSystem: this.#fileSystem,
@@ -971,7 +999,7 @@ export class Directory<
 
   /** Get a file at the specified `path` and optional extensions. */
   async getFile<
-    ExtensionType extends keyof FileTypes | string,
+    ExtensionType extends keyof Types | string,
     const Extension extends ExtensionType | Extension[],
   >(
     path: string | string[],
@@ -979,18 +1007,18 @@ export class Directory<
   ): Promise<
     | (Extension extends string
         ? IsJavaScriptLikeExtension<Extension> extends true
-          ? JavaScriptFile<FileTypes[Extension]>
-          : File<FileTypes>
-        : File<FileTypes>)
+          ? JavaScriptFile<Types[Extension]>
+          : File<Types>
+        : File<Types>)
     | undefined
   > {
     const segments = Array.isArray(path)
       ? path.slice(0)
       : path.split('/').filter(Boolean)
-    let currentDirectory = this as Directory<FileTypes>
+    let currentDirectory = this as Directory<Types>
 
     while (segments.length > 0) {
-      let entry: FileSystemEntry<FileTypes> | undefined
+      let entry: FileSystemEntry<Types> | undefined
       const currentSegment = createSlug(segments.shift()!, this.#pathCasing)
       const lastSegment = segments.at(-1)
       const allEntries = await currentDirectory.getEntries({
@@ -1112,7 +1140,7 @@ export class Directory<
    * An error will be thrown if the file is not found.
    */
   async getFileOrThrow<
-    ExtensionType extends keyof FileTypes | string,
+    ExtensionType extends keyof Types | string,
     const Extension extends ExtensionType | Extension[],
   >(
     path: string | string[],
@@ -1120,9 +1148,9 @@ export class Directory<
   ): Promise<
     Extension extends string
       ? IsJavaScriptLikeExtension<Extension> extends true
-        ? JavaScriptFile<FileTypes[Extension]>
-        : File<FileTypes>
-      : File<FileTypes>
+        ? JavaScriptFile<Types[Extension]>
+        : File<Types>
+      : File<Types>
   > {
     const file = await this.getFile(path, extension)
 
@@ -1148,11 +1176,11 @@ export class Directory<
   /** Get a directory at the specified `path`. */
   async getDirectory(
     path: string | string[]
-  ): Promise<Directory<FileTypes> | undefined> {
+  ): Promise<Directory<Types> | undefined> {
     const segments = Array.isArray(path)
       ? path.slice(0)
       : path.split('/').filter(Boolean)
-    let currentDirectory = this as Directory<FileTypes>
+    let currentDirectory = this as Directory<Types>
 
     while (segments.length > 0) {
       const currentSegment = createSlug(segments.shift()!, this.#pathCasing)
@@ -1160,7 +1188,7 @@ export class Directory<
         includeDuplicates: true,
         includeTsConfigIgnoredFiles: true,
       })
-      let entry: FileSystemEntry<FileTypes> | undefined
+      let entry: FileSystemEntry<Types> | undefined
 
       for (const currentEntry of allEntries) {
         const baseSegment = createSlug(
@@ -1193,7 +1221,7 @@ export class Directory<
    */
   async getDirectoryOrThrow(
     path: string | string[]
-  ): Promise<Directory<FileTypes>> {
+  ): Promise<Directory<Types>> {
     const directory = await this.getDirectory(path)
 
     if (!directory) {
@@ -1210,7 +1238,7 @@ export class Directory<
   /** Get a file or directory at the specified `path`. Files will be prioritized over directories. */
   async getEntry(
     path: string | string[]
-  ): Promise<FileSystemEntry<FileTypes> | undefined> {
+  ): Promise<FileSystemEntry<Types> | undefined> {
     const file = await this.getFile(path)
 
     if (file) {
@@ -1227,7 +1255,7 @@ export class Directory<
   /** Get a file or directory at the specified `path`. An error will be thrown if the entry is not found. */
   async getEntryOrThrow(
     path: string | string[]
-  ): Promise<FileSystemEntry<FileTypes>> {
+  ): Promise<FileSystemEntry<Types>> {
     const entry = await this.getEntry(path)
 
     if (!entry) {
@@ -1252,14 +1280,14 @@ export class Directory<
     includeTsConfigIgnoredFiles?: boolean
   }): Promise<
     Include extends string
-      ? FileWithExtension<FileTypes, ExtractFilePatternExtension<Include>>[]
-      : Include extends EntryInclude<infer FilteredEntry, FileTypes>
+      ? FileWithExtension<Types, ExtractFilePatternExtension<Include>>[]
+      : Include extends EntryInclude<infer FilteredEntry, Types>
         ? FilteredEntry[]
-        : FileSystemEntry<FileTypes>[]
+        : FileSystemEntry<Types>[]
   > {
     const fileSystem = this.getFileSystem()
     const directoryEntries = await fileSystem.readDirectory(this.#path)
-    const entriesMap = new Map<string, FileSystemEntry<FileTypes>>()
+    const entriesMap = new Map<string, FileSystemEntry<Types>>()
     const thisDirectory = this as Directory<any, any, any>
     const directoryBaseName = this.getBaseName()
     const nextDepth = this.#depth + 1
@@ -1319,7 +1347,7 @@ export class Directory<
         }
       } else if (entry.isFile) {
         const extension = extensionName(entry.name).slice(1)
-        const loader = this.#loaders?.[extension] as FileLoader<FileTypes[any]>
+        const loader = this.#loaders?.[extension] as ModuleLoader<Types[any]>
         const file =
           loader || isJavaScriptLikeExtension(extension)
             ? new JavaScriptFile({
@@ -1345,7 +1373,7 @@ export class Directory<
 
         if (
           this.#include &&
-          !(await this.#shouldInclude(file as FileSystemEntry<FileTypes>))
+          !(await this.#shouldInclude(file as FileSystemEntry<Types>))
         ) {
           continue
         }
@@ -1354,9 +1382,7 @@ export class Directory<
       }
     }
 
-    const entries = Array.from(
-      entriesMap.values()
-    ) as FileSystemEntry<FileTypes>[]
+    const entries = Array.from(entriesMap.values()) as FileSystemEntry<Types>[]
 
     if (this.#sort) {
       try {
@@ -1396,16 +1422,13 @@ export class Directory<
 
   /** Get the previous and next sibling entries (files or directories) of the parent directory. */
   async getSiblings<
-    GroupFileTypes extends Record<string, any> = FileTypes,
+    GroupFileTypes extends Record<string, any> = Types,
   >(options?: {
     entryGroup?: EntryGroup<FileSystemEntry<any>[], GroupFileTypes>
   }): Promise<
-    [
-      FileSystemEntry<FileTypes> | undefined,
-      FileSystemEntry<FileTypes> | undefined,
-    ]
+    [FileSystemEntry<Types> | undefined, FileSystemEntry<Types> | undefined]
   > {
-    let entries: FileSystemEntry<FileTypes>[]
+    let entries: FileSystemEntry<Types>[]
 
     if (options?.entryGroup) {
       entries = await options.entryGroup.getEntries({ recursive: true })
@@ -1531,7 +1554,7 @@ export class Directory<
   /** Checks if this directory contains the provided entry. */
   hasEntry(
     entry: FileSystemEntry<any> | undefined
-  ): entry is FileSystemEntry<FileTypes> {
+  ): entry is FileSystemEntry<Types> {
     if (entry === undefined) {
       return false
     }
@@ -1550,12 +1573,12 @@ export class Directory<
 
   /** Checks if this directory contains the provided file. */
   hasFile<
-    ExtensionType extends keyof FileTypes | string,
+    ExtensionType extends keyof Types | string,
     const Extension extends ExtensionType | Extension[],
   >(
     entry: FileSystemEntry<any> | undefined,
     extension?: Extension | Extension[]
-  ): entry is FileWithExtension<FileTypes, Extension> {
+  ): entry is FileWithExtension<Types, Extension> {
     const extensions = Array.isArray(extension) ? extension : [extension]
 
     if (entry instanceof File && this.hasEntry(entry)) {
@@ -1830,7 +1853,7 @@ type StringUnion<Type> = Extract<Type, string> | (string & {})
 
 /** Resolves valid extension patterns from an object of loaders. */
 type LoadersToExtensions<
-  DirectoryLoaders extends FileLoaders,
+  DirectoryLoaders extends ModuleLoaders,
   ExtensionUnion = StringUnion<keyof DirectoryLoaders>,
 > = ExtensionUnion | ExtensionUnion[]
 
@@ -1838,30 +1861,19 @@ type LoadersToExtensions<
  * Determines if a `FileSystemEntry` is a `File` and optionally narrows the
  * result based on the provided extensions.
  */
-export function isFile<FileTypes extends Record<string, any>>(
-  entry: FileSystemEntry<FileTypes>
-): entry is File<FileTypes>
-
 export function isFile<
   FileTypes extends Record<string, any>,
-  const Extension extends StringUnion<keyof FileTypes>,
+  const Extension extends
+    | StringUnion<keyof FileTypes>
+    | StringUnion<keyof FileTypes>[],
 >(
   entry: FileSystemEntry<FileTypes>,
-  extension: Extension
-): entry is FileWithExtension<FileTypes, Extension>
-
-export function isFile<
-  FileTypes extends Record<string, any>,
-  const Extensions extends readonly StringUnion<keyof FileTypes>[],
->(
-  entry: FileSystemEntry<FileTypes>,
-  extensions: Extensions
-): entry is FileWithExtension<FileTypes, Extensions[number]>
-
-export function isFile(
-  entry: any,
-  extension?: any
-): entry is FileWithExtension<any, any> {
+  extension?: Extension
+): entry is Extension extends undefined
+  ? File<FileTypes>
+  : Extension extends string
+    ? FileWithExtension<FileTypes, Extension>
+    : FileWithExtension<FileTypes, Extension[number]> {
   if (entry instanceof File) {
     const fileExtension = entry.getExtension()
 
