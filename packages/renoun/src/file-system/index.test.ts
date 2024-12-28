@@ -22,18 +22,17 @@ import {
   withSchema,
 } from './index'
 
-type IsNotAny<Type> = 0 extends 1 & Type ? never : Type
-
-type IsAny<Type> = 0 extends 1 & Type ? true : false
-
-type IsRecordOfAny<Type> =
-  Type extends Record<string, infer Type> ? IsAny<Type> : false
-
-type IsNever<Type> = Type extends never ? true : false
-
 type Expect<Type extends true> = Type
 
 type Not<_ extends false> = true
+
+type IsNot<Type, Expected> = Type extends Expected ? false : true
+
+type IsAny<Type> = 0 extends 1 & Type ? true : false
+
+type IsNotAny<Type> = true extends IsAny<Type> ? false : true
+
+type IsNever<Type> = Type extends never ? true : false
 
 describe('file system', () => {
   test('node file system read directory', async () => {
@@ -158,7 +157,7 @@ describe('file system', () => {
         if (isFile(entry, 'mdx')) {
           const value = await entry.getExportValue('frontmatter')
 
-          value satisfies IsNotAny<typeof value>
+          type Test = Expect<IsNotAny<typeof value>>
 
           value satisfies
             | {
@@ -202,7 +201,7 @@ describe('file system', () => {
     const file = await directory.getFileOrThrow('path', 'ts')
     const basenameFn = await file.getExportValueOrThrow('basename')
 
-    basenameFn satisfies IsNotAny<typeof basenameFn>
+    type Test = Expect<IsNotAny<typeof basenameFn>>
 
     expectTypeOf(basenameFn).toMatchTypeOf<
       (path: string, extension?: string) => string
@@ -224,7 +223,7 @@ describe('file system', () => {
         await directory.getFileOrThrow('introduction', 'ts')
       ).getExportValue('metadata')
 
-      value satisfies IsNotAny<typeof value>
+      type Test = Expect<IsNotAny<typeof value>>
 
       expectTypeOf(value).toMatchTypeOf<{ title: string } | undefined>()
     })
@@ -250,7 +249,7 @@ describe('file system', () => {
         await directory.getFileOrThrow('introduction', 'ts')
       ).getExportValueOrThrow('metadata')
 
-      value satisfies IsNotAny<typeof value>
+      type Test = Expect<IsNotAny<typeof value>>
 
       expectTypeOf(value).toMatchTypeOf<{ title: string }>()
     })
@@ -273,7 +272,7 @@ describe('file system', () => {
         await directory.getFileOrThrow('introduction', 'ts')
       ).getExportValue('metadata')
 
-      value satisfies IsNotAny<typeof value>
+      type Test = Expect<IsNotAny<typeof value>>
 
       expectTypeOf(value).toMatchTypeOf<{ title: string } | undefined>()
     })
@@ -297,7 +296,7 @@ describe('file system', () => {
         await directory.getFileOrThrow('introduction', 'ts')
       ).getExportValue('metadata')
 
-      value satisfies IsNotAny<typeof value>
+      type Test = Expect<IsNotAny<typeof value>>
 
       expectTypeOf(value).toMatchTypeOf<
         { title: string; date: Date } | undefined
@@ -323,7 +322,7 @@ describe('file system', () => {
         await directory.getFileOrThrow('introduction', 'ts')
       ).getExportValue('metadata')
 
-      value satisfies IsNotAny<typeof value>
+      type Test = Expect<IsNotAny<typeof value>>
 
       expectTypeOf(value).toMatchTypeOf<
         { title: string; date?: Date } | undefined
@@ -352,7 +351,9 @@ describe('file system', () => {
     })
     const files = await posts.getEntries()
 
-    expectTypeOf(files).toMatchTypeOf<JavaScriptFile<PostType>[]>()
+    expectTypeOf(files).toMatchTypeOf<
+      JavaScriptFile<{ default: MDXContent } & PostType>[]
+    >()
     expect(files).toHaveLength(1)
   })
 
@@ -372,7 +373,9 @@ describe('file system', () => {
     })
     const files = await posts.getEntries()
 
-    expectTypeOf(files).toMatchTypeOf<JavaScriptFile<PostType>[]>()
+    expectTypeOf(files).toMatchTypeOf<
+      JavaScriptFile<{ default: MDXContent } & PostType>[]
+    >()
     expect(files).toHaveLength(1)
   })
 
@@ -418,7 +421,9 @@ describe('file system', () => {
     })
     const entries = await directory.getEntries()
 
-    expectTypeOf(entries).toMatchTypeOf<JavaScriptFile[]>()
+    expectTypeOf(entries).toMatchTypeOf<
+      JavaScriptFile<{ default: MDXContent }>[]
+    >()
 
     expect(entries).toHaveLength(1)
   })
@@ -837,7 +842,9 @@ describe('file system', () => {
         ts: withSchema<{ metadata: { title: string } }>(
           {
             metadata: (value) => {
-              value satisfies IsNotAny<typeof value>
+              type Test = Expect<IsNotAny<typeof value>>
+
+              value satisfies { title: string }
 
               if (typeof value.title === 'string') {
                 return value
@@ -1209,8 +1216,16 @@ describe('file system', () => {
     const directory = new Directory({
       fileSystem,
       loaders: {
-        tsx: withSchema<{ default: ComponentType }>(),
-        mdx: withSchema<{ default: MDXContent }>(),
+        tsx: withSchema<{
+          default: ComponentType
+        }>,
+        mdx: withSchema<{
+          frontmatter: { title: string }
+        }>(() => {
+          return Promise.resolve<any>({
+            default: () => {},
+          })
+        }),
       },
     })
     const entry = await directory.getEntryOrThrow('Button')
@@ -1231,11 +1246,12 @@ describe('file system', () => {
     expect(isDirectory(file)).toBe(false)
 
     expectTypeOf(file).toMatchTypeOf<
-      JavaScriptFile<
-        InferModuleExports<{
-          default: MDXContent
-        }>
-      >
+      JavaScriptFile<{
+        default: MDXContent
+        frontmatter: {
+          title: string
+        }
+      }>
     >()
   })
 
@@ -1333,7 +1349,9 @@ describe('file system', () => {
     )
 
     expect(mdxFile).toBeInstanceOf(JavaScriptFile)
-    expectTypeOf(mdxFile).toMatchTypeOf<JavaScriptFile<FrontMatter>>()
+    expectTypeOf(mdxFile).toMatchTypeOf<
+      JavaScriptFile<{ default: MDXContent } & InferModuleExports<FrontMatter>>
+    >()
 
     const file = await group.getFileOrThrow(['posts', 'meta'], 'js')
     const [previousEntry, nextEntry] = await file.getSiblings({
@@ -1450,7 +1468,9 @@ describe('file system', () => {
     })
     const file = await group.getFileOrThrow('Button', 'mdx')
 
-    expectTypeOf(file).toMatchTypeOf<JavaScriptFile<MDXTypes>>()
+    expectTypeOf(file).toMatchTypeOf<
+      JavaScriptFile<{ default: MDXContent } & MDXTypes>
+    >()
 
     const entry = await group.getEntryOrThrow('Button')
 
@@ -1458,10 +1478,12 @@ describe('file system', () => {
 
     expect(directoryA.hasFile(entry, 'mdx')).toBe(true)
 
-    entry satisfies IsNotAny<typeof entry>
+    type Test = Expect<IsNotAny<typeof entry>>
 
     if (directoryA.hasFile(entry, 'mdx')) {
-      expectTypeOf(entry).toMatchTypeOf<JavaScriptFile<MDXTypes>>()
+      expectTypeOf(entry).toMatchTypeOf<
+        JavaScriptFile<{ default: MDXContent } & MDXTypes>
+      >()
     }
   })
 })

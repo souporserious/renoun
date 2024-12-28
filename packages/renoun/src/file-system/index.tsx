@@ -1,5 +1,6 @@
 import * as React from 'react'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
+import type { MDXContent } from '@renoun/mdx'
 import { minimatch } from 'minimatch'
 
 import { getFileExportMetadata } from '../project/client.js'
@@ -1007,7 +1008,9 @@ export class Directory<
   ): Promise<
     | (Extension extends string
         ? IsJavaScriptLikeExtension<Extension> extends true
-          ? JavaScriptFile<Types[Extension]>
+          ? Extension extends 'mdx'
+            ? JavaScriptFile<{ default: MDXContent } & Types[Extension]>
+            : JavaScriptFile<Types[Extension]>
           : File<Types>
         : File<Types>)
     | undefined
@@ -1148,7 +1151,9 @@ export class Directory<
   ): Promise<
     Extension extends string
       ? IsJavaScriptLikeExtension<Extension> extends true
-        ? JavaScriptFile<Types[Extension]>
+        ? Extension extends 'mdx'
+          ? JavaScriptFile<{ default: MDXContent } & Types[Extension]>
+          : JavaScriptFile<Types[Extension]>
         : File<Types>
       : File<Types>
   > {
@@ -1714,7 +1719,9 @@ export class EntryGroup<
   ): Promise<
     | (Extension extends string
         ? IsJavaScriptLikeExtension<Extension> extends true
-          ? JavaScriptFile<FileTypes[Extension]>
+          ? Extension extends 'mdx'
+            ? JavaScriptFile<{ default: MDXContent } & FileTypes[Extension]>
+            : JavaScriptFile<FileTypes[Extension]>
           : File<FileTypes>
         : File<FileTypes>)
     | undefined
@@ -1763,7 +1770,9 @@ export class EntryGroup<
   ): Promise<
     Extension extends string
       ? IsJavaScriptLikeExtension<Extension> extends true
-        ? JavaScriptFile<FileTypes[Extension]>
+        ? Extension extends 'mdx'
+          ? JavaScriptFile<{ default: MDXContent } & FileTypes[Extension]>
+          : JavaScriptFile<FileTypes[Extension]>
         : File<FileTypes>
       : File<FileTypes>
   > {
@@ -1841,11 +1850,15 @@ export type FileWithExtension<
   Extension = LoadersToExtensions<FileTypes>,
 > = Extension extends string
   ? IsJavaScriptLikeExtension<Extension> extends true
-    ? JavaScriptFile<FileTypes[Extension]>
+    ? Extension extends 'mdx'
+      ? JavaScriptFile<{ default: MDXContent } & FileTypes[Extension]>
+      : JavaScriptFile<FileTypes[Extension]>
     : File<FileTypes>
   : Extension extends string[]
     ? HasJavaScriptLikeExtensions<Extension> extends true
-      ? JavaScriptFile<FileTypes[Extension[number]]>
+      ? Extension extends 'mdx'
+        ? JavaScriptFile<{ default: MDXContent } & FileTypes[Extension[number]]>
+        : JavaScriptFile<FileTypes[Extension[number]]>
       : File<FileTypes>
     : File<FileTypes>
 
