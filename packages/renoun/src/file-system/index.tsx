@@ -677,11 +677,15 @@ export class JavaScriptFile<
 
             if (result.issues) {
               const issuesMessage = result.issues
-                .map((issue) => issue.message)
-                .join(', ')
+                .map((issue) =>
+                  issue.path
+                    ? `  - ${issue.path.join('.')}: ${issue.message}`
+                    : `  - ${issue.message}`
+                )
+                .join('\n')
 
               throw new Error(
-                `[renoun] Schema validation failed for export "${name}" at file path "${this.getRelativePath()}" with the following issues: ${issuesMessage}`
+                `[renoun] Schema validation failed for export "${name}" at file path: "${this.getAbsolutePath()}"\n\nThe following issues need to be fixed:\n${issuesMessage}`
               )
             }
 
@@ -692,7 +696,7 @@ export class JavaScriptFile<
         } catch (error) {
           if (error instanceof Error) {
             throw new Error(
-              `[renoun] Schema validation failed to parse export "${name}" at file path "${this.getRelativePath()}" errored with: ${error.message}`
+              `[renoun] Schema validation failed to parse export "${name}" at file path: "${this.getAbsolutePath()}"\n\nThe following error occurred:\n${error.message}`
             )
           }
         }
