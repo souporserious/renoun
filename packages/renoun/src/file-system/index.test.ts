@@ -996,7 +996,7 @@ describe('file system', () => {
     expect(basename('/path/to/file.ts', '.ts')).toBe('file')
   })
 
-  test('getRuntimeValue resolves export runtime value from withModule with extension', async () => {
+  test('getRuntimeValue resolves export runtime value from loader', async () => {
     const directory = new Directory({
       path: 'fixtures/utils',
       loaders: {
