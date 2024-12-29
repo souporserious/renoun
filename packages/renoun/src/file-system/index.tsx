@@ -171,33 +171,33 @@ export type PathCasings = SlugCasings
 
 /** A directory or file entry. */
 export type FileSystemEntry<
-  FileTypes extends Record<string, any> = Record<string, any>,
-> = Directory<FileTypes> | File<FileTypes>
+  Types extends Record<string, any> = Record<string, any>,
+> = Directory<Types> | File<Types>
 
 /** Options for a file in the file system. */
 export interface FileOptions<
-  FileTypes extends Record<string, any> = Record<string, any>,
+  Types extends Record<string, any> = Record<string, any>,
 > {
   path: string
   pathCasing: PathCasings
   depth: number
   directory: Directory<
-    FileTypes,
+    Types,
     ModuleLoaders,
-    EntryInclude<FileSystemEntry<FileTypes>, FileTypes>
+    EntryInclude<FileSystemEntry<Types>, Types>
   >
 }
 
 /** A file in the file system. */
 export class File<
-  FileTypes extends Record<string, any> = Record<string, any>,
+  Types extends Record<string, any> = Record<string, any>,
 > extends FileName {
   #path: string
   #pathCasing: PathCasings
   #depth: number
-  #directory: Directory<FileTypes>
+  #directory: Directory<Types>
 
-  constructor(options: FileOptions<FileTypes>) {
+  constructor(options: FileOptions<Types>) {
     super(baseName(options.path))
     this.#path = options.path
     this.#pathCasing = options.pathCasing
@@ -344,16 +344,11 @@ export class File<
    * Get the previous and next sibling entries (files or directories) of the parent directory.
    * If the file is an index or readme file, the siblings will be retrieved from the parent directory.
    */
-  async getSiblings<
-    GroupFileTypes extends Record<string, any> = FileTypes,
-  >(options?: {
-    entryGroup?: EntryGroup<FileSystemEntry<any>[], GroupFileTypes>
+  async getSiblings<GroupTypes extends Record<string, any> = Types>(options?: {
+    entryGroup?: EntryGroup<GroupTypes, FileSystemEntry<any>[]>
     includeDuplicateSegments?: boolean
   }): Promise<
-    [
-      FileSystemEntry<FileTypes> | undefined,
-      FileSystemEntry<FileTypes> | undefined,
-    ]
+    [FileSystemEntry<Types> | undefined, FileSystemEntry<Types> | undefined]
   > {
     const isIndexOrReadme = ['index', 'readme'].includes(
       this.getBaseName().toLowerCase()
@@ -376,9 +371,8 @@ export class File<
   }
 }
 
-type ValueFromExport<
-  FileTypes extends Record<string, any> = Record<string, any>,
-> = FileTypes[Extract<keyof FileTypes, string>]
+type ValueFromExport<Types extends Record<string, any> = Record<string, any>> =
+  Types[Extract<keyof Types, string>]
 
 /** A JavaScript file export. */
 export class JavaScriptFileExport<Value> {
@@ -615,19 +609,19 @@ export class JavaScriptFileExport<Value> {
 }
 
 /** Options for a JavaScript file in the file system. */
-export interface JavaScriptFileOptions<FileTypes extends Record<string, any>>
-  extends FileOptions<FileTypes> {
-  loader?: ModuleLoader<FileTypes>
+export interface JavaScriptFileOptions<Types extends Record<string, any>>
+  extends FileOptions<Types> {
+  loader?: ModuleLoader<Types>
 }
 
 /** A JavaScript file in the file system. */
 export class JavaScriptFile<
-  FileTypes extends Record<string, any> = Record<string, any>,
-> extends File<FileTypes> {
-  #exports = new Map<string, JavaScriptFileExport<ValueFromExport<FileTypes>>>()
-  #loader?: ModuleLoader<FileTypes>
+  Types extends Record<string, any> = Record<string, any>,
+> extends File<Types> {
+  #exports = new Map<string, JavaScriptFileExport<ValueFromExport<Types>>>()
+  #loader?: ModuleLoader<Types>
 
-  constructor({ loader, ...fileOptions }: JavaScriptFileOptions<FileTypes>) {
+  constructor({ loader, ...fileOptions }: JavaScriptFileOptions<Types>) {
     super(fileOptions)
     this.#loader = loader
   }
@@ -721,23 +715,23 @@ export class JavaScriptFile<
     return Promise.all(
       fileExports.map((exportMetadata) =>
         this.getExportOrThrow(
-          exportMetadata.name as Extract<keyof FileTypes, string>
+          exportMetadata.name as Extract<keyof Types, string>
         )
       )
     )
   }
 
   /** Get a JavaScript file export by name. */
-  async getExport<ExportName extends Extract<keyof FileTypes, string>>(
+  async getExport<ExportName extends Extract<keyof Types, string>>(
     name: ExportName
-  ): Promise<JavaScriptFileExport<ValueFromExport<FileTypes>> | undefined> {
+  ): Promise<JavaScriptFileExport<ValueFromExport<Types>> | undefined> {
     if (await this.hasExport(name)) {
       if (this.#exports.has(name)) {
         return this.#exports.get(name)!
       }
 
       const fileExport = await JavaScriptFileExport.init<
-        ValueFromExport<FileTypes>
+        ValueFromExport<Types>
       >(name, this, this.#loader)
 
       this.#exports.set(name, fileExport)
@@ -757,9 +751,9 @@ export class JavaScriptFile<
   }
 
   /** Get a JavaScript file export by name or throw an error if it does not exist. */
-  async getExportOrThrow<ExportName extends Extract<keyof FileTypes, string>>(
+  async getExportOrThrow<ExportName extends Extract<keyof Types, string>>(
     name: ExportName
-  ): Promise<JavaScriptFileExport<ValueFromExport<FileTypes>>> {
+  ): Promise<JavaScriptFileExport<ValueFromExport<Types>>> {
     const fileExport = await this.getExport(name)
 
     if (fileExport === undefined) {
@@ -778,19 +772,19 @@ export class JavaScriptFile<
   }
 
   /** Get the runtime value of an export in the JavaScript file. */
-  async getExportValue<ExportName extends Extract<keyof FileTypes, string>>(
+  async getExportValue<ExportName extends Extract<keyof Types, string>>(
     name: ExportName
-  ): Promise<FileTypes[ExportName] | undefined> {
+  ): Promise<Types[ExportName] | undefined> {
     const fileExport = await this.getExport(name)
-    return fileExport?.getRuntimeValue() as FileTypes[ExportName] | undefined
+    return fileExport?.getRuntimeValue() as Types[ExportName] | undefined
   }
 
   /** Get the runtime value of an export in the JavaScript file or throw an error if it does not exist. */
-  async getExportValueOrThrow<
-    ExportName extends Extract<keyof FileTypes, string>,
-  >(name: ExportName): Promise<FileTypes[ExportName]> {
+  async getExportValueOrThrow<ExportName extends Extract<keyof Types, string>>(
+    name: ExportName
+  ): Promise<Types[ExportName]> {
     const fileExport = await this.getExportOrThrow(name)
-    return fileExport.getRuntimeValue() as FileTypes[ExportName]
+    return fileExport.getRuntimeValue() as Types[ExportName]
   }
 
   /** Check if an export exists in the JavaScript file. */
@@ -822,29 +816,29 @@ export class JavaScriptFile<
 
 export type EntryInclude<
   Entry extends FileSystemEntry<any>,
-  FileTypes extends Record<string, any>,
+  Types extends Record<string, any>,
 > =
-  | ((entry: FileSystemEntry<FileTypes>) => entry is Entry)
-  | ((entry: FileSystemEntry<FileTypes>) => Promise<boolean> | boolean)
+  | ((entry: FileSystemEntry<Types>) => entry is Entry)
+  | ((entry: FileSystemEntry<Types>) => Promise<boolean> | boolean)
   | string
 
 export type IncludedEntry<
-  FileTypes extends Record<string, any>,
-  DirectoryFilter extends EntryInclude<FileSystemEntry<FileTypes>, FileTypes>,
+  Types extends Record<string, any>,
+  DirectoryFilter extends EntryInclude<FileSystemEntry<Types>, Types>,
 > = DirectoryFilter extends string
-  ? FileWithExtension<FileTypes, ExtractFilePatternExtension<DirectoryFilter>>
-  : DirectoryFilter extends EntryInclude<infer Entry, FileTypes>
+  ? FileWithExtension<Types, ExtractFilePatternExtension<DirectoryFilter>>
+  : DirectoryFilter extends EntryInclude<infer Entry, Types>
     ? Entry
-    : FileSystemEntry<FileTypes>
+    : FileSystemEntry<Types>
 
 /** The options for a `Directory`. */
 interface DirectoryOptions<
-  FileTypes extends InferModuleLoaders<Loaders> = any,
+  Types extends InferModuleLoaders<Loaders> = any,
   Loaders extends ModuleLoaders = ModuleLoaders,
-  Include extends EntryInclude<
-    FileSystemEntry<FileTypes>,
-    FileTypes
-  > = EntryInclude<FileSystemEntry<FileTypes>, FileTypes>,
+  Include extends EntryInclude<FileSystemEntry<Types>, Types> = EntryInclude<
+    FileSystemEntry<Types>,
+    Types
+  >,
 > {
   /** The path to the directory in the file system. */
   path?: string
@@ -869,8 +863,8 @@ interface DirectoryOptions<
 
   /** A sort callback applied to all descendant entries. */
   sort?: (
-    a: IncludedEntry<NoInfer<FileTypes>, Include>,
-    b: IncludedEntry<NoInfer<FileTypes>, Include>
+    a: IncludedEntry<NoInfer<Types>, Include>,
+    b: IncludedEntry<NoInfer<Types>, Include>
   ) => Promise<number> | number
 }
 
@@ -1426,10 +1420,8 @@ export class Directory<
   }
 
   /** Get the previous and next sibling entries (files or directories) of the parent directory. */
-  async getSiblings<
-    GroupFileTypes extends Record<string, any> = Types,
-  >(options?: {
-    entryGroup?: EntryGroup<FileSystemEntry<any>[], GroupFileTypes>
+  async getSiblings<GroupTypes extends Record<string, any> = Types>(options?: {
+    entryGroup?: EntryGroup<GroupTypes, FileSystemEntry<any>[]>
   }): Promise<
     [FileSystemEntry<Types> | undefined, FileSystemEntry<Types> | undefined]
   > {
@@ -1602,14 +1594,18 @@ export class Directory<
   }
 }
 
-type LoadersFromEntries<Entries extends readonly FileSystemEntry<any>[]> =
-  Entries extends readonly [infer First, ...infer Rest]
-    ? First extends FileSystemEntry<infer FileTypes>
-      ? Rest extends readonly FileSystemEntry<any>[]
-        ? FileTypes & LoadersFromEntries<Rest>
-        : FileTypes
-      : never
-    : {}
+/** Converts a union type to an intersection type. */
+type UnionToIntersection<Union> = (
+  Union extends any ? (distributedUnion: Union) => void : never
+) extends (mergedIntersection: infer Intersection) => void
+  ? Intersection & Union
+  : never
+
+/** Helper type to extract loader types from entries. */
+type LoadersFromEntries<Entries extends FileSystemEntry<any>[]> =
+  UnionToIntersection<
+    Entries[number] extends Directory<any, infer Loaders> ? Loaders : {}
+  >
 
 /** Options for an `EntryGroup`. */
 export interface EntryGroupOptions<Entries extends FileSystemEntry<any>[]> {
@@ -1618,8 +1614,9 @@ export interface EntryGroupOptions<Entries extends FileSystemEntry<any>[]> {
 
 /** A group of file system entries. */
 export class EntryGroup<
+  Types extends InferModuleLoaders<Loaders>,
   const Entries extends FileSystemEntry<any>[] = FileSystemEntry<any>[],
-  FileTypes extends Record<string, any> = LoadersFromEntries<Entries>,
+  const Loaders extends ModuleLoaders = LoadersFromEntries<Entries>,
 > {
   #entries: Entries
 
@@ -1667,7 +1664,7 @@ export class EntryGroup<
   async getEntry(
     /** The path to the entry excluding leading numbers. */
     path: string | string[]
-  ): Promise<FileSystemEntry<FileTypes> | undefined> {
+  ): Promise<FileSystemEntry<Types> | undefined> {
     const normalizedPath = Array.isArray(path)
       ? path
       : path.split('/').filter(Boolean)
@@ -1699,7 +1696,7 @@ export class EntryGroup<
   async getEntryOrThrow(
     /** The path to the entry excluding leading numbers. */
     path: string | string[]
-  ): Promise<FileSystemEntry<FileTypes>> {
+  ): Promise<FileSystemEntry<Types>> {
     const entry = await this.getEntry(path)
 
     if (!entry) {
@@ -1720,10 +1717,10 @@ export class EntryGroup<
     | (Extension extends string
         ? IsJavaScriptLikeExtension<Extension> extends true
           ? Extension extends 'mdx'
-            ? JavaScriptFile<{ default: MDXContent } & FileTypes[Extension]>
-            : JavaScriptFile<FileTypes[Extension]>
-          : File<FileTypes>
-        : File<FileTypes>)
+            ? JavaScriptFile<{ default: MDXContent } & Types[Extension]>
+            : JavaScriptFile<Types[Extension]>
+          : File<Types>
+        : File<Types>)
     | undefined
   > {
     const normalizedPath = Array.isArray(path)
@@ -1771,10 +1768,10 @@ export class EntryGroup<
     Extension extends string
       ? IsJavaScriptLikeExtension<Extension> extends true
         ? Extension extends 'mdx'
-          ? JavaScriptFile<{ default: MDXContent } & FileTypes[Extension]>
-          : JavaScriptFile<FileTypes[Extension]>
-        : File<FileTypes>
-      : File<FileTypes>
+          ? JavaScriptFile<{ default: MDXContent } & Types[Extension]>
+          : JavaScriptFile<Types[Extension]>
+        : File<Types>
+      : File<Types>
   > {
     const file = await this.getFile(path, extension)
 
@@ -1799,7 +1796,7 @@ export class EntryGroup<
   async getDirectory(
     /** The path to the entry excluding leading numbers. */
     path: string | string[]
-  ): Promise<Directory<FileTypes> | undefined> {
+  ): Promise<Directory<Types> | undefined> {
     const normalizedPath = Array.isArray(path)
       ? path.slice(0)
       : path.split('/').filter(Boolean)
@@ -1826,7 +1823,7 @@ export class EntryGroup<
   /** Get a directory at the specified path or throw an error if not found. */
   async getDirectoryOrThrow(
     path: string | string[]
-  ): Promise<Directory<FileTypes>> {
+  ): Promise<Directory<Types>> {
     const directory = await this.getDirectory(path)
 
     if (!directory) {
@@ -1838,29 +1835,29 @@ export class EntryGroup<
 }
 
 /** Determines if a `FileSystemEntry` is a `Directory`. */
-export function isDirectory<FileTypes extends Record<string, any>>(
-  entry: FileSystemEntry<FileTypes>
-): entry is Directory<FileTypes> {
+export function isDirectory<Types extends Record<string, any>>(
+  entry: FileSystemEntry<Types>
+): entry is Directory<Types> {
   return entry instanceof Directory
 }
 
 /** Determines the type of a `FileSystemEntry` based on its extension. */
 export type FileWithExtension<
-  FileTypes extends Record<string, any>,
-  Extension = LoadersToExtensions<FileTypes>,
+  Types extends Record<string, any>,
+  Extension = LoadersToExtensions<Types>,
 > = Extension extends string
   ? IsJavaScriptLikeExtension<Extension> extends true
     ? Extension extends 'mdx'
-      ? JavaScriptFile<{ default: MDXContent } & FileTypes[Extension]>
-      : JavaScriptFile<FileTypes[Extension]>
-    : File<FileTypes>
+      ? JavaScriptFile<{ default: MDXContent } & Types[Extension]>
+      : JavaScriptFile<Types[Extension]>
+    : File<Types>
   : Extension extends string[]
     ? HasJavaScriptLikeExtensions<Extension> extends true
       ? Extension extends 'mdx'
-        ? JavaScriptFile<{ default: MDXContent } & FileTypes[Extension[number]]>
-        : JavaScriptFile<FileTypes[Extension[number]]>
-      : File<FileTypes>
-    : File<FileTypes>
+        ? JavaScriptFile<{ default: MDXContent } & Types[Extension[number]]>
+        : JavaScriptFile<Types[Extension[number]]>
+      : File<Types>
+    : File<Types>
 
 type StringUnion<Type> = Extract<Type, string> | (string & {})
 
@@ -1875,18 +1872,16 @@ type LoadersToExtensions<
  * result based on the provided extensions.
  */
 export function isFile<
-  FileTypes extends Record<string, any>,
-  const Extension extends
-    | StringUnion<keyof FileTypes>
-    | StringUnion<keyof FileTypes>[],
+  Types extends Record<string, any>,
+  const Extension extends StringUnion<keyof Types> | StringUnion<keyof Types>[],
 >(
-  entry: FileSystemEntry<FileTypes>,
+  entry: FileSystemEntry<Types>,
   extension?: Extension
 ): entry is Extension extends undefined
-  ? File<FileTypes>
+  ? File<Types>
   : Extension extends string
-    ? FileWithExtension<FileTypes, Extension>
-    : FileWithExtension<FileTypes, Extension[number]> {
+    ? FileWithExtension<Types, Extension>
+    : FileWithExtension<Types, Extension[number]> {
   if (entry instanceof File) {
     const fileExtension = entry.getExtension()
 
@@ -1908,8 +1903,8 @@ export function isFile<
 }
 
 /** Determines if a `FileSystemEntry` is a `JavaScriptFile`. */
-export function isJavaScriptFile<FileTypes extends Record<string, any>>(
-  entry: FileSystemEntry<FileTypes>
-): entry is JavaScriptFile<FileTypes> {
+export function isJavaScriptFile<Types extends Record<string, any>>(
+  entry: FileSystemEntry<Types>
+): entry is JavaScriptFile<Types> {
   return entry instanceof JavaScriptFile
 }

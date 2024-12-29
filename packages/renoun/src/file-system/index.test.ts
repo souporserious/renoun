@@ -5,7 +5,7 @@ import * as v from 'valibot'
 import { z } from 'zod'
 
 import type { basename } from '#fixtures/utils/path.ts'
-import type { MDXContent } from '../mdx'
+import type { MDXContent, Headings } from '../mdx'
 import { NodeFileSystem } from './NodeFileSystem'
 import { MemoryFileSystem } from './MemoryFileSystem'
 import {
@@ -1485,5 +1485,51 @@ describe('file system', () => {
         JavaScriptFile<{ default: MDXContent } & MDXTypes>
       >()
     }
+  })
+
+  test('entry group works with type abstractions', async () => {
+    function Document(props: {
+      file: JavaScriptFile<{
+        default: MDXContent
+        headings: Headings
+        metadata: {
+          title: string
+          description: string
+        }
+      }>
+      entryGroup?: EntryGroup<any>
+    }) {
+      return null
+    }
+
+    const directory = new Directory({
+      loaders: {
+        mdx: withSchema(
+          {
+            headings: z.array(
+              z.object({
+                id: z.string(),
+                text: z.string(),
+                depth: z.number(),
+              })
+            ),
+            metadata: z.object({
+              title: z.string(),
+              label: z.string().optional(),
+              description: z.string(),
+              tags: z.array(z.string()).optional(),
+            }),
+          },
+          (path) => Promise.resolve<any>({})
+        ),
+      },
+      include: (entry) => isFile(entry, 'mdx'),
+    })
+    const entryGroup = new EntryGroup({
+      entries: [directory],
+    })
+    const file = await directory.getFileOrThrow('index', 'mdx')
+
+    Document({ file, entryGroup })
   })
 })
