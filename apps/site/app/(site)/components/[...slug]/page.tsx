@@ -1,7 +1,7 @@
 import {
   isFile,
   isDirectory,
-  type JavaScriptFileExportWithRuntime,
+  type JavaScriptFileExport,
 } from 'renoun/file-system'
 import { APIReference, CodeBlock, Tokens } from 'renoun/components'
 import type { Headings } from 'renoun/mdx'
@@ -44,9 +44,9 @@ export default async function Component({
   const examplesEntry = await componentDirectory.getEntry('examples')
   const exampleFiles = examplesEntry
     ? isDirectory(examplesEntry)
-      ? await examplesEntry
-          .withFilter((entry) => isFile(entry, 'tsx'))
-          .getEntries({ includeTsConfigIgnoredFiles: true })
+      ? (
+          await examplesEntry.getEntries({ includeTsConfigIgnoredFiles: true })
+        ).filter((entry) => isFile(entry, 'tsx'))
       : isFile(examplesEntry, 'tsx')
         ? [examplesEntry]
         : null
@@ -139,9 +139,7 @@ export default async function Component({
             >
               {examplesExports.map((fileExport) => (
                 <li key={fileExport.getName()}>
-                  <Preview
-                    fileExport={fileExport as JavaScriptFileExportWithRuntime}
-                  />
+                  <Preview fileExport={fileExport} />
                 </li>
               ))}
             </ul>
@@ -224,7 +222,7 @@ export default async function Component({
 async function Preview({
   fileExport,
 }: {
-  fileExport: JavaScriptFileExportWithRuntime<React.ComponentType>
+  fileExport: JavaScriptFileExport<React.ComponentType>
 }) {
   const name = fileExport.getName()
   const title = fileExport.getTitle()

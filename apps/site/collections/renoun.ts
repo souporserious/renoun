@@ -1,68 +1,55 @@
-import {
-  Directory,
-  isDirectory,
-  isFile,
-  type FileSystemEntry,
-} from 'renoun/file-system'
-import type { MDXContent, Headings } from 'renoun/mdx'
+import { Directory, isDirectory, isFile, withSchema } from 'renoun/file-system'
 import { z } from 'zod'
 
-function getRenounImport(path: string) {
-  return import(`../../../packages/renoun/src/${path}`)
-}
-
-type CollectionsSchema = Record<string, React.ComponentType>
-
-export const CollectionsCollection = new Directory<{ tsx: CollectionsSchema }>({
+export const CollectionsCollection = new Directory({
   path: '../../packages/renoun/src/collections',
   basePath: 'collections',
-}).withFilter((entry) => isFile(entry, 'tsx'))
-
-const metadataSchema = z.object({
-  title: z.string(),
-  description: z.string(),
 })
 
-type CollectionsDocsSchema = {
-  default: MDXContent
-  metadata: z.infer<typeof metadataSchema>
-  headings: Headings
+const collectionSchema = {
+  headings: z.array(
+    z.object({
+      id: z.string(),
+      text: z.string(),
+      depth: z.number(),
+    })
+  ),
+  metadata: z.object({
+    title: z.string(),
+    description: z.string(),
+  }),
 }
 
-export const CollectionsDocsCollection = new Directory<{
-  mdx: CollectionsDocsSchema
-}>({
+export const CollectionsDocsCollection = new Directory({
   path: '../../packages/renoun/src/collections/docs',
   basePath: 'collections',
+  loaders: {
+    mdx: withSchema(collectionSchema, (path) => {
+      return import(`../../../packages/renoun/src/collections/docs/${path}.mdx`)
+    }),
+  },
+  include: (entry) => isFile(entry, 'mdx'),
 })
-  .withSchema('mdx', { metadata: metadataSchema.parse })
-  .withModule((path) => getRenounImport(`collections/docs/${path}`))
-  .withFilter((entry) => isFile(entry, 'mdx'))
 
 type ComponentSchema = Record<string, React.ComponentType>
 
-type ComponentTypes = {
-  ts: ComponentSchema
-  tsx: ComponentSchema
-}
-
-export type ComponentSource = FileSystemEntry<ComponentTypes>
-
-export const ComponentsCollection = new Directory<
-  ComponentTypes & {
-    mdx: {
-      default: MDXContent
-      headings: Headings
-    }
-  }
->({
+export const ComponentsCollection = new Directory({
   path: '../../packages/renoun/src/components',
   tsConfigPath: '../../packages/renoun/tsconfig.json',
-  pathCasing: 'kebab',
   basePath: 'components',
-})
-  .withModule((path) => getRenounImport(`components/${path}`))
-  .withFilter(async (entry) => {
+  loaders: {
+    ts: withSchema<ComponentSchema>(
+      (path) => import(`../../../packages/renoun/src/components/${path}.ts`)
+    ),
+    tsx: withSchema<ComponentSchema>(
+      (path) => import(`../../../packages/renoun/src/components/${path}.tsx`)
+    ),
+    mdx: withSchema(
+      collectionSchema,
+      (path) => import(`../../../packages/renoun/src/components/${path}.mdx`)
+    ),
+  },
+  include: async (entry) => {
     if (isFile(entry, ['ts', 'tsx'])) {
       const fileExports = await entry.getExports()
       const allTags = await Promise.all(
@@ -81,4 +68,5 @@ export const ComponentsCollection = new Directory<
     }
 
     return isDirectory(entry) || isFile(entry, 'mdx')
-  })
+  },
+})
