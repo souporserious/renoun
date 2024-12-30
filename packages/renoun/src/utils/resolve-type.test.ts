@@ -7720,11 +7720,11 @@ describe('resolveType', () => {
                   "position": {
                     "end": {
                       "column": 52,
-                      "line": 2495,
+                      "line": 2266,
                     },
                     "start": {
                       "column": 9,
-                      "line": 2495,
+                      "line": 2266,
                     },
                   },
                   "signatures": [],
