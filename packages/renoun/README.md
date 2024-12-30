@@ -164,7 +164,15 @@ const posts = new Directory({
 })
 ```
 
-Now when we call `JavaScript#getExportValue` and `JavaScriptExport#getRuntimeValue` we will have stronger type checking and autocomplete.
+Now when calling `JavaScript#getExportValue` and `JavaScriptExport#getRuntimeValue` we get stronger type-checking and autocompletion:
+
+```tsx
+const file = await posts.getFileOrThrow('hello-world', 'mdx')
+const frontmatter = await file.getExportValueOrThrow('frontmatter')
+
+frontmatter.title // string
+frontmatter.date // Date
+```
 
 #### Schema Validation
 
