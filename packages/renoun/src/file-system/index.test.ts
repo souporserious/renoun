@@ -141,7 +141,7 @@ describe('file system', () => {
 
   test('filters with schema', async () => {
     const directory = new Directory({
-      path: 'posts',
+      path: 'fixtures/posts',
       loaders: {
         mdx: withSchema(
           {
@@ -165,9 +165,11 @@ describe('file system', () => {
                 date: Date
               }
             | undefined
+
+          return true
         }
 
-        return true
+        return false
       },
     })
     const entries = await directory.getEntries()
@@ -1489,7 +1491,7 @@ describe('file system', () => {
 
   test('entry group works with type abstractions', async () => {
     function Document(props: {
-      file: JavaScriptFile<{
+      file?: JavaScriptFile<{
         default: MDXContent
         headings: Headings
         metadata: {
@@ -1528,7 +1530,7 @@ describe('file system', () => {
     const entryGroup = new EntryGroup({
       entries: [directory],
     })
-    const file = await directory.getFileOrThrow('index', 'mdx')
+    const file = await directory.getFile('index', 'mdx')
 
     Document({ file, entryGroup })
   })

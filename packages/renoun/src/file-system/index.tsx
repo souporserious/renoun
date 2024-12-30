@@ -75,7 +75,7 @@ interface ModuleLoaderWithSchema<
    */
   _IsRuntimeOnly extends boolean = false,
 > {
-  schema?: Types
+  schema: Types
   runtime?: ModuleRuntimeLoader<InferModuleExports<Types>>
 }
 
@@ -104,7 +104,7 @@ export function withSchema<
 export function withSchema(schemaOrRuntime?: any, maybeRuntime?: any) {
   return maybeRuntime
     ? { schema: schemaOrRuntime, runtime: maybeRuntime }
-    : { schema: undefined, runtime: schemaOrRuntime }
+    : schemaOrRuntime
 }
 
 /**
@@ -683,7 +683,8 @@ export class JavaScriptFile<
     }
 
     if (isLoaderWithSchema(this.#loader)) {
-      let parseValue = this.#loader.schema![name]
+      let parseValue = this.#loader.schema[name]
+
       if (parseValue) {
         try {
           if ('~standard' in parseValue) {
