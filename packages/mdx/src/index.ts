@@ -13,7 +13,7 @@ import { addHeadings } from './remark/add-headings.js'
 import { removeImmediateParagraphs } from './remark/remove-immediate-paragraphs.js'
 import { transformRelativeLinks } from './remark/transform-relative-links.js'
 
-export type { Headings } from './remark/add-headings.js'
+export type { MDXHeadings } from './remark/add-headings.js'
 
 export type { MDXComponents, MDXContent } from 'mdx/types.js'
 

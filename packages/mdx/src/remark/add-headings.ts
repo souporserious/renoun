@@ -9,7 +9,7 @@ declare module 'mdast' {
   }
 }
 
-export type Headings = {
+export type MDXHeadings = {
   id: any
   text: string
   depth: number
@@ -18,7 +18,7 @@ export type Headings = {
 /** Adds an `id` to all headings and exports a `headings` prop. */
 export function addHeadings() {
   return function (tree: Root) {
-    const headings: Headings = []
+    const headings: MDXHeadings = []
     const headingCounts = new Map()
 
     visit(tree, 'heading', (node: Heading) => {

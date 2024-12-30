@@ -4,7 +4,7 @@ import {
   type JavaScriptFileExport,
 } from 'renoun/file-system'
 import { APIReference, CodeBlock, Tokens } from 'renoun/components'
-import type { Headings } from 'renoun/mdx'
+import type { MDXHeadings } from 'renoun/mdx'
 import { notFound } from 'next/navigation'
 import { GeistMono } from 'geist/font/mono'
 
@@ -68,7 +68,7 @@ export default async function Component({
     entryGroup: CollectionGroup,
   })
 
-  let headings: Headings = []
+  let headings: MDXHeadings = []
 
   if (mdxHeadings) {
     headings.push(...mdxHeadings)

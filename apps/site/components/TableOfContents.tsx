@@ -1,6 +1,6 @@
 'use client'
 import type { CSSObject } from 'restyle'
-import type { Headings } from 'renoun/mdx'
+import type { MDXHeadings } from 'renoun/mdx'
 
 import { useSectionObserver } from 'hooks/use-section-observer'
 import { ViewSource } from './ViewSource'
@@ -9,7 +9,7 @@ export function TableOfContents({
   headings,
   editPath,
 }: {
-  headings: Headings
+  headings: MDXHeadings
   editPath?: string
 }) {
   const sectionObserver = useSectionObserver()
