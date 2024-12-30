@@ -8,7 +8,6 @@ export default function Page() {
       <Changelog
         components={{
           pre: (props) => (
-            // @ts-expect-error
             <MDXComponents.pre
               allowErrors
               shouldFormat={false}

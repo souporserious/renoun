@@ -8,7 +8,7 @@ import { isNavigationOpenSignal } from './NavigationToggle'
 
 function useIsNavigationOpen() {
   const pathname = usePathname()
-  const previousPathname = useRef<string>()
+  const previousPathname = useRef<string>(null)
   const isNavigationOpen = useSignalValue(isNavigationOpenSignal)
 
   useEffect(() => {

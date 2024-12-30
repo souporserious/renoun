@@ -123,12 +123,12 @@
     "@renoun/mdx": "workspace:*",
     "fast-glob": "^3.3.2",
     "glob-parent": "^6.0.2",
-    "ignore": "^6.0.2",
+    "ignore": "^7.0.0",
     "restyle": "catalog:",
     "minimatch": "^10.0.1",
     "server-only": "0.0.1",
     "shiki": "catalog:",
-    "ts-morph": "^24.0.0",
+    "ts-morph": "^25.0.0",
     "ws": "^8.18.0"
   }
 }
