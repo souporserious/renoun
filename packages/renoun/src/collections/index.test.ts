@@ -106,7 +106,7 @@ describe('collections', () => {
         "/copyright",
         "/git-provider",
         "/mdx-components",
-        "/mdx-content",
+        "/mdx-renderer",
         "/package-install",
         "/rendered-html",
       ]
