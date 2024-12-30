@@ -62,9 +62,9 @@ export class WebSocketServer {
   }
 
   cleanup() {
-    // Close all active WebSocket connection
+    // Close all active WebSocket connections
     this.#sockets.forEach((ws) => {
-      ws.close()
+      ws.close(1000)
     })
 
     // Stop the WebSocket server from accepting new connections
