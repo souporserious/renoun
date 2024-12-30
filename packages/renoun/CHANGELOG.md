@@ -1,5 +1,153 @@
 # renoun
 
+## 7.9.0
+
+### Minor Changes
+
+- 3022d63: Renames `Directory` and `File` `getParentDirectory` methods to `getParent` to better align with `getSiblings`. This also aligns more closely with the web File System API's [getParent](https://developer.mozilla.org/en-US/docs/Web/API/FileSystemEntry/getParent) method.
+
+  ### Breaking Changes
+
+  - `Directory.getParentDirectory` is now `Directory.getParent`
+  - `File.getParentDirectory` is now `File.getParent`
+
+- ba2d5e1: Adds `pathCasing` option to `Directory` for setting the casing of all path methods. This is useful for ensuring that all paths are in a consistent casing, regardless of the underlying file system.
+
+  ```ts
+  import { Directory } from 'renoun/file-system'
+
+  const directory = new Directory({
+    path: 'components',
+    pathCasing: 'kebab',
+  })
+  const file = await directory.getFileOrThrow('button')
+
+  file.getPath() // '/button'
+
+  const directory = await directory.getDirectoryOrThrow('card')
+
+  directory.getPath() // '/card'
+  ```
+
+- 87e380b: Renames the `MDXContent` component to `MDXRenderer`. This was causing confusion with the `MDXContent` type exported from `renoun/mdx` and better reflects the purpose of the component.
+
+  ### Breaking Changes
+
+  - Rename any `MDXContent` component references from `renoun/components` to `MDXRenderer`.
+
+- 4149b39: Refactors the `Directory` builder pattern to move back to an object configuration with the addition of a new `withSchema` helper, allowing strong type inference and colocated file export type definitions:
+
+  ```ts
+  import { Directory, withSchema } from 'renoun/file-system'
+  import { z } from 'zod'
+
+  export const Posts = new Directory({
+    path: 'posts',
+    include: '*.mdx',
+    loaders: {
+      mdx: withSchema(
+        {
+          frontmatter: z.object({
+            title: z.string(),
+            description: z.string(),
+            date: z.date(),
+            tags: z.array(z.string()).optional(),
+          }),
+        },
+        (path) => import(`@/posts/${path}.mdx`)
+      ),
+    },
+  })
+  ```
+
+  Note, some additional changes have also been made:
+
+  - `withModule` has been replaced in favor of a `loaders` option.
+  - `withFilter` has been replaced by an `include` option to better align with TypeScript's configuration naming.
+  - The new `include` filter now also accepts a string glob file pattern e.g. `*.mdx`.
+  - An extension **must** be provided for loaders, this ensures that arbitrary file extensions are not loaded by mistake.
+  - [Standard Schema](https://github.com/standard-schema/standard-schema) is now used to automatically infer types from libraries that adhere to the spec (Zod, Valibot, Arktype).
+  - The `MDXContent` type is now included by default for MDX file `default` exports.
+  - Internally, the `JavaScriptFileWithRuntime` class was collapsed into `JavaScriptFile`. This was originally added to provide strong types when a runtime loader was or was not available, but caused too much complexity. In the future, a runtime loader will be added automatically if not explicitly defined.
+
+  ### Breaking Changes
+
+  The builder pattern configuration for `Directory` has been refactored to use an object configuration with the addition of a new `withSchema` helper. This change is breaking for any existing code that uses the `Directory` builder pattern. The `withSchema` helper is now required to provide strong type inference and colocated file export type definitions.
+
+  #### Before
+
+  ```ts
+  import { Directory } from 'renoun/file-system'
+
+  interface PostTypes {
+    mdx: {
+      default: MDXContent
+    }
+  }
+
+  const posts = new Directory<PostTypes>('posts').withModule(
+    (path) => import(`./posts/${path}`)
+  )
+  ```
+
+  #### After
+
+  ```ts
+  import { Directory } from 'renoun/file-system'
+
+  const posts = new Directory<PostTypes>({
+    path: 'posts',
+    loaders: {
+      mdx: (path) => import(`./posts/${path}.mdx`),
+    },
+  })
+  ```
+
+- 80ae7f2: Marks the `Directory#duplicate` method as private since this was previously only exposed for `EntryGroup` which no longer requires a new instance to be created.
+- 1f6603d: Removes `getEditPath` in favor of `getEditUrl` and `getEditorUri` for a more explicit API. Prior, the `getEditPath` method switched between the editor and the git provider source based on the environment. This was confusing and not always the desired behavior. Now you can explicitly choose the behavior you want.
+
+  ### Breaking Changes
+
+  The `getEditPath` method has been removed. Use `getEditUrl` and `getEditorUri` instead.
+
+  To get the same behavior as `getEditPath` you can use both `getEditUrl` and `getEditorUri` together:
+
+  ```ts
+  import { Directory } from 'renoun/file-system'
+
+  const directory = new Directory('src/components')
+  const file = directory.getFileOrThrow('Button', 'tsx')
+  const editUrl =
+    process.env.NODE_ENV === 'development'
+      ? file.getEditorUri()
+      : file.getEditUrl()
+  ```
+
+- 97bc268: Renames `@renoun/mdx` `Headings` type to `MDXHeadings`. This adds better clarity and consistency with the other `MDX` prefixed types.
+
+  ### Breaking Changes
+
+  - Rename any `Headings` references from `@renoun/mdx` to `MDXHeadings`.
+
+### Patch Changes
+
+- 5d8bd25: Fixes nested ordered files not using a unique key causing them to be filtered.
+- dc323ab: Closes WebSocket connections with a code allowing the Node process to properly exit. More info [here](https://x.com/schickling/status/1869081922846220583).
+- 679da2c: Fixes `Directory#getFile` not considering file name modifiers.
+
+  ```ts
+  const directory = new Directory({ path: 'components' })
+  const file = await directory.getFileOrThrow(['APIReference', 'examples'])
+
+  file.getAbsolutePath() // '/APIReference.examples.tsx'
+  ```
+
+- 5b558c1: Fixes `Directory#getFile` not prioritizing base files over files with modifiers e.g. `Button.tsx` over `Button.examples.tsx`.
+- Updated dependencies [ece3cc2]
+- Updated dependencies [97bc268]
+- Updated dependencies [df4d29d]
+  - @renoun/mdx@1.3.0
+
 ## 7.8.0
 
 ### Minor Changes
