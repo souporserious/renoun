@@ -325,14 +325,56 @@ export class File<
     return fileSystem.getAbsolutePath(this.#path)
   }
 
-  /** Get the URL to the file source code for the configured remote git repository. */
-  getRepositoryUrl(options?: Omit<GetFileUrlOptions, 'path'>) {
+  /** Get a URL to the file for the configured remote git repository. */
+  #getRepositoryUrl(options?: Omit<GetFileUrlOptions, 'path'>) {
     const repository = this.#directory.getRepository()
     const fileSystem = this.#directory.getFileSystem()
 
     return repository.getFileUrl({
       path: fileSystem.getRelativePathToWorkspace(this.#path),
       ...options,
+    })
+  }
+
+  /** Get the URL to the file git blame for the configured git repository. */
+  getBlameUrl(options?: Pick<GetFileUrlOptions, 'ref'>) {
+    return this.#getRepositoryUrl({
+      type: 'blame',
+      ref: options?.ref,
+    })
+  }
+
+  /** Get the edit URL to the file source for the configured git repository. */
+  getEditUrl(options?: Pick<GetFileUrlOptions, 'ref' | 'line'>) {
+    return this.#getRepositoryUrl({
+      type: 'edit',
+      ref: options?.ref,
+      line: options?.line,
+    })
+  }
+
+  /** Get the URL to the file history for the configured git repository. */
+  getHistoryUrl(options?: Pick<GetFileUrlOptions, 'ref'>) {
+    return this.#getRepositoryUrl({
+      type: 'history',
+      ref: options?.ref,
+    })
+  }
+
+  /** Get the URL to the raw file contents for the configured git repository. */
+  getRawUrl(options?: Pick<GetFileUrlOptions, 'ref'>) {
+    return this.#getRepositoryUrl({
+      type: 'raw',
+      ref: options?.ref,
+    })
+  }
+
+  /** Get the URL to the file source for the configured git repository. */
+  getSourceUrl(options?: Pick<GetFileUrlOptions, 'ref' | 'line'>) {
+    return this.#getRepositoryUrl({
+      type: 'source',
+      ref: options?.ref,
+      line: options?.line,
     })
   }
 
@@ -500,11 +542,19 @@ export class JavaScriptFileExport<Value> {
     return this.#metadata?.location.position
   }
 
-  /** Get the URL to the file export source code for the configured remote git repository. */
-  getRepositoryUrl(options?: Omit<GetFileUrlOptions, 'path' | 'line'>) {
-    return this.#file.getRepositoryUrl({
+  /** Get the edit URL to the file export source for the configured git repository. */
+  getEditUrl(options?: Pick<GetFileUrlOptions, 'ref'>) {
+    return this.#file.getEditUrl({
+      ref: options?.ref,
       line: this.#metadata?.location?.position.start.line,
-      ...options,
+    })
+  }
+
+  /** Get the URL to the file export source for the configured git repository. */
+  getSourceUrl(options?: Pick<GetFileUrlOptions, 'ref'>) {
+    return this.#file.getSourceUrl({
+      ref: options?.ref,
+      line: this.#metadata?.location?.position.start.line,
     })
   }
 
@@ -1529,14 +1579,30 @@ export class Directory<
     return this.getFileSystem().getAbsolutePath(this.#path)
   }
 
-  /** Get the URL to the directory source code for the configured git repository. */
-  getRepositoryUrl(options?: Omit<GetDirectoryUrlOptions, 'path'>) {
+  /** Get a URL to the directory for the configured git repository. */
+  #getRepositoryUrl(options?: Omit<GetDirectoryUrlOptions, 'path'>) {
     const repository = this.getRepository()
     const fileSystem = this.getFileSystem()
 
     return repository.getDirectoryUrl({
       path: fileSystem.getRelativePathToWorkspace(this.#path),
       ...options,
+    })
+  }
+
+  /** Get the URL to the directory history for the configured git repository. */
+  getHistoryUrl(options?: Pick<GetFileUrlOptions, 'ref'>) {
+    return this.#getRepositoryUrl({
+      type: 'history',
+      ref: options?.ref,
+    })
+  }
+
+  /** Get the URL to the directory source for the configured git repository. */
+  getSourceUrl(options?: Pick<GetFileUrlOptions, 'ref'>) {
+    return this.#getRepositoryUrl({
+      type: 'source',
+      ref: options?.ref,
     })
   }
 

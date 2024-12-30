@@ -28,7 +28,7 @@ export async function DocumentEntry({
   const updatedAt = shouldRenderUpdatedAt
     ? await file.getLastCommitDate()
     : null
-  const editPath = file.getRepositoryUrl({ type: 'edit' })
+  const editPath = file.getEditUrl()
   const [previousFile, nextFile] = await file.getSiblings({ entryGroup })
 
   return (

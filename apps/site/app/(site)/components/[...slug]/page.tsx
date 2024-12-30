@@ -63,7 +63,7 @@ export default async function Component({
     ? undefined
     : await componentEntry.getExports()
   const updatedAt = await componentEntry.getLastCommitDate()
-  const url = componentEntry.getRepositoryUrl({ type: 'edit' })
+  const url = componentEntry.getEditUrl()
   const [previousEntry, nextEntry] = await componentEntry.getSiblings({
     entryGroup: CollectionGroup,
   })
@@ -230,7 +230,7 @@ async function Preview({
   const title = fileExport.getTitle()
   const description = fileExport.getDescription()
   const slug = fileExport.getSlug()
-  const url = fileExport.getRepositoryUrl({ type: 'edit' })
+  const url = fileExport.getEditUrl()
   const Value = await fileExport.getRuntimeValue()
   const isUppercase = name[0] === name[0].toUpperCase()
   const isComponent = typeof Value === 'function' && isUppercase

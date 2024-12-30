@@ -50,8 +50,8 @@ export default async function Component({
     process.env.NODE_ENV === 'development'
       ? componentEntry.getEditorUri()
       : isDirectory(componentEntry)
-        ? componentEntry.getRepositoryUrl()
-        : componentEntry.getRepositoryUrl({ type: 'edit' })
+        ? componentEntry.getSourceUrl()
+        : componentEntry.getEditUrl()
   const [previousEntry, nextEntry] = await componentEntry.getSiblings()
 
   return (
@@ -167,7 +167,7 @@ async function Preview({
 }) {
   const name = fileExport.getName()
   const description = fileExport.getDescription()
-  const url = fileExport.getRepositoryUrl()
+  const url = fileExport.getSourceUrl()
   const Value = await fileExport.getRuntimeValue()
   const isUppercase = name[0] === name[0].toUpperCase()
   const isComponent = typeof Value === 'function' && isUppercase
