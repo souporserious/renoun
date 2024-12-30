@@ -13,7 +13,7 @@ export {
 export { CodeInline, type CodeInlineProps } from './CodeInline.js'
 export { Copyright } from './Copyright.js'
 export { GitProviderLogo, GitProviderLink } from './GitProvider.js'
-export { MDXContent } from './MDXContent.js'
+export { MDXRenderer } from './MDXRenderer.js'
 export { MDXComponents } from './MDXComponents.js'
 export { PackageInstall, PackageInstallScript } from './PackageInstall/index.js'
 export { RenderedHTML } from './RenderedHTML.js'

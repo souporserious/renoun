@@ -9,7 +9,7 @@ import { notFound } from 'next/navigation'
 import { GeistMono } from 'geist/font/mono'
 
 import { CollectionGroup, ComponentsCollection } from '@/collections'
-import { MDXContent } from '@/components/MDXContent'
+import { MDXRenderer } from '@/components/MDXRenderer'
 import { SiblingLink } from '@/components/SiblingLink'
 import { TableOfContents } from '@/components/TableOfContents'
 
@@ -115,7 +115,7 @@ export default async function Component({
               <h1 css={{ fontSize: '3rem', margin: 0 }}>
                 {componentEntry.getName()} {isExamplesPage ? 'Examples' : ''}
               </h1>
-              {description ? <MDXContent value={description} /> : null}
+              {description ? <MDXRenderer value={description} /> : null}
               {Content ? <Content /> : null}
             </div>
           ) : (

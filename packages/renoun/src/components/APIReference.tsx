@@ -22,7 +22,7 @@ import type {
 } from '../utils/resolve-type.js'
 import { isParameterType, isPropertyType } from '../utils/resolve-type.js'
 import { CodeInline } from './CodeInline.js'
-import { MDXContent } from './MDXContent.js'
+import { MDXRenderer } from './MDXRenderer.js'
 import { MDXComponents } from './MDXComponents.js'
 
 const mdxComponents = {
@@ -153,7 +153,10 @@ async function APIReferenceAsync({
             </div>
 
             {type.description ? (
-              <MDXContent value={type.description} components={mdxComponents} />
+              <MDXRenderer
+                value={type.description}
+                components={mdxComponents}
+              />
             ) : null}
           </div>
 
@@ -207,7 +210,7 @@ async function APIReferenceAsync({
         </div>
 
         {type.description ? (
-          <MDXContent value={type.description} components={mdxComponents} />
+          <MDXRenderer value={type.description} components={mdxComponents} />
         ) : null}
       </div>
 
@@ -538,7 +541,7 @@ function TypeValue({
       </div>
 
       {type.description && (
-        <MDXContent value={type.description} components={mdxComponents} />
+        <MDXRenderer value={type.description} components={mdxComponents} />
       )}
 
       {type.kind === 'Object' && type.properties

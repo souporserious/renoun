@@ -4,7 +4,7 @@ import { styled, type CSSObject } from 'restyle'
 import { analyzeSourceText } from '../../project/client.js'
 import { getThemeColors } from '../../utils/get-theme-colors.js'
 import type { Token, TokenDiagnostic } from '../../utils/get-tokens.js'
-import { MDXContent } from '../MDXContent.js'
+import { MDXRenderer } from '../MDXRenderer.js'
 import { QuickInfoPopover } from './QuickInfoPopover.js'
 
 /**
@@ -81,7 +81,7 @@ export async function QuickInfo({
           {quickInfo?.documentationText.length ? (
             <>
               <Divider color={theme.panel.border} />
-              <MDXContent
+              <MDXRenderer
                 components={{
                   p: ({ children }) => (
                     <Paragraph css={{ color: theme.foreground }}>

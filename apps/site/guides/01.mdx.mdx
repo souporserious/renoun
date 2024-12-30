@@ -9,12 +9,12 @@ This guide will help you understand how to use MDX with renoun.
 
 [MDX](https://mdxjs.com/) is a format that allows you to write JSX directly within Markdown documents. This lets you embed React components and JSX elements inside your Markdown files, creating interactive and dynamic content. MDX works seamlessly with renoun, making it a powerful tool for your documentation needs.
 
-## `MDXContent` component
+## `MDXRenderer` component
 
-The easiest way to get started using MDX with renoun is with the `MDXContent` component:
+The easiest way to get started using MDX with renoun is with the `MDXRenderer` component:
 
 ```tsx
-import { MDXContent } from 'renoun/components'
+import { MDXRenderer } from 'renoun/components'
 
 const content = `
 # Hello, world!
@@ -23,11 +23,11 @@ This is an MDX file.
 `
 
 export default function Page() {
-  return <MDXContent value={content} />
+  return <MDXRenderer value={content} />
 }
 ```
 
-In this example, the `MDXContent` component renders a string of MDX content within your React components. It parses the MDX and converts it into React components that can be rendered in your application.
+In this example, the `MDXRenderer` component renders a string of MDX content within your React components. It parses the MDX and converts it into React components that can be rendered in your application.
 
 ## MDX with Next.js
 
@@ -133,12 +133,12 @@ Exports the reading time metadata added by `rehype-infer-reading-time-meta` as a
 
 ## Applying plugins
 
-After installing the package, you can import and apply the plugins to the `MDXContent` component or any other MDX configuration in your application.
+After installing the package, you can import and apply the plugins to the `MDXRenderer` component or any other MDX configuration in your application.
 
-We'll use the example from before and add the `renoun/mdx` plugins to the `MDXContent` component:
+We'll use the example from before and add the `renoun/mdx` plugins to the `MDXRenderer` component:
 
 ```tsx
-import { MDXContent } from 'renoun/components'
+import { MDXRenderer } from 'renoun/components'
 import { remarkPlugins, rehypePlugins } from 'renoun/mdx'
 
 const content = `
@@ -153,7 +153,7 @@ This is an MDX file.
 
 export default function Page() {
   return (
-    <MDXContent
+    <MDXRenderer
       remarkPlugins={remarkPlugins}
       rehypePlugins={rehypePlugins}
       value={content}
@@ -166,4 +166,4 @@ Now we can utilize plugins like [remark-frontmatter](#remark-frontmatter) to spe
 
 ## Conclusion
 
-MDX is a powerful tool that can be used to create interactive and dynamic content in your documentation. By using the `MDXContent` component and custom plugins, you can easily render MDX content in your components and extend the functionality of the MDX rendering process.
+MDX is a powerful tool that can be used to create interactive and dynamic content in your documentation. By using the `MDXRenderer` component and custom plugins, you can easily render MDX content in your components and extend the functionality of the MDX rendering process.

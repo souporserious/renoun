@@ -7,7 +7,7 @@ import 'server-only'
 import type { MDXComponents } from './MDXComponents.js'
 
 /** Compiles and renders a string of MDX content. */
-export async function MDXContent({
+export async function MDXRenderer({
   value,
   components,
   dependencies,
