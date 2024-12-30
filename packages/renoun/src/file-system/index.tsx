@@ -761,11 +761,7 @@ export class JavaScriptFile<
       return fileExport
     }
 
-    if (this.#loader) {
-      throw new Error(
-        `[renoun] JavaScript file export "${name}" could not be determined statically or at runtime for path "${this.getRelativePathToWorkspace()}".\n    - Ensure the export exists\n    - Verify the file for syntax errors\n    - Confirm that your bundler supports resolving "${this.getExtension()}" extensions`
-      )
-    } else {
+    if (this.#loader === undefined) {
       throw new Error(
         `[renoun] JavaScript file export "${name}" could not be determined statically or at runtime for path "${this.getAbsolutePath()}". Ensure the directory has a loader defined for resolving "${this.getExtension()}" files.`
       )
