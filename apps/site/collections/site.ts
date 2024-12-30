@@ -1,25 +1,36 @@
-import { Directory, isFile, type FileSystemEntry } from 'renoun/file-system'
-import type { MDXContent, Headings } from 'renoun/mdx'
+import { Directory, isFile, withSchema } from 'renoun/file-system'
+import { z } from 'zod'
 
-interface DocsSchema {
-  default: MDXContent
-  headings: Headings
-  metadata: {
-    title: string
-    label?: string
-    description: string
-    tags?: string[]
-  }
+const mdxSchema = {
+  headings: z.array(
+    z.object({
+      id: z.string(),
+      text: z.string(),
+      depth: z.number(),
+    })
+  ),
+  metadata: z.object({
+    title: z.string(),
+    label: z.string().optional(),
+    description: z.string(),
+    tags: z.array(z.string()).optional(),
+  }),
 }
 
-export type DocsEntry = FileSystemEntry<DocsSchema>
+export const DocsCollection = new Directory({
+  path: 'docs',
+  basePath: 'docs',
+  loaders: {
+    mdx: withSchema(mdxSchema, (path) => import(`@/docs/${path}.mdx`)),
+  },
+  include: (entry) => isFile(entry, 'mdx'),
+})
 
-export const DocsCollection = new Directory<{ mdx: DocsSchema }>('docs')
-  .withBasePath('docs')
-  .withModule((path) => import(`@/docs/${path}`))
-  .withFilter((entry) => isFile(entry, 'mdx'))
-
-export const GuidesCollection = new Directory<{ mdx: DocsSchema }>('guides')
-  .withBasePath('guides')
-  .withModule((path) => import(`@/guides/${path}`))
-  .withFilter((entry) => isFile(entry, 'mdx'))
+export const GuidesCollection = new Directory({
+  path: 'guides',
+  basePath: 'guides',
+  loaders: {
+    mdx: withSchema(mdxSchema, (path) => import(`@/guides/${path}.mdx`)),
+  },
+  include: (entry) => isFile(entry, 'mdx'),
+})

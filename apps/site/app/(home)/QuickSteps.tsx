@@ -9,29 +9,20 @@ const steps = [
     title: 'Collect',
     content: `Collect, organize, and validate structured data using the File System API.`,
     code: `import { Directory } from 'renoun/file-system'
-import type { MDXContent } from 'renoun/mdx'
 
-interface PostTypes {
-  mdx: {
-    default: MDXContent
-  }
-}
-
-const posts = new Directory<PostTypes>('posts')`,
+const posts = new Directory({ path: 'posts' })`,
   },
   {
     title: 'Render',
     content: `Query and render your file system entries programmatically using a simple API.`,
     code: `import { Directory } from 'renoun/file-system'
-import type { MDXContent } from 'renoun/mdx'
 
-interface PostTypes {
-  mdx: {
-    default: MDXContent
+const posts = new Directory({
+  path: 'posts',
+  loaders: {
+    mdx: (path) => import(\`@/posts/\${path}.mdx\`),
   }
-}
-
-const posts = new Directory<PostTypes>('posts').withModule((path) => import(\`./posts/\${path}\`))
+})
 
 export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
   const slug = (await params).slug
@@ -46,7 +37,7 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
   return <Content />
 }`,
     codeBlockProps: {
-      focusedLines: '10-30',
+      focusedLines: '5-7,10-30',
     },
   },
   {

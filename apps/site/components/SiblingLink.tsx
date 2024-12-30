@@ -1,9 +1,9 @@
 import Link from 'next/link'
 import {
   isDirectory,
-  isJavaScriptFileWithRuntime,
+  isJavaScriptFile,
   type FileSystemEntry,
-  type JavaScriptFileWithRuntime,
+  type JavaScriptFile,
 } from 'renoun/file-system'
 import { styled } from 'restyle'
 
@@ -12,7 +12,7 @@ export async function SiblingLink({
   direction,
   variant,
 }: {
-  entry: FileSystemEntry<any, true>
+  entry: FileSystemEntry<any>
   direction: 'previous' | 'next'
   variant?: 'name' | 'title'
 }) {
@@ -120,22 +120,9 @@ interface Metadata {
   }
 }
 
-interface ExtensionTypes {
-  mdx: Metadata
-  ts: Metadata
-  tsx: Metadata
-}
-
 /** Resolves metadata from a file system entry. */
-async function resolveEntryMetadata(
-  entry: FileSystemEntry<ExtensionTypes, true>
-) {
-  let file: JavaScriptFileWithRuntime<{
-    metadata: {
-      title: string
-      label?: string
-    }
-  }>
+async function resolveEntryMetadata(entry: FileSystemEntry) {
+  let file: JavaScriptFile<Metadata>
 
   if (isDirectory(entry)) {
     const indexFile = await entry.getFile('index', ['ts', 'tsx'])
@@ -151,7 +138,7 @@ async function resolveEntryMetadata(
         return
       }
     }
-  } else if (isJavaScriptFileWithRuntime<Metadata>(entry)) {
+  } else if (isJavaScriptFile<Metadata>(entry)) {
     file = entry
   } else {
     return

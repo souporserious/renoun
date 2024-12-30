@@ -11,6 +11,17 @@ Meticulously crafted React components and utilities to<br/>help you author techn
   </p>
 </div>
 
+- [Features](#features)
+- [Why renoun?](#why-renoun)
+- [Getting Started](#getting-started)
+  - [File System](#file-system)
+    - [Querying file system entries](#querying-file-system-entries)
+    - [Type checking file exports](#type-checking-file-exports)
+    - [Schema Validation](#schema-validation)
+  - [Components](#components)
+    - [Syntax Highlighting](#syntax-highlighting)
+    - [API References](#api-references)
+
 ## Features
 
 - 📝 Quickly start authoring MDX content
@@ -20,6 +31,16 @@ Meticulously crafted React components and utilities to<br/>help you author techn
 - 🌈 Accurately highlight code blocks
 - ✅ Type-check JavaScript code blocks
 - 🖼️ Render source code examples
+
+## Why renoun?
+
+The renoun toolkit simplifies the creation of engaging and comprehensive content and documentation. By offering a robust set of utilities and React components, renoun enables you to:
+
+- **Organize and Query File System Data:** Easily query and render structured data from your file system.
+- **Validate JavaScript Module Exports:** Ensure your modules are correctly exported and maintain type safety.
+- **Render Interactive Documentation:** Build dynamic and user-friendly documentation using React.
+
+Whether you're authoring technical articles, generating API references, or managing extensive documentation, renoun provides the tools you need to quickly and easily create polished and interactive content.
 
 ## Getting Started
 
@@ -33,14 +54,32 @@ After installing the package, you can follow the [getting started guide](https:/
 
 The File System API offers a way to organize and query file-system data in renoun. It is a powerful tool that allows you to define a schema for file exports and query those exports using a simple API.
 
-To get started with the File System API, instantiate the `Directory` class to target a set of files and directories from the file system. We can then use the `getEntry` / `getDirectory` / `getFile` methods to query a specific file or directory:
+To get started with the File System API, instantiate the `Directory` class to target a set of files and directories from the file system. You can then use the `getEntry` / `getDirectory` / `getFile` methods to query a specific descendant file or directory:
 
 ```tsx
 import { Directory } from 'renoun/file-system'
 
-const posts = new Directory('posts').withModule(
-  (path) => import(`posts/${path}`)
-)
+const posts = new Directory({
+  path: 'posts',
+  loaders: {
+    mdx: (path) => import(`./posts/${path}.mdx`),
+  },
+})
+```
+
+Here we are creating a new `Directory` instance that targets the `posts` directory relative to the working directory. We are also specifying a loader for the `mdx` file extension that will be used to load the file contents using the bundler.
+
+#### Querying file system entries
+
+```tsx
+import { Directory } from 'renoun/file-system'
+
+const posts = new Directory({
+  path: 'posts',
+  loaders: {
+    mdx: (path) => import(`./posts/${path}.mdx`),
+  },
+})
 
 export default async function Page({
   params,
@@ -54,53 +93,34 @@ export default async function Page({
     return <div>Post not found</div>
   }
 
-  const Content = await post.getExportValueOrThrow('default')
+  const Content = await post.getExportValue('default')
 
   return <Content />
 }
 ```
 
-Right now we aren't getting the best type checking from the `getExport` method. We can improve this by providing the types we expect for this extension to the `Directory` class:
+You can query the entries within the directory to help with generating navigations and index pages. For example, we can include only `mdx` file extensions to generate an index page of links to all posts using the `getEntries` method:
 
 ```tsx
-import { Directory } from 'renoun/file-system'
-import type { MDXContent } from 'renoun/mdx'
+import { Directory, withSchema } from 'renoun/file-system'
 
-interface PostTypes {
-  mdx: {
-    default: MDXContent
-    frontmatter: { title: string; date: Date }
+interface PostType {
+  frontmatter: {
+    title: string
+    date: Date
   }
 }
 
-const posts = new Directory<PostTypes>('posts').withModule(
-  (path) => import(`posts/${path}`)
-)
-```
-
-Now when we call `getExport`, we will get better type checking and intellisense.
-
-Next, we can generate an index page of links to all posts using the `getEntries` method. We'll also add types for the incoming front matter that we are expecting from enabling [frontmatter](https://www.renoun.dev/guides/mdx#remark-frontmatter) from `renoun/mdx`:
-
-```tsx
-import { Directory, isFile } from 'renoun/file-system'
-import type { MDXContent } from 'renoun/mdx'
-
-interface PostTypes {
-  mdx: {
-    default: MDXContent
-    frontmatter: { title: string; date: Date }
-  }
-}
-
-const posts = new Directory<PostTypes>('posts').withModule(
-  (path) => import(`posts/${path}`)
-)
+const posts = new Directory({
+  path: 'posts',
+  include: '*.mdx',
+  loaders: {
+    mdx: withSchema<PostType>((path) => import(`./posts/${path}.mdx`)),
+  },
+})
 
 export default async function Page() {
-  const allPosts = await posts
-    .withFilter((post) => isFile(post, 'mdx'))
-    .getEntries()
+  const allPosts = await posts.getEntries()
 
   return (
     <>
@@ -108,7 +128,7 @@ export default async function Page() {
       <ul>
         {allPosts.map(async (post) => {
           const path = post.getPath()
-          const frontmatter = await post.getExportValueOrThrow('frontmatter')
+          const frontmatter = await post.getExportValue('frontmatter')
 
           return (
             <li key={path}>
@@ -122,7 +142,94 @@ export default async function Page() {
 }
 ```
 
-To further improve the types we can also provide [schema validation](https://www.renoun.dev/docs/getting-started#validating-exports) to ensure that modules export the correct shape.
+#### Type checking file exports
+
+To improve type safety, you can utilize the `withSchema` helper to specify the schema for the file’s exports:
+
+```tsx
+import { Directory, withSchema } from 'renoun/file-system'
+
+interface PostType {
+  frontmatter: {
+    title: string
+    date: Date
+  }
+}
+
+const posts = new Directory({
+  path: 'posts',
+  loaders: {
+    mdx: withSchema<PostType>((path) => import(`./posts/${path}.mdx`)),
+  },
+})
+```
+
+Now when we call `JavaScript#getExportValue` and `JavaScriptExport#getRuntimeValue` we will have stronger type checking and autocomplete.
+
+#### Schema Validation
+
+You can also use schema validation using libraries like [Zod](https://zod.dev/), [Valibot](https://valibot.dev/), or [Arktype](https://github.com/arktypeio/arktype) to ensure file exports conform to a specific schema:
+
+```tsx
+import { Directory } from 'renoun/file-system'
+import { z } from 'zod'
+
+const posts = new Directory({
+  path: 'posts',
+  loaders: {
+    mdx: {
+      schema: {
+        frontmatter: z.object({
+          title: z.string(),
+          date: z.date(),
+        }),
+      },
+      runtime: (path) => import(`./posts/${path}.mdx`),
+    },
+  },
+})
+```
+
+<Note>
+
+In this case, the `withSchema` helper isn't necessary because the schema can be inferred directly using the [Standard Schema Spect](https://github.com/standard-schema/standard-schema?tab=readme-ov-file#standard-schema-spec).
+
+</Note>
+
+Alternatively, you can define a schema yourself using both TypeScript types and custom validation functions:
+
+```tsx
+import { Directory, withSchema } from 'renoun/file-system'
+
+interface PostType {
+  frontmatter: {
+    title: string
+    date: Date
+  }
+}
+
+const posts = new Directory({
+  path: 'posts',
+  loaders: {
+    mdx: withSchema<PostType>(
+      {
+        frontmatter: (value) => {
+          if (typeof value.title !== 'string') {
+            throw new Error('Title is required')
+          }
+
+          if (!(value.date instanceof Date)) {
+            throw new Error('Date is required')
+          }
+
+          return value
+        },
+      },
+      (path) => import(`./posts/${path}.mdx`)
+    ),
+  },
+})
+```
 
 The file system utilities are not limited to MDX files and can be used with _any file type_. By organizing content and source code into structured collections, you can easily generate static pages and manage complex routing and navigations. For a more in-depth look at the file system utilities, visit the [docs site](https://www.renoun.dev/).
 

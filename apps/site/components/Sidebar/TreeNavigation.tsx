@@ -1,6 +1,6 @@
 import {
   isFile,
-  isJavaScriptFileWithRuntime,
+  isJavaScriptFile,
   type Directory,
   type FileSystemEntry,
 } from 'renoun/file-system'
@@ -12,13 +12,13 @@ async function ListNavigation({
   entry,
   variant = 'title',
 }: {
-  entry: FileSystemEntry<any, true>
+  entry: FileSystemEntry<any>
   variant?: 'name' | 'title'
 }) {
   const path = entry.getPath()
   const depth = entry.getDepth()
   const metadata =
-    variant === 'title' && isJavaScriptFileWithRuntime(entry)
+    variant === 'title' && isJavaScriptFile(entry)
       ? await entry.getExportValueOrThrow('metadata')
       : null
 
@@ -93,7 +93,7 @@ export async function TreeNavigation({
   collection,
   variant,
 }: {
-  collection: Directory<any, true>
+  collection: Directory<any>
   variant?: 'name' | 'title'
 }) {
   const entries = await collection.getEntries()

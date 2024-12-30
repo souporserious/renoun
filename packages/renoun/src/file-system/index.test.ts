@@ -1,23 +1,38 @@
 import type { ComponentType } from 'react'
 import { describe, test, expect, expectTypeOf } from 'vitest'
 import { runInNewContext } from 'node:vm'
+import * as v from 'valibot'
 import { z } from 'zod'
 
-import type { MDXContent } from '../mdx'
+import type { basename } from '#fixtures/utils/path.ts'
+import type { MDXContent, Headings } from '../mdx'
 import { NodeFileSystem } from './NodeFileSystem'
 import { MemoryFileSystem } from './MemoryFileSystem'
 import {
   type FileSystemEntry,
+  type InferModuleExports,
   File,
   Directory,
   JavaScriptFile,
-  JavaScriptFileWithRuntime,
   JavaScriptFileExport,
   EntryGroup,
   isDirectory,
   isFile,
-  isJavaScriptFileWithRuntime,
+  isJavaScriptFile,
+  withSchema,
 } from './index'
+
+type Expect<Type extends true> = Type
+
+type Not<_ extends false> = true
+
+type IsNot<Type, Expected> = Type extends Expected ? false : true
+
+type IsAny<Type> = 0 extends 1 & Type ? true : false
+
+type IsNotAny<Type> = true extends IsAny<Type> ? false : true
+
+type IsNever<Type> = Type extends never ? true : false
 
 describe('file system', () => {
   test('node file system read directory', async () => {
@@ -63,7 +78,7 @@ describe('file system', () => {
   })
 
   test('recursive entries', async () => {
-    const directory = new Directory('fixtures/project')
+    const directory = new Directory({ path: 'fixtures/project' })
     const entries = await directory.getEntries({
       recursive: true,
       includeIndexAndReadme: true,
@@ -81,7 +96,7 @@ describe('file system', () => {
   })
 
   test('recursive entries does not error', async () => {
-    const fixturesDirectory = new Directory('fixtures')
+    const fixturesDirectory = new Directory({ path: 'fixtures' })
 
     await expect(
       fixturesDirectory.getEntries({ recursive: true })
@@ -105,9 +120,9 @@ describe('file system', () => {
       [
         "/index",
         "/components",
-        "/components/Button",
-        "/components/Button/index",
-        "/components/Link",
+        "/components/button",
+        "/components/button/index",
+        "/components/link",
       ]
     `)
   })
@@ -124,12 +139,50 @@ describe('file system', () => {
     expect(entries).toHaveLength(1)
   })
 
+  test('filters with schema', async () => {
+    const directory = new Directory({
+      path: 'fixtures/posts',
+      loaders: {
+        mdx: withSchema(
+          {
+            frontmatter: z.object({
+              title: z.string(),
+              date: z.coerce.date(),
+            }),
+          },
+          (path) => import(`./posts/${path}.mdx`)
+        ),
+      },
+      include: async (entry) => {
+        if (isFile(entry, 'mdx')) {
+          const value = await entry.getExportValue('frontmatter')
+
+          type Test = Expect<IsNotAny<typeof value>>
+
+          value satisfies
+            | {
+                title: string
+                date: Date
+              }
+            | undefined
+
+          return true
+        }
+
+        return false
+      },
+    })
+    const entries = await directory.getEntries()
+
+    expect(entries).toHaveLength(1)
+  })
+
   test('orders directory before its descendants by default', async () => {
     const fileSystem = new MemoryFileSystem({
       'Button/Button.tsx': '',
       'Button/IconButton.tsx': '',
     })
-    const directory = new Directory({ fileSystem })
+    const directory = new Directory({ fileSystem, pathCasing: 'none' })
     const entries = await directory.getEntries({ recursive: true })
 
     expect(entries.map((entry) => entry.getPath())).toEqual([
@@ -138,32 +191,193 @@ describe('file system', () => {
     ])
   })
 
+  test('loaders', async () => {
+    const directory = new Directory({
+      path: 'fixtures/utils',
+      loaders: {
+        ts: withSchema<{
+          basename: typeof basename
+        }>((path) => import(`#fixtures/utils/${path}.ts`)),
+      },
+    })
+    const file = await directory.getFileOrThrow('path', 'ts')
+    const basenameFn = await file.getExportValueOrThrow('basename')
+
+    type Test = Expect<IsNotAny<typeof basenameFn>>
+
+    expectTypeOf(basenameFn).toMatchTypeOf<
+      (path: string, extension?: string) => string
+    >()
+    expect(basenameFn('fixtures/utils/path.ts')).toBe('path.ts')
+  })
+
+  describe('withSchema', () => {
+    test('types only', async () => {
+      const directory = new Directory({
+        path: 'fixtures/docs',
+        loaders: {
+          ts: withSchema<{ metadata?: { title: string } }>(
+            (path) => import(`#fixtures/docs/${path}.ts`)
+          ),
+        },
+      })
+      const value = await (
+        await directory.getFileOrThrow('introduction', 'ts')
+      ).getExportValue('metadata')
+
+      type Test = Expect<IsNotAny<typeof value>>
+
+      expectTypeOf(value).toMatchTypeOf<{ title: string } | undefined>()
+    })
+
+    test('custom validator', async () => {
+      const directory = new Directory({
+        path: 'fixtures/docs',
+        loaders: {
+          ts: withSchema<{ metadata: { title: string } }>(
+            {
+              metadata: (value) => {
+                if (typeof value.title === 'string') {
+                  return value
+                }
+                throw new Error('Expected a title')
+              },
+            },
+            (path) => import(`#fixtures/docs/${path}.ts`)
+          ),
+        },
+      })
+      const value = await (
+        await directory.getFileOrThrow('introduction', 'ts')
+      ).getExportValueOrThrow('metadata')
+
+      type Test = Expect<IsNotAny<typeof value>>
+
+      expectTypeOf(value).toMatchTypeOf<{ title: string }>()
+    })
+
+    test('inferred validator', async () => {
+      const directory = new Directory({
+        path: 'fixtures/docs',
+        loaders: {
+          ts: withSchema(
+            {
+              metadata: (value: { title: string }) => {
+                return value
+              },
+            },
+            (path) => import(`#fixtures/docs/${path}.ts`)
+          ),
+        },
+      })
+      const value = await (
+        await directory.getFileOrThrow('introduction', 'ts')
+      ).getExportValue('metadata')
+
+      type Test = Expect<IsNotAny<typeof value>>
+
+      expectTypeOf(value).toMatchTypeOf<{ title: string } | undefined>()
+    })
+
+    test('valibot', async () => {
+      const directory = new Directory({
+        path: 'fixtures/docs',
+        loaders: {
+          ts: withSchema(
+            {
+              metadata: v.object({
+                title: v.string(),
+                date: v.date(),
+              }),
+            },
+            (path) => import(`#fixtures/docs/${path}.ts`)
+          ),
+        },
+      })
+      const value = await (
+        await directory.getFileOrThrow('introduction', 'ts')
+      ).getExportValue('metadata')
+
+      type Test = Expect<IsNotAny<typeof value>>
+
+      expectTypeOf(value).toMatchTypeOf<
+        { title: string; date: Date } | undefined
+      >()
+    })
+
+    test('zod', async () => {
+      const directory = new Directory({
+        path: 'fixtures/docs',
+        loaders: {
+          ts: withSchema(
+            {
+              metadata: z.object({
+                title: z.string(),
+                date: z.date().optional(),
+              }),
+            },
+            (path) => import(`#fixtures/docs/${path}.ts`)
+          ),
+        },
+      })
+      const value = await (
+        await directory.getFileOrThrow('introduction', 'ts')
+      ).getExportValue('metadata')
+
+      type Test = Expect<IsNotAny<typeof value>>
+
+      expectTypeOf(value).toMatchTypeOf<
+        { title: string; date?: Date } | undefined
+      >()
+    })
+  })
+
   test('filter entries', async () => {
+    type PostType = { frontmatter: { title: string } }
+    const posts = new Directory({
+      path: 'fixtures/posts',
+      loaders: {
+        mdx: withSchema<PostType>(
+          {
+            frontmatter: (value) => {
+              if (typeof value.title === 'string') {
+                return value
+              }
+              throw new Error('Expected a title')
+            },
+          },
+          (path) => import(`#fixtures/posts/${path}.mdx`)
+        ),
+      },
+      include: (entry) => isFile(entry, 'mdx'),
+    })
+    const files = await posts.getEntries()
+
+    expectTypeOf(files).toMatchTypeOf<
+      JavaScriptFile<{ default: MDXContent } & PostType>[]
+    >()
+    expect(files).toHaveLength(1)
+  })
+
+  test('filter virtual entries', async () => {
     type PostType = { frontmatter: { title: string } }
     const fileSystem = new MemoryFileSystem({
       'posts/getting-started.mdx': '# Getting Started',
       'posts/meta.json': '{ "title": "Posts" }',
     })
-    const posts = new Directory<{ mdx: PostType }>({
-      path: 'posts',
+    const posts = new Directory({
       fileSystem,
+      path: 'posts',
+      loaders: {
+        mdx: withSchema<PostType>(),
+      },
+      include: (entry) => isFile(entry, 'mdx'),
     })
-      .withFilter((entry) => isFile(entry, 'mdx'))
-      .withSort((a, b) => a.getName().localeCompare(b.getName()))
     const files = await posts.getEntries()
 
-    expectTypeOf(files).toMatchTypeOf<JavaScriptFile<PostType>[]>()
-    expect(files).toHaveLength(1)
-  })
-
-  test('filter entries with type guard', async () => {
-    type PostType = { frontmatter: { title: string } }
-    const posts = new Directory<{ mdx: PostType }>('fixtures/posts').withFilter(
-      (entry) => isFile(entry, 'mdx')
-    )
-    const files = await posts.getEntries()
-
-    expectTypeOf(files).toMatchTypeOf<JavaScriptFile<PostType>[]>()
+    expectTypeOf(files).toMatchTypeOf<
+      JavaScriptFile<{ default: MDXContent } & PostType>[]
+    >()
     expect(files).toHaveLength(1)
   })
 
@@ -172,13 +386,14 @@ describe('file system', () => {
       'Button.tsx': '/** @internal */ export const Button = () => {}',
       'Link.tsx': 'export const Link = () => {}',
     })
-    const directory = new Directory({ fileSystem }).withFilter(
-      async (entry) => {
+    const directory = new Directory({
+      fileSystem,
+      include: async (entry) => {
         if (isFile(entry, 'tsx')) {
           const fileExports = await entry.getExports()
 
           for (const fileExport of fileExports) {
-            const tags = await fileExport.getTags()
+            const tags = fileExport.getTags()
 
             if (tags?.some((tag) => tag.tagName === 'internal')) {
               return false
@@ -189,9 +404,28 @@ describe('file system', () => {
         }
 
         return false
-      }
-    )
+      },
+    })
     const entries = await directory.getEntries()
+
+    expect(entries).toHaveLength(1)
+  })
+
+  test('string filter', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'foo.ts': '',
+      'bar.tsx': '',
+      'baz.mdx': '',
+    })
+    const directory = new Directory({
+      fileSystem,
+      include: '*.mdx',
+    })
+    const entries = await directory.getEntries()
+
+    expectTypeOf(entries).toMatchTypeOf<
+      JavaScriptFile<{ default: MDXContent }>[]
+    >()
 
     expect(entries).toHaveLength(1)
   })
@@ -201,9 +435,10 @@ describe('file system', () => {
       'foo.ts': '',
       'bar.ts': '',
     })
-    const directory = new Directory({ fileSystem }).withSort((a, b) =>
-      a.getName().localeCompare(b.getName())
-    )
+    const directory = new Directory({
+      fileSystem,
+      sort: (a, b) => a.getName().localeCompare(b.getName()),
+    })
     const entries = await directory.getEntries()
 
     expect(entries.map((entry) => entry.getName())).toMatchInlineSnapshot(`
@@ -219,27 +454,27 @@ describe('file system', () => {
       'foo.ts': 'const sort = 2',
       'bar.ts': 'const sort = 1',
     })
-    const directory = new Directory<{ ts: { sort: number } }>({
+    const imports = {
+      'foo.ts': () => Promise.resolve({ sort: 2 }),
+      'bar.ts': () => Promise.resolve({ sort: 1 }),
+    }
+    const directory = new Directory({
       fileSystem,
-    })
-      .withModule(async (path) => {
-        if (path === 'foo.ts') {
-          return { sort: 2 }
-        }
-        if (path === 'bar.ts') {
-          return { sort: 1 }
-        }
-      })
-      .withFilter((entry) => {
+      loaders: {
+        ts: withSchema<{ sort: number }>((path) => {
+          const importPath = `${path}.ts` as keyof typeof imports
+          return imports[importPath]()
+        }),
+      },
+      include: (entry) => {
         return isFile(entry, 'ts')
-      })
-      .withSort(async (a, b) => {
-        const aExport = await a.getExportOrThrow('sort')
-        const aSort = await aExport.getRuntimeValue()
-        const bExport = await b.getExportOrThrow('sort')
-        const bSort = await bExport.getRuntimeValue()
+      },
+      sort: async (a, b) => {
+        const aSort = await a.getExportValueOrThrow('sort')
+        const bSort = await b.getExportValueOrThrow('sort')
         return aSort - bSort
-      })
+      },
+    })
     const entries = await directory.getEntries()
 
     expect(entries.map((entry) => entry.getName())).toMatchInlineSnapshot(`
@@ -251,9 +486,12 @@ describe('file system', () => {
   })
 
   test('filter and recursive entries', async () => {
-    const docs = new Directory('fixtures/docs').withFilter((entry) =>
-      isFile(entry, 'mdx')
-    )
+    const docs = new Directory({
+      path: 'fixtures/docs',
+      include(entry) {
+        return isFile(entry, 'mdx')
+      },
+    })
     const entries = await docs.getEntries({ recursive: true })
 
     expect(entries.every((entry) => entry.getExtension() === 'mdx')).toBe(true)
@@ -278,7 +516,7 @@ describe('file system', () => {
     expect(fileEntry.getName()).toBe('Button')
     expect(fileEntry.getExtension()).toBe('tsx')
 
-    const directoryEntry = entries.at(1) as Directory
+    const directoryEntry = entries.at(1) as Directory<any>
 
     expect(directoryEntry.getName()).toBe('CodeBlock')
   })
@@ -296,15 +534,15 @@ describe('file system', () => {
 
     expect(entries.map((entry) => entry.getPath())).toMatchInlineSnapshot(`
       [
-        "/Button",
-        "/CodeBlock",
+        "/button",
+        "/code-block",
         "/tsconfig",
       ]
     `)
   })
 
   test('entry', async () => {
-    const fixturesDirectory = new Directory('fixtures')
+    const fixturesDirectory = new Directory({ path: 'fixtures' })
 
     expect(await fixturesDirectory.getEntry('project')).toBeInstanceOf(
       Directory
@@ -317,7 +555,7 @@ describe('file system', () => {
   })
 
   test('directory', async () => {
-    const componentsDirectory = new Directory('fixtures/components')
+    const componentsDirectory = new Directory({ path: 'fixtures/components' })
     const directory = await componentsDirectory.getDirectory('CodeBlock')
 
     expect(directory).toBeInstanceOf(Directory)
@@ -383,7 +621,7 @@ describe('file system', () => {
   })
 
   test('javascript file', async () => {
-    const projectDirectory = new Directory('fixtures/project')
+    const projectDirectory = new Directory({ path: 'fixtures/project' })
     const file = await projectDirectory.getFile('server', 'ts')
 
     expect(file!).toBeInstanceOf(JavaScriptFile)
@@ -391,25 +629,31 @@ describe('file system', () => {
   })
 
   test('javascript file with runtime', async () => {
-    const projectDirectory = new Directory('fixtures/project').withModule(
-      (path) => import(`#fixtures/project/${path}`)
-    )
+    const projectDirectory = new Directory({
+      path: 'fixtures/project',
+      loaders: {
+        ts: (path) => import(`#fixtures/project/${path}.ts`),
+      },
+    })
     const file = await projectDirectory.getFileOrThrow('server', 'ts')
 
-    expect(file).toBeInstanceOf(JavaScriptFileWithRuntime)
-    expectTypeOf(file).toMatchTypeOf<JavaScriptFileWithRuntime<any>>()
+    expect(file).toBeInstanceOf(JavaScriptFile)
+    expectTypeOf(file).toMatchTypeOf<JavaScriptFile<any>>()
   })
 
   test('is javascript file with runtime', async () => {
-    const projectDirectory = new Directory('fixtures/project').withModule(
-      (path) => import(`#fixtures/project/${path}`)
-    )
+    const projectDirectory = new Directory({
+      path: 'fixtures/project',
+      loaders: {
+        ts: (path) => import(`#fixtures/project/${path}.ts`),
+      },
+    })
     const entry = await projectDirectory.getEntryOrThrow('server')
 
-    expect(isJavaScriptFileWithRuntime(entry)).toBe(true)
+    expect(isJavaScriptFile(entry)).toBe(true)
 
-    if (isJavaScriptFileWithRuntime(entry)) {
-      expectTypeOf(entry).toMatchTypeOf<JavaScriptFileWithRuntime<any>>()
+    if (isJavaScriptFile(entry)) {
+      expectTypeOf(entry).toMatchTypeOf<JavaScriptFile<any>>()
     }
   })
 
@@ -433,6 +677,16 @@ describe('file system', () => {
     const entry = await directory.getEntryOrThrow('APIReference')
 
     expect(entry.getAbsolutePath()).toBe('/APIReference.tsx')
+  })
+
+  test('chooses entry with same name as directory when bare file path', async () => {
+    const directory = new Directory({
+      path: 'fixtures/components',
+      basePath: 'components',
+    })
+    const file = await directory.getFileOrThrow('Box')
+
+    expect(file.getRelativePath()).toBe('Box/Box.tsx')
   })
 
   test('finds file with specific extension starting at directory', async () => {
@@ -501,19 +755,19 @@ describe('file system', () => {
     const directory = new Directory({ fileSystem })
     const file = await directory.getFileOrThrow('Button/Button', 'tsx')
 
-    expect(file.getPath()).toEqual('/Button')
-    expect(file.getPathSegments()).toStrictEqual(['Button'])
+    expect(file.getPath()).toEqual('/button')
+    expect(file.getPathSegments()).toStrictEqual(['button'])
 
     expect(file.getPath({ includeDuplicateSegments: true })).toEqual(
-      '/Button/Button'
+      '/button/button'
     )
     expect(
       file.getPathSegments({ includeDuplicateSegments: true })
-    ).toStrictEqual(['Button', 'Button'])
+    ).toStrictEqual(['button', 'button'])
   })
 
   test('all file exports', async () => {
-    const projectDirectory = new Directory('fixtures/project')
+    const projectDirectory = new Directory({ path: 'fixtures/project' })
     const file = await projectDirectory.getFileOrThrow('server', 'ts')
     const fileExports = await file.getExports()
     const fileExport = fileExports.at(0)!
@@ -535,7 +789,7 @@ describe('file system', () => {
   })
 
   test('deduplicates file exports', async () => {
-    const directory = new Directory('fixtures')
+    const directory = new Directory({ path: 'fixtures' })
     const file = await directory.getFileOrThrow('components/CodeBlock', 'tsx')
     const fileExports = await file.getExports()
 
@@ -548,9 +802,14 @@ describe('file system', () => {
     const fileSystem = new MemoryFileSystem({
       'use-hover.ts': 'export const useHover = () => {}',
     })
-    const rootDirectory = new Directory<{
-      ts: { useHover: Function }
-    }>({ fileSystem }).withModule(async () => ({ useHover: () => {} }))
+    const rootDirectory = new Directory({
+      fileSystem,
+      loaders: {
+        ts: withSchema<{ useHover: Function }>(() => {
+          return Promise.resolve({ useHover: () => {} })
+        }),
+      },
+    })
     const file = await rootDirectory.getFileOrThrow('use-hover', 'ts')
     const fileExport = await file.getExportOrThrow('useHover')
     const value = await fileExport.getRuntimeValue()
@@ -560,11 +819,14 @@ describe('file system', () => {
   })
 
   test('file export value types', async () => {
-    const projectDirectory = new Directory<{
-      ts: { createServer: () => void }
-    }>('fixtures/project').withModule(
-      (path) => import(`#fixtures/project/${path}`)
-    )
+    const projectDirectory = new Directory({
+      path: 'fixtures/project',
+      loaders: {
+        ts: withSchema<{ createServer: () => void }>(
+          (path) => import(`#fixtures/project/${path}.ts`)
+        ),
+      },
+    })
     const file = await projectDirectory.getFileOrThrow('server', 'ts')
     const fileExport = await file.getExportOrThrow('createServer')
     const value = await fileExport.getRuntimeValue()
@@ -576,46 +838,44 @@ describe('file system', () => {
     const fileSystem = new MemoryFileSystem({
       'index.ts': 'export const metadata = 1',
     })
-    const directory = new Directory<{
-      ts: { metadata: { title: string } }
-    }>({
+    const directory = new Directory({
       fileSystem,
-    })
-      .withSchema('ts', {
-        metadata: (value) => {
-          // assert that the inferred value matches the type above
-          type IsAny<T> = 0 extends 1 & T ? true : false
-          type InferredValue = typeof value
+      loaders: {
+        ts: withSchema<{ metadata: { title: string } }>(
+          {
+            metadata: (value) => {
+              type Test = Expect<IsNotAny<typeof value>>
 
-          const inferredValue = {
-            title: '',
-          } satisfies IsAny<InferredValue> extends true ? never : InferredValue
+              value satisfies { title: string }
 
-          if (typeof value.title === 'string') {
-            return value
+              if (typeof value.title === 'string') {
+                return value
+              }
+
+              throw new Error('Expected a title')
+            },
+          },
+          async (path) => {
+            const transpiledCode = await fileSystem.transpileFile(path)
+            const module = { exports: {} }
+
+            runInNewContext(
+              `(function(module, exports) { ${transpiledCode} })(module, module.exports);`,
+              { module }
+            )
+
+            return module.exports as { metadata: { title: string } }
           }
-
-          throw new Error('Expected a title')
-        },
-      })
-      .withModule(async (path) => {
-        const transpiledCode = await fileSystem.transpileFile(path)
-        const module = { exports: {} }
-
-        runInNewContext(
-          `(function(module, exports) { ${transpiledCode} })(module, module.exports);`,
-          { module }
-        )
-
-        return module.exports
-      })
+        ),
+      },
+    })
     const file = await directory.getFileOrThrow('index', 'ts')
     const fileExport = await file.getExportOrThrow('metadata')
 
     await expect(
       fileExport.getRuntimeValue()
     ).rejects.toThrowErrorMatchingInlineSnapshot(
-      `[Error: [renoun] Schema validation failed to parse export "metadata" at file path "index.ts" errored with: Expected a title]`
+      `[Error: [renoun] No source file found while transpiling "index"]`
     )
   })
 
@@ -623,31 +883,31 @@ describe('file system', () => {
     const fileSystem = new MemoryFileSystem({
       'hello-world.ts': `export const metadata = { title: 'Hello, World!', date: '2022-01-01' }`,
     })
-    const metadataSchema = z.object({
-      title: z.string(),
-      date: z.coerce.date(),
-    })
-    const directory = new Directory<{
-      ts: {
-        metadata: z.infer<typeof metadataSchema>
-      }
-    }>({
+    const directory = new Directory({
       fileSystem,
+      loaders: {
+        ts: {
+          schema: {
+            metadata: z.object({
+              title: z.string(),
+              date: z.coerce.date(),
+            }),
+          },
+          runtime: async (path) => {
+            const filePath = `${path}.ts`
+            const transpiledCode = await fileSystem.transpileFile(filePath)
+            const module = { exports: {} }
+
+            runInNewContext(
+              `(function(module, exports) { ${transpiledCode} })(module, module.exports);`,
+              { module }
+            )
+
+            return module.exports
+          },
+        },
+      },
     })
-      .withSchema('ts', {
-        metadata: metadataSchema.parse,
-      })
-      .withModule(async (path) => {
-        const transpiledCode = await fileSystem.transpileFile(path)
-        const module = { exports: {} }
-
-        runInNewContext(
-          `(function(module, exports) { ${transpiledCode} })(module, module.exports);`,
-          { module }
-        )
-
-        return module.exports
-      })
     const file = await directory.getFileOrThrow('hello-world', 'ts')
     const fileExport = await file.getExportOrThrow('metadata')
     const metadata = await fileExport.getRuntimeValue()
@@ -715,13 +975,16 @@ describe('file system', () => {
     expect(type!.name).toBe('Metadata')
   })
 
-  test('getRuntimeValue resolves export runtime value from withModule', async () => {
-    const directory = new Directory('fixtures/utils').withModule(
-      (path) => import(`#fixtures/utils/${path}`)
-    )
+  test('getRuntimeValue resolves export runtime value from extension module', async () => {
+    const directory = new Directory({
+      path: 'fixtures/utils',
+      loaders: {
+        ts: (path) => import(`#fixtures/utils/${path}.ts`),
+      },
+    })
     const file = await directory.getFileOrThrow('path', 'ts')
 
-    expectTypeOf(file).toMatchTypeOf<JavaScriptFileWithRuntime<any>>()
+    expectTypeOf(file).toMatchTypeOf<JavaScriptFile<any>>()
     expect(file).toBeInstanceOf(JavaScriptFile)
 
     const fileExport = await file.getExportOrThrow('basename')
@@ -735,14 +998,16 @@ describe('file system', () => {
     expect(basename('/path/to/file.ts', '.ts')).toBe('file')
   })
 
-  test('getRuntimeValue resolves export runtime value from withModule with extension', async () => {
-    const directory = new Directory('fixtures/utils').withModule(
-      'ts',
-      (path) => import(`#fixtures/utils/${path}.ts`)
-    )
+  test('getRuntimeValue resolves export runtime value from loader', async () => {
+    const directory = new Directory({
+      path: 'fixtures/utils',
+      loaders: {
+        ts: (path) => import(`#fixtures/utils/${path}.ts`),
+      },
+    })
     const file = await directory.getFileOrThrow('path', 'ts')
 
-    expectTypeOf(file).toMatchTypeOf<JavaScriptFileWithRuntime<any>>()
+    expectTypeOf(file).toMatchTypeOf<JavaScriptFile<any>>()
     expect(file).toBeInstanceOf(JavaScriptFile)
 
     const fileExport = await file.getExportOrThrow('basename')
@@ -760,17 +1025,22 @@ describe('file system', () => {
     const fileSystem = new MemoryFileSystem({
       'index.ts': 'export const metadata = { title: "Hello, World!" }',
     })
-    const directory = new Directory({ fileSystem }).withModule(async () => {
-      return { metadata: { title: 'Hello, World!' } }
+    const directory = new Directory({
+      fileSystem,
+      loaders: {
+        ts: async () => {
+          return { metadata: { title: 'Hello, World!' } }
+        },
+      },
     })
     const file = await directory.getFileOrThrow('index', 'ts')
-    const fileExport = await file.getExportValueOrThrow('metadata')
+    const fileExport = await file.getExportValue('metadata')
 
     expect(fileExport).toMatchObject({ title: 'Hello, World!' })
   })
 
   test('uses first file found when no file extension present', async () => {
-    const projectDirectory = new Directory('fixtures/project')
+    const projectDirectory = new Directory({ path: 'fixtures/project' })
     const file = await projectDirectory.getFile('server')
 
     expect(file).toBeDefined()
@@ -797,7 +1067,7 @@ describe('file system', () => {
   })
 
   test('generates sibling navigation from file', async () => {
-    const projectDirectory = new Directory('fixtures/project')
+    const projectDirectory = new Directory({ path: 'fixtures/project' })
     const file = await projectDirectory.getFileOrThrow('server', 'ts')
     const [previousEntry, nextEntry] = await file.getSiblings()
 
@@ -806,7 +1076,7 @@ describe('file system', () => {
   })
 
   test('generates sibling navigation from directory', async () => {
-    const projectDirectory = new Directory('fixtures/project')
+    const projectDirectory = new Directory({ path: 'fixtures/project' })
     const directory = await projectDirectory.getDirectoryOrThrow('rpc')
     const [previousEntry, nextEntry] = await directory.getSiblings()
 
@@ -829,13 +1099,21 @@ describe('file system', () => {
   })
 
   test('generates tree navigation', async () => {
-    const projectDirectory = new Directory('fixtures/project').withBasePath(
-      'project'
-    )
+    const projectDirectory = new Directory({
+      path: 'fixtures/project',
+      basePath: 'project',
+    })
+
+    type TreeEntry = {
+      name: string
+      path: string
+      depth: number
+      children?: TreeEntry[]
+    }
 
     async function buildTreeNavigation<Entry extends FileSystemEntry<any>>(
       entry: Entry
-    ) {
+    ): Promise<TreeEntry> {
       const name = entry.getName()
       const path = entry.getPath()
       const depth = entry.getDepth()
@@ -891,7 +1169,7 @@ describe('file system', () => {
   })
 
   test('uses directory name when index or readme file', async () => {
-    const projectDirectory = new Directory('fixtures/components')
+    const projectDirectory = new Directory({ path: 'fixtures/components' })
     const indexFile = await projectDirectory.getFile('index')
     const readmeFile = await projectDirectory.getFile('README')
 
@@ -900,9 +1178,10 @@ describe('file system', () => {
   })
 
   test('adds base path to entry getPath and getPathSegments', async () => {
-    const projectDirectory = new Directory('fixtures/project').withBasePath(
-      'renoun'
-    )
+    const projectDirectory = new Directory({
+      path: 'fixtures/project',
+      basePath: 'renoun',
+    })
 
     expect(projectDirectory.getBasePath()).toBe('renoun')
 
@@ -936,24 +1215,28 @@ describe('file system', () => {
       'Button/Button.tsx': '',
       'Button/README.mdx': '',
     })
-    type FileTypes = {
-      tsx: {
-        default: ComponentType
-      }
-      mdx: {
-        default: MDXContent
-      }
-    }
-    const directory = new Directory<FileTypes>({ fileSystem })
+    const directory = new Directory({
+      fileSystem,
+      loaders: {
+        tsx: withSchema<{
+          default: ComponentType
+        }>,
+        mdx: withSchema<{
+          frontmatter: { title: string }
+        }>(() => {
+          return Promise.resolve<any>({
+            default: () => {},
+          })
+        }),
+      },
+    })
     const entry = await directory.getEntryOrThrow('Button')
 
     expect(isDirectory(entry)).toBe(false)
     expect(isFile(entry)).toBe(true)
 
     if (isDirectory(entry)) {
-      expectTypeOf(entry).toMatchTypeOf<
-        Directory<FileTypes, false, FileSystemEntry<FileTypes>>
-      >()
+      expectTypeOf(entry).toMatchTypeOf<Directory<any>>()
     }
 
     const normalizedDirectory = isFile(entry) ? entry.getParent() : entry
@@ -963,13 +1246,26 @@ describe('file system', () => {
     const file = await normalizedDirectory.getFileOrThrow('README', 'mdx')
 
     expect(isDirectory(file)).toBe(false)
-    expectTypeOf(file).toMatchTypeOf<JavaScriptFile<{ default: MDXContent }>>()
+
+    expectTypeOf(file).toMatchTypeOf<
+      JavaScriptFile<{
+        default: MDXContent
+        frontmatter: {
+          title: string
+        }
+      }>
+    >()
   })
 
   test('isFile', async () => {
     type Metadata = { title: string }
     const fileSystem = new MemoryFileSystem({ 'Button.tsx': '' })
-    const directory = new Directory<{ tsx: Metadata }>({ fileSystem })
+    const directory = new Directory({
+      fileSystem,
+      loaders: {
+        tsx: withSchema<Metadata>(),
+      },
+    })
     const file = await directory.getFileOrThrow('Button')
     const hasTsxExtension = isFile(file, 'tsx')
 
@@ -982,9 +1278,14 @@ describe('file system', () => {
 
   test('isFile array', async () => {
     type Metadata = { title: string }
-    type FileTypes = { ts: Metadata; tsx: Metadata }
     const fileSystem = new MemoryFileSystem({ 'Button.tsx': '' })
-    const directory = new Directory<FileTypes>({ fileSystem })
+    const directory = new Directory({
+      fileSystem,
+      loaders: {
+        ts: withSchema<Metadata>(),
+        tsx: withSchema<Metadata>(),
+      },
+    })
     const file = await directory.getFileOrThrow('Button')
     const hasTsLikeExtension = isFile(file, ['ts', 'tsx'])
 
@@ -999,7 +1300,7 @@ describe('file system', () => {
     expect(hasCssExtension).toBe(false)
 
     if (hasCssExtension) {
-      expectTypeOf(file).toMatchTypeOf<File<FileTypes>>()
+      expectTypeOf(file).toMatchTypeOf<File>()
     }
   })
 
@@ -1009,12 +1310,18 @@ describe('file system', () => {
       'posts/meta.js': 'export default { "title": "Posts" }',
     })
     type FrontMatter = { frontmatter: { title: string } }
-    const posts = new Directory<{ mdx: FrontMatter }>({
+    const posts = new Directory({
       path: 'posts',
       fileSystem: memoryFileSystem,
+      loaders: {
+        mdx: withSchema<FrontMatter>(),
+      },
     })
-    const docs = new Directory<{ mdx: FrontMatter }>({
+    const docs = new Directory({
       path: 'fixtures/docs',
+      loaders: {
+        mdx: withSchema<FrontMatter>(),
+      },
     })
     const group = new EntryGroup({
       entries: [posts, docs],
@@ -1044,7 +1351,9 @@ describe('file system', () => {
     )
 
     expect(mdxFile).toBeInstanceOf(JavaScriptFile)
-    expectTypeOf(mdxFile).toMatchTypeOf<JavaScriptFile<FrontMatter>>()
+    expectTypeOf(mdxFile).toMatchTypeOf<
+      JavaScriptFile<{ default: MDXContent } & InferModuleExports<FrontMatter>>
+    >()
 
     const file = await group.getFileOrThrow(['posts', 'meta'], 'js')
     const [previousEntry, nextEntry] = await file.getSiblings({
@@ -1129,7 +1438,7 @@ describe('file system', () => {
     const componentEntry = await entryGroup.getEntryOrThrow(['docs', 'Button'])
 
     expect(componentEntry).toBeDefined()
-    expect(componentEntry.getPath()).toBe('/docs/Button')
+    expect(componentEntry.getPath()).toBe('/docs/button')
 
     const componentFile = await entryGroup.getFileOrThrow(
       ['docs', 'Button'],
@@ -1137,33 +1446,121 @@ describe('file system', () => {
     )
 
     expect(componentFile).toBeDefined()
-    expect(componentFile.getPath()).toBe('/docs/Button')
+    expect(componentFile.getPath()).toBe('/docs/button')
   })
 
   test('has entry', async () => {
     type MDXTypes = { frontmatter: { title: string } }
     type TSXTypes = { metadata: { title: string } }
 
-    const directoryA = new Directory<{ mdx: MDXTypes }>({
+    const directoryA = new Directory({
       fileSystem: new MemoryFileSystem({ 'Button.mdx': '' }),
+      loaders: {
+        mdx: withSchema<MDXTypes>(),
+      },
     })
-    const directoryB = new Directory<{ tsx: TSXTypes }>('fixtures/components')
+    const directoryB = new Directory({
+      path: 'fixtures/components',
+      loaders: {
+        tsx: withSchema<TSXTypes>(),
+      },
+    })
     const group = new EntryGroup({
       entries: [directoryA, directoryB],
     })
     const file = await group.getFileOrThrow('Button', 'mdx')
 
-    expectTypeOf(file).toMatchTypeOf<JavaScriptFile<MDXTypes>>()
+    expectTypeOf(file).toMatchTypeOf<
+      JavaScriptFile<{ default: MDXContent } & MDXTypes>
+    >()
 
     const entry = await group.getEntryOrThrow('Button')
 
     expect(directoryA.hasEntry(entry)).toBe(true)
-    expectTypeOf(entry).toMatchTypeOf<FileSystemEntry<{ mdx: MDXTypes }>>()
 
     expect(directoryA.hasFile(entry, 'mdx')).toBe(true)
 
+    type Test = Expect<IsNotAny<typeof entry>>
+
     if (directoryA.hasFile(entry, 'mdx')) {
-      expectTypeOf(entry).toMatchTypeOf<JavaScriptFile<MDXTypes>>()
+      expectTypeOf(entry).toMatchTypeOf<
+        JavaScriptFile<{ default: MDXContent } & MDXTypes>
+      >()
+    }
+  })
+
+  test('entry group works with type abstractions', async () => {
+    function Document(props: {
+      file?: JavaScriptFile<{
+        default: MDXContent
+        headings: Headings
+        metadata: {
+          title: string
+          description: string
+        }
+      }>
+      entryGroup?: EntryGroup<any>
+    }) {
+      return null
+    }
+
+    const directory = new Directory({
+      loaders: {
+        mdx: withSchema(
+          {
+            headings: z.array(
+              z.object({
+                id: z.string(),
+                text: z.string(),
+                depth: z.number(),
+              })
+            ),
+            metadata: z.object({
+              title: z.string(),
+              label: z.string().optional(),
+              description: z.string(),
+              tags: z.array(z.string()).optional(),
+            }),
+          },
+          (path) => Promise.resolve<any>({})
+        ),
+      },
+      include: (entry) => isFile(entry, 'mdx'),
+    })
+    const entryGroup = new EntryGroup({
+      entries: [directory],
+    })
+    const file = await directory.getFile('index', 'mdx')
+
+    Document({ file, entryGroup })
+  })
+
+  test('adds default MDXContent type to existing mdx loaders', async () => {
+    const posts = new Directory({
+      loaders: {
+        mdx: withSchema<{ frontmatter: { title: string } }>(
+          (path) => import(`@/posts/${path}.mdx`)
+        ),
+      },
+    })
+    const file = await posts.getFile('hello-world', 'mdx')
+
+    if (file) {
+      const fileExport = await file.getExportOrThrow('default')
+      const fileExportValue = await fileExport.getRuntimeValue()
+
+      expectTypeOf(fileExportValue).toMatchTypeOf<MDXContent>()
+
+      const Content = await file.getExportValueOrThrow('default')
+      const frontmatter = await file.getExportValueOrThrow('frontmatter')
+
+      expectTypeOf(Content).toMatchTypeOf<MDXContent>()
+      expectTypeOf(frontmatter).toMatchTypeOf<{ title: string }>()
+
+      type Tests = [
+        Expect<IsNotAny<typeof fileExportValue>>,
+        Expect<IsNotAny<typeof Content>>,
+      ]
     }
   })
 })

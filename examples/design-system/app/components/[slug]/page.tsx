@@ -2,12 +2,13 @@ import { APIReference } from 'renoun/components'
 import {
   isFile,
   isDirectory,
-  type JavaScriptFileExportWithRuntime,
+  type FileSystemEntry,
+  type JavaScriptFileExport,
 } from 'renoun/file-system'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
-import { ComponentsCollection, type ComponentEntry } from '@/collections'
+import { ComponentsCollection } from '@/collections'
 import { Stack } from '@/components'
 
 export async function generateStaticParams() {
@@ -36,9 +37,7 @@ export default async function Component({
   const examplesEntry = await componentDirectory.getEntry('examples')
   const exampleFiles = examplesEntry
     ? isDirectory(examplesEntry)
-      ? await examplesEntry
-          .withFilter((entry) => isFile(entry, 'tsx'))
-          .getEntries()
+      ? await examplesEntry.getEntries()
       : isFile(examplesEntry, 'tsx')
         ? [examplesEntry]
         : null
@@ -76,7 +75,7 @@ export default async function Component({
         </div>
       ) : null}
 
-      {isExamplesPage || !exampleFiles ? null : (
+      {/* {isExamplesPage || !exampleFiles ? null : (
         <div>
           <h2 css={{ margin: '0 0 2rem' }}>Examples</h2>
           <ul
@@ -101,7 +100,7 @@ export default async function Component({
             })}
           </ul>
         </div>
-      )}
+      )} */}
 
       <div>
         <div
@@ -164,7 +163,7 @@ export default async function Component({
 async function Preview({
   fileExport,
 }: {
-  fileExport: JavaScriptFileExportWithRuntime<any>
+  fileExport: JavaScriptFileExport<any>
 }) {
   const name = fileExport.getName()
   const description = fileExport.getDescription()
@@ -211,7 +210,7 @@ async function SiblingLink({
   entry,
   direction,
 }: {
-  entry: ComponentEntry
+  entry: FileSystemEntry<any>
   direction: 'previous' | 'next'
 }) {
   return (

@@ -1,16 +1,11 @@
-import { Directory, type FileSystemEntry } from 'renoun/file-system'
-import type { MDXContent } from 'renoun/mdx'
+import { Directory } from 'renoun/file-system'
 
-interface ComponentTypes {
-  tsx: { [exportName: string]: React.ComponentType }
-  mdx: { default: MDXContent }
-}
-
-export type ComponentEntry = FileSystemEntry<ComponentTypes>
-
-export const ComponentsCollection = new Directory<ComponentTypes>({
+export const ComponentsCollection = new Directory({
   path: 'components',
-  pathCasing: 'kebab',
+  basePath: 'components',
+  loaders: {
+    ts: (path) => import(`./components/${path}.ts`),
+    tsx: (path) => import(`./components/${path}.tsx`),
+    mdx: (path) => import(`./components/${path}.mdx`),
+  },
 })
-  .withBasePath('components')
-  .withModule((path) => import(`./components/${path}`))
