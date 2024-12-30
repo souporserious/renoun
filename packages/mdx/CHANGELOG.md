@@ -1,5 +1,20 @@
 # @renoun/mdx
 
+## 1.3.0
+
+### Minor Changes
+
+- 97bc268: Renames `@renoun/mdx` `Headings` type to `MDXHeadings`. This adds better clarity and consistency with the other `MDX` prefixed types.
+
+  ### Breaking Changes
+
+  - Rename any `Headings` references from `@renoun/mdx` to `MDXHeadings`.
+
+### Patch Changes
+
+- ece3cc2: Fixes inline code language inference by considering language aliases.
+- df4d29d: Removes `mdast` dependency. This was added by mistake and is not needed since `@types/mdast` is already a dependency.
+
 ## 1.2.1
 
 ### Patch Changes
