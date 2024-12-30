@@ -39,7 +39,9 @@ export default async function Component({
   const componentDirectory = isDirectory(componentEntry)
     ? componentEntry
     : componentEntry.getParent()
-  const mainExport = await componentEntry.getExport<any>(slug)
+  const mainExport = await componentEntry.getExport<any>(
+    componentEntry.getName()
+  )
   const description = mainExport ? mainExport.getDescription() : null
   const examplesEntry = await componentDirectory.getEntry('examples')
   const exampleFiles = examplesEntry
