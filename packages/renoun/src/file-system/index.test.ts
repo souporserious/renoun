@@ -1532,4 +1532,33 @@ describe('file system', () => {
 
     Document({ file, entryGroup })
   })
+
+  test('adds default MDXContent type to existing mdx loaders', async () => {
+    const posts = new Directory({
+      loaders: {
+        mdx: withSchema<{ frontmatter: { title: string } }>(
+          (path) => import(`@/posts/${path}.mdx`)
+        ),
+      },
+    })
+    const file = await posts.getFile('hello-world', 'mdx')
+
+    if (file) {
+      const fileExport = await file.getExportOrThrow('default')
+      const fileExportValue = await fileExport.getRuntimeValue()
+
+      expectTypeOf(fileExportValue).toMatchTypeOf<MDXContent>()
+
+      const Content = await file.getExportValueOrThrow('default')
+      const frontmatter = await file.getExportValueOrThrow('frontmatter')
+
+      expectTypeOf(Content).toMatchTypeOf<MDXContent>()
+      expectTypeOf(frontmatter).toMatchTypeOf<{ title: string }>()
+
+      type Tests = [
+        Expect<IsNotAny<typeof fileExportValue>>,
+        Expect<IsNotAny<typeof Content>>,
+      ]
+    }
+  })
 })

@@ -69,8 +69,9 @@ interface ModuleLoaderWithSchema<
   Types extends ModuleExports,
   /**
    * This is used exclusively for type inference in `InferModuleLoader` to prevent
-   * unwrapping the provided types and allow passing them through as-is. Without
-   * this TypeScript would attempt to infer the provided types and unwrap them.
+   * unwrapping the provided types and allow passing them through as-is. Without this
+   * flag, TypeScript would infer the provided types as a `ModuleExportValidator`
+   * and unwrap them.
    */
   _IsRuntimeOnly extends boolean = false,
 > {
@@ -137,20 +138,38 @@ type ModuleLoaders = {
   [extension: string]: ModuleLoader
 }
 
+type IsAny<Type> = 0 extends 1 & Type ? true : false
+
 /** Infer the type of a loader based on its schema or runtime. */
-type InferModuleLoader<Loader extends ModuleLoader> =
+type InferModuleLoaderTypes<Loader extends ModuleLoader> =
   Loader extends WithSchema<infer Schema>
     ? Schema
     : Loader extends ModuleLoaderWithSchema<infer Schema, infer IsRuntimeOnly>
       ? IsRuntimeOnly extends true
         ? Schema
         : InferModuleExports<Schema>
-      : Loader extends ModuleRuntimeLoader<infer Value>
-        ? Value
+      : Loader extends ModuleRuntimeLoader<infer Types>
+        ? /**
+           * If the loader is "any", we return the types as a record to prevent
+           * from widening the type to "any" when merging default module types.
+           */
+          IsAny<Types> extends true
+          ? { [exportName: string]: any }
+          : Types
         : never
 
-type InferModuleLoaders<Loaders extends ModuleLoaders> = {
-  [Extension in keyof Loaders]: InferModuleLoader<Loaders[Extension]>
+/** Default module types for common file extensions. */
+interface DefaultModuleTypes {
+  mdx: {
+    default: MDXContent
+  }
+}
+
+/** Infer extension types for all loaders in a module. */
+export type InferModuleLoadersTypes<Loaders extends ModuleLoaders> = {
+  [Extension in keyof Loaders]: Extension extends keyof DefaultModuleTypes
+    ? DefaultModuleTypes[Extension] & InferModuleLoaderTypes<Loaders[Extension]>
+    : InferModuleLoaderTypes<Loaders[Extension]>
 }
 
 /** Determines if the loader is a resolver. */
@@ -370,9 +389,6 @@ export class File<
     return [previous, next]
   }
 }
-
-type ValueFromExport<Types extends Record<string, any> = Record<string, any>> =
-  Types[Extract<keyof Types, string>]
 
 /** A JavaScript file export. */
 export class JavaScriptFileExport<Value> {
@@ -618,7 +634,7 @@ export interface JavaScriptFileOptions<Types extends Record<string, any>>
 export class JavaScriptFile<
   Types extends Record<string, any> = Record<string, any>,
 > extends File<Types> {
-  #exports = new Map<string, JavaScriptFileExport<ValueFromExport<Types>>>()
+  #exports = new Map<string, JavaScriptFileExport<any>>()
   #loader?: ModuleLoader<Types>
 
   constructor({ loader, ...fileOptions }: JavaScriptFileOptions<Types>) {
@@ -728,15 +744,17 @@ export class JavaScriptFile<
   /** Get a JavaScript file export by name. */
   async getExport<ExportName extends Extract<keyof Types, string>>(
     name: ExportName
-  ): Promise<JavaScriptFileExport<ValueFromExport<Types>> | undefined> {
+  ): Promise<JavaScriptFileExport<Types[ExportName]> | undefined> {
     if (await this.hasExport(name)) {
       if (this.#exports.has(name)) {
         return this.#exports.get(name)!
       }
 
-      const fileExport = await JavaScriptFileExport.init<
-        ValueFromExport<Types>
-      >(name, this, this.#loader)
+      const fileExport = await JavaScriptFileExport.init<Types[ExportName]>(
+        name,
+        this,
+        this.#loader
+      )
 
       this.#exports.set(name, fileExport)
 
@@ -757,7 +775,7 @@ export class JavaScriptFile<
   /** Get a JavaScript file export by name or throw an error if it does not exist. */
   async getExportOrThrow<ExportName extends Extract<keyof Types, string>>(
     name: ExportName
-  ): Promise<JavaScriptFileExport<ValueFromExport<Types>>> {
+  ): Promise<JavaScriptFileExport<Types[ExportName]>> {
     const fileExport = await this.getExport(name)
 
     if (fileExport === undefined) {
@@ -837,7 +855,7 @@ export type IncludedEntry<
 
 /** The options for a `Directory`. */
 interface DirectoryOptions<
-  Types extends InferModuleLoaders<Loaders> = any,
+  Types extends InferModuleLoadersTypes<Loaders> = any,
   Loaders extends ModuleLoaders = ModuleLoaders,
   Include extends EntryInclude<FileSystemEntry<Types>, Types> = EntryInclude<
     FileSystemEntry<Types>,
@@ -874,7 +892,7 @@ interface DirectoryOptions<
 
 /** A directory containing files and subdirectories in the file system. */
 export class Directory<
-  Types extends InferModuleLoaders<Loaders>,
+  Types extends InferModuleLoadersTypes<Loaders>,
   Loaders extends ModuleLoaders = ModuleLoaders,
   Include extends EntryInclude<FileSystemEntry<Types>, Types> = EntryInclude<
     FileSystemEntry<Types>,
@@ -1006,9 +1024,7 @@ export class Directory<
   ): Promise<
     | (Extension extends string
         ? IsJavaScriptLikeExtension<Extension> extends true
-          ? Extension extends 'mdx'
-            ? JavaScriptFile<{ default: MDXContent } & Types[Extension]>
-            : JavaScriptFile<Types[Extension]>
+          ? JavaScriptFile<Types[Extension]>
           : File<Types>
         : File<Types>)
     | undefined
@@ -1149,9 +1165,7 @@ export class Directory<
   ): Promise<
     Extension extends string
       ? IsJavaScriptLikeExtension<Extension> extends true
-        ? Extension extends 'mdx'
-          ? JavaScriptFile<{ default: MDXContent } & Types[Extension]>
-          : JavaScriptFile<Types[Extension]>
+        ? JavaScriptFile<Types[Extension]>
         : File<Types>
       : File<Types>
   > {
@@ -1618,7 +1632,7 @@ export interface EntryGroupOptions<Entries extends FileSystemEntry<any>[]> {
 
 /** A group of file system entries. */
 export class EntryGroup<
-  Types extends InferModuleLoaders<Loaders>,
+  Types extends InferModuleLoadersTypes<Loaders>,
   const Entries extends FileSystemEntry<any>[] = FileSystemEntry<any>[],
   const Loaders extends ModuleLoaders = LoadersFromEntries<Entries>,
 > {
@@ -1720,9 +1734,7 @@ export class EntryGroup<
   ): Promise<
     | (Extension extends string
         ? IsJavaScriptLikeExtension<Extension> extends true
-          ? Extension extends 'mdx'
-            ? JavaScriptFile<{ default: MDXContent } & Types[Extension]>
-            : JavaScriptFile<Types[Extension]>
+          ? JavaScriptFile<Types[Extension]>
           : File<Types>
         : File<Types>)
     | undefined
@@ -1771,9 +1783,7 @@ export class EntryGroup<
   ): Promise<
     Extension extends string
       ? IsJavaScriptLikeExtension<Extension> extends true
-        ? Extension extends 'mdx'
-          ? JavaScriptFile<{ default: MDXContent } & Types[Extension]>
-          : JavaScriptFile<Types[Extension]>
+        ? JavaScriptFile<Types[Extension]>
         : File<Types>
       : File<Types>
   > {
