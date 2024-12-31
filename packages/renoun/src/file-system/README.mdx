@@ -116,33 +116,27 @@ Now when we call `JavaScript#getExportValue` and `JavaScriptExport#getRuntimeVal
 
 ### Schema Validation
 
-You can also use schema validation using libraries like [Zod](https://zod.dev/), [Valibot](https://valibot.dev/), or [Arktype](https://github.com/arktypeio/arktype) to ensure file exports conform to a specific schema:
+You can also apply schema validation using libraries that follow the [Standard Schema Spect](https://github.com/standard-schema/standard-schema?tab=readme-ov-file#standard-schema-spec) like [Zod](https://zod.dev/), [Valibot](https://valibot.dev/), or [Arktype](https://github.com/arktypeio/arktype) to ensure file exports conform to a specific schema:
 
 ```tsx
-import { Directory } from 'renoun/file-system'
+import { Directory, withSchema } from 'renoun/file-system'
 import { z } from 'zod'
 
 const posts = new Directory({
   path: 'posts',
   loaders: {
-    mdx: {
-      schema: {
+    mdx: withSchema(
+      {
         frontmatter: z.object({
           title: z.string(),
           date: z.date(),
         }),
       },
-      runtime: (path) => import(`./posts/${path}.mdx`),
-    },
+      (path) => import(`./posts/${path}.mdx`)
+    ),
   },
 })
 ```
-
-<Note>
-
-In this case, the `withSchema` helper isn't necessary because the schema can be inferred directly using the [Standard Schema Spect](https://github.com/standard-schema/standard-schema?tab=readme-ov-file#standard-schema-spec).
-
-</Note>
 
 Alternatively, you can define a schema yourself using both TypeScript types and custom validation functions:
 
