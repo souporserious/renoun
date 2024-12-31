@@ -38,6 +38,14 @@ export function getFileExports(
       )
 
       if (isExportable) {
+        if (tsMorph.Node.isFunctionDeclaration(declaration)) {
+          const body = declaration.getBody()
+
+          if (body === undefined) {
+            continue
+          }
+        }
+
         exportDeclarations.push({
           name,
           path: declaration.getSourceFile().getFilePath(),
