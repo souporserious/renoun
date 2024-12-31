@@ -104,7 +104,9 @@ export function SiteLayout({
             >
               Docs
             </NavigationLink>
-            <NavigationLink href="/collections">Collections</NavigationLink>
+            <NavigationLink href="/utilities/file-system">
+              Utilities
+            </NavigationLink>
             <NavigationLink href="/components">Components</NavigationLink>
             <NavigationLink href="/guides">Guides</NavigationLink>
             <NavigationLink

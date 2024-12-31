@@ -66,7 +66,7 @@ export function Sidebar() {
               gap: '1rem',
             }}
           >
-            <h3 className="title">Collections</h3>
+            <h3 className="title">Utilities</h3>
             <ul
               css={{
                 fontSize: 'var(--font-size-body-2)',
@@ -77,10 +77,10 @@ export function Sidebar() {
               }}
             >
               <li>
-                <SidebarLink pathname="/collections" label="Introduction" />
-              </li>
-              <li>
-                <SidebarLink pathname="/collections/recipes" label="Recipes" />
+                <SidebarLink
+                  pathname="/utilities/file-system"
+                  label="File System"
+                />
               </li>
             </ul>
           </li>
