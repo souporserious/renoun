@@ -912,7 +912,7 @@ interface DirectoryOptions<
   /** The path to the directory in the file system. */
   path?: string
 
-  /** An array of filenames or patterns to include when querying entries. The filenames are resolved relative to the working directory. */
+  /** A filter function or [minimatch](https://github.com/isaacs/minimatch?tab=readme-ov-file#minimatch) pattern used to include specific entries. When using a string, filenames are resolved relative to the working directory. */
   include?: Include
 
   /** The extension definitions to use for loading and validating file exports. */
