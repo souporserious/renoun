@@ -35,6 +35,50 @@ type IsNotAny<Type> = true extends IsAny<Type> ? false : true
 type IsNever<Type> = Type extends never ? true : false
 
 describe('file system', () => {
+  describe('File', () => {
+    test('parses full filename', () => {
+      const file = new File({ path: '02.generics.exercise.ts' })
+
+      expect(file.getOrder()).toBe('02')
+      expect(file.getBaseName()).toBe('generics')
+      expect(file.getModifier()).toBe('exercise')
+      expect(file.getExtension()).toBe('ts')
+    })
+
+    test('without order', () => {
+      const file = new File({ path: 'test.file.txt' })
+
+      expect(file.getOrder()).toBeUndefined()
+      expect(file.getBaseName()).toBe('test')
+      expect(file.getModifier()).toBe('file')
+      expect(file.getExtension()).toBe('txt')
+    })
+
+    test('without modifier', () => {
+      const file = new File({ path: '1-foo.txt' })
+
+      expect(file.getOrder()).toBe('1')
+      expect(file.getBaseName()).toBe('foo')
+      expect(file.getModifier()).toBeUndefined()
+      expect(file.getExtension()).toBe('txt')
+    })
+
+    test('handles filenames with only base', () => {
+      const file = new File({ path: 'foo' })
+
+      expect(file.getOrder()).toBeUndefined()
+      expect(file.getName()).toBe('foo')
+      expect(file.getBaseName()).toBe('foo')
+      expect(file.getModifier()).toBeUndefined()
+      expect(file.getExtension()).toBeUndefined()
+    })
+
+    test('returns original name', () => {
+      const file = new File({ path: '01.beep.boop.bop' })
+      expect(file.getName()).toBe('01.beep.boop.bop')
+    })
+  })
+
   test('node file system read directory', async () => {
     const fileSystem = new NodeFileSystem()
     const entries = await fileSystem.readDirectory('fixtures/utils')
@@ -66,7 +110,7 @@ describe('file system', () => {
     const file = await fixturesDirectory.getFile('project/server', 'ts')
 
     expect(file).toBeInstanceOf(File)
-    expect(file?.getName()).toBe('server')
+    expect(file?.getName()).toBe('server.ts')
   })
 
   test('entries', async () => {
@@ -443,8 +487,8 @@ describe('file system', () => {
 
     expect(entries.map((entry) => entry.getName())).toMatchInlineSnapshot(`
       [
-        "bar",
-        "foo",
+        "bar.ts",
+        "foo.ts",
       ]
     `)
   })
@@ -479,8 +523,8 @@ describe('file system', () => {
 
     expect(entries.map((entry) => entry.getName())).toMatchInlineSnapshot(`
       [
-        "bar",
-        "foo",
+        "bar.ts",
+        "foo.ts",
       ]
     `)
   })
@@ -513,12 +557,12 @@ describe('file system', () => {
 
     const fileEntry = entries.at(0) as File
 
-    expect(fileEntry.getName()).toBe('Button')
+    expect(fileEntry.getBaseName()).toBe('Button')
     expect(fileEntry.getExtension()).toBe('tsx')
 
     const directoryEntry = entries.at(1) as Directory<any>
 
-    expect(directoryEntry.getName()).toBe('CodeBlock')
+    expect(directoryEntry.getBaseName()).toBe('CodeBlock')
   })
 
   test('excludes entries based on tsconfig', async () => {
@@ -576,6 +620,12 @@ describe('file system', () => {
 
     expectTypeOf(file!).toMatchTypeOf<File>()
     expect(file!).toBeInstanceOf(File)
+
+    const tsConfigFile = new File({
+      path: 'tsconfig.json',
+    })
+
+    expect(tsConfigFile.getName()).toBe('tsconfig.json')
   })
 
   test('nested file', async () => {
@@ -626,6 +676,11 @@ describe('file system', () => {
 
     expect(file!).toBeInstanceOf(JavaScriptFile)
     expectTypeOf(file!).toMatchTypeOf<JavaScriptFile<any>>()
+
+    const jsFile = new JavaScriptFile({ path: 'fixtures/project/server.ts' })
+    const jsFileExports = await jsFile.getExports()
+
+    expect(jsFileExports).toHaveLength(1)
   })
 
   test('javascript file with runtime', async () => {
@@ -710,7 +765,8 @@ describe('file system', () => {
     const file = await directory.getFileOrThrow('server', 'ts')
 
     expect(file).toBeInstanceOf(File)
-    expect(file.getName()).toBe('server')
+    expect(file.getName()).toBe('01.server.ts')
+    expect(file.getBaseName()).toBe('server')
     expect(file.getPath()).toBe('/server')
     expect(file.getPathSegments()).toStrictEqual(['server'])
   })
@@ -1071,8 +1127,8 @@ describe('file system', () => {
     const file = await projectDirectory.getFileOrThrow('server', 'ts')
     const [previousEntry, nextEntry] = await file.getSiblings()
 
-    expect(previousEntry?.getName()).toBe('rpc')
-    expect(nextEntry?.getName()).toBe('types')
+    expect(previousEntry?.getBaseName()).toBe('rpc')
+    expect(nextEntry?.getBaseName()).toBe('types')
   })
 
   test('generates sibling navigation from directory', async () => {
@@ -1081,7 +1137,7 @@ describe('file system', () => {
     const [previousEntry, nextEntry] = await directory.getSiblings()
 
     expect(previousEntry).toBeUndefined()
-    expect(nextEntry?.getName()).toBe('server')
+    expect(nextEntry?.getBaseName()).toBe('server')
   })
 
   test('generates sibling navigation from index as directory', async () => {
@@ -1141,12 +1197,12 @@ describe('file system', () => {
           "children": [
             {
               "depth": 1,
-              "name": "client",
+              "name": "client.ts",
               "path": "/project/rpc/client",
             },
             {
               "depth": 1,
-              "name": "server",
+              "name": "server.ts",
               "path": "/project/rpc/server",
             },
           ],
@@ -1156,12 +1212,12 @@ describe('file system', () => {
         },
         {
           "depth": 0,
-          "name": "server",
+          "name": "server.ts",
           "path": "/project/server",
         },
         {
           "depth": 0,
-          "name": "types",
+          "name": "types.ts",
           "path": "/project/types",
         },
       ]
@@ -1170,11 +1226,11 @@ describe('file system', () => {
 
   test('uses directory name when index or readme file', async () => {
     const projectDirectory = new Directory({ path: 'fixtures/components' })
-    const indexFile = await projectDirectory.getFile('index')
-    const readmeFile = await projectDirectory.getFile('README')
+    const indexFile = await projectDirectory.getFileOrThrow('index')
+    const readmeFile = await projectDirectory.getFileOrThrow('README')
 
-    expect(indexFile?.getName()).toBe('components')
-    expect(readmeFile?.getName()).toBe('components')
+    expect(indexFile.getParent().getBaseName()).toBe('components')
+    expect(readmeFile.getParent().getBaseName()).toBe('components')
   })
 
   test('adds base path to entry getPath and getPathSegments', async () => {
@@ -1206,7 +1262,7 @@ describe('file system', () => {
     const file = await directory.getFileOrThrow('index', 'ts')
     const fileExport = await file.getExportOrThrow('default')
 
-    expect(await fileExport.getName()).toBe(file.getName())
+    expect(fileExport.getName()).toBe(file.getBaseName())
   })
 
   test('isDirectory', async () => {
@@ -1334,7 +1390,7 @@ describe('file system', () => {
     const entry = await group.getEntry('posts/building-a-button-component')
 
     expect(entry).toBeInstanceOf(File)
-    expect(entry?.getName()).toBe('building-a-button-component')
+    expect(entry?.getBaseName()).toBe('building-a-button-component')
 
     const directory = await group.getDirectory('docs')
 
@@ -1360,8 +1416,8 @@ describe('file system', () => {
       entryGroup: group,
     })
 
-    expect(previousEntry?.getName()).toBe('building-a-button-component')
-    expect(nextEntry?.getName()).toBe('docs')
+    expect(previousEntry?.getBaseName()).toBe('building-a-button-component')
+    expect(nextEntry?.getBaseName()).toBe('docs')
   })
 
   test('getSiblings in entry group', async () => {

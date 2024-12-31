@@ -25,7 +25,6 @@ import {
   removeOrderPrefixes,
 } from '../utils/path.js'
 import type { SymbolFilter } from '../utils/resolve-type.js'
-import { FileName } from './FileName.js'
 import type { FileSystem } from './FileSystem.js'
 import { NodeFileSystem } from './NodeFileSystem.js'
 import {
@@ -198,9 +197,9 @@ export interface FileOptions<
   Types extends Record<string, any> = Record<string, any>,
 > {
   path: string
-  pathCasing: PathCasings
-  depth: number
-  directory: Directory<
+  pathCasing?: PathCasings
+  depth?: number
+  directory?: Directory<
     Types,
     ModuleLoaders,
     EntryInclude<FileSystemEntry<Types>, Types>
@@ -208,20 +207,66 @@ export interface FileOptions<
 }
 
 /** A file in the file system. */
-export class File<
-  Types extends Record<string, any> = Record<string, any>,
-> extends FileName {
+export class File<Types extends Record<string, any> = Record<string, any>> {
+  #name: string
+  #order?: string
+  #base: string
+  #modifier?: string
+  #extension?: string
   #path: string
   #pathCasing: PathCasings
   #depth: number
   #directory: Directory<Types>
 
   constructor(options: FileOptions<Types>) {
-    super(baseName(options.path))
+    this.#name = baseName(options.path)
     this.#path = options.path
-    this.#pathCasing = options.pathCasing
-    this.#depth = options.depth
-    this.#directory = options.directory
+    this.#pathCasing = options.pathCasing ?? 'kebab'
+    this.#depth = options.depth ?? 0
+    this.#directory = options.directory ?? new Directory()
+
+    const match = this.#name.match(
+      /^(?:(\d+)[.-])?([^.]+)(?:\.([^.]+))?(?:\.([^.]+))?$/
+    )
+
+    if (match) {
+      this.#order = match[1]
+      this.#base = match[2] ?? this.#name
+      this.#modifier = match[4] ? match[3] : undefined
+      this.#extension = match[4] ?? match[3]
+    } else {
+      this.#base = this.#name
+    }
+  }
+
+  /** The intrinsic name of the file. */
+  getName(): string {
+    return this.#name
+  }
+
+  /** The file name without the extension. */
+  getBaseName(): string {
+    return this.#base
+  }
+
+  /** The file name formatted as a title. */
+  getTitle() {
+    return formatNameAsTitle(this.getBaseName())
+  }
+
+  /** The order of the file if defined. */
+  getOrder(): string | undefined {
+    return this.#order
+  }
+
+  /** The modifier of the file if defined. */
+  getModifier(): string | undefined {
+    return this.#modifier
+  }
+
+  /** The extension of the file if defined. */
+  getExtension(): string | undefined {
+    return this.#extension
   }
 
   /** Get the directory containing this file. */
@@ -237,25 +282,6 @@ export class File<
   /** Get the slug of the file. */
   getSlug() {
     return createSlug(this.getName(), this.#pathCasing)
-  }
-
-  /**
-   * Get the base name of the file excluding the extension. The directory name
-   * will be used if the file is an index or readme file.
-   */
-  override getName() {
-    let name = this.getBaseName()
-
-    // Use the directory name if the file is an index or readme file
-    if (['index', 'readme'].includes(name.toLowerCase())) {
-      const directoryName = this.#directory.getName()
-      // Use the directory name if it's not the root directory
-      if (directoryName !== '.') {
-        name = directoryName
-      }
-    }
-
-    return name.split('.').at(0)!
   }
 
   /** Get the path of the file. */
