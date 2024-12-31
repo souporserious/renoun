@@ -2,43 +2,43 @@ export const metadata = {
   title: 'Zod Guide',
   label: 'Zod',
   description:
-    'Learn how to add schema validation to collections using Zod in renoun.',
+    'Learn how to add schema validation to your file system using Zod in renoun.',
 }
 
-```ts allowErrors
-import { Collection } from 'renoun/collections'
+```ts
+import { Directory, withSchema } from 'renoun/file-system'
 import { z } from 'zod'
 
-const frontmatterSchema = z.object({
+const frontmatterSchema = {
   title: z.string(),
-  date: z.coerce.date(),
+  date: z.date(),
   summary: z.string().optional(),
   tags: z.array(z.string()).optional(),
-})
+}
 
-export const PostsCollection = new Collection<{
-  default: MDXContent
-  frontmatter: z.infer<typeof frontmatterSchema>
-}>({
-  filePattern: '*.mdx',
-  baseDirectory: 'posts',
-  schema: {
-    frontmatter: frontmatterSchema.parse,
+const posts = new Directory({
+  path: 'posts',
+  include: '*.mdx',
+  loaders: {
+    mdx: withSchema(
+      { frontmatter: frontmatterSchema },
+      (path) => import(`@/posts/${path}.mdx`)
+    ),
   },
 })
 ```
 
 ## Introduction
 
-In this guide, we'll walk through how to use [Zod](https://zod.dev/) to add collection schemas to your projects. Using Zod ensures that your targeted files conform to an expected structure, providing type safety and validation.
+In this guide, we'll walk through how to use [Zod](https://zod.dev/) to add schema validation to your file system. Using Valibot ensures that your targeted files conform to an expected structure, providing type safety and validation.
 
 ### Before You Begin
 
-Before you start, make sure you have a basic understanding of how collections work in renoun. If you're new to collections, check out the [Collections Guide](/collections). We'll also be using MDX files in this guide, so make sure you're familiar with the [MDX Guide](/guides/mdx) as well.
+Before you start, make sure you have a basic understanding of how the [File System API](/utilities/file-system) works in renoun. We'll also be using MDX files in this guide, so make sure you're familiar with the [MDX Guide](/guides/mdx) as well.
 
 ## Using Zod
 
-Zod is a TypeScript-first schema validation library with static type inference. Let's look at how you can use Zod to add schema validation to your collections in renoun.
+Zod is a TypeScript-first schema validation library with static type inference. Let's look at how you can use Zod to add schema validation to your file system in renoun.
 
 ### Install
 
@@ -50,53 +50,52 @@ First, install `zod` using your package manager:
 
 Now, we'll create a schema using `zod` for the front matter of an MDX file:
 
-```ts allowErrors
+```ts
 import { z } from 'zod'
 
-const frontmatterSchema = z.object({
+const frontmatterSchema = {
   title: z.string(),
-  date: z.coerce.date(),
+  date: z.date(),
   summary: z.string().optional(),
   tags: z.array(z.string()).optional(),
-})
+}
 ```
 
-### Apply to Collection
+### Apply to a Directory
 
-We can now apply the Zod `frontmatterSchema` to your collection using the `schema` option in the `collection` utility:
+We can now apply the Zod `frontmatterSchema` to your `Directory` using the `withSchema` helper:
 
-```ts allowErrors focusedLines="1-2,12-20"
-import { Collection } from 'renoun/collections'
-import type { MDXContent } from 'renoun/mdx'
+```ts highlightedLines="1,11-20"
+import { Directory, withSchema } from 'renoun/file-system'
 import { z } from 'zod'
 
-const frontmatterSchema = z.object({
+const frontmatterSchema = {
   title: z.string(),
-  date: z.coerce.date(),
+  date: z.date(),
   summary: z.string().optional(),
   tags: z.array(z.string()).optional(),
-})
+}
 
-export const PostsCollection = new Collection<{
-  default: MDXContent
-  frontmatter: z.infer<typeof frontmatterSchema>
-}>({
-  filePattern: '*.mdx',
-  baseDirectory: 'posts',
-  schema: {
-    frontmatter: frontmatterSchema.parse,
+const posts = new Directory({
+  path: 'posts',
+  include: '*.mdx',
+  loaders: {
+    mdx: withSchema(
+      { frontmatter: frontmatterSchema },
+      (path) => import(`@/posts/${path}.mdx`)
+    ),
   },
 })
 ```
 
-Now, the `frontmatter` field in your collection will be validated against the `frontmatterSchema` we defined using Zod. If the data does not match the schema, an error will be thrown.
+Now, the `frontmatter` field in your MDX files will be validated against the `frontmatterSchema` we defined using Zod. If the data does not match the schema, an error will be thrown.
 
 ## Beyond Front Matter
 
-While the example in this guide focused on validating front matter in MDX files, the same approach can be applied to validate any kind of export within a file. Whether you need to enforce a specific structure for other metadata, content fields, or custom data exports, Zod provides the flexibility to define schemas that fit your specific collections.
+While the example in this guide focused on validating front matter in MDX files, the same approach can be applied to validate any kind of export within a file. Whether you need to enforce a specific structure for other metadata, content fields, or custom data exports, Zod provides the flexibility to define schemas that fit your file system requirements.
 
-### Conclusion
+## Conclusion
 
-By using Zod, you can add robust schema validation to your collections in renoun. This ensures that your data is always in the expected format, making your application more reliable and easier to maintain.
+By using Zod, you can add robust schema validation to your file system in renoun. This ensures that your data is always in the expected format, making your application more reliable and easier to maintain.
 
-For more information, refer to the [zod documentation](https://github.com/colinhacks/zod).
+For more information, refer to the [Zod documentation](https://github.com/colinhacks/zod).
