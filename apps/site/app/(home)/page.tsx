@@ -39,7 +39,7 @@ export default function Page() {
             margin: 0,
           }}
         >
-          Documentation You Want To Use
+          Your Technical Content Toolkit
         </h1>
         <p
           css={{
