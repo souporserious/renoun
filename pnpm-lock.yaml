@@ -39,6 +39,9 @@ catalogs:
     shiki:
       specifier: 1.24.4
       version: 1.24.4
+    valibot:
+      specifier: 1.0.0-beta.9
+      version: 1.0.0-beta.9
     webpack:
       specifier: 5.97.1
       version: 5.97.1
@@ -128,6 +131,9 @@ importers:
       shiki:
         specifier: 'catalog:'
         version: 1.24.4
+      valibot:
+        specifier: 'catalog:'
+        version: 1.0.0-beta.9(typescript@5.7.2)
       webpack:
         specifier: 'catalog:'
         version: 5.97.1
@@ -359,7 +365,7 @@ importers:
         specifier: 'catalog:'
         version: 19.0.0(react@19.0.0)
       valibot:
-        specifier: 1.0.0-beta.9
+        specifier: 'catalog:'
         version: 1.0.0-beta.9(typescript@5.7.2)
       zod:
         specifier: 'catalog:'
