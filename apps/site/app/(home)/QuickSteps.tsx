@@ -163,9 +163,7 @@ export function QuickSteps() {
           </li>
         ))}
       </ol>
-      <ButtonLink href="/collections">
-        Learn More About Collections →
-      </ButtonLink>
+      <ButtonLink href="/docs/introduction">Learn More →</ButtonLink>
     </section>
   )
 }
