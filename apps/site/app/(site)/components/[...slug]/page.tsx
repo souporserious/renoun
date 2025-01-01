@@ -40,7 +40,7 @@ export default async function Component({
     ? componentEntry
     : componentEntry.getParent()
   const mainExport = await componentEntry.getExport<any>(
-    componentEntry.getName()
+    componentEntry.getBaseName()
   )
   const description = mainExport ? mainExport.getDescription() : null
   const examplesEntry = await componentDirectory.getEntry('examples')
@@ -113,14 +113,15 @@ export default async function Component({
           {description || Content ? (
             <div className="prose">
               <h1 css={{ fontSize: '3rem', margin: 0 }}>
-                {componentEntry.getName()} {isExamplesPage ? 'Examples' : ''}
+                {componentEntry.getBaseName()}{' '}
+                {isExamplesPage ? 'Examples' : ''}
               </h1>
               {description ? <MDXRenderer value={description} /> : null}
               {Content ? <Content /> : null}
             </div>
           ) : (
             <h1 css={{ fontSize: '3rem', margin: 0 }}>
-              {componentEntry.getName()} {isExamplesPage ? 'Examples' : ''}
+              {componentEntry.getBaseName()} {isExamplesPage ? 'Examples' : ''}
             </h1>
           )}
         </div>

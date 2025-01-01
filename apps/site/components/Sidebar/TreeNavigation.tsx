@@ -30,8 +30,8 @@ async function ListNavigation({
           pathname={path}
           label={
             variant === 'title'
-              ? metadata?.label || metadata?.title || entry.getName()
-              : entry.getName()
+              ? metadata?.label || metadata?.title || entry.getBaseName()
+              : entry.getBaseName()
           }
         />
       </li>
@@ -48,8 +48,8 @@ async function ListNavigation({
           pathname={path}
           label={
             variant === 'title'
-              ? metadata?.label || metadata?.title || entry.getName()
-              : entry.getName()
+              ? metadata?.label || metadata?.title || entry.getBaseName()
+              : entry.getBaseName()
           }
         />
       </li>
@@ -72,8 +72,8 @@ async function ListNavigation({
         pathname={path}
         label={
           variant === 'title'
-            ? metadata?.label || metadata?.title || entry.getName()
-            : entry.getName()
+            ? metadata?.label || metadata?.title || entry.getBaseName()
+            : entry.getBaseName()
         }
       />
       <ul style={listStyles}>

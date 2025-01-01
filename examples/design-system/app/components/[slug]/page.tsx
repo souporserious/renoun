@@ -64,7 +64,7 @@ export default async function Component({
       }}
     >
       <div>
-        <h1>{componentEntry.getName()}</h1>
+        <h1>{componentEntry.getBaseName()}</h1>
         {Readme ? <Readme /> : null}
       </div>
 
@@ -222,7 +222,7 @@ async function SiblingLink({
       }}
     >
       <div>{direction === 'previous' ? 'Previous' : 'Next'}</div>
-      {entry.getName()}
+      {entry.getBaseName()}
     </Link>
   )
 }

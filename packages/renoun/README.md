@@ -353,7 +353,7 @@ export default async function Page({
 
   return componentExports.map((source) => (
     <section>
-      <h2>{source.getName()}</h2>
+      <h2>{source.getBaseName()}</h2>
       <APIReference source={source} />
     </section>
   ))

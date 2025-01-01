@@ -37,7 +37,7 @@ async function ComponentEntry({ entry }: { entry: FileSystemEntry<any> }) {
   return (
     <li>
       <StyledLink href={entry.getPath()}>
-        <h2 css={{ margin: 0 }}>{entry.getName()}</h2>
+        <h2 css={{ margin: 0 }}>{entry.getBaseName()}</h2>
       </StyledLink>
     </li>
   )

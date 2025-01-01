@@ -71,7 +71,7 @@ export async function SiblingLink({
         <span>
           {variant === 'title'
             ? metadata?.label || metadata?.title || entry.getTitle()
-            : entry.getName()}
+            : entry.getBaseName()}
         </span>
         {direction === 'next' ? (
           <svg
