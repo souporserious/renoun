@@ -140,7 +140,7 @@ export default async function Page() {
     <>
       <h1>Blog</h1>
       <ul>
-        {allPosts.map(async (post) => {
+        {allPosts.map((post) => {
           const path = post.getPath()
 
           return (
