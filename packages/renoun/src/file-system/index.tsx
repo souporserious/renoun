@@ -269,11 +269,6 @@ export class File<Types extends Record<string, any> = Record<string, any>> {
     return this.#extension
   }
 
-  /** Get the directory containing this file. */
-  getParent() {
-    return this.#directory
-  }
-
   /** Get the depth of the file starting from the root directory. */
   getDepth() {
     return this.#depth
@@ -425,6 +420,11 @@ export class File<Types extends Record<string, any> = Record<string, any>> {
   async getAuthors() {
     const gitMetadata = await getLocalGitFileMetadata(this.#path)
     return gitMetadata.authors
+  }
+
+  /** Get the directory containing this file. */
+  getParent() {
+    return this.#directory
   }
 
   /**
@@ -1258,11 +1258,6 @@ export class Directory<
     return file as any
   }
 
-  /** Get the directory containing this directory. */
-  getParent() {
-    return this.#directory
-  }
-
   /** Get a directory at the specified `path`. */
   async getDirectory(
     path: string | string[]
@@ -1508,6 +1503,17 @@ export class Directory<
     }
 
     return entries as any
+  }
+
+  /** Get the directory containing this directory. */
+  getParent() {
+    if (this.#directory) {
+      return this.#directory
+    }
+
+    throw new Error(
+      `[renoun] The root directory does not have a parent directory.`
+    )
   }
 
   /** Get the previous and next sibling entries (files or directories) of the parent directory. */
