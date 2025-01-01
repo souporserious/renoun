@@ -1669,13 +1669,17 @@ export class Directory<
       return false
     }
 
-    let directory = entry.getParent()
+    try {
+      let directory = entry.getParent()
 
-    while (directory) {
-      if (directory === this) {
-        return true
+      while (directory) {
+        if (directory === this) {
+          return true
+        }
+        directory = directory.getParent()
       }
-      directory = directory.getParent()
+    } catch {
+      return false
     }
 
     return false
