@@ -39,10 +39,6 @@
       "types": "./dist/assets/index.d.ts",
       "import": "./dist/assets/index.js"
     },
-    "./collections": {
-      "types": "./dist/collections/index.d.ts",
-      "import": "./dist/collections/index.js"
-    },
     "./components": {
       "types": "./dist/components/index.d.ts",
       "import": "./dist/components/index.js"
@@ -72,9 +68,6 @@
     "*": {
       "assets": [
         "./dist/assets/index.d.ts"
-      ],
-      "collections": [
-        "./dist/collections/index.d.ts"
       ],
       "components": [
         "./dist/components/index.d.ts"

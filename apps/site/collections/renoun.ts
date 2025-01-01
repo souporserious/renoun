@@ -7,36 +7,6 @@ import {
 } from 'renoun/file-system'
 import { z } from 'zod'
 
-export const CollectionsCollection = new Directory({
-  path: '../../packages/renoun/src/collections',
-  basePath: 'collections',
-})
-
-const collectionSchema = {
-  headings: z.array(
-    z.object({
-      id: z.string(),
-      text: z.string(),
-      depth: z.number(),
-    })
-  ),
-  metadata: z.object({
-    title: z.string(),
-    description: z.string(),
-  }),
-}
-
-export const CollectionsDocsCollection = new Directory({
-  path: '../../packages/renoun/src/collections/docs',
-  basePath: 'collections',
-  loaders: {
-    mdx: withSchema(collectionSchema, (path) => {
-      return import(`../../../packages/renoun/src/collections/docs/${path}.mdx`)
-    }),
-  },
-  include: (entry) => isFile(entry, 'mdx'),
-})
-
 async function filterInternalExports(entry: FileSystemEntry<any>) {
   if (isFile(entry, ['ts', 'tsx'])) {
     const fileExports = await entry.getExports()
@@ -84,7 +54,19 @@ export const ComponentsCollection = new Directory({
       (path) => import(`../../../packages/renoun/src/components/${path}.tsx`)
     ),
     mdx: withSchema(
-      collectionSchema,
+      {
+        headings: z.array(
+          z.object({
+            id: z.string(),
+            text: z.string(),
+            depth: z.number(),
+          })
+        ),
+        metadata: z.object({
+          title: z.string(),
+          description: z.string(),
+        }),
+      },
       (path) => import(`../../../packages/renoun/src/components/${path}.mdx`)
     ),
   },

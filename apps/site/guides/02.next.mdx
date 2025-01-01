@@ -6,7 +6,7 @@ export const metadata = {
   tags: ['next', 'next.js', 'framework'],
 }
 
-The renoun toolkit provides [collections](/collections), [syntax highlighting](/components/code-block), and [api references](/components/api-reference), making it easier to create accurate and engaging content for blogs, documentation, and design systems powered by Next.js.
+The renoun toolkit provides file system querying, [syntax highlighting](/components/code-block), and [api references](/components/api-reference), making it easier to create accurate and engaging content for blogs, documentation, and design systems powered by Next.js.
 
 ## Install
 
@@ -86,65 +86,33 @@ export function useMDXComponents() {
 
 This forwards the meta information added from the `@renoun/mdx` rehype plugin to the `CodeBlock` component.
 
-## Creating Collections
+## Querying the File System
 
-The `Collection` utility is a core concept in renoun. This allows you to query a collection of files from the file system. For example, to create a list of blog posts or documentation pages we can query all the MDX files in a directory:
+The `Directory` utility in renoun lets you query and load files from your project’s file system. For example, to create a list of blog posts or documentation pages we can query all MDX files in a directory:
 
 ```tsx
-import { Collection } from 'renoun/collections'
+import { Directory } from 'renoun/file-system'
 
-const posts = new Collection({
-  filePattern: 'posts/*.mdx',
+const posts = new Directory({
+  path: 'posts',
+  include: '*.mdx',
+  loaders: {
+    mdx: (path) => import(`@/posts/${path}.mdx`),
+  },
 })
 ```
 
-<Note>
-
-When creating a new collection for the first time, a dynamic import will be
-generated at the collection's call site for each targeted extension during the development and build
-process. These imports are necessary to load the targeted files from
-the file system.
-
-```ts highlightedLines="5"
-import { Collection } from 'renoun/collections'
-
-const posts = new Collection(
-  { filePattern: 'posts/*.mdx' },
-  (slug) => import(`./posts/${slug}.mdx`)
-)
-```
-
-</Note>
-
-We can then constrain the collection by providing types for the exports we're interested in querying:
+Next, we can use the `Directory` instance to render the contents of our MDX files:
 
 ```tsx
-import { Collection } from 'renoun/collections'
-import type { MDXContent } from 'renoun/mdx'
+import { Directory } from 'renoun/file-system'
 
-const posts = new Collection<{
-  default: MDXContent
-}>({
-  filePattern: 'posts/*.mdx',
-})
-```
-
-<Note>
-
-`MDXContent` is a type exported from `renoun/mdx` that represents the default export of an MDX file. This type is used to ensure that the default export of each MDX file in the collection is an MDX component.
-
-</Note>
-
-Finally, we can use this collection to render the contents of our MDX files:
-
-```tsx
-import { Collection } from 'renoun/collections'
-import type { MDXContent } from 'renoun/mdx'
-
-const posts = new Collection<{
-  default: MDXContent
-}>({
-  filePattern: 'posts/*.mdx',
+const posts = new Directory({
+  path: 'posts',
+  include: '*.mdx',
+  loaders: {
+    mdx: (path) => import(`@/posts/${path}.mdx`),
+  },
 })
 
 export default async function Page({
@@ -152,13 +120,14 @@ export default async function Page({
 }: {
   params: Promise<{ slug: string }>
 }) {
-  const post = await posts.getSource((await params).slug)
+  const slug = (await params).slug
+  const post = await posts.getFile(slug, 'mdx')
 
   if (!post) {
     return <div>Post not found</div>
   }
 
-  const Content = await post.getExport('default').getValue()
+  const Content = await post.getExportValueOrThrow('default')
 
   return <Content />
 }
@@ -168,21 +137,22 @@ This will create a collection of all MDX files in the `posts` directory and rend
 
 ### Generating Links
 
-A source's `getPath` method is used to generate a URL path for each source in the collection. For example, to generate a link to each post, you can map over the collection using `getSources` and use the `getPath` method on a source to generate a list of links:
+A directory entry’s `getPath` method can generate a route path for each entry. For example, to generate a link to each post, you can iterate over the entries and use the entry’s `getPath` method:
 
 ```tsx
-import { Collection } from 'renoun/collections'
-import type { MDXContent } from 'renoun/mdx'
+import { Directory } from 'renoun/file-system'
 import Link from 'next/link'
 
-const posts = new Collection<{
-  default: MDXContent
-}>({
-  filePattern: 'posts/*.mdx',
+const posts = new Directory({
+  path: 'posts',
+  include: '*.mdx',
+  loaders: {
+    mdx: (path) => import(`@/posts/${path}.mdx`),
+  },
 })
 
 export default async function Page() {
-  const allPosts = await posts.getSources({ depth: 1 })
+  const allPosts = await posts.getEntries()
 
   return (
     <>
@@ -213,4 +183,4 @@ Now you can start your Next.js server with renoun enabled:
 npm run dev
 ```
 
-Congratulations, you've successfully set up renoun with Next.js! You can now create [collections](/collections) or use one of the many [components](/components) available to enhance your content and documentation.
+Congratulations, you've successfully set up renoun with Next.js! You can now query other [file system](/utilities/file-system) entries or use one of the many [components](/components) available to enhance your content and documentation.
