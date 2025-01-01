@@ -37,22 +37,29 @@ export default async function Component({
   const examplesEntry = await componentDirectory.getEntry('examples')
   const exampleFiles = examplesEntry
     ? isDirectory(examplesEntry)
-      ? await examplesEntry.getEntries()
+      ? (await examplesEntry.getEntries()).filter((entry) =>
+          isFile(entry, 'tsx')
+        )
       : isFile(examplesEntry, 'tsx')
         ? [examplesEntry]
         : null
     : null
-  const isExamplesPage = slug.at(-1) === 'examples'
   const readmeFile = await componentDirectory.getFileOrThrow('readme', 'mdx')
   const Readme = await readmeFile.getExportValue('default')
   const lastCommitDate = await componentEntry.getLastCommitDate()
+  const parentDirectory = componentEntry.getParent()
+  const title = ['index', 'readme'].includes(
+    componentEntry.getBaseName().toLowerCase()
+  )
+    ? parentDirectory.getBaseName()
+    : componentEntry.getBaseName()
   const editUrl =
     process.env.NODE_ENV === 'development'
       ? componentEntry.getEditorUri()
       : isDirectory(componentEntry)
         ? componentEntry.getSourceUrl()
         : componentEntry.getEditUrl()
-  const [previousEntry, nextEntry] = await componentEntry.getSiblings()
+  const [previousEntry, nextEntry] = await parentDirectory.getSiblings()
 
   return (
     <div
@@ -64,7 +71,7 @@ export default async function Component({
       }}
     >
       <div>
-        <h1>{componentEntry.getBaseName()}</h1>
+        <h1>{title}</h1>
         {Readme ? <Readme /> : null}
       </div>
 
@@ -75,7 +82,7 @@ export default async function Component({
         </div>
       ) : null}
 
-      {/* {isExamplesPage || !exampleFiles ? null : (
+      {exampleFiles ? (
         <div>
           <h2 css={{ margin: '0 0 2rem' }}>Examples</h2>
           <ul
@@ -100,7 +107,7 @@ export default async function Component({
             })}
           </ul>
         </div>
-      )} */}
+      ) : null}
 
       <div>
         <div
