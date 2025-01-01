@@ -34,41 +34,67 @@ npm run dev
 
 Prepending the renoun CLI ensures that the renoun process starts before your framework's server. The CLI starts a web socket server that will watch for changes to the file system and communicates with renoun components.
 
-## Creating a Collection
+### Path Aliases
 
-The `Collection` utility is a core concept in renoun. This allows you to query a collection of files from the file system. For example, to create a list of blog posts or documentation pages we can query all the MDX files in a directory:
+To simplify imports, you can optionally set up path aliases in your project's `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["*"]
+    }
+  }
+}
+```
+
+With this configuration, you can now import files using the `@/` alias which we will use in the following examples.
+
+## Querying the File System
+
+The `Directory` class is a core utility in renoun. This allows you to easily query and render files and directories within a file system. For example, to create a list of blog posts or documentation pages we can query all the MDX files in a directory:
 
 ```tsx
-import { Collection } from 'renoun/collections'
+import { Directory } from 'renoun/file-system'
 
-const posts = new Collection({
-  filePattern: 'posts/*.mdx',
+const posts = new Directory({
+  path: 'posts',
+  include: '*.mdx',
 })
 ```
 
-We can then constrain the collection by providing types for the exports we're interested in querying:
+We can then add a loader to the directory that resolves the module of each MDX file using a dynamic import:
 
 ```tsx
-import { Collection } from 'renoun/collections'
-import type { MDXContent } from 'renoun/mdx'
+import { Directory } from 'renoun/file-system'
 
-const posts = new Collection<{
-  default: MDXContent
-}>({
-  filePattern: 'posts/*.mdx',
+const posts = new Directory({
+  path: 'posts',
+  include: '*.mdx',
+  loaders: {
+    mdx: (path) => import(`@/posts/${path}.mdx`),
+  },
 })
 ```
 
-Now we can use this collection to render the contents of our MDX files:
+<Note>
+
+Ensure that your bundler is configured to handle the file extension you are targeting. For example, Next.js requires [custom configuration](https://nextjs.org/docs/app/building-your-application/configuring/mdx) to handle `.mdx` files.
+
+</Note>
+
+Now we can use the configured directory to render the contents of our MDX files by querying them from the file system:
 
 ```tsx
-import { Collection } from 'renoun/collections'
-import type { MDXContent } from 'renoun/mdx'
+import { Directory } from 'renoun/file-system'
 
-const posts = new Collection<{
-  default: MDXContent
-}>({
-  filePattern: 'posts/*.mdx',
+const posts = new Directory({
+  path: 'posts',
+  include: '*.mdx',
+  loaders: {
+    mdx: (path) => import(`@/posts/${path}.mdx`),
+  },
 })
 
 export default async function Page({
@@ -76,13 +102,14 @@ export default async function Page({
 }: {
   params: Promise<{ slug: string }>
 }) {
-  const post = await posts.getSource((await params).slug)
+  const slug = (await params).slug
+  const post = await posts.getFile(slug, 'mdx')
 
   if (!post) {
     return <div>Post not found</div>
   }
 
-  const Content = await post.getExport('default').getValue()
+  const Content = await post.getExportValueOrThrow('default')
 
   return <Content />
 }
@@ -90,41 +117,24 @@ export default async function Page({
 
 This will create a collection of all MDX files in the `posts` directory and render them based on the provided slug. Collections are not limited to MDX files and can be used with _any file type_.
 
-<Note>
-
-When creating a new collection for the first time, a dynamic import will be
-generated at the collection's call site for each targeted extension during the development and build
-process. These imports are necessary to load the targeted files from
-the file system.
-
-```ts highlightedLines="5"
-import { Collection } from 'renoun/collections'
-
-const posts = new Collection(
-  { filePattern: 'posts/*.mdx' },
-  (slug) => import(`./posts/${slug}.mdx`)
-)
-```
-
-</Note>
-
 ### Generating Links
 
-A source's `getPath` method is used to generate a URL path for each source in the collection. For example, to generate a link to each post, you can map over the collection using `getSources` and use the `getPath` method on a source to generate a list of links:
+A file system entry's `getPath` method is used to generate a route path for each entry in the directory. For example, to generate a link to each post, you can map over the directory's entries using `getEntries` and then use the entry's `getPath` method to generate a list of links:
 
 ```tsx
-import { Collection } from 'renoun/collections'
-import type { MDXContent } from 'renoun/mdx'
+import { Directory } from 'renoun/file-system'
 import Link from 'next/link'
 
-const posts = new Collection<{
-  default: MDXContent
-}>({
-  filePattern: 'posts/*.mdx',
+const posts = new Directory({
+  path: 'posts',
+  include: '*.mdx',
+  loaders: {
+    mdx: (path) => import(`@/posts/${path}.mdx`),
+  },
 })
 
 export default async function Page() {
-  const allPosts = await posts.getSources({ depth: 1 })
+  const allPosts = await posts.getEntries()
 
   return (
     <>
@@ -145,9 +155,15 @@ export default async function Page() {
 }
 ```
 
+<Note>
+
+The `getEntries` method is filtered by the `include` option provided to the `Directory` constructor. This will only return entries that match the provided glob pattern. Alternatively, you can pass a function to `include` to filter entries based on custom logic.
+
+</Note>
+
 ## Authoring Content
 
-renoun helps with authoring MDX using the `@renoun/mdx` package, allowing you to write content with a mix of Markdown and React components. It is not required, but provides a set of useful defaults.
+The renoun toolkit helps with authoring MDX using the `@renoun/mdx` package, allowing you to write content with a mix of Markdown and React components. It is not required, but provides a set of useful defaults.
 
 Here's an example of how you might structure a blog post:
 
@@ -184,33 +200,32 @@ export function Button({ label, onClick, className }) {
 
 By using schemas, you can validate module exports and ensure they remain consistent and properly documented. The following is an example of how to validate a module export with renoun using [Zod](https://zod.dev/).
 
-In our Button component example, we can validate the front matter of the MDX file at the call site of our collection using a schema:
+Using our Button component example, we can validate the front matter of the MDX file at the call site of our directory using a schema:
 
 ```tsx
-import { Collection } from 'renoun/collections'
-import type { MDXContent } from 'renoun/mdx'
+import { Directory, withSchema } from 'renoun/file-system'
 import { z } from 'zod'
 
-const frontmatterSchema = z.object({
-  title: z.string(),
-  date: z.coerce.date(),
-  summary: z.string().optional(),
-  tags: z.array(z.string()).optional(),
-})
-
-export const PostsCollection = new Collection<{
-  default: MDXContent
-  frontmatter: z.infer<typeof frontmatterSchema>
-}>({
-  filePattern: '*.mdx',
-  baseDirectory: 'posts',
-  schema: {
-    frontmatter: frontmatterSchema.parse,
+export const posts = new Directory({
+  path: 'posts',
+  include: '*.mdx',
+  loaders: {
+    mdx: withSchema(
+      {
+        frontmatter: {
+          title: z.string(),
+          date: z.coerce.date(),
+          summary: z.string().optional(),
+          tags: z.array(z.string()).optional(),
+        },
+      },
+      (path) => import(`@/posts/${path}.mdx`)
+    ),
   },
 })
 ```
 
-Here we define a schema for the front matter of our MDX files and use it to validate the front matter of each file in our collection. This ensures that each file adheres to the schema and provides type safety when accessing the front matter.
+Here we define a schema for the front matter of our MDX files and use it to validate the front matter of each file in the `posts` directory. This ensures that each file adheres to the schema and provides type safety when accessing the `frontmatter` export.
 
 ## Enhancing with Components
 
