@@ -2,7 +2,7 @@ import { posts } from '@/collections'
 
 export async function generateStaticParams() {
   const allPosts = await posts.getEntries()
-  return allPosts.map((post) => ({ slug: post.getName() }))
+  return allPosts.map((post) => ({ slug: post.getBaseName() }))
 }
 
 export default async function Page({
