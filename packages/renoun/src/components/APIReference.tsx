@@ -2,13 +2,8 @@
 /** @jsxRuntime automatic */
 import { Fragment, Suspense } from 'react'
 import type { CSSObject } from 'restyle'
+import { resolve } from 'node:path'
 
-import {
-  isFileSystemSource,
-  type FileSystemSource,
-  type ExportSource,
-} from '../collections/index.js'
-import { getExportedTypes } from '../collections/get-exported-types.js'
 import {
   JavaScriptFile,
   type JavaScriptFileExport,
@@ -40,11 +35,7 @@ interface SourceString {
 
 interface SourceExport {
   /** The export source from a collection export source to get types from. */
-  source:
-    | FileSystemSource<any>
-    | ExportSource<any>
-    | JavaScriptFile<any>
-    | JavaScriptFileExport<any>
+  source: JavaScriptFile<any> | JavaScriptFileExport<any>
 }
 
 interface Filter {
@@ -70,30 +61,7 @@ async function APIReferenceAsync({
   filter,
   ...props
 }: APIReferenceProps) {
-  if (
-    source instanceof JavaScriptFile ||
-    isFileSystemSource(source) ||
-    typeof source === 'string'
-  ) {
-    let filePath
-
-    if (source instanceof JavaScriptFile) {
-      filePath = source.getRelativePath()
-    } else if (typeof source === 'string') {
-      filePath = source
-    } else if (source.isDirectory()) {
-      const indexSource = await source.getSource('index')
-      if (indexSource) {
-        filePath = indexSource.getFileSystemPath()
-      } else {
-        throw new Error(
-          `[renoun] The source "${source.getFileSystemPath()}" does not have an associated index file.`
-        )
-      }
-    } else {
-      filePath = source.getFileSystemPath()
-    }
-
+  if (typeof source === 'string') {
     let workingDirectory: string | undefined
 
     if ('workingDirectory' in props && props.workingDirectory) {
@@ -105,14 +73,17 @@ async function APIReferenceAsync({
       }
     }
 
-    const exportedTypes =
-      source instanceof JavaScriptFile
-        ? await Promise.all(
-            (await source.getExports()).map((exportSource) =>
-              exportSource.getType(filter)
-            )
-          )
-        : await getExportedTypes(filePath, filter, workingDirectory)
+    source = new JavaScriptFile({
+      path: workingDirectory ? resolve(workingDirectory, source) : source,
+    })
+  }
+
+  if (source instanceof JavaScriptFile) {
+    const exportedTypes = await Promise.all(
+      (await source.getExports()).map((exportSource) =>
+        exportSource.getType(filter)
+      )
+    )
 
     return exportedTypes
       .filter((type): type is ResolvedType => Boolean(type))
