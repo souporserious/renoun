@@ -19,7 +19,6 @@
     "remark-mdx-frontmatter": "^5.0.0",
     "renoun": "workspace:*",
     "restyle": "catalog:",
-    "webpack": "catalog:",
     "zod": "catalog:"
   }
 }

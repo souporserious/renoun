@@ -42,9 +42,6 @@ catalogs:
     valibot:
       specifier: 1.0.0-beta.9
       version: 1.0.0-beta.9
-    webpack:
-      specifier: 5.97.1
-      version: 5.97.1
     zod:
       specifier: 3.24.1
       version: 3.24.1
@@ -134,9 +131,6 @@ importers:
       valibot:
         specifier: 'catalog:'
         version: 1.0.0-beta.9(typescript@5.7.2)
-      webpack:
-        specifier: 'catalog:'
-        version: 5.97.1
       zod:
         specifier: 'catalog:'
         version: 3.24.1
@@ -182,9 +176,6 @@ importers:
       restyle:
         specifier: 'catalog:'
         version: 3.0.0(react@19.0.0)
-      webpack:
-        specifier: 'catalog:'
-        version: 5.97.1
       zod:
         specifier: 'catalog:'
         version: 3.24.1
@@ -233,9 +224,6 @@ importers:
       ts-morph:
         specifier: ^25.0.0
         version: 25.0.0
-      webpack:
-        specifier: 'catalog:'
-        version: 5.97.1
 
   packages/mdx:
     dependencies:
@@ -3440,15 +3428,19 @@ snapshots:
       '@jridgewell/set-array': 1.2.1
       '@jridgewell/sourcemap-codec': 1.5.0
       '@jridgewell/trace-mapping': 0.3.25
+    optional: true
 
-  '@jridgewell/resolve-uri@3.1.2': {}
+  '@jridgewell/resolve-uri@3.1.2':
+    optional: true
 
-  '@jridgewell/set-array@1.2.1': {}
+  '@jridgewell/set-array@1.2.1':
+    optional: true
 
   '@jridgewell/source-map@0.3.6':
     dependencies:
       '@jridgewell/gen-mapping': 0.3.8
       '@jridgewell/trace-mapping': 0.3.25
+    optional: true
 
   '@jridgewell/sourcemap-codec@1.5.0': {}
 
@@ -3456,6 +3448,7 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.0
+    optional: true
 
   '@manypkg/find-root@1.1.0':
     dependencies:
@@ -3676,11 +3669,13 @@ snapshots:
     dependencies:
       '@types/eslint': 9.6.1
       '@types/estree': 1.0.6
+    optional: true
 
   '@types/eslint@9.6.1':
     dependencies:
       '@types/estree': 1.0.6
       '@types/json-schema': 7.0.15
+    optional: true
 
   '@types/estree-jsx@1.0.5':
     dependencies:
@@ -3694,7 +3689,8 @@ snapshots:
     dependencies:
       '@types/unist': 3.0.3
 
-  '@types/json-schema@7.0.15': {}
+  '@types/json-schema@7.0.15':
+    optional: true
 
   '@types/mdast@4.0.4':
     dependencies:
@@ -3783,20 +3779,26 @@ snapshots:
     dependencies:
       '@webassemblyjs/helper-numbers': 1.13.2
       '@webassemblyjs/helper-wasm-bytecode': 1.13.2
+    optional: true
 
-  '@webassemblyjs/floating-point-hex-parser@1.13.2': {}
+  '@webassemblyjs/floating-point-hex-parser@1.13.2':
+    optional: true
 
-  '@webassemblyjs/helper-api-error@1.13.2': {}
+  '@webassemblyjs/helper-api-error@1.13.2':
+    optional: true
 
-  '@webassemblyjs/helper-buffer@1.14.1': {}
+  '@webassemblyjs/helper-buffer@1.14.1':
+    optional: true
 
   '@webassemblyjs/helper-numbers@1.13.2':
     dependencies:
       '@webassemblyjs/floating-point-hex-parser': 1.13.2
       '@webassemblyjs/helper-api-error': 1.13.2
       '@xtuc/long': 4.2.2
+    optional: true
 
-  '@webassemblyjs/helper-wasm-bytecode@1.13.2': {}
+  '@webassemblyjs/helper-wasm-bytecode@1.13.2':
+    optional: true
 
   '@webassemblyjs/helper-wasm-section@1.14.1':
     dependencies:
@@ -3804,16 +3806,20 @@ snapshots:
       '@webassemblyjs/helper-buffer': 1.14.1
       '@webassemblyjs/helper-wasm-bytecode': 1.13.2
       '@webassemblyjs/wasm-gen': 1.14.1
+    optional: true
 
   '@webassemblyjs/ieee754@1.13.2':
     dependencies:
       '@xtuc/ieee754': 1.2.0
+    optional: true
 
   '@webassemblyjs/leb128@1.13.2':
     dependencies:
       '@xtuc/long': 4.2.2
+    optional: true
 
-  '@webassemblyjs/utf8@1.13.2': {}
+  '@webassemblyjs/utf8@1.13.2':
+    optional: true
 
   '@webassemblyjs/wasm-edit@1.14.1':
     dependencies:
@@ -3825,6 +3831,7 @@ snapshots:
       '@webassemblyjs/wasm-opt': 1.14.1
       '@webassemblyjs/wasm-parser': 1.14.1
       '@webassemblyjs/wast-printer': 1.14.1
+    optional: true
 
   '@webassemblyjs/wasm-gen@1.14.1':
     dependencies:
@@ -3833,6 +3840,7 @@ snapshots:
       '@webassemblyjs/ieee754': 1.13.2
       '@webassemblyjs/leb128': 1.13.2
       '@webassemblyjs/utf8': 1.13.2
+    optional: true
 
   '@webassemblyjs/wasm-opt@1.14.1':
     dependencies:
@@ -3840,6 +3848,7 @@ snapshots:
       '@webassemblyjs/helper-buffer': 1.14.1
       '@webassemblyjs/wasm-gen': 1.14.1
       '@webassemblyjs/wasm-parser': 1.14.1
+    optional: true
 
   '@webassemblyjs/wasm-parser@1.14.1':
     dependencies:
@@ -3849,15 +3858,19 @@ snapshots:
       '@webassemblyjs/ieee754': 1.13.2
       '@webassemblyjs/leb128': 1.13.2
       '@webassemblyjs/utf8': 1.13.2
+    optional: true
 
   '@webassemblyjs/wast-printer@1.14.1':
     dependencies:
       '@webassemblyjs/ast': 1.14.1
       '@xtuc/long': 4.2.2
+    optional: true
 
-  '@xtuc/ieee754@1.2.0': {}
+  '@xtuc/ieee754@1.2.0':
+    optional: true
 
-  '@xtuc/long@4.2.2': {}
+  '@xtuc/long@4.2.2':
+    optional: true
 
   '@zeit/schemas@2.36.0': {}
 
@@ -3875,15 +3888,18 @@ snapshots:
   ajv-formats@2.1.1(ajv@8.17.1):
     optionalDependencies:
       ajv: 8.17.1
+    optional: true
 
   ajv-keywords@3.5.2(ajv@6.12.6):
     dependencies:
       ajv: 6.12.6
+    optional: true
 
   ajv-keywords@5.1.0(ajv@8.17.1):
     dependencies:
       ajv: 8.17.1
       fast-deep-equal: 3.1.3
+    optional: true
 
   ajv@6.12.6:
     dependencies:
@@ -3891,6 +3907,7 @@ snapshots:
       fast-json-stable-stringify: 2.1.0
       json-schema-traverse: 0.4.1
       uri-js: 4.4.1
+    optional: true
 
   ajv@8.12.0:
     dependencies:
@@ -3905,6 +3922,7 @@ snapshots:
       fast-uri: 3.0.3
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
+    optional: true
 
   ansi-align@3.0.1:
     dependencies:
@@ -3986,8 +4004,10 @@ snapshots:
       electron-to-chromium: 1.5.76
       node-releases: 2.0.19
       update-browserslist-db: 1.1.1(browserslist@4.24.3)
+    optional: true
 
-  buffer-from@1.1.2: {}
+  buffer-from@1.1.2:
+    optional: true
 
   busboy@1.6.0:
     dependencies:
@@ -4034,7 +4054,8 @@ snapshots:
 
   check-error@2.1.1: {}
 
-  chrome-trace-event@1.0.4: {}
+  chrome-trace-event@1.0.4:
+    optional: true
 
   ci-info@3.9.0: {}
 
@@ -4074,7 +4095,8 @@ snapshots:
 
   comma-separated-tokens@2.0.3: {}
 
-  commander@2.20.3: {}
+  commander@2.20.3:
+    optional: true
 
   compressible@2.0.18:
     dependencies:
@@ -4156,7 +4178,8 @@ snapshots:
 
   eastasianwidth@0.2.0: {}
 
-  electron-to-chromium@1.5.76: {}
+  electron-to-chromium@1.5.76:
+    optional: true
 
   emoji-regex-xs@1.0.0: {}
 
@@ -4168,6 +4191,7 @@ snapshots:
     dependencies:
       graceful-fs: 4.2.11
       tapable: 2.2.1
+    optional: true
 
   enquirer@2.4.1:
     dependencies:
@@ -4243,7 +4267,8 @@ snapshots:
       '@esbuild/win32-ia32': 0.23.1
       '@esbuild/win32-x64': 0.23.1
 
-  escalade@3.2.0: {}
+  escalade@3.2.0:
+    optional: true
 
   escape-string-regexp@5.0.0: {}
 
@@ -4251,16 +4276,20 @@ snapshots:
     dependencies:
       esrecurse: 4.3.0
       estraverse: 4.3.0
+    optional: true
 
   esprima@4.0.1: {}
 
   esrecurse@4.3.0:
     dependencies:
       estraverse: 5.3.0
+    optional: true
 
-  estraverse@4.3.0: {}
+  estraverse@4.3.0:
+    optional: true
 
-  estraverse@5.3.0: {}
+  estraverse@5.3.0:
+    optional: true
 
   estree-util-attach-comments@3.0.0:
     dependencies:
@@ -4299,7 +4328,8 @@ snapshots:
     dependencies:
       '@types/estree': 1.0.6
 
-  events@3.3.0: {}
+  events@3.3.0:
+    optional: true
 
   execa@5.1.1:
     dependencies:
@@ -4335,9 +4365,11 @@ snapshots:
       merge2: 1.4.1
       micromatch: 4.0.8
 
-  fast-json-stable-stringify@2.1.0: {}
+  fast-json-stable-stringify@2.1.0:
+    optional: true
 
-  fast-uri@3.0.3: {}
+  fast-uri@3.0.3:
+    optional: true
 
   fastq@1.18.0:
     dependencies:
@@ -4393,7 +4425,8 @@ snapshots:
     dependencies:
       is-glob: 4.0.3
 
-  glob-to-regexp@0.4.1: {}
+  glob-to-regexp@0.4.1:
+    optional: true
 
   global@4.4.0:
     dependencies:
@@ -4600,15 +4633,18 @@ snapshots:
       '@types/node': 22.10.2
       merge-stream: 2.0.0
       supports-color: 8.1.1
+    optional: true
 
   js-yaml@3.14.1:
     dependencies:
       argparse: 1.0.10
       esprima: 4.0.1
 
-  json-parse-even-better-errors@2.3.1: {}
+  json-parse-even-better-errors@2.3.1:
+    optional: true
 
-  json-schema-traverse@0.4.1: {}
+  json-schema-traverse@0.4.1:
+    optional: true
 
   json-schema-traverse@1.0.0: {}
 
@@ -4616,7 +4652,8 @@ snapshots:
     optionalDependencies:
       graceful-fs: 4.2.11
 
-  loader-runner@4.3.0: {}
+  loader-runner@4.3.0:
+    optional: true
 
   locate-path@5.0.0:
     dependencies:
@@ -5147,7 +5184,8 @@ snapshots:
 
   negotiator@0.6.3: {}
 
-  neo-async@2.6.2: {}
+  neo-async@2.6.2:
+    optional: true
 
   next@15.1.3(react-dom@19.0.0(react@19.0.0))(react@19.0.0):
     dependencies:
@@ -5184,7 +5222,8 @@ snapshots:
     dependencies:
       '@types/nlcst': 2.0.3
 
-  node-releases@2.0.19: {}
+  node-releases@2.0.19:
+    optional: true
 
   normalize-strings@1.1.1: {}
 
@@ -5313,6 +5352,7 @@ snapshots:
   randombytes@2.1.0:
     dependencies:
       safe-buffer: 5.2.1
+    optional: true
 
   range-parser@1.2.0: {}
 
@@ -5603,6 +5643,7 @@ snapshots:
       '@types/json-schema': 7.0.15
       ajv: 6.12.6
       ajv-keywords: 3.5.2(ajv@6.12.6)
+    optional: true
 
   schema-utils@4.3.0:
     dependencies:
@@ -5610,12 +5651,14 @@ snapshots:
       ajv: 8.17.1
       ajv-formats: 2.1.1(ajv@8.17.1)
       ajv-keywords: 5.1.0(ajv@8.17.1)
+    optional: true
 
   semver@7.6.3: {}
 
   serialize-javascript@6.0.2:
     dependencies:
       randombytes: 2.1.0
+    optional: true
 
   serve-handler@6.1.6:
     dependencies:
@@ -5708,8 +5751,10 @@ snapshots:
     dependencies:
       buffer-from: 1.1.2
       source-map: 0.6.1
+    optional: true
 
-  source-map@0.6.1: {}
+  source-map@0.6.1:
+    optional: true
 
   source-map@0.7.4: {}
 
@@ -5785,13 +5830,15 @@ snapshots:
   supports-color@8.1.1:
     dependencies:
       has-flag: 4.0.0
+    optional: true
 
   syllable@4.1.0:
     dependencies:
       normalize-strings: 1.1.1
       pluralize: 8.0.0
 
-  tapable@2.2.1: {}
+  tapable@2.2.1:
+    optional: true
 
   term-size@2.2.1: {}
 
@@ -5803,6 +5850,7 @@ snapshots:
       serialize-javascript: 6.0.2
       terser: 5.37.0
       webpack: 5.97.1
+    optional: true
 
   terser@5.37.0:
     dependencies:
@@ -5810,6 +5858,7 @@ snapshots:
       acorn: 8.14.0
       commander: 2.20.3
       source-map-support: 0.5.21
+    optional: true
 
   tinybench@2.9.0: {}
 
@@ -5984,6 +6033,7 @@ snapshots:
       browserslist: 4.24.3
       escalade: 3.2.0
       picocolors: 1.1.1
+    optional: true
 
   update-check@1.5.4:
     dependencies:
@@ -6099,8 +6149,10 @@ snapshots:
     dependencies:
       glob-to-regexp: 0.4.1
       graceful-fs: 4.2.11
+    optional: true
 
-  webpack-sources@3.2.3: {}
+  webpack-sources@3.2.3:
+    optional: true
 
   webpack@5.97.1:
     dependencies:
@@ -6131,6 +6183,7 @@ snapshots:
       - '@swc/core'
       - esbuild
       - uglify-js
+    optional: true
 
   which@2.0.2:
     dependencies:

@@ -28,7 +28,6 @@
     "serve": "^14.2.4",
     "shiki": "catalog:",
     "valibot": "catalog:",
-    "webpack": "catalog:",
     "zod": "catalog:",
     "zod-to-json-schema": "3.24.1"
   }
