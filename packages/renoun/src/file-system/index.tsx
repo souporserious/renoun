@@ -34,6 +34,11 @@ import {
 } from './Repository.js'
 import type { ExtractFilePatternExtension } from './types.js'
 
+export { FileSystem } from './FileSystem.js'
+export { MemoryFileSystem } from './MemoryFileSystem.js'
+export { NodeFileSystem } from './NodeFileSystem.js'
+export { Repository } from './Repository.js'
+
 type IsNever<Type> = Type extends never ? true : false
 
 /** A function that resolves the module runtime. */
