@@ -461,6 +461,12 @@ export class File<Types extends Record<string, any> = Record<string, any>> {
 
     return [previous, next]
   }
+
+  /** Get the source text of the file. */
+  async getText(): Promise<string> {
+    const fileSystem = this.#directory.getFileSystem()
+    return fileSystem.readFile(this.#path)
+  }
 }
 
 /** A JavaScript file export. */
@@ -563,7 +569,7 @@ export class JavaScriptFileExport<Value> {
     return this.#metadata?.environment
   }
 
-  /** Get the text of the export. */
+  /** Get the source text of the export. */
   getText() {
     return this.#metadata?.text
   }
