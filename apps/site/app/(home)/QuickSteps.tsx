@@ -17,12 +17,7 @@ const posts = new Directory({ path: 'posts' })`,
     content: `Query and render your file system entries programmatically using a simple API.`,
     code: `import { Directory } from 'renoun/file-system'
 
-const posts = new Directory({
-  path: 'posts',
-  loaders: {
-    mdx: (path) => import(\`@/posts/\${path}.mdx\`),
-  }
-})
+const posts = new Directory({ path: 'posts'})
 
 export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
   const slug = (await params).slug
@@ -37,7 +32,7 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
   return <Content />
 }`,
     codeBlockProps: {
-      focusedLines: '5-7,10-30',
+      focusedLines: '4-20',
     },
   },
   {
