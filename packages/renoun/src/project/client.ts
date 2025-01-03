@@ -130,29 +130,6 @@ export async function resolveTypeAtLocation(
 }
 
 /**
- * Resolve the type of an expression.
- * TODO: remove after `Collection` is removed.
- * @internal
- */
-export async function resolveType({
-  declaration,
-  projectOptions,
-  filter,
-}: {
-  declaration: Node
-  projectOptions?: ProjectOptions
-  filter?: SymbolFilter
-}): Promise<ResolvedType | undefined> {
-  await waitForRefreshingProjects()
-
-  const filePath = declaration.getSourceFile().getFilePath()
-  const position = declaration.getPos()
-  const kind = declaration.getKind()
-
-  return resolveTypeAtLocation(filePath, position, kind, filter, projectOptions)
-}
-
-/**
  * Get the exports of a file.
  * @internal
  */
