@@ -43,7 +43,10 @@ if (currentHighlighter === null) {
   })
 }
 
-/** Create a WebSocket server. */
+/**
+ * Create a WebSocket server that improves the performance of renoun components and
+ * utilities by processing type analysis and syntax highlighting in a separate process.
+ */
 export function createServer(options?: { port?: number }) {
   const server = new WebSocketServer({ port: options?.port })
 
