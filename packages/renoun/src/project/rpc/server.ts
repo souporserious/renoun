@@ -26,9 +26,9 @@ export class WebSocketServer {
 
   #handlers: { [key: string]: (params: any) => Promise<any> | any } = {}
 
-  constructor() {
+  constructor(options?: { port?: number }) {
     import('ws').then((ws) => {
-      this.#server = new ws.WebSocketServer({ port: 5996 })
+      this.#server = new ws.WebSocketServer({ port: options?.port ?? 5996 })
       this.init()
     })
   }

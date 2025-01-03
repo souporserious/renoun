@@ -44,8 +44,8 @@ if (currentHighlighter === null) {
 }
 
 /** Create a WebSocket server. */
-export function createServer() {
-  const server = new WebSocketServer()
+export function createServer(options?: { port?: number }) {
+  const server = new WebSocketServer({ port: options?.port })
 
   if (process.env.NODE_ENV === 'development') {
     watch(getRootDirectory(), { recursive: true }, (_, filename) => {
