@@ -1,5 +1,107 @@
 # renoun
 
+## 8.0.0
+
+### Major Changes
+
+- 02facb1: Removes `renoun/collections` package export and all related types and utilities that were deprecated in [v7.8.0](https://github.com/souporserious/renoun/releases/tag/renoun%407.8.0).
+
+  ### Breaking Changes
+
+  The `renoun/collections` package was removed. To upgrade, move to the `renoun/file-system` package and use the `Directory` class instead. In most cases, you can replace `Collection` with `Directory` and `CompositeCollection` with `EntryGroup`.
+
+  #### Before
+
+  ```tsx
+  import { Collection, CompositeCollection } from 'renoun/collections'
+
+  const docs = new Collection({
+    filePattern: '*.mdx',
+    baseDirectory: 'docs',
+  })
+  const components = new Collection({
+    filePattern: '*.{ts,tsx}',
+    baseDirectory: 'src/components',
+  })
+  const compositeCollection = new CompositeCollection(docs, components)
+  ```
+
+  #### After
+
+  ```tsx
+  import { Directory, EntryGroup } from 'renoun/file-system'
+
+  const docs = new Directory({
+    path: 'docs',
+    include: '*.mdx',
+  })
+  const components = new Directory({
+    path: 'src/components',
+    include: '*.{ts,tsx}',
+  })
+  const entryGroup = new EntryGroup({
+    entries: [docs, components],
+  })
+  ```
+
+### Minor Changes
+
+- fcd11af: Now `Directory#getParent` throws when called for the root directory. This makes the method easier to work with and aligns better with `File#getParent` always returning a `Directory` instance.
+- 71aa01f: Adds a default `mdx` loader to `JavaScriptFile` that uses the `MDXRenderer` component. This allows MDX files without imports to be rendered easily:
+
+  ```tsx
+  import { Directory } from 'renoun/file-system'
+
+  const posts = new Directory({ path: 'posts' })
+
+  export default async function Page({
+    params,
+  }: {
+    params: Promise<{ slug: string }>
+  }) {
+    const slug = (await params).slug
+    const post = await posts.getFileOrThrow(slug, 'mdx')
+    const Content = await post.getExportValueOrThrow('default')
+
+    return <Content />
+  }
+  ```
+
+- 21a952a: Adds `File#getText` method for retrieving the text contents of the file.
+- e107c2f: Allows instantiating `File` and `JavaScriptFile` more easily using only a `path`:
+
+  ```ts
+  import { JavaScriptFile } from 'renoun/file-system'
+
+  const indexFile = new JavaScriptFile({ path: 'src/index.ts' })
+  const indexFileExports = await indexFile.getExports()
+  ```
+
+- 919b73d: Configures the [JavaScript RegExp Engine](https://shiki.style/guide/regex-engines#javascript-regexp-engine) for `shiki`.
+- 213cc11: Adds an option for specifying the `port` number when using `createServer` from `renoun/server`:
+
+  ```ts
+  import { createServer } from 'renoun/server'
+
+  createServer({ port: 3001 })
+  ```
+
+- 446effc: Exports `FileSystem`, `MemoryFileSystem`, and `NodeFileSystem` classes for creating custom file systems as well as `Repository` for normalizing git providers.
+
+  ```js
+  import { Directory, MemoryFileSystem } from 'renoun/file-system'
+
+  const fileSystem = new MemoryFileSystem({
+    'index.mdx': '# Hello, World!',
+  })
+  const directory = new Directory({ fileSystem })
+  ```
+
+### Patch Changes
+
+- 7b90440: Fixes `getType` erroring when inferring a re-exported type.
+- 54eeb9e: Fixes duplicate exports when there are overloads.
+
 ## 7.9.0
 
 ### Minor Changes
