@@ -174,9 +174,11 @@ frontmatter.title // string
 frontmatter.date // Date
 ```
 
+Note, this does not affect the runtime behavior of the application and is purely for development-time type-checking. See the following section for runtime schema validation.
+
 #### Schema Validation
 
-You can also apply schema validation using libraries that follow the [Standard Schema Spect](https://github.com/standard-schema/standard-schema?tab=readme-ov-file#standard-schema-spec) like [Zod](https://zod.dev/), [Valibot](https://valibot.dev/), or [Arktype](https://github.com/arktypeio/arktype) to ensure file exports conform to a specific schema:
+You can also apply schema validation using libraries that follow the [Standard Schema Spec](https://github.com/standard-schema/standard-schema?tab=readme-ov-file#standard-schema-spec) like [Zod](https://zod.dev/), [Valibot](https://valibot.dev/), or [Arktype](https://github.com/arktypeio/arktype) to ensure file exports conform to a specific schema:
 
 ```tsx
 import { Directory, withSchema } from 'renoun/file-system'
