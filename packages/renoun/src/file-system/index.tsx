@@ -199,7 +199,7 @@ type WithDefaultTypes<Types> = DefaultModuleTypes & Types
 type InferDefaultModuleTypes<Extension extends string> =
   Extension extends keyof DefaultModuleTypes
     ? DefaultModuleTypes[Extension]
-    : Record<string, unknown>
+    : ModuleExports
 
 /** Infer extension types for all loaders in a module. */
 export type InferModuleLoadersTypes<Loaders extends ModuleLoaders> = {
