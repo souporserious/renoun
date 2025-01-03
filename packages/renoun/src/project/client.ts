@@ -1,4 +1,4 @@
-import type { Node, SyntaxKind } from 'ts-morph'
+import type { SyntaxKind } from 'ts-morph'
 
 import type {
   AnalyzeSourceTextOptions,
@@ -17,7 +17,6 @@ import type { resolveTypeAtLocation as baseResolveTypeAtLocation } from '../util
 import type { DistributiveOmit } from '../types.js'
 import { WebSocketClient } from './rpc/client.js'
 import { getProject } from './get-project.js'
-import { waitForRefreshingProjects } from './refresh.js'
 import type { ProjectOptions } from './types.js'
 
 let client: WebSocketClient | undefined
