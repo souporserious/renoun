@@ -625,7 +625,7 @@ export class JavaScriptFileExport<Value> {
     const fileSystem = this.#file.getParent().getFileSystem()
 
     return fileSystem.resolveTypeAtLocation(
-      this.#file.getAbsolutePath(),
+      location.path,
       location.position,
       location.kind,
       filter
