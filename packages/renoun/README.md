@@ -15,8 +15,9 @@ Meticulously crafted React components and utilities to<br/>help you author techn
 - [Why renoun?](#why-renoun)
 - [Getting Started](#getting-started)
   - [File System](#file-system)
-    - [Querying file system entries](#querying-file-system-entries)
-    - [Type checking file exports](#type-checking-file-exports)
+    - [Querying File System Entries](#querying-file-system-entries)
+    - [Generating Navigations](#generating-navigations)
+    - [Type Checking File Exports](#type-checking-file-exports)
     - [Schema Validation](#schema-validation)
   - [Components](#components)
     - [Syntax Highlighting](#syntax-highlighting)
@@ -58,32 +59,22 @@ After installing the package, you can follow the [getting started guide](https:/
 
 The File System API offers a way to organize and query file-system data in renoun. It is a powerful tool that allows you to define a schema for file exports and query those exports using a simple API.
 
-To get started with the File System API, instantiate the `Directory` class to target a set of files and directories from the file system. You can then use the `getEntry` / `getDirectory` / `getFile` methods to query a specific descendant file or directory:
+To get started with the File System API, instantiate the `Directory` class to target a set of files and directories relative to the working directory:
 
 ```tsx
 import { Directory } from 'renoun/file-system'
 
-const posts = new Directory({
-  path: 'posts',
-  loaders: {
-    mdx: (path) => import(`./posts/${path}.mdx`),
-  },
-})
+const posts = new Directory({ path: 'posts' })
 ```
 
-Here we are creating a new `Directory` instance that targets the `posts` directory relative to the working directory. We are also specifying a loader for the `mdx` file extension that will be used to load the file contents using the bundler.
+#### Querying File System Entries
 
-#### Querying file system entries
+The directory class provides a set of methods to query file system entries. For example, to get a specific file, you can use the `getFile` method:
 
 ```tsx
 import { Directory } from 'renoun/file-system'
 
-const posts = new Directory({
-  path: 'posts',
-  loaders: {
-    mdx: (path) => import(`./posts/${path}.mdx`),
-  },
-})
+const posts = new Directory({ path: 'posts' })
 
 export default async function Page({
   params,
@@ -92,18 +83,33 @@ export default async function Page({
 }) {
   const slug = (await params).slug
   const post = await posts.getFile(slug, 'mdx')
-
-  if (!post) {
-    return <div>Post not found</div>
-  }
-
   const Content = await post.getExportValue('default')
 
   return <Content />
 }
 ```
 
-You can query the entries within the directory to help with generating navigations and index pages. For example, we can include only `mdx` file extensions to generate an index page of links to all posts using the `getEntries` method:
+The File System API works with [MDX](https://www.renoun.dev/guides/mdx) out-of-the-box. However, we can also specify a loader for how to resolve the `mdx` file extension's runtime that loads the module using your bundler:
+
+```tsx
+import { Directory } from 'renoun/file-system'
+
+const posts = new Directory({
+  path: 'posts',
+  loaders: {
+    mdx: (path) => import(`./posts/${path}.mdx`),
+  },
+})
+```
+
+> [!Note]
+> Your bundler must be configured to load `mdx` extensions first for this to work.
+
+Using your bundler to resolve the module ensures a consistent runtime environment and applies the same module resolution as your application.
+
+#### Generating Navigations
+
+You can also query all of the entries within the directory to help with generating navigations and index pages. For example, we can include only `mdx` file extensions to generate an index page of links to all posts using the `getEntries` method:
 
 ```tsx
 import { Directory, withSchema } from 'renoun/file-system'
@@ -146,7 +152,7 @@ export default async function Page() {
 }
 ```
 
-#### Type checking file exports
+#### Type Checking File Exports
 
 To improve type safety, you can utilize the `withSchema` helper to specify the schema for the file’s exports:
 
