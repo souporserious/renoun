@@ -2034,15 +2034,11 @@ export type FileWithExtension<
   Extension = LoadersToExtensions<Types>,
 > = Extension extends string
   ? IsJavaScriptLikeExtension<Extension> extends true
-    ? Extension extends 'mdx'
-      ? JavaScriptFile<{ default: MDXContent } & Types[Extension]>
-      : JavaScriptFile<Types[Extension]>
+    ? JavaScriptFile<Types[Extension], any, Extension>
     : File<Types>
   : Extension extends string[]
     ? HasJavaScriptLikeExtensions<Extension> extends true
-      ? Extension extends 'mdx'
-        ? JavaScriptFile<{ default: MDXContent } & Types[Extension[number]]>
-        : JavaScriptFile<Types[Extension[number]]>
+      ? JavaScriptFile<Types[Extension[number]], any, Extension[number]>
       : File<Types>
     : File<Types>
 
