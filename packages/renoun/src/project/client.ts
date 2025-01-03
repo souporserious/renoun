@@ -21,10 +21,7 @@ import type { ProjectOptions } from './types.js'
 
 let client: WebSocketClient | undefined
 
-if (
-  process.env.NODE_ENV === 'development' ||
-  process.env.RENOUN_SERVER === 'true'
-) {
+if (process.env.RENOUN_SERVER === 'true') {
   client = new WebSocketClient()
 }
 
