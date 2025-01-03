@@ -133,7 +133,7 @@ async function resolveEntryMetadata(entry: FileSystemEntry) {
       const readmeFile = await entry.getFile('readme', 'mdx')
 
       if (readmeFile) {
-        file = readmeFile
+        file = readmeFile as unknown as JavaScriptFile<Metadata>
       } else {
         return
       }

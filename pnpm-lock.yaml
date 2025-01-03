@@ -312,9 +312,6 @@ importers:
       restyle:
         specifier: 'catalog:'
         version: 3.0.0(react@19.0.0)
-      server-only:
-        specifier: 0.0.1
-        version: 0.0.1
       shiki:
         specifier: 'catalog:'
         version: 1.24.4
@@ -2547,9 +2544,6 @@ packages:
     resolution: {integrity: sha512-qy1S34PJ/fcY8gjVGszDB3EXiPSk5FKhUa7tQe0UPRddxRidc2V6cNHPNewbE1D7MAkgLuWEt3Vw56vYy73tzQ==}
     engines: {node: '>= 14'}
     hasBin: true
-
-  server-only@0.0.1:
-    resolution: {integrity: sha512-qepMx2JxAa5jjfzxG79yPPq+8BuFToHd1hm7kI+Z4zAq1ftQiP7HcxMhDDItrbtwVeLg/cY2JnKnrcFkmiswNA==}
 
   sharp@0.33.5:
     resolution: {integrity: sha512-haPVm1EkS9pgvHrQ/F3Xy+hgcuMV0Wm9vfIBSiwZ05k+xgb0PkBQpGsAA/oWdDobNaZTH5ppvHtzCFbnSEwHVw==}
@@ -5685,8 +5679,6 @@ snapshots:
       update-check: 1.5.4
     transitivePeerDependencies:
       - supports-color
-
-  server-only@0.0.1: {}
 
   sharp@0.33.5:
     dependencies:

@@ -21,18 +21,7 @@ import {
   isJavaScriptFile,
   withSchema,
 } from './index'
-
-type Expect<Type extends true> = Type
-
-type Not<_ extends false> = true
-
-type IsNot<Type, Expected> = Type extends Expected ? false : true
-
-type IsAny<Type> = 0 extends 1 & Type ? true : false
-
-type IsNotAny<Type> = true extends IsAny<Type> ? false : true
-
-type IsNever<Type> = Type extends never ? true : false
+import type { Expect, Is, IsNotAny } from './types'
 
 describe('file system', () => {
   describe('File', () => {
@@ -91,6 +80,16 @@ describe('file system', () => {
     const entries = await fileSystem.readDirectory('fixtures/utils')
     expect(entries).toHaveLength(1)
     expect(entries[0].name).toBe('path.ts')
+  })
+
+  test('directory with no configuration', async () => {
+    const directory = new Directory()
+    const file = await directory.getFileOrThrow('fixtures/docs/index', 'mdx')
+    const Content = await file.getExportValueOrThrow('default')
+
+    type Tests = [Expect<Is<typeof Content, MDXContent>>]
+
+    expectTypeOf(Content).toMatchTypeOf<MDXContent>()
   })
 
   test('directory with virtual file system', async () => {

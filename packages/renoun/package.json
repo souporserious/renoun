@@ -119,7 +119,6 @@
     "ignore": "^7.0.0",
     "restyle": "catalog:",
     "minimatch": "^10.0.1",
-    "server-only": "0.0.1",
     "shiki": "catalog:",
     "ts-morph": "^25.0.0",
     "ws": "^8.18.0"
