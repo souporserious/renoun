@@ -1,6 +1,5 @@
 import React, { Suspense } from 'react'
 import { type CSSObject, styled } from 'restyle'
-import 'server-only'
 
 import type { MDXComponents } from '../../mdx/index.js'
 import { analyzeSourceText } from '../../project/client.js'

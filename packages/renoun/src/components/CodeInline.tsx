@@ -1,6 +1,5 @@
 import React, { Fragment, Suspense } from 'react'
 import { css, styled, type CSSObject } from 'restyle'
-import 'server-only'
 
 import { analyzeSourceText } from '../project/client.js'
 import type { Languages } from '../utils/get-language.js'
