@@ -100,7 +100,6 @@
   },
   "devDependencies": {
     "@standard-schema/spec": "1.0.0-beta.4",
-    "@types/glob-parent": "5.1.3",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@types/title": "^3.4.3",
@@ -114,8 +113,6 @@
   "dependencies": {
     "@mdx-js/mdx": "^3.1.0",
     "@renoun/mdx": "workspace:*",
-    "fast-glob": "^3.3.2",
-    "glob-parent": "^6.0.2",
     "ignore": "^7.0.0",
     "restyle": "catalog:",
     "minimatch": "^10.0.1",
