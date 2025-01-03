@@ -3,8 +3,8 @@
   "name": "@apps/site",
   "type": "module",
   "scripts": {
-    "dev": "renoun next dev",
-    "build": "node ../../packages/renoun/dist/cli next build",
+    "dev": "next dev",
+    "build": "next build",
     "start": "serve out",
     "check-broken-links": "tsx scripts/check-broken-links.ts"
   },

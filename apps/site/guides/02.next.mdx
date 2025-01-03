@@ -37,6 +37,38 @@ and utilities in your project to provide accurate and performant code analysis a
 
 </Note>
 
+Alternatively, if you would like fine-grained control over the renoun Web Socket server, you can create it manually in your project's `next.config.js` file:
+
+```js filename="01.next.config.mjs"
+import { createServer } from 'renoun/server'
+
+if (process.env.RENOUN_SERVER_STARTED !== 'true') {
+  createServer()
+  process.env.RENOUN_SERVER_STARTED = 'true'
+}
+
+export default {
+  // ...
+}
+```
+
+Using a flag ensures that the server is only started once during the build and development process.
+
+### Webpack Configuration
+
+If you are using Webpack to bundle your Next.js project, you will need to configure the `resolve.alias` option to support ESM files. This will allow you to import renoun components and utilities without errors:
+
+```js filename="02.next.config.mjs"
+export default {
+  webpack(config) {
+    config.resolve.extensionAlias = {
+      '.js': ['.ts', '.tsx', '.js'],
+    }
+    return config
+  },
+}
+```
+
 ## MDX (Optional)
 
 To enable writing MDX content in your Next.js application, we will use the [`@next/mdx`](https://github.com/vercel/next.js/tree/canary/packages/next-mdx) package. This package allows you to author MDX content in your Next.js project. Additionally, you can use the pre-configured `remarkPlugins` and `rehypePlugins` from `renoun/mdx`.
@@ -55,7 +87,7 @@ First, install the Next.js MDX plugin:
 
 Now, add the plugin to your `next.config` file while optionally including the pre-configured `remarkPlugins` and `rehypePlugins` from `renoun/mdx`:
 
-```js
+```js filename="03.next.config.mjs"
 import createMDXPlugin from '@next/mdx'
 import { remarkPlugins, rehypePlugins } from 'renoun/mdx'
 
