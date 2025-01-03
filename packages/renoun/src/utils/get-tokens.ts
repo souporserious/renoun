@@ -109,10 +109,26 @@ export async function getTokens(
   const finalLanguage = getLanguage(language)
   const theme = await getThemeColors()
   const sourceText = sourceFile ? getTrimmedSourceFileText(sourceFile) : value
-  const { tokens } = highlighter.codeToTokens(sourceText, {
-    theme: 'renoun',
-    lang: finalLanguage as any,
-  })
+  let tokens: ReturnType<Highlighter['codeToTokens']>['tokens'] = []
+
+  try {
+    const result = highlighter.codeToTokens(sourceText, {
+      theme: 'renoun',
+      // TODO: this is temporary until the JavaScript regex engine supports MDX
+      lang: finalLanguage === 'mdx' ? 'markdown' : finalLanguage,
+    })
+    tokens = result.tokens
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(
+        `[renoun] Error highlighting the following source text${
+          sourcePath ? ` at "${sourcePath}"` : ''
+        } for language "${finalLanguage}":\n\n${sourceText}\n\nReceived the following error:\n\n${error.message}`,
+        { cause: error }
+      )
+    }
+  }
+
   const sourceFileDiagnostics = getDiagnostics(
     sourceFile,
     allowErrors,

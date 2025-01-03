@@ -4,10 +4,14 @@ import { loadConfig } from './load-config.js'
 /** Converts a string of code to an array of highlighted tokens. */
 export async function createHighlighter() {
   const config = loadConfig()
+  const { createJavaScriptRegexEngine } = await import(
+    'shiki/engine/javascript'
+  )
 
   return (await import('shiki/bundle/web')).createHighlighter({
     langs: config.languages,
     themes: [getTheme()],
+    engine: createJavaScriptRegexEngine(),
   })
 }
 
