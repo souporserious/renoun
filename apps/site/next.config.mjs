@@ -14,4 +14,10 @@ export default withMDX({
   output: 'export',
   pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
   transpilePackages: ['renoun'],
+  webpack(config) {
+    config.resolve.extensionAlias = {
+      '.js': ['.ts', '.tsx', '.js'],
+    }
+    return config
+  },
 })

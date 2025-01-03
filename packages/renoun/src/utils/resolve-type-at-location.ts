@@ -1,4 +1,5 @@
-import type { Project, SyntaxKind } from 'ts-morph'
+import type { Project } from 'ts-morph'
+import { SyntaxKind } from 'ts-morph'
 
 import {
   resolveType,
@@ -40,7 +41,14 @@ export async function resolveTypeAtLocation(
     )
   }
 
-  const exportDeclaration = declaration.getFirstAncestorByKindOrThrow(kind)
+  const exportDeclaration = declaration.getFirstAncestorByKind(kind)
+
+  if (!exportDeclaration) {
+    throw new Error(
+      `[renoun] Could not resolve type for file path "${filePath}" at position "${position}". No ancestor of kind "${SyntaxKind[kind]}" was found starting from: "${declaration.getParentOrThrow().getText()}".`
+    )
+  }
+
   const exportDeclarationType = exportDeclaration.getType()
 
   if (isMemoryFileSystem) {
