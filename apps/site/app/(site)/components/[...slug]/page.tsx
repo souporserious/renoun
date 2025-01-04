@@ -2,6 +2,8 @@ import {
   isFile,
   isDirectory,
   type JavaScriptFileExport,
+  FileNotFoundError,
+  FileExportNotFoundError,
 } from 'renoun/file-system'
 import { APIReference, CodeBlock, Tokens } from 'renoun/components'
 import type { MDXHeadings } from 'renoun/mdx'
@@ -28,22 +30,43 @@ export default async function Component({
 }) {
   const slug = (await params).slug
   const componentEntry = await ComponentsCollection.getFile(slug, ['ts', 'tsx'])
-
-  if (!componentEntry) {
-    notFound()
-  }
-
-  const mdxFile = await ComponentsCollection.getFile(slug, 'mdx')
-  const mdxHeadings = await mdxFile?.getExportValue('headings')
+  const mdxFile = await ComponentsCollection.getFile(slug, 'mdx').catch(
+    (error) => {
+      if (error instanceof FileNotFoundError) {
+        return undefined
+      }
+      throw error
+    }
+  )
+  const mdxHeadings = await mdxFile
+    ?.getExportValue('headings')
+    .catch((error) => {
+      if (error instanceof FileExportNotFoundError) {
+        return undefined
+      }
+      throw error
+    })
   const Content = await mdxFile?.getExportValue('default')
   const componentDirectory = isDirectory(componentEntry)
     ? componentEntry
     : componentEntry.getParent()
-  const mainExport = await componentEntry.getExport<any>(
-    componentEntry.getBaseName()
-  )
+  const mainExport = await componentEntry
+    .getExport<any>(componentEntry.getBaseName())
+    .catch((error) => {
+      if (error instanceof FileExportNotFoundError) {
+        return undefined
+      }
+      throw error
+    })
   const description = mainExport ? mainExport.getDescription() : null
-  const examplesEntry = await componentDirectory.getEntry('examples')
+  const examplesEntry = await componentDirectory
+    .getEntry('examples')
+    .catch((error) => {
+      if (error instanceof FileNotFoundError) {
+        return undefined
+      }
+      throw error
+    })
   const exampleFiles = examplesEntry
     ? isDirectory(examplesEntry)
       ? (

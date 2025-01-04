@@ -18,8 +18,8 @@ export const posts = new Directory({
     ),
   },
   sort: async (a, b) => {
-    const aFrontmatter = await a.getExportValueOrThrow('frontmatter')
-    const bFrontmatter = await b.getExportValueOrThrow('frontmatter')
+    const aFrontmatter = await a.getExportValue('frontmatter')
+    const bFrontmatter = await b.getExportValue('frontmatter')
 
     return bFrontmatter.date.getTime() - aFrontmatter.date.getTime()
   },

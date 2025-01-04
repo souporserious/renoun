@@ -22,9 +22,9 @@ export async function DocumentEntry({
   shouldRenderTableOfContents?: boolean
   shouldRenderUpdatedAt?: boolean
 }) {
-  const Content = await file.getExportValueOrThrow('default')
-  const metadata = await file.getExportValueOrThrow('metadata')
-  const headings = await file.getExportValueOrThrow('headings')
+  const Content = await file.getExportValue('default')
+  const metadata = await file.getExportValue('metadata')
+  const headings = await file.getExportValue('headings')
   const updatedAt = shouldRenderUpdatedAt
     ? await file.getLastCommitDate()
     : null

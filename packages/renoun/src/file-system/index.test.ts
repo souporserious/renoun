@@ -20,8 +20,11 @@ import {
   isFile,
   isJavaScriptFile,
   withSchema,
+  FileNotFoundError,
+  FileExportNotFoundError,
 } from './index'
 import type { Expect, Is, IsNotAny } from './types'
+import { title } from 'node:process'
 
 describe('file system', () => {
   describe('File', () => {
@@ -84,8 +87,8 @@ describe('file system', () => {
 
   test('directory with no configuration', async () => {
     const directory = new Directory()
-    const file = await directory.getFileOrThrow('fixtures/docs/index', 'mdx')
-    const Content = await file.getExportValueOrThrow('default')
+    const file = await directory.getFile('fixtures/docs/index', 'mdx')
+    const Content = await file.getExportValue('default')
 
     type Tests = [Expect<Is<typeof Content, MDXContent>>]
 
@@ -198,7 +201,14 @@ describe('file system', () => {
       },
       include: async (entry) => {
         if (isFile(entry, 'mdx')) {
-          const value = await entry.getExportValue('frontmatter')
+          const value = await entry
+            .getExportValue('frontmatter')
+            .catch((error) => {
+              if (error instanceof FileExportNotFoundError) {
+                return undefined
+              }
+              throw error
+            })
 
           type Test = Expect<IsNotAny<typeof value>>
 
@@ -243,8 +253,8 @@ describe('file system', () => {
         }>((path) => import(`#fixtures/utils/${path}.ts`)),
       },
     })
-    const file = await directory.getFileOrThrow('path', 'ts')
-    const basenameFn = await file.getExportValueOrThrow('basename')
+    const file = await directory.getFile('path', 'ts')
+    const basenameFn = await file.getExportValue('basename')
 
     type Test = Expect<IsNotAny<typeof basenameFn>>
 
@@ -265,7 +275,7 @@ describe('file system', () => {
         },
       })
       const value = await (
-        await directory.getFileOrThrow('introduction', 'ts')
+        await directory.getFile('introduction', 'ts')
       ).getExportValue('metadata')
 
       type Test = Expect<IsNotAny<typeof value>>
@@ -291,8 +301,8 @@ describe('file system', () => {
         },
       })
       const value = await (
-        await directory.getFileOrThrow('introduction', 'ts')
-      ).getExportValueOrThrow('metadata')
+        await directory.getFile('introduction', 'ts')
+      ).getExportValue('metadata')
 
       type Test = Expect<IsNotAny<typeof value>>
 
@@ -314,7 +324,7 @@ describe('file system', () => {
         },
       })
       const value = await (
-        await directory.getFileOrThrow('introduction', 'ts')
+        await directory.getFile('introduction', 'ts')
       ).getExportValue('metadata')
 
       type Test = Expect<IsNotAny<typeof value>>
@@ -338,7 +348,7 @@ describe('file system', () => {
         },
       })
       const value = await (
-        await directory.getFileOrThrow('introduction', 'ts')
+        await directory.getFile('introduction', 'ts')
       ).getExportValue('metadata')
 
       type Test = Expect<IsNotAny<typeof value>>
@@ -364,7 +374,7 @@ describe('file system', () => {
         },
       })
       const value = await (
-        await directory.getFileOrThrow('introduction', 'ts')
+        await directory.getFile('introduction', 'ts')
       ).getExportValue('metadata')
 
       type Test = Expect<IsNotAny<typeof value>>
@@ -513,8 +523,8 @@ describe('file system', () => {
         return isFile(entry, 'ts')
       },
       sort: async (a, b) => {
-        const aSort = await a.getExportValueOrThrow('sort')
-        const bSort = await b.getExportValueOrThrow('sort')
+        const aSort = await a.getExportValue('sort')
+        const bSort = await b.getExportValue('sort')
         return aSort - bSort
       },
     })
@@ -591,9 +601,7 @@ describe('file system', () => {
       Directory
     )
     expect(
-      await (
-        await fixturesDirectory.getDirectoryOrThrow('project')
-      ).getEntry('server')
+      await (await fixturesDirectory.getDirectory('project')).getEntry('server')
     ).toBeInstanceOf(File)
   })
 
@@ -636,16 +644,18 @@ describe('file system', () => {
 
     expect(nestedFile).toBeInstanceOf(File)
 
-    const missingNestedFile = await new Directory({
+    const directory = new Directory({
       path: 'components',
       fileSystem: new MemoryFileSystem({
         'components/CodeBlock/CodeBlock.tsx': '',
         'components/CodeBlock/CodeBlock.mdx': '',
         'components/CodeBlock/CopyButton.tsx': '',
       }),
-    }).getFile(['CodeBlock', 'CopyButton'], 'mdx')
+    })
 
-    expect(missingNestedFile).toBeUndefined()
+    await expect(
+      directory.getFile(['CodeBlock', 'CopyButton'], 'mdx')
+    ).rejects.toThrowError(FileNotFoundError)
   })
 
   test('index file', async () => {
@@ -689,7 +699,7 @@ describe('file system', () => {
         ts: (path) => import(`#fixtures/project/${path}.ts`),
       },
     })
-    const file = await projectDirectory.getFileOrThrow('server', 'ts')
+    const file = await projectDirectory.getFile('server', 'ts')
 
     expect(file).toBeInstanceOf(JavaScriptFile)
     expectTypeOf(file).toMatchTypeOf<JavaScriptFile<any>>()
@@ -702,7 +712,7 @@ describe('file system', () => {
         ts: (path) => import(`#fixtures/project/${path}.ts`),
       },
     })
-    const entry = await projectDirectory.getEntryOrThrow('server')
+    const entry = await projectDirectory.getEntry('server')
 
     expect(isJavaScriptFile(entry)).toBe(true)
 
@@ -717,7 +727,7 @@ describe('file system', () => {
       'APIReference.tsx': '',
     })
     const directory = new Directory({ fileSystem })
-    const entry = await directory.getEntryOrThrow(['APIReference', 'examples'])
+    const entry = await directory.getEntry(['APIReference', 'examples'])
 
     expect(entry.getAbsolutePath()).toBe('/APIReference.examples.tsx')
   })
@@ -728,7 +738,7 @@ describe('file system', () => {
       'APIReference.tsx': '',
     })
     const directory = new Directory({ fileSystem })
-    const entry = await directory.getEntryOrThrow('APIReference')
+    const entry = await directory.getEntry('APIReference')
 
     expect(entry.getAbsolutePath()).toBe('/APIReference.tsx')
   })
@@ -738,7 +748,7 @@ describe('file system', () => {
       path: 'fixtures/components',
       basePath: 'components',
     })
-    const file = await directory.getFileOrThrow('Box')
+    const file = await directory.getFile('Box')
 
     expect(file.getRelativePath()).toBe('Box/Box.tsx')
   })
@@ -750,7 +760,7 @@ describe('file system', () => {
       'PackageInstall/PackageInstall.tsx': '',
     })
     const directory = new Directory({ fileSystem })
-    const file = await directory.getFileOrThrow('PackageInstall', 'mdx')
+    const file = await directory.getFile('PackageInstall', 'mdx')
 
     expect(file).toBeInstanceOf(File)
     expect(file.getExtension()).toBe('mdx')
@@ -761,7 +771,7 @@ describe('file system', () => {
       '01.server.ts': '',
     })
     const directory = new Directory({ fileSystem })
-    const file = await directory.getFileOrThrow('server', 'ts')
+    const file = await directory.getFile('server', 'ts')
 
     expect(file).toBeInstanceOf(File)
     expect(file.getName()).toBe('01.server.ts')
@@ -794,11 +804,11 @@ describe('file system', () => {
       fileSystem,
       pathCasing: 'kebab',
     })
-    const file = await rootDirectory.getFileOrThrow('button')
+    const file = await rootDirectory.getFile('button')
 
     expect(file.getPath()).toBe('/button')
 
-    const directory = await rootDirectory.getDirectoryOrThrow('card')
+    const directory = await rootDirectory.getDirectory('card')
 
     expect(directory.getPath()).toBe('/card')
   })
@@ -808,7 +818,7 @@ describe('file system', () => {
       'Button/Button.tsx': '',
     })
     const directory = new Directory({ fileSystem })
-    const file = await directory.getFileOrThrow('Button/Button', 'tsx')
+    const file = await directory.getFile('Button/Button', 'tsx')
 
     expect(file.getPath()).toEqual('/button')
     expect(file.getPathSegments()).toStrictEqual(['button'])
@@ -823,7 +833,7 @@ describe('file system', () => {
 
   test('all file exports', async () => {
     const projectDirectory = new Directory({ path: 'fixtures/project' })
-    const file = await projectDirectory.getFileOrThrow('server', 'ts')
+    const file = await projectDirectory.getFile('server', 'ts')
     const fileExports = await file.getExports()
     const fileExport = fileExports.at(0)!
 
@@ -835,7 +845,7 @@ describe('file system', () => {
       'use-hover.ts': 'export const useHover = () => {}',
     })
     const rootDirectory = new Directory({ fileSystem })
-    const file = await rootDirectory.getFileOrThrow('use-hover', 'ts')
+    const file = await rootDirectory.getFile('use-hover', 'ts')
     const fileExports = (await file.getExports()).map((fileExport) => ({
       name: fileExport.getName(),
     }))
@@ -845,7 +855,7 @@ describe('file system', () => {
 
   test('deduplicates file exports', async () => {
     const directory = new Directory({ path: 'fixtures' })
-    const file = await directory.getFileOrThrow('components/CodeBlock', 'tsx')
+    const file = await directory.getFile('components/CodeBlock', 'tsx')
     const fileExports = await file.getExports()
 
     expect(fileExports.map((fileExport) => fileExport.getName())).toStrictEqual(
@@ -865,8 +875,8 @@ describe('file system', () => {
         }),
       },
     })
-    const file = await rootDirectory.getFileOrThrow('use-hover', 'ts')
-    const fileExport = await file.getExportOrThrow('useHover')
+    const file = await rootDirectory.getFile('use-hover', 'ts')
+    const fileExport = await file.getExport('useHover')
     const value = await fileExport.getRuntimeValue()
 
     expectTypeOf(value).toMatchTypeOf<Function>()
@@ -882,8 +892,8 @@ describe('file system', () => {
         ),
       },
     })
-    const file = await projectDirectory.getFileOrThrow('server', 'ts')
-    const fileExport = await file.getExportOrThrow('createServer')
+    const file = await projectDirectory.getFile('server', 'ts')
+    const fileExport = await file.getExport('createServer')
     const value = await fileExport.getRuntimeValue()
 
     expectTypeOf(value).toMatchTypeOf<Function>()
@@ -924,8 +934,8 @@ describe('file system', () => {
         ),
       },
     })
-    const file = await directory.getFileOrThrow('index', 'ts')
-    const fileExport = await file.getExportOrThrow('metadata')
+    const file = await directory.getFile('index', 'ts')
+    const fileExport = await file.getExport('metadata')
 
     await expect(
       fileExport.getRuntimeValue()
@@ -963,8 +973,8 @@ describe('file system', () => {
         },
       },
     })
-    const file = await directory.getFileOrThrow('hello-world', 'ts')
-    const fileExport = await file.getExportOrThrow('metadata')
+    const file = await directory.getFile('hello-world', 'ts')
+    const fileExport = await file.getExport('metadata')
     const metadata = await fileExport.getRuntimeValue()
 
     expect(metadata).toMatchObject({
@@ -979,8 +989,8 @@ describe('file system', () => {
       'index.ts': `/**\n * Say hello.\n * @category greetings\n */\n${statementText}`,
     })
     const directory = new Directory({ fileSystem })
-    const file = await directory.getFileOrThrow('index', 'ts')
-    const fileExport = await file.getExportOrThrow('default')
+    const file = await directory.getFile('index', 'ts')
+    const fileExport = await file.getExport('default')
 
     expect(fileExport).toBeInstanceOf(JavaScriptFileExport)
     expect(fileExport.getName()).toBe('hello')
@@ -1009,8 +1019,8 @@ describe('file system', () => {
       'Button.tsx': `/**\n * A button component.\n * @category components\n */\nexport function Button() {}`,
     })
     const directory = new Directory({ fileSystem })
-    const file = await directory.getFileOrThrow('index', 'ts')
-    const fileExport = await file.getExportOrThrow('Button')
+    const file = await directory.getFile('index', 'ts')
+    const fileExport = await file.getExport('Button')
 
     expect(fileExport).toBeInstanceOf(JavaScriptFileExport)
     expect(fileExport.getName()).toBe('Button')
@@ -1021,8 +1031,8 @@ describe('file system', () => {
       'index.ts': 'export type Metadata = { title: string }',
     })
     const directory = new Directory({ fileSystem })
-    const file = await directory.getFileOrThrow('index', 'ts')
-    const fileExport = await file.getExportOrThrow('Metadata')
+    const file = await directory.getFile('index', 'ts')
+    const fileExport = await file.getExport('Metadata')
     const type = await fileExport.getType()
 
     expect(type).toBeDefined()
@@ -1037,12 +1047,12 @@ describe('file system', () => {
         ts: (path) => import(`#fixtures/utils/${path}.ts`),
       },
     })
-    const file = await directory.getFileOrThrow('path', 'ts')
+    const file = await directory.getFile('path', 'ts')
 
     expectTypeOf(file).toMatchTypeOf<JavaScriptFile<any>>()
     expect(file).toBeInstanceOf(JavaScriptFile)
 
-    const fileExport = await file.getExportOrThrow('basename')
+    const fileExport = await file.getExport('basename')
 
     expectTypeOf(fileExport).toHaveProperty('getRuntimeValue')
     expect(fileExport).toBeInstanceOf(JavaScriptFileExport)
@@ -1060,12 +1070,12 @@ describe('file system', () => {
         ts: (path) => import(`#fixtures/utils/${path}.ts`),
       },
     })
-    const file = await directory.getFileOrThrow('path', 'ts')
+    const file = await directory.getFile('path', 'ts')
 
     expectTypeOf(file).toMatchTypeOf<JavaScriptFile<any>>()
     expect(file).toBeInstanceOf(JavaScriptFile)
 
-    const fileExport = await file.getExportOrThrow('basename')
+    const fileExport = await file.getExport('basename')
 
     expectTypeOf(fileExport).toHaveProperty('getRuntimeValue')
     expect(fileExport).toBeInstanceOf(JavaScriptFileExport)
@@ -1088,7 +1098,7 @@ describe('file system', () => {
         },
       },
     })
-    const file = await directory.getFileOrThrow('index', 'ts')
+    const file = await directory.getFile('index', 'ts')
     const fileExport = await file.getExportValue('metadata')
 
     expect(fileExport).toMatchObject({ title: 'Hello, World!' })
@@ -1123,7 +1133,7 @@ describe('file system', () => {
 
   test('generates sibling navigation from file', async () => {
     const projectDirectory = new Directory({ path: 'fixtures/project' })
-    const file = await projectDirectory.getFileOrThrow('server', 'ts')
+    const file = await projectDirectory.getFile('server', 'ts')
     const [previousEntry, nextEntry] = await file.getSiblings()
 
     expect(previousEntry?.getBaseName()).toBe('rpc')
@@ -1132,7 +1142,7 @@ describe('file system', () => {
 
   test('generates sibling navigation from directory', async () => {
     const projectDirectory = new Directory({ path: 'fixtures/project' })
-    const directory = await projectDirectory.getDirectoryOrThrow('rpc')
+    const directory = await projectDirectory.getDirectory('rpc')
     const [previousEntry, nextEntry] = await directory.getSiblings()
 
     expect(previousEntry).toBeUndefined()
@@ -1145,7 +1155,7 @@ describe('file system', () => {
       'utils/index.ts': '',
     })
     const rootDirectory = new Directory({ fileSystem })
-    const indexFile = await rootDirectory.getFileOrThrow('components/index')
+    const indexFile = await rootDirectory.getFile('components/index')
     const [previousEntry, nextEntry] = await indexFile.getSiblings()
 
     expect(previousEntry).toBeUndefined()
@@ -1225,8 +1235,8 @@ describe('file system', () => {
 
   test('uses directory name when index or readme file', async () => {
     const projectDirectory = new Directory({ path: 'fixtures/components' })
-    const indexFile = await projectDirectory.getFileOrThrow('index')
-    const readmeFile = await projectDirectory.getFileOrThrow('README')
+    const indexFile = await projectDirectory.getFile('index')
+    const readmeFile = await projectDirectory.getFile('README')
 
     expect(indexFile.getParent().getBaseName()).toBe('components')
     expect(readmeFile.getParent().getBaseName()).toBe('components')
@@ -1240,12 +1250,12 @@ describe('file system', () => {
 
     expect(projectDirectory.getBasePath()).toBe('renoun')
 
-    const file = await projectDirectory.getFileOrThrow('server', 'ts')
+    const file = await projectDirectory.getFile('server', 'ts')
 
     expect(file.getPath()).toBe('/renoun/server')
     expect(file.getPathSegments()).toEqual(['renoun', 'server'])
 
-    const directory = await projectDirectory.getDirectoryOrThrow('rpc')
+    const directory = await projectDirectory.getDirectory('rpc')
 
     expect(directory.getPath({ includeBasePath: false })).toBe('/rpc')
     expect(directory.getPathSegments({ includeBasePath: false })).toEqual([
@@ -1258,8 +1268,8 @@ describe('file system', () => {
       'index.ts': `export default function () {}`,
     })
     const directory = new Directory({ fileSystem })
-    const file = await directory.getFileOrThrow('index', 'ts')
-    const fileExport = await file.getExportOrThrow('default')
+    const file = await directory.getFile('index', 'ts')
+    const fileExport = await file.getExport('default')
 
     expect(fileExport.getName()).toBe(file.getBaseName())
   })
@@ -1285,7 +1295,7 @@ describe('file system', () => {
         }),
       },
     })
-    const entry = await directory.getEntryOrThrow('Button')
+    const entry = await directory.getEntry('Button')
 
     expect(isDirectory(entry)).toBe(false)
     expect(isFile(entry)).toBe(true)
@@ -1298,7 +1308,7 @@ describe('file system', () => {
 
     expect(isDirectory(normalizedDirectory)).toBe(true)
 
-    const file = await normalizedDirectory.getFileOrThrow('README', 'mdx')
+    const file = await normalizedDirectory.getFile('README', 'mdx')
 
     expect(isDirectory(file)).toBe(false)
 
@@ -1321,7 +1331,7 @@ describe('file system', () => {
         tsx: withSchema<Metadata>(),
       },
     })
-    const file = await directory.getFileOrThrow('Button')
+    const file = await directory.getFile('Button')
     const hasTsxExtension = isFile(file, 'tsx')
 
     expect(hasTsxExtension).toBe(true)
@@ -1341,7 +1351,7 @@ describe('file system', () => {
         tsx: withSchema<Metadata>(),
       },
     })
-    const file = await directory.getFileOrThrow('Button')
+    const file = await directory.getFile('Button')
     const hasTsLikeExtension = isFile(file, ['ts', 'tsx'])
 
     expect(hasTsLikeExtension).toBe(true)
@@ -1395,12 +1405,12 @@ describe('file system', () => {
 
     expect(directory).toBeInstanceOf(Directory)
 
-    const jsFile = await group.getFileOrThrow('posts/meta', 'js')
+    const jsFile = await group.getFile('posts/meta', 'js')
 
     expect(jsFile).toBeInstanceOf(JavaScriptFile)
     expectTypeOf(jsFile).toMatchTypeOf<JavaScriptFile<any>>()
 
-    const mdxFile = await group.getFileOrThrow(
+    const mdxFile = await group.getFile(
       'posts/building-a-button-component',
       'mdx'
     )
@@ -1410,7 +1420,7 @@ describe('file system', () => {
       JavaScriptFile<{ default: MDXContent } & InferModuleExports<FrontMatter>>
     >()
 
-    const file = await group.getFileOrThrow(['posts', 'meta'], 'js')
+    const file = await group.getFile(['posts', 'meta'], 'js')
     const [previousEntry, nextEntry] = await file.getSiblings({
       entryGroup: group,
     })
@@ -1430,7 +1440,7 @@ describe('file system', () => {
     const guides = new Directory({ path: 'guides', fileSystem })
     const group = new EntryGroup({ entries: [docs, guides] })
 
-    const directory = await group.getDirectoryOrThrow('guides')
+    const directory = await group.getDirectory('guides')
     const [previousDirectoryEntry, nextDirectoryEntry] =
       await directory.getSiblings({ entryGroup: group })
 
@@ -1440,7 +1450,7 @@ describe('file system', () => {
     expect(nextDirectoryEntry).toBeDefined()
     expect(nextDirectoryEntry!.getPath()).toBe('/guides/intro')
 
-    const file = await group.getFileOrThrow('guides/intro')
+    const file = await group.getFile('guides/intro')
     const [previousFileEntry, nextFileEntry] = await file.getSiblings({
       entryGroup: group,
     })
@@ -1463,7 +1473,7 @@ describe('file system', () => {
     const entryGroup = new EntryGroup({
       entries: [directory],
     })
-    const directoryEntry = await directory.getFileOrThrow(
+    const directoryEntry = await directory.getFile(
       ['components', 'Button'],
       'tsx'
     )
@@ -1490,15 +1500,12 @@ describe('file system', () => {
     const entryGroup = new EntryGroup({
       entries: [directoryOne, directoryTwo],
     })
-    const componentEntry = await entryGroup.getEntryOrThrow(['docs', 'Button'])
+    const componentEntry = await entryGroup.getEntry(['docs', 'Button'])
 
     expect(componentEntry).toBeDefined()
     expect(componentEntry.getPath()).toBe('/docs/button')
 
-    const componentFile = await entryGroup.getFileOrThrow(
-      ['docs', 'Button'],
-      'mdx'
-    )
+    const componentFile = await entryGroup.getFile(['docs', 'Button'], 'mdx')
 
     expect(componentFile).toBeDefined()
     expect(componentFile.getPath()).toBe('/docs/button')
@@ -1523,13 +1530,13 @@ describe('file system', () => {
     const group = new EntryGroup({
       entries: [directoryA, directoryB],
     })
-    const file = await group.getFileOrThrow('Button', 'mdx')
+    const file = await group.getFile('Button', 'mdx')
 
     expectTypeOf(file).toMatchTypeOf<
       JavaScriptFile<{ default: MDXContent } & MDXTypes>
     >()
 
-    const entry = await group.getEntryOrThrow('Button')
+    const entry = await group.getEntry('Button')
 
     expect(directoryA.hasEntry(entry)).toBe(true)
 
@@ -1560,6 +1567,7 @@ describe('file system', () => {
     }
 
     const directory = new Directory({
+      path: 'fixtures/docs',
       loaders: {
         mdx: withSchema(
           {
@@ -1592,22 +1600,32 @@ describe('file system', () => {
 
   test('adds default MDXContent type to existing mdx loaders', async () => {
     const posts = new Directory({
+      fileSystem: new MemoryFileSystem({
+        'hello-world.mdx': `export const frontmatter = { title: 'Hello, World!' }\n\n# Hello, World!`,
+      }),
       loaders: {
-        mdx: withSchema<{ frontmatter: { title: string } }>(
-          (path) => import(`@/posts/${path}.mdx`)
-        ),
+        mdx: withSchema<{ frontmatter: { title: string } }>(() => {
+          return {
+            default: async () => {
+              return null
+            },
+            frontmatter: {
+              title: 'Hello, World!',
+            },
+          } as any
+        }),
       },
     })
     const file = await posts.getFile('hello-world', 'mdx')
 
     if (file) {
-      const fileExport = await file.getExportOrThrow('default')
+      const fileExport = await file.getExport('default')
       const fileExportValue = await fileExport.getRuntimeValue()
 
       expectTypeOf(fileExportValue).toMatchTypeOf<MDXContent>()
 
-      const Content = await file.getExportValueOrThrow('default')
-      const frontmatter = await file.getExportValueOrThrow('frontmatter')
+      const Content = await file.getExportValue('default')
+      const frontmatter = await file.getExportValue('frontmatter')
 
       expectTypeOf(Content).toMatchTypeOf<MDXContent>()
       expectTypeOf(frontmatter).toMatchTypeOf<{ title: string }>()
