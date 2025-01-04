@@ -107,21 +107,11 @@ Using your bundler to resolve the module ensures a consistent runtime environmen
 You can also query all of the entries within the directory to help with generating navigations and index pages. For example, we can include only `mdx` file extensions to generate an index page of links to all posts using the `getEntries` method:
 
 ```tsx
-import { Directory, withSchema } from 'renoun/file-system'
-
-interface PostType {
-  frontmatter: {
-    title: string
-    date: Date
-  }
-}
+import { Directory } from 'renoun/file-system'
 
 const posts = new Directory({
   path: 'posts',
   include: '*.mdx',
-  loaders: {
-    mdx: withSchema<PostType>((path) => import(`./posts/${path}.mdx`)),
-  },
 })
 
 export default async function Page() {
@@ -147,9 +137,11 @@ export default async function Page() {
 }
 ```
 
+The `include` filter will affect the results of the `getEntries` method, returning only entries that match the specified pattern. Specific files or directories are still accessible using the `getFile` and `getDirectory` methods.
+
 #### Type Checking File Exports
 
-To improve type safety, you can utilize the `withSchema` helper to specify the schema for the file’s exports:
+To improve type safety, you can utilize the `withSchema` helper to specify a schema for the file’s expected exports:
 
 ```tsx
 import { Directory, withSchema } from 'renoun/file-system'
