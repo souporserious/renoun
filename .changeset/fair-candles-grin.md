@@ -13,7 +13,7 @@ import { Directory } from 'renoun/file-system'
 
 const posts = new Directory({ path: 'posts' })
 
-posts.getFile('slug', 'mdxOrThrow').catch((error) => {
+posts.getFile('hello-world', 'mdx').catch((error) => {
   if (error instanceof FileNotFoundError) {
     return undefined
   }
