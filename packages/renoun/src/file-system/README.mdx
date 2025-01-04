@@ -29,12 +29,7 @@ const posts = new Directory({
   },
 })
 
-export default async function Page({
-  params,
-}: {
-  params: Promise<{ slug: string }>
-}) {
-  const slug = (await params).slug
+export default async function Page({ slug }: { slug: string }) {
   const post = await posts.getFile(slug, 'mdx')
   const Content = await post.getExportValue('default')
 

@@ -76,12 +76,7 @@ import { Directory } from 'renoun/file-system'
 
 const posts = new Directory({ path: 'posts' })
 
-export default async function Page({
-  params,
-}: {
-  params: Promise<{ slug: string }>
-}) {
-  const slug = (await params).slug
+async function Page({ slug }: { slug: string }) {
   const post = await posts.getFile(slug, 'mdx')
   const Content = await post.getExportValue('default')
 

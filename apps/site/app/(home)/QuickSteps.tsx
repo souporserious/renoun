@@ -19,8 +19,7 @@ const posts = new Directory({ path: 'posts' })`,
 
 const posts = new Directory({ path: 'posts'})
 
-export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
-  const slug = (await params).slug
+async function Page({ slug }: { slug: string }) {
   const post = await posts.getFile(slug, 'mdx')
   const Content = await post.getExportValue('default')
     
@@ -35,7 +34,7 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
     content: `Select from a growing list of pre-built components to tailor your content and documentation to fit your unique needs and brand identity.`,
     code: `import { CodeBlock, Tokens } from 'renoun/components'
 
-export function Page() {
+function Page() {
   return (
     <CodeBlock
       language="tsx"
