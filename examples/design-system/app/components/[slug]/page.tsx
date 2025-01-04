@@ -2,6 +2,7 @@ import { APIReference } from 'renoun/components'
 import {
   isFile,
   isDirectory,
+  FileNotFoundError,
   type FileSystemEntry,
   type JavaScriptFileExport,
 } from 'renoun/file-system'
@@ -31,10 +32,29 @@ export default async function Component({
   const componentDirectory = isDirectory(componentEntry)
     ? componentEntry
     : componentEntry.getParent()
-  const mainEntry =
-    (await componentDirectory.getFile(slug, ['ts', 'tsx'])) ||
-    (await componentDirectory.getFile('index', ['ts', 'tsx']))
-  const examplesEntry = await componentDirectory.getEntry('examples')
+  const mainEntry = await componentDirectory
+    .getFile(slug, ['ts', 'tsx'])
+    .catch((error) => {
+      if (error instanceof FileNotFoundError) {
+        return componentDirectory
+          .getFile('index', ['ts', 'tsx'])
+          .catch((error) => {
+            if (error instanceof FileNotFoundError) {
+              return undefined
+            }
+            throw error
+          })
+      }
+      throw error
+    })
+  const examplesEntry = await componentDirectory
+    .getEntry('examples')
+    .catch((error) => {
+      if (error instanceof FileNotFoundError) {
+        return undefined
+      }
+      throw error
+    })
   const exampleFiles = examplesEntry
     ? isDirectory(examplesEntry)
       ? (await examplesEntry.getEntries()).filter((entry) =>
@@ -44,7 +64,7 @@ export default async function Component({
         ? [examplesEntry]
         : null
     : null
-  const readmeFile = await componentDirectory.getFileOrThrow('readme', 'mdx')
+  const readmeFile = await componentDirectory.getFile('readme', 'mdx')
   const Readme = await readmeFile.getExportValue('default')
   const lastCommitDate = await componentEntry.getLastCommitDate()
   const parentDirectory = componentEntry.getParent()

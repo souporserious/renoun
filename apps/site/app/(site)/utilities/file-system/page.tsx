@@ -4,7 +4,7 @@ import { FileSystemCollection } from '@/collections'
 import { TableOfContents } from '@/components/TableOfContents'
 
 export default async function Page() {
-  const sourceFile = await FileSystemCollection.getFileOrThrow('index', 'tsx')
+  const sourceFile = await FileSystemCollection.getFile('index', 'tsx')
 
   if (!sourceFile) {
     return null
@@ -16,8 +16,8 @@ export default async function Page() {
     return null
   }
 
-  const Content = await docFile.getExportValueOrThrow('default')
-  const headings = await docFile.getExportValueOrThrow('headings')
+  const Content = await docFile.getExportValue('default')
+  const headings = await docFile.getExportValue('headings')
   const fileExports = await sourceFile.getExports()
 
   return (

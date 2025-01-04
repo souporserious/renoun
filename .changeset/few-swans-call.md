@@ -15,8 +15,8 @@ export default async function Page({
   params: Promise<{ slug: string }>
 }) {
   const slug = (await params).slug
-  const post = await posts.getFileOrThrow(slug, 'mdx')
-  const Content = await post.getExportValueOrThrow('default')
+  const post = await posts.getFile(slug, 'mdx')
+  const Content = await post.getExportValue('default')
 
   return <Content />
 }

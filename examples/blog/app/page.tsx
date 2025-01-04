@@ -10,7 +10,7 @@ export default async function Page() {
       <ul>
         {allPosts.map(async (post) => {
           const path = post.getPath()
-          const frontmatter = await post.getExportValueOrThrow('frontmatter')
+          const frontmatter = await post.getExportValue('frontmatter')
 
           return (
             <li key={path}>

@@ -104,12 +104,7 @@ export default async function Page({
 }) {
   const slug = (await params).slug
   const post = await posts.getFile(slug, 'mdx')
-
-  if (!post) {
-    return <div>Post not found</div>
-  }
-
-  const Content = await post.getExportValueOrThrow('default')
+  const Content = await post.getExportValue('default')
 
   return <Content />
 }

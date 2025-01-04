@@ -222,6 +222,25 @@ function isLoaderWithSchema<Schema extends ModuleExports>(
   return 'schema' in loader && 'runtime' in loader
 }
 
+/** Error for when a file is not found. */
+export class FileNotFoundError extends Error {
+  constructor(path: string | string[], extension?: any) {
+    const normalizedPath = Array.isArray(path) ? joinPaths(...path) : path
+    const normalizedExtension = extension
+      ? Array.isArray(extension)
+        ? extension
+        : [extension]
+      : []
+    const extensionMessage = normalizedExtension.length
+      ? ` with extension${normalizedExtension.length > 1 ? 's' : ''}: ${normalizedExtension.join(',')}`
+      : ''
+    super(
+      `[renoun] File not found at path "${normalizedPath}"${extensionMessage}`
+    )
+    this.name = 'FileNotFoundError'
+  }
+}
+
 export type PathCasings = SlugCasings
 
 /** A directory or file entry. */
@@ -322,7 +341,10 @@ export class File<
     return createSlug(this.getName(), this.#pathCasing)
   }
 
-  /** Get the path of the file. */
+  /**
+   * Get the path of the file excluding the file extension and order prefix.
+   * The configured `pathCasing` option will be used format the path segments.
+   */
   getPath(options?: {
     includeBasePath?: boolean
     includeDuplicateSegments?: boolean
@@ -504,6 +526,16 @@ export class File<
   async getText(): Promise<string> {
     const fileSystem = this.#directory.getFileSystem()
     return fileSystem.readFile(this.#path)
+  }
+}
+
+/** Error for when a file export is not found. */
+export class FileExportNotFoundError extends Error {
+  constructor(path: string, name: string) {
+    super(
+      `[renoun] JavaScriptFile export "${name}" not found in path "${path}"`
+    )
+    this.name = 'FileExportNotFoundError'
   }
 }
 
@@ -875,9 +907,7 @@ export class JavaScriptFile<
 
     return Promise.all(
       fileExports.map((exportMetadata) =>
-        this.getExportOrThrow(
-          exportMetadata.name as Extract<keyof Types, string>
-        )
+        this.getExport(exportMetadata.name as Extract<keyof Types, string>)
       )
     )
   }
@@ -885,7 +915,7 @@ export class JavaScriptFile<
   /** Get a JavaScript file export by name. */
   async getExport<ExportName extends Extract<keyof Types, string>>(
     name: ExportName
-  ): Promise<JavaScriptFileExport<Types[ExportName]> | undefined> {
+  ): Promise<JavaScriptFileExport<Types[ExportName]>> {
     if (await this.hasExport(name)) {
       if (this.#exports.has(name)) {
         return this.#exports.get(name)!
@@ -907,21 +937,8 @@ export class JavaScriptFile<
         `[renoun] JavaScript file export "${name}" could not be determined statically or at runtime for path "${this.getAbsolutePath()}". Ensure the directory has a loader defined for resolving "${this.getExtension()}" files.`
       )
     }
-  }
 
-  /** Get a JavaScript file export by name or throw an error if it does not exist. */
-  async getExportOrThrow<ExportName extends Extract<keyof Types, string>>(
-    name: ExportName
-  ): Promise<JavaScriptFileExport<Types[ExportName]>> {
-    const fileExport = await this.getExport(name)
-
-    if (fileExport === undefined) {
-      throw new Error(
-        `[renoun] JavaScript file export "${name}" not found in path "${this.getAbsolutePath()}"`
-      )
-    }
-
-    return fileExport
+    throw new FileExportNotFoundError(this.getAbsolutePath(), name)
   }
 
   /** Get the start position of an export in the JavaScript file. */
@@ -933,17 +950,9 @@ export class JavaScriptFile<
   /** Get the runtime value of an export in the JavaScript file. */
   async getExportValue<ExportName extends Extract<keyof Types, string>>(
     name: ExportName
-  ): Promise<Types[ExportName] | undefined> {
-    const fileExport = await this.getExport(name)
-    return fileExport?.getRuntimeValue() as Types[ExportName] | undefined
-  }
-
-  /** Get the runtime value of an export in the JavaScript file or throw an error if it does not exist. */
-  async getExportValueOrThrow<ExportName extends Extract<keyof Types, string>>(
-    name: ExportName
   ): Promise<Types[ExportName]> {
-    const fileExport = await this.getExportOrThrow(name)
-    return fileExport.getRuntimeValue() as Types[ExportName]
+    const fileExport = await this.getExport(name)
+    return fileExport.getRuntimeValue()
   }
 
   /** Check if an export exists in the JavaScript file. */
@@ -1152,7 +1161,14 @@ export class Directory<
     return this.#depth
   }
 
-  /** Get a file at the specified `path` and optional extensions. */
+  /**
+   * Get a file at the specified `path` in the file system. The `path` does not
+   * need to include the order prefix or extension. Additionally, an `extension`
+   * can be provided for the second argument to find the first matching file path.
+   *
+   * If the file is not found, an error will be thrown. Use `FileNotFoundError`
+   * to handle the error.
+   */
   async getFile<
     ExtensionType extends keyof LoaderTypes | string,
     const Extension extends ExtensionType | Extension[],
@@ -1160,12 +1176,11 @@ export class Directory<
     path: string | string[],
     extension?: Extension | Extension[]
   ): Promise<
-    | (Extension extends string
-        ? IsJavaScriptLikeExtension<Extension> extends true
-          ? JavaScriptFile<LoaderTypes[Extension], string, Extension>
-          : File<LoaderTypes>
-        : File<LoaderTypes>)
-    | undefined
+    Extension extends string
+      ? IsJavaScriptLikeExtension<Extension> extends true
+        ? JavaScriptFile<LoaderTypes[Extension], string, Extension>
+        : File<LoaderTypes, Extension>
+      : File<LoaderTypes>
   > {
     const segments = Array.isArray(path)
       ? path.slice(0)
@@ -1221,7 +1236,7 @@ export class Directory<
       }
 
       if (!entry) {
-        return
+        throw new FileNotFoundError(path, extension)
       }
 
       // If this is the last segment, check for file or extension match
@@ -1276,57 +1291,22 @@ export class Directory<
           }
         }
 
-        return
+        throw new FileNotFoundError(path, extension)
       }
 
       // If the entry is a directory, continue with the next segment
       if (entry instanceof Directory) {
         currentDirectory = entry
       } else {
-        return
+        throw new FileNotFoundError(path, extension)
       }
     }
 
-    return
-  }
-
-  /**
-   * Get a file at the specified `path` and optional extensions.
-   * An error will be thrown if the file is not found.
-   */
-  async getFileOrThrow<
-    ExtensionType extends keyof LoaderTypes | string,
-    const Extension extends ExtensionType | Extension[],
-  >(
-    path: string | string[],
-    extension?: Extension | Extension[]
-  ): Promise<
-    Extension extends string
-      ? IsJavaScriptLikeExtension<Extension> extends true
-        ? JavaScriptFile<LoaderTypes[Extension], string, Extension>
-        : File<LoaderTypes>
-      : File<LoaderTypes>
-  > {
-    const file = await this.getFile(path, extension)
-
-    if (!file) {
-      const normalizedPath = Array.isArray(path) ? joinPaths(...path) : path
-      const normalizedExtension = Array.isArray(extension)
-        ? extension
-        : [extension]
-
-      throw new Error(
-        `[renoun] File not found at path "${normalizedPath}" with extension${normalizedExtension.length > 1 ? 's' : ''}: ${normalizedExtension.join(',')}`
-      )
-    }
-
-    return file as any
+    throw new FileNotFoundError(path, extension)
   }
 
   /** Get a directory at the specified `path`. */
-  async getDirectory(
-    path: string | string[]
-  ): Promise<Directory<LoaderTypes> | undefined> {
+  async getDirectory(path: string | string[]): Promise<Directory<LoaderTypes>> {
     const segments = Array.isArray(path)
       ? path.slice(0)
       : path.split('/').filter(Boolean)
@@ -1356,7 +1336,7 @@ export class Directory<
       }
 
       if (!entry || !(entry instanceof Directory)) {
-        return undefined
+        throw new FileNotFoundError(path)
       }
 
       currentDirectory = entry
@@ -1365,56 +1345,16 @@ export class Directory<
     return currentDirectory
   }
 
-  /**
-   * Get a directory at the specified `path`. An error will be thrown if the
-   * directory is not found.
-   */
-  async getDirectoryOrThrow(
-    path: string | string[]
-  ): Promise<Directory<LoaderTypes>> {
-    const directory = await this.getDirectory(path)
-
-    if (!directory) {
-      throw new Error(
-        path
-          ? `[renoun] Directory not found at path "${joinPaths(...path)}"`
-          : `[renoun] Parent directory not found`
-      )
-    }
-
-    return directory
-  }
-
   /** Get a file or directory at the specified `path`. Files will be prioritized over directories. */
   async getEntry(
     path: string | string[]
-  ): Promise<FileSystemEntry<LoaderTypes> | undefined> {
-    const file = await this.getFile(path)
-
-    if (file) {
-      return file
-    }
-
-    const directory = await this.getDirectory(path)
-
-    if (directory) {
-      return directory
-    }
-  }
-
-  /** Get a file or directory at the specified `path`. An error will be thrown if the entry is not found. */
-  async getEntryOrThrow(
-    path: string | string[]
   ): Promise<FileSystemEntry<LoaderTypes>> {
-    const entry = await this.getEntry(path)
-
-    if (!entry) {
-      throw new Error(
-        `[renoun] Entry not found at path "${joinPaths(...path)}"`
-      )
-    }
-
-    return entry
+    return this.getFile(path).catch((error) => {
+      if (error instanceof FileNotFoundError) {
+        return this.getDirectory(path)
+      }
+      throw error
+    })
   }
 
   /**
@@ -1855,7 +1795,7 @@ export class EntryGroup<
   async getEntry(
     /** The path to the entry excluding leading numbers. */
     path: string | string[]
-  ): Promise<FileSystemEntry<Types> | undefined> {
+  ): Promise<FileSystemEntry<Types>> {
     const normalizedPath = Array.isArray(path)
       ? path
       : path.split('/').filter(Boolean)
@@ -1867,9 +1807,16 @@ export class EntryGroup<
 
       if (isRootDirectory || baseName === rootPath) {
         if (entry instanceof Directory) {
-          const directoryEntry = await entry.getEntry(
-            isRootDirectory ? normalizedPath : normalizedPath.slice(1)
-          )
+          const directoryEntry = await entry
+            .getEntry(
+              isRootDirectory ? normalizedPath : normalizedPath.slice(1)
+            )
+            .catch((error) => {
+              if (error instanceof FileNotFoundError) {
+                return undefined
+              }
+              throw error
+            })
 
           if (directoryEntry) {
             return directoryEntry
@@ -1881,20 +1828,8 @@ export class EntryGroup<
         }
       }
     }
-  }
 
-  /** Get an entry in the group by its path or throw an error if not found. */
-  async getEntryOrThrow(
-    /** The path to the entry excluding leading numbers. */
-    path: string | string[]
-  ): Promise<FileSystemEntry<Types>> {
-    const entry = await this.getEntry(path)
-
-    if (!entry) {
-      throw new Error(`[renoun] Entry not found at path: ${path}`)
-    }
-
-    return entry
+    throw new FileNotFoundError(path)
   }
 
   /** Get a file at the specified path and optional extension(s). */
@@ -1905,12 +1840,11 @@ export class EntryGroup<
     /** The extension or extensions to match. */
     extension?: Extension | Extension[]
   ): Promise<
-    | (Extension extends string
-        ? IsJavaScriptLikeExtension<Extension> extends true
-          ? JavaScriptFile<Types[Extension]>
-          : File<Types>
-        : File<Types>)
-    | undefined
+    Extension extends string
+      ? IsJavaScriptLikeExtension<Extension> extends true
+        ? JavaScriptFile<Types[Extension]>
+        : File<Types>
+      : File<Types>
   > {
     const normalizedPath = Array.isArray(path)
       ? path.slice(0)
@@ -1923,13 +1857,20 @@ export class EntryGroup<
 
       if (isRootDirectory || baseName === rootPath) {
         if (entry instanceof Directory) {
-          const directoryFile = (await entry.getFile(
-            isRootDirectory ? normalizedPath : normalizedPath.slice(1),
-            extension as any
-          )) as any
+          const directoryFile = await entry
+            .getFile(
+              isRootDirectory ? normalizedPath : normalizedPath.slice(1),
+              extension as any
+            )
+            .catch((error) => {
+              if (error instanceof FileNotFoundError) {
+                return undefined
+              }
+              throw error
+            })
 
           if (directoryFile) {
-            return directoryFile
+            return directoryFile as any
           }
         } else if (entry instanceof File) {
           if (extension) {
@@ -1944,46 +1885,15 @@ export class EntryGroup<
         }
       }
     }
-  }
 
-  /** Get a file at the specified path and optional extension(s), or throw an error if not found. */
-  async getFileOrThrow<Extension extends string | undefined = undefined>(
-    /** The path to the entry excluding leading numbers and the extension. */
-    path: string | string[],
-
-    /** The extension or extensions to match. */
-    extension?: Extension | Extension[]
-  ): Promise<
-    Extension extends string
-      ? IsJavaScriptLikeExtension<Extension> extends true
-        ? JavaScriptFile<Types[Extension]>
-        : File<Types>
-      : File<Types>
-  > {
-    const file = await this.getFile(path, extension)
-
-    if (!file) {
-      const normalizedPath = Array.isArray(path) ? joinPaths(...path) : path
-      const normalizedExtension = Array.isArray(extension)
-        ? extension
-        : [extension]
-      const extensionMessage = extension
-        ? ` with extension${normalizedExtension.length > 1 ? 's' : ''}`
-        : ''
-
-      throw new Error(
-        `[renoun] File not found at path "${normalizedPath}"${extensionMessage}: ${normalizedExtension.join(',')}`
-      )
-    }
-
-    return file as any
+    throw new FileNotFoundError(path, extension)
   }
 
   /** Get a directory at the specified path. */
   async getDirectory(
     /** The path to the entry excluding leading numbers. */
     path: string | string[]
-  ): Promise<Directory<Types> | undefined> {
+  ): Promise<Directory<Types>> {
     const normalizedPath = Array.isArray(path)
       ? path.slice(0)
       : path.split('/').filter(Boolean)
@@ -2005,19 +1915,8 @@ export class EntryGroup<
         }
       }
     }
-  }
 
-  /** Get a directory at the specified path or throw an error if not found. */
-  async getDirectoryOrThrow(
-    path: string | string[]
-  ): Promise<Directory<Types>> {
-    const directory = await this.getDirectory(path)
-
-    if (!directory) {
-      throw new Error(`[renoun] Directory not found at path: ${path}`)
-    }
-
-    return directory
+    throw new FileNotFoundError(path)
   }
 }
 

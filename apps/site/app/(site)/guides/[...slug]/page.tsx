@@ -15,7 +15,7 @@ export default async function Guide({
   params: Promise<{ slug: string[] }>
 }) {
   const { slug } = await params
-  const file = await GuidesCollection.getFileOrThrow(slug, 'mdx')
+  const file = await GuidesCollection.getFile(slug, 'mdx')
 
   return <DocumentEntry file={file} entryGroup={CollectionGroup} />
 }

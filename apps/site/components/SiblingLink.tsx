@@ -1,5 +1,7 @@
 import Link from 'next/link'
 import {
+  FileExportNotFoundError,
+  FileNotFoundError,
   isDirectory,
   isJavaScriptFile,
   type FileSystemEntry,
@@ -125,12 +127,24 @@ async function resolveEntryMetadata(entry: FileSystemEntry) {
   let file: JavaScriptFile<Metadata>
 
   if (isDirectory(entry)) {
-    const indexFile = await entry.getFile('index', ['ts', 'tsx'])
+    const indexFile = await entry
+      .getFile('index', ['ts', 'tsx'])
+      .catch((error) => {
+        if (error instanceof FileNotFoundError) {
+          return undefined
+        }
+        throw error
+      })
 
     if (indexFile) {
       file = indexFile
     } else {
-      const readmeFile = await entry.getFile('readme', 'mdx')
+      const readmeFile = await entry.getFile('readme', 'mdx').catch((error) => {
+        if (error instanceof FileNotFoundError) {
+          return undefined
+        }
+        throw error
+      })
 
       if (readmeFile) {
         file = readmeFile as unknown as JavaScriptFile<Metadata>
@@ -144,7 +158,12 @@ async function resolveEntryMetadata(entry: FileSystemEntry) {
     return
   }
 
-  const metadataExport = await file.getExport('metadata')
+  const metadataExport = await file.getExport('metadata').catch((error) => {
+    if (error instanceof FileExportNotFoundError) {
+      return undefined
+    }
+    throw error
+  })
 
   if (metadataExport) {
     return metadataExport.getRuntimeValue()

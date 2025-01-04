@@ -1,4 +1,5 @@
 import {
+  FileExportNotFoundError,
   isFile,
   isJavaScriptFile,
   type Directory,
@@ -19,7 +20,12 @@ async function ListNavigation({
   const depth = entry.getDepth()
   const metadata =
     variant === 'title' && isJavaScriptFile(entry)
-      ? await entry.getExportValueOrThrow('metadata')
+      ? await entry.getExportValue('metadata').catch((error) => {
+          if (error instanceof FileExportNotFoundError) {
+            return undefined
+          }
+          throw error
+        })
       : null
 
   if (isFile(entry)) {

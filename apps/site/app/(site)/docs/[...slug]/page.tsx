@@ -15,7 +15,7 @@ export default async function Doc({
   params: Promise<{ slug: string[] }>
 }) {
   const { slug } = await params
-  const file = await DocsCollection.getFileOrThrow(slug, 'mdx')
+  const file = await DocsCollection.getFile(slug, 'mdx')
 
   return <DocumentEntry file={file} entryGroup={CollectionGroup} />
 }

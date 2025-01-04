@@ -27,7 +27,7 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
     return <div>Post not found</div>
   }
 
-  const Content = await post.getExportValueOrThrow('default')
+  const Content = await post.getExportValue('default')
     
   return <Content />
 }`,
