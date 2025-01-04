@@ -22,11 +22,6 @@ const posts = new Directory({ path: 'posts'})
 export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
   const slug = (await params).slug
   const post = await posts.getFile(slug, 'mdx')
-
-  if (!post) {
-    return <div>Post not found</div>
-  }
-
   const Content = await post.getExportValue('default')
     
   return <Content />
