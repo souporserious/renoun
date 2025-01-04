@@ -111,13 +111,13 @@ export function getProject(options?: ProjectOptions) {
 
               activeRefreshingProjects.add(promise)
             } else {
-              // project.addSourceFileAtPath(filePath)
+              project.addSourceFileAtPath(filePath)
             }
           }
         } catch (error) {
           if (error instanceof Error) {
             throw new Error(
-              `[renoun] An error occurred while trying to ${eventType} the file path at: ${filename}`,
+              `[renoun] An error occurred while trying to update the project based on a change to the file system for: ${filename}`,
               { cause: error }
             )
           }
