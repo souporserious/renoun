@@ -241,8 +241,6 @@ export class FileNotFoundError extends Error {
   }
 }
 
-export type PathCasings = SlugCasings
-
 /** A directory or file entry. */
 export type FileSystemEntry<
   Types extends Record<string, any> = Record<string, any>,
@@ -254,7 +252,7 @@ export interface FileOptions<
   Path extends string = string,
 > {
   path: Path
-  pathCasing?: PathCasings
+  pathCasing?: SlugCasings
   depth?: number
   directory?: Directory<
     Types,
@@ -276,7 +274,7 @@ export class File<
   #modifier?: string
   #extension?: Extension
   #path: string
-  #pathCasing: PathCasings
+  #pathCasing: SlugCasings
   #depth: number
   #directory: Directory<Types>
 
@@ -1025,7 +1023,7 @@ interface DirectoryOptions<
   tsConfigPath?: string
 
   /** The path casing to apply to all descendant entry `getPath` and `getPathSegments` methods. */
-  pathCasing?: PathCasings
+  pathCasing?: SlugCasings
 
   /** The file system to use for reading directory entries. */
   fileSystem?: FileSystem
@@ -1049,7 +1047,7 @@ export class Directory<
 > {
   #path: string
   #depth: number = -1
-  #pathCasing: PathCasings = 'kebab'
+  #pathCasing: SlugCasings = 'kebab'
   #basePath?: string
   #tsConfigPath?: string
   #loaders?: Loaders
