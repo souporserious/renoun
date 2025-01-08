@@ -42,7 +42,10 @@ export function getProject(options?: ProjectOptions) {
     ? resolve(dirname(options.tsConfigFilePath))
     : process.cwd()
 
-  if (process.env.NODE_ENV === 'development') {
+  if (
+    process.env.NODE_ENV === 'development' &&
+    process.env.RENOUN_SERVER === 'true'
+  ) {
     watch(
       projectDirectory,
       { recursive: true },
