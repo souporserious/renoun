@@ -1,14 +1,11 @@
 import { readdirSync, readFileSync, type Dirent } from 'node:fs'
 import { readdir, readFile } from 'node:fs/promises'
-import { join, resolve, relative } from 'node:path'
-import ignore from 'ignore'
+import { join, resolve } from 'node:path'
 
-import { getRootDirectory } from '../utils/get-root-directory.js'
 import { ensureRelativePath } from '../utils/path.js'
+import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.js'
 import { FileSystem, type FileSystemOptions } from './FileSystem.js'
 import type { DirectoryEntry } from './types.js'
-
-let ignoreManager: ReturnType<typeof ignore>
 
 export class NodeFileSystem extends FileSystem {
   #tsConfigPath: string
@@ -67,32 +64,6 @@ export class NodeFileSystem extends FileSystem {
   }
 
   isFilePathGitIgnored(filePath: string): boolean {
-    const relativePath = relative(getRootDirectory(), filePath)
-
-    if (!ignoreManager) {
-      const gitignorePatterns = getGitIgnorePatterns()
-      ignoreManager = ignore().add(gitignorePatterns)
-    }
-
-    return ignoreManager.ignores(relativePath)
-  }
-}
-
-function getGitIgnorePatterns(): string[] {
-  const gitignorePath = join(getRootDirectory(), '.gitignore')
-
-  try {
-    const gitignoreContent = readFileSync(gitignorePath, 'utf-8')
-
-    return (
-      gitignoreContent
-        .split('\n')
-        .map((line) => line.trim())
-        // Filter out comments and empty lines
-        .filter((line) => line && !line.startsWith('#'))
-    )
-  } catch (error) {
-    // If .gitignore is not found, return an empty array
-    return []
+    return isFilePathGitIgnored(filePath)
   }
 }
