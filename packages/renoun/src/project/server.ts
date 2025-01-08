@@ -35,6 +35,8 @@ if (currentHighlighter === null) {
 export function createServer(options?: { port?: number }) {
   const server = new WebSocketServer({ port: options?.port })
 
+  process.env.RENOUN_SERVER = 'true'
+
   if (process.env.NODE_ENV === 'development') {
     const rootDirectory = getRootDirectory()
 

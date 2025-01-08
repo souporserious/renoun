@@ -34,10 +34,6 @@ if (firstArgument === 'next' || firstArgument === 'waku') {
     subProcess = spawn(firstArgument, [secondArgument, ...restArguments], {
       stdio: 'inherit',
       shell: true,
-      env: {
-        ...process.env,
-        RENOUN_SERVER: 'true',
-      },
     })
 
     subProcess.on('close', (code: number) => {
