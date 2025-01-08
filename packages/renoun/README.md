@@ -37,15 +37,15 @@ Meticulously crafted React components and utilities to<br/>help you author techn
 
 ## Why renoun?
 
-Ensuring accurate, discoverable, and interactive content shouldn't be a chore. Creating high-quality technical content often involves juggling multiple tools and manual workflows. With **renoun**, you can streamline the entire process using a single toolkit built from the ground up for technical creators, using JavaScript and React.
+Creating high-quality technical content often involves juggling multiple tools and manual workflows. With **renoun**, you can streamline the entire process using a single toolkit built from the ground up for technical creators, using JavaScript and React.
 
-At its core, renoun treats your content like an **interactive IDE**—all powered by an easy-to-use toolkit. Rather than displaying static text and code blocks, renoun’s React components and utilities help you seamlessly integrate live code examples, auto-generated API references, schema validation, and more. This approach not only keeps your content up-to-date, but also empowers deeper exploration of complex topics, inviting readers to engage with your content and documentation.
+At its core, renoun treats your content like an **interactive IDE**—all powered by an easy-to-use toolkit. Rather than displaying static text and code blocks, renoun’s React components and utilities help you seamlessly integrate code examples, auto-generated API references, schema validation, and more. This approach not only keeps your content up-to-date, but also empowers deeper exploration of complex topics, inviting readers to engage with your content and documentation.
 
-Here are just a few of the ways renoun enables you to deliver an engaging technical experience:
+Here are some of the key features that make renoun stand out:
 
-- **File System Utilities:** Easily query, type-check, and structure your content. By managing everything in a schema-driven way, large documentation sites or knowledge bases stay organized and maintainable.
-- **Interactive Components:** Present your audience with live, syntax-highlighted code snippets and real-time feedback. Going beyond static code blocks, renoun’s IDE-like approach lets you embed interactive examples, creating a more rich learning experience.
-- **API References:** Automatically pull in type information, signatures, and usage examples from your code. This eliminates duplication and ensures your documentation always reflects your codebase accurately.
+- **File System Utilities:** Easily query, type-check, and structure your file system. By managing files with a schema, renoun ensures that everything from personal blogs to large documentation sites and knowledge bases remain organized and accurate.
+- **Rich Code Visualization:** Showcase syntax-highlighted code snippets enhanced with embedded TypeScript quick info. More than just static blocks, renoun’s visualization features enable straightforward code previews, offering a deeper and more engaging learning experience.
+- **API References:** Automatically pull in type information, signatures, and usage examples from your code. This eliminates duplication and ensures your documentation always reflects your source code.
 
 Focus more on **what** you’re teaching and less on **how** to piece everything together. With the renoun toolkit, you have everything you need to build great technical content.
 
