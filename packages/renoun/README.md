@@ -22,6 +22,8 @@ Meticulously crafted React components and utilities to<br/>help you author techn
   - [Components](#components)
     - [Syntax Highlighting](#syntax-highlighting)
     - [API References](#api-references)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Features
 
@@ -362,6 +364,10 @@ export default async function Page({
 ---
 
 The renoun toolkit offers many different components to help facilitate writing technical content. Visit the [components](https://www.renoun.dev/components) page to learn more.
+
+## Contributing
+
+See the [Contributing Guide](/CONTRIBUTING.md) for details on how to contribute to renoun.
 
 ## License
 
