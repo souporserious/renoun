@@ -117,7 +117,7 @@ export function getProject(options?: ProjectOptions) {
         } catch (error) {
           if (error instanceof Error) {
             throw new Error(
-              `[renoun] An error occurred while trying to update the project based on a change to the file system for: ${filename}`,
+              `[renoun] An error occurred in the file system watcher while trying to ${eventType} the file path at: ${filename}`,
               { cause: error }
             )
           }
