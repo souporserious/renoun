@@ -9,7 +9,7 @@ Removes all `*OrThrow` methods from `Directory` and `EntryGroup`. This also expo
 `Directory` and `EntryGroup` no longer have `*OrThrow` methods, use the respective methods instead. To get the same functionality as before, you can catch the error and handle it accordingly:
 
 ```ts
-import { Directory } from 'renoun/file-system'
+import { Directory, FileNotFoundError } from 'renoun/file-system'
 
 const posts = new Directory({ path: 'posts' })
 
