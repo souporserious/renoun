@@ -2,25 +2,16 @@ import { Project, ts } from 'ts-morph'
 import { join, dirname, extname, resolve } from 'node:path'
 import { existsSync, watch, statSync } from 'node:fs'
 
+import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.js'
+import { resolvedTypeCache } from '../utils/resolve-type-at-location.js'
 import {
   activeRefreshingProjects,
   completeRefreshingProjects,
   startRefreshingProjects,
 } from './refresh.js'
-import { resolvedTypeCache } from '../utils/resolve-type-at-location.js'
 import type { ProjectOptions } from './types.js'
 
 const projects = new Map<string, Project>()
-
-const DEFAULT_IGNORED_PATHS = [
-  '.git',
-  '.next',
-  '.turbo',
-  'build',
-  'dist',
-  'node_modules',
-  'out',
-]
 
 /** Get the project associated with the provided options. */
 export function getProject(options?: ProjectOptions) {
@@ -60,11 +51,7 @@ export function getProject(options?: ProjectOptions) {
 
         const filePath = join(projectDirectory, filename)
 
-        if (
-          DEFAULT_IGNORED_PATHS.some((ignoredPath) =>
-            filePath.includes(ignoredPath)
-          )
-        ) {
+        if (isFilePathGitIgnored(filePath)) {
           return
         }
 

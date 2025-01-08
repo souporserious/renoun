@@ -1,5 +1,5 @@
 import { watch } from 'node:fs'
-import { minimatch } from 'minimatch'
+import { join } from 'node:path'
 import type { SyntaxKind } from 'ts-morph'
 
 import { analyzeSourceText as baseAnalyzeSourceText } from '../utils/analyze-source-text.js'
@@ -12,28 +12,13 @@ import {
   getFileExportMetadata as baseGetFileExportMetadata,
 } from '../utils/get-file-exports.js'
 import { getRootDirectory } from '../utils/get-root-directory.js'
+import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.js'
 import type { SymbolFilter } from '../utils/resolve-type.js'
 import { resolveTypeAtLocation as baseResolveTypeAtLocation } from '../utils/resolve-type-at-location.js'
 import { transpileSourceFile as baseTranspileSourceFile } from '../utils/transpile-source-file.js'
 import { WebSocketServer } from './rpc/server.js'
 import { getProject } from './get-project.js'
 import type { ProjectOptions } from './types.js'
-
-const DEFAULT_IGNORED_PATTERNS = [
-  '.git',
-  '.next',
-  '.turbo',
-  'build',
-  'dist',
-  'node_modules',
-  'out',
-].map((directory) => `**/${directory}/**`)
-
-function shouldIgnore(filePath: string): boolean {
-  return DEFAULT_IGNORED_PATTERNS.some((pattern) =>
-    minimatch(filePath, pattern)
-  )
-}
 
 let currentHighlighter: Highlighter | null = null
 
@@ -51,8 +36,10 @@ export function createServer(options?: { port?: number }) {
   const server = new WebSocketServer({ port: options?.port })
 
   if (process.env.NODE_ENV === 'development') {
-    watch(getRootDirectory(), { recursive: true }, (_, filename) => {
-      if (!filename || shouldIgnore(filename)) {
+    const rootDirectory = getRootDirectory()
+
+    watch(rootDirectory, { recursive: true }, (_, filename) => {
+      if (!filename || isFilePathGitIgnored(join(rootDirectory, filename))) {
         return
       }
 
