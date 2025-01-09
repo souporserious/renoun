@@ -1,6 +1,7 @@
 import { Project, ts } from 'ts-morph'
 import { join, dirname, extname, resolve } from 'node:path'
 import { existsSync, watch, statSync } from 'node:fs'
+import type { FSWatcher } from 'node:fs'
 
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.js'
 import { resolvedTypeCache } from '../utils/resolve-type-at-location.js'
@@ -12,6 +13,8 @@ import {
 import type { ProjectOptions } from './types.js'
 
 const projects = new Map<string, Project>()
+const directoryWatchers = new Map<string, FSWatcher>()
+const directoryToProjects = new Map<string, Set<Project>>()
 
 /** Get the project associated with the provided options. */
 export function getProject(options?: ProjectOptions) {
@@ -41,12 +44,21 @@ export function getProject(options?: ProjectOptions) {
   const projectDirectory = options?.tsConfigFilePath
     ? resolve(dirname(options.tsConfigFilePath))
     : process.cwd()
+  let associatedProjects = directoryToProjects.get(projectDirectory)
+
+  if (!associatedProjects) {
+    associatedProjects = new Set()
+    directoryToProjects.set(projectDirectory, associatedProjects)
+  }
+
+  associatedProjects.add(project)
 
   if (
     process.env.NODE_ENV === 'development' &&
-    process.env.RENOUN_SERVER === 'true'
+    process.env.RENOUN_SERVER === 'true' &&
+    !directoryWatchers.has(projectDirectory)
   ) {
-    watch(
+    const watcher = watch(
       projectDirectory,
       { recursive: true },
       async (eventType, filename) => {
@@ -63,45 +75,51 @@ export function getProject(options?: ProjectOptions) {
           : extname(filename) === ''
 
         try {
-          // The file was added, removed, or renamed
-          if (eventType === 'rename') {
-            if (existsSync(filePath)) {
-              if (isDirectory) {
-                project.addDirectoryAtPath(filePath)
+          const projectsToUpdate = directoryToProjects.get(projectDirectory)
+
+          if (!projectsToUpdate) return
+
+          for (const currentProject of projectsToUpdate) {
+            if (eventType === 'rename') {
+              if (existsSync(filePath)) {
+                if (isDirectory) {
+                  currentProject.addDirectoryAtPath(filePath)
+                } else {
+                  currentProject.addSourceFileAtPath(filePath)
+                }
+              } else if (isDirectory) {
+                const removedDirectory = currentProject.getDirectory(filePath)
+                if (removedDirectory) {
+                  removedDirectory.deleteImmediatelySync()
+                }
               } else {
-                project.addSourceFileAtPath(filePath)
+                const removedSourceFile = currentProject.getSourceFile(filePath)
+
+                if (removedSourceFile) {
+                  removedSourceFile.deleteImmediatelySync()
+                }
               }
-            } else if (isDirectory) {
-              const removedDirectory = project.getDirectory(filePath)
-              if (removedDirectory) {
-                removedDirectory.deleteImmediatelySync()
+            } else if (eventType === 'change') {
+              const previousSourceFile = currentProject.getSourceFile(filePath)
+
+              if (previousSourceFile) {
+                resolvedTypeCache.clear()
+
+                startRefreshingProjects()
+
+                const promise = previousSourceFile
+                  .refreshFromFileSystem()
+                  .finally(() => {
+                    activeRefreshingProjects.delete(promise)
+                    if (activeRefreshingProjects.size === 0) {
+                      completeRefreshingProjects()
+                    }
+                  })
+
+                activeRefreshingProjects.add(promise)
+              } else {
+                currentProject.addSourceFileAtPath(filePath)
               }
-            } else {
-              const removedSourceFile = project.getSourceFile(filePath)
-              if (removedSourceFile) {
-                removedSourceFile.deleteImmediatelySync()
-              }
-            }
-          } else if (eventType === 'change') {
-            const previousSourceFile = project.getSourceFile(filePath)
-
-            if (previousSourceFile) {
-              resolvedTypeCache.clear()
-
-              startRefreshingProjects()
-
-              const promise = previousSourceFile
-                .refreshFromFileSystem()
-                .finally(() => {
-                  activeRefreshingProjects.delete(promise)
-                  if (activeRefreshingProjects.size === 0) {
-                    completeRefreshingProjects()
-                  }
-                })
-
-              activeRefreshingProjects.add(promise)
-            } else {
-              project.addSourceFileAtPath(filePath)
             }
           }
         } catch (error) {
@@ -114,6 +132,8 @@ export function getProject(options?: ProjectOptions) {
         }
       }
     )
+
+    directoryWatchers.set(projectDirectory, watcher)
   }
 
   projects.set(projectId, project)
