@@ -124,7 +124,7 @@
     "restyle": "catalog:",
     "minimatch": "^10.0.1",
     "shiki": "catalog:",
-    "ts-morph": "^25.0.0",
+    "ts-morph": "catalog:",
     "ws": "^8.18.0"
   }
 }

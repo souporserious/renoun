@@ -16,6 +16,16 @@ To use renoun with Next.js, start with an existing or new Next.js project. If yo
 npx create-next-app@latest
 ```
 
+Next, we need to install the `renoun` package dependencies:
+
+<PackageInstall packages={['renoun', 'shiki@1.26.0', 'ts-morph@25.0.0']} />
+
+<Note>
+  The `shiki` and `ts-morph` packages are required for syntax highlighting and
+  code analysis in renoun. Next.js requires these packages to be installed
+  explicitly in your project.
+</Note>
+
 ## Setup
 
 Modify the `next` scripts located in the project's `package.json` file to use the `renoun` CLI. This will ensure that the renoun process starts before your Next.js server:
@@ -55,6 +65,12 @@ export default {
 ```
 
 Using a flag ensures that the server is only started once during the build and development process.
+
+<Note>
+  This does not currently work with a TypeScript Next.js configuration file
+  (`next.config.ts`) due to ESM issues. Please use the CLI above or a JavaScript
+  configuration file.
+</Note>
 
 ### Webpack Configuration
 
