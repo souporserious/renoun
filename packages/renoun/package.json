@@ -37,31 +37,38 @@
   "exports": {
     "./assets": {
       "types": "./dist/assets/index.d.ts",
-      "import": "./dist/assets/index.js"
+      "import": "./dist/assets/index.js",
+      "default": "./dist/assets/index.js"
     },
     "./components": {
       "types": "./dist/components/index.d.ts",
-      "import": "./dist/components/index.js"
+      "import": "./dist/components/index.js",
+      "default": "./dist/components/index.js"
     },
     "./components/*": {
       "types": "./dist/components/*.d.ts",
-      "import": "./dist/components/*.js"
+      "import": "./dist/components/*.js",
+      "default": "./dist/components/*.js"
     },
     "./file-system": {
       "types": "./dist/file-system/index.d.ts",
-      "import": "./dist/file-system/index.js"
+      "import": "./dist/file-system/index.js",
+      "default": "./dist/file-system/index.js"
     },
     "./mdx": {
       "types": "./dist/mdx/index.d.ts",
-      "import": "./dist/mdx/index.js"
+      "import": "./dist/mdx/index.js",
+      "default": "./dist/mdx/index.js"
     },
     "./project": {
       "types": "./dist/project/client.d.ts",
-      "import": "./dist/project/client.js"
+      "import": "./dist/project/client.js",
+      "default": "./dist/project/client.js"
     },
     "./server": {
       "types": "./dist/project/server.d.ts",
-      "import": "./dist/project/server.js"
+      "import": "./dist/project/server.js",
+      "default": "./dist/project/server.js"
     }
   },
   "typesVersions": {
