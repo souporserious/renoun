@@ -74,12 +74,12 @@ export function getProject(options?: ProjectOptions) {
             } else if (isDirectory) {
               const removedDirectory = project.getDirectory(filePath)
               if (removedDirectory) {
-                removedDirectory.delete()
+                removedDirectory.deleteImmediatelySync()
               }
             } else {
               const removedSourceFile = project.getSourceFile(filePath)
               if (removedSourceFile) {
-                removedSourceFile.delete()
+                removedSourceFile.deleteImmediatelySync()
               }
             }
           } else if (eventType === 'change') {
