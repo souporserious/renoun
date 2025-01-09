@@ -1,5 +1,5 @@
 import { join, posix } from 'node:path'
-import type { bundledLanguages, bundledThemes } from 'shiki/bundle/web'
+import type { bundledThemes } from 'shiki/bundle/web'
 import type { Diagnostic, Project, SourceFile, ts } from 'ts-morph'
 import tsMorph from 'ts-morph'
 
