@@ -2,7 +2,6 @@ import type { Parent } from 'unist'
 import type { Element, Properties } from 'hast'
 import { toString } from 'hast-util-to-string'
 import { visit, SKIP } from 'unist-util-visit'
-import { bundledLanguagesInfo } from 'shiki'
 
 interface CodeMetaElement extends Element {
   data?: {
@@ -15,14 +14,15 @@ interface CodeMetaElement extends Element {
   }
 }
 
-const allBundledLanguages = bundledLanguagesInfo.flatMap((language) => [
-  language.id,
-  ...(language.aliases ?? []),
-]) as [string]
-
 /** Parses `CodeBlock` and `CodeInline` props and adds them to `pre` and `code` element properties respectively. */
 export function addCodeMetaProps() {
-  return (tree: Parent) => {
+  return async (tree: Parent) => {
+    const { bundledLanguagesInfo } = await import('shiki')
+    const allBundledLanguages = bundledLanguagesInfo.flatMap((language) => [
+      language.id,
+      ...(language.aliases ?? []),
+    ]) as [string]
+
     visit(tree, 'element', (element: CodeMetaElement) => {
       if (element.tagName === 'pre') {
         const codeNode = element.children[0] as CodeMetaElement
