@@ -1,5 +1,9 @@
+import { createRequire } from 'node:module'
+
 import { findPackageDependency } from './find-package-dependency.js'
 import { extensionName } from './path.js'
+
+const require = createRequire(import.meta.url)
 
 /** Attempts to load a package if it is installed. */
 async function loadPackage<Value>(name: string, getImport: () => any) {
@@ -45,7 +49,7 @@ function loadPrettier() {
   return loadPackage<{
     format: (sourceText: string, options?: Record<string, unknown>) => string
     resolveConfig: (filename: string) => Promise<Record<string, unknown> | null>
-  }>('prettier', () => import('prettier').then((module) => module.default))
+  }>('prettier', () => require('prettier'))
 }
 
 type Formatter = (
