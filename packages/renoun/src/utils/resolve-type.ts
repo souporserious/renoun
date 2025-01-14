@@ -557,8 +557,17 @@ export function resolveType(
       return
     }
   } else {
+    const isExternalOrExported =
+      symbolMetadata.isInNodeModules ||
+      symbolMetadata.isExternal ||
+      symbolMetadata.isExported
+
     /* Attempt to resolve generic type arguments if they exist. */
-    if (aliasTypeArguments.length === 0 && genericTypeArguments.length > 0) {
+    if (
+      isExternalOrExported &&
+      aliasTypeArguments.length === 0 &&
+      genericTypeArguments.length > 0
+    ) {
       const resolvedTypeArguments = genericTypeArguments
         .map((type) => {
           const resolvedType = resolveType(
@@ -582,7 +591,7 @@ export function resolveType(
         (type) => type.kind === 'Reference'
       )
 
-      /* If the any of the type arguments are references, they need need to be linked to the generic type. */
+      /* If any of the type arguments are references link them to the generic type. */
       if (everyTypeArgumentIsReference && resolvedTypeArguments.length > 0) {
         if (!keepReferences) {
           rootReferences.delete(type)
