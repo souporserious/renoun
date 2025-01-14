@@ -1289,7 +1289,6 @@ function resolveTypeTupleElements(
       if (resolvedType) {
         return {
           ...resolvedType,
-          context: 'parameter',
           name: tupleNames[index],
         } satisfies ResolvedType
       }
