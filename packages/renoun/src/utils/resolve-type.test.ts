@@ -193,7 +193,6 @@ describe('resolveType', () => {
         {
           "arguments": [
             {
-              "context": "parameter",
               "filePath": "test.ts",
               "kind": "Reference",
               "position": {
@@ -214,7 +213,7 @@ describe('resolveType', () => {
           "filePath": "test.ts",
           "isOptional": true,
           "isReadonly": false,
-          "kind": "Generic",
+          "kind": "UtilityReference",
           "name": "promiseObject",
           "position": {
             "end": {
@@ -232,7 +231,6 @@ describe('resolveType', () => {
         {
           "arguments": [
             {
-              "context": "parameter",
               "filePath": "test.ts",
               "kind": "Function",
               "name": undefined,
@@ -307,7 +305,7 @@ describe('resolveType', () => {
           "filePath": "test.ts",
           "isOptional": false,
           "isReadonly": false,
-          "kind": "Generic",
+          "kind": "UtilityReference",
           "name": "promiseFunction",
           "position": {
             "end": {
@@ -325,7 +323,6 @@ describe('resolveType', () => {
         {
           "arguments": [
             {
-              "context": "parameter",
               "filePath": "test.ts",
               "kind": "Object",
               "name": undefined,
@@ -391,7 +388,7 @@ describe('resolveType', () => {
           "filePath": "test.ts",
           "isOptional": false,
           "isReadonly": false,
-          "kind": "Generic",
+          "kind": "UtilityReference",
           "name": "promiseVariable",
           "position": {
             "end": {
@@ -785,7 +782,6 @@ describe('resolveType', () => {
             {
               "arguments": [
                 {
-                  "context": "parameter",
                   "filePath": "test.ts",
                   "kind": "Reference",
                   "position": {
@@ -802,7 +798,7 @@ describe('resolveType', () => {
                 },
               ],
               "filePath": "test.ts",
-              "kind": "Generic",
+              "kind": "UtilityReference",
               "name": undefined,
               "position": {
                 "end": {
@@ -876,7 +872,6 @@ describe('resolveType', () => {
           "defaultValue": undefined,
           "elements": [
             {
-              "context": "parameter",
               "filePath": "test.ts",
               "kind": "String",
               "name": "a",
@@ -894,7 +889,6 @@ describe('resolveType', () => {
               "value": undefined,
             },
             {
-              "context": "parameter",
               "filePath": "test.ts",
               "kind": "Number",
               "name": "b",
@@ -912,7 +906,6 @@ describe('resolveType', () => {
               "value": undefined,
             },
             {
-              "context": "parameter",
               "filePath": "test.ts",
               "kind": "String",
               "name": "string",
@@ -1305,7 +1298,6 @@ describe('resolveType', () => {
           {
             "arguments": [
               {
-                "context": "parameter",
                 "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                 "kind": "String",
                 "name": undefined,
@@ -1323,7 +1315,6 @@ describe('resolveType', () => {
                 "value": undefined,
               },
               {
-                "context": "parameter",
                 "filePath": "test.ts",
                 "kind": "Object",
                 "name": undefined,
@@ -1368,7 +1359,7 @@ describe('resolveType', () => {
             "filePath": "test.ts",
             "isOptional": false,
             "isReadonly": false,
-            "kind": "Generic",
+            "kind": "UtilityReference",
             "name": "obj",
             "position": {
               "end": {
@@ -1626,7 +1617,7 @@ describe('resolveType', () => {
     `)
   })
 
-  test('recursive types', () => {
+  test('self referenced types', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       `
@@ -1718,7 +1709,7 @@ describe('resolveType', () => {
     `)
   })
 
-  test('implicit recursive types', () => {
+  test('mutually referenced types', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       dedent`
@@ -1909,8 +1900,28 @@ describe('resolveType', () => {
     expect(processedProperties).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "Object",
+        "kind": "Utility",
         "name": "FileSystemSource",
+        "parameters": [
+          {
+            "constraint": undefined,
+            "defaultType": undefined,
+            "filePath": "test.ts",
+            "kind": "GenericParameter",
+            "name": "Exports",
+            "position": {
+              "end": {
+                "column": 30,
+                "line": 1,
+              },
+              "start": {
+                "column": 23,
+                "line": 1,
+              },
+            },
+            "text": "Exports",
+          },
+        ],
         "position": {
           "end": {
             "column": 2,
@@ -1921,113 +1932,129 @@ describe('resolveType', () => {
             "line": 1,
           },
         },
-        "properties": [
-          {
-            "context": "property",
-            "defaultValue": undefined,
-            "filePath": "test.ts",
-            "isOptional": true,
-            "isReadonly": false,
-            "kind": "Class",
-            "name": "collection",
-            "position": {
-              "end": {
-                "column": 35,
-                "line": 2,
-              },
-              "start": {
-                "column": 3,
-                "line": 2,
-              },
+        "text": "FileSystemSource<Exports>",
+        "type": {
+          "filePath": "test.ts",
+          "kind": "Object",
+          "name": "FileSystemSource",
+          "position": {
+            "end": {
+              "column": 2,
+              "line": 3,
             },
-            "properties": [
-              {
-                "decorators": [],
-                "defaultValue": "undefined",
-                "element": {
+            "start": {
+              "column": 1,
+              "line": 1,
+            },
+          },
+          "properties": [
+            {
+              "context": "property",
+              "defaultValue": undefined,
+              "filePath": "test.ts",
+              "isOptional": true,
+              "isReadonly": false,
+              "kind": "Class",
+              "name": "collection",
+              "position": {
+                "end": {
+                  "column": 35,
+                  "line": 2,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 2,
+                },
+              },
+              "properties": [
+                {
+                  "decorators": [],
+                  "defaultValue": "undefined",
+                  "element": {
+                    "filePath": "test.ts",
+                    "kind": "Object",
+                    "name": "FileSystemSource",
+                    "position": {
+                      "end": {
+                        "column": 2,
+                        "line": 3,
+                      },
+                      "start": {
+                        "column": 1,
+                        "line": 1,
+                      },
+                    },
+                    "properties": [
+                      {
+                        "context": "property",
+                        "defaultValue": undefined,
+                        "filePath": "test.ts",
+                        "isOptional": true,
+                        "isReadonly": false,
+                        "kind": "Class",
+                        "name": "collection",
+                        "position": {
+                          "end": {
+                            "column": 35,
+                            "line": 2,
+                          },
+                          "start": {
+                            "column": 3,
+                            "line": 2,
+                          },
+                        },
+                        "properties": [
+                          {
+                            "decorators": [],
+                            "defaultValue": "undefined",
+                            "filePath": "test.ts",
+                            "isReadonly": false,
+                            "kind": "Reference",
+                            "name": "sources",
+                            "position": {
+                              "end": {
+                                "column": 52,
+                                "line": 6,
+                              },
+                              "start": {
+                                "column": 3,
+                                "line": 6,
+                              },
+                            },
+                            "scope": undefined,
+                            "text": "Array<FileSystemSource<Exports>>",
+                            "visibility": undefined,
+                          },
+                        ],
+                        "text": "Collection<Exports>",
+                      },
+                    ],
+                    "text": "FileSystemSource<Exports>",
+                  },
                   "filePath": "test.ts",
-                  "kind": "Object",
-                  "name": "FileSystemSource",
+                  "isReadonly": false,
+                  "kind": "Array",
+                  "name": "sources",
                   "position": {
                     "end": {
-                      "column": 2,
-                      "line": 3,
+                      "column": 52,
+                      "line": 6,
                     },
                     "start": {
-                      "column": 1,
-                      "line": 1,
+                      "column": 3,
+                      "line": 6,
                     },
                   },
-                  "properties": [
-                    {
-                      "context": "property",
-                      "defaultValue": undefined,
-                      "filePath": "test.ts",
-                      "isOptional": true,
-                      "isReadonly": false,
-                      "kind": "Class",
-                      "name": "collection",
-                      "position": {
-                        "end": {
-                          "column": 35,
-                          "line": 2,
-                        },
-                        "start": {
-                          "column": 3,
-                          "line": 2,
-                        },
-                      },
-                      "properties": [
-                        {
-                          "decorators": [],
-                          "defaultValue": "undefined",
-                          "filePath": "test.ts",
-                          "isReadonly": false,
-                          "kind": "Reference",
-                          "name": "sources",
-                          "position": {
-                            "end": {
-                              "column": 52,
-                              "line": 6,
-                            },
-                            "start": {
-                              "column": 3,
-                              "line": 6,
-                            },
-                          },
-                          "scope": undefined,
-                          "text": "Array<FileSystemSource<Exports>>",
-                          "visibility": undefined,
-                        },
-                      ],
-                      "text": "Collection<Exports>",
-                    },
-                  ],
-                  "text": "FileSystemSource<Exports>",
+                  "scope": undefined,
+                  "text": "Array<FileSystemSource<Exports>>",
+                  "visibility": undefined,
                 },
-                "filePath": "test.ts",
-                "isReadonly": false,
-                "kind": "Array",
-                "name": "sources",
-                "position": {
-                  "end": {
-                    "column": 52,
-                    "line": 6,
-                  },
-                  "start": {
-                    "column": 3,
-                    "line": 6,
-                  },
-                },
-                "scope": undefined,
-                "text": "Array<FileSystemSource<Exports>>",
-                "visibility": undefined,
-              },
-            ],
-            "text": "Collection<Exports>",
-          },
-        ],
-        "text": "FileSystemSource<Exports>",
+              ],
+              "text": "Collection<Exports>",
+            },
+          ],
+          "text": "FileSystemSource<Exports>",
+        },
       }
     `)
   })
@@ -2133,7 +2160,6 @@ describe('resolveType', () => {
           {
             "arguments": [
               {
-                "context": "parameter",
                 "filePath": "test.ts",
                 "kind": "Object",
                 "name": "Foo",
@@ -2178,7 +2204,7 @@ describe('resolveType', () => {
             "filePath": "test.ts",
             "isOptional": false,
             "isReadonly": false,
-            "kind": "Generic",
+            "kind": "UtilityReference",
             "name": "value",
             "position": {
               "end": {
@@ -3223,160 +3249,100 @@ describe('resolveType', () => {
     expect(types).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "Union",
-        "members": [
+        "kind": "Utility",
+        "name": "ModuleData",
+        "parameters": [
           {
-            "filePath": "test.ts",
-            "kind": "Object",
-            "name": undefined,
-            "position": {
-              "end": {
-                "column": 43,
-                "line": 3,
-              },
-              "start": {
-                "column": 7,
-                "line": 3,
-              },
-            },
-            "properties": [
-              {
-                "arguments": [
-                  {
-                    "context": "parameter",
-                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                    "kind": "String",
-                    "name": undefined,
-                    "position": {
-                      "end": {
-                        "column": 4402,
-                        "line": 4,
-                      },
-                      "start": {
-                        "column": 3482,
-                        "line": 4,
-                      },
-                    },
-                    "text": "string",
-                    "value": undefined,
-                  },
-                  {
-                    "context": "parameter",
-                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                    "kind": "Primitive",
-                    "position": {
-                      "end": {
-                        "column": 315,
-                        "line": 6,
-                      },
-                      "start": {
-                        "column": 266,
-                        "line": 6,
-                      },
-                    },
-                    "text": "any",
-                  },
-                ],
-                "context": "property",
-                "defaultValue": undefined,
-                "filePath": "test.ts",
-                "isOptional": false,
-                "isReadonly": false,
-                "kind": "Generic",
-                "name": "frontMatter",
-                "position": {
-                  "end": {
-                    "column": 41,
-                    "line": 3,
-                  },
-                  "start": {
-                    "column": 9,
-                    "line": 3,
-                  },
+            "constraint": {
+              "filePath": "test.ts",
+              "kind": "Object",
+              "name": undefined,
+              "position": {
+                "end": {
+                  "column": 66,
+                  "line": 1,
                 },
-                "text": "Record<string, any>",
-                "typeName": "Record",
+                "start": {
+                  "column": 30,
+                  "line": 1,
+                },
               },
-            ],
-            "text": "{ frontMatter: Record<string, any>; }",
-          },
-          {
+              "properties": [
+                {
+                  "arguments": [
+                    {
+                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                      "kind": "String",
+                      "name": undefined,
+                      "position": {
+                        "end": {
+                          "column": 4402,
+                          "line": 4,
+                        },
+                        "start": {
+                          "column": 3482,
+                          "line": 4,
+                        },
+                      },
+                      "text": "string",
+                      "value": undefined,
+                    },
+                    {
+                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                      "kind": "Primitive",
+                      "position": {
+                        "end": {
+                          "column": 315,
+                          "line": 6,
+                        },
+                        "start": {
+                          "column": 266,
+                          "line": 6,
+                        },
+                      },
+                      "text": "any",
+                    },
+                  ],
+                  "context": "property",
+                  "defaultValue": undefined,
+                  "filePath": "test.ts",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "UtilityReference",
+                  "name": "frontMatter",
+                  "position": {
+                    "end": {
+                      "column": 64,
+                      "line": 1,
+                    },
+                    "start": {
+                      "column": 32,
+                      "line": 1,
+                    },
+                  },
+                  "text": "Record<string, any>",
+                  "typeName": "Record",
+                },
+              ],
+              "text": "{ frontMatter: Record<string, any>; }",
+            },
+            "defaultType": undefined,
             "filePath": "test.ts",
-            "kind": "Object",
-            "name": undefined,
+            "kind": "GenericParameter",
+            "name": "Type",
             "position": {
               "end": {
                 "column": 66,
                 "line": 1,
               },
               "start": {
-                "column": 30,
+                "column": 17,
                 "line": 1,
               },
             },
-            "properties": [
-              {
-                "arguments": [
-                  {
-                    "context": "parameter",
-                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                    "kind": "String",
-                    "name": undefined,
-                    "position": {
-                      "end": {
-                        "column": 4402,
-                        "line": 4,
-                      },
-                      "start": {
-                        "column": 3482,
-                        "line": 4,
-                      },
-                    },
-                    "text": "string",
-                    "value": undefined,
-                  },
-                  {
-                    "context": "parameter",
-                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                    "kind": "Primitive",
-                    "position": {
-                      "end": {
-                        "column": 315,
-                        "line": 6,
-                      },
-                      "start": {
-                        "column": 266,
-                        "line": 6,
-                      },
-                    },
-                    "text": "any",
-                  },
-                ],
-                "context": "property",
-                "defaultValue": undefined,
-                "filePath": "test.ts",
-                "isOptional": false,
-                "isReadonly": false,
-                "kind": "Generic",
-                "name": "frontMatter",
-                "position": {
-                  "end": {
-                    "column": 64,
-                    "line": 1,
-                  },
-                  "start": {
-                    "column": 32,
-                    "line": 1,
-                  },
-                },
-                "text": "Record<string, any>",
-                "typeName": "Record",
-              },
-            ],
-            "text": "{ frontMatter: Record<string, any>; }",
+            "text": "Type",
           },
         ],
-        "name": undefined,
         "position": {
           "end": {
             "column": 43,
@@ -3387,7 +3353,171 @@ describe('resolveType', () => {
             "line": 1,
           },
         },
-        "text": "{ frontMatter: Record<string, any>; } | { frontMatter: Record<string, any>; }",
+        "text": "ModuleData<Type>",
+        "type": {
+          "filePath": "test.ts",
+          "kind": "Union",
+          "members": [
+            {
+              "filePath": "test.ts",
+              "kind": "Object",
+              "name": undefined,
+              "position": {
+                "end": {
+                  "column": 43,
+                  "line": 3,
+                },
+                "start": {
+                  "column": 7,
+                  "line": 3,
+                },
+              },
+              "properties": [
+                {
+                  "arguments": [
+                    {
+                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                      "kind": "String",
+                      "name": undefined,
+                      "position": {
+                        "end": {
+                          "column": 4402,
+                          "line": 4,
+                        },
+                        "start": {
+                          "column": 3482,
+                          "line": 4,
+                        },
+                      },
+                      "text": "string",
+                      "value": undefined,
+                    },
+                    {
+                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                      "kind": "Primitive",
+                      "position": {
+                        "end": {
+                          "column": 315,
+                          "line": 6,
+                        },
+                        "start": {
+                          "column": 266,
+                          "line": 6,
+                        },
+                      },
+                      "text": "any",
+                    },
+                  ],
+                  "context": "property",
+                  "defaultValue": undefined,
+                  "filePath": "test.ts",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "UtilityReference",
+                  "name": "frontMatter",
+                  "position": {
+                    "end": {
+                      "column": 41,
+                      "line": 3,
+                    },
+                    "start": {
+                      "column": 9,
+                      "line": 3,
+                    },
+                  },
+                  "text": "Record<string, any>",
+                  "typeName": "Record",
+                },
+              ],
+              "text": "{ frontMatter: Record<string, any>; }",
+            },
+            {
+              "filePath": "test.ts",
+              "kind": "Object",
+              "name": undefined,
+              "position": {
+                "end": {
+                  "column": 66,
+                  "line": 1,
+                },
+                "start": {
+                  "column": 30,
+                  "line": 1,
+                },
+              },
+              "properties": [
+                {
+                  "arguments": [
+                    {
+                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                      "kind": "String",
+                      "name": undefined,
+                      "position": {
+                        "end": {
+                          "column": 4402,
+                          "line": 4,
+                        },
+                        "start": {
+                          "column": 3482,
+                          "line": 4,
+                        },
+                      },
+                      "text": "string",
+                      "value": undefined,
+                    },
+                    {
+                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                      "kind": "Primitive",
+                      "position": {
+                        "end": {
+                          "column": 315,
+                          "line": 6,
+                        },
+                        "start": {
+                          "column": 266,
+                          "line": 6,
+                        },
+                      },
+                      "text": "any",
+                    },
+                  ],
+                  "context": "property",
+                  "defaultValue": undefined,
+                  "filePath": "test.ts",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "UtilityReference",
+                  "name": "frontMatter",
+                  "position": {
+                    "end": {
+                      "column": 64,
+                      "line": 1,
+                    },
+                    "start": {
+                      "column": 32,
+                      "line": 1,
+                    },
+                  },
+                  "text": "Record<string, any>",
+                  "typeName": "Record",
+                },
+              ],
+              "text": "{ frontMatter: Record<string, any>; }",
+            },
+          ],
+          "name": undefined,
+          "position": {
+            "end": {
+              "column": 43,
+              "line": 3,
+            },
+            "start": {
+              "column": 1,
+              "line": 1,
+            },
+          },
+          "text": "{ frontMatter: Record<string, any>; } | { frontMatter: Record<string, any>; }",
+        },
       }
     `)
   })
@@ -4184,7 +4314,7 @@ describe('resolveType', () => {
     `)
   })
 
-  test('references locally exported generic arguments', () => {
+  test('computes generic arguments', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       dedent`
@@ -4218,31 +4348,65 @@ describe('resolveType', () => {
         },
         "properties": [
           {
-            "arguments": [
-              {
-                "context": "parameter",
-                "filePath": "test.ts",
-                "kind": "Reference",
-                "position": {
-                  "end": {
-                    "column": 66,
-                    "line": 3,
-                  },
-                  "start": {
-                    "column": 25,
-                    "line": 3,
-                  },
-                },
-                "text": "(key: keyof typeof colors) => "red" | "blue" | "green"",
-                "type": "typeof getColor",
-              },
-            ],
             "context": "property",
             "defaultValue": undefined,
             "filePath": "test.ts",
             "isOptional": false,
             "isReadonly": false,
-            "kind": "Generic",
+            "kind": "Union",
+            "members": [
+              {
+                "filePath": "test.ts",
+                "kind": "String",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 38,
+                    "line": 6,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 6,
+                  },
+                },
+                "text": ""red"",
+                "value": "red",
+              },
+              {
+                "filePath": "test.ts",
+                "kind": "String",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 38,
+                    "line": 6,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 6,
+                  },
+                },
+                "text": ""blue"",
+                "value": "blue",
+              },
+              {
+                "filePath": "test.ts",
+                "kind": "String",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 38,
+                    "line": 6,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 6,
+                  },
+                },
+                "text": ""green"",
+                "value": "green",
+              },
+            ],
             "name": "color",
             "position": {
               "end": {
@@ -4254,8 +4418,7 @@ describe('resolveType', () => {
                 "line": 6,
               },
             },
-            "text": "ReturnType<typeof getColor>",
-            "typeName": "ReturnType",
+            "text": ""red" | "blue" | "green"",
           },
         ],
         "text": "TextProps",
@@ -4263,22 +4426,22 @@ describe('resolveType', () => {
     `)
   })
 
-  test('references external generic arguments', () => {
+  test('references external types', () => {
     project.createSourceFile(
       'node_modules/@types/colors/index.d.ts',
       dedent`
         const colors = { red: 'red', blue: 'blue', green: 'green' } as const;
-        export const getColor = (key: keyof typeof colors) => colors[key];
+        export type Colors = typeof colors;
         `
     )
 
     const sourceFile = project.createSourceFile(
       'test.ts',
       dedent`
-        import type { getColor } from 'colors';
+        import type { Colors } from 'colors';
   
         export type TextProps = {
-          color: ReturnType<typeof getColor>;
+          color: Colors;
         }
         `,
       { overwrite: true }
@@ -4303,35 +4466,16 @@ describe('resolveType', () => {
         },
         "properties": [
           {
-            "arguments": [
-              {
-                "context": "parameter",
-                "filePath": "node_modules/@types/colors/index.d.ts",
-                "kind": "Reference",
-                "position": {
-                  "end": {
-                    "column": 66,
-                    "line": 2,
-                  },
-                  "start": {
-                    "column": 25,
-                    "line": 2,
-                  },
-                },
-                "text": "(key: keyof typeof colors) => "red" | "blue" | "green"",
-                "type": "typeof getColor",
-              },
-            ],
             "context": "property",
             "defaultValue": undefined,
             "filePath": "test.ts",
             "isOptional": false,
             "isReadonly": false,
-            "kind": "Generic",
+            "kind": "Reference",
             "name": "color",
             "position": {
               "end": {
-                "column": 38,
+                "column": 17,
                 "line": 4,
               },
               "start": {
@@ -4339,8 +4483,7 @@ describe('resolveType', () => {
                 "line": 4,
               },
             },
-            "text": "ReturnType<typeof getColor>",
-            "typeName": "ReturnType",
+            "text": "{ readonly red: "red"; readonly blue: "blue"; readonly green: "green"; }",
           },
         ],
         "text": "TextProps",
@@ -4387,7 +4530,6 @@ describe('resolveType', () => {
           {
             "arguments": [
               {
-                "context": "parameter",
                 "filePath": "test.ts",
                 "kind": "Object",
                 "name": undefined,
@@ -4453,7 +4595,7 @@ describe('resolveType', () => {
             "filePath": "test.ts",
             "isOptional": false,
             "isReadonly": false,
-            "kind": "Generic",
+            "kind": "UtilityReference",
             "name": "functionReturn",
             "position": {
               "end": {
@@ -5061,117 +5203,6 @@ describe('resolveType', () => {
           },
         ],
         "text": "({ initialCount }: ReturnType<typeof useCounter>) => void",
-      }
-    `)
-  })
-
-  test('imported function object return types should not be parsed', () => {
-    project.createSourceFile(
-      'types.ts',
-      `export function useCounter() { return { initialCount: 0 } }`,
-      { overwrite: true }
-    )
-    const sourceFile = project.createSourceFile(
-      'test.ts',
-      `import { useCounter } from './types' function useCounterOverride({ counterState }: { counterState: ReturnType<typeof useCounter> }) {}`,
-      { overwrite: true }
-    )
-    const functionDeclaration =
-      sourceFile.getFunctionOrThrow('useCounterOverride')
-    const types = resolveType(
-      functionDeclaration.getType(),
-      functionDeclaration
-    )
-
-    expect(types).toMatchInlineSnapshot(`
-      {
-        "filePath": "test.ts",
-        "kind": "Function",
-        "name": "useCounterOverride",
-        "position": {
-          "end": {
-            "column": 135,
-            "line": 1,
-          },
-          "start": {
-            "column": 38,
-            "line": 1,
-          },
-        },
-        "signatures": [
-          {
-            "generics": [],
-            "kind": "FunctionSignature",
-            "modifier": undefined,
-            "parameters": [
-              {
-                "context": "parameter",
-                "defaultValue": undefined,
-                "description": undefined,
-                "filePath": "test.ts",
-                "isOptional": false,
-                "kind": "Object",
-                "name": undefined,
-                "position": {
-                  "end": {
-                    "column": 131,
-                    "line": 1,
-                  },
-                  "start": {
-                    "column": 66,
-                    "line": 1,
-                  },
-                },
-                "properties": [
-                  {
-                    "arguments": [
-                      {
-                        "context": "parameter",
-                        "filePath": "types.ts",
-                        "kind": "Reference",
-                        "position": {
-                          "end": {
-                            "column": 60,
-                            "line": 1,
-                          },
-                          "start": {
-                            "column": 1,
-                            "line": 1,
-                          },
-                        },
-                        "text": "() => { initialCount: number; }",
-                        "type": "typeof useCounter",
-                      },
-                    ],
-                    "context": "property",
-                    "defaultValue": undefined,
-                    "filePath": "test.ts",
-                    "isOptional": false,
-                    "isReadonly": false,
-                    "kind": "Generic",
-                    "name": "counterState",
-                    "position": {
-                      "end": {
-                        "column": 129,
-                        "line": 1,
-                      },
-                      "start": {
-                        "column": 86,
-                        "line": 1,
-                      },
-                    },
-                    "text": "ReturnType<typeof useCounter>",
-                    "typeName": "ReturnType",
-                  },
-                ],
-                "text": "{ counterState: ReturnType<typeof useCounter>; }",
-              },
-            ],
-            "returnType": "void",
-            "text": "function useCounterOverride({ counterState: ReturnType<typeof useCounter>; }): void",
-          },
-        ],
-        "text": "({ counterState }: { counterState: ReturnType<typeof useCounter>; }) => void",
       }
     `)
   })
@@ -8581,7 +8612,6 @@ describe('resolveType', () => {
         "promiseTypes": {
           "arguments": [
             {
-              "context": "parameter",
               "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
               "kind": "Number",
               "name": undefined,
@@ -8600,7 +8630,7 @@ describe('resolveType', () => {
             },
           ],
           "filePath": "test.ts",
-          "kind": "Generic",
+          "kind": "UtilityReference",
           "name": "promise",
           "position": {
             "end": {
@@ -8637,7 +8667,7 @@ describe('resolveType', () => {
           return undefined as unknown as { authors: string }
         }
   
-        export type Module = Compute<{ authors?: string[] } & ReturnType<typeof getGitMetadata>>
+        export type Module<T> = Compute<{ authors?: string[] } & ReturnType<typeof getGitMetadata>>
         `,
       { overwrite: true }
     )
@@ -9115,7 +9145,6 @@ describe('resolveType', () => {
                       {
                         "arguments": [
                           {
-                            "context": "parameter",
                             "filePath": "test.ts",
                             "kind": "Reference",
                             "position": {
@@ -9131,7 +9160,6 @@ describe('resolveType', () => {
                             "text": "This",
                           },
                           {
-                            "context": "parameter",
                             "filePath": "test.ts",
                             "kind": "Function",
                             "name": undefined,
@@ -9184,7 +9212,7 @@ describe('resolveType', () => {
                         "description": undefined,
                         "filePath": "test.ts",
                         "isOptional": false,
-                        "kind": "Generic",
+                        "kind": "UtilityReference",
                         "name": "context",
                         "position": {
                           "end": {

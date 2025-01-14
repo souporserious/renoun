@@ -202,8 +202,8 @@ function TypeChildren({
 }) {
   if (
     type.kind === 'Enum' ||
-    type.kind === 'Generic' ||
     type.kind === 'Symbol' ||
+    type.kind === 'UtilityReference' ||
     type.kind === 'Reference'
   ) {
     return <CodeInline value={type.text} language="typescript" />
@@ -352,6 +352,10 @@ function TypeChildren({
         })}
       </div>
     )
+  }
+
+  if (type.kind === 'Utility') {
+    return <TypeChildren type={type.type} css={{ marginTop: '2rem' }} />
   }
 
   console.log('[APIReference:TypeChildren] Did not render: ', type)

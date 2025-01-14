@@ -29,7 +29,7 @@ export interface BaseType {
   /** Distinguishs between different kinds of types, such as primitives, objects, classes, functions, etc. */
   kind?: unknown
 
-  /** Whether the type is a function/method parameter or a object/class/interface property. */
+  /** Whether the type is a function/method parameter or a class/object/interface property. */
   context?: 'parameter' | 'property'
 
   /** The name of the symbol or declaration if it exists. */
@@ -209,16 +209,32 @@ export interface ReferenceType extends BaseType {
   kind: 'Reference'
 }
 
-export interface GenericType extends BaseType {
-  kind: 'Generic'
-  typeName: string
-  arguments: ParameterTypes[]
-}
-
 export interface GenericParameterType extends BaseType {
   kind: 'GenericParameter'
   constraint?: BaseTypes
   defaultType?: BaseTypes
+}
+
+/** Represents a utility type definition e.g. `type Partial<Type> = { [Key in keyof Type]?: Type[Key] }`. */
+export interface UtilityType extends BaseType {
+  kind: 'Utility'
+
+  /** The resolved type of the utility type. */
+  type: ResolvedType
+
+  /** The type parameters used in the definition of this utility type itself. */
+  parameters: GenericParameterType[]
+}
+
+/** Represents when a utility type is used as a type reference e.g. `{ options: Partial<Type> }`. */
+export interface UtilityReferenceType extends BaseType {
+  kind: 'UtilityReference'
+
+  /** The name of the utility type (e.g. "Partial", "Readonly", etc.). */
+  typeName: string
+
+  /** The type arguments passed in during usage, e.g. `Type` in `Partial<Type>`. */
+  arguments: ResolvedType[]
 }
 
 export interface UnknownType extends BaseType {
@@ -242,7 +258,8 @@ export type BaseTypes =
   | ComponentType
   | PrimitiveType
   | ReferenceType
-  | GenericType
+  | UtilityType
+  | UtilityReferenceType
   | GenericParameterType
   | UnknownType
 
@@ -369,20 +386,17 @@ export function resolveType(
 
   /* Use the generic name and type text if the type is a type alias or property signature. */
   let genericTypeArguments: TypeNode[] = []
-  let genericTypeName = ''
-  let genericTypeText = ''
 
-  if (
-    typeArguments.length === 0 &&
-    (tsMorph.Node.isTypeAliasDeclaration(enclosingNode) ||
-      tsMorph.Node.isPropertySignature(enclosingNode))
-  ) {
-    const typeNode = enclosingNode.getTypeNode()
+  if (typeArguments.length === 0) {
+    if (
+      tsMorph.Node.isTypeAliasDeclaration(enclosingNode) ||
+      tsMorph.Node.isPropertySignature(enclosingNode)
+    ) {
+      const typeNode = enclosingNode.getTypeNode()
 
-    if (tsMorph.Node.isTypeReference(typeNode)) {
-      genericTypeArguments = typeNode.getTypeArguments()
-      genericTypeName = typeNode.getTypeName().getText()
-      genericTypeText = typeNode.getText()
+      if (tsMorph.Node.isTypeReference(typeNode)) {
+        genericTypeArguments = typeNode.getTypeArguments()
+      }
     }
   }
 
@@ -422,15 +436,12 @@ export function resolveType(
           }
 
           return {
-            kind: 'Generic',
+            kind: 'UtilityReference',
             text: typeText,
             typeName: typeName!,
-            arguments: resolvedTypeArguments.map((type) => ({
-              ...type,
-              context: 'parameter',
-            })),
+            arguments: resolvedTypeArguments,
             ...declarationLocation,
-          } satisfies GenericType
+          } satisfies UtilityReferenceType
         } else {
           if (!declarationLocation.filePath) {
             throw new Error(
@@ -556,60 +567,51 @@ export function resolveType(
       }
       return
     }
-  } else {
-    const isExternalOrExported =
-      symbolMetadata.isInNodeModules ||
-      symbolMetadata.isExternal ||
-      symbolMetadata.isExported
+  } else if (
+    isRootType &&
+    tsMorph.Node.isTypeAliasDeclaration(enclosingNode) &&
+    aliasTypeArguments.length > 0
+  ) {
+    // Prevent the type from being resolved as a reference.
+    rootReferences.delete(type)
 
-    /* Attempt to resolve generic type arguments if they exist. */
-    if (
-      isExternalOrExported &&
-      aliasTypeArguments.length === 0 &&
-      genericTypeArguments.length > 0
-    ) {
-      const resolvedTypeArguments = genericTypeArguments
-        .map((type) => {
-          const resolvedType = resolveType(
-            type.getType(),
-            type,
-            filter,
-            false,
-            defaultValues,
-            keepReferences,
-            dependencies
-          )
-          if (resolvedType) {
-            return {
-              ...resolvedType,
-              type: type.getText(),
-            }
-          }
-        })
-        .filter(Boolean) as ResolvedType[]
-      const everyTypeArgumentIsReference = resolvedTypeArguments.every(
-        (type) => type.kind === 'Reference'
+    const resolvedUtilityType = resolveType(
+      type,
+      declaration,
+      filter,
+      false,
+      defaultValues,
+      keepReferences,
+      dependencies
+    )
+
+    // Restore the root reference cache after resolving the utility type.
+    rootReferences.add(type)
+
+    if (!resolvedUtilityType) {
+      throw new Error(
+        `[renoun:resolveType]: No utility type found for "${typeText}". Please file an issue if you encounter this error.`
       )
-
-      /* If any of the type arguments are references link them to the generic type. */
-      if (everyTypeArgumentIsReference && resolvedTypeArguments.length > 0) {
-        if (!keepReferences) {
-          rootReferences.delete(type)
-        }
-
-        return {
-          kind: 'Generic',
-          text: genericTypeText,
-          typeName: genericTypeName,
-          arguments: resolvedTypeArguments.map((type) => ({
-            ...type,
-            context: 'parameter',
-          })),
-          ...declarationLocation,
-        } satisfies GenericType
-      }
     }
 
+    resolvedType = {
+      kind: 'Utility',
+      name: symbolMetadata.name,
+      text: typeText,
+      type: resolvedUtilityType,
+      parameters: aliasTypeArguments.map((type) => {
+        return resolveType(
+          type,
+          declaration,
+          filter,
+          false,
+          defaultValues,
+          keepReferences,
+          dependencies
+        ) as GenericParameterType
+      }) as GenericParameterType[],
+    } satisfies UtilityType
+  } else {
     if (type.isTypeParameter()) {
       const constraintType = type.getConstraint()
       const defaultType = type.getDefault()
@@ -909,15 +911,12 @@ export function resolveType(
           }
 
           resolvedType = {
-            kind: 'Generic',
+            kind: 'UtilityReference',
             name: symbolMetadata.name,
             text: typeText,
             typeName: typeName!,
-            arguments: resolvedTypeArguments.map((type) => ({
-              ...type,
-              context: 'parameter',
-            })),
-          } satisfies GenericType
+            arguments: resolvedTypeArguments,
+          } satisfies UtilityReferenceType
         } else if (properties.length === 0 && indexSignatures.length > 0) {
           resolvedType = {
             kind: 'Object',
