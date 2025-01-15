@@ -1162,11 +1162,25 @@ export class Directory<
   /**
    * Get a file at the specified `path` in the file system. The `path` does not
    * need to include the order prefix or extension. Additionally, an `extension`
-   * can be provided for the second argument to find the first matching file path.
+   * can be provided for the second argument to find the first matching file path
+   * that includes the extension.
    *
    * If the file is not found, an error will be thrown. Use `FileNotFoundError`
    * to handle the error.
    */
+  async getFile<
+    const Path extends string,
+    Extension extends ExtractFileExtension<Path> = ExtractFileExtension<Path>,
+  >(
+    path: Path
+  ): Promise<
+    Extension extends string
+      ? IsJavaScriptLikeExtension<Extension> extends true
+        ? JavaScriptFile<LoaderTypes[Extension], string, Extension>
+        : File<LoaderTypes, Path, Extension>
+      : File<LoaderTypes>
+  >
+
   async getFile<
     ExtensionType extends keyof LoaderTypes | string,
     const Extension extends ExtensionType | Extension[],
@@ -1179,10 +1193,38 @@ export class Directory<
         ? JavaScriptFile<LoaderTypes[Extension], string, Extension>
         : File<LoaderTypes, Extension>
       : File<LoaderTypes>
-  > {
+  >
+
+  async getFile(path: string | string[], extension?: string | string[]) {
     const segments = Array.isArray(path)
       ? path.slice(0)
       : path.split('/').filter(Boolean)
+    const lastSegment = segments.at(-1)
+    const parsedExtension = lastSegment
+      ? extensionName(lastSegment).slice(1)
+      : undefined
+
+    if (lastSegment && parsedExtension) {
+      segments[segments.length - 1] = removeExtension(lastSegment)
+    }
+
+    if (parsedExtension && extension) {
+      throw new Error(
+        `[renoun] The path "${Array.isArray(path) ? path.join('/') : path}" already includes a file extension (` +
+          `.${parsedExtension}), the \`extension\` argument can only be used when the path does not include an extension.`
+      )
+    }
+
+    let allExtensions: string[] | undefined
+
+    if (parsedExtension) {
+      allExtensions = [parsedExtension]
+    } else if (extension) {
+      allExtensions = (
+        Array.isArray(extension) ? extension : [extension]
+      ) as any
+    }
+
     let currentDirectory = this as Directory<LoaderTypes>
 
     while (segments.length > 0) {
@@ -1195,7 +1237,7 @@ export class Directory<
         includeTsConfigIgnoredFiles: true,
       })
 
-      // Find the entry matching the current segment
+      // Find an entry whose base name matches the slug of `currentSegment`
       for (const currentEntry of allEntries) {
         const baseSegment = createSlug(
           currentEntry.getBaseName(),
@@ -1207,15 +1249,9 @@ export class Directory<
             (currentEntry instanceof File && currentEntry.getModifier()) ===
             lastSegment
 
-          // Check if the entry is a file and matches the extension
-          if (extension && currentEntry instanceof File) {
-            const fileExtensions = Array.isArray(extension)
-              ? extension
-              : [extension]
-
-            if (
-              fileExtensions.includes(currentEntry.getExtension() as Extension)
-            ) {
+          // If allExtensions are specified, we check if the file’s extension is in that array.
+          if (allExtensions && currentEntry instanceof File) {
+            if (allExtensions.includes(currentEntry.getExtension())) {
               if (matchesModifier) {
                 return currentEntry as any
               } else if (
@@ -1234,51 +1270,45 @@ export class Directory<
       }
 
       if (!entry) {
-        throw new FileNotFoundError(path, extension)
+        throw new FileNotFoundError(path, allExtensions)
       }
 
       // If this is the last segment, check for file or extension match
       if (segments.length === 0) {
         if (entry instanceof File) {
-          if (extension) {
-            const fileExtensions = Array.isArray(extension)
-              ? extension
-              : [extension]
-
-            if (fileExtensions.includes(entry.getExtension() as Extension)) {
+          if (allExtensions) {
+            if (allExtensions.includes(entry.getExtension())) {
               return entry as any
             }
           } else {
             return entry as any
           }
         } else if (entry instanceof Directory) {
-          const entries = await entry.getEntries({
-            includeDuplicates: true,
-            includeIndexAndReadme: true,
-          })
-          const directoryName = entry.getBaseName()
-
-          // If extension is provided, check for a file with the extension
-          if (extension) {
-            const fileExtensions = Array.isArray(extension)
-              ? extension
-              : [extension]
-
+          // First, check if there's a file with the provided extension in the directory
+          if (allExtensions) {
+            const entries = await entry.getEntries({
+              includeDuplicates: true,
+              includeIndexAndReadme: true,
+            })
             for (const subEntry of entries) {
               if (
                 subEntry instanceof File &&
                 subEntry.getBaseName() === entry.getBaseName() &&
-                fileExtensions.includes(subEntry.getExtension() as Extension)
+                allExtensions.includes(subEntry.getExtension())
               ) {
                 return subEntry as any
               }
             }
-          }
-          // Otherwise, check for a file with the same name as the directory or an index/readme file
-          else {
+          } else {
+            // Otherwise, check for a file with the same name as the directory or an index/readme file
+            const entries = await entry.getEntries({
+              includeDuplicates: true,
+              includeIndexAndReadme: true,
+            })
+            const directoryName = entry.getBaseName()
+
             for (const subEntry of entries) {
               const name = subEntry.getBaseName()
-
               if (
                 name === directoryName ||
                 ['index', 'readme'].includes(name.toLowerCase())
@@ -1289,18 +1319,18 @@ export class Directory<
           }
         }
 
-        throw new FileNotFoundError(path, extension)
+        throw new FileNotFoundError(path, allExtensions)
       }
 
       // If the entry is a directory, continue with the next segment
       if (entry instanceof Directory) {
         currentDirectory = entry
       } else {
-        throw new FileNotFoundError(path, extension)
+        throw new FileNotFoundError(path, allExtensions)
       }
     }
 
-    throw new FileNotFoundError(path, extension)
+    throw new FileNotFoundError(path, allExtensions)
   }
 
   /** Get a directory at the specified `path`. */
