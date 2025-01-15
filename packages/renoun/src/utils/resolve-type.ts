@@ -739,7 +739,32 @@ export function resolveType(
           }
         }
 
-        if (resolvedUnionTypes.length === 0) {
+        const uniqueUnionTypes: ResolvedType[] = []
+
+        for (const unionType of resolvedUnionTypes) {
+          if (
+            !uniqueUnionTypes.some((uniqueUnionType) => {
+              const sameStart =
+                unionType.position?.start.line ===
+                uniqueUnionType.position?.start.line
+              const sameEnd =
+                unionType.position?.end.line ===
+                uniqueUnionType.position?.end.line
+
+              return (
+                uniqueUnionType.kind === unionType.kind &&
+                uniqueUnionType.text === unionType.text &&
+                uniqueUnionType.path === unionType.path &&
+                sameStart &&
+                sameEnd
+              )
+            })
+          ) {
+            uniqueUnionTypes.push(unionType)
+          }
+        }
+
+        if (uniqueUnionTypes.length === 0) {
           if (!keepReferences) {
             rootReferences.delete(type)
           }
@@ -750,7 +775,7 @@ export function resolveType(
           kind: 'Union',
           name: symbolMetadata.name,
           text: typeText,
-          members: resolvedUnionTypes,
+          members: uniqueUnionTypes,
         } satisfies UnionType
       }
     } else if (type.isIntersection()) {
