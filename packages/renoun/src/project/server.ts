@@ -32,10 +32,11 @@ if (currentHighlighter === null) {
  * Create a WebSocket server that improves the performance of renoun components and
  * utilities by processing type analysis and syntax highlighting in a separate process.
  */
-export function createServer(options?: { port?: number }) {
+export async function createServer(options?: { port?: number }) {
   const server = new WebSocketServer({ port: options?.port })
+  const port = await server.getPort()
 
-  process.env.RENOUN_SERVER = 'true'
+  process.env.RENOUN_SERVER_PORT = String(port)
 
   if (process.env.NODE_ENV === 'development') {
     const rootDirectory = getRootDirectory()
@@ -184,4 +185,14 @@ export function createServer(options?: { port?: number }) {
   )
 
   return server
+}
+
+/**
+ * Starts the WebSocket server for renoun and ensures that it is only ever started
+ * once for the current process. For more control over the server, use `createServer`.
+ */
+export async function startServer(options?: { port?: number }) {
+  if (process.env.RENOUN_SERVER_PORT === undefined) {
+    await createServer(options)
+  }
 }

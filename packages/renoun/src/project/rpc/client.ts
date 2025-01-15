@@ -27,7 +27,9 @@ export class WebSocketClient {
 
   #connect() {
     import('ws').then(({ default: WebSocket }) => {
-      this.#ws = new WebSocket(`ws://localhost:5996`)
+      this.#ws = new WebSocket(
+        `ws://localhost:${process.env.RENOUN_SERVER_PORT}`
+      )
       this.#ws.addEventListener('open', this.#handleOpenEvent)
       this.#ws.addEventListener('message', this.#handleMessageEvent)
       this.#ws.addEventListener('error', this.#handleErrorEvent)

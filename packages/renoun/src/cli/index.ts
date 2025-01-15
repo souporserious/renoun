@@ -30,10 +30,16 @@ if (firstArgument === 'next' || firstArgument === 'waku') {
     process.env.NODE_ENV = isDev ? 'development' : 'production'
   }
 
-  function runSubProcess() {
+  async function runSubProcess() {
+    const port = String(await server.getPort())
+
     subProcess = spawn(firstArgument, [secondArgument, ...restArguments], {
       stdio: 'inherit',
       shell: true,
+      env: {
+        ...process.env,
+        RENOUN_SERVER_PORT: port,
+      },
     })
 
     subProcess.on('close', (code: number) => {
@@ -42,9 +48,9 @@ if (firstArgument === 'next' || firstArgument === 'waku') {
     })
   }
 
-  const server = createServer()
+  const server = await createServer()
 
-  runSubProcess()
+  await runSubProcess()
 
   // Handle Ctrl+C
   process.on('SIGINT', () => cleanupAndExit(0))

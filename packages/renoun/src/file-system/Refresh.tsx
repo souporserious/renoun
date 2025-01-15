@@ -7,9 +7,9 @@ let startedWatching = false
  * Refreshes the Next.js development server when a source file changes.
  * @internal
  */
-export function Refresh() {
+export function Refresh({ port }: { port: string }) {
   if (!startedWatching && typeof window !== 'undefined') {
-    new WebSocket(`ws://localhost:5996`).addEventListener(
+    new WebSocket(`ws://localhost:${port}`).addEventListener(
       'message',
       (event: MessageEvent) => {
         const message = JSON.parse(event.data) as WebSocketNotification
