@@ -1955,7 +1955,7 @@ export class EntryGroup<
 
 /** Determines if a `FileSystemEntry` is a `Directory`. */
 export function isDirectory<Types extends Record<string, any>>(
-  entry: FileSystemEntry<Types>
+  entry: FileSystemEntry<Types> | undefined
 ): entry is Directory<Types> {
   return entry instanceof Directory
 }
@@ -1990,7 +1990,7 @@ export function isFile<
   Types extends Record<string, any>,
   const Extension extends StringUnion<keyof Types> | StringUnion<keyof Types>[],
 >(
-  entry: FileSystemEntry<Types>,
+  entry: FileSystemEntry<Types> | undefined,
   extension?: Extension
 ): entry is Extension extends undefined
   ? File<Types>
@@ -2019,7 +2019,7 @@ export function isFile<
 
 /** Determines if a `FileSystemEntry` is a `JavaScriptFile`. */
 export function isJavaScriptFile<Types extends Record<string, any>>(
-  entry: FileSystemEntry<Types>
+  entry: FileSystemEntry<Types> | undefined
 ): entry is JavaScriptFile<Types> {
   return entry instanceof JavaScriptFile
 }
