@@ -1196,6 +1196,11 @@ export class Directory<
   >
 
   async getFile(path: string | string[], extension?: string | string[]) {
+    // Trim leading './' from relative paths
+    if (typeof path === 'string' && path.startsWith('./')) {
+      path = path.slice(2)
+    }
+
     const segments = Array.isArray(path)
       ? path.slice(0)
       : path.split('/').filter(Boolean)

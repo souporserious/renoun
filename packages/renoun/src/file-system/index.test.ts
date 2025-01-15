@@ -643,6 +643,14 @@ describe('file system', () => {
     expect(file.getName()).toBe('tsconfig.json')
   })
 
+  test('relative file', async () => {
+    const rootDirectory = new Directory()
+    const file = await rootDirectory.getFile('./tsconfig.json')
+
+    expect(file).toBeInstanceOf(File)
+    expect(file.getName()).toBe('tsconfig.json')
+  })
+
   test('nested file', async () => {
     const rootDirectory = new Directory()
     const nestedFile = await rootDirectory.getFile(
