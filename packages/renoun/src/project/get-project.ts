@@ -55,7 +55,7 @@ export function getProject(options?: ProjectOptions) {
 
   if (
     process.env.NODE_ENV === 'development' &&
-    process.env.RENOUN_SERVER === 'true' &&
+    process.env.RENOUN_SERVER_PORT !== undefined &&
     !directoryWatchers.has(projectDirectory)
   ) {
     const watcher = watch(

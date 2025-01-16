@@ -21,7 +21,7 @@ import type { ProjectOptions } from './types.js'
 
 let client: WebSocketClient | undefined
 
-if (process.env.RENOUN_SERVER === 'true') {
+if (process.env.RENOUN_SERVER_PORT !== undefined) {
   client = new WebSocketClient()
 }
 
