@@ -1,6 +1,4 @@
-import WebSocket from 'ws'
-
-WebSocket.WebSocketServer
+import WebSocket, { type AddressInfo } from 'ws'
 
 export interface WebSocketRequest {
   method: string
@@ -24,16 +22,31 @@ export class WebSocketServer {
 
   #sockets: Set<WebSocket> = new Set()
 
+  #readyPromise!: Promise<void>
+
+  #resolveReady!: () => void
+
+  #rejectReady!: (error: any) => void
+
   #handlers: { [key: string]: (params: any) => Promise<any> | any } = {}
 
   constructor(options?: { port?: number }) {
-    import('ws').then((ws) => {
-      this.#server = new ws.WebSocketServer({ port: options?.port ?? 5996 })
-      this.init()
+    this.#readyPromise = new Promise<void>((resolve, reject) => {
+      this.#resolveReady = resolve
+      this.#rejectReady = reject
     })
+
+    import('ws')
+      .then((ws) => {
+        this.#server = new ws.WebSocketServer({ port: options?.port ?? 0 })
+        this.#init()
+      })
+      .catch((error) => {
+        this.#rejectReady(error)
+      })
   }
 
-  init() {
+  #init() {
     this.#server.on('error', (error: NodeJS.ErrnoException) => {
       let message = '[renoun] WebSocket server error'
 
@@ -41,7 +54,7 @@ export class WebSocketServer {
         message = `[renoun] WebSocket server is already in use. This issue likely occurred because both the 'renoun' CLI and the Next.js plugin are running simultaneously. The Next.js plugin already manages the WebSocket server. Please ensure that only one of these is used at a time to avoid conflicts. You may need to stop one of the processes or verify that the port is not being used by another application. Please file an issue if this error persists.`
       }
 
-      throw new Error(message, { cause: error })
+      this.#rejectReady(new Error(message, { cause: error }))
     })
 
     this.#server.on('connection', (ws: WebSocket) => {
@@ -58,6 +71,10 @@ export class WebSocketServer {
       ws.on('message', (message: string) => {
         this.#handleMessage(ws, message)
       })
+    })
+
+    this.#server.on('listening', () => {
+      this.#resolveReady()
     })
   }
 
@@ -77,6 +94,22 @@ export class WebSocketServer {
         console.log('[renoun] WebSocket server closed successfully.')
       }
     })
+  }
+
+  async isReady() {
+    return this.#readyPromise
+  }
+
+  async getPort() {
+    await this.isReady()
+
+    const address = this.#server.address()
+
+    if (address && typeof address !== 'string') {
+      return (address as AddressInfo).port
+    }
+
+    throw new Error('[renoun] Unable to retrieve server port')
   }
 
   registerMethod(method: string, handler: (params: any) => Promise<any> | any) {
@@ -114,11 +147,12 @@ export class WebSocketServer {
       this.#sendResponse(ws, request.id, result)
     } catch (error) {
       if (error instanceof Error) {
+        const params = JSON.stringify(request.params, null, 2)
         this.#sendError(
           ws,
           request.id,
           -32603,
-          `[renoun] Internal server error for method "${request.method}" with params:\n${JSON.stringify(request.params, null, 2)}`,
+          `[renoun] Internal server error for method "${request.method}" with params:\n${params}`,
           error.message
         )
       }
@@ -126,8 +160,9 @@ export class WebSocketServer {
   }
 
   sendNotification(message: WebSocketNotification) {
+    const serialized = JSON.stringify(message)
     this.#sockets.forEach((ws) => {
-      ws.send(JSON.stringify(message))
+      ws.send(serialized)
     })
   }
 

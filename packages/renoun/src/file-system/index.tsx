@@ -762,10 +762,15 @@ export class JavaScriptFileExport<Value> {
         const Component = exportValue as React.ComponentType
         const WrappedComponent = async (props: Record<string, unknown>) => {
           const { Refresh } = await import('./Refresh.js')
+          const port = process.env.RENOUN_SERVER_PORT
+
+          if (port === undefined) {
+            return <Component {...props} />
+          }
 
           return (
             <>
-              <Refresh />
+              <Refresh port={port} />
               <Component {...props} />
             </>
           )

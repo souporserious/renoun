@@ -1,6 +1,6 @@
 import createMDXPlugin from '@next/mdx'
 import { remarkPlugins, rehypePlugins } from 'renoun/mdx'
-import { createServer } from 'renoun/server'
+import { startServer } from 'renoun/server'
 
 const withMDX = createMDXPlugin({
   extension: /\.mdx?$/,
@@ -11,10 +11,7 @@ const withMDX = createMDXPlugin({
   },
 })
 
-if (process.env.RENOUN_SERVER_STARTED !== 'true') {
-  createServer()
-  process.env.RENOUN_SERVER_STARTED = 'true'
-}
+await startServer()
 
 export default withMDX({
   output: 'export',

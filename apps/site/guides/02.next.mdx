@@ -49,27 +49,22 @@ and utilities in your project to provide accurate and performant code analysis a
 
 ### Custom Server
 
-Alternatively, if you would like fine-grained control over the renoun WebSocket server, you can create the server manually in your project's `next.config` file:
+Alternatively, if you don't want to use the CLI, the renoun WebSocket server can be started in your project's `next.config` file using the `startServer` utility:
 
 ```js filename="01.next.config.mjs"
-import { createServer } from 'renoun/server'
+import { startServer } from 'renoun/server'
 
-if (process.env.RENOUN_SERVER_STARTED !== 'true') {
-  createServer()
-  process.env.RENOUN_SERVER_STARTED = 'true'
-}
+await startServer()
 
 export default {
-  // ...
+  /* config options here */
 }
 ```
 
-Using a flag ensures that the server is only started once during the build and development process.
-
 <Note>
-  This does not currently work with a TypeScript Next.js configuration file
-  (`next.config.ts`) due to ESM issues. Please use the CLI above or a JavaScript
-  configuration file.
+  The `startServer` function does not currently work with a TypeScript Next.js
+  configuration file (`next.config.ts`) due to ESM issues. Please use the CLI
+  above or a JavaScript configuration file instead.
 </Note>
 
 ### Webpack Configuration
