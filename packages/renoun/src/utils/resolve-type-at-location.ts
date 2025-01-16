@@ -27,12 +27,6 @@ export async function resolveTypeAtLocation(
   const typeId = `${filePath}:${position}:${kind}`
   const sourceFile = project.addSourceFileAtPath(filePath)
 
-  // TODO: there is a bug in the `getProject` watch implementation and the `waitForRefreshingProjects` utility
-  // that currently requires refreshing the file every time
-  if (process.env.NODE_ENV === 'development') {
-    await sourceFile.refreshFromFileSystem()
-  }
-
   let declaration = sourceFile.getDescendantAtPos(position)
 
   if (!declaration) {
