@@ -355,7 +355,11 @@ function TypeChildren({
   }
 
   if (type.kind === 'Utility') {
-    return <TypeChildren type={type.type} css={{ marginTop: '2rem' }} />
+    if (type.type) {
+      return <TypeChildren type={type.type} css={{ marginTop: '2rem' }} />
+    } else {
+      return <CodeInline value={type.text} language="typescript" />
+    }
   }
 
   console.log('[APIReference:TypeChildren] Did not render: ', type)

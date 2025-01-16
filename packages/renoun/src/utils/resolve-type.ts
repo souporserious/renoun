@@ -220,7 +220,7 @@ export interface UtilityType extends BaseType {
   kind: 'Utility'
 
   /** The resolved type of the utility type. */
-  type: ResolvedType
+  type: ResolvedType | undefined
 
   /** The type parameters used in the definition of this utility type itself. */
   parameters: GenericParameterType[]
@@ -589,7 +589,7 @@ export function resolveType(
     rootReferences.add(type)
 
     if (!resolvedUtilityType) {
-      throw new Error(
+      console.log(
         `[renoun:resolveType]: No utility type found for "${typeText}". Please file an issue if you encounter this error.`
       )
     }
