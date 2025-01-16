@@ -52,16 +52,13 @@ and utilities in your project to provide accurate and performant code analysis a
 Alternatively, if you don't want to use the CLI, the renoun WebSocket server can be started in your project's `next.config` file using the `startServer` utility:
 
 ```js filename="01.next.config.mjs"
-import type { NextConfig } from "next";
 import { startServer } from 'renoun/server'
 
 await startServer()
 
-const nextConfig: NextConfig = {
+export default {
   /* config options here */
-};
-
-export default nextConfig;
+}
 ```
 
 <Note>
