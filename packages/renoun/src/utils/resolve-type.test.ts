@@ -7751,11 +7751,11 @@ describe('resolveType', () => {
                   "position": {
                     "end": {
                       "column": 52,
-                      "line": 2266,
+                      "line": 2265,
                     },
                     "start": {
                       "column": 9,
-                      "line": 2266,
+                      "line": 2265,
                     },
                   },
                   "signatures": [],
