@@ -1,13 +1,13 @@
 import {
   isFile,
   isDirectory,
-  type JavaScriptFileExport,
   FileNotFoundError,
   FileExportNotFoundError,
+  type JavaScriptFile,
+  type JavaScriptFileExport,
 } from 'renoun/file-system'
 import { APIReference, CodeBlock, Tokens } from 'renoun/components'
 import type { MDXHeadings } from 'renoun/mdx'
-import { notFound } from 'next/navigation'
 import { GeistMono } from 'geist/font/mono'
 
 import { CollectionGroup, ComponentsCollection } from '@/collections'
@@ -47,9 +47,6 @@ export default async function Component({
       throw error
     })
   const Content = await mdxFile?.getExportValue('default')
-  const componentDirectory = isDirectory(componentEntry)
-    ? componentEntry
-    : componentEntry.getParent()
   const mainExport = await componentEntry
     .getExport<any>(componentEntry.getBaseName())
     .catch((error) => {
@@ -59,23 +56,28 @@ export default async function Component({
       throw error
     })
   const description = mainExport ? mainExport.getDescription() : null
-  const examplesEntry = await componentDirectory
-    .getEntry('examples')
-    .catch((error) => {
-      if (error instanceof FileNotFoundError) {
-        return undefined
-      }
-      throw error
-    })
-  const exampleFiles = examplesEntry
-    ? isDirectory(examplesEntry)
-      ? (
-          await examplesEntry.getEntries({ includeTsConfigIgnoredFiles: true })
-        ).filter((entry) => isFile(entry, 'tsx'))
-      : isFile(examplesEntry, 'tsx')
-        ? [examplesEntry]
-        : null
-    : null
+  const examplesEntry = await ComponentsCollection.getEntry([
+    ...slug,
+    'examples',
+  ]).catch((error) => {
+    if (error instanceof FileNotFoundError) {
+      return undefined
+    }
+    throw error
+  })
+  let exampleFiles: JavaScriptFile<any>[] | null = null
+
+  if (isDirectory(examplesEntry)) {
+    exampleFiles = await examplesEntry
+      .getEntries({
+        includeIndexAndReadme: true,
+        includeTsConfigIgnoredFiles: true,
+      })
+      .then((entries) => entries.filter((entry) => isFile(entry, 'tsx')))
+  } else if (isFile(examplesEntry, 'tsx')) {
+    exampleFiles = [examplesEntry]
+  }
+
   const examplesExports = exampleFiles
     ? (
         await Promise.all(exampleFiles.map(async (file) => file.getExports()))
@@ -306,7 +308,7 @@ async function Preview({
             <Value />
           </div>
         ) : null}
-        {/* <CodeBlock allowErrors value={fileExport.getText()} language="tsx">
+        <CodeBlock allowErrors value={fileExport.getText()!} language="tsx">
           <pre
             css={{
               position: 'relative',
@@ -325,7 +327,7 @@ async function Preview({
           >
             <Tokens />
           </pre>
-        </CodeBlock> */}
+        </CodeBlock>
       </div>
     </section>
   )
