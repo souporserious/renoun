@@ -42,7 +42,11 @@ export async function createServer(options?: { port?: number }) {
     const rootDirectory = getRootDirectory()
 
     watch(rootDirectory, { recursive: true }, (_, filename) => {
-      if (!filename || isFilePathGitIgnored(join(rootDirectory, filename))) {
+      if (!filename) return
+
+      const filePath = join(rootDirectory, filename)
+
+      if (isFilePathGitIgnored(filePath)) {
         return
       }
 

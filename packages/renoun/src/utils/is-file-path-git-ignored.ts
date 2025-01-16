@@ -6,8 +6,15 @@ import { getRootDirectory } from './get-root-directory.js'
 
 let ignoreManager: ReturnType<typeof ignore>
 
-/** Check if a file path is ignored based on the root `.gitignore` file. */
+/**
+ * Check if a file path is ignored based on the root `.gitignore` file. This will
+ * also ignore any file paths within the `.git` directory.
+ */
 export function isFilePathGitIgnored(filePath: string): boolean {
+  if (filePath.includes('/.git/')) {
+    return true
+  }
+
   const relativePath = relative(getRootDirectory(), filePath)
 
   if (!ignoreManager) {
