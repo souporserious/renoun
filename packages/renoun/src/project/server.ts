@@ -192,11 +192,15 @@ export async function createServer(options?: { port?: number }) {
 }
 
 /**
- * Starts the WebSocket server for renoun and ensures that it is only ever started
- * once for the current process. For more control over the server, use `createServer`.
+ * Starts the WebSocket server for renoun during development and ensures that only
+ * one server is ever started for the running process. For more control over the
+ * server, use `createServer`.
  */
 export async function startServer(options?: { port?: number }) {
-  if (process.env.RENOUN_SERVER_PORT === undefined) {
+  if (
+    process.env.NODE_ENV === 'development' &&
+    process.env.RENOUN_SERVER_PORT === undefined
+  ) {
     await createServer(options)
   }
 }
