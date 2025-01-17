@@ -344,6 +344,11 @@ function formatDocumentationText(documentation: ts.SymbolDisplayPart[]) {
   return markdownText
 }
 
+const quickInfoCache = new Map<
+  string,
+  { displayText: string; documentationText: string }
+>()
+
 /** Get the quick info a token */
 function getQuickInfo(
   sourceFile: SourceFile,
@@ -352,6 +357,12 @@ function getQuickInfo(
   rootDirectory: string,
   baseDirectory: string
 ) {
+  const cacheKey = `${filename}:${tokenStart}`
+
+  if (quickInfoCache.has(cacheKey)) {
+    return quickInfoCache.get(cacheKey)
+  }
+
   const quickInfo = sourceFile
     .getProject()
     .getLanguageService()
@@ -373,11 +384,14 @@ function getQuickInfo(
     .replaceAll('/renoun', '')
   const documentation = quickInfo.documentation || []
   const documentationText = formatDocumentationText(documentation)
-
-  return {
+  const result = {
     displayText,
     documentationText,
   }
+
+  quickInfoCache.set(cacheKey, result)
+
+  return result
 }
 
 const FontStyle = {
