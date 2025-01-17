@@ -1,6 +1,5 @@
 import createMDXPlugin from '@next/mdx'
 import { remarkPlugins, rehypePlugins } from 'renoun/mdx'
-import { startServer } from 'renoun/server'
 
 const withMDX = createMDXPlugin({
   extension: /\.mdx?$/,
@@ -10,8 +9,6 @@ const withMDX = createMDXPlugin({
     jsxImportSource: 'restyle',
   },
 })
-
-await startServer()
 
 export default withMDX({
   output: 'export',
