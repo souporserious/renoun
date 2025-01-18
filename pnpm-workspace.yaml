@@ -15,6 +15,6 @@ catalog:
   'react-dom': 19.0.0
   'restyle': 3.1.1
   'shiki': 1.27.2
-  'ts-morph': 25.0.0
+  'ts-morph': 23.0.0
   'valibot': 1.0.0-beta.12
   'zod': 3.24.1

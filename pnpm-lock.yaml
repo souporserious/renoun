@@ -40,8 +40,8 @@ catalogs:
       specifier: 1.27.2
       version: 1.27.2
     ts-morph:
-      specifier: 25.0.0
-      version: 25.0.0
+      specifier: 23.0.0
+      version: 23.0.0
     valibot:
       specifier: 1.0.0-beta.12
       version: 1.0.0-beta.12
@@ -133,7 +133,7 @@ importers:
         version: 1.27.2
       ts-morph:
         specifier: 'catalog:'
-        version: 25.0.0
+        version: 23.0.0
       valibot:
         specifier: 'catalog:'
         version: 1.0.0-beta.12(typescript@5.7.3)
@@ -187,7 +187,7 @@ importers:
         version: 1.27.2
       ts-morph:
         specifier: 'catalog:'
-        version: 25.0.0
+        version: 23.0.0
       zod:
         specifier: 'catalog:'
         version: 3.24.1
@@ -235,7 +235,7 @@ importers:
         version: 1.27.2
       ts-morph:
         specifier: 'catalog:'
-        version: 25.0.0
+        version: 23.0.0
 
   packages/mdx:
     dependencies:
@@ -323,7 +323,7 @@ importers:
         version: 1.27.2
       ts-morph:
         specifier: 'catalog:'
-        version: 25.0.0
+        version: 23.0.0
       ws:
         specifier: ^8.18.0
         version: 8.18.0
@@ -1056,8 +1056,8 @@ packages:
   '@swc/helpers@0.5.15':
     resolution: {integrity: sha512-JQ5TuMi45Owi4/BIMAJBoSQoOJu12oOk/gADqlcUL9JEdHB8vyjUSsxqeNXnmXHjYKMi2WcYtezGEEhqUI/E2g==}
 
-  '@ts-morph/common@0.26.0':
-    resolution: {integrity: sha512-/RmKAtctStXqM5nECMQ46duT74Hoig/DBzhWXGHcodlDNrgRbsbwwHqSKFNbca6z9Xt/CUWMeXOsC9QEN1+rqw==}
+  '@ts-morph/common@0.24.0':
+    resolution: {integrity: sha512-c1xMmNHWpNselmpIqursHeOHHBTIsJLbB+NuovbTTRCNiTLEr/U9dbJ8qy0jd/O2x5pc3seWuOUN5R2IoOTp8A==}
 
   '@types/acorn@4.0.6':
     resolution: {integrity: sha512-veQTnWP+1D/xbxVrPC3zHnCZRjSrKfhbMUlEA43iMZLu7EsnTtkJklIuwrCPbOi8YkvDQAiW05VQQFvvz9oieQ==}
@@ -2174,6 +2174,11 @@ packages:
   minimist@1.2.8:
     resolution: {integrity: sha512-2yyAR8qBkN3YuheJanUpWC5U3bb5osDywNB8RzDVlDwDHbocAJveqqj1u8+SVD7jkWT4yvsHCpWqqWqAxb0zCA==}
 
+  mkdirp@3.0.1:
+    resolution: {integrity: sha512-+NsyUUAZDmo6YVHzL/stxSu3t9YS1iljliy3BSDrXJ/dkn1KYdmtZODGGjLcc9XLgVVpH4KshHB8XmZgMhaBXg==}
+    engines: {node: '>=10'}
+    hasBin: true
+
   mri@1.2.0:
     resolution: {integrity: sha512-tzzskb3bG8LvYGFF/mDTpq3jpI6Q9wc3LEmBaghu+DdCssd1FakN7Bc0hVNmEyGq1bq3RgfkCb3cmQLpNPOroA==}
     engines: {node: '>=4'}
@@ -2759,8 +2764,8 @@ packages:
   trough@2.2.0:
     resolution: {integrity: sha512-tmMpK00BjZiUyVyvrBK7knerNgmgvcV/KLVyuma/SC+TQN167GrMRciANTz09+k3zW8L8t60jWO1GpfkZdjTaw==}
 
-  ts-morph@25.0.0:
-    resolution: {integrity: sha512-ERPTUVO5qF8cEGJgAejGOsCVlbk8d0SDyiJsucKQT5XgqoZslv0Qml+gnui6Yy6o+uQqw5SestyW2HvlVtT/Sg==}
+  ts-morph@23.0.0:
+    resolution: {integrity: sha512-FcvFx7a9E8TUe6T3ShihXJLiJOiqyafzFKUO4aqIHDUCIvADdGNShcbc2W5PMr3LerXRv7mafvFZ9lRENxJmug==}
 
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
@@ -3656,10 +3661,11 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
-  '@ts-morph/common@0.26.0':
+  '@ts-morph/common@0.24.0':
     dependencies:
       fast-glob: 3.3.2
       minimatch: 9.0.5
+      mkdirp: 3.0.1
       path-browserify: 1.0.1
 
   '@types/acorn@4.0.6':
@@ -5173,6 +5179,8 @@ snapshots:
 
   minimist@1.2.8: {}
 
+  mkdirp@3.0.1: {}
+
   mri@1.2.0: {}
 
   ms@2.0.0: {}
@@ -5889,9 +5897,9 @@ snapshots:
 
   trough@2.2.0: {}
 
-  ts-morph@25.0.0:
+  ts-morph@23.0.0:
     dependencies:
-      '@ts-morph/common': 0.26.0
+      '@ts-morph/common': 0.24.0
       code-block-writer: 13.0.3
 
   tslib@2.8.1: {}
