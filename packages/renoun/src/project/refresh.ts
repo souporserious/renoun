@@ -1,8 +1,5 @@
 import type { FileSystemRefreshResult } from 'ts-morph'
-import { EventEmitter } from 'node:events'
 
-const REFRESHING_COMPLETED = 'refreshing:completed'
-const emitter = new EventEmitter()
 let isRefreshingProjects = false
 
 /** Active promises that are refreshing projects. */
@@ -10,32 +7,43 @@ export const activeRefreshingProjects = new Set<
   Promise<FileSystemRefreshResult>
 >()
 
-/** Mark the start of the refreshing process and emit an event. */
+/** List of callbacks to invoke when refreshing is completed */
+const refreshCompletedCallbacks = new Set<() => void>()
+
+/** Mark the start of the refreshing process. */
 export function startRefreshingProjects() {
   isRefreshingProjects = true
 }
 
-/** Mark the completion of the refreshing process and emit an event. */
+/** Mark the completion of the refreshing process and notify all callbacks. */
 export function completeRefreshingProjects() {
   if (isRefreshingProjects && activeRefreshingProjects.size === 0) {
     isRefreshingProjects = false
-    emitter.emit(REFRESHING_COMPLETED)
+    refreshCompletedCallbacks.forEach((callback) => callback())
+    refreshCompletedCallbacks.clear()
   }
 }
 
-/** Emit an event when all projects have finished refreshing. */
-export async function waitForRefreshingProjects() {
-  if (!isRefreshingProjects) return
+/**
+ * Register a callback to be called when all projects have finished refreshing.
+ * If the refreshing is already complete, the callback is invoked immediately.
+ * Otherwise, it will be called once the refreshing completes or after a timeout.
+ */
+export function waitForRefreshingProjects(callback: () => void) {
+  if (!isRefreshingProjects) {
+    callback()
+    return
+  }
 
-  return new Promise<void>((resolve) => {
-    const timeoutId = setTimeout(() => {
-      emitter.removeAllListeners(REFRESHING_COMPLETED)
-      resolve()
-    }, 10000)
+  const timeoutId = setTimeout(() => {
+    refreshCompletedCallbacks.delete(wrappedCallback)
+    callback()
+  }, 10000)
 
-    emitter.once(REFRESHING_COMPLETED, () => {
-      clearTimeout(timeoutId)
-      resolve()
-    })
-  })
+  const wrappedCallback = () => {
+    clearTimeout(timeoutId)
+    callback()
+  }
+
+  refreshCompletedCallbacks.add(wrappedCallback)
 }
