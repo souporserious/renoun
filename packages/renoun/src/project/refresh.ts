@@ -7,8 +7,8 @@ export const activeRefreshingProjects = new Set<
   Promise<FileSystemRefreshResult>
 >()
 
-/** List of callbacks to invoke when refreshing is completed */
-const refreshCompletedCallbacks = new Set<() => void>()
+/** Set of resolver functions to call when refreshing is completed */
+const refreshCompletedResolvers = new Set<() => void>()
 
 /** Mark the start of the refreshing process. */
 export function startRefreshingProjects() {
@@ -19,31 +19,31 @@ export function startRefreshingProjects() {
 export function completeRefreshingProjects() {
   if (isRefreshingProjects && activeRefreshingProjects.size === 0) {
     isRefreshingProjects = false
-    refreshCompletedCallbacks.forEach((callback) => callback())
-    refreshCompletedCallbacks.clear()
+    refreshCompletedResolvers.forEach((callback) => callback())
+    refreshCompletedResolvers.clear()
   }
 }
 
 /**
- * Register a callback to be called when all projects have finished refreshing.
- * If the refreshing is already complete, the callback is invoked immediately.
- * Otherwise, it will be called once the refreshing completes or after a timeout.
+ * Wait for all projects to finish refreshing. Returns a promise that resolves
+ * when refreshing is complete or after a timeout.
  */
-export function waitForRefreshingProjects(callback: () => void) {
+export async function waitForRefreshingProjects(): Promise<void> {
   if (!isRefreshingProjects) {
-    callback()
     return
   }
 
-  const timeoutId = setTimeout(() => {
-    refreshCompletedCallbacks.delete(wrappedCallback)
-    callback()
-  }, 10000)
+  return new Promise<void>((resolve) => {
+    const timeoutId = setTimeout(() => {
+      refreshCompletedResolvers.delete(wrappedResolve)
+      resolve()
+    }, 10000)
 
-  const wrappedCallback = () => {
-    clearTimeout(timeoutId)
-    callback()
-  }
+    function wrappedResolve() {
+      clearTimeout(timeoutId)
+      resolve()
+    }
 
-  refreshCompletedCallbacks.add(wrappedCallback)
+    refreshCompletedResolvers.add(wrappedResolve)
+  })
 }
