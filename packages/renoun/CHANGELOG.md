@@ -1,5 +1,157 @@
 # renoun
 
+## 8.0.0
+
+### Major Changes
+
+- 02facb1: Removes `renoun/collections` package export and all related types and utilities that were deprecated in [v7.8.0](https://github.com/souporserious/renoun/releases/tag/renoun%407.8.0).
+
+  ### Breaking Changes
+
+  The `renoun/collections` package was removed. To upgrade, move to the `renoun/file-system` package and use the `Directory` class instead. In most cases, you can replace `Collection` with `Directory` and `CompositeCollection` with `EntryGroup`.
+
+  #### Before
+
+  ```tsx
+  import { Collection, CompositeCollection } from 'renoun/collections'
+
+  const docs = new Collection({
+    filePattern: '*.mdx',
+    baseDirectory: 'docs',
+  })
+  const components = new Collection({
+    filePattern: '*.{ts,tsx}',
+    baseDirectory: 'src/components',
+  })
+  const compositeCollection = new CompositeCollection(docs, components)
+  ```
+
+  #### After
+
+  ```tsx
+  import { Directory, EntryGroup } from 'renoun/file-system'
+
+  const docs = new Directory({
+    path: 'docs',
+    include: '*.mdx',
+  })
+  const components = new Directory({
+    path: 'src/components',
+    include: '*.{ts,tsx}',
+  })
+  const entryGroup = new EntryGroup({
+    entries: [docs, components],
+  })
+  ```
+
+- eda5977: Removes all `*OrThrow` methods from `Directory` and `EntryGroup`. This also exports two new custom errors, `FileNotFoundError` and `FileExportNotFoundError` to handle missing files and exports.
+
+  ### Breaking Changes
+
+  `Directory` and `EntryGroup` no longer have `*OrThrow` methods, use the respective methods instead. To get the same functionality as before, you can catch the error and handle it accordingly:
+
+  ```ts
+  import { Directory, FileNotFoundError } from 'renoun/file-system'
+
+  const posts = new Directory({ path: 'posts' })
+
+  posts.getFile('hello-world', 'mdx').catch((error) => {
+    if (error instanceof FileNotFoundError) {
+      return undefined
+    }
+    throw error
+  })
+  ```
+
+### Minor Changes
+
+- fcd11af: Now `Directory#getParent` throws when called for the root directory. This makes the method easier to work with and aligns better with `File#getParent` always returning a `Directory` instance.
+- 71aa01f: Adds a default `mdx` loader to `JavaScriptFile` that uses the `MDXRenderer` component. This allows MDX files without imports to be rendered easily:
+
+  ```tsx
+  import { Directory } from 'renoun/file-system'
+
+  const posts = new Directory({ path: 'posts' })
+
+  export default async function Page({
+    params,
+  }: {
+    params: Promise<{ slug: string }>
+  }) {
+    const slug = (await params).slug
+    const post = await posts.getFile(slug, 'mdx')
+    const Content = await post.getExportValue('default')
+
+    return <Content />
+  }
+  ```
+
+- 21a952a: Adds `File#getText` method for retrieving the text contents of the file.
+- e107c2f: Allows instantiating `File` and `JavaScriptFile` more easily using only a `path`:
+
+  ```ts
+  import { JavaScriptFile } from 'renoun/file-system'
+
+  const indexFile = new JavaScriptFile({ path: 'src/index.ts' })
+  const indexFileExports = await indexFile.getExports()
+  ```
+
+- 3298b6b: Refactors `Generic` kind that can be returned from `JavaScriptFileExport#getType` into two separate `Utility` and `UtilityReference` kinds. This is more explicit in how types are resolved based on where the type resolution starts from.
+
+  ```ts
+  // "Partial" is resolved as a "Utility" kind when starting from the type alias
+  type Partial<Type> = {
+    [Key in keyof Type]?: Type[Key]
+  }
+
+  // Whereas "Partial" here is resolved as a "UtilityReference" kind when resolved from within a type
+  interface Props<Type> {
+    options: Partial<Type>
+  }
+  ```
+
+- a470c98: Adds an overload to `Directory#getFile` that allows for querying files by their path including the extension instead of needing to provide the extension separately:
+
+  ```ts
+  const rootDirectory = new Directory()
+  const file = await rootDirectory.getFile('tsconfig.json')
+  ```
+
+- 919b73d: Configures the [JavaScript RegExp Engine](https://shiki.style/guide/regex-engines#javascript-regexp-engine) for `shiki`.
+- eb6a7f2: The WebSocket server now uses `.gitignore` to ignore watching files instead of a hardcoded array.
+- 213cc11: Adds an option for specifying the `port` number when using `createServer` from `renoun/server`:
+
+  ```ts
+  import { createServer } from 'renoun/server'
+
+  createServer({ port: 3001 })
+  ```
+
+- b82df87: Allows File System type guards (`isDirectory`, `isFile`, `isJavaScriptFile`) to accept `undefined`. This saves from having to check if a file exists before checking its type.
+- 37cb7bb: Fixes running multiple renoun WebSocket servers by setting the port to `0` by default. This allows the OS to assign an available port.
+- 446effc: Exports `FileSystem`, `MemoryFileSystem`, and `NodeFileSystem` classes for creating custom file systems as well as `Repository` for normalizing git providers.
+
+  ```js
+  import { Directory, MemoryFileSystem } from 'renoun/file-system'
+
+  const fileSystem = new MemoryFileSystem({
+    'index.mdx': '# Hello, World!',
+  })
+  const directory = new Directory({ fileSystem })
+  ```
+
+### Patch Changes
+
+- 8f64055: Fixes error when adding a file at a previously deleted path by flushing the file deletion immediately.
+- 334f859: Fixes duplicate unions appearing in `JavaScriptFileExport#getType`.
+- 438dc94: Avoids creating duplicate watchers for the same directory.
+- 1cc52b8: Fixes Webpack cache warning from dynamic prettier import by moving to require.
+- ce751f1: Fixes non-exported types not being resolved.
+- 7b90440: Fixes `getType` erroring when inferring a re-exported type.
+- 54eeb9e: Fixes duplicate exports when there are overloads.
+- Updated dependencies [c394b9c]
+  - @renoun/mdx@1.3.1
+
 ## 7.9.0
 
 ### Minor Changes

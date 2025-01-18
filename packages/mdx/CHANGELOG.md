@@ -1,5 +1,11 @@
 # @renoun/mdx
 
+## 1.3.1
+
+### Patch Changes
+
+- c394b9c: Moves `shiki` to dynamic import to avoid ESM require errors.
+
 ## 1.3.0
 
 ### Minor Changes
