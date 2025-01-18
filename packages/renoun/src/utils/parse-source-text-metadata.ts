@@ -1,4 +1,3 @@
-import crypto from 'node:crypto'
 import { join, posix, isAbsolute } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import type { Project, SourceFile } from 'ts-morph'
@@ -60,13 +59,7 @@ export async function parseSourceTextMetadata({
 
       // generate a unique id for the code block based on the contents if a filename is not provided
       if (id === undefined) {
-        const hex = crypto
-          .createHash('sha256')
-          .update(props.value)
-          .digest('hex')
-        if (hex) {
-          id = hex
-        }
+        id = await generateId(props.value)
       }
     }
   } else if ('source' in props) {
@@ -194,4 +187,15 @@ export async function parseSourceTextMetadata({
     value: sourceFile ? sourceFile.getFullText() : finalValue,
     language: finalLanguage,
   }
+}
+
+/** Generates a SHA-256 hash of a string. */
+async function generateId(value: string): Promise<string> {
+  const hashBuffer = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(value)
+  )
+  return Array.from(new Uint8Array(hashBuffer))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('')
 }
