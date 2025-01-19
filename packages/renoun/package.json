@@ -32,6 +32,10 @@
   },
   "type": "module",
   "imports": {
+    "#get-project": {
+      "react-server": "./src/project/get-project.server.ts",
+      "default": "./src/project/get-project.client.ts"
+    },
     "#fixtures/*": "./fixtures/*"
   },
   "exports": {
