@@ -11,13 +11,13 @@ import {
   getFileExports as baseGetFileExports,
   getFileExportMetadata as baseGetFileExportMetadata,
 } from '../utils/get-file-exports.js'
-import { getRootDirectory } from '../utils/get-root-directory.js'
+import { getRootDirectory } from '#get-root-directory'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.js'
 import type { SymbolFilter } from '../utils/resolve-type.js'
 import { resolveTypeAtLocation as baseResolveTypeAtLocation } from '../utils/resolve-type-at-location.js'
 import { transpileSourceFile as baseTranspileSourceFile } from '../utils/transpile-source-file.js'
 import { WebSocketServer } from './rpc/server.js'
-import { getProject } from './get-project.js'
+import { getProject } from './get-project.server.js'
 import type { ProjectOptions } from './types.js'
 
 let currentHighlighter: Highlighter | null = null

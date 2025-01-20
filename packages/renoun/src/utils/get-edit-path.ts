@@ -1,6 +1,6 @@
 import { join, posix } from 'node:path'
 
-import { getRootDirectory } from '../utils/get-root-directory.js'
+import { getRootDirectory } from '#get-root-directory'
 import { getEditorUri } from './get-editor-uri.js'
 import { getGitFileUrl } from '../utils/get-git-file-url.js'
 import { loadConfig } from '../utils/load-config.js'

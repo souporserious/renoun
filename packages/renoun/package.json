@@ -32,11 +32,15 @@
   },
   "type": "module",
   "imports": {
+    "#fixtures/*": "./fixtures/*",
     "#get-project": {
       "react-server": "./src/project/get-project.server.ts",
       "default": "./src/project/get-project.client.ts"
     },
-    "#fixtures/*": "./fixtures/*"
+    "#get-root-directory": {
+      "react-server": "./src/utils/get-root-directory.ts",
+      "default": "./src/utils/get-root-directory.client.ts"
+    }
   },
   "exports": {
     "./assets": {

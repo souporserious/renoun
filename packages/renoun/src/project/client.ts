@@ -16,7 +16,7 @@ import type { ResolvedType, SymbolFilter } from '../utils/resolve-type.js'
 import type { resolveTypeAtLocation as baseResolveTypeAtLocation } from '../utils/resolve-type-at-location.js'
 import type { DistributiveOmit } from '../types.js'
 import { WebSocketClient } from './rpc/client.js'
-import { getProject } from './get-project.js'
+import { getProject } from '#get-project'
 import type { ProjectOptions } from './types.js'
 
 let client: WebSocketClient | undefined

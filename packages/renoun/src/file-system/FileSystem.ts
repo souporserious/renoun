@@ -7,7 +7,7 @@ import {
   resolveTypeAtLocation,
 } from '../project/client.js'
 import type { ProjectOptions } from '../project/types.js'
-import { getRootDirectory } from '../utils/get-root-directory.js'
+import { getRootDirectory } from '#get-root-directory'
 import {
   directoryName,
   joinPaths,
