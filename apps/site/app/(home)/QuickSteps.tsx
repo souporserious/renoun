@@ -17,7 +17,7 @@ const posts = new Directory({ path: 'posts' })`,
     content: `Query and render your file system entries programmatically using a simple API.`,
     code: `import { Directory } from 'renoun/file-system'
 
-const posts = new Directory({ path: 'posts'})
+const posts = new Directory({ path: 'posts' })
 
 async function Page({ slug }: { slug: string }) {
   const post = await posts.getFile(slug, 'mdx')
