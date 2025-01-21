@@ -17,6 +17,7 @@ import { Toolbar } from './Toolbar.js'
 import {
   generateFocusedLinesGradient,
   generateHighlightedLinesGradient,
+  getScrollContainerStyles,
 } from './utils.js'
 
 export type BaseCodeBlockProps = {
@@ -228,13 +229,16 @@ async function CodeBlockAsync({
             gridTemplateColumns: showLineNumbers ? 'auto 1fr' : undefined,
             gridAutoRows: 'max-content',
             margin: 0,
-            overflow: 'auto',
             backgroundColor: shouldRenderToolbar ? 'inherit' : theme.background,
             color: shouldRenderToolbar ? undefined : theme.foreground,
             borderRadius: shouldRenderToolbar ? 'inherit' : 5,
             boxShadow: shouldRenderToolbar
               ? undefined
               : `0 0 0 1px ${theme.panel.border}`,
+            ...getScrollContainerStyles({
+              paddingBottom: containerPadding.bottom,
+              color: theme.scrollbarSlider.hoverBackground,
+            }),
             ...(highlightedLines
               ? {
                   '--h0': `rgba(0, 0, 0, 0)`,
@@ -269,8 +273,7 @@ async function CodeBlockAsync({
               <Code
                 css={{
                   gridColumn: 2,
-                  padding: containerPadding.all,
-                  paddingLeft: 0,
+                  padding: `${containerPadding.vertical} ${containerPadding.horizontal} 0 0`,
                   ...focusedLinesStyles,
                 }}
               >
@@ -294,7 +297,7 @@ async function CodeBlockAsync({
             <Code
               css={{
                 gridColumn: 1,
-                padding: containerPadding.all,
+                padding: `${containerPadding.vertical} ${containerPadding.horizontal} 0`,
                 ...focusedLinesStyles,
               }}
             >
@@ -347,7 +350,12 @@ export function CodeBlock(props: CodeBlockProps) {
     return <CodeBlockAsync {...props} />
   }
 
-  const padding = props.style?.container?.padding ?? '0.5lh'
+  const containerPadding = computeDirectionalStyles(
+    'padding',
+    '0.5lh',
+    props.css?.container,
+    props.style?.container
+  )
 
   return (
     <Suspense
@@ -358,13 +366,16 @@ export function CodeBlock(props: CodeBlockProps) {
               gridTemplateColumns: props.showLineNumbers
                 ? 'auto 1fr'
                 : undefined,
+              ...getScrollContainerStyles({
+                paddingBottom: containerPadding.bottom,
+              }),
             }}
             className={props.className?.container}
             style={props.style?.container}
           >
             {props.showLineNumbers && (
               <FallbackLineNumbers
-                css={{ padding }}
+                css={{ padding: containerPadding.all }}
                 className={props.className?.lineNumbers}
                 style={props.style?.lineNumbers}
               >
@@ -376,7 +387,7 @@ export function CodeBlock(props: CodeBlockProps) {
             )}
             <FallbackCode
               css={{
-                padding,
+                padding: `${containerPadding.vertical} ${containerPadding.horizontal} 0`,
                 gridColumn: props.showLineNumbers ? 2 : 1,
               }}
             >
@@ -427,7 +438,6 @@ const FallbackPre = styled('pre', {
   whiteSpace: 'pre',
   wordWrap: 'break-word',
   margin: 0,
-  overflow: 'auto',
   borderRadius: 5,
 })
 

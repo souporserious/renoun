@@ -1,3 +1,5 @@
+import type { CSSObject } from 'restyle'
+
 /**
  * Get the closest scrollable viewport of a node.
  * @internal
@@ -208,4 +210,32 @@ export function generateFocusedLinesGradient(highlightedLines: string) {
   }
 
   return `linear-gradient(to bottom, ${maskPieces.join(', ')})`
+}
+
+/** Returns the CSS styles for the scroll container accounting for bottom padding. */
+export function getScrollContainerStyles({
+  paddingBottom,
+  color,
+}: {
+  paddingBottom?: string
+  color?: string
+}) {
+  return {
+    overflowX: 'scroll',
+    '::-webkit-scrollbar': {
+      height: paddingBottom,
+    },
+    '::-webkit-scrollbar-thumb': {
+      backgroundColor: 'rgba(0, 0, 0, 0)',
+    },
+    ':hover::-webkit-scrollbar-thumb': {
+      backgroundColor: color,
+    },
+    '@supports (-webkit-touch-callout: none)': {
+      paddingBottom,
+    },
+    '@-moz-document url-prefix()': {
+      paddingBottom,
+    },
+  } satisfies CSSObject
 }

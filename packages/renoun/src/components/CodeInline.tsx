@@ -6,6 +6,7 @@ import type { Languages } from '../utils/get-language.js'
 import { getThemeColors } from '../utils/get-theme-colors.js'
 import type { Token } from '../utils/get-tokens.js'
 import { CopyButton } from './CodeBlock/CopyButton.js'
+import { getScrollContainerStyles } from './CodeBlock/utils.js'
 
 export type CodeInlineProps = {
   /** Code snippet to be highlighted. */
@@ -86,23 +87,11 @@ async function CodeInlineAsync({
     boxShadow: `0 0 0 1px ${theme.panel.border}`,
     borderRadius: 5,
     whiteSpace: 'nowrap',
-    overflowX: 'scroll',
     position: 'relative',
-    '::-webkit-scrollbar': {
-      height: paddingY,
-    },
-    '::-webkit-scrollbar-thumb': {
-      backgroundColor: 'rgba(0, 0, 0, 0)',
-    },
-    ':hover::-webkit-scrollbar-thumb': {
-      backgroundColor: theme.scrollbarSlider.hoverBackground,
-    },
-    '@supports (-webkit-touch-callout: none)': {
+    ...getScrollContainerStyles({
       paddingBottom: paddingY,
-    },
-    '@-moz-document url-prefix()': {
-      paddingBottom: paddingY,
-    },
+      color: theme.scrollbarSlider.hoverBackground,
+    }),
     ...cssProp,
   })
   const children = tokens.map((line, lineIndex) => (
@@ -174,17 +163,8 @@ export function CodeInline({
               gap: props.allowCopy ? '1ch' : undefined,
               borderRadius: 5,
               whiteSpace: 'nowrap',
-              overflowX: 'scroll',
               position: 'relative',
-              '::-webkit-scrollbar': {
-                height: paddingY,
-              },
-              '::-webkit-scrollbar-thumb': {
-                backgroundColor: 'rgba(0, 0, 0, 0)',
-              },
-              '@-moz-document url-prefix()': {
-                paddingBottom: paddingY,
-              },
+              ...getScrollContainerStyles({ paddingBottom: paddingY }),
               ...props.css,
             }}
             className={props.className}
