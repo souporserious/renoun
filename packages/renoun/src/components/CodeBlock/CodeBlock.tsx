@@ -253,7 +253,7 @@ async function CodeBlockAsync({
           className={
             shouldRenderToolbar ? undefined : props.className?.container
           }
-          style={props.style?.container}
+          style={shouldRenderToolbar ? undefined : props.style?.container}
         >
           {showLineNumbers ? (
             <>
@@ -356,44 +356,103 @@ export function CodeBlock(props: CodeBlockProps) {
     props.css?.container,
     props.style?.container
   )
+  const shouldRenderToolbar = Boolean(
+    props.showToolbar === undefined
+      ? props.filename || ('source' in props && props.source) || props.allowCopy
+      : props.showToolbar
+  )
+  const Container = shouldRenderToolbar ? StyledContainer : React.Fragment
 
   return (
     <Suspense
       fallback={
         'value' in props && props.value ? (
-          <FallbackPre
-            css={{
-              gridTemplateColumns: props.showLineNumbers
-                ? 'auto 1fr'
-                : undefined,
-              ...getScrollContainerStyles({
-                paddingBottom: containerPadding.bottom,
-              }),
-            }}
-            className={props.className?.container}
-            style={props.style?.container}
+          <Container
+            css={
+              shouldRenderToolbar
+                ? {
+                    borderRadius: 5,
+                    boxShadow: '0 0 0 1px #666',
+                    ...props.css?.container,
+                    padding: 0,
+                  }
+                : {}
+            }
+            className={
+              shouldRenderToolbar ? props.className?.container : undefined
+            }
+            style={shouldRenderToolbar ? props.style?.container : undefined}
           >
-            {props.showLineNumbers && (
-              <FallbackLineNumbers
-                css={{ padding: containerPadding.all }}
-                className={props.className?.lineNumbers}
-                style={props.style?.lineNumbers}
-              >
-                {Array.from(
-                  { length: props.value.split('\n').length },
-                  (_, index) => index + 1
-                ).join('\n')}
-              </FallbackLineNumbers>
+            {shouldRenderToolbar && (
+              <FallbackToolbar
+                css={{ padding: containerPadding.all, ...props.css?.toolbar }}
+                className={props.className?.toolbar}
+                style={props.style?.toolbar}
+              />
             )}
-            <FallbackCode
+            <FallbackPre
               css={{
-                padding: `${containerPadding.vertical} ${containerPadding.horizontal} 0`,
-                gridColumn: props.showLineNumbers ? 2 : 1,
+                WebkitTextSizeAdjust: 'none',
+                textSizeAdjust: 'none',
+                position: 'relative',
+                whiteSpace: 'pre',
+                wordWrap: 'break-word',
+                display: 'grid',
+                gridAutoRows: 'max-content',
+                gridTemplateColumns: props.showLineNumbers
+                  ? 'auto 1fr'
+                  : undefined,
+                margin: 0,
+                backgroundColor: shouldRenderToolbar
+                  ? 'inherit'
+                  : 'transparent',
+                color: shouldRenderToolbar ? undefined : 'inherit',
+                borderRadius: shouldRenderToolbar ? 'inherit' : 5,
+                boxShadow: shouldRenderToolbar ? undefined : '0 0 0 1px #666',
+                ...getScrollContainerStyles({
+                  paddingBottom: containerPadding.bottom,
+                }),
+                ...(shouldRenderToolbar ? {} : props.css?.container),
+                padding: 0,
               }}
+              className={
+                shouldRenderToolbar ? undefined : props.className?.container
+              }
+              style={shouldRenderToolbar ? undefined : props.style?.container}
             >
-              {props.value}
-            </FallbackCode>
-          </FallbackPre>
+              {props.showLineNumbers && (
+                <FallbackLineNumbers
+                  css={{
+                    padding: containerPadding.all,
+                    gridColumn: 1,
+                    gridRow: '1 / -1',
+                    width: '4ch',
+                    backgroundPosition: 'inherit',
+                    backgroundImage: 'inherit',
+                    ...props.css?.lineNumbers,
+                  }}
+                  className={props.className?.lineNumbers}
+                  style={props.style?.lineNumbers}
+                >
+                  {Array.from(
+                    { length: props.value.split('\n').length },
+                    (_, index) => index + 1
+                  ).join('\n')}
+                </FallbackLineNumbers>
+              )}
+
+              <FallbackCode
+                css={{
+                  gridColumn: props.showLineNumbers ? 2 : 1,
+                  padding: props.showLineNumbers
+                    ? `${containerPadding.vertical} ${containerPadding.horizontal} 0 0`
+                    : `${containerPadding.vertical} ${containerPadding.horizontal} 0`,
+                }}
+              >
+                {props.value}
+              </FallbackCode>
+            </FallbackPre>
+          </Container>
         ) : null
       }
     >
@@ -405,6 +464,7 @@ export function CodeBlock(props: CodeBlockProps) {
 const languageKey = 'language-'
 const languageLength = languageKey.length
 
+/** Parses the props of an MDX `pre` element for passing to `CodeBlock`. */
 CodeBlock.parsePreProps = (
   props: React.ComponentProps<NonNullable<MDXComponents['pre']>>
 ) => {
@@ -433,12 +493,16 @@ const Code = styled('code', {
   backgroundColor: 'transparent',
 })
 
+const FallbackToolbar = styled('div', {
+  padding: '0.5lh',
+  boxShadow: `inset 0 -1px 0 0 #666`,
+})
+
 const FallbackPre = styled('pre', {
   display: 'grid',
   whiteSpace: 'pre',
   wordWrap: 'break-word',
   margin: 0,
-  borderRadius: 5,
 })
 
 const FallbackLineNumbers = styled('span', {
@@ -457,4 +521,5 @@ const FallbackLineNumbers = styled('span', {
 const FallbackCode = styled('code', {
   display: 'block',
   width: 'max-content',
+  backgroundColor: 'transparent',
 })
