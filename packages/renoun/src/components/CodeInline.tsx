@@ -97,6 +97,9 @@ async function CodeInlineAsync({
     ':hover::-webkit-scrollbar-thumb': {
       backgroundColor: theme.scrollbarSlider.hoverBackground,
     },
+    '@supports (-webkit-touch-callout: none)': {
+      paddingBottom: paddingY,
+    },
     '@-moz-document url-prefix()': {
       paddingBottom: paddingY,
     },
