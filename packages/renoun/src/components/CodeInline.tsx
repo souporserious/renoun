@@ -76,7 +76,7 @@ async function CodeInlineAsync({
   })
   const theme = await getThemeColors()
   const [classNames, Styles] = css({
-    display: allowCopy ? 'inline-flex' : 'inline-block',
+    display: allowCopy ? 'inline-grid' : 'inline-block',
     alignItems: allowCopy ? 'center' : undefined,
     verticalAlign: 'text-bottom',
     padding: `${paddingY} ${paddingX} 0`,
@@ -120,11 +120,14 @@ async function CodeInlineAsync({
         className={className ? `${classNames} ${className}` : classNames}
         style={style}
       >
-        {allowCopy ? <span>{children}</span> : children}
+        {allowCopy ? <Container>{children}</Container> : children}
         {allowCopy ? (
           <CopyButton
             value={value}
             css={{
+              position: 'sticky',
+              right: 0,
+              gridArea: '1 / 2',
               marginLeft: 'auto',
               color: theme.activityBar.foreground,
             }}
@@ -135,6 +138,11 @@ async function CodeInlineAsync({
     </>
   )
 }
+
+const Container = styled('span', {
+  gridArea: '1 / 1',
+  width: 'max-content',
+})
 
 const CodeFallback = styled('code', {
   display: 'inline-flex',
