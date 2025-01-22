@@ -77,7 +77,12 @@ export async function getFileExportMetadata(
     throw new Error(`[renoun] Declaration not found at position ${position}`)
   }
 
-  const exportDeclaration = declaration.getFirstAncestorByKindOrThrow(kind)
+  const exportDeclaration = declaration.getFirstAncestorByKind(kind)
+  if (!exportDeclaration) {
+    throw new Error(
+      `[renoun] Could not resolve type for file path "${filePath}" at position "${position}". No ancestor of kind "${tsMorph.SyntaxKind[kind]}" was found starting from: "${declaration.getText()}".`
+    )
+  }
 
   return {
     name: getName(
