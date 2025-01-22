@@ -1,5 +1,18 @@
 # renoun
 
+## 8.1.0
+
+### Minor Changes
+
+- 339ef75: Aligns `CodeBlock` scroll container styles with `CodeInline`.
+
+### Patch Changes
+
+- 5390d03: Fixes [Standard Schema](https://github.com/standard-schema/standard-schema) types not working by copying them directly into the project.
+- 94f53da: Fixes `CodeBlock` fallback layout shift during development.
+- 5a641b3: Fixes collapsed right padding for `CodeInline` when container is scrolled to the end.
+- ca25cd3: Fixes missing bottom padding for `CodeInline` in iOS Safari.
+
 ## 8.0.0
 
 ### Major Changes
