@@ -1,5 +1,4 @@
 import * as React from 'react'
-import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { MDXContent } from '@renoun/mdx'
 import { rehypePlugins, remarkPlugins } from '@renoun/mdx'
 import { minimatch } from 'minimatch'
@@ -35,6 +34,7 @@ import {
   type GetFileUrlOptions,
   type GetDirectoryUrlOptions,
 } from './Repository.js'
+import type { StandardSchemaV1 } from './standard-schema.js'
 import type { ExtractFileExtension, IsNever } from './types.js'
 
 export { FileSystem } from './FileSystem.js'
