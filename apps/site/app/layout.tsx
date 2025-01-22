@@ -5,7 +5,7 @@ import { PackageInstallScript } from 'renoun/components'
 
 export const metadata = {
   title: 'renoun',
-  description: 'The toolkit to build docs as great as your product.',
+  description: 'The Documentation Toolkit for React',
 } satisfies Metadata
 
 export default function RootLayout({

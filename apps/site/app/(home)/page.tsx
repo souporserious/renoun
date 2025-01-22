@@ -39,7 +39,7 @@ export default function Page() {
             margin: 0,
           }}
         >
-          Enhance Your Documentation
+          The Documentation Toolkit for React
         </h1>
         <p
           css={{
