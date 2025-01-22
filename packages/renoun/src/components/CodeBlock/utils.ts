@@ -212,7 +212,10 @@ export function generateFocusedLinesGradient(highlightedLines: string) {
   return `linear-gradient(to bottom, ${maskPieces.join(', ')})`
 }
 
-/** Returns the CSS styles for the scroll container accounting for bottom padding. */
+/**
+ * Returns the CSS styles for the scroll container accounting for bottom padding.
+ * @internal
+ */
 export function getScrollContainerStyles({
   paddingBottom,
   color,
