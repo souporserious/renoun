@@ -5,7 +5,7 @@
       <img src="/packages/renoun/images/logo-light.png" alt="renoun" width="180"/>
     </picture>
   </a>
-  <h2>Create Engaging Content and Documentation</h2>
+  <h2>The Documentation Toolkit for React</h2>
   <p>
 Meticulously crafted React components and utilities to<br/>help you author technical content and documentation.
   </p>
