@@ -47,7 +47,7 @@ export type APIReferenceProps =
   | (SourceString & Filter)
   | (SourceExport & Filter)
 
-/** Displays type documentation for all types exported from a file path or types related to a collection export source. */
+/** Displays type documentation for all types exported from a file path, `JavaScriptFile`, or `JavaScriptFileExport`. */
 export function APIReference(props: APIReferenceProps) {
   return (
     <Suspense fallback="Loading API references...">
