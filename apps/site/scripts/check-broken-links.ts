@@ -9,6 +9,7 @@ interface Link {
   originUrl: string
   html: string
   status?: number | string
+  trace?: string[]
 }
 
 const baseUrl = 'http://localhost:3000'
@@ -134,6 +135,7 @@ function extractLinks(html: string, originUrl: string): Link[] {
     const href = match[1]
     const fullUrl = href.startsWith('/') ? baseUrl + href : href
 
+    // Restrict to links that are inside `baseUrl` domain
     if (fullUrl.startsWith(baseUrl)) {
       links.push({
         html: fullHtml,
@@ -149,7 +151,7 @@ function extractLinks(html: string, originUrl: string): Link[] {
 const checkedLinks = new Set<string>()
 
 /** Send an HTTP/HTTPS GET request to check link validity. */
-function checkLink(link: Link): Promise<void> {
+function checkLink(link: Link, trace: string[]): Promise<void> {
   const { url, originUrl, html } = link
 
   if (checkedLinks.has(url)) {
@@ -160,6 +162,7 @@ function checkLink(link: Link): Promise<void> {
         url,
         originUrl,
         html,
+        trace,
         status: brokenLink.status,
       })
     }
@@ -180,6 +183,7 @@ function checkLink(link: Link): Promise<void> {
             url,
             originUrl,
             html,
+            trace,
             status: response.statusCode,
           })
         }
@@ -189,12 +193,15 @@ function checkLink(link: Link): Promise<void> {
 
     request.on('error', (error) => {
       console.log(error)
+
       brokenLinks.push({
         url,
         originUrl,
         html,
+        trace,
         status: 'Network Error',
       })
+
       resolve()
     })
 
@@ -203,18 +210,21 @@ function checkLink(link: Link): Promise<void> {
 }
 
 /** Recursively crawl pages and check all links. */
-async function crawlPage(url: string, originUrl: string): Promise<void> {
+async function crawlPage(url: string, trace: string[] = []): Promise<void> {
   if (visitedPages.has(url)) return
   visitedPages.add(url)
 
+  const currentTrace = [...trace, url]
   const allLinks = await fetchPage(url)
   const internalLinks = allLinks.filter((link) => link.url.startsWith(baseUrl))
 
   // Check links on the current page
-  await Promise.all(allLinks.map((link) => checkLink(link)))
+  await Promise.all(allLinks.map((link) => checkLink(link, currentTrace)))
 
   // Recursively crawl internal links
-  await Promise.all(internalLinks.map((link) => crawlPage(link.url, url)))
+  await Promise.all(
+    internalLinks.map((link) => crawlPage(link.url, currentTrace))
+  )
 }
 
 /** Display broken links with full <a> tag HTML content. */
@@ -224,24 +234,21 @@ function displayBrokenLinks() {
     return
   }
 
-  console.log('Broken links found 🚨')
+  console.log('\nBroken links found 🚨\n--------------------')
 
-  // Group broken links by originUrl for better readability
-  const groupedByPage: { [originUrl: string]: Link[] } = {}
+  for (const link of brokenLinks) {
+    const trace = link.trace
+      ? link.trace
+          .map((segment) => segment.replace(baseUrl, '') || '/')
+          .join(' → ')
+      : '(unknown)'
 
-  brokenLinks.forEach((link) => {
-    if (!groupedByPage[link.originUrl]) {
-      groupedByPage[link.originUrl] = []
-    }
-    groupedByPage[link.originUrl].push(link)
-  })
-
-  // Log each broken link by its origin page with the full <a> tag HTML content
-  for (const [originUrl, links] of Object.entries(groupedByPage)) {
-    console.log(`\n${originUrl.replace(baseUrl, '')}`)
-    links.forEach((link) => {
-      console.log(`[${link.status}]: ${link.html}`)
-    })
+    console.log(
+      `\nLink:   ${link.html}\n` +
+        `URL:    ${link.url}\n` +
+        `Trace:  ${trace}\n` +
+        `Status: ${link.status}`
+    )
   }
 }
 
@@ -254,7 +261,7 @@ function displayBrokenLinks() {
     serverProcess = await serveOutDirectory()
 
     console.log('Starting broken link checker...')
-    await crawlPage(baseUrl, baseUrl)
+    await crawlPage(baseUrl)
     displayBrokenLinks()
   } catch (error) {
     throw error
