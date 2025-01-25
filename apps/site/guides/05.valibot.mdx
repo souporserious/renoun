@@ -9,12 +9,12 @@ export const metadata = {
 import { Directory, withSchema } from 'renoun/file-system'
 import * as v from 'valibot'
 
-const frontmatterSchema = {
+const frontmatterSchema = v.object({
   title: v.string(),
   date: v.date(),
   summary: v.optional(v.string()),
   tags: v.optional(v.array(v.string())),
-}
+})
 
 const posts = new Directory({
   path: 'posts',
@@ -53,12 +53,12 @@ Now, we'll create a schema using `valibot` for the front matter of an MDX file:
 ```ts
 import * as v from 'valibot'
 
-const frontmatterSchema = {
+const frontmatterSchema = v.object({
   title: v.string(),
   date: v.date(),
   summary: v.optional(v.string()),
   tags: v.optional(v.array(v.string())),
-}
+})
 ```
 
 ### Apply to a Directory
@@ -69,12 +69,12 @@ We can now apply the Valibot `frontmatterSchema` to your collection using the `s
 import { Directory, withSchema } from 'renoun/file-system'
 import * as v from 'valibot'
 
-const frontmatterSchema = {
+const frontmatterSchema = v.object({
   title: v.string(),
   date: v.date(),
   summary: v.optional(v.string()),
   tags: v.optional(v.array(v.string())),
-}
+})
 
 const posts = new Directory({
   path: 'posts',

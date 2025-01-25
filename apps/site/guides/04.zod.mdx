@@ -9,12 +9,12 @@ export const metadata = {
 import { Directory, withSchema } from 'renoun/file-system'
 import { z } from 'zod'
 
-const frontmatterSchema = {
+const frontmatterSchema = z.object({
   title: z.string(),
   date: z.date(),
   summary: z.string().optional(),
   tags: z.array(z.string()).optional(),
-}
+})
 
 const posts = new Directory({
   path: 'posts',
@@ -53,12 +53,12 @@ Now, we'll create a schema using `zod` for the front matter of an MDX file:
 ```ts
 import { z } from 'zod'
 
-const frontmatterSchema = {
+const frontmatterSchema = z.object({
   title: z.string(),
   date: z.date(),
   summary: z.string().optional(),
   tags: z.array(z.string()).optional(),
-}
+})
 ```
 
 ### Apply to a Directory
@@ -69,12 +69,12 @@ We can now apply the Zod `frontmatterSchema` to your `Directory` using the `with
 import { Directory, withSchema } from 'renoun/file-system'
 import { z } from 'zod'
 
-const frontmatterSchema = {
+const frontmatterSchema = z.object({
   title: z.string(),
   date: z.date(),
   summary: z.string().optional(),
   tags: z.array(z.string()).optional(),
-}
+})
 
 const posts = new Directory({
   path: 'posts',
