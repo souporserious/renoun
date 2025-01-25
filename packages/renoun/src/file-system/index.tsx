@@ -106,14 +106,20 @@ interface ModuleLoaderWithSchema<
   runtime?: ModuleRuntimeLoader<InferModuleExports<Types>>
 }
 
+/** Provides type inference for the module loader. */
 export function withSchema<
   Types extends ModuleExports,
 >(): ModuleLoaderWithSchema<Types>
 
+/** A function that resolves the module runtime. */
 export function withSchema<Types extends ModuleExports>(
   runtime: ModuleRuntimeLoader<NoInfer<Types>>
 ): ModuleLoaderWithSchema<Types, true>
 
+/**
+ * A schema that follows the Standard Schema Spec like Zod, Valibot, and Arktype
+ * or custom validation functions to ensure file exports conform to a specific schema.
+ */
 export function withSchema<
   Types extends ModuleExports = never,
   Schema extends ModuleExports = ModuleExports,
