@@ -118,13 +118,22 @@ export default withMDX({
 
 ## MDX Code Blocks
 
-Use the `MDXComponents` export to override the `pre` and `code` components in your project's `mdx-components.tsx` file:
+Use the `CodeBlock` and `CodeInline` components to override the `pre` and `code` components respectively in your project's `mdx-components.tsx` file:
 
 ```tsx filename="02.mdx-components.tsx"
-import { MDXComponents } from 'renoun/components'
+import { CodeBlock, CodeInline } from 'renoun/components'
+import type { MDXComponents } from 'renoun/mdx'
 
 export function useMDXComponents() {
-  return MDXComponents
+  return {
+    pre: (props) => {
+      const { value, language } = CodeBlock.parsePreProps(props)
+      return <CodeBlock allowErrors value={value} language={language} />
+    },
+    code: (props) => {
+      return <CodeInline value={props.children} language="typescript" />
+    },
+  } satisfies MDXComponents
 }
 ```
 

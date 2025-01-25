@@ -2,8 +2,7 @@ import * as React from 'react'
 import * as jsxRuntime from 'react/jsx-runtime'
 import * as jsxDevRuntime from 'react/jsx-dev-runtime'
 import type { CompileOptions } from '@mdx-js/mdx'
-
-import type { MDXComponents } from './MDXComponents.js'
+import type { MDXComponents } from '@renoun/mdx'
 
 /** Compiles and renders a string of MDX content. */
 export async function MDXRenderer({

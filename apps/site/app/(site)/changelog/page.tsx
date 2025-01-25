@@ -1,5 +1,4 @@
-import { MDXComponents } from 'renoun/components'
-
+import { MDXComponents } from 'components/MDXComponents'
 import Changelog from '../../../../../packages/renoun/CHANGELOG.md'
 
 export default function Page() {
@@ -7,6 +6,7 @@ export default function Page() {
     <main className="prose">
       <Changelog
         components={{
+          ...MDXComponents,
           pre: (props) => (
             <MDXComponents.pre
               allowErrors

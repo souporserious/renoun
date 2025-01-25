@@ -3,8 +3,10 @@ import type { MDXContent } from '@renoun/mdx'
 import { rehypePlugins, remarkPlugins } from '@renoun/mdx'
 import { minimatch } from 'minimatch'
 
-import { MDXComponents } from '../components/MDXComponents.js'
+import { CodeBlock } from '../components/CodeBlock/index.js'
+import { CodeInline } from '../components/CodeInline.js'
 import { MDXRenderer } from '../components/MDXRenderer.js'
+import type { MDXComponents } from '../mdx/index.js'
 import { getFileExportMetadata } from '../project/client.js'
 import { createSlug, type SlugCasings } from '../utils/create-slug.js'
 import { formatNameAsTitle } from '../utils/format-name-as-title.js'
@@ -42,6 +44,16 @@ export { MemoryFileSystem } from './MemoryFileSystem.js'
 export { NodeFileSystem } from './NodeFileSystem.js'
 export { Repository } from './Repository.js'
 
+const mdxComponents = {
+  pre: (props) => {
+    const { value, language } = CodeBlock.parsePreProps(props)
+    return <CodeBlock allowErrors value={value} language={language} />
+  },
+  code: (props) => {
+    return <CodeInline value={props.children} language="typescript" />
+  },
+} satisfies MDXComponents
+
 const defaultLoaders: Record<string, ModuleLoader<any>> = {
   mdx: async (_, file) => {
     return {
@@ -51,7 +63,7 @@ const defaultLoaders: Record<string, ModuleLoader<any>> = {
         return (
           <MDXRenderer
             value={value}
-            components={MDXComponents}
+            components={mdxComponents}
             rehypePlugins={rehypePlugins}
             remarkPlugins={remarkPlugins}
           />
