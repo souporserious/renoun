@@ -88,6 +88,7 @@ describe('resolveType', () => {
             },
             "signatures": [
               {
+                "filePath": "test.ts",
                 "generics": [],
                 "kind": "FunctionSignature",
                 "modifier": undefined,
@@ -136,6 +137,16 @@ describe('resolveType', () => {
                     "text": "{ objectValue: number; }",
                   },
                 ],
+                "position": {
+                  "end": {
+                    "column": 72,
+                    "line": 8,
+                  },
+                  "start": {
+                    "column": 7,
+                    "line": 8,
+                  },
+                },
                 "returnType": "Promise<number>",
                 "text": "(parameterValue: { objectValue: number; }) => Promise<number>",
               },
@@ -246,6 +257,7 @@ describe('resolveType', () => {
               },
               "signatures": [
                 {
+                  "filePath": "test.ts",
                   "generics": [],
                   "kind": "FunctionSignature",
                   "modifier": undefined,
@@ -293,6 +305,16 @@ describe('resolveType', () => {
                       "value": undefined,
                     },
                   ],
+                  "position": {
+                    "end": {
+                      "column": 62,
+                      "line": 23,
+                    },
+                    "start": {
+                      "column": 32,
+                      "line": 23,
+                    },
+                  },
                   "returnType": "void",
                   "text": "(a: number, b: string) => void",
                 },
@@ -500,6 +522,7 @@ describe('resolveType', () => {
               },
               "signatures": [
                 {
+                  "filePath": "test.ts",
                   "generics": [],
                   "kind": "FunctionSignature",
                   "modifier": undefined,
@@ -526,6 +549,16 @@ describe('resolveType', () => {
                       "value": undefined,
                     },
                   ],
+                  "position": {
+                    "end": {
+                      "column": 52,
+                      "line": 26,
+                    },
+                    "start": {
+                      "column": 22,
+                      "line": 26,
+                    },
+                  },
                   "returnType": "string | number",
                   "text": "(a: string) => string | number",
                 },
@@ -854,10 +887,21 @@ describe('resolveType', () => {
               },
               "signatures": [
                 {
+                  "filePath": "test.ts",
                   "generics": [],
                   "kind": "FunctionSignature",
                   "modifier": undefined,
                   "parameters": [],
+                  "position": {
+                    "end": {
+                      "column": 82,
+                      "line": 28,
+                    },
+                    "start": {
+                      "column": 73,
+                      "line": 28,
+                    },
+                  },
                   "returnType": "void",
                   "text": "() => void",
                 },
@@ -1395,6 +1439,7 @@ describe('resolveType', () => {
             },
             "signatures": [
               {
+                "filePath": "test.ts",
                 "generics": [],
                 "kind": "FunctionSignature",
                 "modifier": undefined,
@@ -1421,6 +1466,16 @@ describe('resolveType', () => {
                     "value": undefined,
                   },
                 ],
+                "position": {
+                  "end": {
+                    "column": 20,
+                    "line": 23,
+                  },
+                  "start": {
+                    "column": 17,
+                    "line": 20,
+                  },
+                },
                 "returnType": "void",
                 "text": "(a: string) => void",
               },
@@ -1448,10 +1503,21 @@ describe('resolveType', () => {
             },
             "signatures": [
               {
+                "filePath": "test.ts",
                 "generics": [],
                 "kind": "FunctionSignature",
                 "modifier": "async",
                 "parameters": [],
+                "position": {
+                  "end": {
+                    "column": 32,
+                    "line": 28,
+                  },
+                  "start": {
+                    "column": 9,
+                    "line": 28,
+                  },
+                },
                 "returnType": "Promise<void>",
                 "text": "function foo(): Promise<void>",
               },
@@ -2873,6 +2939,7 @@ describe('resolveType', () => {
         },
         "signatures": [
           {
+            "filePath": "test.ts",
             "generics": [],
             "kind": "ComponentSignature",
             "modifier": undefined,
@@ -2917,6 +2984,16 @@ describe('resolveType', () => {
                 },
               ],
               "text": "TextProps",
+            },
+            "position": {
+              "end": {
+                "column": 43,
+                "line": 7,
+              },
+              "start": {
+                "column": 1,
+                "line": 7,
+              },
             },
             "returnType": "void",
             "text": "function Text(props?: TextProps): void",
@@ -2971,6 +3048,7 @@ describe('resolveType', () => {
         },
         "signatures": [
           {
+            "filePath": "test.ts",
             "generics": [],
             "kind": "ComponentSignature",
             "modifier": undefined,
@@ -2993,6 +3071,16 @@ describe('resolveType', () => {
                 },
               },
               "text": "TextProps",
+            },
+            "position": {
+              "end": {
+                "column": 46,
+                "line": 8,
+              },
+              "start": {
+                "column": 20,
+                "line": 8,
+              },
             },
             "returnType": "void",
             "text": "(props: TextProps) => void",
@@ -3036,6 +3124,7 @@ describe('resolveType', () => {
         },
         "signatures": [
           {
+            "filePath": "test.ts",
             "generics": [],
             "kind": "ComponentSignature",
             "modifier": undefined,
@@ -3060,6 +3149,16 @@ describe('resolveType', () => {
                 },
               },
               "text": "TextProps",
+            },
+            "position": {
+              "end": {
+                "column": 61,
+                "line": 6,
+              },
+              "start": {
+                "column": 1,
+                "line": 6,
+              },
             },
             "returnType": "void",
             "text": "function Text(props: TextProps): void",
@@ -3106,6 +3205,7 @@ describe('resolveType', () => {
         },
         "signatures": [
           {
+            "filePath": "test.ts",
             "generics": [],
             "kind": "ComponentSignature",
             "modifier": undefined,
@@ -3223,6 +3323,16 @@ describe('resolveType', () => {
                 },
               ],
               "text": "TextProps",
+            },
+            "position": {
+              "end": {
+                "column": 115,
+                "line": 9,
+              },
+              "start": {
+                "column": 1,
+                "line": 9,
+              },
             },
             "returnType": "void",
             "text": "function Text(TextProps): void",
@@ -3556,6 +3666,7 @@ describe('resolveType', () => {
         },
         "signatures": [
           {
+            "filePath": "test.ts",
             "generics": [],
             "kind": "FunctionSignature",
             "modifier": undefined,
@@ -3625,6 +3736,16 @@ describe('resolveType', () => {
                 "text": "GridProps",
               },
             ],
+            "position": {
+              "end": {
+                "column": 79,
+                "line": 2,
+              },
+              "start": {
+                "column": 59,
+                "line": 2,
+              },
+            },
             "returnType": "void",
             "text": "(props: GridProps) => void",
           },
@@ -3909,6 +4030,7 @@ describe('resolveType', () => {
             "scope": undefined,
             "signatures": [
               {
+                "filePath": "test.ts",
                 "generics": [],
                 "kind": "FunctionSignature",
                 "modifier": undefined,
@@ -3935,6 +4057,16 @@ describe('resolveType', () => {
                     "value": undefined,
                   },
                 ],
+                "position": {
+                  "end": {
+                    "column": 4,
+                    "line": 6,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 4,
+                  },
+                },
                 "returnType": "void",
                 "text": "(value: string) => void",
               },
@@ -4647,10 +4779,21 @@ describe('resolveType', () => {
         },
         "signatures": [
           {
+            "filePath": "test.ts",
             "generics": [],
             "kind": "ComponentSignature",
             "modifier": undefined,
             "parameter": undefined,
+            "position": {
+              "end": {
+                "column": 2,
+                "line": 4,
+              },
+              "start": {
+                "column": 1,
+                "line": 2,
+              },
+            },
             "returnType": "ReactNode",
             "text": "function Text(): ReactNode",
           },
@@ -4690,6 +4833,7 @@ describe('resolveType', () => {
         },
         "signatures": [
           {
+            "filePath": "test.ts",
             "generics": [],
             "kind": "FunctionSignature",
             "modifier": undefined,
@@ -4716,6 +4860,16 @@ describe('resolveType', () => {
                 "value": undefined,
               },
             ],
+            "position": {
+              "end": {
+                "column": 64,
+                "line": 2,
+              },
+              "start": {
+                "column": 1,
+                "line": 1,
+              },
+            },
             "returnType": "void",
             "text": "function useCounter(initialCount: number): void",
           },
@@ -4756,6 +4910,8 @@ describe('resolveType', () => {
         },
         "signatures": [
           {
+            "description": "Provides a counter state.",
+            "filePath": "test.ts",
             "generics": [],
             "kind": "FunctionSignature",
             "modifier": undefined,
@@ -4808,7 +4964,23 @@ describe('resolveType', () => {
                 "text": "{ initialCount?: number; }",
               },
             ],
+            "position": {
+              "end": {
+                "column": 63,
+                "line": 5,
+              },
+              "start": {
+                "column": 1,
+                "line": 4,
+              },
+            },
             "returnType": "void",
+            "tags": [
+              {
+                "tagName": "deprecated",
+                "text": "use \`Counter\` component",
+              },
+            ],
             "text": "function useCounter({ initialCount?: number; }): void",
           },
         ],
@@ -4852,6 +5024,7 @@ describe('resolveType', () => {
         },
         "signatures": [
           {
+            "filePath": "test.ts",
             "generics": [],
             "kind": "FunctionSignature",
             "modifier": undefined,
@@ -4928,6 +5101,16 @@ describe('resolveType', () => {
                 "text": "{ initial?: { count: number; }; }",
               },
             ],
+            "position": {
+              "end": {
+                "column": 90,
+                "line": 1,
+              },
+              "start": {
+                "column": 1,
+                "line": 1,
+              },
+            },
             "returnType": "void",
             "text": "function useCounter({ initial?: { count: number; }; }): void",
           },
@@ -4967,6 +5150,7 @@ describe('resolveType', () => {
         },
         "signatures": [
           {
+            "filePath": "test.ts",
             "generics": [],
             "kind": "FunctionSignature",
             "modifier": undefined,
@@ -4993,6 +5177,16 @@ describe('resolveType', () => {
                 "value": undefined,
               },
             ],
+            "position": {
+              "end": {
+                "column": 52,
+                "line": 1,
+              },
+              "start": {
+                "column": 20,
+                "line": 1,
+              },
+            },
             "returnType": "void",
             "text": "(initialCount: number) => void",
           },
@@ -5032,6 +5226,7 @@ describe('resolveType', () => {
         },
         "signatures": [
           {
+            "filePath": "test.ts",
             "generics": [],
             "kind": "FunctionSignature",
             "modifier": undefined,
@@ -5058,6 +5253,16 @@ describe('resolveType', () => {
                 "value": undefined,
               },
             ],
+            "position": {
+              "end": {
+                "column": 58,
+                "line": 1,
+              },
+              "start": {
+                "column": 20,
+                "line": 1,
+              },
+            },
             "returnType": "void",
             "text": "(initialCount: number) => void",
           },
@@ -5100,6 +5305,7 @@ describe('resolveType', () => {
         },
         "signatures": [
           {
+            "filePath": "test.ts",
             "generics": [],
             "kind": "FunctionSignature",
             "modifier": undefined,
@@ -5127,6 +5333,16 @@ describe('resolveType', () => {
                 "text": "CounterOptions",
               },
             ],
+            "position": {
+              "end": {
+                "column": 102,
+                "line": 1,
+              },
+              "start": {
+                "column": 42,
+                "line": 1,
+              },
+            },
             "returnType": "void",
             "text": "function useCounter(CounterOptions): void",
           },
@@ -5171,6 +5387,7 @@ describe('resolveType', () => {
         },
         "signatures": [
           {
+            "filePath": "test.ts",
             "generics": [],
             "kind": "FunctionSignature",
             "modifier": undefined,
@@ -5198,6 +5415,16 @@ describe('resolveType', () => {
                 "text": "{ initialCount: number; }",
               },
             ],
+            "position": {
+              "end": {
+                "column": 121,
+                "line": 1,
+              },
+              "start": {
+                "column": 38,
+                "line": 1,
+              },
+            },
             "returnType": "void",
             "text": "function useCounterOverride({ initialCount: number; }): void",
           },
@@ -5241,6 +5468,7 @@ describe('resolveType', () => {
         },
         "signatures": [
           {
+            "filePath": "test.ts",
             "generics": [],
             "kind": "ComponentSignature",
             "modifier": undefined,
@@ -5385,6 +5613,16 @@ describe('resolveType', () => {
                 },
               },
               "text": "Props",
+            },
+            "position": {
+              "end": {
+                "column": 36,
+                "line": 5,
+              },
+              "start": {
+                "column": 1,
+                "line": 5,
+              },
             },
             "returnType": "void",
             "text": "function Component(props: Props): void",
@@ -5560,6 +5798,7 @@ describe('resolveType', () => {
         },
         "signatures": [
           {
+            "filePath": "test.ts",
             "generics": [],
             "kind": "ComponentSignature",
             "modifier": undefined,
@@ -5692,6 +5931,16 @@ describe('resolveType', () => {
                 },
               },
               "text": "Props",
+            },
+            "position": {
+              "end": {
+                "column": 36,
+                "line": 5,
+              },
+              "start": {
+                "column": 1,
+                "line": 5,
+              },
             },
             "returnType": "void",
             "text": "function Component(props: Props): void",
@@ -5929,6 +6178,7 @@ describe('resolveType', () => {
         },
         "signatures": [
           {
+            "filePath": "test.ts",
             "generics": [],
             "kind": "ComponentSignature",
             "modifier": undefined,
@@ -5953,6 +6203,16 @@ describe('resolveType', () => {
                 },
               },
               "text": "TextProps",
+            },
+            "position": {
+              "end": {
+                "column": 2,
+                "line": 29,
+              },
+              "start": {
+                "column": 21,
+                "line": 21,
+              },
             },
             "returnType": "void",
             "text": "(props: TextProps) => void",
@@ -6576,6 +6836,7 @@ describe('resolveType', () => {
           {
             "decorators": [],
             "description": "Sets the count.",
+            "filePath": "test.ts",
             "generics": [],
             "kind": "ClassSetAccessor",
             "modifier": undefined,
@@ -6603,6 +6864,16 @@ describe('resolveType', () => {
                 "value": undefined,
               },
             ],
+            "position": {
+              "end": {
+                "column": 4,
+                "line": 28,
+              },
+              "start": {
+                "column": 3,
+                "line": 26,
+              },
+            },
             "returnType": "void",
             "scope": undefined,
             "tags": undefined,
@@ -6622,6 +6893,8 @@ describe('resolveType', () => {
         ],
         "constructors": [
           {
+            "description": "Constructs a new counter.",
+            "filePath": "test.ts",
             "generics": [],
             "kind": "FunctionSignature",
             "modifier": undefined,
@@ -6648,7 +6921,18 @@ describe('resolveType', () => {
                 "value": undefined,
               },
             ],
+            "position": {
+              "end": {
+                "column": 4,
+                "line": 13,
+              },
+              "start": {
+                "column": 3,
+                "line": 9,
+              },
+            },
             "returnType": "Counter",
+            "tags": undefined,
             "text": "(initialCount: number) => Counter",
           },
         ],
@@ -6663,11 +6947,24 @@ describe('resolveType', () => {
             "scope": undefined,
             "signatures": [
               {
+                "description": "Increments the count.",
+                "filePath": "test.ts",
                 "generics": [],
                 "kind": "FunctionSignature",
                 "modifier": undefined,
                 "parameters": [],
+                "position": {
+                  "end": {
+                    "column": 4,
+                    "line": 18,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 16,
+                  },
+                },
                 "returnType": "void",
+                "tags": undefined,
                 "text": "() => void",
               },
             ],
@@ -6683,11 +6980,24 @@ describe('resolveType', () => {
             "scope": undefined,
             "signatures": [
               {
+                "description": "Decrements the count.",
+                "filePath": "test.ts",
                 "generics": [],
                 "kind": "FunctionSignature",
                 "modifier": undefined,
                 "parameters": [],
+                "position": {
+                  "end": {
+                    "column": 4,
+                    "line": 23,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 21,
+                  },
+                },
                 "returnType": "void",
+                "tags": undefined,
                 "text": "() => void",
               },
             ],
@@ -6703,6 +7013,8 @@ describe('resolveType', () => {
             "scope": undefined,
             "signatures": [
               {
+                "description": "Returns the current count.",
+                "filePath": "test.ts",
                 "generics": [],
                 "kind": "FunctionSignature",
                 "modifier": undefined,
@@ -6728,7 +7040,18 @@ describe('resolveType', () => {
                     "text": "boolean",
                   },
                 ],
+                "position": {
+                  "end": {
+                    "column": 4,
+                    "line": 38,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 36,
+                  },
+                },
                 "returnType": "number",
+                "tags": undefined,
                 "text": "(isFloored?: boolean) => number",
               },
             ],
@@ -6743,10 +7066,21 @@ describe('resolveType', () => {
             "scope": "static",
             "signatures": [
               {
+                "filePath": "test.ts",
                 "generics": [],
                 "kind": "FunctionSignature",
                 "modifier": undefined,
                 "parameters": [],
+                "position": {
+                  "end": {
+                    "column": 4,
+                    "line": 42,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 40,
+                  },
+                },
                 "returnType": "number",
                 "text": "() => number",
               },
@@ -6846,6 +7180,7 @@ describe('resolveType', () => {
         },
         "signatures": [
           {
+            "filePath": "test.ts",
             "generics": [],
             "kind": "FunctionSignature",
             "modifier": undefined,
@@ -6896,6 +7231,16 @@ describe('resolveType', () => {
                 "text": "{ initialCount: number; }",
               },
             ],
+            "position": {
+              "end": {
+                "column": 97,
+                "line": 1,
+              },
+              "start": {
+                "column": 1,
+                "line": 1,
+              },
+            },
             "returnType": "void",
             "text": "function useCounter({ initialCount: number; }): void",
           },
@@ -6934,6 +7279,7 @@ describe('resolveType', () => {
         },
         "signatures": [
           {
+            "filePath": "test.ts",
             "generics": [],
             "kind": "FunctionSignature",
             "modifier": undefined,
@@ -6981,6 +7327,16 @@ describe('resolveType', () => {
                 "value": undefined,
               },
             ],
+            "position": {
+              "end": {
+                "column": 64,
+                "line": 1,
+              },
+              "start": {
+                "column": 1,
+                "line": 1,
+              },
+            },
             "returnType": "number",
             "text": "function add(a: number, b: number): number",
           },
@@ -7420,6 +7776,7 @@ describe('resolveType', () => {
         },
         "signatures": [
           {
+            "filePath": "test.ts",
             "generics": [],
             "kind": "FunctionSignature",
             "modifier": undefined,
@@ -7588,6 +7945,16 @@ describe('resolveType', () => {
                 "text": "{ apiEndpoint: string; apiKey: string; } | { dbHost: string; dbPort: number; dbName: string; }",
               },
             ],
+            "position": {
+              "end": {
+                "column": 5,
+                "line": 3,
+              },
+              "start": {
+                "column": 1,
+                "line": 1,
+              },
+            },
             "returnType": "void",
             "text": "function useCounter(settings: { apiEndpoint: string; apiKey: string; } | { dbHost: string; dbPort: number; dbName: string; }): void",
           },
@@ -7645,6 +8012,7 @@ describe('resolveType', () => {
         },
         "signatures": [
           {
+            "filePath": "test.tsx",
             "generics": [],
             "kind": "ComponentSignature",
             "modifier": undefined,
@@ -7764,6 +8132,16 @@ describe('resolveType', () => {
               ],
               "text": "ButtonProps",
             },
+            "position": {
+              "end": {
+                "column": 2,
+                "line": 11,
+              },
+              "start": {
+                "column": 23,
+                "line": 9,
+              },
+            },
             "returnType": "Element",
             "text": "(props: ButtonProps) => Element",
           },
@@ -7829,6 +8207,7 @@ describe('resolveType', () => {
         },
         "signatures": [
           {
+            "filePath": "test.ts",
             "generics": [],
             "kind": "ComponentSignature",
             "modifier": undefined,
@@ -7897,6 +8276,7 @@ describe('resolveType', () => {
                       },
                       "signatures": [
                         {
+                          "filePath": "test.ts",
                           "generics": [],
                           "kind": "FunctionSignature",
                           "modifier": undefined,
@@ -7982,6 +8362,16 @@ describe('resolveType', () => {
                               "text": "Array<{ name: string; description: string; }>",
                             },
                           ],
+                          "position": {
+                            "end": {
+                              "column": 23,
+                              "line": 19,
+                            },
+                            "start": {
+                              "column": 14,
+                              "line": 17,
+                            },
+                          },
                           "returnType": "ReactNode",
                           "text": "(exportedTypes: Array<{ name: string; description: string; }>) => ReactNode",
                         },
@@ -8070,6 +8460,7 @@ describe('resolveType', () => {
                       },
                       "signatures": [
                         {
+                          "filePath": "test.ts",
                           "generics": [],
                           "kind": "FunctionSignature",
                           "modifier": undefined,
@@ -8155,6 +8546,16 @@ describe('resolveType', () => {
                               "text": "Array<{ name: string; description: string; }>",
                             },
                           ],
+                          "position": {
+                            "end": {
+                              "column": 23,
+                              "line": 19,
+                            },
+                            "start": {
+                              "column": 14,
+                              "line": 17,
+                            },
+                          },
                           "returnType": "ReactNode",
                           "text": "(exportedTypes: Array<{ name: string; description: string; }>) => ReactNode",
                         },
@@ -8178,6 +8579,16 @@ describe('resolveType', () => {
                 },
               },
               "text": "ExportedTypesProps",
+            },
+            "position": {
+              "end": {
+                "column": 60,
+                "line": 26,
+              },
+              "start": {
+                "column": 1,
+                "line": 26,
+              },
             },
             "returnType": "void",
             "text": "function ExportedTypes(ExportedTypesProps): void",
@@ -8560,10 +8971,21 @@ describe('resolveType', () => {
               "scope": undefined,
               "signatures": [
                 {
+                  "filePath": "test.ts",
                   "generics": [],
                   "kind": "FunctionSignature",
                   "modifier": undefined,
                   "parameters": [],
+                  "position": {
+                    "end": {
+                      "column": 4,
+                      "line": 5,
+                    },
+                    "start": {
+                      "column": 3,
+                      "line": 3,
+                    },
+                  },
                   "returnType": "void",
                   "text": "() => void",
                 },
@@ -8821,10 +9243,21 @@ describe('resolveType', () => {
                 },
                 "signatures": [
                   {
+                    "filePath": "test.ts",
                     "generics": [],
                     "kind": "FunctionSignature",
                     "modifier": undefined,
                     "parameters": [],
+                    "position": {
+                      "end": {
+                        "column": 78,
+                        "line": 11,
+                      },
+                      "start": {
+                        "column": 50,
+                        "line": 11,
+                      },
+                    },
                     "returnType": "string | boolean",
                     "text": "() => string | boolean",
                   },
@@ -8867,6 +9300,7 @@ describe('resolveType', () => {
         },
         "signatures": [
           {
+            "filePath": "test.ts",
             "generics": [
               {
                 "constraint": {
@@ -8943,6 +9377,16 @@ describe('resolveType', () => {
                 "text": "Args",
               },
             ],
+            "position": {
+              "end": {
+                "column": 75,
+                "line": 1,
+              },
+              "start": {
+                "column": 1,
+                "line": 1,
+              },
+            },
             "returnType": "void",
             "text": "function loggedMethod<Args extends Array<string>>(args: Args): void",
           },
@@ -9002,6 +9446,7 @@ describe('resolveType', () => {
                 },
                 "signatures": [
                   {
+                    "filePath": "test.ts",
                     "generics": [
                       {
                         "constraint": undefined,
@@ -9111,6 +9556,7 @@ describe('resolveType', () => {
                         },
                         "signatures": [
                           {
+                            "filePath": "test.ts",
                             "generics": [],
                             "kind": "FunctionSignature",
                             "modifier": undefined,
@@ -9136,6 +9582,16 @@ describe('resolveType', () => {
                                 "text": "Args",
                               },
                             ],
+                            "position": {
+                              "end": {
+                                "column": 48,
+                                "line": 2,
+                              },
+                              "start": {
+                                "column": 11,
+                                "line": 2,
+                              },
+                            },
                             "returnType": "Return",
                             "text": "(args: Args) => Return",
                           },
@@ -9175,6 +9631,7 @@ describe('resolveType', () => {
                             },
                             "signatures": [
                               {
+                                "filePath": "test.ts",
                                 "generics": [],
                                 "kind": "FunctionSignature",
                                 "modifier": undefined,
@@ -9200,6 +9657,16 @@ describe('resolveType', () => {
                                     "text": "Args",
                                   },
                                 ],
+                                "position": {
+                                  "end": {
+                                    "column": 83,
+                                    "line": 3,
+                                  },
+                                  "start": {
+                                    "column": 46,
+                                    "line": 3,
+                                  },
+                                },
                                 "returnType": "Return",
                                 "text": "(args: Args) => Return",
                               },
@@ -9228,6 +9695,16 @@ describe('resolveType', () => {
                         "typeName": "ClassMethodDecoratorContext",
                       },
                     ],
+                    "position": {
+                      "end": {
+                        "column": 2,
+                        "line": 11,
+                      },
+                      "start": {
+                        "column": 1,
+                        "line": 1,
+                      },
+                    },
                     "returnType": "(this: This, ...args: Args) => Return",
                     "text": "function loggedMethod<This, Args extends Array<any>, Return>(target: (this: This, ...args: Args) => Return, context: ClassMethodDecoratorContext<This, (this: This, ...args: Args) => Return>): (this: This, ...args: Args) => Return",
                   },
@@ -9240,6 +9717,7 @@ describe('resolveType', () => {
             "scope": undefined,
             "signatures": [
               {
+                "filePath": "test.ts",
                 "generics": [],
                 "kind": "FunctionSignature",
                 "modifier": undefined,
@@ -9266,6 +9744,16 @@ describe('resolveType', () => {
                     "value": undefined,
                   },
                 ],
+                "position": {
+                  "end": {
+                    "column": 4,
+                    "line": 17,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 14,
+                  },
+                },
                 "returnType": "string",
                 "text": "(name: string) => string",
               },

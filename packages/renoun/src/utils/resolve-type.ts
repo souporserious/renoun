@@ -1150,6 +1150,8 @@ function resolveSignature(
     parameters: resolvedParameters,
     modifier,
     returnType,
+    ...getJsDocMetadata(signatureDeclaration),
+    ...getDeclarationLocation(signatureDeclaration),
   }
 }
 
