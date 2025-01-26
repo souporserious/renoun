@@ -10,7 +10,7 @@ export function useMDXComponents() {
     },
     pre: (props) => {
       const { value, language } = CodeBlock.parsePreProps(props)
-      return <CodeBlock allowErrors value={value} language={language} />
+      return <CodeBlock value={value} language={language} />
     },
   } satisfies MDXComponents
 }

@@ -11,7 +11,7 @@ import type { MDXComponents } from 'renoun/mdx'
 const mdxComponents = {
   pre: (props) => {
     const { value, language } = CodeBlock.parsePreProps(props)
-    return <CodeBlock allowErrors value={value} language={language} />
+    return <CodeBlock value={value} language={language} />
   },
   code: (props) => {
     return <CodeInline value={props.children} language="typescript" />
