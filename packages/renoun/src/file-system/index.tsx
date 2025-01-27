@@ -1021,7 +1021,7 @@ export type IncludedEntry<
     : FileSystemEntry<Types>
 
 /** The options for a `Directory`. */
-interface DirectoryOptions<
+export interface DirectoryOptions<
   Types extends InferModuleLoadersTypes<Loaders> = any,
   LoaderTypes extends Types = any,
   Loaders extends ModuleLoaders = ModuleLoaders,
