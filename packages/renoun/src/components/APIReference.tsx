@@ -187,7 +187,9 @@ async function APIReferenceAsync({
           {/* {type.path && <ViewSource href={type.path} />} */}
         </div>
 
-        {type.description ? (
+        {type.description &&
+        type.kind !== 'Function' &&
+        type.kind !== 'Component' ? (
           <MDXRenderer value={type.description} components={mdxComponents} />
         ) : null}
       </div>
@@ -288,11 +290,24 @@ function TypeChildren({
         }}
       >
         {type.signatures.length > 1 ? (
-          <h4 css={{ margin: 0, marginBottom: '1rem' }}>Signatures</h4>
+          <h4 css={{ margin: 0, marginBottom: '1rem' }}>Overloads</h4>
         ) : null}
         {type.signatures.map((signature, index) => {
           return (
             <Fragment key={index}>
+              <hr
+                css={{
+                  border: 'none',
+                  borderTop: '1px solid var(--color-separator-secondary)',
+                }}
+              />
+              <CodeInline value={signature.text} language="typescript" />
+              {signature.description ? (
+                <MDXRenderer
+                  value={signature.description}
+                  components={mdxComponents}
+                />
+              ) : null}
               {signature.parameter ? (
                 <div>
                   <h5 css={{ margin: '0' }}>Parameters</h5>
@@ -335,11 +350,24 @@ function TypeChildren({
         }}
       >
         {type.signatures.length > 1 ? (
-          <h4 css={{ margin: 0, marginBottom: '1rem' }}>Signatures</h4>
+          <h4 css={{ margin: 0, marginBottom: '1rem' }}>Overloads</h4>
         ) : null}
         {type.signatures.map((signature, index) => {
           return (
             <Fragment key={index}>
+              <hr
+                css={{
+                  border: 'none',
+                  borderTop: '1px solid var(--color-separator-secondary)',
+                }}
+              />
+              <CodeInline value={signature.text} language="typescript" />
+              {signature.description ? (
+                <MDXRenderer
+                  value={signature.description}
+                  components={mdxComponents}
+                />
+              ) : null}
               {signature.parameters.length > 0 ? (
                 <div>
                   <h5 css={{ margin: 0 }}>Parameters</h5>
@@ -349,9 +377,12 @@ function TypeChildren({
                 </div>
               ) : null}
               {signature.returnType ? (
-                <div>
+                <div css={{ display: 'flex', flexDirection: 'column' }}>
                   <h5 css={{ margin: 0, marginBottom: '1.5rem' }}>Returns</h5>
-                  {signature.returnType}
+                  <CodeInline
+                    value={signature.returnType}
+                    language="typescript"
+                  />
                 </div>
               ) : null}
             </Fragment>
