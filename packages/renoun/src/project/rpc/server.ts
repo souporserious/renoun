@@ -1,4 +1,5 @@
-import WebSocket, { type AddressInfo } from 'ws'
+import type { AddressInfo, Server } from 'ws'
+import WebSocket from 'ws'
 
 export interface WebSocketRequest {
   method: string
@@ -18,7 +19,7 @@ export interface WebSocketNotification {
 }
 
 export class WebSocketServer {
-  #server!: WebSocket.Server
+  #server!: Server
 
   #sockets: Set<WebSocket> = new Set()
 

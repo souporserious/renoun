@@ -109,7 +109,7 @@
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@types/title": "^3.4.3",
-    "@types/ws": "^8.5.13",
+    "@types/ws": "^8.5.14",
     "dedent": "^1.5.3",
     "react": "catalog:",
     "react-dom": "catalog:",
