@@ -42,6 +42,16 @@ export class MemoryFileSystem extends FileSystem {
     }
   }
 
+  createFile(path: string, content: string): void {
+    const normalizedPath = path.startsWith('.') ? path : `./${path}`
+    this.#files.set(normalizedPath, content)
+
+    const extension = normalizedPath.split('.').pop()
+    if (extension && isJavaScriptLikeExtension(extension)) {
+      createSourceFile(normalizedPath, content, this.#projectOptions)
+    }
+  }
+
   getProjectOptions() {
     return this.#projectOptions
   }
