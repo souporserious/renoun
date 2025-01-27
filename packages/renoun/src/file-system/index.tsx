@@ -359,7 +359,7 @@ export class File<
 
   /**
    * Get the path of the file excluding the file extension and order prefix.
-   * The configured `pathCasing` option will be used format the path segments.
+   * The configured `pathCasing` option will be used to format the path segments.
    */
   getPath(options?: {
     includeBasePath?: boolean
