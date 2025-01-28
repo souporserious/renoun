@@ -58,7 +58,12 @@ export async function loadContent(props: LoadContentProps): Promise<MemoryFileSy
 
   // TODO: try to integrate the `MemoryFileSystem` 
   //       together with `getFileSystemWrapper`
+
+  // we're cloning the repo without checkout the code
   await clone({ ...cloneConfig, cache })
+  // because we will use the `checkout` function
+  // which allows us to filter the files to store
+  // so we save only the documents which are required
   await checkout({ ...checkoutConfig, cache })
 
   const files = await listFiles({fs: defaultFs, dir: cacheDirectory, ref: props.branch, cache})
