@@ -26,6 +26,9 @@ export async function loadContent(props: LoadContentProps) {
 // calculates the path to store the remote files locally
 // if `cacheDirectory` is specified, we will use this path
 // if `cacheDirectory` is not specified, we will use `<project-dir>/.renoun/cache/git-file-system/<hash>` as fallback
+// for the `<hash>`, we're using the given repository url and branch ( defaults to `main` )
+// with this, we can ensure, that we do not overwrite the content, in case we fetch from the
+// same repo, but different branches - maybe there is a better solution, but haven't found it, yet
 function getCacheDirectory(props: LoadContentProps) {
   if (props.cacheDirectory) {
     return props.cacheDirectory
