@@ -242,6 +242,9 @@ importers:
       isomorphic-git:
         specifier: ^1.29.0
         version: 1.29.0
+      renoun:
+        specifier: workspace:*
+        version: link:../renoun
 
   packages/mdx:
     dependencies:

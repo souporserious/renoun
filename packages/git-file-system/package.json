@@ -33,6 +33,7 @@
   },
   "devDependencies": {},
   "dependencies": {
-    "isomorphic-git": "^1.29.0"
+    "isomorphic-git": "^1.29.0",
+    "renoun": "workspace:*"
   }
 }
