@@ -3034,7 +3034,7 @@ describe('resolveType', () => {
     expect(processedProperties).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "Component",
+        "kind": "Function",
         "name": "Text",
         "position": {
           "end": {
@@ -3050,28 +3050,30 @@ describe('resolveType', () => {
           {
             "filePath": "test.ts",
             "generics": [],
-            "kind": "ComponentSignature",
+            "kind": "FunctionSignature",
             "modifier": undefined,
-            "parameter": {
-              "context": "parameter",
-              "defaultValue": undefined,
-              "description": undefined,
-              "filePath": "test.ts",
-              "isOptional": false,
-              "kind": "Reference",
-              "name": "props",
-              "position": {
-                "end": {
-                  "column": 37,
-                  "line": 8,
+            "parameters": [
+              {
+                "context": "parameter",
+                "defaultValue": undefined,
+                "description": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "kind": "Reference",
+                "name": "props",
+                "position": {
+                  "end": {
+                    "column": 37,
+                    "line": 8,
+                  },
+                  "start": {
+                    "column": 21,
+                    "line": 8,
+                  },
                 },
-                "start": {
-                  "column": 21,
-                  "line": 8,
-                },
+                "text": "TextProps",
               },
-              "text": "TextProps",
-            },
+            ],
             "position": {
               "end": {
                 "column": 46,
@@ -9774,6 +9776,273 @@ describe('resolveType', () => {
           },
         },
         "text": "Person",
+      }
+    `)
+  })
+
+  test('overloads', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      type Loader<Types> = (path: string) => Promise<Types>;
+
+      type Schema<Types extends Record<string, any>> = {
+        [Key in keyof Types]: (value: Types[Key]) => boolean | void;
+      };
+
+      /** A loader function. */
+      function withSchema<Types>(loader: Loader<Types>): Loader<Types>;
+
+      /** A schema and a loader function. */
+      function withSchema<Types extends Record<string, any>>(
+        schema: Schema<Types>,
+        loader: Loader<{ [Key in keyof Types]: Types[Key] }>
+      ): Loader<{ [Key in keyof Types]: Types[Key] }>;
+
+      /** Implementation of withSchema handling both overloads. */
+      function withSchema<Types extends Record<string, any>>(
+        a: Schema<Types> | Loader<any>,
+        b?: Loader<any>
+      ): Loader<any> {
+      return undefined as any
+      }
+      `,
+      { overwrite: true }
+    )
+    const functionDeclaration = sourceFile.getFunctionOrThrow('withSchema')
+    const types = resolveType(
+      functionDeclaration.getType(),
+      functionDeclaration
+    )
+
+    expect(types).toMatchInlineSnapshot(`
+      {
+        "description": "Implementation of withSchema handling both overloads.",
+        "filePath": "test.ts",
+        "kind": "Function",
+        "name": "withSchema",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 22,
+          },
+          "start": {
+            "column": 1,
+            "line": 17,
+          },
+        },
+        "signatures": [
+          {
+            "description": "A loader function.",
+            "filePath": "test.ts",
+            "generics": [
+              {
+                "constraint": undefined,
+                "defaultType": undefined,
+                "filePath": "test.ts",
+                "kind": "GenericParameter",
+                "name": "Types",
+                "position": {
+                  "end": {
+                    "column": 26,
+                    "line": 8,
+                  },
+                  "start": {
+                    "column": 21,
+                    "line": 8,
+                  },
+                },
+                "text": "Types",
+              },
+            ],
+            "kind": "FunctionSignature",
+            "modifier": undefined,
+            "parameters": [
+              {
+                "context": "parameter",
+                "defaultValue": undefined,
+                "description": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "kind": "Function",
+                "name": "loader",
+                "position": {
+                  "end": {
+                    "column": 49,
+                    "line": 8,
+                  },
+                  "start": {
+                    "column": 28,
+                    "line": 8,
+                  },
+                },
+                "signatures": [
+                  {
+                    "filePath": "test.ts",
+                    "generics": [],
+                    "kind": "FunctionSignature",
+                    "modifier": undefined,
+                    "parameters": [
+                      {
+                        "context": "parameter",
+                        "defaultValue": undefined,
+                        "description": undefined,
+                        "filePath": "test.ts",
+                        "isOptional": false,
+                        "kind": "String",
+                        "name": "path",
+                        "position": {
+                          "end": {
+                            "column": 35,
+                            "line": 1,
+                          },
+                          "start": {
+                            "column": 23,
+                            "line": 1,
+                          },
+                        },
+                        "text": "string",
+                        "value": undefined,
+                      },
+                    ],
+                    "position": {
+                      "end": {
+                        "column": 54,
+                        "line": 1,
+                      },
+                      "start": {
+                        "column": 22,
+                        "line": 1,
+                      },
+                    },
+                    "returnType": "Promise<Types>",
+                    "text": "(path: string) => Promise<Types>",
+                  },
+                ],
+                "text": "Loader<Types>",
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 66,
+                "line": 8,
+              },
+              "start": {
+                "column": 1,
+                "line": 8,
+              },
+            },
+            "returnType": "Loader<Types>",
+            "tags": undefined,
+            "text": "function withSchema<Types>(loader: Loader<Types>): Loader<Types>",
+          },
+          {
+            "description": "A schema and a loader function.",
+            "filePath": "test.ts",
+            "generics": [
+              {
+                "constraint": undefined,
+                "defaultType": undefined,
+                "filePath": "test.ts",
+                "kind": "GenericParameter",
+                "name": "Types",
+                "position": {
+                  "end": {
+                    "column": 54,
+                    "line": 11,
+                  },
+                  "start": {
+                    "column": 21,
+                    "line": 11,
+                  },
+                },
+                "text": "Types",
+              },
+            ],
+            "kind": "FunctionSignature",
+            "modifier": undefined,
+            "parameters": [
+              {
+                "context": "parameter",
+                "defaultValue": undefined,
+                "description": undefined,
+                "filePath": "test.ts",
+                "isOptional": false,
+                "kind": "Function",
+                "name": "loader",
+                "position": {
+                  "end": {
+                    "column": 55,
+                    "line": 13,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 13,
+                  },
+                },
+                "signatures": [
+                  {
+                    "filePath": "test.ts",
+                    "generics": [],
+                    "kind": "FunctionSignature",
+                    "modifier": undefined,
+                    "parameters": [
+                      {
+                        "context": "parameter",
+                        "defaultValue": undefined,
+                        "description": undefined,
+                        "filePath": "test.ts",
+                        "isOptional": false,
+                        "kind": "String",
+                        "name": "path",
+                        "position": {
+                          "end": {
+                            "column": 35,
+                            "line": 1,
+                          },
+                          "start": {
+                            "column": 23,
+                            "line": 1,
+                          },
+                        },
+                        "text": "string",
+                        "value": undefined,
+                      },
+                    ],
+                    "position": {
+                      "end": {
+                        "column": 54,
+                        "line": 1,
+                      },
+                      "start": {
+                        "column": 22,
+                        "line": 1,
+                      },
+                    },
+                    "returnType": "Promise<{ [Key in keyof Types]: Types[Key]; }>",
+                    "text": "(path: string) => Promise<{ [Key in keyof Types]: Types[Key]; }>",
+                  },
+                ],
+                "text": "Loader<{ [Key in keyof Types]: Types[Key]; }>",
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 49,
+                "line": 14,
+              },
+              "start": {
+                "column": 1,
+                "line": 11,
+              },
+            },
+            "returnType": "Loader<{ [Key in keyof Types]: Types[Key]; }>",
+            "tags": undefined,
+            "text": "function withSchema<Types>(loader: Loader<{ [Key in keyof Types]: Types[Key]; }>): Loader<{ [Key in keyof Types]: Types[Key]; }>",
+          },
+        ],
+        "tags": undefined,
+        "text": "{ <Types>(loader: Loader<Types>): Loader<Types>; <Types extends Record<string, any>>(schema: Schema<Types>, loader: Loader<{ [Key in keyof Types]: Types[Key]; }>): Loader<{ [Key in keyof Types]: Types[Key]; }>; }",
       }
     `)
   })

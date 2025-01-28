@@ -321,9 +321,10 @@ export function resolveType(
   keepReferences: boolean = false,
   dependencies?: Set<string>
 ): ResolvedType | undefined {
+  const aliasSymbol = type.getAliasSymbol()
   const symbol =
-    /* First, attempt to get the aliased symbol for imported and aliased types */
-    type.getAliasSymbol() ||
+    /* First, attempt to get the aliased symbol for aliased types */
+    aliasSymbol ||
     /* Next, try to get the symbol of the type itself */
     type.getSymbol() ||
     /* Finally, try to get the symbol of the apparent type */
@@ -864,7 +865,10 @@ export function resolveType(
           dependencies
         )
 
-        if (isComponent(symbolMetadata.name, resolvedCallSignatures)) {
+        if (
+          aliasSymbol === undefined &&
+          isComponent(symbolMetadata.name, resolvedCallSignatures)
+        ) {
           resolvedType = {
             kind: 'Component',
             name: symbolMetadata.name,
