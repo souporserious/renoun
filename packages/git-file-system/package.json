@@ -1,0 +1,37 @@
+{
+  "name": "@renoun/git-file-system",
+  "version": "0.0.1",
+  "description": "GIT Filesystem extension for renoun",
+  "author": "Travis Arnold",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/souporserious/renoun",
+    "directory": "packages/mdx-plugins"
+  },
+  "bugs": "https://github.com/souporserious/renoun/issues",
+  "homepage": "https://renoun.dev/git-file-system",
+  "keywords": [
+    "markdown",
+    "md",
+    "mdx",
+    "documentation",
+    "git",
+    "filesystem"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist/*"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc -w",
+    "prepare": "pnpm run build"
+  },
+  "devDependencies": {
+  },
+  "dependencies": {
+  }
+}
