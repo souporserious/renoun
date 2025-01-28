@@ -28,10 +28,11 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc -w",
+    "test": "vitest --typecheck",
     "prepare": "pnpm run build"
   },
-  "devDependencies": {
-  },
+  "devDependencies": {},
   "dependencies": {
+    "isomorphic-git": "^1.29.0"
   }
 }
