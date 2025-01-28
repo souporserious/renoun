@@ -1,11 +1,11 @@
 import { describe, test, expect } from 'vitest'
 
-import { createCloneConfig } from './index'
+import { createCheckoutConfig, createCloneConfig } from './index'
 import path from 'path'
 
 describe('git filesystem', () => {
   describe('clone config', () => {
-    test('only repository is specified', () => {
+    test('w/ defaults', () => {
       const config = createCloneConfig({
         repository: 'https://github.com/souporserious/renoun',
       })
@@ -57,6 +57,33 @@ describe('git filesystem', () => {
         username: 'XXXX',
         password: 'XXXX',
       })
+    })
+  })
+
+  describe("checkout config", () => {
+    test('w/ defaults', () => {
+      const config = createCheckoutConfig({
+        repository: 'https://github.com/souporserious/renoun',
+      })
+
+      expect(config.dir).toEqual(
+        path.join(
+          process.cwd(),
+          '.renoun',
+          'cache',
+          'git-file-system',
+          'b9316d301e274ff6190f743be1c43aacbb5b7e0b25f7494bbff9beaec38bf522'
+        )
+      )
+    })
+
+    test('w/ custom cache dir', () => {
+      const config = createCheckoutConfig({
+        repository: 'https://github.com/souporserious/renoun',
+        cacheDirectory: '/tmp',
+      })
+
+      expect(config.dir).toEqual('/tmp')
     })
   })
 })
