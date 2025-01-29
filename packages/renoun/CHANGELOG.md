@@ -1,5 +1,36 @@
 # renoun
 
+## 8.2.0
+
+### Minor Changes
+
+- 2af679d: Adds `createFile` method to `MemoryFileSystem`.
+- dec8620: Removes predefined `MDXComponents` components since it's easy to instantiate yourself which allows overriding defaults. The same functionality can be achieved by defining the components directly:
+
+  ```tsx
+  import { CodeBlock, CodeInline } from 'renoun/components'
+  import type { MDXComponents } from 'renoun/mdx'
+
+  const mdxComponents = {
+    pre: (props) => {
+      const { value, language } = CodeBlock.parsePreProps(props)
+      return <CodeBlock value={value} language={language} />
+    },
+    code: (props) => {
+      return <CodeInline value={props.children} language="typescript" />
+    },
+  } satisfies MDXComponents
+  ```
+
+- 2b4aa82: Renames `File#getModifier` to `File#getModifierName` to be more descriptive and avoid confusion.
+
+### Patch Changes
+
+- f05656d: Fixes missing JS Doc metadata for overloads in `JavaScriptFileExport#getType`.
+- f47bd21: Fixes type aliases being inferred as components in `JavaScriptFileExport#getType`.
+- 38a8ae1: Exports `DirectoryOptions` interface.
+- 72b8e58: Fixes `APIReference` documentation for overloads.
+
 ## 8.1.0
 
 ### Minor Changes

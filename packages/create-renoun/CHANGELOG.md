@@ -1,5 +1,11 @@
 # create-renoun
 
+## 1.0.0
+
+### Major Changes
+
+- 35921f5: Adds the initial release of the `create-renoun` CLI. This package is a scaffolding tool for renoun examples. It provides a simple way to clone an example with the necessary configuration and dependencies.
+
 ## 0.4.1
 
 ### Patch Changes
