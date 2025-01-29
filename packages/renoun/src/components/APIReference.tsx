@@ -377,11 +377,18 @@ function TypeChildren({
                 </div>
               ) : null}
               {signature.returnType ? (
-                <div css={{ display: 'flex', flexDirection: 'column' }}>
+                <div
+                  css={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'start',
+                  }}
+                >
                   <h5 css={{ margin: 0, marginBottom: '1.5rem' }}>Returns</h5>
                   <CodeInline
                     value={signature.returnType}
                     language="typescript"
+                    css={{ maxWidth: '-webkit-fill-available' }}
                   />
                 </div>
               ) : null}
