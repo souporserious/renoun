@@ -68,7 +68,7 @@ export default function Page() {
           <ButtonLink href="/docs/getting-started">Start Writing</ButtonLink>
           <CodeInline
             allowCopy
-            value={`npm install renoun`}
+            value={`npm create renoun`}
             language="bash"
             paddingX="0.8em"
             paddingY="0.5em"
