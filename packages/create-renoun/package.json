@@ -1,0 +1,32 @@
+{
+  "name": "create-renoun",
+  "type": "module",
+  "version": "0.4.1",
+  "author": "Travis Arnold",
+  "license": "AGPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/souporserious/renoun",
+    "directory": "packages/create-renoun"
+  },
+  "bugs": "https://github.com/souporserious/renoun/issues",
+  "homepage": "https://renoun.dev",
+  "files": [
+    "dist/*"
+  ],
+  "bin": "./dist/index.mjs",
+  "scripts": {
+    "build": "bunchee",
+    "dev": "bunchee --watch"
+  },
+  "devDependencies": {
+    "bunchee": "^6.3.2"
+  },
+  "dependencies": {
+    "@antfu/install-pkg": "^1.0.0",
+    "chalk": "^5.4.1",
+    "git-remote-origin-url": "^4.0.0",
+    "terminal-link": "^3.0.0",
+    "ts-morph": "catalog:"
+  }
+}
