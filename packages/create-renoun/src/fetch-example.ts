@@ -14,7 +14,10 @@ import chalk from 'chalk'
 import { fetchPackageVersion } from './get-package-version.js'
 import { Log, askQuestion, askYesNo } from './utils.js'
 
-/** Fetches the contents of an MDXTS example from the GitHub repository and downloads them to the local file system. */
+/**
+ * Fetches the contents of a renoun example from the GitHub repository and
+ * downloads them to the local file system.
+ */
 export async function fetchExample(exampleSlug: string, message: string = '') {
   let workingDirectory = process.cwd()
   const directoryPath = `examples/${exampleSlug}`
@@ -174,7 +177,10 @@ const downloadFile = async (url: string, filePath: string) => {
   await pipeline(stream, fileStream)
 }
 
-/** Reformat package.json file to remove monorepo dependencies and use the latest MDXTS version. */
+/**
+ * Reformat package.json file to remove monorepo dependencies and use the latest
+ * versions for `catalog:` and `workspace:*`.
+ */
 async function reformatPackageJson(workingDirectory: string) {
   const packageJsonPath = join(workingDirectory, 'package.json')
   const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
