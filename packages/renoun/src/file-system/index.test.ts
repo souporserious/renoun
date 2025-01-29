@@ -33,7 +33,7 @@ describe('file system', () => {
 
       expect(file.getOrder()).toBe('02')
       expect(file.getBaseName()).toBe('generics')
-      expect(file.getModifier()).toBe('exercise')
+      expect(file.getModifierName()).toBe('exercise')
       expect(file.getExtension()).toBe('ts')
     })
 
@@ -42,7 +42,7 @@ describe('file system', () => {
 
       expect(file.getOrder()).toBeUndefined()
       expect(file.getBaseName()).toBe('test')
-      expect(file.getModifier()).toBe('file')
+      expect(file.getModifierName()).toBe('file')
       expect(file.getExtension()).toBe('txt')
     })
 
@@ -51,7 +51,7 @@ describe('file system', () => {
 
       expect(file.getOrder()).toBe('1')
       expect(file.getBaseName()).toBe('foo')
-      expect(file.getModifier()).toBeUndefined()
+      expect(file.getModifierName()).toBeUndefined()
       expect(file.getExtension()).toBe('txt')
     })
 
@@ -61,7 +61,7 @@ describe('file system', () => {
       expect(file.getOrder()).toBeUndefined()
       expect(file.getName()).toBe('foo')
       expect(file.getBaseName()).toBe('foo')
-      expect(file.getModifier()).toBeUndefined()
+      expect(file.getModifierName()).toBeUndefined()
       expect(file.getExtension()).toBeUndefined()
     })
 

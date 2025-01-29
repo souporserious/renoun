@@ -287,9 +287,9 @@ export class File<
   Extension extends string = ExtractFileExtension<Path>,
 > {
   #name: string
+  #baseName: string
+  #modifierName?: string
   #order?: string
-  #base: string
-  #modifier?: string
   #extension?: Extension
   #path: string
   #pathCasing: SlugCasings
@@ -309,11 +309,11 @@ export class File<
 
     if (match) {
       this.#order = match[1]
-      this.#base = match[2] ?? this.#name
-      this.#modifier = match[4] ? match[3] : undefined
+      this.#baseName = match[2] ?? this.#name
+      this.#modifierName = match[4] ? match[3] : undefined
       this.#extension = (match[4] ?? match[3]) as Extension
     } else {
-      this.#base = this.#name
+      this.#baseName = this.#name
     }
   }
 
@@ -322,24 +322,24 @@ export class File<
     return this.#name
   }
 
-  /** The file name without the extension. */
+  /** The base name of the file e.g. `index` in `index.ts`. */
   getBaseName(): string {
-    return this.#base
+    return this.#baseName
   }
 
-  /** The file name formatted as a title. */
+  /** The modifier name of the file if defined e.g. `test` in `index.test.ts`. */
+  getModifierName(): string | undefined {
+    return this.#modifierName
+  }
+
+  /** The base file name formatted as a title. */
   getTitle() {
-    return formatNameAsTitle(this.getBaseName())
+    return formatNameAsTitle(this.#baseName)
   }
 
   /** The order of the file if defined. */
   getOrder(): string | undefined {
     return this.#order
-  }
-
-  /** The modifier of the file if defined. */
-  getModifier(): string | undefined {
-    return this.#modifier
   }
 
   /** The extension of the file if defined. */
@@ -1274,7 +1274,7 @@ export class Directory<
 
         if (baseSegment === currentSegment) {
           const matchesModifier =
-            (currentEntry instanceof File && currentEntry.getModifier()) ===
+            (currentEntry instanceof File && currentEntry.getModifierName()) ===
             lastSegment
 
           // If allExtensions are specified, we check if the file’s extension is in that array.
@@ -1284,14 +1284,17 @@ export class Directory<
                 return currentEntry as any
               } else if (
                 !entry ||
-                (entry instanceof File && entry.getModifier())
+                (entry instanceof File && entry.getModifierName())
               ) {
                 entry = currentEntry
               }
             }
           } else if (matchesModifier) {
             return currentEntry as any
-          } else if (!entry || (entry instanceof File && entry.getModifier())) {
+          } else if (
+            !entry ||
+            (entry instanceof File && entry.getModifierName())
+          ) {
             entry = currentEntry
           }
         }
