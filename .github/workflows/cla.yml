@@ -25,5 +25,6 @@ jobs:
           path-to-signatures: 'cla.json'
           path-to-document: 'https://github.com/souporserious/renoun/blob/main/CLA.md'
           branch: 'main'
+          allowlist: dependabot[bot]
           remote-organization-name: souporserious
           remote-repository-name: renoun-cla
