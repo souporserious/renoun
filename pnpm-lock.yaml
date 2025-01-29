@@ -245,15 +245,9 @@ importers:
       chalk:
         specifier: ^5.4.1
         version: 5.4.1
-      git-remote-origin-url:
-        specifier: ^4.0.0
-        version: 4.0.0
       terminal-link:
         specifier: ^3.0.0
         version: 3.0.0
-      ts-morph:
-        specifier: 'catalog:'
-        version: 25.0.0
     devDependencies:
       bunchee:
         specifier: ^6.3.2
@@ -2068,13 +2062,6 @@ packages:
 
   get-tsconfig@4.8.1:
     resolution: {integrity: sha512-k9PN+cFBmaLWtVz29SkUoqU5O0slLuHJXt/2P+tMVFT+phsSGXGkp9t3rQIqdz0e+06EHNGs3oM6ZX1s2zHxRg==}
-
-  git-remote-origin-url@4.0.0:
-    resolution: {integrity: sha512-EAxDksNdjuWgmVW9pVvA9jQDi/dmTaiDONktIy7qiRRhBZUI4FQK1YvBvteuTSX24aNKg9lfgxNYJEeeSXe6DA==}
-    engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
-
-  gitconfiglocal@2.1.0:
-    resolution: {integrity: sha512-qoerOEliJn3z+Zyn1HW2F6eoYJqKwS6MgC9cztTLUB/xLWX8gD/6T60pKn4+t/d6tP7JlybI7Z3z+I572CR/Vg==}
 
   glob-parent@5.1.2:
     resolution: {integrity: sha512-AOIgSQCepiJYwP3ARnGx+5VnTu2HBYdzbGP45eLw1vr3zB3vZLeyed1sC9hnbcOc9/SrMyM5RPQrkGz4aS9Zow==}
@@ -5132,14 +5119,6 @@ snapshots:
   get-tsconfig@4.8.1:
     dependencies:
       resolve-pkg-maps: 1.0.0
-
-  git-remote-origin-url@4.0.0:
-    dependencies:
-      gitconfiglocal: 2.1.0
-
-  gitconfiglocal@2.1.0:
-    dependencies:
-      ini: 1.3.8
 
   glob-parent@5.1.2:
     dependencies:
