@@ -23,7 +23,7 @@ export type ButtonProps = {
 export const Button = styled(
   'button',
   ({ backgroundColor, color, variant = 'primary' }: ButtonProps) => {
-    const variantProps = variants[variant] || {}
+    const variantProps = variants[variant]
 
     return {
       appearance: 'none',
