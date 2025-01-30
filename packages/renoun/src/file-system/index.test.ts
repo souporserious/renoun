@@ -235,7 +235,7 @@ describe('file system', () => {
       'Button/Button.tsx': '',
       'Button/IconButton.tsx': '',
     })
-    const directory = new Directory({ fileSystem, pathCasing: 'none' })
+    const directory = new Directory({ fileSystem, slugCasing: 'none' })
     const entries = await directory.getEntries({ recursive: true })
 
     expect(entries.map((entry) => entry.getPath())).toEqual([
@@ -818,7 +818,7 @@ describe('file system', () => {
     })
     const rootDirectory = new Directory({
       fileSystem,
-      pathCasing: 'kebab',
+      slugCasing: 'kebab',
     })
     const file = await rootDirectory.getFile('button')
 

@@ -270,7 +270,7 @@ export interface FileOptions<
   Path extends string = string,
 > {
   path: Path
-  pathCasing?: SlugCasings
+  slugCasing?: SlugCasings
   depth?: number
   directory?: Directory<
     Types,
@@ -292,14 +292,14 @@ export class File<
   #order?: string
   #extension?: Extension
   #path: string
-  #pathCasing: SlugCasings
+  #slugCasing: SlugCasings
   #depth: number
   #directory: Directory<Types>
 
   constructor(options: FileOptions<Types, Path>) {
     this.#name = baseName(options.path)
     this.#path = options.path
-    this.#pathCasing = options.pathCasing ?? 'kebab'
+    this.#slugCasing = options.slugCasing ?? 'kebab'
     this.#depth = options.depth ?? 0
     this.#directory = options.directory ?? new Directory()
 
@@ -354,12 +354,12 @@ export class File<
 
   /** Get the slug of the file. */
   getSlug() {
-    return createSlug(this.getName(), this.#pathCasing)
+    return createSlug(this.getName(), this.#slugCasing)
   }
 
   /**
    * Get the path of the file excluding the file extension and order prefix.
-   * The configured `pathCasing` option will be used to format the path segments.
+   * The configured `slugCasing` option will be used to format the path segments.
    */
   getPath(options?: {
     includeBasePath?: boolean
@@ -374,7 +374,7 @@ export class File<
       includeBasePath ? { basePath } : undefined
     )
 
-    if (!includeDuplicateSegments || this.#pathCasing !== 'none') {
+    if (!includeDuplicateSegments || this.#slugCasing !== 'none') {
       const parsedPath = path.split('/')
       const parsedSegments: string[] = []
 
@@ -383,9 +383,9 @@ export class File<
 
         if (includeDuplicateSegments || segment !== parsedPath[index - 1]) {
           parsedSegments.push(
-            this.#pathCasing === 'none'
+            this.#slugCasing === 'none'
               ? segment
-              : createSlug(segment, this.#pathCasing)
+              : createSlug(segment, this.#slugCasing)
           )
         }
       }
@@ -560,25 +560,34 @@ export class JavaScriptFileExport<Value> {
   #name: string
   #file: JavaScriptFile<any>
   #loader?: ModuleLoader<any>
+  #slugCasing: SlugCasings
   #location: Omit<FileExport, 'name'> | undefined
   #metadata: Awaited<ReturnType<typeof getFileExportMetadata>> | undefined
 
   constructor(
     name: string,
     file: JavaScriptFile<any>,
-    loader?: ModuleLoader<any>
+    loader?: ModuleLoader<any>,
+    slugCasing?: SlugCasings
   ) {
     this.#name = name
     this.#file = file
     this.#loader = loader
+    this.#slugCasing = slugCasing ?? 'kebab'
   }
 
   static async init<Value>(
     name: string,
     file: JavaScriptFile<any>,
-    loader?: ModuleLoader<any>
+    loader?: ModuleLoader<any>,
+    slugCasing?: SlugCasings
   ): Promise<JavaScriptFileExport<Value>> {
-    const fileExport = new JavaScriptFileExport<Value>(name, file, loader)
+    const fileExport = new JavaScriptFileExport<Value>(
+      name,
+      file,
+      loader,
+      slugCasing
+    )
     await fileExport.getStaticMetadata()
     return fileExport
   }
@@ -624,7 +633,7 @@ export class JavaScriptFileExport<Value> {
 
   /** Get the slug of the file export. */
   getSlug() {
-    return createSlug(this.getName(), 'kebab')
+    return createSlug(this.getName(), this.#slugCasing)
   }
 
   /** Get the name of the export. Default exports will use the file name or declaration name if available. */
@@ -818,6 +827,7 @@ export class JavaScriptFile<
 > extends File<Types, Path, Extension> {
   #exports = new Map<string, JavaScriptFileExport<any>>()
   #loader?: ModuleLoader<Types>
+  #slugCasing?: SlugCasings
 
   constructor({ loader, ...fileOptions }: JavaScriptFileOptions<Types, Path>) {
     super(fileOptions)
@@ -831,6 +841,8 @@ export class JavaScriptFile<
     } else {
       this.#loader = loader
     }
+
+    this.#slugCasing = fileOptions.slugCasing ?? 'kebab'
   }
 
   #getModule() {
@@ -945,7 +957,8 @@ export class JavaScriptFile<
       const fileExport = await JavaScriptFileExport.init<Types[ExportName]>(
         name,
         this as any,
-        this.#loader
+        this.#loader,
+        this.#slugCasing
       )
 
       this.#exports.set(name, fileExport)
@@ -1045,8 +1058,8 @@ export interface DirectoryOptions<
   /** The tsconfig.json file path to use for type checking and analyzing JavaScript and TypeScript files. */
   tsConfigPath?: string
 
-  /** The path casing to apply to all descendant entry `getPath` and `getPathSegments` methods. */
-  pathCasing?: SlugCasings
+  /** The slug casing to apply to all descendant entry `getPath`, `getPathSegments`, and `getSlug` methods. */
+  slugCasing?: SlugCasings
 
   /** The file system to use for reading directory entries. */
   fileSystem?: FileSystem
@@ -1070,7 +1083,7 @@ export class Directory<
 > {
   #path: string
   #depth: number = -1
-  #pathCasing: SlugCasings = 'kebab'
+  #slugCasing: SlugCasings
   #basePath?: string
   #tsConfigPath?: string
   #loaders?: Loaders
@@ -1093,13 +1106,14 @@ export class Directory<
   ) {
     if (options === undefined) {
       this.#path = '.'
+      this.#slugCasing = 'kebab'
     } else {
       this.#path = ensureRelativePath(options.path)
-      this.#pathCasing = options.pathCasing ?? 'kebab'
       this.#loaders = options.loaders
       this.#include = options.include
       this.#sort = options.sort as any
       this.#basePath = options.basePath
+      this.#slugCasing = options.slugCasing ?? 'kebab'
       this.#tsConfigPath = options.tsConfigPath
       this.#fileSystem = options.fileSystem
     }
@@ -1132,7 +1146,7 @@ export class Directory<
 
     directory.#depth = this.#depth
     directory.#tsConfigPath = this.#tsConfigPath
-    directory.#pathCasing = this.#pathCasing
+    directory.#slugCasing = this.#slugCasing
     directory.#basePath = this.#basePath
     directory.#loaders = this.#loaders
     directory.#sort = this.#sort
@@ -1257,7 +1271,7 @@ export class Directory<
 
     while (segments.length > 0) {
       let entry: FileSystemEntry<LoaderTypes> | undefined
-      const currentSegment = createSlug(segments.shift()!, this.#pathCasing)
+      const currentSegment = createSlug(segments.shift()!, this.#slugCasing)
       const lastSegment = segments.at(-1)
       const allEntries = await currentDirectory.getEntries({
         includeDuplicates: true,
@@ -1269,7 +1283,7 @@ export class Directory<
       for (const currentEntry of allEntries) {
         const baseSegment = createSlug(
           currentEntry.getBaseName(),
-          this.#pathCasing
+          this.#slugCasing
         )
 
         if (baseSegment === currentSegment) {
@@ -1372,7 +1386,7 @@ export class Directory<
     let currentDirectory = this as Directory<LoaderTypes>
 
     while (segments.length > 0) {
-      const currentSegment = createSlug(segments.shift()!, this.#pathCasing)
+      const currentSegment = createSlug(segments.shift()!, this.#slugCasing)
       const allEntries = await currentDirectory.getEntries({
         includeDuplicates: true,
         includeTsConfigIgnoredFiles: true,
@@ -1382,7 +1396,7 @@ export class Directory<
       for (const currentEntry of allEntries) {
         const baseSegment = createSlug(
           currentEntry.getBaseName(),
-          this.#pathCasing
+          this.#slugCasing
         )
 
         if (
@@ -1505,14 +1519,14 @@ export class Directory<
                 path: entry.path,
                 depth: nextDepth,
                 directory: thisDirectory,
-                pathCasing: this.#pathCasing,
+                slugCasing: this.#slugCasing,
                 loader,
               })
             : new File({
                 path: entry.path,
                 depth: nextDepth,
                 directory: thisDirectory,
-                pathCasing: this.#pathCasing,
+                slugCasing: this.#slugCasing,
               })
 
         if (
@@ -1617,7 +1631,7 @@ export class Directory<
 
   /** Get the slug of the directory. */
   getSlug() {
-    return createSlug(this.getName(), this.#pathCasing)
+    return createSlug(this.getName(), this.#slugCasing)
   }
 
   /** Get the base name of the directory. */
@@ -1644,14 +1658,14 @@ export class Directory<
       includeBasePath ? { basePath: this.#basePath } : undefined
     )
 
-    if (this.#pathCasing === 'none') {
+    if (this.#slugCasing === 'none') {
       return path
     }
 
     const segments = path.split('/')
 
     for (let index = 0; index < segments.length; index++) {
-      segments[index] = createSlug(segments[index], this.#pathCasing)
+      segments[index] = createSlug(segments[index], this.#slugCasing)
     }
 
     return segments.join('/')
