@@ -24,7 +24,8 @@
   --font-size-code-1: 1.6rem;
   --font-size-code-2: 1.6rem;
   --font-size-code-3: 1.4rem;
-  --font-size-button: 1.6rem;
+  --font-size-button-1: 1.6rem;
+  --font-size-button-2: 1.4rem;
   --line-height-heading-0: 5rem;
   --line-height-heading-1: 4rem;
   --line-height-heading-2: 3.4rem;
@@ -56,7 +57,8 @@
     --font-size-code-1: 1.2rem;
     --font-size-code-2: 1rem;
     --font-size-code-3: 0.875rem;
-    --font-size-button: 1.2rem;
+    --font-size-button-1: 1.2rem;
+    --font-size-button-2: 1rem;
     --line-height-heading-1: 3rem;
     --line-height-heading-2: 2.2rem;
     --line-height-heading-3: 1.8rem;

@@ -89,6 +89,9 @@ importers:
       '@preact/signals-core':
         specifier: ^1.8.0
         version: 1.8.0
+      '@stackblitz/sdk':
+        specifier: ^1.11.0
+        version: 1.11.0
       '@types/mdx':
         specifier: 'catalog:'
         version: 2.0.13
@@ -1231,6 +1234,9 @@ packages:
 
   '@shikijs/vscode-textmate@10.0.1':
     resolution: {integrity: sha512-fTIQwLF+Qhuws31iw7Ncl1R3HUDtGwIipiJ9iU+UsDUwMhegFcQKQHd51nZjb7CArq0MvON8rbgCGQYWHUKAdg==}
+
+  '@stackblitz/sdk@1.11.0':
+    resolution: {integrity: sha512-DFQGANNkEZRzFk1/rDP6TcFdM82ycHE+zfl9C/M/jXlH68jiqHWHFMQURLELoD8koxvu/eW5uhg94NSAZlYrUQ==}
 
   '@swc/core-darwin-arm64@1.10.11':
     resolution: {integrity: sha512-ZpgEaNcx2e5D+Pd0yZGVbpSrEDOEubn7r2JXoNBf0O85lPjUm3HDzGRfLlV/MwxRPAkwm93eLP4l7gYnc50l3g==}
@@ -4247,6 +4253,8 @@ snapshots:
       '@types/hast': 3.0.4
 
   '@shikijs/vscode-textmate@10.0.1': {}
+
+  '@stackblitz/sdk@1.11.0': {}
 
   '@swc/core-darwin-arm64@1.10.11':
     optional: true

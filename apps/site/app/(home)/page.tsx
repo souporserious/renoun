@@ -3,6 +3,7 @@ import { CodeInline } from 'renoun/components'
 import { ButtonLink } from '@/components/ButtonLink'
 import { Text } from '@/components/Text'
 import { SignupForm } from '../SignupForm'
+import { Sandbox } from './Sandbox'
 import { QuickSteps } from './QuickSteps'
 
 export default function Page() {
@@ -78,6 +79,24 @@ export default function Page() {
       </div>
 
       <QuickSteps />
+
+      <div
+        css={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '1rem',
+        }}
+      >
+        <Text variant="heading-2" css={{ textAlign: 'center' }}>
+          Playground
+        </Text>
+        <Text variant="body-1" css={{ textAlign: 'center' }}>
+          Explore using components and utilities to query and render a set of
+          blog posts.
+        </Text>
+      </div>
+
+      <Sandbox />
 
       <div
         css={{
