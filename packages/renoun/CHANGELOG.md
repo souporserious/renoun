@@ -1,5 +1,44 @@
 # renoun
 
+## 8.3.0
+
+### Minor Changes
+
+- b7895d2: Renames file system `pathCasing` option to `slugCasing` to better reflect its purpose. This also adds an option for configuring the casing used for `JavaScriptFileExport`.
+- 03d7591: Exports a `parseCodeProps` utility for the `CodeInline` component to makie it easier to parse and type custom MDX components correctly:
+
+  ```tsx
+  import { CodeInline, parseCodeProps } from 'renoun/components'
+  import type { MDXComponents } from 'renoun/mdx'
+
+  export function useMDXComponents() {
+    return {
+      code: (props) => {
+        return <CodeInline {...parseCodeProps(props)} />
+      },
+    } satisfies MDXComponents
+  }
+  ```
+
+- 3547b64: Exports the `parsePreProps` utility for the `CodeBlock` component instead of attaching it to the component itself:
+
+  ```tsx
+  import { CodeBlock, parsePreProps } from 'renoun/components'
+  import type { MDXComponents } from 'renoun/mdx'
+
+  export function useMDXComponents() {
+    return {
+      pre: (props) => {
+        return <CodeBlock {...parsePreProps(props)} />
+      },
+    } satisfies MDXComponents
+  }
+  ```
+
+### Patch Changes
+
+- 1555cca: Fixes return type in `APIReference` always spanning entire width.
+
 ## 8.2.0
 
 ### Minor Changes
