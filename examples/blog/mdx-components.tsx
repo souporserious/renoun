@@ -4,9 +4,8 @@ import type { MDXComponents } from 'renoun/mdx'
 export function useMDXComponents() {
   return {
     code: (props) => {
-      return (
-        <CodeInline value={props.children as string} language="typescript" />
-      )
+      const { value, language } = CodeInline.parseCodeProps(props)
+      return <CodeInline value={value} language={language} />
     },
     pre: (props) => {
       const { value, language } = CodeBlock.parsePreProps(props)

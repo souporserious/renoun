@@ -46,8 +46,7 @@ export { Repository } from './Repository.js'
 
 const mdxComponents = {
   pre: (props) => {
-    const { value, language } = CodeBlock.parsePreProps(props)
-    return <CodeBlock value={value} language={language} />
+    return <CodeBlock {...CodeBlock.parsePreProps(props)} />
   },
   code: (props) => {
     return <CodeInline value={props.children} language="typescript" />

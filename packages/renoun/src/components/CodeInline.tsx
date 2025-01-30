@@ -1,6 +1,7 @@
 import React, { Fragment, Suspense } from 'react'
 import { css, styled, type CSSObject } from 'restyle'
 
+import type { MDXComponents } from '../mdx/index.js'
 import { analyzeSourceText } from '../project/client.js'
 import type { Languages } from '../utils/get-language.js'
 import { getThemeColors } from '../utils/get-theme-colors.js'
@@ -178,4 +179,18 @@ export function CodeInline({
       <CodeInlineAsync paddingX={paddingX} paddingY={paddingY} {...props} />
     </Suspense>
   )
+}
+
+/** Parses the props of an MDX `code` element for passing to `CodeInline`. */
+CodeInline.parseCodeProps = ({
+  children,
+  ...props
+}: React.ComponentProps<NonNullable<MDXComponents['code']>>) => {
+  return {
+    value: (children as string).trim(),
+    ...props,
+  } as {
+    value: string
+    language?: Languages
+  } & Omit<React.ComponentProps<NonNullable<MDXComponents['code']>>, 'children'>
 }

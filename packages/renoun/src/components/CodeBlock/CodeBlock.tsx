@@ -465,15 +465,16 @@ const languageKey = 'language-'
 const languageLength = languageKey.length
 
 /** Parses the props of an MDX `pre` element for passing to `CodeBlock`. */
-CodeBlock.parsePreProps = (
-  props: React.ComponentProps<NonNullable<MDXComponents['pre']>>
-) => {
-  const code = props.children as React.ReactElement<{
+CodeBlock.parsePreProps = ({
+  children,
+  ...props
+}: React.ComponentProps<NonNullable<MDXComponents['pre']>>) => {
+  const code = children as React.ReactElement<{
     className: `language-${string}`
     children: string
   }>
   const languageClassName = code.props.className
-    .split(' ')
+    ?.split(' ')
     .find((className) => className.startsWith(languageKey))
 
   return {
@@ -481,7 +482,11 @@ CodeBlock.parsePreProps = (
     language: (languageClassName
       ? languageClassName.slice(languageLength)
       : 'plain') as Languages,
-  }
+    ...props,
+  } as {
+    value: string
+    language?: Languages
+  } & Omit<React.ComponentProps<NonNullable<MDXComponents['pre']>>, 'children'>
 }
 
 const StyledContainer = styled('div')
