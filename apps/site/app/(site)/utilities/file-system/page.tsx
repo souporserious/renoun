@@ -4,13 +4,13 @@ import { FileSystemCollection } from '@/collections'
 import { TableOfContents } from '@/components/TableOfContents'
 
 export default async function Page() {
-  const sourceFile = await FileSystemCollection.getFile('index', 'tsx')
+  const sourceFile = await FileSystemCollection.getFile('index.tsx')
 
   if (!sourceFile) {
     return null
   }
 
-  const docFile = await FileSystemCollection.getFile('README', 'mdx')
+  const docFile = await FileSystemCollection.getFile('README.mdx')
 
   if (!docFile) {
     return null

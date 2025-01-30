@@ -360,11 +360,11 @@ export class File<
    * Get the path of the file excluding the file extension and order prefix.
    * The configured `slugCasing` option will be used to format the path segments.
    */
-  getPath(options?: {
-    includeBasePath?: boolean
+  getRoutePath(options?: {
+    includeBaseRoutePath?: boolean
     includeDuplicateSegments?: boolean
   }) {
-    const includeBasePath = options?.includeBasePath ?? true
+    const includeBasePath = options?.includeBaseRoutePath ?? true
     const includeDuplicateSegments = options?.includeDuplicateSegments ?? false
     const fileSystem = this.#directory.getFileSystem()
     const basePath = this.#directory.getBasePath()
@@ -396,14 +396,17 @@ export class File<
   }
 
   /** Get the path segments of the file. */
-  getPathSegments(options?: {
-    includeBasePath?: boolean
+  getRoutePathSegments(options?: {
+    includeBaseRoutePath?: boolean
     includeDuplicateSegments?: boolean
   }) {
-    const includeBasePath = options?.includeBasePath ?? true
+    const includeBaseRoutePath = options?.includeBaseRoutePath ?? true
     const includeDuplicateSegments = options?.includeDuplicateSegments ?? false
 
-    return this.getPath({ includeBasePath, includeDuplicateSegments })
+    return this.getRoutePath({
+      includeBaseRoutePath,
+      includeDuplicateSegments,
+    })
       .split('/')
       .filter(Boolean)
   }
@@ -527,10 +530,10 @@ export class File<
     const entries = await (options?.entryGroup
       ? options.entryGroup.getEntries({ recursive: true })
       : this.#directory.getEntries())
-    const path = this.getPath({
+    const path = this.getRoutePath({
       includeDuplicateSegments: options?.includeDuplicateSegments,
     })
-    const index = entries.findIndex((entry) => entry.getPath() === path)
+    const index = entries.findIndex((entry) => entry.getRoutePath() === path)
     const previous = index > 0 ? entries[index - 1] : undefined
     const next = index < entries.length - 1 ? entries[index + 1] : undefined
 
@@ -1051,13 +1054,13 @@ export interface DirectoryOptions<
   /** The extension definitions to use for loading and validating file exports. */
   loaders?: Loaders
 
-  /** The base path to apply to all descendant entry `getPath` and `getPathSegments` methods. */
-  basePath?: string
+  /** The base path to apply to all descendant entry `getRoutePath` and `getRoutePathSegments` methods. */
+  baseRoutePath?: string
 
   /** The tsconfig.json file path to use for type checking and analyzing JavaScript and TypeScript files. */
   tsConfigPath?: string
 
-  /** The slug casing to apply to all descendant entry `getPath`, `getPathSegments`, and `getSlug` methods. */
+  /** The slug casing to apply to all descendant entry `getRoutePath`, `getRoutePathSegments`, and `getSlug` methods. */
   slugCasing?: SlugCasings
 
   /** The file system to use for reading directory entries. */
@@ -1083,7 +1086,7 @@ export class Directory<
   #path: string
   #depth: number = -1
   #slugCasing: SlugCasings
-  #basePath?: string
+  #baseRoutePath?: string
   #tsConfigPath?: string
   #loaders?: Loaders
   #directory?: Directory<any, any, any>
@@ -1111,7 +1114,7 @@ export class Directory<
       this.#loaders = options.loaders
       this.#include = options.include
       this.#sort = options.sort as any
-      this.#basePath = options.basePath
+      this.#baseRoutePath = options.baseRoutePath
       this.#slugCasing = options.slugCasing ?? 'kebab'
       this.#tsConfigPath = options.tsConfigPath
       this.#fileSystem = options.fileSystem
@@ -1146,7 +1149,7 @@ export class Directory<
     directory.#depth = this.#depth
     directory.#tsConfigPath = this.#tsConfigPath
     directory.#slugCasing = this.#slugCasing
-    directory.#basePath = this.#basePath
+    directory.#baseRoutePath = this.#baseRoutePath
     directory.#loaders = this.#loaders
     directory.#sort = this.#sort
     directory.#include = this.#include
@@ -1504,7 +1507,7 @@ export class Directory<
         if (options?.recursive) {
           const nestedEntries = await directory.getEntries(options)
           for (const nestedEntry of nestedEntries) {
-            entriesMap.set(nestedEntry.getPath(), nestedEntry)
+            entriesMap.set(nestedEntry.getRoutePath(), nestedEntry)
           }
         }
       } else if (entry.isFile) {
@@ -1618,9 +1621,9 @@ export class Directory<
       return [undefined, undefined]
     }
 
-    const path = this.getPath()
+    const path = this.getRoutePath()
     const index = entries.findIndex(
-      (entryToCompare) => entryToCompare.getPath() === path
+      (entryToCompare) => entryToCompare.getRoutePath() === path
     )
     const previous = index > 0 ? entries[index - 1] : undefined
     const next = index < entries.length - 1 ? entries[index + 1] : undefined
@@ -1648,13 +1651,13 @@ export class Directory<
     return formatNameAsTitle(this.getName())
   }
 
-  /** Get a URL-friendly path to the directory. */
-  getPath(options?: { includeBasePath?: boolean }) {
-    const includeBasePath = options?.includeBasePath ?? true
+  /** Get a route-friendly path to the directory. */
+  getRoutePath(options?: { includeBaseDirectory?: boolean }) {
+    const includeBaseDirectory = options?.includeBaseDirectory ?? true
     const fileSystem = this.getFileSystem()
     const path = fileSystem.getPath(
       this.#path,
-      includeBasePath ? { basePath: this.#basePath } : undefined
+      includeBaseDirectory ? { basePath: this.#baseRoutePath } : undefined
     )
 
     if (this.#slugCasing === 'none') {
@@ -1671,15 +1674,17 @@ export class Directory<
   }
 
   /** Get the path segments to the directory. */
-  getPathSegments(options?: { includeBasePath?: boolean }) {
-    const includeBasePath = options?.includeBasePath ?? true
+  getRoutePathSegments(options?: { includeBaseDirectory?: boolean }) {
+    const includeBaseDirectory = options?.includeBaseDirectory ?? true
 
-    return this.getPath({ includeBasePath }).split('/').filter(Boolean)
+    return this.getRoutePath({ includeBaseDirectory })
+      .split('/')
+      .filter(Boolean)
   }
 
   /** Get the configured base path of the directory. */
   getBasePath() {
-    return this.#basePath
+    return this.#baseRoutePath
   }
 
   /** Get the relative path of the directory. */

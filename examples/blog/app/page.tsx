@@ -9,7 +9,7 @@ export default async function Page() {
       <h1>Blog</h1>
       <ul>
         {allPosts.map(async (post) => {
-          const path = post.getPath()
+          const path = post.getRoutePath()
           const frontmatter = await post.getExportValue('frontmatter')
 
           return (
