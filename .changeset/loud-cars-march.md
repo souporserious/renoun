@@ -2,16 +2,16 @@
 'renoun': minor
 ---
 
-Adds a `parseCodeProps` helper to the `CodeInline` component making it easier to type custom MDX components correctly:
+Exports a `parseCodeProps` utility for the `CodeInline` component to makie it easier to parse and type custom MDX components correctly:
 
 ```tsx
-import { CodeInline } from 'renoun/components'
+import { CodeInline, parseCodeProps } from 'renoun/components'
 import type { MDXComponents } from 'renoun/mdx'
 
 export function useMDXComponents() {
   return {
     code: (props) => {
-      return <CodeInline {...CodeInline.parseCodeProps(props)} />
+      return <CodeInline {...parseCodeProps(props)} />
     },
   } satisfies MDXComponents
 }

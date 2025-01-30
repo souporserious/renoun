@@ -182,10 +182,10 @@ export function CodeInline({
 }
 
 /** Parses the props of an MDX `code` element for passing to `CodeInline`. */
-CodeInline.parseCodeProps = ({
+export function parseCodeProps({
   children,
   ...props
-}: React.ComponentProps<NonNullable<MDXComponents['code']>>) => {
+}: React.ComponentProps<NonNullable<MDXComponents['code']>>) {
   return {
     value: (children as string).trim(),
     ...props,

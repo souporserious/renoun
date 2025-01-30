@@ -2,6 +2,7 @@ import {
   CodeBlock as RenounCodeBlock,
   CodeInline,
   PackageInstall,
+  parseCodeProps,
 } from 'renoun/components'
 import type { MDXComponents as MDXComponentsType } from 'renoun/mdx'
 import { GeistMono } from 'geist/font/mono'
@@ -90,7 +91,7 @@ export const MDXComponents = {
     )
   },
   code: (props) => {
-    const { value, language } = CodeInline.parseCodeProps(props)
+    const { value, language } = parseCodeProps(props)
     return (
       <CodeInline
         value={value}

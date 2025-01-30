@@ -121,7 +121,7 @@ export default withMDX({
 Use the `CodeBlock` and `CodeInline` components to override the `pre` and `code` components respectively in your project's `mdx-components.tsx` file:
 
 ```tsx filename="02.mdx-components.tsx"
-import { CodeBlock, CodeInline } from 'renoun/components'
+import { CodeBlock, CodeInline, parseCodeProps } from 'renoun/components'
 import type { MDXComponents } from 'renoun/mdx'
 
 export function useMDXComponents() {
@@ -130,7 +130,7 @@ export function useMDXComponents() {
       return <CodeBlock {...CodeBlock.parsePreProps(props)} />
     },
     code: (props) => {
-      return <CodeInline {...CodeInline.parseCodeProps(props)} />
+      return <CodeInline {...parseCodeProps(props)} />
     },
   } satisfies MDXComponents
 }
