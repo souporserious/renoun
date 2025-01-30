@@ -7,14 +7,41 @@ import { Text } from '@/components/Text'
 const steps = [
   {
     title: 'Collect',
-    content: `Collect, organize, and validate structured data using the File System API.`,
-    code: `import { Directory } from 'renoun/file-system'
+    content: `Collect, organize, and validate structured data using powerful file system utilities.`,
+    code: `import { Directory, withSchema } from 'renoun/file-system'
+import { z } from 'zod'
 
-const posts = new Directory({ path: 'posts' })`,
+export const posts = new Directory({
+  path: 'posts',
+  include: '*.mdx',
+  loaders: {
+    mdx: withSchema(
+      {
+        frontmatter: z.object({
+          title: z.string(),
+          date: z.coerce.date(),
+          summary: z.string().optional(),
+          tags: z.array(z.string()).optional(),
+        }),
+      },
+      (path) => import(\`./posts/\${path\}.mdx\`)
+    ),
+  },
+  sort: async (a, b) => {
+    const aFrontmatter = await a.getExportValue('frontmatter')
+    const bFrontmatter = await b.getExportValue('frontmatter')
+
+    return bFrontmatter.date.getTime() - aFrontmatter.date.getTime()
+  },
+})`,
+    cta: {
+      label: 'View Utilities',
+      href: '/utilities/file-system',
+    },
   },
   {
     title: 'Render',
-    content: `Query and render your file system entries programmatically using a simple API.`,
+    content: `Query and render your file system entries programmatically in your favorite framework.`,
     code: `import { Directory } from 'renoun/file-system'
 
 const posts = new Directory({ path: 'posts' })
@@ -27,6 +54,10 @@ async function Page({ slug }: { slug: string }) {
 }`,
     codeBlockProps: {
       focusedLines: '4-20',
+    },
+    cta: {
+      label: 'Framework Guides',
+      href: '/guides',
     },
   },
   {
@@ -46,12 +77,17 @@ function Page() {
     </CodeBlock>
   )
 }`,
+    cta: {
+      label: 'View Components',
+      href: '/components',
+    },
   },
 ] satisfies {
   title: string
   content: string
   code: string
   codeBlockProps?: Partial<CodeBlockProps>
+  cta: { label: string; href: string }
 }[]
 
 export function QuickSteps() {
@@ -65,6 +101,15 @@ export function QuickSteps() {
         rowGap: '6rem',
       }}
     >
+      <div css={{ display: 'flex', flexDirection: 'column', gap: '1.6rem' }}>
+        <Text variant="heading-2" css={{ textAlign: 'center' }}>
+          Easy Setup so You Can Focus on What Matters
+        </Text>
+        <Text variant="body-1" css={{ textAlign: 'center' }}>
+          Start writing type-safe content and documentation in just a few simple
+          steps.
+        </Text>
+      </div>
       <ol
         css={{
           display: 'flex',
@@ -136,6 +181,13 @@ export function QuickSteps() {
                 <Text variant="body-1" css={{ gridColumn: '2', gridRow: '2' }}>
                   {step.content}
                 </Text>
+                <ButtonLink
+                  href={step.cta.href}
+                  variant="secondary"
+                  css={{ gridColumn: '2', gridRow: '3', justifySelf: 'start' }}
+                >
+                  {step.cta.label}
+                </ButtonLink>
               </figcaption>
               <CodeBlock
                 language="tsx"
@@ -152,7 +204,6 @@ export function QuickSteps() {
           </li>
         ))}
       </ol>
-      <ButtonLink href="/docs/introduction">Learn More →</ButtonLink>
     </section>
   )
 }
