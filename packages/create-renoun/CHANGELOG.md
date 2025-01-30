@@ -1,5 +1,11 @@
 # create-renoun
 
+## 1.1.0
+
+### Minor Changes
+
+- 2a150d6: Updates custom readline implementation to use `@clack/prompts`.
+
 ## 1.0.0
 
 ### Major Changes
