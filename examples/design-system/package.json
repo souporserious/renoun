@@ -2,8 +2,8 @@
   "private": true,
   "name": "@examples/design-system",
   "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "next build",
+    "dev": "renoun next --turbopack",
+    "build": "renoun next build",
     "start": "next start"
   },
   "dependencies": {
