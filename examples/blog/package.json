@@ -3,7 +3,7 @@
   "name": "@examples/blog",
   "scripts": {
     "dev": "renoun next",
-    "build": "next build",
+    "build": "renoun next build",
     "start": "next start"
   },
   "dependencies": {
