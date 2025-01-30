@@ -1,13 +1,23 @@
 #!/usr/bin/env node
 
+import { installPackage } from '@antfu/install-pkg'
+import {
+  intro,
+  outro,
+  spinner,
+  confirm,
+  cancel,
+  isCancel,
+  select,
+  log,
+} from '@clack/prompts'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import chalk from 'chalk'
+import color from 'picocolors'
+import terminalLink from 'terminal-link'
 
 import { fetchExample } from '../fetch-example.js'
 import { isPackageOutdated } from '../is-package-outdated.js'
-import { pickExample } from '../pick-example.js'
-import { askYesNo, Log } from '../utils.js'
 
 const states = {
   INITIAL_STATE: 'initialState',
@@ -26,8 +36,8 @@ export async function start() {
   const context = { message: '' }
   let currentState = states.INITIAL_STATE
 
-  console.log(
-    `Welcome to ${chalk.bold(chalk.yellow('renoun'))}!\nThe Documentation Toolkit for React`
+  intro(
+    `${color.bgYellowBright(color.bold(color.black('renoun')))} The Documentation Toolkit for React`
   )
 
   while (
@@ -47,11 +57,8 @@ export async function start() {
          */
         case states.CHECK_OUTDATED: {
           if (await isPackageOutdated('create-renoun')) {
-            const installCommand = chalk.bold('npm create renoun@latest')
-            Log.warning(
-              `A new version of ${chalk.bold(
-                'create-renoun'
-              )} is available. Please use the latest version by running ${installCommand}.`
+            log.warn(
+              `A new version of ${color.bold('create-renoun')} is available. Please use the latest version by running ${color.bold('npm create renoun@latest')}.`
             )
           }
           currentState = states.CHECK_EXAMPLE
@@ -94,21 +101,37 @@ export async function start() {
          * - After fetching, go directly to SUCCESS_STATE.
          */
         case states.PICK_EXAMPLE: {
-          const terminalLink = (await import('terminal-link')).default
-          const example = await pickExample({
-            options: ['blog', 'design-system'],
+          const example = await select({
+            message: 'Choose an example below to get started:',
+            options: [
+              { value: 'blog', label: 'Blog' },
+              { value: 'design-system', label: 'Design System' },
+            ],
           })
+
+          if (isCancel(example)) {
+            context.message = 'Example selection cancelled.'
+            currentState = states.WARNING_STATE
+            break
+          }
+
           const exampleLink = terminalLink(
             example,
             `https://github.com/souporserious/renoun/tree/main/examples/${example}`
           )
-          await fetchExample(
+          const fetched = await fetchExample(
             example,
-            `Download the ${exampleLink} example to ${chalk.bold(
-              join(process.cwd(), example)
-            )}?`
+            `Download the ${color.underline(
+              exampleLink
+            )} example to ${color.bold(join(process.cwd(), example))}?`
           )
-          currentState = states.SUCCESS_STATE
+
+          if (fetched) {
+            currentState = states.SUCCESS_STATE
+          } else {
+            context.message = `Example download exited. Please download an example or install renoun manually to continue.`
+            currentState = states.WARNING_STATE
+          }
           break
         }
 
@@ -118,14 +141,20 @@ export async function start() {
          */
         case states.CHECK_RENOUN_INSTALLED: {
           if (!checkRenounInstalled()) {
-            const isYes = await askYesNo(
-              `The ${chalk.bold('renoun')} package is not installed. Would you like to install it now?`
-            )
+            const isYes = await confirm({
+              message: `The ${color.bold('renoun')} package is not installed. Would you like to install it now?`,
+            })
+
+            if (isCancel(isYes)) {
+              context.message = `Installation cancelled. Please install renoun manually.`
+              currentState = states.WARNING_STATE
+              break
+            }
 
             if (isYes) {
               currentState = states.INSTALL_RENOUN
             } else {
-              context.message = `Please install the ${chalk.bold('renoun')} package before continuing.`
+              context.message = `Please install the ${color.bold('renoun')} package before continuing.`
               currentState = states.WARNING_STATE
             }
           } else {
@@ -154,11 +183,11 @@ export async function start() {
   }
 
   if (currentState === states.SUCCESS_STATE) {
-    Log.success('renoun configured successfully!')
+    outro('renoun configured successfully!')
   } else if (currentState === states.WARNING_STATE) {
-    Log.warning(context.message)
+    log.warn(context.message)
   } else {
-    Log.error(context.message)
+    cancel(context.message)
     process.exit(1)
   }
 }
@@ -180,15 +209,16 @@ function checkRenounInstalled() {
  * Install renoun using @antfu/install-pkg
  */
 async function installRenoun() {
-  const { installPackage } = await import('@antfu/install-pkg')
-  Log.info(`Installing ${chalk.bold('renoun')}...`)
+  const loader = spinner()
+
+  loader.start(`Installing ${color.bold('renoun')}...`)
 
   try {
     await installPackage(['renoun'])
-    Log.success('renoun package installed successfully!')
+    loader.stop(`${color.bold('renoun')} installed successfully!`)
   } catch (error) {
     if (error instanceof Error) {
-      throw new Error(`Installing renoun failed: ${error.message}`)
+      throw new Error(`Failed to install renoun: ${error.message}`)
     }
   }
 }

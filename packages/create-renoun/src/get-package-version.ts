@@ -1,8 +1,7 @@
+import { log } from '@clack/prompts'
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { homedir } from 'node:os'
-
-import { Log } from './utils.js'
 
 const packageJsonPath = resolve(__dirname, '../package.json')
 const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
@@ -31,7 +30,7 @@ export async function fetchPackageVersion(
     return data.latest
   } catch (error) {
     if (error instanceof Error) {
-      Log.error(`Error fetching package version: ${error}`)
+      log.error(`Error fetching package version: ${error}`)
     }
     clearTimeout(timeoutId)
     return packageJson.version

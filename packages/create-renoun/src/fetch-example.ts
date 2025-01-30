@@ -1,3 +1,4 @@
+import { confirm, text, isCancel, spinner, log } from '@clack/prompts'
 import { basename, join } from 'node:path'
 import {
   createWriteStream,
@@ -9,10 +10,9 @@ import {
 } from 'node:fs'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
-import chalk from 'chalk'
+import color from 'picocolors'
 
 import { fetchPackageVersion } from './get-package-version.js'
-import { Log, askQuestion, askYesNo } from './utils.js'
 
 /**
  * Fetches the contents of a renoun example from the GitHub repository and
@@ -21,15 +21,20 @@ import { Log, askQuestion, askYesNo } from './utils.js'
 export async function fetchExample(exampleSlug: string, message: string = '') {
   let workingDirectory = process.cwd()
   const directoryPath = `examples/${exampleSlug}`
-  const directoryName = chalk.bold(basename(directoryPath))
+  const directoryName = color.bold(basename(directoryPath))
   const postMessage = ` Press enter to proceed or specify a different directory: `
-  const userBaseDirectory = await askQuestion(
-    message
+  const userBaseDirectory = await text({
+    message: message
       ? `${message}${postMessage}`
-      : `Download the ${chalk.bold(directoryName)} example to ${chalk.bold(
+      : `Download the ${directoryName} example to ${color.bold(
           join(workingDirectory, exampleSlug)
-        )}}?${postMessage}`
-  )
+        )}?${postMessage}`,
+    placeholder: exampleSlug,
+  })
+
+  if (isCancel(userBaseDirectory)) {
+    throw new Error('Example download cancelled.')
+  }
 
   if (userBaseDirectory) {
     workingDirectory = join(workingDirectory, userBaseDirectory)
@@ -38,45 +43,76 @@ export async function fetchExample(exampleSlug: string, message: string = '') {
   }
 
   if (existsSync(workingDirectory)) {
-    const isYes = await askYesNo(
-      `The directory ${chalk.bold(
+    const isYes = await confirm({
+      message: `The directory ${color.bold(
         workingDirectory
       )} already exists. Do you want to overwrite it?`,
-      { defaultYes: false }
-    )
+      initialValue: false,
+    })
+
+    if (isCancel(isYes)) {
+      log.warn('Overwrite confirmation cancelled.')
+      throw new Error('User cancelled the overwrite.')
+    }
 
     if (isYes) {
-      rmdirSync(workingDirectory, { recursive: true })
-      mkdirSync(workingDirectory, { recursive: true })
+      try {
+        rmdirSync(workingDirectory, { recursive: true })
+        mkdirSync(workingDirectory, { recursive: true })
+        log.info(`Overwritten the directory ${color.bold(workingDirectory)}.`)
+      } catch (error) {
+        if (error instanceof Error) {
+          throw new Error(
+            `Failed to overwrite directory ${workingDirectory}: ${error.message}`
+          )
+        }
+      }
     } else {
-      Log.info(
-        `Skipping download of ${directoryName} example to ${chalk.bold(
+      log.info(
+        `Skipping download of ${directoryName} example to ${color.bold(
           workingDirectory
         )}.`
       )
-      return
+      return false
     }
   } else {
     mkdirSync(workingDirectory, { recursive: true })
   }
 
-  Log.info(
-    `Downloading ${directoryName} example to ${chalk.bold(workingDirectory)}.`
+  log.info(
+    `Downloading ${directoryName} example to ${color.bold(workingDirectory)}.`
   )
 
-  await fetchGitHubDirectory({
-    owner: 'souporserious',
-    repo: 'renoun',
-    branch: 'main',
-    basePath: '.',
-    directoryPath,
-    workingDirectory,
-  })
+  const loader = spinner()
+
+  loader.start('Fetching example files...')
+
+  try {
+    await fetchGitHubDirectory({
+      owner: 'souporserious',
+      repo: 'renoun',
+      branch: 'main',
+      basePath: '.',
+      directoryPath,
+      workingDirectory,
+    })
+    loader.stop('Example files fetched successfully.')
+  } catch (error) {
+    log.error('Failed to fetch example files.')
+    throw error
+  }
 
   const { detectPackageManager } = await import('@antfu/install-pkg')
-  const packageManager = await detectPackageManager(process.cwd())
+  const packageManager = await detectPackageManager(workingDirectory)
 
-  await reformatPackageJson(workingDirectory)
+  try {
+    await reformatPackageJson(workingDirectory)
+    loader.start('Reformatting package.json...')
+    loader.stop('package.json reformatted successfully.')
+  } catch (error) {
+    log.error('Failed to reformat package.json.')
+    throw error
+  }
 
   writeFileSync(
     join(workingDirectory, '.gitignore'),
@@ -86,16 +122,20 @@ export async function fetchExample(exampleSlug: string, message: string = '') {
 
   const introInstallInstructions =
     workingDirectory === process.cwd()
-      ? `Run`
-      : `Change to the ${chalk.bold(userBaseDirectory ?? directoryName)} directory and run`
+      ? `Run ${color.bold(`${packageManager ?? 'npm'} install`)} to install the dependencies and get started.`
+      : `Change to the ${color.bold(
+          directoryName
+        )} directory and run ${color.bold(
+          `${packageManager ?? 'npm'} install`
+        )} to install the dependencies and get started.`
 
-  Log.success(
-    `Example ${chalk.bold(
+  log.success(
+    `Example ${color.bold(
       directoryName
-    )} fetched and configured successfully! ${introInstallInstructions} ${chalk.bold(
-      `${packageManager ?? 'npm'} install`
-    )} to install the dependencies and get started.`
+    )} fetched and configured successfully! ${introInstallInstructions}`
   )
+
+  return true
 }
 
 /** Fetches the contents of a directory in a GitHub repository and downloads them to the local file system. */
@@ -116,13 +156,11 @@ async function fetchGitHubDirectory({
 }) {
   const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${directoryPath}?ref=${branch}`
   const response = await fetch(apiUrl)
-  const directoryName = chalk.bold(basename(directoryPath))
+  const directoryName = color.bold(basename(directoryPath))
 
   if (!response.ok) {
     throw new Error(
-      `Failed to fetch ${chalk.red(directoryName)} at ${apiUrl}: ${
-        response.statusText
-      }`
+      `Failed to fetch ${directoryName} from ${apiUrl}: ${response.statusText}`
     )
   }
 
