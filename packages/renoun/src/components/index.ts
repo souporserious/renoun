@@ -5,12 +5,17 @@ export {
   LineNumbers,
   Tokens,
   Toolbar,
+  parsePreProps,
   type BaseCodeBlockProps,
   type CodeBlockProps,
   type TokensProps,
   type ToolbarProps,
 } from './CodeBlock/index.js'
-export { CodeInline, type CodeInlineProps } from './CodeInline.js'
+export {
+  CodeInline,
+  parseCodeProps,
+  type CodeInlineProps,
+} from './CodeInline.js'
 export { Copyright } from './Copyright.js'
 export { GitProviderLogo, GitProviderLink } from './GitProvider.js'
 export { MDXRenderer } from './MDXRenderer.js'

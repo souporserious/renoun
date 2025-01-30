@@ -3,7 +3,7 @@ import type { MDXContent } from '@renoun/mdx'
 import { rehypePlugins, remarkPlugins } from '@renoun/mdx'
 import { minimatch } from 'minimatch'
 
-import { CodeBlock } from '../components/CodeBlock/index.js'
+import { CodeBlock, parsePreProps } from '../components/CodeBlock/index.js'
 import { CodeInline } from '../components/CodeInline.js'
 import { MDXRenderer } from '../components/MDXRenderer.js'
 import type { MDXComponents } from '../mdx/index.js'
@@ -46,7 +46,7 @@ export { Repository } from './Repository.js'
 
 const mdxComponents = {
   pre: (props) => {
-    return <CodeBlock {...CodeBlock.parsePreProps(props)} />
+    return <CodeBlock {...parsePreProps(props)} />
   },
   code: (props) => {
     return <CodeInline value={props.children} language="typescript" />

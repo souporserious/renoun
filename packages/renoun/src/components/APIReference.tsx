@@ -16,14 +16,14 @@ import type {
   TypeOfKind,
 } from '../utils/resolve-type.js'
 import { isParameterType, isPropertyType } from '../utils/resolve-type.js'
-import { CodeBlock } from './CodeBlock/index.js'
+import { CodeBlock, parsePreProps } from './CodeBlock/index.js'
 import { CodeInline } from './CodeInline.js'
 import { MDXRenderer } from './MDXRenderer.js'
 import type { MDXComponents } from '../mdx/index.js'
 
 const mdxComponents = {
   pre: (props) => {
-    return <CodeBlock {...CodeBlock.parsePreProps(props)} />
+    return <CodeBlock {...parsePreProps(props)} />
   },
   code: (props) => {
     return <CodeInline value={props.children} language="typescript" />

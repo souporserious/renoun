@@ -1,5 +1,6 @@
 export {
   CodeBlock,
+  parsePreProps,
   type BaseCodeBlockProps,
   type CodeBlockProps,
 } from './CodeBlock.js'
