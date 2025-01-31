@@ -1,5 +1,11 @@
 # renoun
 
+## 8.3.2
+
+### Patch Changes
+
+- 076403c: Update `restyle` dependency to latest version.
+
 ## 8.3.1
 
 ### Patch Changes
