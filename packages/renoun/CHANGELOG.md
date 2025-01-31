@@ -1,5 +1,13 @@
 # renoun
 
+## 8.3.1
+
+### Patch Changes
+
+- ae38994: Update `shiki` dependency to latest version.
+- Updated dependencies [ae38994]
+  - @renoun/mdx@1.3.2
+
 ## 8.3.0
 
 ### Minor Changes

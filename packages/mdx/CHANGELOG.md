@@ -1,5 +1,11 @@
 # @renoun/mdx
 
+## 1.3.2
+
+### Patch Changes
+
+- ae38994: Update `shiki` dependency to latest version.
+
 ## 1.3.1
 
 ### Patch Changes
