@@ -24,10 +24,10 @@ if (firstArgument === 'next' || firstArgument === 'waku') {
     process.exit(code)
   }
 
-  const isDev = secondArgument === undefined || secondArgument === 'dev'
+  const isProduction = secondArgument === 'build'
 
   if (process.env.NODE_ENV === undefined) {
-    process.env.NODE_ENV = isDev ? 'development' : 'production'
+    process.env.NODE_ENV = isProduction ? 'production' : 'development'
   }
 
   async function runSubProcess() {
