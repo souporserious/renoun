@@ -59,7 +59,7 @@ After installing the package, you can follow the [getting started guide](https:/
 
 ### File System
 
-The File System API offers a way to organize and query file-system data in renoun. It is a powerful tool that allows you to define a schema for file exports and query those exports using a simple API.
+The File System utilities offer a way to organize and query file-system data in renoun. It is a powerful tool that allows you to define a schema for file exports and query those exports using a simple API.
 
 To get started with the File System API, instantiate the `Directory` class to target a set of files and directories relative to the working directory:
 
@@ -86,7 +86,7 @@ async function Page({ slug }: { slug: string }) {
 }
 ```
 
-The File System API works with [MDX](https://www.renoun.dev/guides/mdx) out-of-the-box. However, we can also specify a loader for how to resolve the `mdx` file extension's runtime that loads the module using your bundler:
+The File System utilities work with [MDX](https://www.renoun.dev/guides/mdx) out-of-the-box. However, we can also specify a loader for how to resolve the `mdx` file extension's runtime that loads the module using your bundler:
 
 ```tsx
 import { Directory } from 'renoun/file-system'
