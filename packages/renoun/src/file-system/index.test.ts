@@ -1014,7 +1014,7 @@ describe('file system', () => {
     expect(fileExport.getTags()).toMatchObject([
       { tagName: 'category', text: 'greetings' },
     ])
-    expect(fileExport.getText()).toBe(statementText)
+    expect(await fileExport.getText()).toBe(statementText)
     expect(fileExport.getPosition()).toMatchInlineSnapshot(`
       {
         "end": {

@@ -663,9 +663,30 @@ export class JavaScriptFileExport<Value> {
     return this.#metadata?.environment
   }
 
-  /** Get the source text of the export. */
-  getText() {
-    return this.#metadata?.text
+  /**
+   * Get the source text of the export, optionally including dependencies.
+   *
+   * Note, including dependencies can be expensive to calculate, only use when necessary.
+   */
+  async getText({
+    includeDependencies,
+  }: { includeDependencies?: boolean } = {}) {
+    const location = await this.#getLocation()
+
+    if (location === undefined) {
+      throw new Error(
+        `[renoun] Export cannot be statically analyzed at file path "${this.#file.getRelativePath()}".`
+      )
+    }
+
+    const fileSystem = this.#file.getParent().getFileSystem()
+
+    return fileSystem.getFileExportText(
+      location.path,
+      location.position,
+      location.kind,
+      includeDependencies
+    )
   }
 
   /** Get the start and end position of the export in the file system. */
@@ -712,7 +733,7 @@ export class JavaScriptFileExport<Value> {
 
     if (location === undefined) {
       throw new Error(
-        `[renoun] Export can not be statically analyzed at file path "${this.#file.getRelativePath()}".`
+        `[renoun] Export cannot not be statically analyzed at file path "${this.#file.getRelativePath()}".`
       )
     }
 

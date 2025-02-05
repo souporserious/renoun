@@ -11,6 +11,7 @@ import {
   getFileExports as baseGetFileExports,
   getFileExportMetadata as baseGetFileExportMetadata,
 } from '../utils/get-file-exports.js'
+import { getFileExportText as baseGetFileExportText } from '../utils/get-file-export-text.js'
 import { getRootDirectory } from '../utils/get-root-directory.js'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.js'
 import type { SymbolFilter } from '../utils/resolve-type.js'
@@ -153,6 +154,32 @@ export async function createServer(options?: { port?: number }) {
     }) {
       const project = getProject(projectOptions)
       return baseGetFileExportMetadata(name, filePath, position, kind, project)
+    }
+  )
+
+  server.registerMethod(
+    'getFileExportText',
+    async function getFileExportText({
+      filePath,
+      position,
+      kind,
+      includeDependencies,
+      projectOptions,
+    }: {
+      filePath: string
+      position: number
+      kind: SyntaxKind
+      includeDependencies?: boolean
+      projectOptions?: ProjectOptions
+    }) {
+      const project = getProject(projectOptions)
+      return baseGetFileExportText({
+        filePath,
+        position,
+        kind,
+        includeDependencies,
+        project,
+      })
     }
   )
 

@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'vitest'
 import { Project } from 'ts-morph'
 
-import { extractExportByIdentifier } from './extract-export-by-identifier.js'
+import { getExportDeclarationTextWithDependencies } from './get-export-declaration-text-with-dependencies.js'
 
 const sourceFileText = `
 import { Image } from 'components'
@@ -40,6 +40,7 @@ type SystemProps = { as: any }
 
 type BoxProps = { children: any } & SystemProps
 
+/** A box component. */
 export const Box = (props: BoxProps) => <div {...props} />
 
 const Stack = (props: { children: any; style?: any }) => <div {...props} />
@@ -77,7 +78,11 @@ describe('extractExportByIdentifier', () => {
   test('extracts export and dependencies', () => {
     const project = new Project({ useInMemoryFileSystem: true })
     const sourceFile = project.createSourceFile('test.tsx', sourceFileText)
-    const codeString = extractExportByIdentifier(sourceFile, 'Box')
+    const boxDeclaration = sourceFile
+      .getExportedDeclarations()
+      .get('Box')!
+      .at(0)!
+    const codeString = getExportDeclarationTextWithDependencies(boxDeclaration)
 
     expect(codeString).toBe(result)
   })

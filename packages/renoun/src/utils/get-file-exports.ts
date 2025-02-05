@@ -59,9 +59,8 @@ export function getFileExports(
   return exportDeclarations
 }
 
-/** Returns metadata about a specific export of a file. */
-export async function getFileExportMetadata(
-  name: string,
+/** Returns a specific export declaration of a file at a given position and kind. */
+export function getFileExportDeclaration(
   filePath: string,
   position: number,
   kind: tsMorph.SyntaxKind,
@@ -84,6 +83,30 @@ export async function getFileExportMetadata(
     )
   }
 
+  return exportDeclaration
+}
+
+/** Returns metadata about a specific export of a file. */
+export async function getFileExportMetadata(
+  name: string,
+  filePath: string,
+  position: number,
+  kind: tsMorph.SyntaxKind,
+  project: Project
+) {
+  const sourceFile = project.getSourceFile(filePath)
+
+  if (!sourceFile) {
+    throw new Error(`[renoun] Source file not found: ${filePath}`)
+  }
+
+  const exportDeclaration = getFileExportDeclaration(
+    filePath,
+    position,
+    kind,
+    project
+  )
+
   return {
     name: getName(
       sourceFile.getBaseNameWithoutExtension(),
@@ -93,7 +116,6 @@ export async function getFileExportMetadata(
     environment: getEnvironment(exportDeclaration),
     jsDocMetadata: getJsDocMetadata(exportDeclaration),
     location: getDeclarationLocation(exportDeclaration),
-    text: exportDeclaration.getText(),
   }
 }
 

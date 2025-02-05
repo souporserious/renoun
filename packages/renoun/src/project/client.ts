@@ -153,7 +153,7 @@ export async function getFileExports(
 }
 
 /**
- * Get a specific export of a file.
+ * Get a specific file export in a source file.
  * @internal
  */
 export async function getFileExportMetadata(
@@ -186,6 +186,50 @@ export async function getFileExportMetadata(
     ({ getFileExportMetadata }) => {
       const project = getProject(projectOptions)
       return getFileExportMetadata(name, filePath, position, kind, project)
+    }
+  )
+}
+
+/**
+ * Get a specific file export's text by identifier, optionally including its dependencies.
+ * @internal
+ */
+export async function getFileExportText(
+  filePath: string,
+  position: number,
+  kind: SyntaxKind,
+  includeDependencies?: boolean,
+  projectOptions?: ProjectOptions
+) {
+  if (client) {
+    return client.callMethod<
+      {
+        filePath: string
+        position: number
+        kind: SyntaxKind
+        includeDependencies?: boolean
+        projectOptions?: ProjectOptions
+      },
+      string
+    >('getFileExportText', {
+      filePath,
+      position,
+      kind,
+      includeDependencies,
+      projectOptions,
+    })
+  }
+
+  return import('../utils/get-file-export-text.js').then(
+    ({ getFileExportText }) => {
+      const project = getProject(projectOptions)
+      return getFileExportText({
+        filePath,
+        position,
+        kind,
+        includeDependencies,
+        project,
+      })
     }
   )
 }

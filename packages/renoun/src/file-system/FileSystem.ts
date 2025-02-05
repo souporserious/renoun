@@ -4,6 +4,7 @@ import type { SyntaxKind } from 'ts-morph'
 import {
   getFileExports,
   getFileExportMetadata,
+  getFileExportText,
   resolveTypeAtLocation,
 } from '../project/client.js'
 import type { ProjectOptions } from '../project/types.js'
@@ -142,6 +143,21 @@ export abstract class FileSystem {
       filePath,
       position,
       kind,
+      this.getProjectOptions()
+    )
+  }
+
+  getFileExportText(
+    filePath: string,
+    position: number,
+    kind: SyntaxKind,
+    includeDependencies?: boolean
+  ) {
+    return getFileExportText(
+      filePath,
+      position,
+      kind,
+      includeDependencies,
       this.getProjectOptions()
     )
   }
