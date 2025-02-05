@@ -88,7 +88,7 @@ export type BaseCodeBlockProps = {
 export type CodeBlockProps =
   | ({
       /** Source code to highlight. */
-      value: string
+      value: string | Promise<string>
     } & BaseCodeBlockProps)
   | ({
       /** Path to the source file on disk to highlight. */
@@ -129,7 +129,15 @@ async function CodeBlockAsync({
       )
     }
 
-    options.value = props.value
+    // Wait for the value to resolve if it is a Promise
+    if (
+      typeof props.value === 'object' &&
+      typeof props.value.then === 'function'
+    ) {
+      options.value = await props.value
+    } else {
+      options.value = props.value
+    }
   } else if (hasSource) {
     options.source = props.source
 
@@ -434,10 +442,12 @@ export function CodeBlock(props: CodeBlockProps) {
                   className={props.className?.lineNumbers}
                   style={props.style?.lineNumbers}
                 >
-                  {Array.from(
-                    { length: props.value.split('\n').length },
-                    (_, index) => index + 1
-                  ).join('\n')}
+                  {typeof props.value === 'string'
+                    ? Array.from(
+                        { length: props.value.split('\n').length },
+                        (_, index) => index + 1
+                      ).join('\n')
+                    : null}
                 </FallbackLineNumbers>
               )}
 
