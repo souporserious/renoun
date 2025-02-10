@@ -16,6 +16,21 @@ const projects = new Map<string, Project>()
 const directoryWatchers = new Map<string, FSWatcher>()
 const directoryToProjects = new Map<string, Set<Project>>()
 
+const defaultCompilerOptions = {
+  allowJs: true,
+  esModuleInterop: true,
+  isolatedModules: true,
+  noImplicitOverride: true,
+  noUncheckedIndexedAccess: true,
+  resolveJsonModule: true,
+  skipLibCheck: true,
+  strict: true,
+  jsx: ts.JsxEmit.ReactJSX,
+  module: ts.ModuleKind.ESNext,
+  moduleDetection: ts.ModuleDetectionKind.Force,
+  target: ts.ScriptTarget.ESNext,
+} satisfies ts.CompilerOptions
+
 /** Get the project associated with the provided options. */
 export function getProject(options?: ProjectOptions) {
   const projectId = JSON.stringify(options)
@@ -24,27 +39,20 @@ export function getProject(options?: ProjectOptions) {
     return projects.get(projectId)!
   }
 
-  const project = new Project({
-    compilerOptions: {
-      allowJs: true,
-      esModuleInterop: true,
-      isolatedModules: true,
-      noImplicitOverride: true,
-      noUncheckedIndexedAccess: true,
-      resolveJsonModule: true,
-      skipLibCheck: true,
-      strict: true,
-      jsx: ts.JsxEmit.ReactJSX,
-      module: ts.ModuleKind.ESNext,
-      moduleDetection: ts.ModuleDetectionKind.Force,
-      target: ts.ScriptTarget.ESNext,
-      ...options?.compilerOptions,
-    },
-    tsConfigFilePath: options?.useInMemoryFileSystem
-      ? undefined
-      : (options?.tsConfigFilePath ?? 'tsconfig.json'),
-    useInMemoryFileSystem: options?.useInMemoryFileSystem,
-  })
+  const project = new Project(
+    options?.useInMemoryFileSystem
+      ? {
+          compilerOptions: {
+            ...defaultCompilerOptions,
+            ...options?.compilerOptions,
+          },
+          useInMemoryFileSystem: true,
+        }
+      : {
+          compilerOptions: options?.compilerOptions,
+          tsConfigFilePath: options?.tsConfigFilePath || 'tsconfig.json',
+        }
+  )
   const projectDirectory = options?.tsConfigFilePath
     ? resolve(dirname(options.tsConfigFilePath))
     : process.cwd()
