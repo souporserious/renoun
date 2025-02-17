@@ -203,7 +203,7 @@ type InferModuleLoaderTypes<Loader extends ModuleLoader> =
         : never
 
 /** Default module types for common file extensions. */
-interface DefaultModuleTypes {
+export interface DefaultModuleTypes {
   mdx: {
     default: MDXContent
   }
