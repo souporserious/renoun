@@ -17,13 +17,13 @@
     "postinstall": "turbo run build --filter=renoun"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.27.12",
-    "@types/node": "^22.12.0",
-    "prettier": "3.4.2",
-    "tsx": "4.19.2",
-    "turbo": "^2.3.4",
+    "@changesets/cli": "^2.28.0",
+    "@types/node": "^22.13.4",
+    "prettier": "3.5.1",
+    "tsx": "4.19.3",
+    "turbo": "^2.4.2",
     "typescript": "^5.7.3",
-    "vitest": "^3.0.4"
+    "vitest": "^3.0.6"
   },
   "engines": {
     "node": "20 || >=22"
