@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { ThemeProvider } from 'renoun/components'
 import Link from 'next/link'
 import './layout.css'
 
@@ -19,6 +20,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <ThemeProvider />
         <nav css={{ display: 'flex', gap: '1rem' }}>
           <Link href="/">Home</Link>
           <Link href="/components">Components</Link>

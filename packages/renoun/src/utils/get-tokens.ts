@@ -7,7 +7,7 @@ import type { Highlighter } from './create-highlighter.js'
 import { getDiagnosticMessageText } from './get-diagnostic-message.js'
 import { getLanguage, type Languages } from './get-language.js'
 import { getRootDirectory } from './get-root-directory.js'
-import { getThemeColors } from './get-theme-colors.js'
+import { getThemeColors } from './get-theme.js'
 import { getTrimmedSourceFileText } from './get-trimmed-source-file-text.js'
 import { isJsxOnly } from './is-jsx-only.js'
 import { generatedFilenames } from './parse-source-text-metadata.js'
@@ -113,9 +113,9 @@ export async function getTokens(
 
   try {
     const result = highlighter.codeToTokens(sourceText, {
-      theme: 'renoun',
-      // TODO: this is temporary until the JavaScript regex engine supports MDX
-      lang: finalLanguage === 'mdx' ? 'markdown' : finalLanguage,
+      // theme: 'renoun',
+      theme: 'vitesse-dark',
+      lang: finalLanguage,
     })
     tokens = result.tokens
   } catch (error) {

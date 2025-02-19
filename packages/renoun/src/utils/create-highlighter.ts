@@ -10,7 +10,7 @@ export async function createHighlighter() {
 
   return (await import('shiki/bundle/web')).createHighlighter({
     langs: config.languages,
-    themes: [getTheme()],
+    themes: [getTheme(), 'vitesse-light', 'vitesse-dark'],
     engine: createJavaScriptRegexEngine(),
   })
 }

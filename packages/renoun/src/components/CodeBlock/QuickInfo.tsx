@@ -2,7 +2,7 @@ import React, { Fragment } from 'react'
 import { styled, type CSSObject } from 'restyle'
 
 import { analyzeSourceText } from '../../project/client.js'
-import { getThemeColors } from '../../utils/get-theme-colors.js'
+import { getThemeColors } from '../../utils/get-theme.js'
 import type { Token, TokenDiagnostic } from '../../utils/get-tokens.js'
 import { MDXRenderer } from '../MDXRenderer.js'
 import { QuickInfoPopover } from './QuickInfoPopover.js'
