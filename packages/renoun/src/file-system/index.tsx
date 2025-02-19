@@ -353,7 +353,7 @@ export class File<
 
   /** Get the slug of the file. */
   getSlug() {
-    return createSlug(this.getName(), this.#slugCasing)
+    return createSlug(this.getBaseName(), this.#slugCasing)
   }
 
   /**
@@ -1651,7 +1651,7 @@ export class Directory<
 
   /** Get the slug of the directory. */
   getSlug() {
-    return createSlug(this.getName(), this.#slugCasing)
+    return createSlug(this.getBaseName(), this.#slugCasing)
   }
 
   /** Get the base name of the directory. */
