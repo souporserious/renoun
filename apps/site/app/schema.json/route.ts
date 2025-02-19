@@ -9,7 +9,9 @@ const themeSchema = z.union([
     .describe('A bundled Shiki theme.'),
   z
     .string()
-    .describe('A path on the file system to a VS Code compatible theme.'),
+    .describe(
+      'A path on the file system to a JSON file with a VS Code compatible theme.'
+    ),
 ])
 
 const languagesSchema = z.enum(
@@ -20,10 +22,10 @@ const languagesSchema = z.enum(
 )
 
 const gitSchema = z.object({
-  source: z.string().url().describe('URL to the Git repository.').optional(),
+  source: z.string().url().describe('URL to the git repository.').optional(),
   provider: z
     .enum(['github', 'gitlab', 'bitbucket'])
-    .describe('Git provider.')
+    .describe('The provider to use when constructing git repository URLs.')
     .optional(),
   branch: z
     .string()
@@ -40,7 +42,11 @@ const renounConfigSchema = z.object({
     .describe('List of language grammars to load.')
     .optional(),
   git: gitSchema.describe('Git configuration object').optional(),
-  siteUrl: z.string().url().describe('URL of the site').optional(),
+  siteUrl: z
+    .string()
+    .url()
+    .describe('The production site URL e.g. https://renoun.dev')
+    .optional(),
 })
 
 export const dynamic = 'force-static'
