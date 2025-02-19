@@ -32,15 +32,31 @@ const languagesSchema = z.enum(
 )
 
 const gitSchema = z.object({
-  source: z.string().url().describe('URL to the git repository.').optional(),
-  provider: z
-    .enum(['github', 'gitlab', 'bitbucket'])
-    .describe('The provider to use when constructing git repository URLs.')
+  source: z
+    .string()
+    .url()
+    .describe(
+      'The git source URL to use for linking to the repository and source files.'
+    )
     .optional(),
   branch: z
     .string()
-    .default('main')
-    .describe('Git branch name to link to.')
+    .describe(
+      'The branch to use for linking to the repository and source files.'
+    )
+    .optional(),
+  provider: z
+    .enum(['github', 'gitlab', 'bitbucket'])
+    .describe(
+      'The git provider to use. This option disables the provider detection from `git.source` which is helpful for self-hosted instances.'
+    )
+    .optional(),
+  owner: z.string().describe('The owner of the repository.').optional(),
+  repository: z.string().describe('The repository name.').optional(),
+  baseUrl: z
+    .string()
+    .url()
+    .describe('The base URL of the Git provider.')
     .optional(),
 })
 
@@ -49,6 +65,18 @@ const renounConfigSchema = z.object({
   theme: themeSchema.describe('Theme configuration object').optional(),
   languages: z
     .array(languagesSchema)
+    .default([
+      'css',
+      'js',
+      'jsx',
+      'ts',
+      'tsx',
+      'md',
+      'mdx',
+      'sh',
+      'json',
+      'html',
+    ])
     .describe('List of language grammars to load.')
     .optional(),
   git: gitSchema.describe('Git configuration object').optional(),
