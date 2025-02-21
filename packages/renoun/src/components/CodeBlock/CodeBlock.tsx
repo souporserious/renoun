@@ -262,7 +262,6 @@ async function CodeBlockAsync({
             ...getThemeTokenVariables(),
             padding: 0,
           }}
-          data-theme="dark"
           className={
             shouldRenderToolbar ? undefined : props.className?.container
           }
