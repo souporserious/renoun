@@ -225,6 +225,10 @@ export async function getTokens(
           const themeTokens = themedTokens[themeIndex]
           const currentToken = themeTokens[lineIndex][tokenIndex]
 
+          if (!currentToken) {
+            continue
+          }
+
           const color = currentToken.color
           if (color) {
             style[`--${themeIndex}`] = color
