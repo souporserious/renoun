@@ -2,7 +2,7 @@ import React, { Fragment } from 'react'
 import type { CSSObject } from 'restyle'
 import { css } from 'restyle/css'
 
-import { getThemeColors } from '../../utils/get-theme-colors.js'
+import { getThemeColors } from '../../utils/get-theme.js'
 import { getContext } from '../../utils/context.js'
 import type { GetTokens } from '../../utils/get-tokens.js'
 import { Context } from './Context.js'
@@ -63,24 +63,11 @@ async function TokensAsync({
     <QuickInfoProvider>
       {tokens.map((line, lineIndex) => {
         const lineChildren = line.map((token) => {
-          const hasTextStyles = Boolean(
-            token.fontStyle || token.fontWeight || token.textDecoration
-          )
           const hasSymbolMeta = token.diagnostics || token.quickInfo
 
-          if (
-            token.isWhitespace ||
-            (!hasTextStyles && !hasSymbolMeta && token.isBaseColor)
-          ) {
+          if (token.isWhitespace) {
             return token.value
           }
-
-          const tokenStyles = {
-            fontStyle: token.fontStyle,
-            fontWeight: token.fontWeight,
-            textDecoration: token.textDecoration,
-            color: token.isBaseColor ? undefined : token.color,
-          } satisfies CSSObject
 
           if (hasSymbolMeta) {
             const diagnosticStyles = {
@@ -89,7 +76,7 @@ async function TokensAsync({
               backgroundPosition: 'bottom left',
             }
             const [symbolClassName, Styles] = css({
-              ...tokenStyles,
+              ...token.style,
               ...(token.diagnostics && diagnosticStyles),
               ...cssProp.token,
             })
@@ -120,7 +107,7 @@ async function TokensAsync({
             )
           }
 
-          const [classNames, Styles] = css(tokenStyles)
+          const [classNames, Styles] = css(token.style)
 
           return (
             <span

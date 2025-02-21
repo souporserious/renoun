@@ -56,6 +56,48 @@ To use a custom theme, you can reference a JSON file that defines a <a href="htt
 }
 ```
 
+### Multiple Themes
+
+You can also specify multiple themes to be used, the first theme will be used as the default theme:
+
+```json
+{
+  "theme": {
+    "light": "vitesse-light",
+    "dark": "vitesse-dark"
+  }
+}
+```
+
+This requires using the `ThemeProvider` component that will inject the proper CSS Variables in the head of the document:
+
+```tsx
+import { ThemeProvider } from 'renoun/components'
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <html lang="en">
+      <body>
+        <ThemeProvider />
+        {children}
+      </body>
+    </html>
+  )
+}
+```
+
+To use a specific theme, append a `data-theme` attribute to the `html` element or another parent element:
+
+```html
+<html data-theme="dark">
+  ...
+</html>
+```
+
 ## Languages
 
 The `languages` property is used to define the languages that are supported by the `CodeBlock` and `CodeInline` components. This is used to determine which language to load when highlighting code.

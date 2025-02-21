@@ -7,11 +7,22 @@ export async function createHighlighter() {
   const { createJavaScriptRegexEngine } = await import(
     'shiki/engine/javascript'
   )
+  let themes
+
+  if (typeof config.theme === 'string') {
+    themes = [await getTheme(config.theme)]
+  } else {
+    themes = await Promise.all(
+      Object.entries(config.theme).map(([name, theme]) =>
+        theme.endsWith('.json') ? getTheme(name) : theme
+      )
+    )
+  }
 
   return (await import('shiki/bundle/web')).createHighlighter({
-    langs: config.languages,
-    themes: [getTheme()],
     engine: createJavaScriptRegexEngine(),
+    langs: config.languages,
+    themes,
   })
 }
 

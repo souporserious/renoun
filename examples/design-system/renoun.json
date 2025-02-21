@@ -3,5 +3,9 @@
   "git": {
     "source": "https://github.com/souporserious/renoun"
   },
-  "siteUrl": "https://renoun.dev"
+  "siteUrl": "https://renoun.dev",
+  "theme": {
+    "dark": "vitesse-dark",
+    "light": "vitesse-light"
+  }
 }

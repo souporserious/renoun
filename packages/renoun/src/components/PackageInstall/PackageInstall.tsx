@@ -1,7 +1,7 @@
 import React from 'react'
 import { styled, type CSSObject } from 'restyle'
 
-import { getThemeColors } from '../../utils/get-theme-colors.js'
+import { getThemeColors } from '../../utils/get-theme.js'
 import { CodeBlock } from '../CodeBlock/CodeBlock.js'
 import { Tokens } from '../CodeBlock/Tokens.js'
 import { CopyCommand } from './CopyCommand.js'

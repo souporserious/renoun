@@ -3,9 +3,11 @@ import { resolve } from 'node:path'
 import { cwd } from 'node:process'
 import type { bundledThemes, bundledLanguages } from 'shiki'
 
+type ThemeValue = keyof typeof bundledThemes | (string & {})
+
 type ConfigurationOptions = {
   /** Path to the VS Code compatible theme used for syntax highlighting the `CodeBlock`, `CodeInline`, and `Tokens` components. */
-  theme: keyof typeof bundledThemes | (string & {})
+  theme: ThemeValue | Record<string, ThemeValue>
 
   /** List of languages to load for syntax highlighting. */
   languages: (keyof typeof bundledLanguages)[]

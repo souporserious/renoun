@@ -1,7 +1,7 @@
 import React, { Fragment } from 'react'
 import { styled, type CSSObject } from 'restyle'
 
-import { getThemeColors } from '../../utils/get-theme-colors.js'
+import { getThemeColors } from '../../utils/get-theme.js'
 import { getContext } from '../../utils/context.js'
 import type { getTokens } from '../../utils/get-tokens.js'
 import { Context } from './Context.js'
