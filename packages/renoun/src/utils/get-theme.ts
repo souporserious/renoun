@@ -217,8 +217,8 @@ function buildNestedObject(
  *
  * ```js
  * {
- *   '& span, [data-theme="light"]& span': { color: 'var(--0)' },
- *   '[data-theme="dark"]& span': { color: 'var(--1)' },
+ *   '[data-theme="light"] & span': { color: 'var(--0)' },
+ *   '[data-theme="dark"] & span': { color: 'var(--1)' },
  * }
  *
  */
@@ -232,16 +232,9 @@ export function getThemeTokenVariables() {
   const themeVariables: Record<string, any> = {}
   const themeNames = Object.keys(config.theme)
 
-  if (themeNames.length) {
-    for (let index = 0; index < Object.keys(config.theme).length; index++) {
-      const property =
-        index === 0
-          ? `& span, [data-theme="${themeNames[index]}"]& span`
-          : `[data-theme="${themeNames[index]}"]& span`
-
-      themeVariables[property] = {
-        color: `var(--${index})`,
-      }
+  for (let index = 0; index < themeNames.length; index++) {
+    themeVariables[`[data-theme="${themeNames[index]}"] & span`] = {
+      color: `var(--${index})`,
     }
   }
 
