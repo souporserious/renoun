@@ -9,6 +9,7 @@
     "dev": "turbo run dev",
     "dev:site": "pnpm dev --filter=renoun --filter=@apps/site",
     "dev:examples": "pnpm dev --filter=renoun --filter=@examples/*",
+    "dev:example": "bash -c 'pnpm dev --filter=renoun  --filter=@examples/$1'",
     "test": "turbo run test",
     "format": "prettier --write '**/**/*.{js,ts,tsx,json,css}'",
     "ci:version": "pnpm changeset version && pnpm install --no-frozen-lockfile && git add .",
