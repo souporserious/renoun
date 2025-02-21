@@ -4,7 +4,10 @@ import { type CSSObject, styled } from 'restyle'
 import type { MDXComponents } from '../../mdx/index.js'
 import { analyzeSourceText } from '../../project/client.js'
 import { computeDirectionalStyles } from '../../utils/compute-directional-styles.js'
-import { getThemeColors } from '../../utils/get-theme.js'
+import {
+  getThemeColors,
+  getThemeTokenVariables,
+} from '../../utils/get-theme.js'
 import type { Languages } from '../../utils/get-language.js'
 import type { ContextValue } from './Context.js'
 import { Context } from './Context.js'
@@ -256,14 +259,8 @@ async function CodeBlockAsync({
                 }
               : {}),
             ...(shouldRenderToolbar ? {} : props.css?.container),
+            ...getThemeTokenVariables(),
             padding: 0,
-
-            span: {
-              color: 'var(--0)',
-            },
-            '[data-theme="light"]& span': {
-              color: 'var(--1)',
-            },
           }}
           data-theme="dark"
           className={

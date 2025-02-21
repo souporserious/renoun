@@ -211,3 +211,39 @@ function buildNestedObject(
 
   return result
 }
+
+/**
+ * Gets the theme token variables for each theme.
+ *
+ * ```js
+ * {
+ *   '& span, [data-theme="light"]& span': { color: 'var(--0)' },
+ *   '[data-theme="dark"]& span': { color: 'var(--1)' },
+ * }
+ *
+ */
+export function getThemeTokenVariables() {
+  const config = loadConfig()
+
+  if (typeof config.theme === 'string') {
+    return {}
+  }
+
+  const themeVariables: Record<string, any> = {}
+  const themeNames = Object.keys(config.theme)
+
+  if (themeNames.length) {
+    for (let index = 0; index < Object.keys(config.theme).length; index++) {
+      const property =
+        index === 0
+          ? `& span, [data-theme="${themeNames[index]}"]& span`
+          : `[data-theme="${themeNames[index]}"]& span`
+
+      themeVariables[property] = {
+        color: `var(--${index})`,
+      }
+    }
+  }
+
+  return themeVariables
+}

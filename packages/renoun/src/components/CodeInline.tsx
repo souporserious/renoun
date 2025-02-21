@@ -4,7 +4,7 @@ import { css, styled, type CSSObject } from 'restyle'
 import type { MDXComponents } from '../mdx/index.js'
 import { analyzeSourceText } from '../project/client.js'
 import type { Languages } from '../utils/get-language.js'
-import { getThemeColors } from '../utils/get-theme.js'
+import { getThemeColors, getThemeTokenVariables } from '../utils/get-theme.js'
 import type { Token } from '../utils/get-tokens.js'
 import { CopyButton } from './CodeBlock/CopyButton.js'
 import { getScrollContainerStyles } from './CodeBlock/utils.js'
@@ -89,13 +89,7 @@ async function CodeInlineAsync({
       color: theme.scrollbarSlider.hoverBackground,
     }),
     ...cssProp,
-
-    span: {
-      color: 'var(--0)',
-    },
-    '[data-theme="light"]& span': {
-      color: 'var(--1)',
-    },
+    ...getThemeTokenVariables(),
   })
   const children = tokens.map((line, lineIndex) => (
     <Fragment key={lineIndex}>
