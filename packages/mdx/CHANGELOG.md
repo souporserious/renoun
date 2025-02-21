@@ -1,5 +1,11 @@
 # @renoun/mdx
 
+## 1.4.0
+
+### Minor Changes
+
+- 5f524f5: Updates all dependencies to their latest version.
+
 ## 1.3.2
 
 ### Patch Changes

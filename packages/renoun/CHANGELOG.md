@@ -1,5 +1,62 @@
 # renoun
 
+## 8.4.0
+
+### Minor Changes
+
+- 4079759: Allows `CodeBlock` `value` prop to accept a promise that will resolve within the Suspense boundary.
+- 5f524f5: Updates all dependencies to their latest version.
+- fba9490: Adds support for defining multiple syntax highlighting themes in `renoun.json`:
+
+  ```json
+  {
+    "theme": {
+      "light": "vitesse-light",
+      "dark": "vitesse-dark"
+    }
+  }
+  ```
+
+  This requires using a new `ThemeProvider` component that will inject the proper CSS Variables in the head of the document:
+
+  ```tsx
+  import { ThemeProvider } from 'renoun/components'
+
+  export default function RootLayout({
+    children,
+  }: {
+    children: React.ReactNode
+  }) {
+    return (
+      <html lang="en">
+        <body>
+          <ThemeProvider />
+          {children}
+        </body>
+      </html>
+    )
+  }
+  ```
+
+  To use a specific theme, append a `data-theme` attribute to the `html` element or another parent element:
+
+  ```html
+  <html data-theme="dark" lang="en">
+    ...
+  </html>
+  ```
+
+- 26757a9: Adds `includeDependencies` option to `JavaScriptFileExport#getText` method. When enabled, this will include all dependencies of the export declaration in the returned text.
+- c831cb6: Updates a project's default compiler options to only be set when using `MemoryFileSystem`. This makes sure to respect the local `tsconfig.json` file without any implicit overrides when using `NodeFileSystem`.
+
+### Patch Changes
+
+- 33b0adb: Exports `DefaultModuleTypes` to ensure all types used in public API declarations are explicitly available.
+- b55efb0: Fixes `File#getSlug` appending an extension.
+- 0a2f85c: Fixes Next.js warning for wrong `NODE_ENV` set to production during development.
+- Updated dependencies [5f524f5]
+  - @renoun/mdx@1.4.0
+
 ## 8.3.2
 
 ### Patch Changes
