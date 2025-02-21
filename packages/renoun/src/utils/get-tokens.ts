@@ -124,7 +124,12 @@ export async function getTokens(
   const themeNames =
     typeof config.theme === 'string'
       ? [config.theme]
-      : Object.values(config.theme)
+      : Object.values(config.theme).map((theme) => {
+          if (typeof theme === 'string') {
+            return theme
+          }
+          return theme[0]
+        })
   let themedTokens: ReturnType<Highlighter['codeToTokens']>['tokens'][] = []
 
   try {

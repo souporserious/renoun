@@ -14,13 +14,64 @@ const themeValueSchema = z.union([
     ),
 ])
 
-const themeSchema = z.union([
+const themeOverrideSchema = z
+  .object({
+    colors: z
+      .record(z.string())
+      .optional()
+      .describe('Overrides for theme colors.'),
+    tokenColors: z
+      .array(
+        z.object({
+          scope: z
+            .union([z.string(), z.array(z.string())])
+            .optional()
+            .describe(
+              'One or more token scopes where the settings will be applied.'
+            ),
+          settings: z
+            .object({
+              foreground: z
+                .string()
+                .optional()
+                .describe('The foreground color.'),
+              background: z
+                .string()
+                .optional()
+                .describe('The background color.'),
+              fontStyle: z
+                .string()
+                .optional()
+                .describe(
+                  'Font style (e.g. "italic", "bold", or a combination thereof).'
+                ),
+            })
+            .optional()
+            .describe('Token style settings.'),
+        })
+      )
+      .optional()
+      .describe('Overrides for token colors.'),
+    semanticTokenColors: z
+      .record(z.union([z.string(), z.object({}).passthrough()]))
+      .optional()
+      .describe('Overrides for semantic token colors.'),
+  })
+  .passthrough()
+  .describe('Theme override configuration.')
+
+const themeOptionSchema = z.union([
   themeValueSchema,
+  z.tuple([themeValueSchema, themeOverrideSchema]),
+])
+
+const themeSchema = z.union([
+  themeOptionSchema,
   z
     .object({})
-    .catchall(themeValueSchema)
+    .catchall(themeOptionSchema)
     .describe(
-      `Define multiple named themes using an object \`{ light: 'vitesse-light', dark: 'vitesse-dark' }\`. The first theme defined in the object will be used as the default theme.`
+      `Define multiple named themes using an object, e.g. { light: 'vitesse-light', dark: 'vitesse-dark' }. The first theme defined in the object will be used as the default theme.`
     ),
 ])
 
