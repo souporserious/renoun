@@ -205,20 +205,37 @@ export async function getTokens(
 
       let style: Record<string, string> = {}
 
-      for (let themeIndex = 0; themeIndex < themedTokens.length; themeIndex++) {
-        const themeTokens = themedTokens[themeIndex]
-        const currentToken = themeTokens[lineIndex][tokenIndex]
-
-        const color = currentToken.color
-        if (color) {
-          style[`--${themeIndex}`] = color
+      if (typeof config.theme === 'string') {
+        if (baseToken.color) {
+          style.color = baseToken.color
         }
 
-        const fontStyle = currentToken.fontStyle
-        if (fontStyle) {
-          const resolvedFontStyles = Object.values(getFontStyle(fontStyle))
-          for (let index = 0; index < resolvedFontStyles.length; index++) {
-            style[`--${themeIndex}${index}`] = resolvedFontStyles[index]
+        if (baseToken.fontStyle) {
+          style = {
+            ...style,
+            ...getFontStyle(baseToken.fontStyle),
+          }
+        }
+      } else {
+        for (
+          let themeIndex = 0;
+          themeIndex < themedTokens.length;
+          themeIndex++
+        ) {
+          const themeTokens = themedTokens[themeIndex]
+          const currentToken = themeTokens[lineIndex][tokenIndex]
+
+          const color = currentToken.color
+          if (color) {
+            style[`--${themeIndex}`] = color
+          }
+
+          const fontStyle = currentToken.fontStyle
+          if (fontStyle) {
+            const resolvedFontStyles = Object.values(getFontStyle(fontStyle))
+            for (let index = 0; index < resolvedFontStyles.length; index++) {
+              style[`--${themeIndex}${index}`] = resolvedFontStyles[index]
+            }
           }
         }
       }
