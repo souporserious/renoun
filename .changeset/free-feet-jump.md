@@ -33,3 +33,14 @@ export default function RootLayout({
   )
 }
 ```
+
+To use a specific theme, append a `data-theme` attribute to the `html` element or another parent element:
+
+```tsx
+<html data-theme="dark" lang="en">
+  <body>
+    <ThemeProvider />
+    {children}
+  </body>
+</html>
+```
