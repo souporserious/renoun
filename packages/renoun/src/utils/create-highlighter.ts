@@ -13,9 +13,15 @@ export async function createHighlighter() {
     themes = [await getTheme(config.theme)]
   } else {
     themes = await Promise.all(
-      Object.entries(config.theme).map(([name, theme]) =>
-        theme.endsWith('.json') ? getTheme(name) : theme
-      )
+      Object.entries(config.theme).map(([name, theme]) => {
+        if (typeof theme === 'string' && theme.endsWith('.json')) {
+          return getTheme(name)
+        } else if (Array.isArray(theme)) {
+          return theme[0]
+        } else {
+          return theme
+        }
+      })
     )
   }
 

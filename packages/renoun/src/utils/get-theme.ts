@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import { loadConfig } from './load-config.js'
 
 /** Gets the theme path from the `renoun.json` config. */
-function getThemePath(themeName?: string) {
+function getThemeConfig(themeName?: string) {
   const config = loadConfig()
 
   if (typeof config.theme === 'object') {
@@ -24,19 +24,22 @@ const cachedThemes = new Map<string, Record<string, any>>()
 
 /** Gets a normalized VS Code theme. */
 export async function getTheme(themeName?: string) {
-  const themePath = getThemePath(themeName)
+  const themeConfig = getThemeConfig(themeName)
 
-  if (themePath === undefined) {
+  if (themeConfig === undefined) {
     throw new Error(
       `[renoun] No valid theme found. Ensure the \`theme\` property in the \`renoun.json\` at the root of your project is configured correctly. For more information, visit: https://renoun.dev/docs/configuration`
     )
   }
+
+  const themePath = Array.isArray(themeConfig) ? themeConfig[0] : themeConfig
 
   if (cachedThemes.has(themePath)) {
     return cachedThemes.get(themePath)!
   }
 
   const { bundledThemes, normalizeTheme } = await import('shiki/bundle/web')
+  const themeOverrides = Array.isArray(themeConfig) ? themeConfig[1] : undefined
   let theme: Record<string, any>
 
   if (themePath.endsWith('.json')) {
@@ -49,6 +52,11 @@ export async function getTheme(themeName?: string) {
     throw new Error(
       `[renoun] The theme "${themePath}" is not a valid JSON file or a bundled theme.`
     )
+  }
+
+  // Apply theme overrides.
+  if (themeOverrides) {
+    theme = mergeThemes(theme, themeOverrides)
   }
 
   // Set fallback values for missing colors.
@@ -239,4 +247,51 @@ export function getThemeTokenVariables() {
   }
 
   return themeVariables
+}
+
+/** Merge two VS Code theme JSON objects (baseTheme and overrides). */
+function mergeThemes(
+  baseTheme: Record<string, any>,
+  overrides: Record<string, any>
+) {
+  if (!overrides) {
+    return baseTheme
+  }
+
+  const mergedColors = {
+    ...baseTheme.colors,
+    ...overrides.colors,
+  }
+  const mergedTokenColors = [
+    ...(baseTheme.tokenColors ?? []),
+    ...(overrides.tokenColors ?? []),
+  ]
+  const baseSemanticTokenColors = baseTheme.semanticTokenColors ?? {}
+  const overrideSemanticTokenColors = overrides.semanticTokenColors ?? {}
+  const allScopes = new Set([
+    ...Object.keys(baseSemanticTokenColors),
+    ...Object.keys(overrideSemanticTokenColors),
+  ])
+  const mergedSemanticTokenColors: Record<string, any> = {}
+
+  for (const scope of allScopes) {
+    const baseValue = baseSemanticTokenColors[scope]
+    const overrideValue = overrideSemanticTokenColors[scope]
+
+    if (baseValue == null) {
+      mergedSemanticTokenColors[scope] = overrideValue
+    } else if (typeof baseValue === 'string') {
+      mergedSemanticTokenColors[scope] = overrideValue ?? baseValue
+    } else if (typeof baseValue === 'object') {
+      mergedSemanticTokenColors[scope] = { ...baseValue, ...overrideValue }
+    } else {
+      mergedSemanticTokenColors[scope] = overrideValue ?? baseValue
+    }
+  }
+
+  return {
+    colors: mergedColors,
+    tokenColors: mergedTokenColors,
+    semanticTokenColors: mergedSemanticTokenColors,
+  }
 }
