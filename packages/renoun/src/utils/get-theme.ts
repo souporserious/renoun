@@ -3,8 +3,6 @@ import { resolve } from 'node:path'
 
 import { loadConfig } from './load-config.js'
 
-let theme: Record<string, any> | null = null
-
 /** Gets the theme path from the `renoun.json` config. */
 function getThemePath(themeName?: string) {
   const config = loadConfig()
@@ -39,77 +37,64 @@ export async function getTheme(themeName?: string) {
   }
 
   const { bundledThemes, normalizeTheme } = await import('shiki/bundle/web')
+  let theme: Record<string, any>
 
-  if (theme === null) {
-    if (themePath.endsWith('.json')) {
-      theme = JSON.parse(readFileSync(themePath, 'utf-8'))
-    } else if (themePath in bundledThemes) {
-      const themeKey = themePath as keyof typeof bundledThemes
-      const resolvedTheme = await bundledThemes[themeKey].call(null)
-      theme = resolvedTheme.default
-    } else {
-      throw new Error(
-        `[renoun] The theme "${themePath}" is not a valid JSON file or a bundled theme.`
-      )
-    }
-
-    const resolvedTheme = theme!
-
-    // Set fallback values for missing colors.
-    if (!resolvedTheme.colors['editor.background']) {
-      resolvedTheme.colors['editor.background'] =
-        resolvedTheme.colors.background || '#000000'
-    }
-    if (!resolvedTheme.colors['editor.foreground']) {
-      resolvedTheme.colors['editor.foreground'] =
-        resolvedTheme.colors.foreground || '#ffffff'
-    }
-    if (!resolvedTheme.colors.background) {
-      resolvedTheme.colors.background =
-        resolvedTheme.colors['editor.background']
-    }
-    if (!resolvedTheme.colors.foreground) {
-      resolvedTheme.colors.foreground =
-        resolvedTheme.colors['editor.foreground']
-    }
-    if (!resolvedTheme.colors['panel.background']) {
-      resolvedTheme.colors['panel.background'] =
-        resolvedTheme.colors['editor.background']
-    }
-    if (!resolvedTheme.colors['panel.border']) {
-      resolvedTheme.colors['panel.border'] =
-        resolvedTheme.colors['editor.foreground']
-    }
-    if (!resolvedTheme.colors['editor.hoverHighlightBackground']) {
-      resolvedTheme.colors['editor.hoverHighlightBackground'] =
-        'rgba(255, 255, 255, 0.1)'
-    }
-    if (!resolvedTheme.colors['activityBar.background']) {
-      resolvedTheme.colors['activityBar.background'] =
-        resolvedTheme.colors['editor.background']
-    }
-    if (!resolvedTheme.colors['activityBar.foreground']) {
-      resolvedTheme.colors['activityBar.foreground'] =
-        resolvedTheme.colors['editor.foreground']
-    }
-    if (!resolvedTheme.colors['scrollbarSlider.background']) {
-      resolvedTheme.colors['scrollbarSlider.background'] =
-        'rgba(121, 121, 121, 0.4)'
-    }
-    if (!resolvedTheme.colors['scrollbarSlider.hoverBackground']) {
-      resolvedTheme.colors['scrollbarSlider.hoverBackground'] =
-        'rgba(100, 100, 100, 0.7)'
-    }
-    if (!resolvedTheme.colors['scrollbarSlider.activeBackground']) {
-      resolvedTheme.colors['scrollbarSlider.activeBackground'] =
-        'rgba(191, 191, 191, 0.4)'
-    }
-
-    theme = normalizeTheme(resolvedTheme)
-    theme.name = themeName ?? 'renoun'
+  if (themePath.endsWith('.json')) {
+    theme = JSON.parse(readFileSync(themePath, 'utf-8'))
+  } else if (themePath in bundledThemes) {
+    const themeKey = themePath as keyof typeof bundledThemes
+    const resolvedTheme = await bundledThemes[themeKey].call(null)
+    theme = resolvedTheme.default
+  } else {
+    throw new Error(
+      `[renoun] The theme "${themePath}" is not a valid JSON file or a bundled theme.`
+    )
   }
 
+  // Set fallback values for missing colors.
+  if (!theme.colors['editor.background']) {
+    theme.colors['editor.background'] = theme.colors.background || '#000000'
+  }
+  if (!theme.colors['editor.foreground']) {
+    theme.colors['editor.foreground'] = theme.colors.foreground || '#ffffff'
+  }
+  if (!theme.colors.background) {
+    theme.colors.background = theme.colors['editor.background']
+  }
+  if (!theme.colors.foreground) {
+    theme.colors.foreground = theme.colors['editor.foreground']
+  }
+  if (!theme.colors['panel.background']) {
+    theme.colors['panel.background'] = theme.colors['editor.background']
+  }
+  if (!theme.colors['panel.border']) {
+    theme.colors['panel.border'] = theme.colors['editor.foreground']
+  }
+  if (!theme.colors['editor.hoverHighlightBackground']) {
+    theme.colors['editor.hoverHighlightBackground'] = 'rgba(255, 255, 255, 0.1)'
+  }
+  if (!theme.colors['activityBar.background']) {
+    theme.colors['activityBar.background'] = theme.colors['editor.background']
+  }
+  if (!theme.colors['activityBar.foreground']) {
+    theme.colors['activityBar.foreground'] = theme.colors['editor.foreground']
+  }
+  if (!theme.colors['scrollbarSlider.background']) {
+    theme.colors['scrollbarSlider.background'] = 'rgba(121, 121, 121, 0.4)'
+  }
+  if (!theme.colors['scrollbarSlider.hoverBackground']) {
+    theme.colors['scrollbarSlider.hoverBackground'] = 'rgba(100, 100, 100, 0.7)'
+  }
+  if (!theme.colors['scrollbarSlider.activeBackground']) {
+    theme.colors['scrollbarSlider.activeBackground'] =
+      'rgba(191, 191, 191, 0.4)'
+  }
+
+  theme = normalizeTheme(theme)
+  theme.name = themeName
+
   cachedThemes.set(themePath, theme)
+
   return theme!
 }
 

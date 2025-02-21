@@ -18,7 +18,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en" data-theme="dark">
       <body>
         <ThemeProvider />
         <nav css={{ display: 'flex', gap: '1rem' }}>

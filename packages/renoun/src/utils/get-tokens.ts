@@ -10,6 +10,7 @@ import { getRootDirectory } from './get-root-directory.js'
 import { getThemeColors } from './get-theme.js'
 import { getTrimmedSourceFileText } from './get-trimmed-source-file-text.js'
 import { isJsxOnly } from './is-jsx-only.js'
+import { loadConfig } from './load-config.js'
 import { generatedFilenames } from './parse-source-text-metadata.js'
 import { splitTokenByRanges } from './split-tokens-by-ranges.js'
 
@@ -47,15 +48,24 @@ export type Token = {
   value: string
   start: number
   end: number
-  color?: string
-  fontStyle?: string
-  fontWeight?: string
-  textDecoration?: string
   isBaseColor: boolean
-  isWhitespace: boolean
   isSymbol: boolean
-  quickInfo?: { displayText: string; documentationText: string }
+  isWhitespace: boolean
   diagnostics?: TokenDiagnostic[]
+  quickInfo?: {
+    displayText: string
+    documentationText: string
+  }
+  style:
+    | {
+        color?: string
+        fontStyle?: string
+        fontWeight?: string
+        textDecoration?: string
+      }
+    | {
+        [property: `--${string}`]: string
+      }
 }
 
 export type Tokens = Token[]
@@ -91,6 +101,7 @@ export async function getTokens(
           isBaseColor: true,
           isWhitespace: false,
           isSymbol: false,
+          style: {},
         } satisfies Token,
       ],
     ]
@@ -107,17 +118,23 @@ export async function getTokens(
   const jsxOnly = isJavaScriptLikeLanguage ? isJsxOnly(value) : false
   const sourceFile = filename ? project.getSourceFile(filename) : undefined
   const finalLanguage = getLanguage(language)
+  const config = loadConfig()
   const theme = await getThemeColors()
   const sourceText = sourceFile ? getTrimmedSourceFileText(sourceFile) : value
-  let tokens: ReturnType<Highlighter['codeToTokens']>['tokens'] = []
+  const themeNames =
+    typeof config.theme === 'string'
+      ? [config.theme]
+      : Object.values(config.theme)
+  let themedTokens: ReturnType<Highlighter['codeToTokens']>['tokens'][] = []
 
   try {
-    const result = highlighter.codeToTokens(sourceText, {
-      // theme: 'renoun',
-      theme: 'vitesse-dark',
-      lang: finalLanguage,
-    })
-    tokens = result.tokens
+    for (const themeName of themeNames) {
+      const result = highlighter.codeToTokens(sourceText, {
+        theme: themeName,
+        lang: finalLanguage,
+      })
+      themedTokens.push(result.tokens)
+    }
   } catch (error) {
     if (error instanceof Error) {
       throw new Error(
@@ -170,36 +187,57 @@ export async function getTokens(
     })
   const rootDirectory = getRootDirectory()
   const baseDirectory = process.cwd().replace(rootDirectory, '')
+  const firstThemeTokens = themedTokens[0] || []
   let previousTokenStart = 0
-  let parsedTokens = tokens.map((line) => {
-    // increment position for line breaks
+  let parsedTokens: Token[][] = firstThemeTokens.map((line, lineIndex) => {
+    // increment position for line breaks if the line is empty
     if (line.length === 0) {
       previousTokenStart += 1
     }
-    return line.flatMap((token, tokenIndex) => {
+
+    return line.flatMap((baseToken, tokenIndex) => {
       const tokenStart = previousTokenStart
-      const tokenEnd = tokenStart + token.content.length
+      const tokenEnd = tokenStart + baseToken.content.length
       const lastToken = tokenIndex === line.length - 1
 
       // account for newlines
       previousTokenStart = lastToken ? tokenEnd + 1 : tokenEnd
 
-      const fontStyle = token.fontStyle ? getFontStyle(token.fontStyle) : {}
+      let style: Record<string, string> = {}
+
+      for (let themeIndex = 0; themeIndex < themedTokens.length; themeIndex++) {
+        const themeTokens = themedTokens[themeIndex]
+        const currentToken = themeTokens[lineIndex][tokenIndex]
+
+        const color = currentToken.color
+        if (color) {
+          style[`--${themeIndex}`] = color
+        }
+
+        const fontStyle = currentToken.fontStyle
+        if (fontStyle) {
+          const resolvedFontStyles = Object.values(getFontStyle(fontStyle))
+          for (let index = 0; index < resolvedFontStyles.length; index++) {
+            style[`--${themeIndex}${index}`] = resolvedFontStyles[index]
+          }
+        }
+      }
+
       const initialToken: Token = {
-        value: token.content,
+        value: baseToken.content,
         start: tokenStart,
         end: tokenEnd,
-        color: token.color,
-        isBaseColor: token.color
-          ? token.color.toLowerCase() === theme.foreground.toLowerCase()
+        isBaseColor: baseToken.color
+          ? baseToken.color.toLowerCase() === theme.foreground.toLowerCase()
           : false,
-        isWhitespace: token.content.trim() === '',
+        isWhitespace: baseToken.content.trim() === '',
         isSymbol: false,
-        ...fontStyle,
+        style,
       }
+
+      // Split this token further if it intersects symbol ranges
       let processedTokens: Tokens = []
 
-      // split tokens by symbol ranges
       if (symbolRanges.length) {
         const symbolRange = symbolRanges.find((range) => {
           return range.start >= tokenStart && range.end <= tokenEnd
@@ -264,7 +302,9 @@ export async function getTokens(
     const firstJsxLineIndex = parsedTokens.findIndex((line) =>
       line.find((token) => token.value === '<')
     )
-    parsedTokens = parsedTokens.slice(firstJsxLineIndex)
+    if (firstJsxLineIndex > 0) {
+      parsedTokens = parsedTokens.slice(firstJsxLineIndex)
+    }
   }
 
   if (allowErrors === false && sourceFile && sourceFileDiagnostics.length > 0) {
@@ -378,7 +418,7 @@ function getQuickInfo(
     .join('')
     // First, replace root directory to handle root node_modules
     .replaceAll(rootDirectory, '.')
-    // Next, replace base directory for on disk paths
+    // Next, replace base directory for on-disk paths
     .replaceAll(baseDirectory, '')
     // Finally, replace the in-memory renoun directory
     .replaceAll('/renoun', '')
@@ -448,7 +488,7 @@ function tokensToPlainText(tokens: Token[][]) {
     }
 
     let lineContent = ''
-    let errorMarkers = []
+    const errorMarkers: { startIndex: number; tokenLength: number }[] = []
 
     for (const token of line) {
       lineContent += token.value

@@ -258,8 +258,11 @@ async function CodeBlockAsync({
             ...(shouldRenderToolbar ? {} : props.css?.container),
             padding: 0,
 
-            '[data-theme="dark"]& span': {
-              color: 'var(--2)',
+            span: {
+              color: 'var(--0)',
+            },
+            '[data-theme="light"]& span': {
+              color: 'var(--1)',
             },
           }}
           data-theme="dark"

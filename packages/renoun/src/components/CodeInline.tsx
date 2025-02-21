@@ -43,12 +43,7 @@ function Token({ token }: { token: Token }) {
     return token.value
   }
 
-  const [classNames, Styles] = css({
-    fontStyle: token.fontStyle,
-    fontWeight: token.fontWeight,
-    textDecoration: token.textDecoration,
-    color: token.color,
-  })
+  const [classNames, Styles] = css(token.style)
 
   return (
     <span className={classNames}>
@@ -94,6 +89,13 @@ async function CodeInlineAsync({
       color: theme.scrollbarSlider.hoverBackground,
     }),
     ...cssProp,
+
+    span: {
+      color: 'var(--0)',
+    },
+    '[data-theme="light"]& span': {
+      color: 'var(--1)',
+    },
   })
   const children = tokens.map((line, lineIndex) => (
     <Fragment key={lineIndex}>

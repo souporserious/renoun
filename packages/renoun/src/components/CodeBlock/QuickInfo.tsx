@@ -68,7 +68,7 @@ export async function QuickInfo({
                   <Fragment key={index}>
                     {index === 0 ? null : '\n'}
                     {line.map((token, index) => (
-                      <TokenSpan key={index} css={{ color: token.color }}>
+                      <TokenSpan key={index} css={token.style}>
                         {token.value}
                       </TokenSpan>
                     ))}
