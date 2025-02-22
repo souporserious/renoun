@@ -243,6 +243,9 @@ export function getThemeTokenVariables() {
   for (let index = 0; index < themeNames.length; index++) {
     themeVariables[`[data-theme="${themeNames[index]}"] & span`] = {
       color: `var(--${index})`,
+      fontStyle: `var(--${index}0)`,
+      fontWeight: `var(--${index}1)`,
+      textDecoration: `var(--${index}2)`,
     }
   }
 
