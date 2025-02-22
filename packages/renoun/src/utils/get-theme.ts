@@ -99,7 +99,7 @@ export async function getTheme(themeName?: string) {
   }
 
   theme = normalizeTheme(theme)
-  theme.name = themeName
+  theme.name = themePath
 
   cachedThemes.set(themePath, theme)
 
