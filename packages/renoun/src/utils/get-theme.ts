@@ -115,7 +115,7 @@ export async function getThemeColorVariables() {
 
   if (typeof theme === 'string') {
     throw new Error(
-      `[renoun] The \`theme\` property in the \`renoun.json\` at the root of your project must be an object. For more information, visit: https://renoun.dev/docs/configuration`
+      `[renoun] The \`theme\` property in the \`renoun.json\` at the root of your project must be an object when using the ThemeProvider component. For more information, visit: https://renoun.dev/docs/configuration`
     )
   }
 
