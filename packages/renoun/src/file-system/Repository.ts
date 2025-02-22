@@ -1,4 +1,4 @@
-export type GitProviderType = 'github' | 'gitlab' | 'bitbucket'
+export type GitProviderType = 'github' | 'gitlab' | 'bitbucket' | 'pierre'
 
 export interface RepositoryConfig {
   /** The base URL of the repository. */
@@ -101,10 +101,16 @@ export class Repository {
           this.#owner = match.at(1)
           this.#repo = match.at(2)
         }
+      } else if (this.#provider === 'pierre') {
+        const match = this.#baseUrl.match(/pierre\.co\/([^/]+)\/([^/]+)$/)
+        if (match) {
+          this.#owner = match.at(1)
+          this.#repo = match.at(2)
+        }
       }
     }
 
-    if (!['github', 'gitlab', 'bitbucket'].includes(this.#provider)) {
+    if (!['github', 'gitlab', 'bitbucket', 'pierre'].includes(this.#provider)) {
       throw new Error(`Unsupported provider: ${this.#provider}`)
     }
   }
@@ -170,6 +176,8 @@ export class Repository {
         return this.#getGitLabUrl(type, ref, path, line)
       case 'bitbucket':
         return this.#getBitbucketUrl(type, ref, path, line)
+      case 'pierre':
+        return this.#getPierreUrl(type, ref, path)
       default:
         throw new Error(`Unsupported provider: ${this.#provider}`)
     }
@@ -186,6 +194,8 @@ export class Repository {
         return this.#getGitLabDirectoryUrl(type, ref, path)
       case 'bitbucket':
         return this.#getBitbucketDirectoryUrl(type, ref, path)
+      case 'pierre':
+        return this.#getPierreDirectoryUrl(type, ref, path)
       default:
         throw new Error(`Unsupported provider: ${this.#provider}`)
     }
@@ -306,6 +316,36 @@ export class Repository {
       case 'source':
       default:
         return `${this.#baseUrl}/src/${ref}/${path}`
+    }
+  }
+
+  #getPierreUrl(type: string, ref: string, path: string): string {
+    switch (type) {
+      case 'edit':
+      case 'raw':
+      case 'blame':
+        throw new Error(
+          `[renoun] getFileUrl "${type}" type is not supported for Pierre repositories. Use "history" or "source" type instead.`
+        )
+      case 'history':
+        return `${this.#baseUrl}/history?commit=${ref}`
+      case 'source':
+      default:
+        return `${this.#baseUrl}/files?path=${encodeURIComponent(path)}`
+    }
+  }
+
+  #getPierreDirectoryUrl(
+    type: 'source' | 'history',
+    ref: string,
+    path: string
+  ): string {
+    switch (type) {
+      case 'history':
+        return `${this.#baseUrl}/history?commit=${ref}`
+      case 'source':
+      default:
+        return `${this.#baseUrl}/files?path=${encodeURIComponent(path)}`
     }
   }
 
