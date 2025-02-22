@@ -15,9 +15,7 @@ function getThemeConfig(themeName?: string) {
     return config.theme[themeName]
   }
 
-  return typeof config.theme === 'string' && config.theme.endsWith('.json')
-    ? resolve(process.cwd(), config.theme)
-    : config.theme
+  return config.theme
 }
 
 const cachedThemes = new Map<string, Record<string, any>>()
@@ -32,7 +30,11 @@ export async function getTheme(themeName?: string) {
     )
   }
 
-  const themePath = Array.isArray(themeConfig) ? themeConfig[0] : themeConfig
+  let themePath = Array.isArray(themeConfig) ? themeConfig[0] : themeConfig
+
+  if (themePath.endsWith('.json')) {
+    themePath = resolve(process.cwd(), themePath)
+  }
 
   if (cachedThemes.has(themePath)) {
     return cachedThemes.get(themePath)!
@@ -99,7 +101,7 @@ export async function getTheme(themeName?: string) {
   }
 
   theme = normalizeTheme(theme)
-  theme.name = themePath
+  theme.name = Array.isArray(themeConfig) ? themeConfig[1] : themeConfig
 
   cachedThemes.set(themePath, theme)
 
