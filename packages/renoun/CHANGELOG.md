@@ -1,5 +1,40 @@
 # renoun
 
+## 8.5.0
+
+### Minor Changes
+
+- 720e101: Adds the ability to override specific theme values. You can now provide a tuple when configuring themes that specifies the specific theme values to override:
+
+  ```json
+  {
+    "theme": {
+      "light": "vitesse-light",
+      "dark": [
+        "vitesse-dark",
+        {
+          "colors": {
+            "editor.background": "#000000",
+            "panel.border": "#666666"
+          }
+        }
+      ]
+    }
+  }
+  ```
+
+  This accepts a subset of a VS Code theme to override, specifically the `colors`, `tokenColors`, and `semanticTokenColors` properties.
+
+### Patch Changes
+
+- abaa0f9: Fixes font styles when using multiple themes.
+- 6abb6ad: Fixes error when tokens are different among multiple themes.
+- 0e884db: Fixes `QuickInfo` syntax highlighting when using multiple themes.
+- 9e97dc7: Fixes forced theme on `CodeBlock`.
+- f056a45: Uses correct CSS style selector for theme token variables.
+- 17b33f0: Fixes loading local theme when using multiple themes.
+- 31f7f4e: Updates `CodeInline` background color to be consistent with `CodeBlock`.
+
 ## 8.4.0
 
 ### Minor Changes
