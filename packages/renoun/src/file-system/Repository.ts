@@ -67,7 +67,20 @@ export class Repository {
     } else {
       const { baseUrl, provider } = repository
 
+      if (baseUrl === undefined) {
+        throw new Error(
+          `Missing 'baseUrl' in 'git' repository config in 'renoun.json' file.`
+        )
+      }
+
       this.#baseUrl = baseUrl.replace(/\/+$/, '') // Remove trailing slashes
+
+      if (provider === undefined) {
+        throw new Error(
+          `Missing 'provider' in 'git' repository config in 'renoun.json' file.`
+        )
+      }
+
       this.#provider = provider.toLowerCase() as GitProviderType
 
       if (this.#provider === 'github') {
