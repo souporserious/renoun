@@ -1,5 +1,23 @@
 # renoun
 
+## 8.6.0
+
+### Minor Changes
+
+- edbee62: Adds [Pierre](https://pierre.co/) as a git provider option that can be configured in the `renoun.json` file:
+
+  ```json
+  {
+    "git": {
+      "source": "https://pierre.co/souporserious/renoun"
+    }
+  }
+  ```
+
+### Patch Changes
+
+- 7b13d1e: Throws better error message when missing git configuration.
+
 ## 8.5.0
 
 ### Minor Changes
