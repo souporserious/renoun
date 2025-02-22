@@ -2,7 +2,10 @@ import React, { Fragment } from 'react'
 import { styled, type CSSObject } from 'restyle'
 
 import { analyzeSourceText } from '../../project/client.js'
-import { getThemeColors } from '../../utils/get-theme.js'
+import {
+  getThemeColors,
+  getThemeTokenVariables,
+} from '../../utils/get-theme.js'
 import type { Token, TokenDiagnostic } from '../../utils/get-tokens.js'
 import { MDXRenderer } from '../MDXRenderer.js'
 import { QuickInfoPopover } from './QuickInfoPopover.js'
@@ -43,6 +46,7 @@ export async function QuickInfo({
           border: `1px solid ${theme.panel.border}`,
           backgroundColor: theme.panel.background,
           color: theme.foreground,
+          ...getThemeTokenVariables(),
           ...css,
         }}
         className={className}
