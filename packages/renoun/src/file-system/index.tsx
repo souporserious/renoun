@@ -1,7 +1,7 @@
 import * as React from 'react'
 import type { MDXContent } from '@renoun/mdx'
 import { rehypePlugins, remarkPlugins } from '@renoun/mdx'
-import { minimatch } from 'minimatch'
+import { Minimatch } from 'minimatch'
 
 import { CodeBlock, parsePreProps } from '../components/CodeBlock/index.js'
 import { CodeInline } from '../components/CodeInline.js'
@@ -1115,7 +1115,7 @@ export class Directory<
         entry: FileSystemEntry<LoaderTypes>
       ) => entry is FileSystemEntry<LoaderTypes>)
     | ((entry: FileSystemEntry<LoaderTypes>) => Promise<boolean> | boolean)
-    | string
+    | Minimatch
   #sort?: (
     a: FileSystemEntry<LoaderTypes>,
     b: FileSystemEntry<LoaderTypes>
@@ -1130,7 +1130,10 @@ export class Directory<
     } else {
       this.#path = ensureRelativePath(options.path)
       this.#loaders = options.loaders
-      this.#include = options.include
+      this.#include =
+        typeof options.include === 'string'
+          ? new Minimatch(options.include, { dot: true })
+          : options.include
       this.#sort = options.sort as any
       this.#basePath = options.basePath
       this.#slugCasing = options.slugCasing ?? 'kebab'
@@ -1144,8 +1147,8 @@ export class Directory<
       return true
     }
 
-    if (typeof this.#include === 'string') {
-      return minimatch(entry.getRelativePath(), this.#include)
+    if (this.#include instanceof Minimatch) {
+      return this.#include.match(entry.getRelativePath())
     }
 
     return this.#include(entry)
