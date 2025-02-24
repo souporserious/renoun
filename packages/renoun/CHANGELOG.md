@@ -1,5 +1,11 @@
 # renoun
 
+## 8.6.1
+
+### Patch Changes
+
+- f1d6b47: Improves `exclude` filtering performance by caching the minimatch pattern.
+
 ## 8.6.0
 
 ### Minor Changes
