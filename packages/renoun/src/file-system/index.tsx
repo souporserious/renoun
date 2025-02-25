@@ -4,7 +4,7 @@ import { rehypePlugins, remarkPlugins } from '@renoun/mdx'
 import { Minimatch } from 'minimatch'
 
 import { CodeBlock, parsePreProps } from '../components/CodeBlock/index.js'
-import { CodeInline } from '../components/CodeInline.js'
+import { CodeInline, parseCodeProps } from '../components/CodeInline.js'
 import { MDXRenderer } from '../components/MDXRenderer.js'
 import type { MDXComponents } from '../mdx/index.js'
 import { getFileExportMetadata } from '../project/client.js'
@@ -45,12 +45,8 @@ export { NodeFileSystem } from './NodeFileSystem.js'
 export { Repository } from './Repository.js'
 
 const mdxComponents = {
-  pre: (props) => {
-    return <CodeBlock {...parsePreProps(props)} />
-  },
-  code: (props) => {
-    return <CodeInline value={props.children} language="typescript" />
-  },
+  pre: (props) => <CodeBlock {...parsePreProps(props)} />,
+  code: (props) => <CodeInline {...parseCodeProps(props)} />,
 } satisfies MDXComponents
 
 const defaultLoaders: Record<string, ModuleLoader<any>> = {
