@@ -1005,7 +1005,7 @@ export class JavaScriptFile<
     return fileExport.getRuntimeValue()
   }
 
-  /** Check if an export exists in the JavaScript file. */
+  /** Check if an export exists statically in the JavaScript file. */
   async #hasStaticExport(name: string): Promise<boolean> {
     try {
       const location = await this.getExportLocation(name)
@@ -1015,20 +1015,27 @@ export class JavaScriptFile<
     }
   }
 
-  /** Check if an export exists in the JavaScript file. */
-  async hasExport(name: string): Promise<boolean> {
-    // First, attempt to statically analyze the export
-    if (await this.#hasStaticExport(name)) {
-      return true
-    }
-
-    // Fallback to runtime check
+  /** Check if an export exists at runtime in the JavaScript file. */
+  async #hasRuntimeExport(name: string) {
     try {
       const fileModule = await this.#getModule()
       return name in fileModule
     } catch {
       return false
     }
+  }
+
+  /** Check if an export exists in the JavaScript file statically or at runtime. */
+  async hasExport(name: string): Promise<boolean> {
+    if (await this.#hasStaticExport(name)) {
+      return true
+    }
+
+    if (await this.#hasRuntimeExport(name)) {
+      return true
+    }
+
+    return false
   }
 }
 
@@ -1449,6 +1456,8 @@ export class Directory<
     })
   }
 
+  #entriesCache = new Map<string, FileSystemEntry<LoaderTypes>[]>()
+
   /**
    * Retrieves all entries (files and directories) within the current directory
    * that are not excluded by Git ignore rules or the closest `tsconfig` file.
@@ -1467,6 +1476,22 @@ export class Directory<
         ? FilteredEntry[]
         : FileSystemEntry<LoaderTypes>[]
   > {
+    let cacheKey = ''
+
+    if (options) {
+      cacheKey += options.recursive ? 'r' : ''
+      cacheKey += options.includeIndexAndReadme ? 'i' : ''
+      cacheKey += options.includeDuplicates ? 'd' : ''
+      cacheKey += options.includeGitIgnoredFiles ? 'g' : ''
+      cacheKey += options.includeTsConfigIgnoredFiles ? 't' : ''
+    }
+
+    if (this.#entriesCache.has(cacheKey)) {
+      console.log('[getEntries] cache hit')
+      const entries = this.#entriesCache.get(cacheKey)!
+      return entries as any
+    }
+
     const fileSystem = this.getFileSystem()
     const directoryEntries = await fileSystem.readDirectory(this.#path)
     const entriesMap = new Map<string, FileSystemEntry<LoaderTypes>>()
@@ -1602,6 +1627,8 @@ export class Directory<
         throw error
       }
     }
+
+    this.#entriesCache.set(cacheKey, entries)
 
     return entries as any
   }
