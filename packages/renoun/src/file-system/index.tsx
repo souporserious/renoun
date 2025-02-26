@@ -5,7 +5,6 @@ import { Minimatch } from 'minimatch'
 
 import { CodeBlock, parsePreProps } from '../components/CodeBlock/index.js'
 import { CodeInline, parseCodeProps } from '../components/CodeInline.js'
-import { MDXRenderer } from '../components/MDXRenderer.js'
 import type { MDXComponents } from '../mdx/index.js'
 import { getFileExportMetadata } from '../project/client.js'
 import { createSlug, type SlugCasings } from '../utils/create-slug.js'
@@ -13,6 +12,7 @@ import { formatNameAsTitle } from '../utils/format-name-as-title.js'
 import { getEditorUri } from '../utils/get-editor-uri.js'
 import type { FileExport } from '../utils/get-file-exports.js'
 import { getLocalGitFileMetadata } from '../utils/get-local-git-file-metadata.js'
+import { getMDXRuntimeValue } from '../utils/get-mdx-runtime-value.js'
 import {
   isJavaScriptLikeExtension,
   type IsJavaScriptLikeExtension,
@@ -51,19 +51,15 @@ const mdxComponents = {
 
 const defaultLoaders: Record<string, ModuleLoader<any>> = {
   mdx: async (_, file) => {
+    const value = await file.getText()
+    const { default: Content, ...mdxExports } = await getMDXRuntimeValue({
+      value,
+      remarkPlugins,
+      rehypePlugins,
+    })
     return {
-      default: async () => {
-        const value = await file.getText()
-
-        return (
-          <MDXRenderer
-            value={value}
-            components={mdxComponents}
-            rehypePlugins={rehypePlugins}
-            remarkPlugins={remarkPlugins}
-          />
-        )
-      },
+      default: () => <Content components={mdxComponents} />,
+      ...mdxExports,
     }
   },
 } satisfies Record<string, ModuleRuntimeLoader<any>>

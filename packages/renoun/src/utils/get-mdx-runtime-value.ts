@@ -1,13 +1,11 @@
-import * as React from 'react'
+import * as jsxRuntime from 'react/jsx-runtime'
+import * as jsxDevRuntime from 'react/jsx-dev-runtime'
 import type { CompileOptions } from '@mdx-js/mdx'
-import type { MDXComponents } from '@renoun/mdx'
+import type { MDXContent } from '@renoun/mdx'
 
-import { getMDXRuntimeValue } from '../utils/get-mdx-runtime-value.js'
-
-/** Compiles and renders a string of MDX content. */
-export async function MDXRenderer({
+/** Compiles and executes a string of MDX content. */
+export async function getMDXRuntimeValue({
   value,
-  components,
   dependencies,
   remarkPlugins,
   rehypePlugins,
@@ -15,9 +13,6 @@ export async function MDXRenderer({
 }: {
   /** The MDX content to render. */
   value: string
-
-  /** Additional components to use or a function that creates them. */
-  components?: MDXComponents
 
   /** An object of external dependencies that will be available to the MDX source code. */
   dependencies?: Record<string, any>
@@ -30,14 +25,21 @@ export async function MDXRenderer({
 
   /** Base URL to resolve imports and named exports from (e.g. `import.meta.url`) */
   baseUrl?: string
-}) {
-  const { default: Content } = await getMDXRuntimeValue({
-    value,
-    dependencies,
-    remarkPlugins,
-    rehypePlugins,
+}): Promise<{
+  default: MDXContent
+  [key: string]: any
+}> {
+  const { compile, run } = await import('@mdx-js/mdx')
+  const code = await compile(value, {
     baseUrl,
+    rehypePlugins,
+    remarkPlugins,
+    outputFormat: 'function-body',
+    development: process.env.NODE_ENV === 'development',
   })
 
-  return <Content components={components} />
+  return run(code.value, {
+    ...(process.env.NODE_ENV === 'development' ? jsxDevRuntime : jsxRuntime),
+    ...dependencies,
+  } as any)
 }
