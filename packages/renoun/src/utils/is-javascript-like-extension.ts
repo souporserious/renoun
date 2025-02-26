@@ -11,8 +11,6 @@ export const javascriptLikeExtensions = [
   'mtsx',
   'cts',
   'ctsx',
-  'md',
-  'mdx',
 ] as const
 
 export type JavaScriptLikeExtensions = (typeof javascriptLikeExtensions)[number]

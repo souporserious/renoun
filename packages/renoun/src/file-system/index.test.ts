@@ -15,6 +15,8 @@ import {
   Directory,
   JavaScriptFile,
   JavaScriptFileExport,
+  MDXFile,
+  MDXFileExport,
   EntryGroup,
   isDirectory,
   isFile,
@@ -24,7 +26,6 @@ import {
   FileExportNotFoundError,
 } from './index'
 import type { Expect, Is, IsNotAny } from './types'
-import { title } from 'node:process'
 
 describe('file system', () => {
   describe('File', () => {
@@ -407,7 +408,7 @@ describe('file system', () => {
     const files = await posts.getEntries()
 
     expectTypeOf(files).toMatchTypeOf<
-      JavaScriptFile<{ default: MDXContent } & PostType>[]
+      MDXFile<{ default: MDXContent } & PostType>[]
     >()
     expect(files).toHaveLength(1)
   })
@@ -429,7 +430,7 @@ describe('file system', () => {
     const files = await posts.getEntries()
 
     expectTypeOf(files).toMatchTypeOf<
-      JavaScriptFile<{ default: MDXContent } & PostType>[]
+      MDXFile<{ default: MDXContent } & PostType>[]
     >()
     expect(files).toHaveLength(1)
   })
@@ -476,9 +477,7 @@ describe('file system', () => {
     })
     const entries = await directory.getEntries()
 
-    expectTypeOf(entries).toMatchTypeOf<
-      JavaScriptFile<{ default: MDXContent }>[]
-    >()
+    expectTypeOf(entries).toMatchTypeOf<MDXFile<{ default: MDXContent }>[]>()
 
     expect(entries).toHaveLength(1)
   })
@@ -1329,7 +1328,7 @@ describe('file system', () => {
     expect(isDirectory(file)).toBe(false)
 
     expectTypeOf(file).toMatchTypeOf<
-      JavaScriptFile<{
+      MDXFile<{
         default: MDXContent
         frontmatter: {
           title: string
@@ -1433,7 +1432,7 @@ describe('file system', () => {
 
     expect(mdxFile).toBeInstanceOf(JavaScriptFile)
     expectTypeOf(mdxFile).toMatchTypeOf<
-      JavaScriptFile<{ default: MDXContent } & InferModuleExports<FrontMatter>>
+      MDXFile<{ default: MDXContent } & InferModuleExports<FrontMatter>>
     >()
 
     const file = await group.getFile(['posts', 'meta'], 'js')
@@ -1549,7 +1548,7 @@ describe('file system', () => {
     const file = await group.getFile('Button', 'mdx')
 
     expectTypeOf(file).toMatchTypeOf<
-      JavaScriptFile<{ default: MDXContent } & MDXTypes>
+      MDXFile<{ default: MDXContent } & MDXTypes>
     >()
 
     const entry = await group.getEntry('Button')
@@ -1562,14 +1561,14 @@ describe('file system', () => {
 
     if (directoryA.hasFile(entry, 'mdx')) {
       expectTypeOf(entry).toMatchTypeOf<
-        JavaScriptFile<{ default: MDXContent } & MDXTypes>
+        MDXFile<{ default: MDXContent } & MDXTypes>
       >()
     }
   })
 
   test('entry group works with type abstractions', async () => {
     function Document(props: {
-      file?: JavaScriptFile<{
+      file?: MDXFile<{
         default: MDXContent
         headings: MDXHeadings
         metadata: {

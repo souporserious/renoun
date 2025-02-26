@@ -1,4 +1,4 @@
-import type { EntryGroup, JavaScriptFile } from 'renoun/file-system'
+import type { EntryGroup, MDXFile } from 'renoun/file-system'
 import type { MDXContent, MDXHeadings } from 'renoun/mdx'
 
 import { SiblingLink } from './SiblingLink'
@@ -10,7 +10,7 @@ export async function DocumentEntry({
   shouldRenderTableOfContents = true,
   shouldRenderUpdatedAt = true,
 }: {
-  file: JavaScriptFile<{
+  file: MDXFile<{
     default: MDXContent
     headings: MDXHeadings
     metadata: {
