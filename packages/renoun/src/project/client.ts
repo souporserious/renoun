@@ -125,6 +125,8 @@ export async function resolveTypeAtLocation(
   )
 }
 
+const fileExportsCache = new Map<string, FileExport[]>()
+
 /**
  * Get the exports of a file.
  * @internal
@@ -133,8 +135,17 @@ export async function getFileExports(
   filePath: string,
   projectOptions?: ProjectOptions
 ) {
+  let cacheKey: string
+
+  if (process.env.NODE_ENV === 'production') {
+    cacheKey = filePath + getProjectOptionsCacheKey(projectOptions)
+    if (fileExportsCache.has(cacheKey)) {
+      return fileExportsCache.get(cacheKey)!
+    }
+  }
+
   if (client) {
-    return client.callMethod<
+    const fileExports = await client.callMethod<
       {
         filePath: string
         projectOptions?: ProjectOptions
@@ -144,11 +155,23 @@ export async function getFileExports(
       filePath,
       projectOptions,
     })
+
+    if (process.env.NODE_ENV === 'production') {
+      fileExportsCache.set(cacheKey!, fileExports)
+    }
+
+    return fileExports
   }
 
   return import('../utils/get-file-exports.js').then(({ getFileExports }) => {
     const project = getProject(projectOptions)
-    return getFileExports(filePath, project)
+    const fileExports = getFileExports(filePath, project)
+
+    if (process.env.NODE_ENV === 'production') {
+      fileExportsCache.set(cacheKey, fileExports)
+    }
+
+    return fileExports
   })
 }
 
@@ -290,4 +313,50 @@ export async function transpileSourceFile(
       return transpileSourceFile(filePath, project)
     }
   )
+}
+
+/**
+ * Generate a cache key for a project's options.
+ * @internal
+ */
+export function getProjectOptionsCacheKey(options?: ProjectOptions): string {
+  if (!options) {
+    return ''
+  }
+
+  let key = ''
+
+  if (options.theme) {
+    key += `t:${options.theme};`
+  }
+  if (options.siteUrl) {
+    key += `u:${options.siteUrl};`
+  }
+  if (options.gitSource) {
+    key += `s:${options.gitSource};`
+  }
+  if (options.gitBranch) {
+    key += `b:${options.gitBranch};`
+  }
+  if (options.gitProvider) {
+    key += `p:${options.gitProvider};`
+  }
+  if (options.projectId) {
+    key += `i:${options.projectId};`
+  }
+  if (options.tsConfigFilePath) {
+    key += `f:${options.tsConfigFilePath};`
+  }
+
+  key += `m:${options.useInMemoryFileSystem ? 1 : 0};`
+
+  if (options.compilerOptions) {
+    key += 'c:'
+    for (const k in options.compilerOptions) {
+      const value = options.compilerOptions[k]
+      key += `${k}=${value};`
+    }
+  }
+
+  return key
 }

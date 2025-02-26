@@ -1474,18 +1474,19 @@ export class Directory<
   > {
     let cacheKey = ''
 
-    if (options) {
-      cacheKey += options.recursive ? 'r' : ''
-      cacheKey += options.includeIndexAndReadme ? 'i' : ''
-      cacheKey += options.includeDuplicates ? 'd' : ''
-      cacheKey += options.includeGitIgnoredFiles ? 'g' : ''
-      cacheKey += options.includeTsConfigIgnoredFiles ? 't' : ''
-    }
+    if (process.env.NODE_ENV === 'production') {
+      if (options) {
+        cacheKey += options.recursive ? 'r' : ''
+        cacheKey += options.includeIndexAndReadme ? 'i' : ''
+        cacheKey += options.includeDuplicates ? 'd' : ''
+        cacheKey += options.includeGitIgnoredFiles ? 'g' : ''
+        cacheKey += options.includeTsConfigIgnoredFiles ? 't' : ''
+      }
 
-    if (this.#entriesCache.has(cacheKey)) {
-      console.log('[getEntries] cache hit')
-      const entries = this.#entriesCache.get(cacheKey)!
-      return entries as any
+      if (this.#entriesCache.has(cacheKey)) {
+        const entries = this.#entriesCache.get(cacheKey)!
+        return entries as any
+      }
     }
 
     const fileSystem = this.getFileSystem()
@@ -1624,7 +1625,9 @@ export class Directory<
       }
     }
 
-    this.#entriesCache.set(cacheKey, entries)
+    if (process.env.NODE_ENV === 'production') {
+      this.#entriesCache.set(cacheKey, entries)
+    }
 
     return entries as any
   }
