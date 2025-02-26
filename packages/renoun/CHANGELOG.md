@@ -1,5 +1,15 @@
 # renoun
 
+## 8.6.1
+
+### Patch Changes
+
+- 29e19e5: Fixes default MDX file system loader not including all exports.
+- f1d6b47: Improves `exclude` filtering performance by caching the minimatch pattern.
+- 5c4e0ec: Fixes default MDX loader to parse inline code props.
+- Updated dependencies [b325412]
+  - @renoun/mdx@1.4.1
+
 ## 8.6.0
 
 ### Minor Changes
