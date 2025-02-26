@@ -1,3 +1,4 @@
+import 'mdast-util-mdx'
 import type { Root, Heading } from 'mdast'
 import { valueToEstree } from 'estree-util-value-to-estree'
 import { toString } from 'mdast-util-to-string'
@@ -51,11 +52,9 @@ export function addHeadings() {
     })
 
     tree.children.unshift({
-      // @ts-expect-error
       type: 'mdxjsEsm',
       value: '',
       data: {
-        // @ts-expect-error
         estree: {
           type: 'Program',
           body: [
