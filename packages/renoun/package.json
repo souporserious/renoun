@@ -106,6 +106,7 @@
     "react-dom": ">=18.0.0"
   },
   "devDependencies": {
+    "@mdx-js/rollup": "^3.1.0",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@types/title": "^3.4.3",

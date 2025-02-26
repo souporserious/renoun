@@ -1102,26 +1102,29 @@ export class MDXFileExport<Value> {
   }
 
   #getModule() {
-    if (!this.#loader) {
+    if (this.#loader === undefined) {
       const parentPath = this.#file.getParent().getRelativePathToWorkspace()
+
       throw new Error(
-        `[renoun] No mdx loader defined for directory at "${parentPath}".`
+        `[renoun] An mdx loader for the parent Directory at ${parentPath} is not defined.`
       )
     }
+
     const path = removeExtension(this.#file.getRelativePath())
 
     if (isLoader(this.#loader)) {
-      return this.#loader(path, this as any)
+      return this.#loader(path, this.#file)
     }
 
     if (isLoaderWithSchema(this.#loader) && this.#loader.runtime) {
-      if (!this.#loader.runtime) {
-        throw new Error(`[renoun] No mdx runtime loader configured.`)
-      }
       return this.#loader.runtime(path, this.#file)
     }
 
-    throw new Error(`[renoun] Invalid mdx loader: missing runtime function.`)
+    const parentPath = this.#file.getParent().getRelativePathToWorkspace()
+
+    throw new Error(
+      `[renoun] An mdx runtime loader for the parent Directory at ${parentPath} is not defined.`
+    )
   }
 }
 
@@ -1214,26 +1217,35 @@ export class MDXFile<
   }
 
   #getModule() {
-    if (!this.#loader) {
-      const parentPath = this.getParent().getRelativePathToWorkspace()
+    if (this.#loader === undefined) {
+      const parentPath = this.getParent().getRelativePath()
+
       throw new Error(
-        `[renoun] A loader for mdx is not defined in directory "${parentPath}".`
+        `[renoun] An mdx loader for the parent Directory at ${parentPath} is not defined.`
       )
     }
+
     const path = removeExtension(this.getRelativePath())
 
     if (isLoader(this.#loader)) {
       return this.#loader(path, this as any)
     }
 
-    if (isLoaderWithSchema(this.#loader) && this.#loader.runtime) {
-      if (!this.#loader.runtime) {
-        throw new Error(`[renoun] No mdx runtime loader is defined.`)
+    if (isLoaderWithSchema(this.#loader) && 'runtime' in this.#loader) {
+      if (this.#loader.runtime === undefined) {
+        const parentPath = this.getParent().getRelativePathToWorkspace()
+
+        throw new Error(
+          `[renoun] An mdx runtime loader for the parent Directory at ${parentPath} is not defined.`
+        )
       }
+
       return this.#loader.runtime(path, this as any)
     }
 
-    throw new Error(`[renoun] This mdx loader is missing a runtime function.`)
+    throw new Error(
+      `[renoun] This loader is missing an mdx runtime for the parent Directory at ${this.getParent().getRelativePathToWorkspace()}.`
+    )
   }
 }
 
@@ -1760,29 +1772,28 @@ export class Directory<
         const loader = this.#loaders?.[extension] as ModuleLoader<
           LoaderTypes[any]
         >
-        const file =
-          loader || isJavaScriptLikeExtension(extension)
-            ? new JavaScriptFile({
+        const file = isJavaScriptLikeExtension(extension)
+          ? new JavaScriptFile({
+              path: entry.path,
+              depth: nextDepth,
+              directory: thisDirectory,
+              slugCasing: this.#slugCasing,
+              loader,
+            })
+          : extension === 'mdx'
+            ? new MDXFile({
                 path: entry.path,
                 depth: nextDepth,
                 directory: thisDirectory,
                 slugCasing: this.#slugCasing,
                 loader,
               })
-            : extension === 'mdx'
-              ? new MDXFile({
-                  path: entry.path,
-                  depth: nextDepth,
-                  directory: thisDirectory,
-                  slugCasing: this.#slugCasing,
-                  loader,
-                })
-              : new File({
-                  path: entry.path,
-                  depth: nextDepth,
-                  directory: thisDirectory,
-                  slugCasing: this.#slugCasing,
-                })
+            : new File({
+                path: entry.path,
+                depth: nextDepth,
+                directory: thisDirectory,
+                slugCasing: this.#slugCasing,
+              })
 
         if (
           !options?.includeDuplicates &&

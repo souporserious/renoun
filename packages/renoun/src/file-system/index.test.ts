@@ -197,7 +197,7 @@ describe('file system', () => {
               date: z.coerce.date(),
             }),
           },
-          (path) => import(`./posts/${path}.mdx`)
+          (path) => import(`#fixtures/posts/${path}.mdx`)
         ),
       },
       include: async (entry) => {
@@ -1430,7 +1430,7 @@ describe('file system', () => {
       'mdx'
     )
 
-    expect(mdxFile).toBeInstanceOf(JavaScriptFile)
+    expect(mdxFile).toBeInstanceOf(MDXFile)
     expectTypeOf(mdxFile).toMatchTypeOf<
       MDXFile<{ default: MDXContent } & InferModuleExports<FrontMatter>>
     >()
