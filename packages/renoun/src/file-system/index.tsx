@@ -67,7 +67,7 @@ const defaultLoaders: Record<string, ModuleLoader<any>> = {
 /** A function that resolves the module runtime. */
 type ModuleRuntimeLoader<Value> = (
   path: string,
-  file: JavaScriptFile<any>
+  file: File<any> | JavaScriptFile<any> | MDXFile<any>
 ) => Promise<Value>
 
 /** A record of named exports in a module. */
@@ -252,8 +252,8 @@ export class FileNotFoundError extends Error {
 
 /** A directory or file entry. */
 export type FileSystemEntry<
-  Types extends Record<string, any> = Record<string, any>,
-> = Directory<Types> | File<Types>
+  DirectoryTypes extends Record<string, any> = Record<string, any>,
+> = Directory<DirectoryTypes> | File<DirectoryTypes>
 
 /** Options for a file in the file system. */
 export interface FileOptions<
@@ -273,7 +273,7 @@ export interface FileOptions<
 
 /** A file in the file system. */
 export class File<
-  Types extends Record<string, any> = Record<string, any>,
+  DirectoryTypes extends Record<string, any> = Record<string, any>,
   Path extends string = string,
   Extension extends string = ExtractFileExtension<Path>,
 > {
@@ -285,9 +285,9 @@ export class File<
   #path: string
   #slugCasing: SlugCasings
   #depth: number
-  #directory: Directory<Types>
+  #directory: Directory<DirectoryTypes>
 
-  constructor(options: FileOptions<Types, Path>) {
+  constructor(options: FileOptions<DirectoryTypes, Path>) {
     this.#name = baseName(options.path)
     this.#path = options.path
     this.#slugCasing = options.slugCasing ?? 'kebab'
@@ -503,11 +503,16 @@ export class File<
    * Get the previous and next sibling entries (files or directories) of the parent directory.
    * If the file is an index or readme file, the siblings will be retrieved from the parent directory.
    */
-  async getSiblings<GroupTypes extends Record<string, any> = Types>(options?: {
+  async getSiblings<
+    GroupTypes extends Record<string, any> = DirectoryTypes,
+  >(options?: {
     entryGroup?: EntryGroup<GroupTypes, FileSystemEntry<any>[]>
     includeDuplicateSegments?: boolean
   }): Promise<
-    [FileSystemEntry<Types> | undefined, FileSystemEntry<Types> | undefined]
+    [
+      FileSystemEntry<DirectoryTypes> | undefined,
+      FileSystemEntry<DirectoryTypes> | undefined,
+    ]
   > {
     const isIndexOrReadme = ['index', 'readme'].includes(
       this.getBaseName().toLowerCase()
@@ -826,22 +831,27 @@ export class JavaScriptFileExport<Value> {
 /** Options for a JavaScript file in the file system. */
 export interface JavaScriptFileOptions<
   Types extends Record<string, any>,
+  DirectoryTypes extends Record<string, any>,
   Path extends string,
-> extends FileOptions<Types, Path> {
+> extends FileOptions<DirectoryTypes, Path> {
   loader?: ModuleLoader<Types>
 }
 
 /** A JavaScript file in the file system. */
 export class JavaScriptFile<
   Types extends InferDefaultModuleTypes<Path>,
+  DirectoryTypes extends Record<string, any> = Record<string, any>,
   const Path extends string = string,
   Extension extends string = ExtractFileExtension<Path>,
-> extends File<Types, Path, Extension> {
+> extends File<DirectoryTypes, Path, Extension> {
   #exports = new Map<string, JavaScriptFileExport<any>>()
   #loader?: ModuleLoader<Types>
   #slugCasing?: SlugCasings
 
-  constructor({ loader, ...fileOptions }: JavaScriptFileOptions<Types, Path>) {
+  constructor({
+    loader,
+    ...fileOptions
+  }: JavaScriptFileOptions<Types, DirectoryTypes, Path>) {
     super(fileOptions)
 
     if (loader === undefined) {
@@ -1032,6 +1042,210 @@ export class JavaScriptFile<
     }
 
     return false
+  }
+}
+
+/** An MDX file export. */
+export class MDXFileExport<Value> {
+  #name: string
+  #file: MDXFile<any>
+  #loader?: ModuleLoader<any>
+  #slugCasing: SlugCasings
+
+  constructor(
+    name: string,
+    file: MDXFile<any>,
+    loader?: ModuleLoader<any>,
+    slugCasing?: SlugCasings
+  ) {
+    this.#name = name
+    this.#file = file
+    this.#loader = loader
+    this.#slugCasing = slugCasing ?? 'kebab'
+  }
+
+  getName() {
+    return this.#name
+  }
+
+  getTitle() {
+    return formatNameAsTitle(this.getName())
+  }
+
+  getSlug() {
+    return createSlug(this.getName(), this.#slugCasing)
+  }
+
+  getEditorUri() {
+    return this.#file.getEditorUri()
+  }
+
+  getEditUrl(options?: Pick<GetFileUrlOptions, 'ref'>) {
+    return this.#file.getEditUrl(options)
+  }
+
+  getSourceUrl(options?: Pick<GetFileUrlOptions, 'ref'>) {
+    return this.#file.getSourceUrl(options)
+  }
+
+  async getRuntimeValue(): Promise<Value> {
+    const fileModule = await this.#getModule()
+
+    if (!(this.#name in fileModule)) {
+      throw new FileExportNotFoundError(
+        this.#file.getAbsolutePath(),
+        this.#name
+      )
+    }
+
+    return fileModule[this.#name]
+  }
+
+  #getModule() {
+    if (this.#loader === undefined) {
+      const parentPath = this.#file.getParent().getRelativePathToWorkspace()
+
+      throw new Error(
+        `[renoun] An mdx loader for the parent Directory at ${parentPath} is not defined.`
+      )
+    }
+
+    const path = removeExtension(this.#file.getRelativePath())
+
+    if (isLoader(this.#loader)) {
+      return this.#loader(path, this.#file)
+    }
+
+    if (isLoaderWithSchema(this.#loader) && this.#loader.runtime) {
+      return this.#loader.runtime(path, this.#file)
+    }
+
+    const parentPath = this.#file.getParent().getRelativePathToWorkspace()
+
+    throw new Error(
+      `[renoun] An mdx runtime loader for the parent Directory at ${parentPath} is not defined.`
+    )
+  }
+}
+
+/** Options for an MDX file in the file system. */
+export interface MDXFileOptions<
+  Types extends Record<string, any>,
+  DirectoryTypes extends Record<string, any>,
+  Path extends string,
+> extends FileOptions<DirectoryTypes, Path> {
+  loader?: ModuleLoader<Types>
+}
+
+/** An MDX file in the file system. */
+export class MDXFile<
+  Types extends InferDefaultModuleTypes<Path>,
+  DirectoryTypes extends Record<string, any> = any,
+  const Path extends string = string,
+  Extension extends string = ExtractFileExtension<Path>,
+> extends File<DirectoryTypes, Path, Extension> {
+  #exports = new Map<string, MDXFileExport<any>>()
+  #loader?: ModuleLoader<Types>
+  #slugCasing?: SlugCasings
+
+  constructor({
+    loader,
+    ...fileOptions
+  }: MDXFileOptions<Types, DirectoryTypes, Path>) {
+    super(fileOptions)
+
+    if (loader === undefined) {
+      this.#loader = defaultLoaders.mdx
+    } else {
+      this.#loader = loader
+    }
+
+    this.#slugCasing = fileOptions.slugCasing ?? 'kebab'
+  }
+
+  async getExports() {
+    const fileModule = await this.#getModule()
+    const exportNames = Object.keys(fileModule)
+
+    for (const name of exportNames) {
+      if (!this.#exports.has(name)) {
+        const mdxExport = new MDXFileExport(
+          name,
+          this as MDXFile<any>,
+          this.#loader,
+          this.#slugCasing
+        )
+        this.#exports.set(name, mdxExport)
+      }
+    }
+
+    return Array.from(this.#exports.values())
+  }
+
+  async getExport<ExportName extends Extract<keyof Types, string>>(
+    name: ExportName
+  ): Promise<MDXFileExport<Types[ExportName]>> {
+    if (this.#exports.has(name)) {
+      return this.#exports.get(name)!
+    }
+
+    const fileModule = await this.#getModule()
+    if (!(name in fileModule)) {
+      throw new FileExportNotFoundError(this.getAbsolutePath(), name)
+    }
+
+    const mdxExport = new MDXFileExport<Types[ExportName]>(
+      name,
+      this as MDXFile<any>,
+      this.#loader,
+      this.#slugCasing
+    )
+    this.#exports.set(name, mdxExport)
+    return mdxExport
+  }
+
+  async hasExport(name: string): Promise<boolean> {
+    const fileModule = await this.#getModule()
+    return name in fileModule
+  }
+
+  async getExportValue<ExportName extends Extract<keyof Types, string>>(
+    name: ExportName
+  ): Promise<Types[ExportName]> {
+    const mdxExport = await this.getExport(name)
+    return mdxExport.getRuntimeValue()
+  }
+
+  #getModule() {
+    if (this.#loader === undefined) {
+      const parentPath = this.getParent().getRelativePath()
+
+      throw new Error(
+        `[renoun] An mdx loader for the parent Directory at ${parentPath} is not defined.`
+      )
+    }
+
+    const path = removeExtension(this.getRelativePath())
+
+    if (isLoader(this.#loader)) {
+      return this.#loader(path, this as any)
+    }
+
+    if (isLoaderWithSchema(this.#loader) && 'runtime' in this.#loader) {
+      if (this.#loader.runtime === undefined) {
+        const parentPath = this.getParent().getRelativePathToWorkspace()
+
+        throw new Error(
+          `[renoun] An mdx runtime loader for the parent Directory at ${parentPath} is not defined.`
+        )
+      }
+
+      return this.#loader.runtime(path, this as any)
+    }
+
+    throw new Error(
+      `[renoun] This loader is missing an mdx runtime for the parent Directory at ${this.getParent().getRelativePathToWorkspace()}.`
+    )
   }
 }
 
@@ -1235,8 +1449,10 @@ export class Directory<
   ): Promise<
     Extension extends string
       ? IsJavaScriptLikeExtension<Extension> extends true
-        ? JavaScriptFile<LoaderTypes[Extension], string, Extension>
-        : File<LoaderTypes, Path, Extension>
+        ? JavaScriptFile<LoaderTypes[Extension], LoaderTypes, string, Extension>
+        : Extension extends 'mdx'
+          ? MDXFile<LoaderTypes['mdx'], LoaderTypes, string, Extension>
+          : File<LoaderTypes, Path, Extension>
       : File<LoaderTypes>
   >
 
@@ -1249,8 +1465,10 @@ export class Directory<
   ): Promise<
     Extension extends string
       ? IsJavaScriptLikeExtension<Extension> extends true
-        ? JavaScriptFile<LoaderTypes[Extension], string, Extension>
-        : File<LoaderTypes, Extension>
+        ? JavaScriptFile<LoaderTypes[Extension], LoaderTypes, string, Extension>
+        : Extension extends 'mdx'
+          ? MDXFile<LoaderTypes['mdx'], LoaderTypes, string, Extension>
+          : File<LoaderTypes, Extension>
       : File<LoaderTypes>
   >
 
@@ -1554,9 +1772,16 @@ export class Directory<
         const loader = this.#loaders?.[extension] as ModuleLoader<
           LoaderTypes[any]
         >
-        const file =
-          loader || isJavaScriptLikeExtension(extension)
-            ? new JavaScriptFile({
+        const file = isJavaScriptLikeExtension(extension)
+          ? new JavaScriptFile({
+              path: entry.path,
+              depth: nextDepth,
+              directory: thisDirectory,
+              slugCasing: this.#slugCasing,
+              loader,
+            })
+          : extension === 'mdx'
+            ? new MDXFile({
                 path: entry.path,
                 depth: nextDepth,
                 directory: thisDirectory,
@@ -1961,7 +2186,9 @@ export class EntryGroup<
     Extension extends string
       ? IsJavaScriptLikeExtension<Extension> extends true
         ? JavaScriptFile<Types[Extension]>
-        : File<Types>
+        : Extension extends 'mdx'
+          ? MDXFile<Types['mdx']>
+          : File<Types>
       : File<Types>
   > {
     const normalizedPath = Array.isArray(path)
@@ -2051,12 +2278,16 @@ export type FileWithExtension<
   Extension = LoadersToExtensions<Types>,
 > = Extension extends string
   ? IsJavaScriptLikeExtension<Extension> extends true
-    ? JavaScriptFile<Types[Extension], any, Extension>
-    : File<Types>
+    ? JavaScriptFile<Types[Extension], Types, any, Extension>
+    : Extension extends 'mdx'
+      ? MDXFile<Types['mdx'], Types, any, Extension>
+      : File<Types>
   : Extension extends string[]
     ? HasJavaScriptLikeExtensions<Extension> extends true
-      ? JavaScriptFile<Types[Extension[number]], any, Extension[number]>
-      : File<Types>
+      ? JavaScriptFile<Types[Extension[number]], Types, any, Extension[number]>
+      : Extension[number] extends 'mdx'
+        ? MDXFile<Types['mdx'], Types, any, Extension[number]>
+        : File<Types>
     : File<Types>
 
 type StringUnion<Type> = Extract<Type, string> | (string & {})
@@ -2077,11 +2308,7 @@ export function isFile<
 >(
   entry: FileSystemEntry<Types> | undefined,
   extension?: Extension
-): entry is Extension extends undefined
-  ? File<Types>
-  : Extension extends string
-    ? FileWithExtension<Types, Extension>
-    : FileWithExtension<Types, Extension[number]> {
+): entry is FileWithExtension<Types, Extension> {
   if (entry instanceof File) {
     const fileExtension = entry.getExtension()
 
@@ -2103,8 +2330,21 @@ export function isFile<
 }
 
 /** Determines if a `FileSystemEntry` is a `JavaScriptFile`. */
-export function isJavaScriptFile<Types extends Record<string, any>>(
-  entry: FileSystemEntry<Types> | undefined
-): entry is JavaScriptFile<Types> {
+export function isJavaScriptFile<
+  FileTypes extends Record<string, any>,
+  DirectoryTypes extends Record<string, any> = Record<string, any>,
+>(
+  entry: FileSystemEntry<DirectoryTypes> | undefined
+): entry is JavaScriptFile<FileTypes, DirectoryTypes> {
   return entry instanceof JavaScriptFile
+}
+
+/** Determines if a `FileSystemEntry` is an `MDXFile`. */
+export function isMDXFile<
+  FileTypes extends Record<string, any>,
+  DirectoryTypes extends Record<string, any> = Record<string, any>,
+>(
+  entry: FileSystemEntry<DirectoryTypes> | undefined
+): entry is MDXFile<FileTypes, DirectoryTypes> {
+  return entry instanceof MDXFile
 }

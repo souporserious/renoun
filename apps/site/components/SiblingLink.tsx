@@ -4,8 +4,10 @@ import {
   FileNotFoundError,
   isDirectory,
   isJavaScriptFile,
+  isMDXFile,
   type FileSystemEntry,
   type JavaScriptFile,
+  type MDXFile,
 } from 'renoun/file-system'
 import { styled } from 'restyle'
 
@@ -124,7 +126,7 @@ interface Metadata {
 
 /** Resolves metadata from a file system entry. */
 async function resolveEntryMetadata(entry: FileSystemEntry) {
-  let file: JavaScriptFile<Metadata>
+  let file: JavaScriptFile<Metadata> | MDXFile<Metadata>
 
   if (isDirectory(entry)) {
     const indexFile = await entry
@@ -152,7 +154,7 @@ async function resolveEntryMetadata(entry: FileSystemEntry) {
         return
       }
     }
-  } else if (isJavaScriptFile<Metadata>(entry)) {
+  } else if (isJavaScriptFile<Metadata>(entry) || isMDXFile<Metadata>(entry)) {
     file = entry
   } else {
     return
