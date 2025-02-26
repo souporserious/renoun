@@ -1,5 +1,25 @@
 # renoun
 
+## 8.7.0
+
+### Minor Changes
+
+- e6ad215: Adds `MDXFile`, `MDXFileExport`, and `isMDXFile` classes and utilities to better differentiate between specific MDX and JavaScript file methods. This also helps with performance since we should never attempt to analyze an MDX file using the TypeScript compiler and allows for future MDX-specific methods to be added.
+
+  ### Breaking Changes
+
+  In some cases there may be breaking changes if you were loading mdx files and targeting `JavaScriptFile` related classes or types. These should be transitioned to the new `MDXFile`, `MDXFileExport`, and `isMDXFile` respectively.
+
+- 073b6d1: Adds a cache for `Directory#getEntries` and `JavaScriptFile#getFileExports` during production builds to help with performance since these methods can be called multiple times during a build.
+
+### Patch Changes
+
+- 29e19e5: Fixes default MDX file system loader not including all exports.
+- f1d6b47: Improves `exclude` filtering performance by caching the minimatch pattern.
+- 5c4e0ec: Fixes default MDX loader to parse inline code props.
+- Updated dependencies [b325412]
+  - @renoun/mdx@1.4.1
+
 ## 8.6.0
 
 ### Minor Changes
