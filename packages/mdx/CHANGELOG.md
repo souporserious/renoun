@@ -1,5 +1,11 @@
 # @renoun/mdx
 
+## 1.4.1
+
+### Patch Changes
+
+- b325412: Imports correct MDX AST global types.
+
 ## 1.4.0
 
 ### Minor Changes
