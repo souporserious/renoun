@@ -17,7 +17,7 @@ export default async function Page({
     month: '2-digit',
     day: '2-digit',
     timeZone: 'UTC',
-  }).format(frontmatter.date)
+  }).format(new Date(frontmatter.date))
   const Content = await post.getExportValue('default')
 
   return (
