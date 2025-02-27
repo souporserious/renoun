@@ -543,9 +543,9 @@ export class File<
 
 /** Error for when a file export is not found. */
 export class FileExportNotFoundError extends Error {
-  constructor(path: string, name: string) {
+  constructor(path: string, name: string, className: string = "JavaScriptFile") {
     super(
-      `[renoun] JavaScriptFile export "${name}" not found in path "${path}"`
+      `[renoun] ${className} export "${name}" not found in path "${path}"`
     )
     this.name = 'FileExportNotFoundError'
   }
@@ -901,11 +901,13 @@ export class JavaScriptFile<
 
   /** Parse and validate an export value using the configured schema if available. */
   parseExportValue(name: string, value: any): any {
+
     const extension = this.getExtension()
 
     if (!extension || !this.#loader) {
       return value
     }
+
 
     if (isLoaderWithSchema(this.#loader)) {
       let parseValue = (this.#loader as ModuleLoaderWithSchema<any>).schema[
@@ -1088,17 +1090,78 @@ export class MDXFileExport<Value> {
     return this.#file.getSourceUrl(options)
   }
 
+    /** Parse and validate an export value using the configured schema if available. */
+    parseExportValue(name: string, value: any): any {
+
+      const extension = "mdx"
+  
+      if (!extension || !this.#loader) {
+        return value
+      }
+  
+  
+      if (isLoaderWithSchema(this.#loader)) {
+        let parseValue = (this.#loader as ModuleLoaderWithSchema<any>).schema[
+          name
+        ]
+  
+        if (parseValue) {
+          try {
+            if ('~standard' in parseValue) {
+              const result = parseValue['~standard'].validate(
+                value
+              ) as StandardSchemaV1.Result<any>
+  
+              if (result.issues) {
+                const issuesMessage = result.issues
+                  .map((issue) =>
+                    issue.path
+                      ? `  - ${issue.path.join('.')}: ${issue.message}`
+                      : `  - ${issue.message}`
+                  )
+                  .join('\n')
+  
+                throw new Error(
+                  `[renoun] Schema validation failed for export "${name}" at file path: "${this.#file.getAbsolutePath()}"\n\nThe following issues need to be fixed:\n${issuesMessage}`
+                )
+              }
+  
+              value = result.value
+            } else {
+              value = parseValue(value)
+            }
+          } catch (error) {
+            if (error instanceof Error) {
+              throw new Error(
+                `[renoun] Schema validation failed to parse export "${name}" at file path: "${this.#file.getAbsolutePath()}"\n\nThe following error occurred:\n${error.message}`
+              )
+            }
+          }
+        }
+      }
+  
+      return value
+    }
+
   async getRuntimeValue(): Promise<Value> {
     const fileModule = await this.#getModule()
 
     if (!(this.#name in fileModule)) {
       throw new FileExportNotFoundError(
         this.#file.getAbsolutePath(),
-        this.#name
+        this.#name,
+        MDXFile.name
       )
     }
 
-    return fileModule[this.#name]
+    const fileModuleExport = fileModule[this.#name]
+
+    const exportValue = this.parseExportValue(
+      this.#name,
+      fileModuleExport
+    )
+
+    return exportValue
   }
 
   #getModule() {
@@ -1191,7 +1254,7 @@ export class MDXFile<
 
     const fileModule = await this.#getModule()
     if (!(name in fileModule)) {
-      throw new FileExportNotFoundError(this.getAbsolutePath(), name)
+      throw new FileExportNotFoundError(this.getAbsolutePath(), name, MDXFile.name)
     }
 
     const mdxExport = new MDXFileExport<Types[ExportName]>(
@@ -1212,6 +1275,7 @@ export class MDXFile<
   async getExportValue<ExportName extends Extract<keyof Types, string>>(
     name: ExportName
   ): Promise<Types[ExportName]> {
+
     const mdxExport = await this.getExport(name)
     return mdxExport.getRuntimeValue()
   }

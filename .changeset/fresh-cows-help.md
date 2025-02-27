@@ -2,4 +2,4 @@
 'renoun': patch
 ---
 
-Fixed build issue in the blog example
+* Extend `MDXFile.getRuntimeValue` to be able to parse the runtime values ( e.g. frontmatter ) based on the schema definition ( e.g. via `withSchema` )
