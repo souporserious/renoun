@@ -91,7 +91,14 @@ export async function getTokens(
   highlighter: Highlighter | null = null,
   sourcePath?: string | false
 ) {
-  if (language === 'plaintext' || language === 'diff') {
+  if (
+    language === 'plaintext' ||
+    language === 'diff' ||
+    // TODO: Add support for MDX and loading related grammars
+    language === 'mdx' ||
+    language === 'markdown' ||
+    language === ('plain' as Languages)
+  ) {
     return [
       [
         {
@@ -119,7 +126,6 @@ export async function getTokens(
   const sourceFile = filename ? project.getSourceFile(filename) : undefined
   const finalLanguage = getLanguage(language)
   const config = loadConfig()
-  const theme = await getThemeColors()
   const sourceText = sourceFile ? getTrimmedSourceFileText(sourceFile) : value
   const themeNames =
     typeof config.theme === 'string'
@@ -130,27 +136,18 @@ export async function getTokens(
           }
           return theme[0]
         })
-  let themedTokens: ReturnType<Highlighter['codeToTokens']>['tokens'][] = []
-
-  try {
-    for (const themeName of themeNames) {
-      const result = highlighter.codeToTokens(sourceText, {
-        theme: themeName,
-        lang: finalLanguage,
-      })
-      themedTokens.push(result.tokens)
-    }
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(
-        `[renoun] Error highlighting the following source text${
-          sourcePath ? ` at "${sourcePath}"` : ''
-        } for language "${finalLanguage}":\n\n${sourceText}\n\nReceived the following error:\n\n${error.message}`,
-        { cause: error }
-      )
-    }
-  }
-
+  const tokens: Awaited<ReturnType<Highlighter>> = await highlighter(
+    sourceText,
+    finalLanguage,
+    themeNames
+  ).catch((error) => {
+    throw new Error(
+      `[renoun] Error highlighting the following source text${
+        sourcePath ? ` at "${sourcePath}"` : ''
+      } for language "${finalLanguage}":\n\n${sourceText}\n\nReceived the following error:\n\n${error.message}`,
+      { cause: error }
+    )
+  })
   const sourceFileDiagnostics = getDiagnostics(
     sourceFile,
     allowErrors,
@@ -192,9 +189,8 @@ export async function getTokens(
     })
   const rootDirectory = getRootDirectory()
   const baseDirectory = process.cwd().replace(rootDirectory, '')
-  const firstThemeTokens = themedTokens[0] || []
   let previousTokenStart = 0
-  let parsedTokens: Token[][] = firstThemeTokens.map((line, lineIndex) => {
+  let parsedTokens: Token[][] = tokens.map((line) => {
     // increment position for line breaks if the line is empty
     if (line.length === 0) {
       previousTokenStart += 1
@@ -202,63 +198,24 @@ export async function getTokens(
 
     return line.flatMap((baseToken, tokenIndex) => {
       const tokenStart = previousTokenStart
-      const tokenEnd = tokenStart + baseToken.content.length
+      const tokenEnd = tokenStart + baseToken.value.length
       const lastToken = tokenIndex === line.length - 1
 
       // account for newlines
       previousTokenStart = lastToken ? tokenEnd + 1 : tokenEnd
 
-      let style: Record<string, string> = {}
-
-      if (typeof config.theme === 'string') {
-        if (baseToken.color) {
-          style.color = baseToken.color
-        }
-
-        if (baseToken.fontStyle) {
-          style = {
-            ...style,
-            ...getFontStyle(baseToken.fontStyle),
-          }
-        }
-      } else {
-        for (
-          let themeIndex = 0;
-          themeIndex < themedTokens.length;
-          themeIndex++
-        ) {
-          const themeTokens = themedTokens[themeIndex]
-          const currentToken = themeTokens[lineIndex][tokenIndex]
-
-          if (!currentToken) {
-            continue
-          }
-
-          const color = currentToken.color
-          if (color) {
-            style[`--${themeIndex}`] = color
-          }
-
-          const fontStyle = currentToken.fontStyle
-          if (fontStyle) {
-            const resolvedFontStyles = Object.values(getFontStyle(fontStyle))
-            for (let index = 0; index < resolvedFontStyles.length; index++) {
-              style[`--${themeIndex}${index}`] = resolvedFontStyles[index]
-            }
-          }
-        }
-      }
-
       const initialToken: Token = {
-        value: baseToken.content,
+        value: baseToken.value,
         start: tokenStart,
         end: tokenEnd,
-        isBaseColor: baseToken.color
-          ? baseToken.color.toLowerCase() === theme.foreground.toLowerCase()
-          : false,
-        isWhitespace: baseToken.content.trim() === '',
+        isBaseColor: false,
+        // isBaseColor: baseToken.style.color
+        //   ? baseToken.style.color.toLowerCase() ===
+        //     theme.foreground.toLowerCase()
+        //   : false,
+        isWhitespace: baseToken.value.trim() === '',
         isSymbol: false,
-        style,
+        style: baseToken.style,
       }
 
       // Split this token further if it intersects symbol ranges
@@ -458,38 +415,6 @@ function getQuickInfo(
   quickInfoCache.set(cacheKey, result)
 
   return result
-}
-
-const FontStyle = {
-  Italic: 1,
-  Bold: 2,
-  Underline: 4,
-  Strikethrough: 8,
-}
-
-function getFontStyle(fontStyle: number) {
-  const style: {
-    fontStyle?: 'italic'
-    fontWeight?: 'bold'
-    textDecoration?: 'underline' | 'line-through'
-  } = {
-    fontStyle: undefined,
-    fontWeight: undefined,
-    textDecoration: undefined,
-  }
-  if (fontStyle === FontStyle.Italic) {
-    style['fontStyle'] = 'italic'
-  }
-  if (fontStyle === FontStyle.Bold) {
-    style['fontWeight'] = 'bold'
-  }
-  if (fontStyle === FontStyle.Underline) {
-    style['textDecoration'] = 'underline'
-  }
-  if (fontStyle === FontStyle.Strikethrough) {
-    style['textDecoration'] = 'line-through'
-  }
-  return style
 }
 
 /** Converts tokens to plain text. */

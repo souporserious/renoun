@@ -122,9 +122,11 @@
     "@renoun/mdx": "workspace:*",
     "ignore": "^7.0.3",
     "minimatch": "^10.0.1",
+    "oniguruma-to-es": "^3.1.1",
     "restyle": "catalog:",
     "shiki": "catalog:",
     "ts-morph": "catalog:",
-    "ws": "^8.18.0"
+    "vscode-textmate": "^9.2.0",
+    "ws": "^8.18.1"
   }
 }

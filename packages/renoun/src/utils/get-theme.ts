@@ -209,9 +209,9 @@ function buildNestedObject(
     const parts = key.split('.')
     let target = result
 
-    for (let i = 0; i < parts.length - 1; i++) {
-      if (!target[parts[i]]) target[parts[i]] = {}
-      target = target[parts[i]]
+    for (let index = 0; index < parts.length - 1; index++) {
+      if (!target[parts[index]]) target[parts[index]] = {}
+      target = target[parts[index]]
     }
 
     target[parts[parts.length - 1]] = useVariables
@@ -244,10 +244,11 @@ export function getThemeTokenVariables() {
 
   for (let index = 0; index < themeNames.length; index++) {
     themeVariables[`[data-theme="${themeNames[index]}"] & span`] = {
-      color: `var(--${index})`,
-      fontStyle: `var(--${index}0)`,
-      fontWeight: `var(--${index}1)`,
-      textDecoration: `var(--${index}2)`,
+      color: `var(--${index}fg)`,
+      backgroundColor: `var(--${index}bg)`,
+      fontStyle: `var(--${index}fs)`,
+      fontWeight: `var(--${index}fw)`,
+      textDecoration: `var(--${index}td)`,
     }
   }
 

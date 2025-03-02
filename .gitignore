@@ -15,9 +15,6 @@ out
 # turbo
 .turbo
 
-# renoun
-.renoun
-
 # production
 build
 dist
