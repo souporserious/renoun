@@ -2,6 +2,7 @@ import {
   FileExportNotFoundError,
   isFile,
   isJavaScriptFile,
+  isMDXFile,
   type Directory,
   type FileSystemEntry,
 } from 'renoun/file-system'
@@ -19,7 +20,7 @@ async function ListNavigation({
   const path = entry.getPath()
   const depth = entry.getDepth()
   const metadata =
-    variant === 'title' && isJavaScriptFile(entry)
+    variant === 'title' && (isJavaScriptFile(entry) || isMDXFile(entry))
       ? await entry.getExportValue('metadata').catch((error) => {
           if (error instanceof FileExportNotFoundError) {
             return undefined
