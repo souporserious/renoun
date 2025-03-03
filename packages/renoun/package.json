@@ -98,7 +98,6 @@
   },
   "scripts": {
     "build": "tsc",
-    "generate-textmate-maps": "tsx scripts/generate-textmate-maps.ts",
     "dev": "tsc -w",
     "test": "vitest --typecheck"
   },
