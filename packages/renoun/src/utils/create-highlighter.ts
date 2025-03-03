@@ -1,7 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
-
 import { grammars } from '../grammars/index.js'
-import { getRenounFilePath } from './get-renoun-file-path.js'
 import { createTokenizer } from './create-tokenizer.js'
 
 /** Converts a string of code to an array of highlighted tokens. */
@@ -15,8 +12,9 @@ export async function createHighlighter() {
       }
 
       const loader = grammar[0]
+      const result = await loader()
 
-      return loader.call(null).then((module) => module.default)
+      return result.default.at(-1)
     },
     getTheme: async (name) => {
       const themePath = getRenounFilePath('themes', `${name}.json`)

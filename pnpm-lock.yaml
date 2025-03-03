@@ -331,6 +331,12 @@ importers:
       '@renoun/mdx':
         specifier: workspace:*
         version: link:../mdx
+      '@shikijs/langs':
+        specifier: ^3.1.0
+        version: 3.1.0
+      '@shikijs/themes':
+        specifier: ^3.1.0
+        version: 3.1.0
       ignore:
         specifier: ^7.0.3
         version: 7.0.3
@@ -346,12 +352,6 @@ importers:
       shiki:
         specifier: 'catalog:'
         version: 3.0.0
-      tm-grammars:
-        specifier: ^1.22.19
-        version: 1.22.19
-      tm-themes:
-        specifier: ^1.9.14
-        version: 1.9.14
       ts-morph:
         specifier: 'catalog:'
         version: 25.0.1
@@ -1157,11 +1157,20 @@ packages:
   '@shikijs/langs@3.0.0':
     resolution: {integrity: sha512-HBsZAukiYz7k3hzttPWa0en3PABEwK3cpxcAcERRwvwuKc5pn0Y+yPxAIYZtN9cFdtNqrbFJNhfcEu/xbG1u/A==}
 
+  '@shikijs/langs@3.1.0':
+    resolution: {integrity: sha512-hAM//sExPXAXG3ZDWjrmV6Vlw4zlWFOcT1ZXNhFRBwPP27scZu/ZIdZ+TdTgy06zSvyF4KIjnF8j6+ScKGu6ww==}
+
   '@shikijs/themes@3.0.0':
     resolution: {integrity: sha512-mz63nyVB5nXWsv5H2hifDFIThZEJ/cJhMq1/+0JjMdOuuBq2H2D1Fn8UM5yzUtEvap/ipRltv381+hsHZFs4ug==}
 
+  '@shikijs/themes@3.1.0':
+    resolution: {integrity: sha512-A4MJmy9+ydLNbNCtkmdTp8a+ON+MMXoUe1KTkELkyu0+pHGOcbouhNuobhZoK59cL4cOST6CCz1x+kUdkp9UZA==}
+
   '@shikijs/types@3.0.0':
     resolution: {integrity: sha512-kh/xgZHxI6m9trVvPw+C47jyVHx190r0F5gkF+VO5vYB54UtcoPJe66dzZmK7GbJbzmtGEGbOwct/jsoPjjUqg==}
+
+  '@shikijs/types@3.1.0':
+    resolution: {integrity: sha512-F8e7Fy4ihtcNpJG572BZZC1ErYrBrzJ5Cbc9Zi3REgWry43gIvjJ9lFAoUnuy7Bvy4IFz7grUSxL5edfrrjFEA==}
 
   '@shikijs/vscode-textmate@10.0.2':
     resolution: {integrity: sha512-83yeghZ2xxin3Nj8z1NMd/NCuca+gsYXswywDy5bHvwlWL8tpTQmzGeUuHd9FC3E/SBEMvzJRwWEOz5gGes9Qg==}
@@ -3111,12 +3120,6 @@ packages:
     resolution: {integrity: sha512-n1cw8k1k0x4pgA2+9XrOkFydTerNcJ1zWCO5Nn9scWHTD+5tp8dghT2x1uduQePZTZgd3Tupf+x9BxJjeJi77Q==}
     engines: {node: '>=14.0.0'}
 
-  tm-grammars@1.22.19:
-    resolution: {integrity: sha512-cCPeivEYa1oGVfeij6dL3TCoqKlAuoSZqhmyvzs7Qfp3RggaoQaUGkc4JcXLDuoiPHRamQOLMqC+Pr1kf5wtJg==}
-
-  tm-themes@1.9.14:
-    resolution: {integrity: sha512-U3YTy+DSuRzu7H9GVeIhs0wgPD4LyOrkJZ9AzAB6aTEt6L550FeSZwGt9QA+vc3bA1XInLWSNUSkUzqnbMsJIA==}
-
   tmp@0.0.33:
     resolution: {integrity: sha512-jRCJlojKnZ3addtTOjdIqoRuPEKBvNXcGYqzO6zWZX8KfKEpnGY5jfggJQ3EjKuu8D4bJRr0y+cYJFmYbImXGw==}
     engines: {node: '>=0.6.0'}
@@ -4133,11 +4136,24 @@ snapshots:
     dependencies:
       '@shikijs/types': 3.0.0
 
+  '@shikijs/langs@3.1.0':
+    dependencies:
+      '@shikijs/types': 3.1.0
+
   '@shikijs/themes@3.0.0':
     dependencies:
       '@shikijs/types': 3.0.0
 
+  '@shikijs/themes@3.1.0':
+    dependencies:
+      '@shikijs/types': 3.1.0
+
   '@shikijs/types@3.0.0':
+    dependencies:
+      '@shikijs/vscode-textmate': 10.0.2
+      '@types/hast': 3.0.4
+
+  '@shikijs/types@3.1.0':
     dependencies:
       '@shikijs/vscode-textmate': 10.0.2
       '@types/hast': 3.0.4
@@ -6593,10 +6609,6 @@ snapshots:
   tinyrainbow@2.0.0: {}
 
   tinyspy@3.0.2: {}
-
-  tm-grammars@1.22.19: {}
-
-  tm-themes@1.9.14: {}
 
   tmp@0.0.33:
     dependencies:
