@@ -11,9 +11,7 @@ export async function createHighlighter() {
       const grammar = grammars[name]
 
       if (!grammar) {
-        throw new Error(
-          `Missing language grammar for scope "${name}", run "renoun language ${name}" in your terminal to download and configure this language for your project.`
-        )
+        return null
       }
 
       const loader = grammar[0]

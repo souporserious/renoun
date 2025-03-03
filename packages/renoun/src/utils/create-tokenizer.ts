@@ -174,13 +174,7 @@ class JsOnigString {
 }
 
 const onigLib = Promise.resolve({
-  createOnigScanner: (patterns: (string | RegExp)[]) => {
-    return new JsOnigScanner(
-      patterns.map((pattern) =>
-        typeof pattern === 'string' ? pattern : pattern.source
-      )
-    )
-  },
+  createOnigScanner: (patterns: string[]) => new JsOnigScanner(patterns),
   createOnigString: (string: string) => new JsOnigString(string),
 })
 
@@ -202,7 +196,7 @@ export class Registry<Grammar extends string, Theme extends string> {
     })
   }
 
-  fetchGrammar = async (name: Grammar): Promise<GrammarMetadata> => {
+  fetchGrammar = async (name: Grammar): Promise<GrammarMetadata | null> => {
     const source = await this.#options.getGrammar(name)
     let grammar: GrammarMetadata
 
@@ -211,7 +205,7 @@ export class Registry<Grammar extends string, Theme extends string> {
     } else if (source) {
       grammar = source
     } else {
-      throw new Error(`Missing grammar: "${name}"`)
+      return null
     }
 
     return grammar

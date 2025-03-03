@@ -3,7 +3,7 @@ import { writeFileSync } from 'node:fs'
 
 const mapEntries = grammars
   .map((grammar) => {
-    const importString = `() => import('tm-grammars/grammars/${grammar.name}.json')`
+    const importString = `() => import('tm-grammars/grammars/${grammar.name}.json', { with: { type: 'json' } })`
     const aliasesString = grammar.aliases
       ? [grammar.name]
           .concat(grammar.aliases)

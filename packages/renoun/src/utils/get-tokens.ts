@@ -91,14 +91,7 @@ export async function getTokens(
   highlighter: Highlighter | null = null,
   sourcePath?: string | false
 ) {
-  if (
-    language === 'plaintext' ||
-    language === 'diff' ||
-    // TODO: Add support for MDX and loading related grammars
-    language === 'mdx' ||
-    language === 'markdown' ||
-    language === ('plain' as Languages)
-  ) {
+  if (language === 'plaintext' || language === 'diff') {
     return [
       [
         {
