@@ -5,8 +5,15 @@
   },
   "siteUrl": "https://renoun.dev",
   "theme": {
-    "dark": "night-owl",
-    "light": "everforest-light"
+    "light": "everforest-light",
+    "dark": [
+      "dracula-soft",
+      {
+        "colors": {
+          "panel.border": "#666"
+        }
+      }
+    ]
   },
   "languages": ["tsx", "typescript"]
 }

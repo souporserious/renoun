@@ -7,7 +7,6 @@ import type { Highlighter } from './create-highlighter.js'
 import { getDiagnosticMessageText } from './get-diagnostic-message.js'
 import { getLanguage, type Languages } from './get-language.js'
 import { getRootDirectory } from './get-root-directory.js'
-import { getThemeColors } from './get-theme.js'
 import { getTrimmedSourceFileText } from './get-trimmed-source-file-text.js'
 import { isJsxOnly } from './is-jsx-only.js'
 import { loadConfig } from './load-config.js'
@@ -118,8 +117,8 @@ export async function getTokens(
   const jsxOnly = isJavaScriptLikeLanguage ? isJsxOnly(value) : false
   const sourceFile = filename ? project.getSourceFile(filename) : undefined
   const finalLanguage = getLanguage(language)
-  const config = loadConfig()
   const sourceText = sourceFile ? getTrimmedSourceFileText(sourceFile) : value
+  const config = loadConfig()
   const themeNames =
     typeof config.theme === 'string'
       ? [config.theme]

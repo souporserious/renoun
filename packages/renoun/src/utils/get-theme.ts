@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 
 import type { TextMateThemeRaw } from './create-tokenizer.js'
 import { loadConfig } from './load-config.js'
+import theme from '@shikijs/themes/andromeeda'
 
 /** Resolves the theme config name from the `renoun.json` config. */
 function getThemeConfigName(themeName?: string) {
@@ -15,7 +16,11 @@ function getThemeConfigName(themeName?: string) {
     }
 
     // Try matching theme config name
-    if (Object.values(config.theme).includes(themeName)) {
+    if (
+      Object.values(config.theme)
+        .map((theme) => (typeof theme === 'string' ? theme : theme[0]))
+        .includes(themeName)
+    ) {
       return themeName
     }
 
