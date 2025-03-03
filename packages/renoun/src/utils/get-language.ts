@@ -1,4 +1,4 @@
-import type { bundledLanguages } from 'shiki/bundle/web'
+import type { bundledLanguages, PlainTextLanguage } from 'shiki/bundle/web'
 
 export const languageMap = {
   mjs: 'js',
@@ -7,7 +7,7 @@ export const languageMap = {
 export type Languages =
   | keyof typeof bundledLanguages
   | keyof typeof languageMap
-  | 'plaintext'
+  | PlainTextLanguage
   | 'diff'
 
 /** Normalizes language to a specific grammar language key. */

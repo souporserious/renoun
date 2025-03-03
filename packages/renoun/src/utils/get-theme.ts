@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
+import type { TextMateThemeRaw } from './create-tokenizer.js'
 import { loadConfig } from './load-config.js'
 
-/** Gets the theme path from the `renoun.json` config. */
-function getThemeConfig(themeName?: string) {
+/** Resolves the theme config name from the `renoun.json` config. */
+function getThemeConfigName(themeName?: string) {
   const config = loadConfig()
 
   if (typeof config.theme === 'object') {
@@ -12,6 +13,12 @@ function getThemeConfig(themeName?: string) {
     if (themeName === undefined) {
       return Object.values(config.theme)[0]
     }
+
+    // Try matching theme config name
+    if (Object.values(config.theme).includes(themeName)) {
+      return themeName
+    }
+
     return config.theme[themeName]
   }
 
@@ -21,27 +28,31 @@ function getThemeConfig(themeName?: string) {
 const cachedThemes = new Map<string, Record<string, any>>()
 
 /** Gets a normalized VS Code theme. */
-export async function getTheme(themeName?: string) {
-  const themeConfig = getThemeConfig(themeName)
+export async function getTheme(themeName?: string): Promise<TextMateThemeRaw> {
+  const themeConfigName = getThemeConfigName(themeName)
 
-  if (themeConfig === undefined) {
+  if (themeConfigName === undefined) {
     throw new Error(
       `[renoun] No valid theme found. Ensure the \`theme\` property in the \`renoun.json\` at the root of your project is configured correctly. For more information, visit: https://renoun.dev/docs/configuration`
     )
   }
 
-  let themePath = Array.isArray(themeConfig) ? themeConfig[0] : themeConfig
+  let themePath = Array.isArray(themeConfigName)
+    ? themeConfigName[0]
+    : themeConfigName
 
   if (themePath.endsWith('.json')) {
     themePath = resolve(process.cwd(), themePath)
   }
 
   if (cachedThemes.has(themePath)) {
-    return cachedThemes.get(themePath)!
+    return cachedThemes.get(themePath)! as TextMateThemeRaw
   }
 
   const { bundledThemes, normalizeTheme } = await import('shiki/bundle/web')
-  const themeOverrides = Array.isArray(themeConfig) ? themeConfig[1] : undefined
+  const themeOverrides = Array.isArray(themeConfigName)
+    ? themeConfigName[1]
+    : undefined
   let theme: Record<string, any>
 
   if (themePath.endsWith('.json')) {
@@ -101,11 +112,13 @@ export async function getTheme(themeName?: string) {
   }
 
   theme = normalizeTheme(theme)
-  theme.name = Array.isArray(themeConfig) ? themeConfig[1] : themeConfig
+  theme.name = Array.isArray(themeConfigName)
+    ? themeConfigName[1]
+    : themeConfigName
 
   cachedThemes.set(themePath, theme)
 
-  return theme!
+  return theme! as TextMateThemeRaw
 }
 
 /**
@@ -127,8 +140,10 @@ export async function getThemeColorVariables() {
     const currentTheme = await getTheme(themeName)
     const variables: Record<string, any> = {}
 
-    for (const [key, value] of Object.entries(currentTheme.colors)) {
-      variables[`--${key.replace(/\./g, '-')}`] = value
+    if (currentTheme.colors) {
+      for (const [key, value] of Object.entries(currentTheme.colors)) {
+        variables[`--${key.replace(/\./g, '-')}`] = value
+      }
     }
 
     themeVariables[`[data-theme="${themeName}"]`] = variables
@@ -162,7 +177,9 @@ export async function getThemeColors() {
 
   if (typeof config.theme === 'string') {
     const { colors } = await getTheme()
-    flatColors = colors
+    if (colors) {
+      flatColors = colors
+    }
   } else {
     const themeNames = Object.keys(config.theme)
 
@@ -186,7 +203,9 @@ export async function getThemeColors() {
     // Only one theme defined
     else {
       const { colors } = await getTheme(themeNames[0])
-      flatColors = colors
+      if (colors) {
+        flatColors = colors
+      }
     }
   }
 

@@ -1,6 +1,6 @@
 {
   "$schema": "https://renoun.dev/schema.json",
-  "theme": "night-owl",
+  "theme": "theme.json",
   "git": {
     "source": "https://github.com/souporserious/renoun"
   },

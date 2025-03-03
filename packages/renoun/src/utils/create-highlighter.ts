@@ -1,5 +1,6 @@
 import { grammars } from '../grammars/index.js'
 import { createTokenizer } from './create-tokenizer.js'
+import { getTheme } from './get-theme.js'
 
 /** Converts a string of code to an array of highlighted tokens. */
 export async function createHighlighter() {
@@ -17,15 +18,7 @@ export async function createHighlighter() {
       return result.default.at(-1)
     },
     getTheme: async (name) => {
-      const themePath = getRenounFilePath('themes', `${name}.json`)
-
-      if (!existsSync(themePath)) {
-        throw new Error(
-          `Missing theme for "${name}", run "renoun theme ${name}" in your terminal to download and configure this theme for your project.`
-        )
-      }
-
-      return JSON.parse(readFileSync(themePath, 'utf-8'))
+      return getTheme(name)
     },
   })
 }

@@ -8,8 +8,5 @@
     "dark": "night-owl",
     "light": "everforest-light"
   },
-  "languages": [
-    "tsx",
-    "typescript"
-  ]
+  "languages": ["tsx", "typescript"]
 }
