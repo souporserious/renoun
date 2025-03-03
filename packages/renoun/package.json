@@ -98,6 +98,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "generate-textmate-maps": "tsx scripts/generate-textmate-maps.ts",
     "dev": "tsc -w",
     "test": "vitest --typecheck"
   },
@@ -125,6 +126,8 @@
     "oniguruma-to-es": "^3.1.1",
     "restyle": "catalog:",
     "shiki": "catalog:",
+    "tm-grammars": "^1.22.19",
+    "tm-themes": "^1.9.14",
     "ts-morph": "catalog:",
     "vscode-textmate": "^9.2.0",
     "ws": "^8.18.1"

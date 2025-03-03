@@ -7,8 +7,9 @@ import type {
 import TextMate from 'vscode-textmate'
 import { toRegExp } from 'oniguruma-to-es'
 
+import { grammars } from '../grammars/index.js'
+
 export interface RegistryOptions<Grammar extends string, Theme extends string> {
-  getAliases: () => { [scopeName: string]: string[] }
   getGrammar: (grammar: Grammar) => Promise<TextMateGrammarRaw | string>
   getTheme: (theme: Theme) => Promise<TextMateThemeRaw | string>
 }
@@ -227,9 +228,8 @@ export class Registry<Grammar extends string, Theme extends string> {
   }
 
   loadGrammar = async (name: Grammar): Promise<TextMateGrammar | null> => {
-    const aliases = this.#options.getAliases()
-    const scopeName = Object.keys(aliases).find((scopeName) =>
-      aliases[scopeName].includes(name)
+    const scopeName = Object.keys(grammars).find((scopeName) =>
+      grammars[scopeName].slice(1).includes(name)
     ) as Grammar
 
     return this.#registry.loadGrammar(scopeName || name)

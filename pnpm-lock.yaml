@@ -346,6 +346,12 @@ importers:
       shiki:
         specifier: 'catalog:'
         version: 3.0.0
+      tm-grammars:
+        specifier: ^1.22.19
+        version: 1.22.19
+      tm-themes:
+        specifier: ^1.9.14
+        version: 1.9.14
       ts-morph:
         specifier: 'catalog:'
         version: 25.0.1
@@ -3104,6 +3110,12 @@ packages:
   tinyspy@3.0.2:
     resolution: {integrity: sha512-n1cw8k1k0x4pgA2+9XrOkFydTerNcJ1zWCO5Nn9scWHTD+5tp8dghT2x1uduQePZTZgd3Tupf+x9BxJjeJi77Q==}
     engines: {node: '>=14.0.0'}
+
+  tm-grammars@1.22.19:
+    resolution: {integrity: sha512-cCPeivEYa1oGVfeij6dL3TCoqKlAuoSZqhmyvzs7Qfp3RggaoQaUGkc4JcXLDuoiPHRamQOLMqC+Pr1kf5wtJg==}
+
+  tm-themes@1.9.14:
+    resolution: {integrity: sha512-U3YTy+DSuRzu7H9GVeIhs0wgPD4LyOrkJZ9AzAB6aTEt6L550FeSZwGt9QA+vc3bA1XInLWSNUSkUzqnbMsJIA==}
 
   tmp@0.0.33:
     resolution: {integrity: sha512-jRCJlojKnZ3addtTOjdIqoRuPEKBvNXcGYqzO6zWZX8KfKEpnGY5jfggJQ3EjKuu8D4bJRr0y+cYJFmYbImXGw==}
@@ -6581,6 +6593,10 @@ snapshots:
   tinyrainbow@2.0.0: {}
 
   tinyspy@3.0.2: {}
+
+  tm-grammars@1.22.19: {}
+
+  tm-themes@1.9.14: {}
 
   tmp@0.0.33:
     dependencies:

@@ -1,41 +1,24 @@
 import { existsSync, readFileSync } from 'node:fs'
 
+import { grammars } from '../grammars/index.js'
 import { getRenounFilePath } from './get-renoun-file-path.js'
 import { createTokenizer } from './create-tokenizer.js'
 
 /** Converts a string of code to an array of highlighted tokens. */
 export async function createHighlighter() {
   return createTokenizer({
-    getAliases: () => {
-      const metaPath = getRenounFilePath('languages', 'meta.json')
-
-      if (!existsSync(metaPath)) {
-        throw new Error(`Missing language grammar meta file.`)
-      }
-
-      return JSON.parse(readFileSync(metaPath, 'utf-8'))
-    },
     async getGrammar(name) {
-      const aliases = Object.entries(this.getAliases())
-        .find(([key]) => key === name)
-        ?.at(1)
+      const grammar = grammars[name]
 
-      if (!aliases) {
+      if (!grammar) {
         throw new Error(
-          `Missing language grammar for "${name}", run "renoun language ${name}" in your terminal to download and configure this language for your project.`
+          `Missing language grammar for scope "${name}", run "renoun language ${name}" in your terminal to download and configure this language for your project.`
         )
       }
 
-      const language = aliases[0]
-      const languagePath = getRenounFilePath('languages', `${language}.json`)
+      const loader = grammar[0]
 
-      if (!existsSync(languagePath)) {
-        throw new Error(
-          `Missing language grammar for "${language}", run "renoun language ${name}" in your terminal to download and configure this language for your project.`
-        )
-      }
-
-      return JSON.parse(readFileSync(languagePath, 'utf-8'))
+      return loader.call(null).then((module) => module.default)
     },
     getTheme: async (name) => {
       const themePath = getRenounFilePath('themes', `${name}.json`)
