@@ -1,34 +1,25 @@
+import { grammars } from '../textmate/index.js'
+import { createTokenizer } from './create-tokenizer.js'
 import { getTheme } from './get-theme.js'
-import { loadConfig } from './load-config.js'
 
 /** Converts a string of code to an array of highlighted tokens. */
 export async function createHighlighter() {
-  const config = loadConfig()
-  const { createJavaScriptRegexEngine } = await import(
-    'shiki/engine/javascript'
-  )
-  let themes
+  return createTokenizer({
+    async getGrammar(name) {
+      const grammar = grammars[name]
 
-  if (typeof config.theme === 'string') {
-    themes = [await getTheme(config.theme)]
-  } else {
-    themes = await Promise.all(
-      Object.entries(config.theme).map(([name, theme]) => {
-        if (typeof theme === 'string' && theme.endsWith('.json')) {
-          return getTheme(name)
-        } else if (Array.isArray(theme)) {
-          return theme[0]
-        } else {
-          return theme
-        }
-      })
-    )
-  }
+      if (!grammar) {
+        return null
+      }
 
-  return (await import('shiki/bundle/web')).createHighlighter({
-    engine: createJavaScriptRegexEngine(),
-    langs: config.languages,
-    themes,
+      const loader = grammar[0]
+      const result = await loader()
+
+      return result.default.at(-1)
+    },
+    getTheme: async (name) => {
+      return getTheme(name)
+    },
   })
 }
 

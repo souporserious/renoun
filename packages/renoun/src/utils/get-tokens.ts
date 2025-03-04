@@ -1,5 +1,4 @@
 import { join, posix } from 'node:path'
-import type { bundledThemes } from 'shiki/bundle/web'
 import type { Diagnostic, Project, SourceFile, ts } from 'ts-morph'
 import tsMorph from 'ts-morph'
 
@@ -7,7 +6,6 @@ import type { Highlighter } from './create-highlighter.js'
 import { getDiagnosticMessageText } from './get-diagnostic-message.js'
 import { getLanguage, type Languages } from './get-language.js'
 import { getRootDirectory } from './get-root-directory.js'
-import { getThemeColors } from './get-theme.js'
 import { getTrimmedSourceFileText } from './get-trimmed-source-file-text.js'
 import { isJsxOnly } from './is-jsx-only.js'
 import { loadConfig } from './load-config.js'
@@ -15,8 +13,6 @@ import { generatedFilenames } from './parse-source-text-metadata.js'
 import { splitTokenByRanges } from './split-tokens-by-ranges.js'
 
 const { Node, SyntaxKind } = tsMorph
-
-export type Themes = keyof typeof bundledThemes
 
 type Color = string
 
@@ -48,7 +44,6 @@ export type Token = {
   value: string
   start: number
   end: number
-  isBaseColor: boolean
   isSymbol: boolean
   isWhitespace: boolean
   diagnostics?: TokenDiagnostic[]
@@ -98,7 +93,6 @@ export async function getTokens(
           value,
           start: 0,
           end: value.length,
-          isBaseColor: true,
           isWhitespace: false,
           isSymbol: false,
           style: {},
@@ -118,9 +112,8 @@ export async function getTokens(
   const jsxOnly = isJavaScriptLikeLanguage ? isJsxOnly(value) : false
   const sourceFile = filename ? project.getSourceFile(filename) : undefined
   const finalLanguage = getLanguage(language)
-  const config = loadConfig()
-  const theme = await getThemeColors()
   const sourceText = sourceFile ? getTrimmedSourceFileText(sourceFile) : value
+  const config = loadConfig()
   const themeNames =
     typeof config.theme === 'string'
       ? [config.theme]
@@ -130,27 +123,18 @@ export async function getTokens(
           }
           return theme[0]
         })
-  let themedTokens: ReturnType<Highlighter['codeToTokens']>['tokens'][] = []
-
-  try {
-    for (const themeName of themeNames) {
-      const result = highlighter.codeToTokens(sourceText, {
-        theme: themeName,
-        lang: finalLanguage,
-      })
-      themedTokens.push(result.tokens)
-    }
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(
-        `[renoun] Error highlighting the following source text${
-          sourcePath ? ` at "${sourcePath}"` : ''
-        } for language "${finalLanguage}":\n\n${sourceText}\n\nReceived the following error:\n\n${error.message}`,
-        { cause: error }
-      )
-    }
-  }
-
+  const tokens: Awaited<ReturnType<Highlighter>> = await highlighter(
+    sourceText,
+    finalLanguage,
+    themeNames
+  ).catch((error) => {
+    throw new Error(
+      `[renoun] Error highlighting the following source text${
+        sourcePath ? ` at "${sourcePath}"` : ''
+      } for language "${finalLanguage}":\n\n${sourceText}\n\nReceived the following error:\n\n${error.message}`,
+      { cause: error }
+    )
+  })
   const sourceFileDiagnostics = getDiagnostics(
     sourceFile,
     allowErrors,
@@ -192,9 +176,8 @@ export async function getTokens(
     })
   const rootDirectory = getRootDirectory()
   const baseDirectory = process.cwd().replace(rootDirectory, '')
-  const firstThemeTokens = themedTokens[0] || []
   let previousTokenStart = 0
-  let parsedTokens: Token[][] = firstThemeTokens.map((line, lineIndex) => {
+  let parsedTokens: Token[][] = tokens.map((line) => {
     // increment position for line breaks if the line is empty
     if (line.length === 0) {
       previousTokenStart += 1
@@ -202,63 +185,19 @@ export async function getTokens(
 
     return line.flatMap((baseToken, tokenIndex) => {
       const tokenStart = previousTokenStart
-      const tokenEnd = tokenStart + baseToken.content.length
+      const tokenEnd = tokenStart + baseToken.value.length
       const lastToken = tokenIndex === line.length - 1
 
       // account for newlines
       previousTokenStart = lastToken ? tokenEnd + 1 : tokenEnd
 
-      let style: Record<string, string> = {}
-
-      if (typeof config.theme === 'string') {
-        if (baseToken.color) {
-          style.color = baseToken.color
-        }
-
-        if (baseToken.fontStyle) {
-          style = {
-            ...style,
-            ...getFontStyle(baseToken.fontStyle),
-          }
-        }
-      } else {
-        for (
-          let themeIndex = 0;
-          themeIndex < themedTokens.length;
-          themeIndex++
-        ) {
-          const themeTokens = themedTokens[themeIndex]
-          const currentToken = themeTokens[lineIndex][tokenIndex]
-
-          if (!currentToken) {
-            continue
-          }
-
-          const color = currentToken.color
-          if (color) {
-            style[`--${themeIndex}`] = color
-          }
-
-          const fontStyle = currentToken.fontStyle
-          if (fontStyle) {
-            const resolvedFontStyles = Object.values(getFontStyle(fontStyle))
-            for (let index = 0; index < resolvedFontStyles.length; index++) {
-              style[`--${themeIndex}${index}`] = resolvedFontStyles[index]
-            }
-          }
-        }
-      }
-
       const initialToken: Token = {
-        value: baseToken.content,
+        value: baseToken.value,
         start: tokenStart,
         end: tokenEnd,
-        isBaseColor: baseToken.color
-          ? baseToken.color.toLowerCase() === theme.foreground.toLowerCase()
-          : false,
-        isWhitespace: baseToken.content.trim() === '',
+        isWhitespace: baseToken.value.trim() === '',
         isSymbol: false,
-        style,
+        style: baseToken.style,
       }
 
       // Split this token further if it intersects symbol ranges
@@ -458,38 +397,6 @@ function getQuickInfo(
   quickInfoCache.set(cacheKey, result)
 
   return result
-}
-
-const FontStyle = {
-  Italic: 1,
-  Bold: 2,
-  Underline: 4,
-  Strikethrough: 8,
-}
-
-function getFontStyle(fontStyle: number) {
-  const style: {
-    fontStyle?: 'italic'
-    fontWeight?: 'bold'
-    textDecoration?: 'underline' | 'line-through'
-  } = {
-    fontStyle: undefined,
-    fontWeight: undefined,
-    textDecoration: undefined,
-  }
-  if (fontStyle === FontStyle.Italic) {
-    style['fontStyle'] = 'italic'
-  }
-  if (fontStyle === FontStyle.Bold) {
-    style['fontWeight'] = 'bold'
-  }
-  if (fontStyle === FontStyle.Underline) {
-    style['textDecoration'] = 'underline'
-  }
-  if (fontStyle === FontStyle.Strikethrough) {
-    style['textDecoration'] = 'line-through'
-  }
-  return style
 }
 
 /** Converts tokens to plain text. */

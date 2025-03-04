@@ -1,9 +1,10 @@
-import type { bundledThemes } from 'shiki/bundle/web'
 import type { ProjectOptions as TsMorphProjectOptions } from 'ts-morph'
+
+import type { Themes } from '../textmate/index.js'
 
 export type ProjectOptions = {
   /** Path to the VS Code compatible theme used for syntax highlighting the `CodeBlock`, `CodeInline`, and `Tokens` components. */
-  theme?: keyof typeof bundledThemes | (string & {})
+  theme?: Themes | (string & {})
 
   /** The URL of the production site. This is used for generating sitemap and RSS feed URLs. */
   siteUrl?: string
