@@ -69,6 +69,11 @@
       "types": "./dist/project/server.d.ts",
       "import": "./dist/project/server.js",
       "default": "./dist/project/server.js"
+    },
+    "./textmate": {
+      "types": "./dist/textmate/index.d.ts",
+      "import": "./dist/textmate/index.js",
+      "default": "./dist/textmate/index.js"
     }
   },
   "typesVersions": {
@@ -93,6 +98,9 @@
       ],
       "server": [
         "./dist/project/server.d.ts"
+      ],
+      "textmate": [
+        "./dist/textmate/index.d.ts"
       ]
     }
   },

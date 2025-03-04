@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { zodToJsonSchema } from 'zod-to-json-schema'
-import { bundledThemesInfo, bundledLanguagesInfo } from 'shiki'
+import { themes, grammars } from 'renoun/textmate'
 
 const themeValueSchema = z.union([
   z
-    .enum(bundledThemesInfo.map((theme) => theme.id) as [string])
-    .describe('A bundled Shiki theme.'),
+    .enum(Object.keys(themes) as [string, ...string[]])
+    .describe('A bundled textmate theme.'),
   z
     .string()
     .describe(
@@ -75,12 +75,7 @@ const themeSchema = z.union([
     ),
 ])
 
-const languagesSchema = z.enum(
-  bundledLanguagesInfo.flatMap((language) => [
-    language.id,
-    ...(language.aliases ?? []),
-  ]) as [string]
-)
+const languagesSchema = z.enum(Object.keys(grammars) as [string, ...string[]])
 
 const gitSchema = z.object({
   source: z
