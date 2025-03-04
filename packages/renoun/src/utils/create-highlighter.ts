@@ -17,9 +17,7 @@ export async function createHighlighter() {
 
       return result.default.at(-1)
     },
-    getTheme: async (name) => {
-      return getTheme(name)
-    },
+    getTheme,
   })
 }
 
