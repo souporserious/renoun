@@ -10,8 +10,8 @@ import { toRegExp } from 'oniguruma-to-es'
 import { grammars } from '../textmate/index.js'
 
 export interface RegistryOptions<Grammar extends string, Theme extends string> {
-  getGrammar: (grammar: Grammar) => Promise<TextMateGrammarRaw | string>
-  getTheme: (theme: Theme) => Promise<TextMateThemeRaw | string>
+  getGrammar: (grammar: Grammar) => Promise<TextMateGrammarRaw>
+  getTheme: (theme: Theme) => Promise<TextMateThemeRaw>
 }
 
 export type TextMateGrammar = IGrammar
@@ -196,51 +196,41 @@ export class Registry<Grammar extends string, Theme extends string> {
     })
   }
 
-  fetchGrammar = async (name: Grammar): Promise<GrammarMetadata | null> => {
-    const source = await this.#options.getGrammar(name)
-    let grammar: GrammarMetadata
-
-    if (typeof source === 'string') {
-      grammar = await (await fetch(source)).json()
-    } else if (source) {
-      grammar = source
-    } else {
+  fetchGrammar = async (
+    scopeName: Grammar
+  ): Promise<GrammarMetadata | null> => {
+    const source = await this.#options.getGrammar(scopeName)
+    if (!source) {
       return null
     }
-
-    return grammar
+    return source
   }
 
-  fetchTheme = async (name: Theme): Promise<TextMateThemeRaw> => {
-    const source = await this.#options.getTheme(name)
-    if (typeof source === 'string') {
-      return await (await fetch(source)).json()
-    } else if (source) {
-      return source
-    }
-    throw new Error(`Missing theme: "${name}"`)
-  }
-
-  loadGrammar = async (name: Grammar): Promise<TextMateGrammar | null> => {
+  async loadGrammar(name: Grammar): Promise<TextMateGrammar | null> {
     const scopeName = Object.keys(grammars).find((scopeName) =>
       grammars[scopeName].slice(1).includes(name)
     ) as Grammar
-
     return this.#registry.loadGrammar(scopeName || name)
   }
 
-  loadTheme = async (name: Theme): Promise<TextMateThemeRaw> => {
-    return this.fetchTheme(name)
+  async fetchTheme(name: Theme): Promise<TextMateThemeRaw> {
+    const source = await this.#options.getTheme(name)
+    if (!source) {
+      throw new Error(
+        `[renoun] Missing "${name}" theme in Registry. Ensure this theme is configured in renoun.json.`
+      )
+    }
+    return source
   }
 
-  getThemeColors = (): string[] => {
-    return this.#registry.getColorMap()
-  }
-
-  setTheme = (theme: TextMateThemeRaw): void => {
+  setTheme(theme: TextMateThemeRaw): void {
     if (this.#theme === theme) return
     this.#theme = theme
     this.#registry.setTheme(theme)
+  }
+
+  getThemeColors(): string[] {
+    return this.#registry.getColorMap()
   }
 }
 
@@ -269,13 +259,14 @@ export class Tokenizer<Grammar extends string, Theme extends string> {
     const themeColorMaps: string[][] = []
     const states: StateStack[] = []
 
+    // Manage a registry for each theme to ensure that each theme has its own state
     for (let themeIndex = 0; themeIndex < themes.length; themeIndex++) {
       const theme = themes[themeIndex]
 
       let registry = this.registries.get(theme)
       if (!registry) {
         registry = new Registry(this.registryOptions)
-        registry.setTheme(await registry.loadTheme(theme))
+        registry.setTheme(await registry.fetchTheme(theme))
         this.registries.set(theme, registry)
       }
 
