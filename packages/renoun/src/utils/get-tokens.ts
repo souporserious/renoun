@@ -44,7 +44,6 @@ export type Token = {
   value: string
   start: number
   end: number
-  isBaseColor: boolean
   isSymbol: boolean
   isWhitespace: boolean
   diagnostics?: TokenDiagnostic[]
@@ -94,7 +93,6 @@ export async function getTokens(
           value,
           start: 0,
           end: value.length,
-          isBaseColor: true,
           isWhitespace: false,
           isSymbol: false,
           style: {},
@@ -197,11 +195,6 @@ export async function getTokens(
         value: baseToken.value,
         start: tokenStart,
         end: tokenEnd,
-        isBaseColor: false,
-        // isBaseColor: baseToken.style.color
-        //   ? baseToken.style.color.toLowerCase() ===
-        //     theme.foreground.toLowerCase()
-        //   : false,
         isWhitespace: baseToken.value.trim() === '',
         isSymbol: false,
         style: baseToken.style,
