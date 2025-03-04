@@ -1,4 +1,4 @@
-import { grammars } from '../grammars/index.js'
+import { grammars } from '../textmate/index.js'
 import { createTokenizer } from './create-tokenizer.js'
 import { getTheme } from './get-theme.js'
 

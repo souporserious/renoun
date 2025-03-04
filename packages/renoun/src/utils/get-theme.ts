@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
+import type { Themes } from '../textmate/index.js'
 import type { TextMateThemeRaw } from './create-tokenizer.js'
 import { loadConfig } from './load-config.js'
-import theme from '@shikijs/themes/andromeeda'
 
 /** Resolves the theme config name from the `renoun.json` config. */
 function getThemeConfigName(themeName?: string) {
@@ -54,7 +54,7 @@ export async function getTheme(themeName?: string): Promise<TextMateThemeRaw> {
     return cachedThemes.get(themePath)! as TextMateThemeRaw
   }
 
-  const { bundledThemes, normalizeTheme } = await import('shiki/bundle/web')
+  const { themes } = await import('../textmate/index.js')
   const themeOverrides = Array.isArray(themeConfigName)
     ? themeConfigName[1]
     : undefined
@@ -62,9 +62,9 @@ export async function getTheme(themeName?: string): Promise<TextMateThemeRaw> {
 
   if (themePath.endsWith('.json')) {
     theme = JSON.parse(readFileSync(themePath, 'utf-8'))
-  } else if (themePath in bundledThemes) {
-    const themeKey = themePath as keyof typeof bundledThemes
-    const resolvedTheme = await bundledThemes[themeKey].call(null)
+  } else if (themePath in themes) {
+    const themeKey = themePath as Themes
+    const resolvedTheme = await themes[themeKey].call(null)
     theme = resolvedTheme.default
   } else {
     throw new Error(
@@ -116,14 +116,18 @@ export async function getTheme(themeName?: string): Promise<TextMateThemeRaw> {
       'rgba(191, 191, 191, 0.4)'
   }
 
-  theme = normalizeTheme(theme)
-  theme.name = Array.isArray(themeConfigName)
-    ? themeConfigName[1]
-    : themeConfigName
+  const finalTheme = {
+    ...theme,
+    name: Array.isArray(themeConfigName) ? themeConfigName[0] : themeConfigName,
+  } as TextMateThemeRaw
 
-  cachedThemes.set(themePath, theme)
+  if (!theme.settings) {
+    finalTheme.settings = theme.tokenColors || []
+  }
 
-  return theme! as TextMateThemeRaw
+  cachedThemes.set(themePath, finalTheme)
+
+  return finalTheme
 }
 
 /**

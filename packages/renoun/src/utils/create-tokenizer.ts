@@ -7,7 +7,7 @@ import type {
 import TextMate from 'vscode-textmate'
 import { toRegExp } from 'oniguruma-to-es'
 
-import { grammars } from '../grammars/index.js'
+import { grammars } from '../textmate/index.js'
 
 export interface RegistryOptions<Grammar extends string, Theme extends string> {
   getGrammar: (grammar: Grammar) => Promise<TextMateGrammarRaw | string>
@@ -230,25 +230,11 @@ export class Registry<Grammar extends string, Theme extends string> {
   }
 
   loadTheme = async (name: Theme): Promise<TextMateThemeRaw> => {
-    const theme = await this.fetchTheme(name)
-    return this.normalizeTheme(theme)
+    return this.fetchTheme(name)
   }
 
   getThemeColors = (): string[] => {
     return this.#registry.getColorMap()
-  }
-
-  normalizeTheme = async function (
-    theme: TextMateThemeRaw
-  ): Promise<TextMateThemeRaw> {
-    if (!theme.settings) {
-      if (theme.tokenColors) {
-        theme.settings = theme.tokenColors
-      } else {
-        theme.settings = []
-      }
-    }
-    return theme
   }
 
   setTheme = (theme: TextMateThemeRaw): void => {

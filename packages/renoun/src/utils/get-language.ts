@@ -1,21 +1,17 @@
-import type { bundledLanguages, PlainTextLanguage } from 'shiki/bundle/web'
+import type { Languages as TextMateLanguages } from '../textmate/index.js'
 
 export const languageMap = {
   mjs: 'js',
 } as const
 
-export type Languages =
-  | keyof typeof bundledLanguages
-  | keyof typeof languageMap
-  | PlainTextLanguage
-  | 'diff'
+export type PlainTextLanguage = 'plaintext' | 'text' | 'txt'
+
+export type Languages = TextMateLanguages | PlainTextLanguage | 'diff'
 
 /** Normalizes language to a specific grammar language key. */
-export function getLanguage(
-  language: Languages
-): keyof typeof bundledLanguages {
+export function getLanguage(language: Languages): Languages {
   if (language in languageMap) {
     return languageMap[language as keyof typeof languageMap]
   }
-  return language as keyof typeof bundledLanguages
+  return language as Languages
 }

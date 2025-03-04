@@ -1,5 +1,4 @@
 import { join, posix } from 'node:path'
-import type { bundledThemes } from 'shiki/bundle/web'
 import type { Diagnostic, Project, SourceFile, ts } from 'ts-morph'
 import tsMorph from 'ts-morph'
 
@@ -14,8 +13,6 @@ import { generatedFilenames } from './parse-source-text-metadata.js'
 import { splitTokenByRanges } from './split-tokens-by-ranges.js'
 
 const { Node, SyntaxKind } = tsMorph
-
-export type Themes = keyof typeof bundledThemes
 
 type Color = string
 

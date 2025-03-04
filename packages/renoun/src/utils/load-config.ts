@@ -1,16 +1,17 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { cwd } from 'node:process'
-import type { bundledThemes, bundledLanguages } from 'shiki'
 
-type ThemeValue = keyof typeof bundledThemes | (string & {})
+import type { Languages, Themes } from '../textmate/index.js'
+
+type ThemeValue = Themes | (string & {})
 
 type ConfigurationOptions = {
   /** Path to the VS Code compatible theme used for syntax highlighting the `CodeBlock`, `CodeInline`, and `Tokens` components. */
   theme: ThemeValue | Record<string, ThemeValue>
 
   /** List of languages to load for syntax highlighting. */
-  languages: (keyof typeof bundledLanguages)[]
+  languages: Languages[]
 
   /** Configuration options for git linking. */
   git?: {
