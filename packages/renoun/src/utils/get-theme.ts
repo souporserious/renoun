@@ -72,58 +72,15 @@ export async function getTheme(themeName?: string): Promise<TextMateThemeRaw> {
     )
   }
 
-  // Apply theme overrides.
-  if (themeOverrides) {
-    theme = mergeThemes(theme, themeOverrides)
-  }
-
-  // Set fallback values for missing colors.
-  if (!theme.colors['editor.background']) {
-    theme.colors['editor.background'] = theme.colors.background || '#000000'
-  }
-  if (!theme.colors['editor.foreground']) {
-    theme.colors['editor.foreground'] = theme.colors.foreground || '#ffffff'
-  }
-  if (!theme.colors.background) {
-    theme.colors.background = theme.colors['editor.background']
-  }
-  if (!theme.colors.foreground) {
-    theme.colors.foreground = theme.colors['editor.foreground']
-  }
-  if (!theme.colors['panel.background']) {
-    theme.colors['panel.background'] = theme.colors['editor.background']
-  }
-  if (!theme.colors['panel.border']) {
-    theme.colors['panel.border'] = theme.colors['editor.foreground']
-  }
-  if (!theme.colors['editor.hoverHighlightBackground']) {
-    theme.colors['editor.hoverHighlightBackground'] = 'rgba(255, 255, 255, 0.1)'
-  }
-  if (!theme.colors['activityBar.background']) {
-    theme.colors['activityBar.background'] = theme.colors['editor.background']
-  }
-  if (!theme.colors['activityBar.foreground']) {
-    theme.colors['activityBar.foreground'] = theme.colors['editor.foreground']
-  }
-  if (!theme.colors['scrollbarSlider.background']) {
-    theme.colors['scrollbarSlider.background'] = 'rgba(121, 121, 121, 0.4)'
-  }
-  if (!theme.colors['scrollbarSlider.hoverBackground']) {
-    theme.colors['scrollbarSlider.hoverBackground'] = 'rgba(100, 100, 100, 0.7)'
-  }
-  if (!theme.colors['scrollbarSlider.activeBackground']) {
-    theme.colors['scrollbarSlider.activeBackground'] =
-      'rgba(191, 191, 191, 0.4)'
-  }
-
-  const finalTheme = {
-    ...theme,
-    name: Array.isArray(themeConfigName) ? themeConfigName[0] : themeConfigName,
-  } as TextMateThemeRaw
-
-  if (!theme.settings) {
-    finalTheme.settings = theme.tokenColors || []
-  }
+  const finalTheme = normalizeTheme(
+    {
+      ...theme,
+      name: Array.isArray(themeConfigName)
+        ? themeConfigName[0]
+        : themeConfigName,
+    },
+    themeOverrides
+  )
 
   cachedThemes.set(themePath, finalTheme)
 
@@ -283,13 +240,107 @@ export function getThemeTokenVariables() {
   return themeVariables
 }
 
+/** Normalize a VS Code theme to a TextMate theme. */
+export function normalizeTheme(
+  theme: Record<string, any>,
+  overrides?: Record<string, any>
+): TextMateThemeRaw {
+  // Apply theme overrides.
+  if (overrides) {
+    const mergedTheme = mergeThemeColors(theme, overrides)
+    theme.colors = mergedTheme.colors
+    theme.tokenColors = mergedTheme.tokenColors
+    theme.semanticTokenColors = mergedTheme.semanticTokenColors
+  }
+
+  // Normalize theme settings.
+  if (!theme.settings) {
+    if (theme.tokenColors) {
+      theme.settings = theme.tokenColors
+      delete theme.tokenColors
+    } else {
+      theme.settings = []
+    }
+  }
+
+  // Set default colors and fallback values for missing colors.
+  const globalSetting = theme.settings
+    ? theme.settings.find((setting: any) => !setting.name && !setting.scope)
+    : undefined
+
+  if (globalSetting?.settings) {
+    if (globalSetting.settings.foreground) {
+      theme.colors.foreground = globalSetting.settings.foreground
+    }
+
+    if (globalSetting.settings.background) {
+      theme.colors.background = globalSetting.settings.background
+    }
+  }
+  if (!theme.colors['editor.background']) {
+    theme.colors['editor.background'] = theme.colors.background || '#000000'
+  }
+  if (!theme.colors['editor.foreground']) {
+    theme.colors['editor.foreground'] = theme.colors.foreground || '#ffffff'
+  }
+  if (!theme.colors.background) {
+    theme.colors.background = theme.colors['editor.background']
+  }
+  if (!theme.colors.foreground) {
+    theme.colors.foreground = theme.colors['editor.foreground']
+  }
+
+  // Set global default colors if none were provided.
+  if (!globalSetting) {
+    theme.settings.unshift({
+      settings: {
+        foreground: theme.colors.foreground,
+        background: theme.colors.background,
+      },
+    })
+  }
+
+  // This applies defaults for theme values that renoun uses within components.
+  if (!theme.colors['panel.background']) {
+    theme.colors['panel.background'] = theme.colors['editor.background']
+  }
+  if (!theme.colors['panel.border']) {
+    theme.colors['panel.border'] = theme.colors['editor.foreground']
+  }
+  if (!theme.colors['editor.hoverHighlightBackground']) {
+    theme.colors['editor.hoverHighlightBackground'] = 'rgba(255, 255, 255, 0.1)'
+  }
+  if (!theme.colors['activityBar.background']) {
+    theme.colors['activityBar.background'] = theme.colors['editor.background']
+  }
+  if (!theme.colors['activityBar.foreground']) {
+    theme.colors['activityBar.foreground'] = theme.colors['editor.foreground']
+  }
+  if (!theme.colors['scrollbarSlider.background']) {
+    theme.colors['scrollbarSlider.background'] = 'rgba(121, 121, 121, 0.4)'
+  }
+  if (!theme.colors['scrollbarSlider.hoverBackground']) {
+    theme.colors['scrollbarSlider.hoverBackground'] = 'rgba(100, 100, 100, 0.7)'
+  }
+  if (!theme.colors['scrollbarSlider.activeBackground']) {
+    theme.colors['scrollbarSlider.activeBackground'] =
+      'rgba(191, 191, 191, 0.4)'
+  }
+
+  return theme as TextMateThemeRaw
+}
+
 /** Merge two VS Code theme JSON objects (baseTheme and overrides). */
-function mergeThemes(
+function mergeThemeColors(
   baseTheme: Record<string, any>,
   overrides: Record<string, any>
 ) {
   if (!overrides) {
-    return baseTheme
+    return {
+      colors: baseTheme.colors,
+      tokenColors: baseTheme.tokenColors,
+      semanticTokenColors: baseTheme.semanticTokenColors,
+    }
   }
 
   const mergedColors = {
