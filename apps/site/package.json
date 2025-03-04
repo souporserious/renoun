@@ -26,7 +26,6 @@
     "renoun": "workspace:*",
     "restyle": "catalog:",
     "serve": "^14.2.4",
-    "shiki": "catalog:",
     "ts-morph": "catalog:",
     "valibot": "catalog:",
     "zod": "catalog:",
