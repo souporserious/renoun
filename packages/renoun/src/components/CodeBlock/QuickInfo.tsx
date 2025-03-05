@@ -43,9 +43,11 @@ export async function QuickInfo({
     <QuickInfoPopover>
       <Container
         css={{
-          border: `1px solid ${theme.panel.border}`,
-          backgroundColor: theme.panel.background,
-          color: theme.foreground,
+          border: theme.editorHoverWidget.border
+            ? `1px solid ${theme.editorHoverWidget.border}`
+            : undefined,
+          backgroundColor: theme.editorHoverWidget.background,
+          color: theme.editorHoverWidget.foreground,
           ...getThemeTokenVariables(),
           ...css,
         }}
