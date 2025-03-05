@@ -88,9 +88,17 @@ export async function getTheme(themeName?: string): Promise<TextMateThemeRaw> {
 }
 
 /**
- * Generates CSS variables for all theme colors.
- * @internal
+ * Helper to convert a theme key (e.g. "editorHoverWidget.background")
+ * into a CSS variable name in kebab-case (e.g. "editor-hover-widget-background").
  */
+function toCssVariableName(key: string): string {
+  return key
+    .split('.')
+    .map((part) => part.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase())
+    .join('-')
+}
+
+/** Generates CSS variables for all theme colors. */
 export async function getThemeColorVariables() {
   const { theme } = loadConfig()
 
@@ -108,7 +116,7 @@ export async function getThemeColorVariables() {
 
     if (currentTheme.colors) {
       for (const [key, value] of Object.entries(currentTheme.colors)) {
-        variables[`--${key.replace(/\./g, '-')}`] = value
+        variables[`--${toCssVariableName(key)}`] = value
       }
     }
 
@@ -117,6 +125,79 @@ export async function getThemeColorVariables() {
 
   return themeVariables
 }
+
+/**
+ * Fallbacks for theme colors used throughout renoun.
+ * Each key represents a final color key, and its array is the fallback chain.
+ */
+const themeFallbacks = {
+  'activityBar.background': ['editor.background'],
+  'activityBar.foreground': ['editor.foreground'],
+  'panel.background': ['editor.background'],
+  'panel.border': ['editorSuggestWidget.border', 'menu.border'],
+  'editor.hoverHighlightBackground': [
+    {
+      dark: 'rgba(255, 255, 255, 0.1)',
+      light: 'rgba(0, 0, 0, 0.06)',
+    },
+  ],
+  'editor.rangeHighlightBackground': ['editor.hoverHighlightBackground'],
+  'editorLineNumber.foreground': ['editor.foreground'],
+  'editorLineNumber.activeForeground': ['editorLineNumber.foreground'],
+  'editorHoverWidget.background': [
+    'editorSuggestWidget.background',
+    'menu.background',
+    'editor.background',
+  ],
+  'editorHoverWidget.foreground': [
+    'editorSuggestWidget.foreground',
+    'menu.foreground',
+    'editor.foreground',
+  ],
+  'editorHoverWidget.border': ['editorSuggestWidget.border', 'menu.border'],
+  'scrollbarSlider.background': [
+    {
+      dark: 'rgba(121, 121, 121, 0.4)',
+      light: 'rgba(121, 121, 121, 0.2)',
+    },
+  ],
+  'scrollbarSlider.hoverBackground': [
+    {
+      dark: 'rgba(100, 100, 100, 0.7)',
+      light: 'rgba(100, 100, 100, 0.4)',
+    },
+  ],
+  'scrollbarSlider.activeBackground': [
+    {
+      dark: 'rgba(191, 191, 191, 0.4)',
+      light: 'rgba(191, 191, 191, 0.2)',
+    },
+  ],
+}
+
+type DotNestedObject<
+  Key extends string,
+  Value,
+> = Key extends `${infer Head}.${infer Rest}`
+  ? { [_ in Head]: DotNestedObject<Rest, Value> }
+  : { [_ in Key]: Value }
+
+type UnionToIntersection<Union> = (
+  Union extends any ? (k: Union) => void : never
+) extends (k: infer Intersection) => void
+  ? Intersection
+  : never
+
+type ThemeColorFallbacks = UnionToIntersection<
+  {
+    [Key in keyof typeof themeFallbacks]: DotNestedObject<Key, string>
+  }[keyof typeof themeFallbacks]
+>
+
+export type ThemeColors = {
+  foreground: string
+  background: string
+} & ThemeColorFallbacks
 
 let cachedThemeColors: Record<string, any> | null = null
 
@@ -129,12 +210,10 @@ let cachedThemeColors: Record<string, any> | null = null
  *
  * Missing keys in any particular theme will result in an undefined CSS variable,
  * allowing for a graceful fallback.
- *
- * @internal
  */
-export async function getThemeColors() {
+export async function getThemeColors(): Promise<ThemeColors> {
   if (cachedThemeColors !== null) {
-    return cachedThemeColors
+    return cachedThemeColors as ThemeColors
   }
 
   const config = loadConfig()
@@ -156,7 +235,6 @@ export async function getThemeColors() {
 
       for (const themeName of themeNames) {
         const currentTheme = await getTheme(themeName)
-
         for (const key in currentTheme.colors) {
           unionKeys.add(key)
         }
@@ -177,12 +255,13 @@ export async function getThemeColors() {
 
   cachedThemeColors = buildNestedObject(flatColors, useVariables)
 
-  return cachedThemeColors
+  return cachedThemeColors as ThemeColors
 }
 
 /**
  * Helper to build a nested object from dot‑notation keys.
- * If `useVariables` is true, each leaf value is transformed into a CSS variable reference.
+ * If `useVariables` is true, each leaf value is transformed into a CSS variable reference
+ * using the toCssVarName helper.
  */
 function buildNestedObject(
   flatObject: Record<string, any>,
@@ -200,7 +279,7 @@ function buildNestedObject(
     }
 
     target[parts[parts.length - 1]] = useVariables
-      ? `var(--${key.replace(/\./g, '-')})`
+      ? `var(--${toCssVariableName(key)})`
       : value
   }
 
@@ -212,10 +291,10 @@ function buildNestedObject(
  *
  * ```js
  * {
- *   '[data-theme="light"] & span': { color: 'var(--0)' },
- *   '[data-theme="dark"] & span': { color: 'var(--1)' },
+ *   '[data-theme="light"] & span': { color: 'var(--0fg)' },
+ *   '[data-theme="dark"] & span': { color: 'var(--1fg)' },
  * }
- *
+ * ```
  */
 export function getThemeTokenVariables() {
   const config = loadConfig()
@@ -263,69 +342,9 @@ export function normalizeTheme(
     }
   }
 
-  // Set default colors and fallback values for missing colors.
-  const globalSetting = theme.settings
-    ? theme.settings.find((setting: any) => !setting.name && !setting.scope)
-    : undefined
+  applyForegroundBackground(theme)
 
-  if (globalSetting?.settings) {
-    if (globalSetting.settings.foreground) {
-      theme.colors.foreground = globalSetting.settings.foreground
-    }
-
-    if (globalSetting.settings.background) {
-      theme.colors.background = globalSetting.settings.background
-    }
-  }
-  if (!theme.colors['editor.background']) {
-    theme.colors['editor.background'] = theme.colors.background || '#000000'
-  }
-  if (!theme.colors['editor.foreground']) {
-    theme.colors['editor.foreground'] = theme.colors.foreground || '#ffffff'
-  }
-  if (!theme.colors.background) {
-    theme.colors.background = theme.colors['editor.background']
-  }
-  if (!theme.colors.foreground) {
-    theme.colors.foreground = theme.colors['editor.foreground']
-  }
-
-  // Set global default colors if none were provided.
-  if (!globalSetting) {
-    theme.settings.unshift({
-      settings: {
-        foreground: theme.colors.foreground,
-        background: theme.colors.background,
-      },
-    })
-  }
-
-  // This applies defaults for theme values that renoun uses within components.
-  if (!theme.colors['panel.background']) {
-    theme.colors['panel.background'] = theme.colors['editor.background']
-  }
-  if (!theme.colors['panel.border']) {
-    theme.colors['panel.border'] = theme.colors['editor.foreground']
-  }
-  if (!theme.colors['editor.hoverHighlightBackground']) {
-    theme.colors['editor.hoverHighlightBackground'] = 'rgba(255, 255, 255, 0.1)'
-  }
-  if (!theme.colors['activityBar.background']) {
-    theme.colors['activityBar.background'] = theme.colors['editor.background']
-  }
-  if (!theme.colors['activityBar.foreground']) {
-    theme.colors['activityBar.foreground'] = theme.colors['editor.foreground']
-  }
-  if (!theme.colors['scrollbarSlider.background']) {
-    theme.colors['scrollbarSlider.background'] = 'rgba(121, 121, 121, 0.4)'
-  }
-  if (!theme.colors['scrollbarSlider.hoverBackground']) {
-    theme.colors['scrollbarSlider.hoverBackground'] = 'rgba(100, 100, 100, 0.7)'
-  }
-  if (!theme.colors['scrollbarSlider.activeBackground']) {
-    theme.colors['scrollbarSlider.activeBackground'] =
-      'rgba(191, 191, 191, 0.4)'
-  }
+  applyFallbacks(theme.colors, theme.type || 'dark')
 
   return theme as TextMateThemeRaw
 }
@@ -378,5 +397,69 @@ function mergeThemeColors(
     colors: mergedColors,
     tokenColors: mergedTokenColors,
     semanticTokenColors: mergedSemanticTokenColors,
+  }
+}
+
+/** Applies default foreground and background colors to the theme. */
+function applyForegroundBackground(theme: Record<string, any>) {
+  const globalSetting = theme.settings
+    ? theme.settings.find((setting: any) => !setting.name && !setting.scope)
+    : undefined
+
+  if (globalSetting?.settings) {
+    if (globalSetting.settings.foreground) {
+      theme.colors.foreground = globalSetting.settings.foreground
+    }
+    if (globalSetting.settings.background) {
+      theme.colors.background = globalSetting.settings.background
+    }
+  }
+  if (!theme.colors['editor.background']) {
+    theme.colors['editor.background'] = theme.colors.background || '#000000'
+  }
+  if (!theme.colors['editor.foreground']) {
+    theme.colors['editor.foreground'] = theme.colors.foreground || '#ffffff'
+  }
+  if (!theme.colors.background) {
+    theme.colors.background = theme.colors['editor.background']
+  }
+  if (!theme.colors.foreground) {
+    theme.colors.foreground = theme.colors['editor.foreground']
+  }
+
+  if (!globalSetting) {
+    theme.settings.unshift({
+      settings: {
+        foreground: theme.colors.foreground,
+        background: theme.colors.background,
+      },
+    })
+  }
+}
+
+/** Applies fallback chains for color keys as specified in `themeFallbacks`. */
+function applyFallbacks(
+  colors: Record<string, string>,
+  type: 'light' | 'dark'
+) {
+  for (const [key, chain] of Object.entries(themeFallbacks)) {
+    if (colors[key]) continue
+
+    let fallbackValue: string | undefined
+    for (const item of chain) {
+      if (typeof item === 'string') {
+        if (colors[item]) {
+          fallbackValue = colors[item]
+          break
+        }
+      } else if (typeof item === 'object') {
+        fallbackValue = item[type]
+        break
+      }
+    }
+
+    if (fallbackValue !== undefined) {
+      colors[key] = fallbackValue
+    }
   }
 }
