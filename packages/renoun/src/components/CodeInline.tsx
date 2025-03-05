@@ -39,7 +39,7 @@ export type CodeInlineProps = {
 }
 
 function Token({ token }: { token: Token }) {
-  if (token.isWhitespace) {
+  if (token.isBaseColor || token.isWhiteSpace) {
     return token.value
   }
 

@@ -56,6 +56,9 @@ export interface TextMateToken {
   start: number
   end: number
   style: Record<string, string>
+  hasTextStyles: boolean
+  isBaseColor: boolean
+  isWhiteSpace: boolean
 }
 
 class JsOnigScanner {
@@ -239,11 +242,12 @@ const fontWeights = ['', '', 'bold', '', '']
 const textDecorations = ['', '', '', '', 'underline']
 
 export class Tokenizer<Grammar extends string, Theme extends string> {
-  private registries: Map<string, Registry<Grammar, Theme>> = new Map()
-  private registryOptions: RegistryOptions<Grammar, Theme>
+  #baseColors: Map<string, string> = new Map()
+  #registries: Map<string, Registry<Grammar, Theme>> = new Map()
+  #registryOptions: RegistryOptions<Grammar, Theme>
 
   constructor(registryOptions: RegistryOptions<Grammar, Theme>) {
-    this.registryOptions = registryOptions
+    this.#registryOptions = registryOptions
   }
 
   /** Tokenize the given source for multiple themes. */
@@ -261,13 +265,15 @@ export class Tokenizer<Grammar extends string, Theme extends string> {
 
     // Manage a registry for each theme to ensure that each theme has its own state
     for (let themeIndex = 0; themeIndex < themes.length; themeIndex++) {
-      const theme = themes[themeIndex]
+      const themeName = themes[themeIndex]
 
-      let registry = this.registries.get(theme)
+      let registry = this.#registries.get(themeName)
       if (!registry) {
-        registry = new Registry(this.registryOptions)
-        registry.setTheme(await registry.fetchTheme(theme))
-        this.registries.set(theme, registry)
+        registry = new Registry(this.#registryOptions)
+        const theme = await registry.fetchTheme(themeName)
+        registry.setTheme(theme)
+        this.#baseColors.set(themeName, theme.colors!.foreground)
+        this.#registries.set(themeName, registry)
       }
 
       const loadedGrammar = await registry.loadGrammar(grammar)
@@ -349,15 +355,17 @@ export class Tokenizer<Grammar extends string, Theme extends string> {
 
         // Merge style bits from all tokens that overlap this boundary range
         const style: Record<string, string> = {}
+        let isBaseColor = true
+        let hasTextStyles = false
 
         for (const token of allTokens) {
+          const baseColor = this.#baseColors.get(themes[token.themeIndex])!
+
           if (token.start < rangeEnd && token.end > rangeStart) {
-            const colorMap = themeColorMaps[token.themeIndex]
             const { bits } = token
-
             const colorBits = (bits & 0b00000000111111111000000000000000) >>> 15
+            const colorMap = themeColorMaps[token.themeIndex]
             const color = colorMap[colorBits] || ''
-
             const fontBits = (bits & 0b00000000000000000011100000000000) >>> 11
             const fontStyle = fontStyles[fontBits]
             const fontWeight = fontWeights[fontBits]
@@ -375,6 +383,14 @@ export class Tokenizer<Grammar extends string, Theme extends string> {
               if (fontWeight) style.fontWeight = fontWeight
               if (textDecoration) style.textDecoration = textDecoration
             }
+
+            if (baseColor.toLowerCase() !== color.toLowerCase()) {
+              isBaseColor = false
+            }
+
+            if (fontStyle || fontWeight || textDecoration) {
+              hasTextStyles = true
+            }
           }
         }
 
@@ -383,6 +399,9 @@ export class Tokenizer<Grammar extends string, Theme extends string> {
           start: rangeStart,
           end: rangeEnd,
           style,
+          hasTextStyles,
+          isBaseColor,
+          isWhiteSpace: /^\s*$/.test(value),
         })
       }
 

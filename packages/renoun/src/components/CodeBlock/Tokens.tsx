@@ -65,7 +65,10 @@ async function TokensAsync({
         const lineChildren = line.map((token) => {
           const hasSymbolMeta = token.diagnostics || token.quickInfo
 
-          if (token.isWhitespace) {
+          if (
+            token.isWhiteSpace ||
+            (!hasSymbolMeta && !token.hasTextStyles && token.isBaseColor)
+          ) {
             return token.value
           }
 
@@ -75,8 +78,17 @@ async function TokensAsync({
               backgroundRepeat: 'repeat-x',
               backgroundPosition: 'bottom left',
             }
+
+            // Remove color tokens if they are base colors.
+            const filteredTokenStyles: Record<string, any> = token.isBaseColor
+              ? Object.fromEntries(
+                  Object.entries(token.style).filter(
+                    ([key]) => key !== 'color' && !key.endsWith('fg')
+                  )
+                )
+              : token.style
             const [symbolClassName, Styles] = css({
-              ...token.style,
+              ...filteredTokenStyles,
               ...(token.diagnostics && diagnosticStyles),
               ...cssProp.token,
             })
