@@ -10,8 +10,8 @@ export interface ToolbarProps {
   /** The value of the code block. */
   value?: string
 
-  /** Whether or not to allow copying the code block value. */
-  allowCopy?: boolean
+  /** Whether or not to allow copying the code block value. Accepts a boolean or a string that will be copied. */
+  allowCopy?: boolean | string
 
   /** CSS object to apply to the toolbar. */
   css?: CSSObject
@@ -53,7 +53,7 @@ async function ToolbarAsync({
 
       {allowCopy && value ? (
         <CopyButton
-          value={value}
+          value={typeof allowCopy === 'string' ? allowCopy : value}
           css={{
             padding: 0,
             marginLeft: 'auto',

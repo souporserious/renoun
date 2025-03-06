@@ -67,7 +67,7 @@ export default function Page() {
         >
           <ButtonLink href="/docs/getting-started">Start Writing</ButtonLink>
           <CodeInline
-            allowCopy
+            allowCopy="npx create-renoun@latest"
             language="bash"
             paddingX="0.8em"
             paddingY="0.5em"

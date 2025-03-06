@@ -17,8 +17,8 @@ export type CodeInlineProps = {
   /** Language of the code snippet. */
   language?: Languages
 
-  /** Show or hide a persistent button that copies the `value` to the clipboard. */
-  allowCopy?: boolean
+  /** Show or hide a persistent button that copies the `value` to the clipboard. Accepts a boolean or a string that will be copied. */
+  allowCopy?: boolean | string
 
   /** Whether or not to allow errors. Accepts a boolean or comma-separated list of allowed error codes. */
   allowErrors?: boolean | string
@@ -99,7 +99,7 @@ async function CodeInlineAsync({
         )}
         {allowCopy ? (
           <CopyButton
-            value={children}
+            value={typeof allowCopy === 'string' ? allowCopy : children}
             css={{
               position: 'sticky',
               right: 0,

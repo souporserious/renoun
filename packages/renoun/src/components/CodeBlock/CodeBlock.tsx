@@ -39,8 +39,8 @@ export type BaseCodeBlockProps = {
   /** Opacity of unfocused lines when using `focusedLines`. */
   unfocusedLinesOpacity?: number
 
-  /** Show or hide a button that copies the source code to the clipboard. */
-  allowCopy?: boolean
+  /** Show or hide a button that copies the source code to the clipboard. Accepts a boolean or a string that will be copied. */
+  allowCopy?: boolean | string
 
   /** Whether or not to allow errors. Accepts a boolean or comma-separated list of allowed error codes. */
   allowErrors?: boolean | string
