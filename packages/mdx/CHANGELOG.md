@@ -1,5 +1,11 @@
 # @renoun/mdx
 
+## 1.5.0
+
+### Minor Changes
+
+- a5c470c: Replaces `shiki` languages with a locally-defined set of languages.
+
 ## 1.4.1
 
 ### Patch Changes

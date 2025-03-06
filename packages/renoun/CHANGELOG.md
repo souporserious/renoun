@@ -1,5 +1,42 @@
 # renoun
 
+## 8.8.0
+
+### Minor Changes
+
+- 3ef7096: Removes initial symbol highlighting styles that were triggered when the pointer entered the `CodeBlock` component. These styles are too opinionated and should be left for the user to define.
+- 22eec86: Improves the fallback theme colors used throughout components to better match the theme author's intent.
+- 836a6b3: Adds a new `useThemePicker` hook for selecting a theme from the configured themes:
+
+  ```tsx
+  'use client'
+  import { useThemePicker } from 'renoun/components'
+
+  export function ThemePicker() {
+    const [theme, setTheme] = useThemePicker()
+
+    return (
+      <select value={theme} onChange={(event) => setTheme(event.target.value)}>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
+    )
+  }
+  ```
+
+  The theme can be toggled or set explicitly using the `setTheme` function. Note, that `theme` is always initially set to `undefined` since it cannot be known until the React tree is hydrated. Use the `data-theme` attribute to style the app based on the selected theme.
+
+- bed53d7: Replaces [shiki](https://github.com/shikijs/shiki) with an internal `createTokenizer` utility that uses [oniguruma-to-es](https://github.com/slevithan/oniguruma-to-es) and [vscode-textmate](https://github.com/shikijs/vscode-textmate) directly. This implementation is based on both [textmate-highlighter](https://github.com/fabiospampinato/textmate-highlighter) and `shiki` to provide a smaller, focused highlighter that allows for more granular control.
+
+### Patch Changes
+
+- da9b603: Fixes a regression from when multiple themes were introduced that had removed token rendering optimizations. Now tokens across themes that are not a symbol and match the foreground color will not be wrapped in an element.
+- bed53d7: Fixes an issue when highlighting multiple themes where tokens were only generated correctly for the first theme.
+- 970102c: Fixes `QuickInfo` popover not staying contained within the viewport for smaller screens.
+- 2100b91: Fixes `CopyButton` icon size filling the entire container.
+- Updated dependencies [a5c470c]
+  - @renoun/mdx@1.5.0
+
 ## 8.7.0
 
 ### Minor Changes
