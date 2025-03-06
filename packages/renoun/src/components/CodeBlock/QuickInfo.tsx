@@ -43,6 +43,7 @@ export async function QuickInfo({
     <QuickInfoPopover>
       <Container
         css={{
+          boxSizing: 'border-box',
           border: theme.editorHoverWidget.border
             ? `1px solid ${theme.editorHoverWidget.border}`
             : undefined,

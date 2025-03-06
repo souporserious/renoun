@@ -103,11 +103,24 @@ export function keepElementInView(
     styles.left = viewportRect.right - styles.width
   }
 
+  if (styles.left < viewportRect.left) {
+    styles.left = viewportRect.left
+  }
+
   if (styles.left + styles.width > viewportRect.right) {
     styles.width = viewportRect.right - styles.left
   }
 
-  return styles
+  popoverNode.style.top = styles.top + 'px'
+  popoverNode.style.left = styles.left + 'px'
+  popoverNode.style.width = styles.width + 'px'
+  popoverNode.style.height = styles.height + 'px'
+
+  if (popoverNode.scrollHeight > styles.height) {
+    const heightDifference = popoverNode.scrollHeight - styles.height
+    popoverNode.style.setProperty('top', styles.top - heightDifference + 'px')
+    popoverNode.style.setProperty('height', 'auto')
+  }
 }
 
 /** @internal */
