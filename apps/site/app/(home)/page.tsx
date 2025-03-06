@@ -68,12 +68,13 @@ export default function Page() {
           <ButtonLink href="/docs/getting-started">Start Writing</ButtonLink>
           <CodeInline
             allowCopy
-            value={`npx create-renoun`}
             language="bash"
             paddingX="0.8em"
             paddingY="0.5em"
             css={{ fontSize: 'var(--font-size-code-1)' }}
-          />
+          >
+            npx create-renoun
+          </CodeInline>
         </div>
       </div>
 

@@ -5,7 +5,7 @@ export function Basic() {
   return (
     <p>
       In React,{' '}
-      <CodeInline value="<span style={{ color: 'blue' }} />" language="jsx" />{' '}
+      <CodeInline language="jsx">{`<span style={{ color: 'blue' }} />`}</CodeInline>{' '}
       changes the color of the text to blue.
     </p>
   )
@@ -13,12 +13,8 @@ export function Basic() {
 
 export function AllowCopy() {
   return (
-    <CodeInline
-      allowCopy
-      value={`npm install renoun`}
-      language="sh"
-      paddingX="0.8em"
-      paddingY="0.5em"
-    />
+    <CodeInline allowCopy language="sh" paddingX="0.8em" paddingY="0.5em">
+      npx create-renoun
+    </CodeInline>
   )
 }

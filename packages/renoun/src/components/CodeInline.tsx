@@ -12,7 +12,7 @@ import { getScrollContainerStyles } from './CodeBlock/utils.js'
 
 export type CodeInlineProps = {
   /** Code snippet to be highlighted. */
-  value: string
+  children: string
 
   /** Language of the code snippet. */
   language?: Languages
@@ -39,23 +39,8 @@ export type CodeInlineProps = {
   style?: React.CSSProperties
 }
 
-function Token({ token }: { token: Token }) {
-  if (token.isBaseColor || token.isWhiteSpace) {
-    return token.value
-  }
-
-  const [classNames, Styles] = css(token.style)
-
-  return (
-    <span className={classNames}>
-      {token.value}
-      <Styles />
-    </span>
-  )
-}
-
 async function CodeInlineAsync({
-  value,
+  children,
   language,
   allowCopy,
   paddingX,
@@ -68,7 +53,7 @@ async function CodeInlineAsync({
   const { tokens } = await analyzeSourceText({
     isInline: true,
     shouldFormat: false,
-    value,
+    value: children,
     language,
     allowErrors,
   })
@@ -92,7 +77,7 @@ async function CodeInlineAsync({
     ...cssProp,
     ...getThemeTokenVariables(),
   })
-  const children = tokens.map((line, lineIndex) => (
+  const childrenToRender = tokens.map((line, lineIndex) => (
     <Fragment key={lineIndex}>
       {line.map((token, tokenIndex) => (
         <Token key={tokenIndex} token={token} />
@@ -107,10 +92,14 @@ async function CodeInlineAsync({
         className={className ? `${classNames} ${className}` : classNames}
         style={style}
       >
-        {allowCopy ? <Container>{children}</Container> : children}
+        {allowCopy ? (
+          <Container>{childrenToRender}</Container>
+        ) : (
+          childrenToRender
+        )}
         {allowCopy ? (
           <CopyButton
-            value={value}
+            value={children}
             css={{
               position: 'sticky',
               right: 0,
@@ -126,19 +115,6 @@ async function CodeInlineAsync({
   )
 }
 
-const Container = styled('span', {
-  gridArea: '1 / 1',
-  width: 'max-content',
-})
-
-const CodeFallback = styled('code', {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: '1ch',
-  whiteSpace: 'nowrap',
-  overflowX: 'scroll',
-})
-
 /** Renders an inline `code` element with optional syntax highlighting and copy button. */
 export function CodeInline({
   paddingX = '0.25em',
@@ -148,7 +124,7 @@ export function CodeInline({
   return (
     <Suspense
       fallback={
-        'value' in props && props.value ? (
+        'value' in props && props.children ? (
           <CodeFallback
             css={{
               display: props.allowCopy ? 'inline-flex' : 'inline-block',
@@ -168,7 +144,7 @@ export function CodeInline({
             className={props.className}
             style={props.style}
           >
-            {props.value}
+            {props.children}
           </CodeFallback>
         ) : null
       }
@@ -178,33 +154,60 @@ export function CodeInline({
   )
 }
 
+function Token({ token }: { token: Token }) {
+  if (token.isBaseColor || token.isWhiteSpace) {
+    return token.value
+  }
+
+  const [classNames, Styles] = css(token.style)
+
+  return (
+    <span className={classNames}>
+      {token.value}
+      <Styles />
+    </span>
+  )
+}
+
+const Container = styled('span', {
+  gridArea: '1 / 1',
+  width: 'max-content',
+})
+
+const CodeFallback = styled('code', {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '1ch',
+  whiteSpace: 'nowrap',
+  overflowX: 'scroll',
+})
+
 /** Parses the props of an MDX `code` element for passing to `CodeInline`. */
 export function parseCodeProps({
   children,
   ...props
 }: React.ComponentProps<NonNullable<MDXComponents['code']>>) {
-  let value = (children as string).trim()
   let language: Languages | undefined
-  const firstSpaceIndex = value.indexOf(' ')
+  const firstSpaceIndex = children.indexOf(' ')
 
   if (firstSpaceIndex > -1) {
-    const possibleLanguage = value.substring(0, firstSpaceIndex) as Languages
+    const possibleLanguage = children.substring(0, firstSpaceIndex) as Languages
     const isValidLanguage = Object.entries(grammars).some(
       ([, [, ...grammar]]) => grammar.includes(possibleLanguage)
     )
 
     if (isValidLanguage) {
       language = possibleLanguage
-      value = value.slice(firstSpaceIndex + 1)
+      children = children.slice(firstSpaceIndex + 1)
     }
   }
 
   return {
-    value,
+    children,
     language,
     ...props,
   } as {
-    value: string
+    children: string
     language?: Languages
   } & Omit<React.ComponentProps<NonNullable<MDXComponents['code']>>, 'children'>
 }

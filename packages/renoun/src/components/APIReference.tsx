@@ -26,7 +26,7 @@ const mdxComponents = {
     return <CodeBlock {...parsePreProps(props)} />
   },
   code: (props) => {
-    return <CodeInline value={props.children} language="typescript" />
+    return <CodeInline children={props.children} language="typescript" />
   },
   p: (props) => <p {...props} css={{ margin: 0 }} />,
 } satisfies MDXComponents
@@ -124,7 +124,7 @@ async function APIReferenceAsync({
                 {type.name}
               </h3>
 
-              <CodeInline value={type.text} language="typescript" />
+              <CodeInline children={type.text} language="typescript" />
 
               {/* {type.path && <ViewSource href={type.path} />} */}
             </div>
@@ -181,7 +181,7 @@ async function APIReferenceAsync({
             {type.name}
           </h3>
 
-          <CodeInline value={type.text} language="typescript" />
+          <CodeInline children={type.text} language="typescript" />
 
           {/* {type.path && <ViewSource href={type.path} />} */}
         </div>
@@ -214,7 +214,7 @@ function TypeChildren({
     type.kind === 'UtilityReference' ||
     type.kind === 'Reference'
   ) {
-    return <CodeInline value={type.text} language="typescript" />
+    return <CodeInline children={type.text} language="typescript" />
   }
 
   if (
@@ -300,7 +300,7 @@ function TypeChildren({
                   borderTop: '1px solid var(--color-separator-secondary)',
                 }}
               />
-              <CodeInline value={signature.text} language="typescript" />
+              <CodeInline children={signature.text} language="typescript" />
               {signature.description ? (
                 <MDXRenderer
                   value={signature.description}
@@ -314,7 +314,7 @@ function TypeChildren({
                     <TypeProperties type={signature.parameter} />
                   ) : signature.parameter.kind === 'Reference' ? (
                     <CodeInline
-                      value={signature.parameter.text}
+                      children={signature.parameter.text}
                       language="typescript"
                       css={{ display: 'inline-block', marginTop: '1.5rem' }}
                     />
@@ -360,7 +360,7 @@ function TypeChildren({
                   borderTop: '1px solid var(--color-separator-secondary)',
                 }}
               />
-              <CodeInline value={signature.text} language="typescript" />
+              <CodeInline children={signature.text} language="typescript" />
               {signature.description ? (
                 <MDXRenderer
                   value={signature.description}
@@ -385,7 +385,7 @@ function TypeChildren({
                 >
                   <h5 css={{ margin: 0, marginBottom: '1.5rem' }}>Returns</h5>
                   <CodeInline
-                    value={signature.returnType}
+                    children={signature.returnType}
                     language="typescript"
                     css={{ maxWidth: '-webkit-fill-available' }}
                   />
@@ -402,7 +402,7 @@ function TypeChildren({
     if (type.type) {
       return <TypeChildren type={type.type} css={{ marginTop: '2rem' }} />
     } else {
-      return <CodeInline value={type.text} language="typescript" />
+      return <CodeInline children={type.text} language="typescript" />
     }
   }
 
@@ -536,7 +536,7 @@ function TypeValue({
         >
           {isNameSameAsType ? null : (
             <CodeInline
-              value={type.text}
+              children={type.text}
               language="typescript"
               paddingX="0.5rem"
               paddingY="0.2rem"
@@ -555,7 +555,7 @@ function TypeValue({
             >
               ={' '}
               <CodeInline
-                value={JSON.stringify(defaultValue)}
+                children={JSON.stringify(defaultValue)}
                 language="typescript"
               />
             </span>
