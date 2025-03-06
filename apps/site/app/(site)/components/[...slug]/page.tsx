@@ -131,6 +131,14 @@ export default async function Component({
     )
   }
 
+  const baseName = componentEntry.getBaseName()
+  // If base name is kebab case, use the first export name as the title
+  const title = baseName.includes('-')
+    ? componentExports?.length
+      ? componentExports[0].getName()
+      : baseName
+    : baseName
+
   return (
     <>
       <div css={{ display: 'flex', flexDirection: 'column', gap: '4rem' }}>
@@ -138,15 +146,14 @@ export default async function Component({
           {description || Content ? (
             <div className="prose">
               <h1 css={{ fontSize: '3rem', margin: 0 }}>
-                {componentEntry.getBaseName()}{' '}
-                {isExamplesPage ? 'Examples' : ''}
+                {title} {isExamplesPage ? 'Examples' : ''}
               </h1>
               {description ? <MDXRenderer value={description} /> : null}
               {Content ? <Content /> : null}
             </div>
           ) : (
             <h1 css={{ fontSize: '3rem', margin: 0 }}>
-              {componentEntry.getBaseName()} {isExamplesPage ? 'Examples' : ''}
+              {title} {isExamplesPage ? 'Examples' : ''}
             </h1>
           )}
         </div>

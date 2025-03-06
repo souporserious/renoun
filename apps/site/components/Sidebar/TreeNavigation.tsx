@@ -30,6 +30,24 @@ async function ListNavigation({
       : null
 
   if (isFile(entry)) {
+    const baseName = entry.getBaseName()
+
+    if (baseName.includes('-') && isJavaScriptFile(entry)) {
+      const firstExport = await entry
+        .getExports()
+        .then((fileExports) => fileExports[0])
+
+      return (
+        <li>
+          <SidebarLink
+            css={{ paddingLeft: `${depth * 0.8}rem` }}
+            pathname={path}
+            label={firstExport.getName()}
+          />
+        </li>
+      )
+    }
+
     return (
       <li>
         <SidebarLink
@@ -37,8 +55,8 @@ async function ListNavigation({
           pathname={path}
           label={
             variant === 'title'
-              ? metadata?.label || metadata?.title || entry.getBaseName()
-              : entry.getBaseName()
+              ? metadata?.label || metadata?.title || baseName
+              : baseName
           }
         />
       </li>

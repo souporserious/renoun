@@ -80,22 +80,41 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html suppressHydrationWarning>
       <body>
-        <ThemeProvider />
-        {children}
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   )
 }
 ```
 
-To use a specific theme, append a `data-theme` attribute to the `html` element or another parent element:
+A `data-theme` attribute on the `html` element will be set immediately on page load before the first render based on local storage. This is why we need to suppress hydration warnings since the theme is not known until the React tree is hydrated which could have changed.
+
+To use a specific default theme, append a `data-theme` attribute to the `html` element:
 
 ```html
-<html data-theme="dark">
+<html data-theme="dark" suppressHydrationWarning>
   ...
 </html>
+```
+
+The `useThemePicker` hook can be used to build a select menu or toggle for choosing from the configured themes:
+
+```tsx
+'use client'
+import { useThemePicker } from 'renoun/components'
+
+export function ThemePicker() {
+  const [theme, setTheme] = useThemePicker()
+
+  return (
+    <select value={theme} onChange={(event) => setTheme(event.target.value)}>
+      <option value="light">Light</option>
+      <option value="dark">Dark</option>
+    </select>
+  )
+}
 ```
 
 ### Overriding Themes

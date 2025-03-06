@@ -1,2 +1,2 @@
-export { ThemeProvider } from './ThemeProvider.js'
+export { ThemeProvider } from './Theme.js'
 export { useThemePicker } from './use-theme-picker.js'
