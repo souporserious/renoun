@@ -21,6 +21,15 @@ export async function SiblingLink({
   variant?: 'name' | 'title'
 }) {
   const metadata = await resolveEntryMetadata(entry)
+  let baseName = entry.getBaseName()
+
+  if (baseName.includes('-') && isJavaScriptFile(entry)) {
+    const firstExport = await entry
+      .getExports()
+      .then((fileExports) => fileExports[0])
+
+    baseName = firstExport.getName()
+  }
 
   return (
     <StyledLink
@@ -75,7 +84,7 @@ export async function SiblingLink({
         <span>
           {variant === 'title'
             ? metadata?.label || metadata?.title || entry.getTitle()
-            : entry.getBaseName()}
+            : baseName}
         </span>
         {direction === 'next' ? (
           <svg
