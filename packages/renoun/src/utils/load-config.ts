@@ -6,7 +6,7 @@ import type { Languages, Themes } from '../textmate/index.js'
 
 type ThemeValue = Themes | (string & {})
 
-type ConfigurationOptions = {
+export interface ConfigurationOptions {
   /** Path to the VS Code compatible theme used for syntax highlighting the `CodeBlock`, `CodeInline`, and `Tokens` components. */
   theme: ThemeValue | Record<string, ThemeValue>
 
