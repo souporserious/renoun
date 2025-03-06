@@ -41,30 +41,6 @@ export function addCodeMetaProps() {
         // Add props to code element
         Object.assign(element.properties, props)
 
-        if (
-          codeNode &&
-          codeNode.type === 'element' &&
-          codeNode.tagName === 'code'
-        ) {
-          const codeString = toString(codeNode)
-          element.properties.value = codeString
-
-          // get class name from code element
-          const className = codeNode.properties.className as string
-          const metadata = getClassNameMetadata(className || '')
-
-          // Add filename and language as a props if they don't already exist
-          if (metadata) {
-            if (!element.properties.filename && metadata.filename) {
-              element.properties.filename = metadata.filename
-            }
-
-            if (!element.properties.language) {
-              element.properties.language = metadata.language
-            }
-          }
-        }
-
         return SKIP
       } else if (element.tagName === 'code') {
         const codeString = toString(element)
@@ -89,31 +65,6 @@ export function addCodeMetaProps() {
         }
       }
     })
-  }
-}
-
-const languageKey = 'language-'
-const languageLength = languageKey.length
-
-/** Parses file metadata from a remark code block class name. */
-function getClassNameMetadata(className: string | string[]) {
-  const classNames = Array.isArray(className) ? className : className.split(' ')
-  const filenameOrLanguage = classNames
-    .find((name) => name.startsWith(languageKey))
-    ?.slice(languageLength)
-
-  if (!filenameOrLanguage) {
-    return null
-  }
-
-  const extension = filenameOrLanguage.split('.').pop() ?? filenameOrLanguage
-
-  return {
-    filename: filenameOrLanguage?.includes('.') ? filenameOrLanguage : null,
-    language: extension,
-  } as {
-    filename: string | null
-    language: string
   }
 }
 
