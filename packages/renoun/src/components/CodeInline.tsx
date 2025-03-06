@@ -3,6 +3,7 @@ import { css, styled, type CSSObject } from 'restyle'
 
 import type { MDXComponents } from '../mdx/index.js'
 import { analyzeSourceText } from '../project/client.js'
+import { grammars } from '../textmate/index.js'
 import type { Languages } from '../utils/get-language.js'
 import { getThemeColors, getThemeTokenVariables } from '../utils/get-theme.js'
 import type { Token } from '../utils/get-tokens.js'
@@ -182,8 +183,25 @@ export function parseCodeProps({
   children,
   ...props
 }: React.ComponentProps<NonNullable<MDXComponents['code']>>) {
+  let value = (children as string).trim()
+  let language: Languages | undefined
+  const firstSpaceIndex = value.indexOf(' ')
+
+  if (firstSpaceIndex > -1) {
+    const possibleLanguage = value.substring(0, firstSpaceIndex) as Languages
+    const isValidLanguage = Object.entries(grammars).some(
+      ([, [, ...grammar]]) => grammar.includes(possibleLanguage)
+    )
+
+    if (isValidLanguage) {
+      language = possibleLanguage
+      value = value.slice(firstSpaceIndex + 1)
+    }
+  }
+
   return {
-    value: (children as string).trim(),
+    value,
+    language,
     ...props,
   } as {
     value: string

@@ -252,9 +252,6 @@ importers:
       estree-util-value-to-estree:
         specifier: ^3.3.2
         version: 3.3.2
-      hast-util-to-string:
-        specifier: 3.0.1
-        version: 3.0.1
       mdast-util-mdx:
         specifier: ^3.0.0
         version: 3.0.0
