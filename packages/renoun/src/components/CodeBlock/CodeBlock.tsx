@@ -487,15 +487,18 @@ export function parsePreProps({
     className: `language-${string}`
     children: string
   }>
-  const languageClassName = code.props.className
+  const filename = code.props.className
     ?.split(' ')
     .find((className) => className.startsWith(languageKey))
+  const language = filename
+    ? filename.includes('.')
+      ? filename.split('.').pop()
+      : filename.slice(languageLength)
+    : 'plaintext'
 
   return {
     value: code.props.children.trim(),
-    language: languageClassName
-      ? languageClassName.slice(languageLength)
-      : 'plaintext',
+    language,
     ...props,
   } satisfies {
     value: string
