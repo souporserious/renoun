@@ -26,5 +26,9 @@ export async function RenderedHTML({
   )
   const markup = renderToStaticMarkup(content)
 
-  return <CodeBlock language="html" value={markup} {...props} />
+  return (
+    <CodeBlock language="html" {...props}>
+      {markup}
+    </CodeBlock>
+  )
 }

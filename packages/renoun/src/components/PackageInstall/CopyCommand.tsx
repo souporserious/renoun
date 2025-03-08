@@ -1,12 +1,14 @@
 'use client'
 import React from 'react'
 
-import { CopyButton } from '../CodeBlock/CopyButton.js'
+import { CopyButtonClient } from '../CodeBlock/CopyButtonClient.js'
 
 /** @internal */
-export function CopyCommand(props: React.ComponentProps<typeof CopyButton>) {
+export function CopyCommand(
+  props: React.ComponentProps<typeof CopyButtonClient>
+) {
   return (
-    <CopyButton
+    <CopyButtonClient
       {...props}
       value={(event) => {
         const packageInstallElement = event.currentTarget.closest(

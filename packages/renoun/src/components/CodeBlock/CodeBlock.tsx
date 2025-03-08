@@ -83,15 +83,12 @@ export type BaseCodeBlockProps = {
     token?: React.CSSProperties
     popover?: React.CSSProperties
   }
-
-  /** Overrides default rendering to allow full control over styles using `CodeBlock` components like `Tokens`, `LineNumbers`, and `Toolbar`. */
-  children?: React.ReactNode
 }
 
 export type CodeBlockProps =
   | ({
-      /** Source code to highlight. */
-      value: string | Promise<string>
+      /** Pass a code string to highlight or override default rendering using `Tokens`, `LineNumbers`, and `Toolbar` components. */
+      children: React.ReactNode | Promise<string>
     } & BaseCodeBlockProps)
   | ({
       /** Path to the source file on disk to highlight. */
@@ -99,6 +96,9 @@ export type CodeBlockProps =
 
       /** The working directory for the `source`. */
       workingDirectory?: string
+
+      /** Override default rendering using `Tokens`, `LineNumbers`, and `Toolbar` components. */
+      children?: React.ReactNode | Promise<string>
     } & BaseCodeBlockProps)
 
 async function CodeBlockAsync({
@@ -121,27 +121,15 @@ async function CodeBlockAsync({
     props.css?.container,
     props.style?.container
   )
-  const hasValue = 'value' in props
+  const isString = typeof props.children === 'string'
+  const isPromise =
+    props.children &&
+    typeof props.children === 'object' &&
+    typeof (props.children as any).then === 'function'
   const hasSource = 'source' in props
   const options: any = {}
 
-  if (hasValue) {
-    if (props.value === undefined || props.value === '') {
-      throw new Error(
-        '[renoun] The `CodeBlock` component `value` prop cannot be `undefined` or an empty string.'
-      )
-    }
-
-    // Wait for the value to resolve if it is a Promise
-    if (
-      typeof props.value === 'object' &&
-      typeof props.value.then === 'function'
-    ) {
-      options.value = await props.value
-    } else {
-      options.value = props.value
-    }
-  } else if (hasSource) {
+  if (hasSource) {
     options.source = props.source
 
     if (props.workingDirectory) {
@@ -152,13 +140,15 @@ async function CodeBlockAsync({
         options.workingDirectory = props.workingDirectory
       }
     }
-  } else {
-    throw new Error(
-      '[renoun] The `CodeBlock` component requires a `value` or `source` prop.'
-    )
+  }
+  // Wait for the children string to resolve if it is a Promise
+  else if (isPromise) {
+    options.value = await props.children
+  } else if (isString) {
+    options.value = props.children
   }
 
-  const { tokens, value, label } = await analyzeSourceText({
+  const metadata = await analyzeSourceText({
     filename,
     language,
     allowErrors,
@@ -166,22 +156,27 @@ async function CodeBlockAsync({
     shouldFormat,
     ...options,
   })
+  const resolvers = Promise.withResolvers<void>()
   const contextValue = {
-    filenameLabel: filename || hasSource ? label : undefined,
+    filename: metadata.filename,
+    filenameLabel: filename || hasSource ? metadata.filenameLabel : undefined,
+    language: metadata.language,
+    value: metadata.value,
     padding: containerPadding.all,
-    value,
     highlightedLines,
-    tokens,
+    resolvers,
   } satisfies ContextValue
 
-  if ('children' in props) {
-    return (
-      <Context value={contextValue}>
-        <CopyButtonContextProvider value={value}>
-          {props.children}
-        </CopyButtonContextProvider>
-      </Context>
-    )
+  if (props.children) {
+    if (!isString && !isPromise) {
+      return (
+        <Context value={contextValue}>
+          <CopyButtonContextProvider value={metadata.value}>
+            {props.children}
+          </CopyButtonContextProvider>
+        </Context>
+      )
+    }
   }
 
   const theme = await getThemeColors()
@@ -198,10 +193,10 @@ async function CodeBlockAsync({
   const containerProps = shouldRenderToolbar
     ? {
         css: {
-          backgroundColor: theme.background,
-          color: theme.foreground,
           borderRadius: 5,
           boxShadow: `0 0 0 1px ${theme.panel.border}`,
+          backgroundColor: theme.background,
+          color: theme.foreground,
           ...props.css?.container,
           padding: 0,
         } satisfies CSSObject,
@@ -302,7 +297,9 @@ async function CodeBlockAsync({
                     token: props.style?.token,
                     popover: props.style?.popover,
                   }}
-                />
+                >
+                  {metadata.value}
+                </Tokens>
               </Code>
             </>
           ) : (
@@ -326,7 +323,9 @@ async function CodeBlockAsync({
                   token: props.style?.token,
                   popover: props.style?.popover,
                 }}
-              />
+              >
+                {metadata.value}
+              </Tokens>
             </Code>
           )}
           {allowCopy !== false && !shouldRenderToolbar ? (
@@ -344,9 +343,9 @@ async function CodeBlockAsync({
                 borderRadius: 5,
               }}
               value={
-                value.includes('export { }')
-                  ? value.split('\n').slice(0, -2).join('\n')
-                  : value
+                metadata.value.includes('export { }')
+                  ? metadata.value.split('\n').slice(0, -2).join('\n')
+                  : metadata.value
               }
             />
           ) : null}
@@ -356,9 +355,9 @@ async function CodeBlockAsync({
   )
 }
 
-/** Renders a `pre` element with syntax highlighting, type information, and type checking. */
+/** Renders a  with syntax highlighting, type information, and type checking. */
 export function CodeBlock(props: CodeBlockProps) {
-  if ('children' in props) {
+  if (typeof props.children !== 'string') {
     return <CodeBlockAsync {...props} />
   }
 
@@ -378,96 +377,90 @@ export function CodeBlock(props: CodeBlockProps) {
   return (
     <Suspense
       fallback={
-        'value' in props && props.value ? (
-          <Container
-            css={
-              shouldRenderToolbar
-                ? {
-                    borderRadius: 5,
-                    boxShadow: '0 0 0 1px #666',
-                    ...props.css?.container,
-                    padding: 0,
-                  }
-                : {}
-            }
+        <Container
+          css={
+            shouldRenderToolbar
+              ? {
+                  borderRadius: 5,
+                  boxShadow: '0 0 0 1px #666',
+                  ...props.css?.container,
+                  padding: 0,
+                }
+              : {}
+          }
+          className={
+            shouldRenderToolbar ? props.className?.container : undefined
+          }
+          style={shouldRenderToolbar ? props.style?.container : undefined}
+        >
+          {shouldRenderToolbar && (
+            <FallbackToolbar
+              css={{ padding: containerPadding.all, ...props.css?.toolbar }}
+              className={props.className?.toolbar}
+              style={props.style?.toolbar}
+            />
+          )}
+          <FallbackPre
+            css={{
+              WebkitTextSizeAdjust: 'none',
+              textSizeAdjust: 'none',
+              position: 'relative',
+              whiteSpace: 'pre',
+              wordWrap: 'break-word',
+              display: 'grid',
+              gridAutoRows: 'max-content',
+              gridTemplateColumns: props.showLineNumbers
+                ? 'auto 1fr'
+                : undefined,
+              margin: 0,
+              backgroundColor: shouldRenderToolbar ? 'inherit' : 'transparent',
+              color: shouldRenderToolbar ? undefined : 'inherit',
+              borderRadius: shouldRenderToolbar ? 'inherit' : 5,
+              boxShadow: shouldRenderToolbar ? undefined : '0 0 0 1px #666',
+              ...getScrollContainerStyles({
+                paddingBottom: containerPadding.bottom,
+              }),
+              ...(shouldRenderToolbar ? {} : props.css?.container),
+              padding: 0,
+            }}
             className={
-              shouldRenderToolbar ? props.className?.container : undefined
+              shouldRenderToolbar ? undefined : props.className?.container
             }
-            style={shouldRenderToolbar ? props.style?.container : undefined}
+            style={shouldRenderToolbar ? undefined : props.style?.container}
           >
-            {shouldRenderToolbar && (
-              <FallbackToolbar
-                css={{ padding: containerPadding.all, ...props.css?.toolbar }}
-                className={props.className?.toolbar}
-                style={props.style?.toolbar}
-              />
-            )}
-            <FallbackPre
-              css={{
-                WebkitTextSizeAdjust: 'none',
-                textSizeAdjust: 'none',
-                position: 'relative',
-                whiteSpace: 'pre',
-                wordWrap: 'break-word',
-                display: 'grid',
-                gridAutoRows: 'max-content',
-                gridTemplateColumns: props.showLineNumbers
-                  ? 'auto 1fr'
-                  : undefined,
-                margin: 0,
-                backgroundColor: shouldRenderToolbar
-                  ? 'inherit'
-                  : 'transparent',
-                color: shouldRenderToolbar ? undefined : 'inherit',
-                borderRadius: shouldRenderToolbar ? 'inherit' : 5,
-                boxShadow: shouldRenderToolbar ? undefined : '0 0 0 1px #666',
-                ...getScrollContainerStyles({
-                  paddingBottom: containerPadding.bottom,
-                }),
-                ...(shouldRenderToolbar ? {} : props.css?.container),
-                padding: 0,
-              }}
-              className={
-                shouldRenderToolbar ? undefined : props.className?.container
-              }
-              style={shouldRenderToolbar ? undefined : props.style?.container}
-            >
-              {props.showLineNumbers && (
-                <FallbackLineNumbers
-                  css={{
-                    padding: containerPadding.all,
-                    gridColumn: 1,
-                    gridRow: '1 / -1',
-                    width: '4ch',
-                    backgroundPosition: 'inherit',
-                    backgroundImage: 'inherit',
-                    ...props.css?.lineNumbers,
-                  }}
-                  className={props.className?.lineNumbers}
-                  style={props.style?.lineNumbers}
-                >
-                  {typeof props.value === 'string'
-                    ? Array.from(
-                        { length: props.value.split('\n').length },
-                        (_, index) => index + 1
-                      ).join('\n')
-                    : null}
-                </FallbackLineNumbers>
-              )}
-
-              <FallbackCode
+            {props.showLineNumbers && (
+              <FallbackLineNumbers
                 css={{
-                  gridColumn: props.showLineNumbers ? 2 : 1,
-                  padding: props.showLineNumbers
-                    ? `${containerPadding.vertical} ${containerPadding.horizontal} 0 0`
-                    : `${containerPadding.vertical} ${containerPadding.horizontal} 0`,
+                  padding: containerPadding.all,
+                  gridColumn: 1,
+                  gridRow: '1 / -1',
+                  width: '4ch',
+                  backgroundPosition: 'inherit',
+                  backgroundImage: 'inherit',
+                  ...props.css?.lineNumbers,
                 }}
+                className={props.className?.lineNumbers}
+                style={props.style?.lineNumbers}
               >
-                {props.value}
-              </FallbackCode>
-            </FallbackPre>
-          </Container>
-        ) : null
+                {Array.from(
+                  { length: props.children.split('\n').length },
+                  (_, index) => index + 1
+                ).join('\n')}
+              </FallbackLineNumbers>
+            )}
+
+            <FallbackCode
+              css={{
+                gridColumn: props.showLineNumbers ? 2 : 1,
+                padding: props.showLineNumbers
+                  ? `${containerPadding.vertical} ${containerPadding.horizontal} 0 0`
+                  : `${containerPadding.vertical} ${containerPadding.horizontal} 0`,
+              }}
+            >
+              {props.children}
+            </FallbackCode>
+          </FallbackPre>
+        </Container>
       }
     >
       <CodeBlockAsync {...props} />
@@ -497,7 +490,7 @@ export function parsePreProps({
     : 'plaintext'
 
   return {
-    value: code.props.children.trim(),
+    children: code.props.children.trim(),
     language,
     ...props,
   } satisfies {

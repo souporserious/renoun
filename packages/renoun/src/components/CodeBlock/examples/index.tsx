@@ -12,53 +12,42 @@ export function Basic() {
 
 export function TypeChecking() {
   return (
-    <CodeBlock
-      value={`const a = 1; a + b;`}
-      language="ts"
-      allowCopy={false}
-      allowErrors
-      showErrors
-    />
+    <CodeBlock language="ts" allowCopy={false} allowErrors showErrors>
+      const a = 1; a + b;
+    </CodeBlock>
   )
 }
 
 export function Ordered() {
   return (
     <div style={{ display: 'grid', gap: '2rem' }}>
-      <CodeBlock filename="01.example.ts" value="const a = 1;" />
-      <CodeBlock filename="02.example.ts" value="const a = 1; const b = 2;" />
+      <CodeBlock filename="01.example.ts">const a = 1;</CodeBlock>
+      <CodeBlock filename="02.example.ts">const a = 1; const b = 2;</CodeBlock>
     </div>
   )
 }
 
 export function LineNumbering() {
   return (
-    <CodeBlock
-      filename="line-numbers.ts"
-      value={`const a = 1;\nconst b = 2;\n\nconst add = a + b\nconst subtract = a - b`}
-      showLineNumbers
-      highlightedLines="4"
-    />
+    <CodeBlock filename="line-numbers.ts" showLineNumbers highlightedLines="4">
+      {`const a = 1;\nconst b = 2;\n\nconst add = a + b\nconst subtract = a - b`}
+    </CodeBlock>
   )
 }
 
 export function LineHighlighting() {
   return (
-    <CodeBlock
-      filename="line-highlight.ts"
-      value={`const a = 1;\nconst b = 2;\n\nconst add = a + b\nconst subtract = a - b`}
-      highlightedLines="2, 4"
-    />
+    <CodeBlock filename="line-highlight.ts" highlightedLines="2, 4">
+      {`const a = 1;\nconst b = 2;\n\nconst add = a + b\nconst subtract = a - b`}
+    </CodeBlock>
   )
 }
 
 export function LineFocusing() {
   return (
-    <CodeBlock
-      filename="line-focus.ts"
-      value={`const a = 1;\nconst b = 2;\n\nconst add = a + b\nconst subtract = a - b`}
-      focusedLines="2, 4"
-    />
+    <CodeBlock filename="line-focus.ts" focusedLines="2, 4">
+      {`const a = 1;\nconst b = 2;\n\nconst add = a + b\nconst subtract = a - b`}
+    </CodeBlock>
   )
 }
 
@@ -66,11 +55,16 @@ export function LineHighlightAndFocus() {
   return (
     <CodeBlock
       filename="line-highlight-and-focus.ts"
-      value={`const a = 1;\nconst b = 2;\n\nconst add = a + b\nconst subtract = a - b`}
       highlightedLines="2, 4"
       focusedLines="2, 4"
-    />
+    >
+      {`const a = 1;\nconst b = 2;\n\nconst add = a + b\nconst subtract = a - b`}
+    </CodeBlock>
   )
+}
+
+export function TokensOnly() {
+  return <Tokens language="ts">const a = '1'; const b = '2'; a + b;</Tokens>
 }
 
 export function CustomStyles() {

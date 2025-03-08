@@ -2,7 +2,7 @@ import React, { Fragment, Suspense } from 'react'
 import { css, styled, type CSSObject } from 'restyle'
 
 import type { MDXComponents } from '../mdx/index.js'
-import { analyzeSourceText } from '../project/client.js'
+import { getTokens } from '../project/client.js'
 import { grammars } from '../textmate/index.js'
 import type { Languages } from '../utils/get-language.js'
 import { getThemeColors, getThemeTokenVariables } from '../utils/get-theme.js'
@@ -50,9 +50,8 @@ async function CodeInlineAsync({
   style,
   allowErrors,
 }: CodeInlineProps) {
-  const { tokens } = await analyzeSourceText({
+  const tokens = await getTokens({
     isInline: true,
-    shouldFormat: false,
     value: children,
     language,
     allowErrors,

@@ -315,7 +315,7 @@ async function Preview({
             <Value />
           </div>
         ) : null}
-        <CodeBlock allowErrors value={fileExport.getText()!} language="tsx">
+        <CodeBlock allowErrors language="tsx">
           <pre
             css={{
               position: 'relative',
@@ -332,7 +332,7 @@ async function Preview({
             }}
             className={GeistMono.className}
           >
-            <Tokens />
+            <Tokens>{fileExport.getText()}</Tokens>
           </pre>
         </CodeBlock>
       </div>

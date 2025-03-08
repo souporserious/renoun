@@ -6,7 +6,6 @@ import type { Highlighter } from './create-highlighter.js'
 import { getDiagnosticMessageText } from './get-diagnostic-message.js'
 import { getLanguage, type Languages } from './get-language.js'
 import { getRootDirectory } from './get-root-directory.js'
-import { getTrimmedSourceFileText } from './get-trimmed-source-file-text.js'
 import { isJsxOnly } from './is-jsx-only.js'
 import { loadConfig } from './load-config.js'
 import { generatedFilenames } from './parse-source-text-metadata.js'
@@ -67,27 +66,31 @@ export type Token = {
 
 export type Tokens = Token[]
 
-export type GetTokens = (
-  value: string,
-  language?: Languages,
-  filename?: string,
-  allowErrors?: string | boolean,
-  showErrors?: boolean,
+export type TokenizedLines = Tokens[]
+
+export interface GetTokensOptions {
+  project: Project
+  value: string
+  language?: Languages
+  filename?: string
+  allowErrors?: boolean | string
+  showErrors?: boolean
+  isInline?: boolean
+  highlighter: Highlighter | null
   sourcePath?: string | false
-) => Promise<Tokens[]>
+}
 
 /** Converts a string of code to an array of highlighted tokens. */
-export async function getTokens(
-  project: Project,
-  value: string,
-  language: Languages = 'plaintext',
-  filename?: string,
-  allowErrors: string | boolean = false,
-  showErrors: boolean = false,
-  isInline: boolean = false,
-  highlighter: Highlighter | null = null,
-  sourcePath?: string | false
-) {
+export async function getTokens({
+  project,
+  value,
+  language = 'plaintext',
+  filename,
+  allowErrors,
+  showErrors,
+  isInline,
+  highlighter = null,
+}: GetTokensOptions): Promise<TokenizedLines> {
   if (language === 'plaintext' || language === 'diff') {
     return [
       [
@@ -114,9 +117,7 @@ export async function getTokens(
   const componentName = isInline ? 'CodeInline' : 'CodeBlock'
   const isJavaScriptLikeLanguage = ['js', 'jsx', 'ts', 'tsx'].includes(language)
   const jsxOnly = isJavaScriptLikeLanguage ? isJsxOnly(value) : false
-  const sourceFile = filename ? project.getSourceFile(filename) : undefined
   const finalLanguage = getLanguage(language)
-  const sourceText = sourceFile ? getTrimmedSourceFileText(sourceFile) : value
   const config = loadConfig()
   const themeNames =
     typeof config.theme === 'string'
@@ -127,18 +128,8 @@ export async function getTokens(
           }
           return theme[0]
         })
-  const tokens: Awaited<ReturnType<Highlighter>> = await highlighter(
-    sourceText,
-    finalLanguage,
-    themeNames
-  ).catch((error) => {
-    throw new Error(
-      `[renoun] Error highlighting the following source text${
-        sourcePath ? ` at "${sourcePath}"` : ''
-      } for language "${finalLanguage}":\n\n${sourceText}\n\nReceived the following error:\n\n${error.message}`,
-      { cause: error }
-    )
-  })
+  const tokens = await highlighter(value, finalLanguage, themeNames)
+  const sourceFile = filename ? project.getSourceFile(filename) : undefined
   const sourceFileDiagnostics = getDiagnostics(
     sourceFile,
     allowErrors,
@@ -284,8 +275,7 @@ export async function getTokens(
       filename,
       sourceFile,
       sourceFileDiagnostics,
-      parsedTokens,
-      sourcePath
+      parsedTokens
     )
   }
 
@@ -464,8 +454,7 @@ function throwDiagnosticErrors(
   filename: string | undefined,
   sourceFile: SourceFile,
   diagnostics: Diagnostic[],
-  tokens: Token[][],
-  sourcePath?: string | false
+  tokens: Token[][]
 ) {
   const workingDirectory = join(process.cwd(), 'renoun', posix.sep)
   const formattedPath = generatedFilenames.has(filename!)
@@ -495,8 +484,6 @@ function throwDiagnosticErrors(
   const errorMessage = `${formattedErrors}\n\n${tokensToPlainText(tokens)}\n\n${actionsToTake}`
 
   throw new Error(
-    `[renoun] ${componentName} type errors found ${
-      sourcePath ? `at "${sourcePath}" ` : ''
-    }${formattedPath}\n\n${errorMessage}\n\n`
+    `[renoun] ${componentName} type errors found ${formattedPath}\n\n${errorMessage}\n\n`
   )
 }
