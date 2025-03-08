@@ -156,7 +156,11 @@ async function CodeBlockAsync({
     shouldFormat,
     ...options,
   })
-  const resolvers = Promise.withResolvers<void>()
+  const resolvers: any = {}
+  resolvers.promise = new Promise<void>((resolve, reject) => {
+    resolvers.resolve = resolve
+    resolvers.reject = reject
+  })
   const contextValue = {
     filename: metadata.filename,
     filenameLabel: filename || hasSource ? metadata.filenameLabel : undefined,
