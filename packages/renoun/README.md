@@ -248,7 +248,7 @@ Use the [`CodeBlock`](https://www.renoun.dev/components/code-block) component to
 import { CodeBlock } from 'renoun/components'
 
 export default function Page() {
-  return <CodeBlock language="jsx" value={`<div>Hello, world!</div>`} />
+  return <CodeBlock language="jsx">{`<div>Hello, world!</div>`}</CodeBlock>
 }
 ```
 
@@ -259,7 +259,7 @@ import { CodeBlock, LineNumbers, Tokens, Toolbar } from 'renoun/components'
 
 export default function Page() {
   return (
-    <CodeBlock language="jsx" value={`<div>Hello, world!</div>`}>
+    <CodeBlock language="jsx">
       <div
         style={{
           fontSize: '1rem',
@@ -287,7 +287,7 @@ export default function Page() {
         >
           <LineNumbers css={{ padding: '0 0.5lh' }} />
           <code style={{ paddingRight: '0.5lh' }}>
-            <Tokens />
+            <Tokens>{`<div>Hello, world!</div>`}</Tokens>
           </code>
         </pre>
       </div>
@@ -321,11 +321,8 @@ export default async function Page({
 }: {
   params: Promise<{ slug: string }>
 }) {
-  const component = await components.getFile((await params).slug, 'tsx')
-
-  if (!component) {
-    return <div>Component not found</div>
-  }
+  const { slug } = await params
+  const component = await components.getFile(slug, 'tsx')
 
   return <APIReference source={component} />
 }
@@ -344,12 +341,8 @@ export default async function Page({
 }: {
   params: Promise<{ slug: string }>
 }) {
-  const component = await components.getFile((await params).slug, 'tsx')
-
-  if (!component) {
-    return <div>Component not found</div>
-  }
-
+  const { slug } = await params
+  const component = await components.getFile(slug, 'tsx')
   const componentExports = component.getExports()
 
   return componentExports.map((source) => (
