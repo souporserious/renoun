@@ -3,11 +3,11 @@ import { css, styled, type CSSObject } from 'restyle'
 
 import type { MDXComponents } from '../mdx/index.js'
 import { getTokens } from '../project/client.js'
+import type { Languages } from '../textmate/index.js'
 import { grammars } from '../textmate/index.js'
-import type { Languages } from '../utils/get-language.js'
 import { getThemeColors, getThemeTokenVariables } from '../utils/get-theme.js'
-import type { Token } from '../utils/get-tokens.js'
 import { CopyButton } from './CodeBlock/CopyButton.js'
+import { Tokens } from './CodeBlock/Tokens.js'
 import { getScrollContainerStyles } from './CodeBlock/utils.js'
 
 export type CodeInlineProps = {
@@ -20,8 +20,11 @@ export type CodeInlineProps = {
   /** Show or hide a persistent button that copies the `children` string or provided text to the clipboard. */
   allowCopy?: boolean | string
 
-  /** Whether or not to allow errors. Accepts a boolean or comma-separated list of allowed error codes. */
+  /** Whether or not to allow errors when a `language` is specified. Accepts a boolean or comma-separated list of allowed error codes. */
   allowErrors?: boolean | string
+
+  /** Show or hide error diagnostics when a `language` is specified. */
+  showErrors?: boolean
 
   /** Horizontal padding to apply to the wrapping element. */
   paddingX?: string
@@ -86,13 +89,8 @@ async function CodeInlineAsync({
   className,
   style,
   allowErrors,
+  showErrors,
 }: CodeInlineProps) {
-  const tokens = await getTokens({
-    isInline: true,
-    value: children,
-    language,
-    allowErrors,
-  })
   const theme = await getThemeColors()
   const [classNames, Styles] = css({
     display: allowCopy ? 'inline-grid' : 'inline-block',
@@ -113,14 +111,17 @@ async function CodeInlineAsync({
     ...cssProp,
     ...getThemeTokenVariables(),
   })
-  const childrenToRender = tokens.map((line, lineIndex) => (
-    <Fragment key={lineIndex}>
-      {line.map((token, tokenIndex) => (
-        <Token key={tokenIndex} token={token} />
-      ))}
-      {lineIndex === tokens.length - 1 ? null : '\n'}
-    </Fragment>
-  ))
+  const childrenToRender = language ? (
+    <Tokens
+      language={language}
+      allowErrors={allowErrors}
+      showErrors={showErrors}
+    >
+      {children}
+    </Tokens>
+  ) : (
+    children
+  )
 
   return (
     <>
@@ -148,21 +149,6 @@ async function CodeInlineAsync({
       </code>
       <Styles />
     </>
-  )
-}
-
-function Token({ token }: { token: Token }) {
-  if (token.isBaseColor || token.isWhiteSpace) {
-    return token.value
-  }
-
-  const [classNames, Styles] = css(token.style)
-
-  return (
-    <span className={classNames}>
-      {token.value}
-      <Styles />
-    </span>
   )
 }
 

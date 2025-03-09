@@ -75,7 +75,6 @@ export interface GetTokensOptions {
   filename?: string
   allowErrors?: boolean | string
   showErrors?: boolean
-  isInline?: boolean
   highlighter: Highlighter | null
   sourcePath?: string | false
 }
@@ -88,7 +87,6 @@ export async function getTokens({
   filename,
   allowErrors,
   showErrors,
-  isInline,
   highlighter = null,
 }: GetTokensOptions): Promise<TokenizedLines> {
   if (language === 'plaintext' || language === 'diff') {
@@ -114,7 +112,6 @@ export async function getTokens({
     )
   }
 
-  const componentName = isInline ? 'CodeInline' : 'CodeBlock'
   const isJavaScriptLikeLanguage = ['js', 'jsx', 'ts', 'tsx'].includes(language)
   const jsxOnly = isJavaScriptLikeLanguage ? isJsxOnly(value) : false
   const finalLanguage = getLanguage(language)
@@ -271,7 +268,6 @@ export async function getTokens({
 
   if (allowErrors === false && sourceFile && sourceFileDiagnostics.length > 0) {
     throwDiagnosticErrors(
-      componentName,
       filename,
       sourceFile,
       sourceFileDiagnostics,
@@ -450,7 +446,6 @@ function tokensToPlainText(tokens: Token[][]) {
 
 /** Throws diagnostic errors, formatting them for display. */
 function throwDiagnosticErrors(
-  componentName: string,
   filename: string | undefined,
   sourceFile: SourceFile,
   diagnostics: Diagnostic[],
@@ -475,15 +470,15 @@ function throwDiagnosticErrors(
   })
   const formattedErrors = errorMessages.join('\n')
   const actionsToTake = `You can fix this error by taking one of the following actions:
-  - Use the diagnostic ${errorMessages.length > 1 ? 'messages' : 'message'} above to identify and fix any issues in the ${componentName} component.
+  - Use the diagnostic ${errorMessages.length > 1 ? 'messages' : 'message'} above to identify and fix any issues.
   - If type declarations are missing, ensure that the necessary types are installed and available in the targeted workspace.
   - Make sure "filename" is unique and does not conflict with other filenames in the same module. Prefix the filename with a number for progressive examples e.g. filename="01.${filename}".
-  - If this error is expected for educational purposes or temporary migrations, pass the "allowErrors" prop to the ${componentName} component.
+  - If this error is expected for educational purposes or temporary migrations, pass the "allowErrors" prop to the component.
   - If you are unable to resolve this error, please file an issue at: https://github.com/souporserious/renoun/issues
   `
   const errorMessage = `${formattedErrors}\n\n${tokensToPlainText(tokens)}\n\n${actionsToTake}`
 
   throw new Error(
-    `[renoun] ${componentName} type errors found ${formattedPath}\n\n${errorMessage}\n\n`
+    `[renoun] Type errors found when rendering Tokens component for ${formattedPath}\n\n${errorMessage}\n\n`
   )
 }

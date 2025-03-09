@@ -14,7 +14,6 @@ type BaseParseMetadataOptions = {
   language?: Languages
   allowErrors?: boolean | string
   shouldFormat?: boolean
-  isInline?: boolean
 }
 
 export type ParseMetadataOptions = BaseParseMetadataOptions &
@@ -45,10 +44,8 @@ export async function parseSourceTextMetadata({
   language,
   allowErrors = false,
   shouldFormat = true,
-  isInline = false,
   ...props
 }: ParseMetadataOptions): Promise<ParseMetadataResult> {
-  const componentName = isInline ? 'CodeInline' : 'CodeBlock'
   let finalValue: string = ''
   let finalLanguage = language
   let isGeneratedFilename = false
@@ -75,7 +72,7 @@ export async function parseSourceTextMetadata({
 
     if (isRelative && !workingDirectory) {
       throw new Error(
-        `[renoun] The "workingDirectory" prop is required for "${componentName}" with the relative source "${props.source}".\n\nPass a valid [workingDirectory]. If this is being renderend directly in an MDX file, make sure the "renoun/remark" plugin is configured correctly.`
+        `[renoun] The "workingDirectory" prop is required for CodeBlock with the relative source "${props.source}".\n\nPass a valid [workingDirectory]. If this is being renderend directly in an MDX file, make sure the "renoun/remark" plugin is configured correctly.`
       )
     }
 
@@ -115,7 +112,7 @@ export async function parseSourceTextMetadata({
       finalValue = await formatSourceText(filename, finalValue, finalLanguage)
     } catch (error) {
       throw new Error(
-        `[renoun] Error formatting "${componentName}" source text${filename ? ` at filename "${filename}"` : ''} ${error}`
+        `[renoun] Error formatting CodeBlock source text${filename ? ` at filename "${filename}"` : ''} ${error}`
       )
     }
 
@@ -125,7 +122,7 @@ export async function parseSourceTextMetadata({
     }
 
     // Trim semicolon from formatting.
-    if ((jsxOnly || isInline) && finalValue.startsWith(';')) {
+    if (jsxOnly && finalValue.startsWith(';')) {
       finalValue = finalValue.slice(1)
     }
   }
@@ -144,16 +141,11 @@ export async function parseSourceTextMetadata({
   if (isJavaScriptLikeLanguage && !filename.includes('.')) {
     if (!finalLanguage) {
       throw new Error(
-        `[renoun] The "language" prop was not provided to the "${componentName}" component and could not be inferred from the filename. Pass a valid "filename" with extension or a "language" prop`
+        `[renoun] The "language" prop was not provided to the CodeBlock component and could not be inferred from the filename. Pass a valid "filename" with extension or a "language" prop`
       )
     }
 
     filename = `${filename}.${finalLanguage}`
-  }
-
-  // Trim extra whitespace from inline code blocks since it's difficult to read.
-  if (isInline) {
-    finalValue = finalValue.replace(/\s+/g, ' ')
   }
 
   // Create a ts-morph source file to type-check JavaScript and TypeScript code blocks.
@@ -165,20 +157,18 @@ export async function parseSourceTextMetadata({
 
       finalValue = sourceFile.getFullText().trim()
 
-      if (!isInline) {
-        // If no imports or exports add an empty export declaration to coerce TypeScript to treat the file as a module
-        const hasImports = sourceFile.getImportDeclarations().length > 0
-        const hasExports = sourceFile.getExportDeclarations().length > 0
+      // If no imports or exports add an empty export declaration to coerce TypeScript to treat the file as a module
+      const hasImports = sourceFile.getImportDeclarations().length > 0
+      const hasExports = sourceFile.getExportDeclarations().length > 0
 
-        if (!hasImports && !hasExports) {
-          sourceFile.addExportDeclaration({})
-        }
+      if (!hasImports && !hasExports) {
+        sourceFile.addExportDeclaration({})
       }
     } catch (error) {
       if (error instanceof Error) {
         const workingDirectory = process.cwd()
         throw new Error(
-          `[renoun] Error trying to create "${componentName}" source file at working directory "${workingDirectory}"`,
+          `[renoun] Error trying to create CodeBlock source file at working directory "${workingDirectory}"`,
           { cause: error }
         )
       }

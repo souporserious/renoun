@@ -15,7 +15,6 @@ export async function analyzeSourceText({
   filename,
   language,
   allowErrors,
-  isInline,
   ...options
 }: AnalyzeSourceTextOptions): Promise<ParseMetadataResult> {
   await waitForRefreshingProjects()
@@ -25,7 +24,6 @@ export async function analyzeSourceText({
     filename,
     language,
     allowErrors,
-    isInline,
     ...options,
   })
 }
