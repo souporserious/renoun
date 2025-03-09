@@ -1,5 +1,12 @@
 # @renoun/mdx
 
+## 1.6.0
+
+### Minor Changes
+
+- 3dac737: Removes parsing of `filename`, `language`, and `value` props for pre elements since these can be parsed directly in the `parsePreProps` utility.
+- e67e284: Moves inline code `language` parsing to `parseCodeProps` utility.
+
 ## 1.5.0
 
 ### Minor Changes
