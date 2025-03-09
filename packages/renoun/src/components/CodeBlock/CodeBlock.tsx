@@ -340,7 +340,7 @@ async function CodeBlockAsync({
                 gridRow: '1 / -1',
                 position: 'sticky',
                 top: containerPadding.top,
-                right: containerPadding.right,
+                right: '1ch',
                 boxShadow: `inset 0 0 0 1px ${theme.panel.border}`,
                 backgroundColor: theme.activityBar.background,
                 color: theme.activityBar.foreground,
