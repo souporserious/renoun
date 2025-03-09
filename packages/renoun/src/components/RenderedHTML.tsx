@@ -14,7 +14,7 @@ export async function RenderedHTML({
 
   /** Whether or not to wrap children in `html`, `head`, and `body` tags. */
   includeHtml?: boolean
-} & Omit<CodeBlockProps, 'language' | 'value'>) {
+} & Omit<CodeBlockProps, 'language' | 'children'>) {
   const { renderToStaticMarkup } = await import('react-dom/server')
   const content = includeHtml ? (
     <html>
@@ -24,11 +24,10 @@ export async function RenderedHTML({
   ) : (
     children
   )
-  const markup = renderToStaticMarkup(content)
 
   return (
     <CodeBlock language="html" {...props}>
-      {markup}
+      {renderToStaticMarkup(content)}
     </CodeBlock>
   )
 }
