@@ -64,7 +64,11 @@ export function LineHighlightAndFocus() {
 }
 
 export function TokensOnly() {
-  return <Tokens language="ts">const a = '1'; const b = '2'; a + b;</Tokens>
+  return (
+    <pre>
+      <Tokens language="ts">{`const a = 1\nconst b = 2\na + b`}</Tokens>
+    </pre>
+  )
 }
 
 export function CustomStyles() {
