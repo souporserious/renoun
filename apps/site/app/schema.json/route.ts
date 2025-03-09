@@ -75,7 +75,9 @@ const themeSchema = z.union([
     ),
 ])
 
-const languagesSchema = z.enum(Object.keys(grammars) as [string, ...string[]])
+const languagesSchema = z.enum(
+  Object.values(grammars).map(([, id]) => id) as [string, ...string[]]
+)
 
 const gitSchema = z.object({
   source: z
@@ -111,18 +113,6 @@ const renounConfigSchema = z.object({
   theme: themeSchema.describe('Theme configuration object').optional(),
   languages: z
     .array(languagesSchema)
-    .default([
-      'css',
-      'js',
-      'jsx',
-      'ts',
-      'tsx',
-      'md',
-      'mdx',
-      'sh',
-      'json',
-      'html',
-    ])
     .describe('List of language grammars to load.')
     .optional(),
   git: gitSchema.describe('Git configuration object').optional(),
