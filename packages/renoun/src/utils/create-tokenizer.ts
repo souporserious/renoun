@@ -371,25 +371,25 @@ export class Tokenizer<Grammar extends string, Theme extends string> {
             const fontWeight = fontWeights[fontBits]
             const textDecoration = textDecorations[fontBits]
 
-            if (useCssVariables) {
-              const themeKey = '--' + token.themeIndex
-              if (color) style[themeKey + 'fg'] = color
-              if (fontStyle) style[themeKey + 'fs'] = fontStyle
-              if (fontWeight) style[themeKey + 'fw'] = fontWeight
-              if (textDecoration) style[themeKey + 'td'] = textDecoration
-            } else {
-              if (color) style.color = color
-              if (fontStyle) style.fontStyle = fontStyle
-              if (fontWeight) style.fontWeight = fontWeight
-              if (textDecoration) style.textDecoration = textDecoration
-            }
-
             if (baseColor.toLowerCase() !== color.toLowerCase()) {
               isBaseColor = false
             }
 
             if (fontStyle || fontWeight || textDecoration) {
               hasTextStyles = true
+            }
+
+            if (useCssVariables) {
+              const themeKey = '--' + token.themeIndex
+              if (color && !isBaseColor) style[themeKey + 'fg'] = color
+              if (fontStyle) style[themeKey + 'fs'] = fontStyle
+              if (fontWeight) style[themeKey + 'fw'] = fontWeight
+              if (textDecoration) style[themeKey + 'td'] = textDecoration
+            } else {
+              if (color && !isBaseColor) style.color = color
+              if (fontStyle) style.fontStyle = fontStyle
+              if (fontWeight) style.fontWeight = fontWeight
+              if (textDecoration) style.textDecoration = textDecoration
             }
           }
         }

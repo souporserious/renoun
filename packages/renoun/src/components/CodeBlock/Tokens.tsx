@@ -114,17 +114,8 @@ async function TokensAsync({
               backgroundRepeat: 'repeat-x',
               backgroundPosition: 'bottom left',
             }
-
-            // Remove color tokens if they are base colors.
-            const filteredTokenStyles: Record<string, any> = token.isBaseColor
-              ? Object.fromEntries(
-                  Object.entries(token.style).filter(
-                    ([key]) => key !== 'color' && !key.endsWith('fg')
-                  )
-                )
-              : token.style
             const [symbolClassName, Styles] = css({
-              ...filteredTokenStyles,
+              ...token.style,
               ...(token.diagnostics && diagnosticStyles),
               ...cssProp.token,
             })
