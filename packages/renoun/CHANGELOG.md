@@ -1,5 +1,79 @@
 # renoun
 
+## 8.9.0
+
+### Minor Changes
+
+- 49f6179: Adds `copyButton` property to `CodeBlock` `css`, `className`, and `style` props for overriding `CopyButton` styles.
+- 90417e5: Improves composition for `CodeBlock` by allowing `Tokens` to accept string children to be tokenized and highlighted:
+
+  ```tsx
+  import { Tokens } from 'renoun/components'
+
+  export function App() {
+    return <Tokens>const foo = 'bar';</Tokens>
+  }
+  ```
+
+  This removes the need to pass a `value` prop to `CodeBlock`.
+
+  ### Breaking Changes
+
+  The `CodeBlock` `value` prop should now be passed as a child to the `Tokens` component:
+
+  ```diff
+  -<CodeBlock language="ts" value="const foo = 'bar';" />
+  +<CodeBlock language="ts">const foo = 'bar';</CodeBlock>
+  ```
+
+- 72567ea: Renames the `MDXRenderer` `value` prop to `children` to be consistent with other components.
+
+  ### Breaking Changes
+
+  The `MDXRenderer` `value` prop has been renamed to `children`:
+
+  ```diff
+  -<MDXRenderer value="# Hello World" />
+  +<MDXRenderer># Hello World</MDXRenderer>
+  ```
+
+- 24a31df: Allows passing a string to `allowCopy` for both `CodeBlock` and `CodeInline` components:
+
+  ```tsx
+  <CodeInline allowCopy="npx create-renoun@latest" language="bash">
+    npx create-renoun
+  </CodeInline>
+  ```
+
+- 89ce87f: Optimizes calculating whether or not to apply the base color for a token by moving the calculation to the `Tokenizer` class.
+- e67e284: Moves inline code `language` parsing to `parseCodeProps` utility.
+- ff7f63d: Renames the `CodeInline` `value` prop to `children` to better integrate with Markdown and MDX renderers.
+
+  ### Breaking Changes
+
+  The `CodeInline` `value` prop has been renamed to `children`:
+
+  ```diff
+  -<CodeInline language="js" value="const foo = 'bar';" />
+  +<CodeInline language="js">const foo = 'bar';</CodeInline>
+  ```
+
+### Patch Changes
+
+- 7d9b83a: Fixes parsing language from Markdown and MDX when using filenames:
+
+  ````mdx
+  ```use-hover.ts
+  export function useHover() {
+    // ...
+  }
+  ```
+  ````
+
+- Updated dependencies [3dac737]
+- Updated dependencies [e67e284]
+  - @renoun/mdx@1.6.0
+
 ## 8.8.0
 
 ### Minor Changes
