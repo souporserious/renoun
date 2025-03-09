@@ -157,8 +157,8 @@ async function PackageInstallAsync({
           suppressHydrationWarning
         >
           <Code css={css?.code} className={className?.code}>
-            <CodeBlock value={installCommand} language="sh">
-              <Tokens />
+            <CodeBlock language="sh">
+              <Tokens>{installCommand}</Tokens>
             </CodeBlock>
           </Code>
         </TabPanel>

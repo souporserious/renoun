@@ -1,7 +1,7 @@
 import React, { Fragment } from 'react'
 import { styled, type CSSObject } from 'restyle'
 
-import { analyzeSourceText } from '../../project/client.js'
+import { getTokens } from '../../project/client.js'
 import {
   getThemeColors,
   getThemeTokenVariables,
@@ -31,10 +31,9 @@ export async function QuickInfo({
   let displayTextTokens: Token[][] = []
 
   if (quickInfo?.displayText) {
-    const { tokens } = await analyzeSourceText({
+    const tokens = await getTokens({
       value: quickInfo.displayText,
       language: 'typescript',
-      shouldFormat: false,
     })
     displayTextTokens = tokens
   }

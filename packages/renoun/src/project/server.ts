@@ -13,6 +13,10 @@ import {
 } from '../utils/get-file-exports.js'
 import { getFileExportText as baseGetFileExportText } from '../utils/get-file-export-text.js'
 import { getRootDirectory } from '../utils/get-root-directory.js'
+import {
+  getTokens as baseGetTokens,
+  type GetTokensOptions,
+} from '../utils/get-tokens.js'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.js'
 import type { SymbolFilter } from '../utils/resolve-type.js'
 import { resolveTypeAtLocation as baseResolveTypeAtLocation } from '../utils/resolve-type-at-location.js'
@@ -21,11 +25,11 @@ import { WebSocketServer } from './rpc/server.js'
 import { getProject } from './get-project.js'
 import type { ProjectOptions } from './types.js'
 
-let currentHighlighter: Highlighter | null = null
+let currentHighlighter: { current: Highlighter | null } = { current: null }
 
-if (currentHighlighter === null) {
+if (currentHighlighter.current === null) {
   createHighlighter().then((highlighter) => {
-    currentHighlighter = highlighter
+    currentHighlighter.current = highlighter
   })
 }
 
@@ -66,15 +70,32 @@ export async function createServer(options?: { port?: number }) {
     }) {
       const project = getProject(projectOptions)
 
-      if (currentHighlighter === null) {
+      return baseAnalyzeSourceText({
+        ...options,
+        project,
+      })
+    }
+  )
+
+  server.registerMethod(
+    'getTokens',
+    async function getTokens({
+      projectOptions,
+      ...options
+    }: GetTokensOptions & {
+      projectOptions?: ProjectOptions
+    }) {
+      const project = getProject(projectOptions)
+
+      if (currentHighlighter.current === null) {
         throw new Error(
           '[renoun] Highlighter is not initialized in web socket "analyzeSourceText"'
         )
       }
 
-      return baseAnalyzeSourceText({
+      return baseGetTokens({
         ...options,
-        highlighter: currentHighlighter,
+        highlighter: currentHighlighter.current,
         project,
       })
     }

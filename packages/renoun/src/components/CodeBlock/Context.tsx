@@ -1,15 +1,17 @@
 import type { CSSProperties } from 'react'
 
+import type { Languages } from '../../utils/get-language.js'
 import { createContext } from '../../utils/context.js'
-import type { getTokens } from '../../utils/get-tokens.js'
 
 /** @internal */
 export type ContextValue = {
-  value: string
-  tokens: Awaited<ReturnType<typeof getTokens>>
+  filename: string
   filenameLabel?: string
+  language: Languages
+  value: string
   highlightedLines?: string
   padding?: CSSProperties['padding']
+  resolvers: PromiseWithResolvers<void>
 } | null
 
 /**

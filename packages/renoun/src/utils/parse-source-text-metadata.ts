@@ -1,7 +1,7 @@
 import crypto from 'node:crypto'
 import { join, posix, isAbsolute } from 'node:path'
 import { readFile } from 'node:fs/promises'
-import type { Project, SourceFile } from 'ts-morph'
+import type { Project } from 'ts-morph'
 
 import { formatSourceText } from './format-source-text.js'
 import { getLanguage, type Languages } from './get-language.js'
@@ -103,7 +103,6 @@ export async function parseSourceTextMetadata({
   )
   const jsxOnly = isJavaScriptLikeLanguage ? isJsxOnly(finalValue) : false
   let filename = 'source' in props ? props.source : filenameProp
-  let sourceFile: SourceFile | undefined
 
   if (!filename) {
     filename = `${id}.${finalLanguage}`
@@ -160,9 +159,11 @@ export async function parseSourceTextMetadata({
   // Create a ts-morph source file to type-check JavaScript and TypeScript code blocks.
   if (isJavaScriptLikeLanguage) {
     try {
-      sourceFile = project.createSourceFile(filename, finalValue, {
+      const sourceFile = project.createSourceFile(filename, finalValue, {
         overwrite: true,
       })
+
+      finalValue = sourceFile.getFullText().trim()
 
       if (!isInline) {
         // If no imports or exports add an empty export declaration to coerce TypeScript to treat the file as a module
@@ -191,7 +192,7 @@ export async function parseSourceTextMetadata({
   return {
     filename,
     filenameLabel,
-    value: sourceFile ? sourceFile.getFullText() : finalValue,
+    value: finalValue,
     language: finalLanguage,
   }
 }

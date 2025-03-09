@@ -2,17 +2,27 @@ import React, { Fragment } from 'react'
 import type { CSSObject } from 'restyle'
 import { css } from 'restyle/css'
 
-import { getThemeColors } from '../../utils/get-theme.js'
+import { getTokens } from '../../project/client.js'
+import type { Languages } from '../../textmate/index.js'
 import { getContext } from '../../utils/context.js'
-import type { GetTokens } from '../../utils/get-tokens.js'
-import { Context } from './Context.js'
+import { getThemeColors } from '../../utils/get-theme.js'
 import { QuickInfo } from './QuickInfo.js'
 import { QuickInfoProvider } from './QuickInfoProvider.js'
+import { Context } from './Context.js'
 import { Symbol } from './Symbol.js'
 
 export interface TokensProps {
-  /** Syntax highlighted tokens from `getTokens` to render. */
-  tokens?: Awaited<ReturnType<GetTokens>>
+  /** Code string to highlight and render as tokens. */
+  children?: string | Promise<string>
+
+  /** Whether to allow errors to be displayed. */
+  allowErrors?: boolean | string
+
+  /** Whether to show errors. */
+  showErrors?: boolean
+
+  /** Language to use for syntax highlighting. */
+  language?: Languages
 
   /** CSS style object to apply to the tokens and popover elements. */
   css?: {
@@ -41,7 +51,10 @@ export interface TokensProps {
 }
 
 async function TokensAsync({
-  tokens: tokensProp,
+  children,
+  language,
+  allowErrors,
+  showErrors,
   renderLine,
   css: cssProp = {},
   className = {},
@@ -49,14 +62,37 @@ async function TokensAsync({
 }: TokensProps) {
   const context = getContext(Context)
   const theme = await getThemeColors()
-  const tokens = tokensProp || context?.tokens
+  let value
 
-  if (!tokens) {
+  if (children) {
+    if (typeof children === 'string') {
+      value = children
+    } else {
+      value = await children
+    }
+
+    if (context) {
+      context.value = value
+    }
+  } else {
+    value = context?.value
+  }
+
+  context?.resolvers.resolve()
+
+  if (value === undefined) {
     throw new Error(
-      '[renoun] The `Tokens` component must be used within a `CodeBlock` component or provided a `tokens` prop.'
+      '[renoun] No code value provided to Tokens component. Pass a string, a promise that resolves to a string, or wrap within a `CodeBlock` that defines a `source` prop.'
     )
   }
 
+  const tokens = await getTokens({
+    filename: context?.filename,
+    language: language || context?.language,
+    value,
+    allowErrors,
+    showErrors,
+  })
   const lastLineIndex = tokens.length - 1
 
   return (

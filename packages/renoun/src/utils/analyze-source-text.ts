@@ -1,21 +1,13 @@
 import { waitForRefreshingProjects } from '../project/refresh.js'
-import { getTokens } from './get-tokens.js'
-import type { createHighlighter } from './create-highlighter.js'
-import type { ParseMetadataOptions } from './parse-source-text-metadata.js'
+import type {
+  ParseMetadataOptions,
+  ParseMetadataResult,
+} from './parse-source-text-metadata.js'
 import { parseSourceTextMetadata } from './parse-source-text-metadata.js'
 import type { Project } from 'ts-morph'
 
 export type AnalyzeSourceTextOptions = ParseMetadataOptions & {
   project: Project
-  highlighter?: Awaited<ReturnType<typeof createHighlighter>>
-  sourcePath?: string
-  showErrors?: boolean
-}
-
-export type AnalyzeSourceTextResult = {
-  tokens: Awaited<ReturnType<typeof getTokens>>
-  value: string
-  label: string
 }
 
 export async function analyzeSourceText({
@@ -23,15 +15,12 @@ export async function analyzeSourceText({
   filename,
   language,
   allowErrors,
-  showErrors,
-  sourcePath,
   isInline,
-  highlighter,
   ...options
-}: AnalyzeSourceTextOptions): Promise<AnalyzeSourceTextResult> {
+}: AnalyzeSourceTextOptions): Promise<ParseMetadataResult> {
   await waitForRefreshingProjects()
 
-  const metadata = await parseSourceTextMetadata({
+  return parseSourceTextMetadata({
     project,
     filename,
     language,
@@ -39,22 +28,4 @@ export async function analyzeSourceText({
     isInline,
     ...options,
   })
-  const tokens = await getTokens(
-    project,
-    metadata.value,
-    metadata.language,
-    metadata.filename,
-    allowErrors,
-    showErrors,
-    isInline,
-    highlighter,
-    // Simplify the path for more legibile error messages.
-    sourcePath ? sourcePath.split(process.cwd()).at(1) : undefined
-  )
-
-  return {
-    tokens,
-    value: metadata.value,
-    label: metadata.filenameLabel,
-  }
 }
