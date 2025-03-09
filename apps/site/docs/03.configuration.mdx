@@ -20,7 +20,7 @@ This file should be placed in the root of your workspace. Here is an example con
   "theme": "theme.json",
 
   // Specify the languages to load for code highlighting
-  "languages": ["sh", "ts", "tsx"],
+  "languages": ["mdx", "typescript", "tsx"],
 
   // Specify the git information for edit links
   "git": {
@@ -144,26 +144,30 @@ This accepts a subset of a VS Code theme to override, specifically the `colors`,
 
 The `languages` property is used to define the languages that are supported by the `CodeBlock` and `CodeInline` components. This is used to determine which language to load when highlighting code.
 
-The following list is the default languages loaded by renoun:
+The following languages are loaded by default:
 
 ```json
 {
   "languages": [
     "css",
-    "js",
+    "javascript",
     "jsx",
-    "ts",
+    "typescript",
     "tsx",
-    "md",
+    "markdown",
     "mdx",
-    "sh",
+    "shellscript",
     "json",
     "html"
   ]
 }
 ```
 
-Overriding this property will replace the default languages with the provided list.
+<Note>
+
+Configuring the `languages` property will replace the default languages. If you want to add additional languages, you should include the default languages in your configuration explicitly.
+
+</Note>
 
 ## Git Information
 
