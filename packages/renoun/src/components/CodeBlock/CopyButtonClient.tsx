@@ -43,7 +43,9 @@ export function CopyButtonClient({
     border: 0,
     backgroundColor: 'transparent',
     cursor: 'pointer',
-    '& svg': {
+    svg: {
+      width: '0.65lh',
+      height: '0.65lh',
       color: 'inherit',
     },
     ...cssProp,
@@ -74,13 +76,7 @@ export function CopyButtonClient({
       className={className ? `${className} ${classNames}` : classNames}
       {...props}
     >
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        width="0.75lh"
-        height="0.75lh"
-      >
+      <svg viewBox="0 0 24 24" fill="none">
         {state === 'idle' || state === 'not-allowed' ? (
           <path
             d="M8 9.56402V19.436C8 20.2998 8.70023 21 9.56402 21L19.436 21C20.2998 21 21 20.2998 21 19.436V9.56402C21 8.70023 20.2998 8 19.436 8H9.56402C8.70023 8 8 8.70023 8 9.56402Z"

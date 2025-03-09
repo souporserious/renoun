@@ -57,9 +57,6 @@ async function ToolbarAsync({
           css={{
             padding: 0,
             marginLeft: 'auto',
-            border: theme.editorHoverWidget.border
-              ? `1px solid ${theme.editorHoverWidget.border}`
-              : undefined,
             color: theme.activityBar.foreground,
           }}
         />

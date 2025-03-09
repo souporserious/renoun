@@ -341,7 +341,7 @@ async function CodeBlockAsync({
                 position: 'sticky',
                 top: containerPadding.top,
                 right: containerPadding.right,
-                boxShadow: `0 0 0 1px ${theme.panel.border}`,
+                boxShadow: `inset 0 0 0 1px ${theme.panel.border}`,
                 backgroundColor: theme.activityBar.background,
                 color: theme.activityBar.foreground,
                 borderRadius: 5,
