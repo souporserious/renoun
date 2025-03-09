@@ -64,6 +64,7 @@ export type BaseCodeBlockProps = {
     lineNumbers?: CSSObject
     token?: CSSObject
     popover?: CSSObject
+    copyButton?: CSSObject
   }
 
   /** Class names to apply to code block elements. */
@@ -73,6 +74,7 @@ export type BaseCodeBlockProps = {
     lineNumbers?: string
     token?: string
     popover?: string
+    copyButton?: string
   }
 
   /** Styles to apply to code block elements. */
@@ -82,6 +84,7 @@ export type BaseCodeBlockProps = {
     lineNumbers?: React.CSSProperties
     token?: React.CSSProperties
     popover?: React.CSSProperties
+    copyButton?: React.CSSProperties
   }
 }
 
@@ -345,7 +348,10 @@ async function CodeBlockAsync({
                 backgroundColor: theme.activityBar.background,
                 color: theme.activityBar.foreground,
                 borderRadius: 5,
+                ...props.css?.copyButton,
               }}
+              className={props.className?.copyButton}
+              style={props.style?.copyButton}
               value={
                 metadata.value.includes('export { }')
                   ? metadata.value.split('\n').slice(0, -2).join('\n')
