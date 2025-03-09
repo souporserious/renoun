@@ -3,13 +3,13 @@ import { remarkPlugins, rehypePlugins } from 'renoun/mdx'
 
 import { MDXComponents } from '@/components/MDXComponents'
 
-export function MDXRenderer({ value }: { value: string }) {
+export function MDXRenderer({ children }: { children: string }) {
   return (
     <BaseMDXRenderer
-      components={MDXComponents as any}
+      components={MDXComponents}
       remarkPlugins={remarkPlugins}
       rehypePlugins={rehypePlugins}
-      value={value}
+      children={children}
     />
   )
 }

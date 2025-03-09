@@ -6,7 +6,7 @@ import { getMDXRuntimeValue } from '../utils/get-mdx-runtime-value.js'
 
 /** Compiles and renders a string of MDX content. */
 export async function MDXRenderer({
-  value,
+  children,
   components,
   dependencies,
   remarkPlugins,
@@ -14,7 +14,7 @@ export async function MDXRenderer({
   baseUrl,
 }: {
   /** The MDX content to render. */
-  value: string
+  children: string
 
   /** Additional components to use or a function that creates them. */
   components?: MDXComponents
@@ -32,7 +32,7 @@ export async function MDXRenderer({
   baseUrl?: string
 }) {
   const { default: Content } = await getMDXRuntimeValue({
-    value,
+    value: children,
     dependencies,
     remarkPlugins,
     rehypePlugins,

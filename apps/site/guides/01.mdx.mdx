@@ -23,7 +23,7 @@ This is an MDX file.
 `
 
 export default function Page() {
-  return <MDXRenderer value={content} />
+  return <MDXRenderer>{content}</MDXRenderer>
 }
 ```
 
@@ -153,11 +153,9 @@ This is an MDX file.
 
 export default function Page() {
   return (
-    <MDXRenderer
-      remarkPlugins={remarkPlugins}
-      rehypePlugins={rehypePlugins}
-      value={content}
-    />
+    <MDXRenderer remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins}>
+      {content}
+    </MDXRenderer>
   )
 }
 ```

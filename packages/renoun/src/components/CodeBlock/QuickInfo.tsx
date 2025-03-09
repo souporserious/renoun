@@ -95,7 +95,7 @@ export async function QuickInfo({
                     </Paragraph>
                   ),
                 }}
-                value={quickInfo.documentationText}
+                children={quickInfo.documentationText}
               />
             </>
           ) : null}

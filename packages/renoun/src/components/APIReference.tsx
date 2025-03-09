@@ -131,7 +131,7 @@ async function APIReferenceAsync({
 
             {type.description ? (
               <MDXRenderer
-                value={type.description}
+                children={type.description}
                 components={mdxComponents}
               />
             ) : null}
@@ -189,7 +189,7 @@ async function APIReferenceAsync({
         {type.description &&
         type.kind !== 'Function' &&
         type.kind !== 'Component' ? (
-          <MDXRenderer value={type.description} components={mdxComponents} />
+          <MDXRenderer children={type.description} components={mdxComponents} />
         ) : null}
       </div>
 
@@ -303,7 +303,7 @@ function TypeChildren({
               <CodeInline children={signature.text} language="typescript" />
               {signature.description ? (
                 <MDXRenderer
-                  value={signature.description}
+                  children={signature.description}
                   components={mdxComponents}
                 />
               ) : null}
@@ -363,7 +363,7 @@ function TypeChildren({
               <CodeInline children={signature.text} language="typescript" />
               {signature.description ? (
                 <MDXRenderer
-                  value={signature.description}
+                  children={signature.description}
                   components={mdxComponents}
                 />
               ) : null}
@@ -564,7 +564,7 @@ function TypeValue({
       </div>
 
       {type.description && (
-        <MDXRenderer value={type.description} components={mdxComponents} />
+        <MDXRenderer children={type.description} components={mdxComponents} />
       )}
 
       {type.kind === 'Object' && type.properties

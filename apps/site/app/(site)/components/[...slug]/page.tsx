@@ -148,7 +148,7 @@ export default async function Component({
               <h1 css={{ fontSize: '3rem', margin: 0 }}>
                 {title} {isExamplesPage ? 'Examples' : ''}
               </h1>
-              {description ? <MDXRenderer value={description} /> : null}
+              {description ? <MDXRenderer>{description}</MDXRenderer> : null}
               {Content ? <Content /> : null}
             </div>
           ) : (
