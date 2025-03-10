@@ -104,6 +104,119 @@ export type CodeBlockProps =
       children?: React.ReactNode | Promise<string>
     } & BaseCodeBlockProps)
 
+/** Renders a  with syntax highlighting, type information, and type checking. */
+export function CodeBlock(props: CodeBlockProps) {
+  if (typeof props.children !== 'string') {
+    return <CodeBlockAsync {...props} />
+  }
+
+  const containerPadding = computeDirectionalStyles(
+    'padding',
+    '0.5lh',
+    props.css?.container,
+    props.style?.container
+  )
+  const shouldRenderToolbar = Boolean(
+    props.showToolbar === undefined
+      ? props.filename || ('source' in props && props.source) || props.allowCopy
+      : props.showToolbar
+  )
+  const Container = shouldRenderToolbar ? StyledContainer : React.Fragment
+
+  return (
+    <Suspense
+      fallback={
+        <Container
+          css={
+            shouldRenderToolbar
+              ? {
+                  borderRadius: 5,
+                  boxShadow: '0 0 0 1px #666',
+                  ...props.css?.container,
+                  padding: 0,
+                }
+              : {}
+          }
+          className={
+            shouldRenderToolbar ? props.className?.container : undefined
+          }
+          style={shouldRenderToolbar ? props.style?.container : undefined}
+        >
+          {shouldRenderToolbar && (
+            <FallbackToolbar
+              css={{ padding: containerPadding.all, ...props.css?.toolbar }}
+              className={props.className?.toolbar}
+              style={props.style?.toolbar}
+            />
+          )}
+          <FallbackPre
+            css={{
+              WebkitTextSizeAdjust: 'none',
+              textSizeAdjust: 'none',
+              position: 'relative',
+              whiteSpace: 'pre',
+              wordWrap: 'break-word',
+              display: 'grid',
+              gridAutoRows: 'max-content',
+              gridTemplateColumns: props.showLineNumbers
+                ? 'auto 1fr'
+                : undefined,
+              margin: 0,
+              backgroundColor: shouldRenderToolbar ? 'inherit' : 'transparent',
+              color: shouldRenderToolbar ? undefined : 'inherit',
+              borderRadius: shouldRenderToolbar ? 'inherit' : 5,
+              boxShadow: shouldRenderToolbar ? undefined : '0 0 0 1px #666',
+              ...getScrollContainerStyles({
+                paddingBottom: containerPadding.bottom,
+              }),
+              ...(shouldRenderToolbar ? {} : props.css?.container),
+              padding: 0,
+            }}
+            className={
+              shouldRenderToolbar ? undefined : props.className?.container
+            }
+            style={shouldRenderToolbar ? undefined : props.style?.container}
+          >
+            {props.showLineNumbers && (
+              <FallbackLineNumbers
+                css={{
+                  padding: containerPadding.all,
+                  gridColumn: 1,
+                  gridRow: '1 / -1',
+                  width: '4ch',
+                  backgroundPosition: 'inherit',
+                  backgroundImage: 'inherit',
+                  ...props.css?.lineNumbers,
+                }}
+                className={props.className?.lineNumbers}
+                style={props.style?.lineNumbers}
+              >
+                {Array.from(
+                  { length: props.children.split('\n').length },
+                  (_, index) => index + 1
+                ).join('\n')}
+              </FallbackLineNumbers>
+            )}
+
+            <FallbackCode
+              css={{
+                gridColumn: props.showLineNumbers ? 2 : 1,
+                padding: props.showLineNumbers
+                  ? `${containerPadding.vertical} ${containerPadding.horizontal} 0 0`
+                  : `${containerPadding.vertical} ${containerPadding.horizontal} 0`,
+              }}
+            >
+              {props.children}
+            </FallbackCode>
+          </FallbackPre>
+        </Container>
+      }
+    >
+      <CodeBlockAsync {...props} />
+    </Suspense>
+  )
+}
+
 async function CodeBlockAsync({
   filename,
   language,
@@ -365,119 +478,6 @@ async function CodeBlockAsync({
   )
 }
 
-/** Renders a  with syntax highlighting, type information, and type checking. */
-export function CodeBlock(props: CodeBlockProps) {
-  if (typeof props.children !== 'string') {
-    return <CodeBlockAsync {...props} />
-  }
-
-  const containerPadding = computeDirectionalStyles(
-    'padding',
-    '0.5lh',
-    props.css?.container,
-    props.style?.container
-  )
-  const shouldRenderToolbar = Boolean(
-    props.showToolbar === undefined
-      ? props.filename || ('source' in props && props.source) || props.allowCopy
-      : props.showToolbar
-  )
-  const Container = shouldRenderToolbar ? StyledContainer : React.Fragment
-
-  return (
-    <Suspense
-      fallback={
-        <Container
-          css={
-            shouldRenderToolbar
-              ? {
-                  borderRadius: 5,
-                  boxShadow: '0 0 0 1px #666',
-                  ...props.css?.container,
-                  padding: 0,
-                }
-              : {}
-          }
-          className={
-            shouldRenderToolbar ? props.className?.container : undefined
-          }
-          style={shouldRenderToolbar ? props.style?.container : undefined}
-        >
-          {shouldRenderToolbar && (
-            <FallbackToolbar
-              css={{ padding: containerPadding.all, ...props.css?.toolbar }}
-              className={props.className?.toolbar}
-              style={props.style?.toolbar}
-            />
-          )}
-          <FallbackPre
-            css={{
-              WebkitTextSizeAdjust: 'none',
-              textSizeAdjust: 'none',
-              position: 'relative',
-              whiteSpace: 'pre',
-              wordWrap: 'break-word',
-              display: 'grid',
-              gridAutoRows: 'max-content',
-              gridTemplateColumns: props.showLineNumbers
-                ? 'auto 1fr'
-                : undefined,
-              margin: 0,
-              backgroundColor: shouldRenderToolbar ? 'inherit' : 'transparent',
-              color: shouldRenderToolbar ? undefined : 'inherit',
-              borderRadius: shouldRenderToolbar ? 'inherit' : 5,
-              boxShadow: shouldRenderToolbar ? undefined : '0 0 0 1px #666',
-              ...getScrollContainerStyles({
-                paddingBottom: containerPadding.bottom,
-              }),
-              ...(shouldRenderToolbar ? {} : props.css?.container),
-              padding: 0,
-            }}
-            className={
-              shouldRenderToolbar ? undefined : props.className?.container
-            }
-            style={shouldRenderToolbar ? undefined : props.style?.container}
-          >
-            {props.showLineNumbers && (
-              <FallbackLineNumbers
-                css={{
-                  padding: containerPadding.all,
-                  gridColumn: 1,
-                  gridRow: '1 / -1',
-                  width: '4ch',
-                  backgroundPosition: 'inherit',
-                  backgroundImage: 'inherit',
-                  ...props.css?.lineNumbers,
-                }}
-                className={props.className?.lineNumbers}
-                style={props.style?.lineNumbers}
-              >
-                {Array.from(
-                  { length: props.children.split('\n').length },
-                  (_, index) => index + 1
-                ).join('\n')}
-              </FallbackLineNumbers>
-            )}
-
-            <FallbackCode
-              css={{
-                gridColumn: props.showLineNumbers ? 2 : 1,
-                padding: props.showLineNumbers
-                  ? `${containerPadding.vertical} ${containerPadding.horizontal} 0 0`
-                  : `${containerPadding.vertical} ${containerPadding.horizontal} 0`,
-              }}
-            >
-              {props.children}
-            </FallbackCode>
-          </FallbackPre>
-        </Container>
-      }
-    >
-      <CodeBlockAsync {...props} />
-    </Suspense>
-  )
-}
-
 const languageKey = 'language-'
 const languageLength = languageKey.length
 
@@ -515,6 +515,7 @@ const Code = styled('code', {
   gridRow: '1 / -1',
   display: 'block',
   width: 'max-content',
+  minWidth: 'stretch',
   backgroundColor: 'transparent',
 })
 
