@@ -102,7 +102,7 @@ export default async function Component({
   if (examplesExports.length) {
     const parsedExports = examplesExports.map((exampleExport) => ({
       id: exampleExport.getSlug(),
-      text: exampleExport.getName(),
+      text: exampleExport.getTitle(),
       depth: 3,
     }))
 
