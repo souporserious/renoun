@@ -5,15 +5,6 @@ export function Basic() {
   return <CodeBlock language="ts">const beep = 'boop'</CodeBlock>
 }
 
-export function FileSystemSource() {
-  return (
-    <CodeBlock
-      source="./counter/useCounter.ts"
-      workingDirectory={import.meta.url}
-    />
-  )
-}
-
 export function TypeChecking() {
   return (
     <CodeBlock language="ts" allowCopy={false} allowErrors showErrors>
@@ -75,14 +66,20 @@ export function TokensOnly() {
   )
 }
 
-export function CustomStyles() {
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { readFile } from 'node:fs/promises'
+
+const directoryPath = dirname(fileURLToPath(import.meta.url))
+
+export async function CustomStyles() {
+  const code = await readFile(
+    join(directoryPath, './counter/Counter.tsx'),
+    'utf-8'
+  )
+
   return (
-    <CodeBlock
-      allowErrors="2307"
-      path="toolbar.tsx"
-      source="./counter/Counter.tsx"
-      workingDirectory={import.meta.url}
-    >
+    <CodeBlock path="toolbar.tsx">
       <div
         style={{
           fontSize: '1rem',
@@ -115,7 +112,7 @@ export function CustomStyles() {
             }}
           />
           <code style={{ paddingRight: '0.5lh' }}>
-            <Tokens />
+            <Tokens>{code}</Tokens>
           </code>
         </pre>
       </div>

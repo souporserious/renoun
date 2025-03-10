@@ -23,8 +23,11 @@ import {
   getScrollContainerStyles,
 } from './utils.js'
 
-export type BaseCodeBlockProps = {
-  /** Name or path of the code block. Ordered filenames will be stripped from the name e.g. `01.index.tsx` becomes `index.tsx`. */
+export type CodeBlockProps = {
+  /** Pass a code string to highlight or override default rendering using `Tokens`, `LineNumbers`, and `Toolbar` components. */
+  children: React.ReactNode | Promise<string>
+
+  /** Name or path of the code block. Ordered file names will be stripped from the name e.g. `01.index.tsx` becomes `index.tsx`. */
   path?: string
 
   /** Language of the source code. When used with `source`, the file extension will be used by default. */
@@ -87,22 +90,6 @@ export type BaseCodeBlockProps = {
     copyButton?: React.CSSProperties
   }
 }
-
-export type CodeBlockProps =
-  | ({
-      /** Pass a code string to highlight or override default rendering using `Tokens`, `LineNumbers`, and `Toolbar` components. */
-      children: React.ReactNode | Promise<string>
-    } & BaseCodeBlockProps)
-  | ({
-      /** Path to the source file on disk to highlight. */
-      source: string
-
-      /** The working directory for the `source`. */
-      workingDirectory?: string
-
-      /** Override default rendering using `Tokens`, `LineNumbers`, and `Toolbar` components. */
-      children?: React.ReactNode | Promise<string>
-    } & BaseCodeBlockProps)
 
 /** Renders a  with syntax highlighting, type information, and type checking. */
 export function CodeBlock(props: CodeBlockProps) {
@@ -242,23 +229,10 @@ async function CodeBlockAsync({
     props.children &&
     typeof props.children === 'object' &&
     typeof (props.children as any).then === 'function'
-  const hasSource = 'source' in props
   const options: any = {}
 
-  if (hasSource) {
-    options.source = props.source
-
-    if (props.workingDirectory) {
-      if (URL.canParse(props.workingDirectory)) {
-        const { pathname } = new URL(props.workingDirectory)
-        options.workingDirectory = pathname.slice(0, pathname.lastIndexOf('/'))
-      } else {
-        options.workingDirectory = props.workingDirectory
-      }
-    }
-  }
   // Wait for the children string to resolve if it is a Promise
-  else if (isPromise) {
+  if (isPromise) {
     options.value = await props.children
   } else if (isString) {
     options.value = props.children
@@ -279,7 +253,7 @@ async function CodeBlockAsync({
   })
   const contextValue = {
     filename: metadata.filename,
-    filenameLabel: filePath || hasSource ? metadata.filenameLabel : undefined,
+    filenameLabel: filePath ? metadata.filenameLabel : undefined,
     language: metadata.language,
     value: metadata.value,
     padding: containerPadding.all,
@@ -301,7 +275,7 @@ async function CodeBlockAsync({
 
   const theme = await getThemeColors()
   const shouldRenderToolbar = Boolean(
-    showToolbar === undefined ? filePath || hasSource || allowCopy : showToolbar
+    showToolbar === undefined ? filePath || allowCopy : showToolbar
   )
   const highlightedLinesGradient = highlightedLines
     ? generateHighlightedLinesGradient(highlightedLines)

@@ -6,7 +6,6 @@ export {
   Tokens,
   Toolbar,
   parsePreProps,
-  type BaseCodeBlockProps,
   type CodeBlockProps,
   type TokensProps,
   type ToolbarProps,
