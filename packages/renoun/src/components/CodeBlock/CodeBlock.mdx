@@ -41,7 +41,7 @@ fully customizing the rendering of the `CodeBlock` component.
 
 ## Component Overrides
 
-If you need more customization, the `CodeBlock` component can be fully overridden by importing it from `renoun/components` and extending it:
+If you need more customization, the `CodeBlock` component can be fully overridden by importing it from `renoun/components` and extending it as needed:
 
 ```tsx path="CodeBlock.tsx"
 import {
@@ -50,7 +50,10 @@ import {
   Tokens,
 } from 'renoun/components'
 
-export function CodeBlock(props: CodeBlockProps) {
+export function CodeBlock({
+  children,
+  ...props
+}: Omit<CodeBlockProps, 'children'> & { children: string }) {
   return (
     <BaseCodeBlock {...props}>
       <pre
@@ -60,7 +63,7 @@ export function CodeBlock(props: CodeBlockProps) {
           overflow: 'auto',
         }}
       >
-        <Tokens />
+        <Tokens>{children}</Tokens>
       </pre>
     </BaseCodeBlock>
   )
