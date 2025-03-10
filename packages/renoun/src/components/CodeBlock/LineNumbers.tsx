@@ -26,11 +26,16 @@ async function LineNumbersAsync({
   style,
 }: LineNumbersProps) {
   const context = getContext(Context)
+
+  if (context) {
+    await context.resolvers.promise
+  }
+
   const value = context?.value
 
   if (!value) {
     throw new Error(
-      '[renoun] `LineNumbers` must be provided a `tokens` prop or used inside a `CodeBlock` component.'
+      '[renoun] `LineNumbers` must be used inside a `CodeBlock` component that specifies `Tokens`.'
     )
   }
 
