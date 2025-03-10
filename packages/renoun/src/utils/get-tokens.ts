@@ -89,7 +89,12 @@ export async function getTokens({
   showErrors,
   highlighter = null,
 }: GetTokensOptions): Promise<TokenizedLines> {
-  if (language === 'plaintext' || language === 'diff') {
+  if (
+    language === 'plaintext' ||
+    language === 'text' ||
+    language === 'txt' ||
+    language === 'diff' // TODO: add support for diff highlighting
+  ) {
     return [
       [
         {
