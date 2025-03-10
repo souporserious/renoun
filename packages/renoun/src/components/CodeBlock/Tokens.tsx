@@ -98,7 +98,7 @@ async function TokensAsync({
   return (
     <QuickInfoProvider>
       {tokens.map((line, lineIndex) => {
-        const lineChildren = line.map((token) => {
+        const lineChildren = line.map((token, tokenIndex) => {
           const hasSymbolMeta = token.diagnostics || token.quickInfo
 
           if (
@@ -122,7 +122,7 @@ async function TokensAsync({
 
             return (
               <Symbol
-                key={token.start}
+                key={tokenIndex}
                 highlightColor={theme.editor.hoverHighlightBackground}
                 popover={
                   <QuickInfo
@@ -150,7 +150,7 @@ async function TokensAsync({
 
           return (
             <span
-              key={token.start}
+              key={tokenIndex}
               className={
                 className.token
                   ? `${classNames} ${className.token}`
