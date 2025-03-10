@@ -8,7 +8,7 @@ import { getLanguage, type Languages } from './get-language.js'
 import { getRootDirectory } from './get-root-directory.js'
 import { isJsxOnly } from './is-jsx-only.js'
 import { loadConfig } from './load-config.js'
-import { generatedFilenames } from './parse-source-text-metadata.js'
+import { generatedFilenames } from './get-source-text-metadata.js'
 import { splitTokenByRanges } from './split-tokens-by-ranges.js'
 
 const { Node, SyntaxKind } = tsMorph
@@ -72,7 +72,7 @@ export interface GetTokensOptions {
   project: Project
   value: string
   language?: Languages
-  filename?: string
+  filePath?: string
   allowErrors?: boolean | string
   showErrors?: boolean
   highlighter: Highlighter | null
@@ -84,7 +84,7 @@ export async function getTokens({
   project,
   value,
   language = 'plaintext',
-  filename,
+  filePath,
   allowErrors,
   showErrors,
   highlighter = null,
@@ -126,7 +126,7 @@ export async function getTokens({
           return theme[0]
         })
   const tokens = await highlighter(value, finalLanguage, themeNames)
-  const sourceFile = filename ? project.getSourceFile(filename) : undefined
+  const sourceFile = filePath ? project.getSourceFile(filePath) : undefined
   const sourceFileDiagnostics = getDiagnostics(
     sourceFile,
     allowErrors,
@@ -237,10 +237,10 @@ export async function getTokens({
             message: getDiagnosticMessageText(diagnostic.getMessageText()),
           }))
         const quickInfo =
-          sourceFile && filename
+          sourceFile && filePath
             ? getQuickInfo(
                 sourceFile,
-                filename,
+                filePath,
                 token.start,
                 rootDirectory,
                 baseDirectory
@@ -268,7 +268,7 @@ export async function getTokens({
 
   if (allowErrors === false && sourceFile && sourceFileDiagnostics.length > 0) {
     throwDiagnosticErrors(
-      filename,
+      filePath,
       sourceFile,
       sourceFileDiagnostics,
       parsedTokens
@@ -349,12 +349,12 @@ const quickInfoCache = new Map<
 /** Get the quick info a token */
 function getQuickInfo(
   sourceFile: SourceFile,
-  filename: string,
+  filePath: string,
   tokenStart: number,
   rootDirectory: string,
   baseDirectory: string
 ) {
-  const cacheKey = `${filename}:${tokenStart}`
+  const cacheKey = `${filePath}:${tokenStart}`
 
   if (quickInfoCache.has(cacheKey)) {
     return quickInfoCache.get(cacheKey)
@@ -363,7 +363,7 @@ function getQuickInfo(
   const quickInfo = sourceFile
     .getProject()
     .getLanguageService()
-    .compilerObject.getQuickInfoAtPosition(filename, tokenStart)
+    .compilerObject.getQuickInfoAtPosition(filePath, tokenStart)
 
   if (!quickInfo) {
     return
@@ -446,15 +446,15 @@ function tokensToPlainText(tokens: Token[][]) {
 
 /** Throws diagnostic errors, formatting them for display. */
 function throwDiagnosticErrors(
-  filename: string | undefined,
+  fileName: string | undefined,
   sourceFile: SourceFile,
   diagnostics: Diagnostic[],
   tokens: Token[][]
 ) {
   const workingDirectory = join(process.cwd(), 'renoun', posix.sep)
-  const formattedPath = generatedFilenames.has(filename!)
+  const formattedPath = generatedFilenames.has(fileName!)
     ? ''
-    : `for filename "${sourceFile.getFilePath().replace(workingDirectory, '')}"`
+    : `for file path "${sourceFile.getFilePath().replace(workingDirectory, '')}"`
   const errorMessages = diagnostics.map((diagnostic) => {
     const message = getDiagnosticMessageText(diagnostic.getMessageText())
     const start = diagnostic.getStart()
@@ -472,7 +472,7 @@ function throwDiagnosticErrors(
   const actionsToTake = `You can fix this error by taking one of the following actions:
   - Use the diagnostic ${errorMessages.length > 1 ? 'messages' : 'message'} above to identify and fix any issues.
   - If type declarations are missing, ensure that the necessary types are installed and available in the targeted workspace.
-  - Make sure the "path" is unique and does not conflict with other filenames in the same module. Prefix the file name with a number for progressive examples e.g. path="01.${filename}".
+  - Make sure the "path" is unique and does not conflict with other file paths in the same project. Prefix the file name with a number for progressive examples e.g. path="01.${fileName}".
   - If this error is expected for educational purposes or temporary migrations, pass the "allowErrors" prop to the component.
   - If you are unable to resolve this error, please file an issue at: https://github.com/souporserious/renoun/issues
   `

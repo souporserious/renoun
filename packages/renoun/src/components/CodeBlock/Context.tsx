@@ -5,10 +5,12 @@ import { createContext } from '../../utils/context.js'
 
 /** @internal */
 export type ContextValue = {
-  filename: string
-  filenameLabel?: string
-  language: Languages
   value: string
+  language: Languages
+  filePath: string
+  label?: string
+  allowErrors?: boolean | string
+  showErrors?: boolean
   highlightedLines?: string
   padding?: CSSProperties['padding']
   resolvers: PromiseWithResolvers<void>

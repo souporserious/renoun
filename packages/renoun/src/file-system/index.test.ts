@@ -29,7 +29,7 @@ import type { Expect, Is, IsNotAny } from './types'
 
 describe('file system', () => {
   describe('File', () => {
-    test('parses full filename', () => {
+    test('parses full file name', () => {
       const file = new File({ path: '02.generics.exercise.ts' })
 
       expect(file.getOrder()).toBe('02')
@@ -56,7 +56,7 @@ describe('file system', () => {
       expect(file.getExtension()).toBe('txt')
     })
 
-    test('handles filenames with only base', () => {
+    test('handles file names with only base', () => {
       const file = new File({ path: 'foo' })
 
       expect(file.getOrder()).toBeUndefined()

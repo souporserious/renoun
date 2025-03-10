@@ -62,7 +62,7 @@ describe('getDirectorySourceFile', () => {
     expect(result).toBe(indexFile)
   })
 
-  test('handles case-sensitive filenames correctly', () => {
+  test('handles case-sensitive file names correctly', () => {
     const project = new Project({ useInMemoryFileSystem: true })
     const directory = project.createDirectory('Button')
     const readmeFile = directory.createSourceFile('readme.md')

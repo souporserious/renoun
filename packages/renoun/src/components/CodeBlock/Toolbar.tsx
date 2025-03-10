@@ -40,7 +40,7 @@ async function ToolbarAsync({
   let childrenToRender = children
 
   if (childrenToRender === undefined && context) {
-    childrenToRender = <Label>{context.filenameLabel}</Label>
+    childrenToRender = <Label>{context.label}</Label>
   }
 
   return (
@@ -65,7 +65,7 @@ async function ToolbarAsync({
   )
 }
 
-/** A toolbar for the `CodeBlock` component that displays the filename, a source link, and copy button. */
+/** A toolbar for the `CodeBlock` component that displays the file path, a source link, and copy button. */
 export function Toolbar(props: ToolbarProps) {
   return <ToolbarAsync {...props} />
 }

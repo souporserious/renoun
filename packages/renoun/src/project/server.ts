@@ -2,7 +2,6 @@ import { watch } from 'node:fs'
 import { join } from 'node:path'
 import type { SyntaxKind } from 'ts-morph'
 
-import { analyzeSourceText as baseAnalyzeSourceText } from '../utils/analyze-source-text.js'
 import {
   createHighlighter,
   type Highlighter,
@@ -17,6 +16,10 @@ import {
   getTokens as baseGetTokens,
   type GetTokensOptions,
 } from '../utils/get-tokens.js'
+import {
+  getSourceTextMetadata as baseGetSourceTextMetadata,
+  type GetSourceTextMetadataOptions,
+} from '../utils/get-source-text-metadata.js'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.js'
 import type { SymbolFilter } from '../utils/resolve-type.js'
 import { resolveTypeAtLocation as baseResolveTypeAtLocation } from '../utils/resolve-type-at-location.js'
@@ -46,10 +49,10 @@ export async function createServer(options?: { port?: number }) {
   if (process.env.NODE_ENV === 'development') {
     const rootDirectory = getRootDirectory()
 
-    watch(rootDirectory, { recursive: true }, (_, filename) => {
-      if (!filename) return
+    watch(rootDirectory, { recursive: true }, (_, fileName) => {
+      if (!fileName) return
 
-      const filePath = join(rootDirectory, filename)
+      const filePath = join(rootDirectory, fileName)
 
       if (isFilePathGitIgnored(filePath)) {
         return
@@ -61,16 +64,16 @@ export async function createServer(options?: { port?: number }) {
   }
 
   server.registerMethod(
-    'analyzeSourceText',
-    async function analyzeSourceText({
+    'getSourceTextMetadata',
+    async function getSourceTextMetadata({
       projectOptions,
       ...options
-    }: Parameters<typeof baseAnalyzeSourceText>[0] & {
+    }: GetSourceTextMetadataOptions & {
       projectOptions?: ProjectOptions
     }) {
       const project = getProject(projectOptions)
 
-      return baseAnalyzeSourceText({
+      return baseGetSourceTextMetadata({
         ...options,
         project,
       })
@@ -89,7 +92,7 @@ export async function createServer(options?: { port?: number }) {
 
       if (currentHighlighter.current === null) {
         throw new Error(
-          '[renoun] Highlighter is not initialized in web socket "analyzeSourceText"'
+          '[renoun] Highlighter is not initialized in web socket "getTokens"'
         )
       }
 

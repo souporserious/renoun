@@ -79,7 +79,7 @@ describe('filePathToPathname', () => {
     ).toBe('/components/index')
   })
 
-  test('handles upper case filenames', () => {
+  test('handles upper case file names', () => {
     expect(filePathToPathname('src/components/MDX.tsx', 'src')).toBe(
       '/components/mdx'
     )
@@ -89,13 +89,13 @@ describe('filePathToPathname', () => {
     )
   })
 
-  test('handles pascal case filenames', () => {
+  test('handles pascal case file names', () => {
     expect(filePathToPathname('src/components/CodeBlock.tsx', 'src')).toBe(
       '/components/code-block'
     )
   })
 
-  test('handles camel case filenames', () => {
+  test('handles camel case file names', () => {
     expect(filePathToPathname('src/hooks/useHover.ts', 'src')).toBe(
       '/hooks/use-hover'
     )

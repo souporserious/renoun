@@ -2,7 +2,7 @@ import React, { Suspense } from 'react'
 import { type CSSObject, styled } from 'restyle'
 
 import type { MDXComponents } from '../../mdx/index.js'
-import { analyzeSourceText } from '../../project/client.js'
+import { getSourceTextMetadata } from '../../project/client.js'
 import { computeDirectionalStyles } from '../../utils/compute-directional-styles.js'
 import {
   getThemeColors,
@@ -105,7 +105,7 @@ export function CodeBlock(props: CodeBlockProps) {
   )
   const shouldRenderToolbar = Boolean(
     props.showToolbar === undefined
-      ? props.path || ('source' in props && props.source) || props.allowCopy
+      ? props.path || props.allowCopy
       : props.showToolbar
   )
   const Container = shouldRenderToolbar ? StyledContainer : React.Fragment
@@ -216,35 +216,36 @@ async function CodeBlockAsync({
   showLineNumbers,
   showToolbar,
   shouldFormat,
-  ...props
+  children,
+  className,
+  css,
+  style,
 }: CodeBlockProps) {
   const containerPadding = computeDirectionalStyles(
     'padding',
     '0.5lh',
-    props.css?.container,
-    props.style?.container
+    css?.container,
+    style?.container
   )
-  const isString = typeof props.children === 'string'
+  const isString = typeof children === 'string'
   const isPromise =
-    props.children &&
-    typeof props.children === 'object' &&
-    typeof (props.children as any).then === 'function'
-  const options: any = {}
+    children &&
+    typeof children === 'object' &&
+    typeof (children as any).then === 'function'
+  let value: any = ''
 
   // Wait for the children string to resolve if it is a Promise
   if (isPromise) {
-    options.value = await props.children
+    value = await children
   } else if (isString) {
-    options.value = props.children
+    value = children
   }
 
-  const metadata = await analyzeSourceText({
-    filename: filePath,
+  const metadata = await getSourceTextMetadata({
+    value,
     language,
-    allowErrors,
-    showErrors,
+    filePath,
     shouldFormat,
-    ...options,
   })
   const resolvers: any = {}
   resolvers.promise = new Promise<void>((resolve, reject) => {
@@ -252,21 +253,23 @@ async function CodeBlockAsync({
     resolvers.reject = reject
   })
   const contextValue = {
-    filename: metadata.filename,
-    filenameLabel: filePath ? metadata.filenameLabel : undefined,
-    language: metadata.language,
     value: metadata.value,
+    language: metadata.language,
+    filePath: metadata.filePath,
+    label: filePath ? metadata.label : undefined,
     padding: containerPadding.all,
+    allowErrors,
+    showErrors,
     highlightedLines,
     resolvers,
   } satisfies ContextValue
 
-  if (props.children) {
+  if (children) {
     if (!isString && !isPromise) {
       return (
         <Context value={contextValue}>
           <CopyButtonContextProvider value={metadata.value}>
-            {props.children}
+            {children}
           </CopyButtonContextProvider>
         </Context>
       )
@@ -291,11 +294,11 @@ async function CodeBlockAsync({
           boxShadow: `0 0 0 1px ${theme.panel.border}`,
           backgroundColor: theme.background,
           color: theme.foreground,
-          ...props.css?.container,
+          ...css?.container,
           padding: 0,
         } satisfies CSSObject,
-        className: props.className?.container,
-        style: props.style?.container,
+        className: className?.container,
+        style: style?.container,
       }
     : {}
   const focusedLinesStyles = focusedLines
@@ -313,9 +316,9 @@ async function CodeBlockAsync({
         {shouldRenderToolbar ? (
           <Toolbar
             allowCopy={allowCopy === undefined ? Boolean(filePath) : allowCopy}
-            css={{ padding: containerPadding.all, ...props.css?.toolbar }}
-            className={props.className?.toolbar}
-            style={props.style?.toolbar}
+            css={{ padding: containerPadding.all, ...css?.toolbar }}
+            className={className?.toolbar}
+            style={style?.toolbar}
           />
         ) : null}
         <Pre
@@ -347,19 +350,17 @@ async function CodeBlockAsync({
                   backgroundImage: highlightedLinesGradient,
                 }
               : {}),
-            ...(shouldRenderToolbar ? {} : props.css?.container),
+            ...(shouldRenderToolbar ? {} : css?.container),
             ...getThemeTokenVariables(),
             padding: 0,
           }}
-          className={
-            shouldRenderToolbar ? undefined : props.className?.container
-          }
-          style={shouldRenderToolbar ? undefined : props.style?.container}
+          className={shouldRenderToolbar ? undefined : className?.container}
+          style={shouldRenderToolbar ? undefined : style?.container}
         >
           {showLineNumbers ? (
             <>
               <LineNumbers
-                className={props.className?.lineNumbers}
+                className={className?.lineNumbers}
                 css={{
                   padding: containerPadding.all,
                   gridColumn: 1,
@@ -367,9 +368,9 @@ async function CodeBlockAsync({
                   width: '4ch',
                   backgroundPosition: 'inherit',
                   backgroundImage: 'inherit',
-                  ...props.css?.lineNumbers,
+                  ...css?.lineNumbers,
                 }}
-                style={props.style?.lineNumbers}
+                style={style?.lineNumbers}
               />
               <Code
                 css={{
@@ -380,16 +381,16 @@ async function CodeBlockAsync({
               >
                 <Tokens
                   css={{
-                    token: props.css?.token,
-                    popover: props.css?.popover,
+                    token: css?.token,
+                    popover: css?.popover,
                   }}
                   className={{
-                    token: props.className?.token,
-                    popover: props.className?.popover,
+                    token: className?.token,
+                    popover: className?.popover,
                   }}
                   style={{
-                    token: props.style?.token,
-                    popover: props.style?.popover,
+                    token: style?.token,
+                    popover: style?.popover,
                   }}
                 >
                   {metadata.value}
@@ -406,16 +407,16 @@ async function CodeBlockAsync({
             >
               <Tokens
                 css={{
-                  token: props.css?.token,
-                  popover: props.css?.popover,
+                  token: css?.token,
+                  popover: css?.popover,
                 }}
                 className={{
-                  token: props.className?.token,
-                  popover: props.className?.popover,
+                  token: className?.token,
+                  popover: className?.popover,
                 }}
                 style={{
-                  token: props.style?.token,
-                  popover: props.style?.popover,
+                  token: style?.token,
+                  popover: style?.popover,
                 }}
               >
                 {metadata.value}
@@ -435,10 +436,10 @@ async function CodeBlockAsync({
                 backgroundColor: theme.activityBar.background,
                 color: theme.activityBar.foreground,
                 borderRadius: 5,
-                ...props.css?.copyButton,
+                ...css?.copyButton,
               }}
-              className={props.className?.copyButton}
-              style={props.style?.copyButton}
+              className={className?.copyButton}
+              style={style?.copyButton}
               value={
                 metadata.value.includes('export { }')
                   ? metadata.value.split('\n').slice(0, -2).join('\n')
@@ -464,13 +465,13 @@ export function parsePreProps({
     className: `language-${string}`
     children: string
   }>
-  const filename = code.props.className
+  const fileName = code.props.className
     ?.split(' ')
     .find((className) => className.startsWith(languageKey))
-  const language = filename
-    ? filename.includes('.')
-      ? filename.split('.').pop()
-      : filename.slice(languageLength)
+  const language = fileName
+    ? fileName.includes('.')
+      ? fileName.split('.').pop()
+      : fileName.slice(languageLength)
     : 'plaintext'
 
   return {

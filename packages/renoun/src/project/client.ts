@@ -1,6 +1,5 @@
 import type { SyntaxKind } from 'ts-morph'
 
-import type { AnalyzeSourceTextOptions } from '../utils/analyze-source-text.js'
 import {
   createHighlighter,
   type Highlighter,
@@ -10,7 +9,10 @@ import type {
   getFileExportMetadata as baseGetFileExportMetadata,
 } from '../utils/get-file-exports.js'
 import type { GetTokensOptions, TokenizedLines } from '../utils/get-tokens.js'
-import type { ParseMetadataResult } from '../utils/parse-source-text-metadata.js'
+import type {
+  GetSourceTextMetadataOptions,
+  GetSourceTextMetadataResult,
+} from '../utils/get-source-text-metadata.js'
 import type { ResolvedType, SymbolFilter } from '../utils/resolve-type.js'
 import type { resolveTypeAtLocation as baseResolveTypeAtLocation } from '../utils/resolve-type-at-location.js'
 import type { DistributiveOmit } from '../types.js'
@@ -25,31 +27,32 @@ if (process.env.RENOUN_SERVER_PORT !== undefined) {
 }
 
 /**
- * Analyze source text and return highlighted tokens with diagnostics.
+ * Parses and normalizes source text metadata. This also optionally formats the
+ * source text using the project's installed formatter.
  * @internal
  */
-export async function analyzeSourceText(
-  options: DistributiveOmit<AnalyzeSourceTextOptions, 'project'> & {
+export async function getSourceTextMetadata(
+  options: DistributiveOmit<GetSourceTextMetadataOptions, 'project'> & {
     projectOptions?: ProjectOptions
   }
-): Promise<ParseMetadataResult> {
+): Promise<GetSourceTextMetadataResult> {
   if (client) {
     return client.callMethod<
-      DistributiveOmit<AnalyzeSourceTextOptions, 'project'> & {
+      DistributiveOmit<GetSourceTextMetadataOptions, 'project'> & {
         projectOptions?: ProjectOptions
       },
-      ParseMetadataResult
-    >('analyzeSourceText', options)
+      GetSourceTextMetadataResult
+    >('getSourceTextMetadata', options)
   }
 
   /* Switch to synchronous analysis when building for production to prevent timeouts. */
-  const { projectOptions, ...analyzeOptions } = options
+  const { projectOptions, ...getSourceTextMetadataOptions } = options
   const project = getProject(projectOptions)
 
-  return import('../utils/analyze-source-text.js').then(
-    ({ analyzeSourceText }) => {
-      return analyzeSourceText({
-        ...analyzeOptions,
+  return import('../utils/get-source-text-metadata.js').then(
+    ({ getSourceTextMetadata }) => {
+      return getSourceTextMetadata({
+        ...getSourceTextMetadataOptions,
         project,
       })
     }

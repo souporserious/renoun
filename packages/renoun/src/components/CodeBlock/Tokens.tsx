@@ -87,11 +87,11 @@ async function TokensAsync({
   }
 
   const tokens = await getTokens({
-    filename: context?.filename,
+    filePath: context?.filePath,
     language: language || context?.language,
+    allowErrors: allowErrors || context?.allowErrors,
+    showErrors: showErrors || context?.showErrors,
     value,
-    allowErrors,
-    showErrors,
   })
   const lastLineIndex = tokens.length - 1
 
