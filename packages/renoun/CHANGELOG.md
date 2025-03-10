@@ -1652,7 +1652,7 @@
 
   Use `getSources` to render a list of the immediate sources in the collection:
 
-  ```tsx filename="app/posts/page.tsx"
+  ```tsx path="app/posts/page.tsx"
   export default async function Page() {
     return (
       <>
@@ -1671,7 +1671,7 @@
 
   Similar to list navigation, we can use `getSources` recursively to render a tree of links:
 
-  ```tsx filename="app/posts/layout.tsx"
+  ```tsx path="app/posts/layout.tsx"
   import { PostsCollection } from '@/collections'
 
   export default async function Layout() {
@@ -1723,7 +1723,7 @@
 
   Use `getSiblings` to get the previous and next sources in the collection:
 
-  ```tsx filename="app/posts/[slug]/page.tsx"
+  ```tsx path="app/posts/[slug]/page.tsx"
   export default async function Page({ params }) {
     const postSource = Posts.getSource(params.slug)
 

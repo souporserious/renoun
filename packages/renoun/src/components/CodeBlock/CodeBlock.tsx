@@ -25,7 +25,7 @@ import {
 
 export type BaseCodeBlockProps = {
   /** Name or path of the code block. Ordered filenames will be stripped from the name e.g. `01.index.tsx` becomes `index.tsx`. */
-  filename?: string
+  path?: string
 
   /** Language of the source code. When used with `source`, the file extension will be used by default. */
   language?: Languages
@@ -118,7 +118,7 @@ export function CodeBlock(props: CodeBlockProps) {
   )
   const shouldRenderToolbar = Boolean(
     props.showToolbar === undefined
-      ? props.filename || ('source' in props && props.source) || props.allowCopy
+      ? props.path || ('source' in props && props.source) || props.allowCopy
       : props.showToolbar
   )
   const Container = shouldRenderToolbar ? StyledContainer : React.Fragment
@@ -218,7 +218,7 @@ export function CodeBlock(props: CodeBlockProps) {
 }
 
 async function CodeBlockAsync({
-  filename,
+  path: filePath,
   language,
   highlightedLines,
   focusedLines,
@@ -265,7 +265,7 @@ async function CodeBlockAsync({
   }
 
   const metadata = await analyzeSourceText({
-    filename,
+    filename: filePath,
     language,
     allowErrors,
     showErrors,
@@ -279,7 +279,7 @@ async function CodeBlockAsync({
   })
   const contextValue = {
     filename: metadata.filename,
-    filenameLabel: filename || hasSource ? metadata.filenameLabel : undefined,
+    filenameLabel: filePath || hasSource ? metadata.filenameLabel : undefined,
     language: metadata.language,
     value: metadata.value,
     padding: containerPadding.all,
@@ -301,7 +301,7 @@ async function CodeBlockAsync({
 
   const theme = await getThemeColors()
   const shouldRenderToolbar = Boolean(
-    showToolbar === undefined ? filename || hasSource || allowCopy : showToolbar
+    showToolbar === undefined ? filePath || hasSource || allowCopy : showToolbar
   )
   const highlightedLinesGradient = highlightedLines
     ? generateHighlightedLinesGradient(highlightedLines)
@@ -338,7 +338,7 @@ async function CodeBlockAsync({
       <Container {...containerProps}>
         {shouldRenderToolbar ? (
           <Toolbar
-            allowCopy={allowCopy === undefined ? Boolean(filename) : allowCopy}
+            allowCopy={allowCopy === undefined ? Boolean(filePath) : allowCopy}
             css={{ padding: containerPadding.all, ...props.css?.toolbar }}
             className={props.className?.toolbar}
             style={props.style?.toolbar}

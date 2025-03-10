@@ -52,7 +52,7 @@ and utilities in your project to provide accurate and performant code analysis a
 
 Alternatively, if you don't want to use the CLI, the renoun WebSocket server can be started manually using the `createServer` function:
 
-```js filename="renoun-server.mjs"
+```js path="renoun-server.mjs"
 import { createServer } from 'renoun/server'
 
 const server = await createServer()
@@ -69,7 +69,7 @@ production builds.
 
 If you are using Webpack to bundle your Next.js project, you will need to configure the `resolve.alias` option to support ESM files. This will allow you to import renoun components and utilities without errors:
 
-```js filename="02.next.config.mjs"
+```js path="02.next.config.mjs"
 export default {
   webpack(config) {
     config.resolve.extensionAlias = {
@@ -98,7 +98,7 @@ First, install the Next.js MDX plugin:
 
 Now, add the plugin to your `next.config` file while optionally including the pre-configured `remarkPlugins` and `rehypePlugins` from `renoun/mdx`:
 
-```js filename="03.next.config.mjs"
+```js path="03.next.config.mjs"
 import createMDXPlugin from '@next/mdx'
 import { remarkPlugins, rehypePlugins } from 'renoun/mdx'
 
@@ -119,7 +119,7 @@ export default withMDX({
 
 Use the `CodeBlock` and `CodeInline` components to override the `pre` and `code` components respectively in your project's `mdx-components.tsx` file:
 
-```tsx filename="02.mdx-components.tsx"
+```tsx path="02.mdx-components.tsx"
 import {
   CodeBlock,
   CodeInline,
