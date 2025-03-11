@@ -1,5 +1,43 @@
 # renoun
 
+## 8.10.0
+
+### Minor Changes
+
+- 41d7551: Renames `CodeBlock` `filename` prop to `path` to better reflect its purpose since a nested file path can be defined.
+
+  ### Breaking Changes
+
+  The `filename` prop in the `CodeBlock` component has been renamed to `path`. Update any references to the `filename` prop in components or MDX pages that use the `CodeBlock` component for rendering code fences.
+
+- 78e5234: Adds a `shouldAnalyze` prop to `CodeBlock`, `CodeInline`, and `Tokens` components for controlling whether or not to analyze and type-check source code.
+- 5c966d1: Uses the `Tokens` component within `CodeInline` when a `language` is provided.
+- e3e2dea: Removes `source` and `workingDirectory` props from `CodeBlock` component since these can be calculated using `readFile` explicitly.
+
+  ### Breaking Changes
+
+  The `source` and `workingDirectory` props from `CodeBlock` component have been removed. Use `readFile` to read the source file contents:
+
+  ```tsx
+  import { CodeBlock } from 'renoun/components'
+  import { readFile } from 'node:fs/promises'
+
+  export function CodeBlock() {
+    return (
+      <CodeBlock language="tsx">
+        {readFile('src/components/Button.tsx', 'utf-8')}
+      </CodeBlock>
+    )
+  }
+  ```
+
+### Patch Changes
+
+- 8d232ac: Fixes `LineNumbers` not awaiting the text value from `Tokens`.
+- 417155e: Fixes duplicate key warning in development for `Tokens` component.
+- bdbc887: Fixes `CodeInline` fallback state causing layout shift.
+- 120e0eb: Fixes `CodeBlock` erroring for `text` and `txt` languages.
+
 ## 8.9.0
 
 ### Minor Changes
