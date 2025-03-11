@@ -19,7 +19,7 @@ export interface GetSourceTextMetadataResult {
   value: string
   language: Languages
   filePath: string
-  label: string
+  label?: string
 }
 
 export const generatedFilenames = new Set<string>()
@@ -44,7 +44,7 @@ export async function getSourceTextMetadata({
 
   let finalValue = value
   let finalLanguage = language
-  let isGeneratedFilename = false
+  let isGeneratedFileName = false
   let id = filePathProp
 
   // generate a unique id for the code block based on the contents if a file path is not provided
@@ -71,7 +71,7 @@ export async function getSourceTextMetadata({
 
   if (!filePath) {
     filePath = `${id}.${finalLanguage}`
-    isGeneratedFilename = true
+    isGeneratedFileName = true
   }
 
   // Format source text if enabled.
@@ -99,7 +99,7 @@ export async function getSourceTextMetadata({
   filePath = join(scopeId, filePath)
 
   // Store generated file names to provide better error messages
-  if (isGeneratedFilename) {
+  if (isGeneratedFileName) {
     generatedFilenames.add(filePath)
   }
 
@@ -141,11 +141,13 @@ export async function getSourceTextMetadata({
     }
   }
 
-  const label = (filePathProp || filePath)
-    // Remove _renoun/ prefix
-    .replace(join(scopeId, posix.sep), '')
-    // Remove ordered number prefix
-    .replace(/\d+\./, '')
+  const label = isGeneratedFileName
+    ? undefined
+    : (filePathProp || filePath)
+        // Remove _renoun/ prefix
+        .replace(join(scopeId, posix.sep), '')
+        // Remove ordered number prefix
+        .replace(/\d+\./, '')
 
   return {
     value: finalValue,
