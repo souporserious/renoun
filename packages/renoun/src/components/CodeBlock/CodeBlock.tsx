@@ -57,6 +57,9 @@ export type CodeBlockProps = {
   /** Show or hide the toolbar. */
   showToolbar?: boolean
 
+  /** Whether or not to analyze the source code for type errors and provide quick information on hover. */
+  shouldAnalyze?: boolean
+
   /** Whether or not to format the source code using `prettier` if installed. */
   shouldFormat?: boolean
 
@@ -91,10 +94,27 @@ export type CodeBlockProps = {
   }
 }
 
-/** Renders a  with syntax highlighting, type information, and type checking. */
-export function CodeBlock(props: CodeBlockProps) {
+/**
+ * Renders a code block with tokenized source code, line numbers, and a toolbar.
+ *
+ * When targeting JavaScript or TypeScript languages, the provided source code is
+ * type-checked and will throw errors that can be optionally displayed. Additionally,
+ * the source code will be formatted using `prettier` if installed and quick info
+ * is available when hovering symbols.
+ */
+export function CodeBlock({
+  shouldAnalyze = true,
+  unfocusedLinesOpacity = 0.6,
+  ...props
+}: CodeBlockProps) {
   if (typeof props.children !== 'string') {
-    return <CodeBlockAsync {...props} />
+    return (
+      <CodeBlockAsync
+        shouldAnalyze={shouldAnalyze}
+        unfocusedLinesOpacity={unfocusedLinesOpacity}
+        {...props}
+      />
+    )
   }
 
   const containerPadding = computeDirectionalStyles(
@@ -199,7 +219,11 @@ export function CodeBlock(props: CodeBlockProps) {
         </Container>
       }
     >
-      <CodeBlockAsync {...props} />
+      <CodeBlockAsync
+        shouldAnalyze={shouldAnalyze}
+        unfocusedLinesOpacity={unfocusedLinesOpacity}
+        {...props}
+      />
     </Suspense>
   )
 }
@@ -209,12 +233,13 @@ async function CodeBlockAsync({
   language,
   highlightedLines,
   focusedLines,
-  unfocusedLinesOpacity = 0.6,
+  unfocusedLinesOpacity,
   allowCopy,
   allowErrors,
   showErrors,
   showLineNumbers,
   showToolbar,
+  shouldAnalyze,
   shouldFormat,
   children,
   className,
@@ -260,6 +285,7 @@ async function CodeBlockAsync({
     padding: containerPadding.all,
     allowErrors,
     showErrors,
+    shouldAnalyze,
     highlightedLines,
     resolvers,
   } satisfies ContextValue

@@ -2,7 +2,7 @@ import React, { Fragment } from 'react'
 import type { CSSObject } from 'restyle'
 import { css } from 'restyle/css'
 
-import { getTokens } from '../../project/client.js'
+import { getSourceTextMetadata, getTokens } from '../../project/client.js'
 import type { Languages } from '../../textmate/index.js'
 import { getContext } from '../../utils/context.js'
 import { getThemeColors } from '../../utils/get-theme.js'
@@ -20,6 +20,12 @@ export interface TokensProps {
 
   /** Whether to show errors. */
   showErrors?: boolean
+
+  /** Whether or not to analyze the source code for type errors and provide quick information on hover. */
+  shouldAnalyze?: boolean
+
+  /** Whether or not to format the source code using `prettier` if installed. */
+  shouldFormat?: boolean
 
   /** Language to use for syntax highlighting. */
   language?: Languages
@@ -50,11 +56,14 @@ export interface TokensProps {
   }) => React.ReactNode
 }
 
-async function TokensAsync({
+/** Renders syntax highlighted tokens for the `CodeBlock` component. */
+export async function Tokens({
   children,
-  language,
+  language: languageProp,
   allowErrors,
   showErrors,
+  shouldAnalyze: shouldAnalyzeProp,
+  shouldFormat,
   renderLine,
   css: cssProp = {},
   className = {},
@@ -62,6 +71,7 @@ async function TokensAsync({
 }: TokensProps) {
   const context = getContext(Context)
   const theme = await getThemeColors()
+  const language = languageProp || context?.language
   let value
 
   if (children) {
@@ -86,12 +96,33 @@ async function TokensAsync({
     )
   }
 
+  /* When rendering `Tokens` inside of a `CodeBlock` component, we need to create a source file and analyze it. */
+  const shouldAnalyze = shouldAnalyzeProp ?? context?.shouldAnalyze ?? true
+  const metadata: Record<string, any> = {}
+
+  if (shouldAnalyze) {
+    const result = await getSourceTextMetadata({
+      value,
+      language,
+      shouldFormat,
+    })
+    metadata.filePath = result.filePath
+    metadata.label = result.label
+    metadata.language = result.language
+    metadata.value = result.value
+  } else {
+    metadata.value = value
+    metadata.language = language
+    metadata.filePath = context?.filePath
+    metadata.label = context?.label
+  }
+
   const tokens = await getTokens({
-    filePath: context?.filePath,
-    language: language || context?.language,
+    value: metadata.value,
+    language: metadata.language,
+    filePath: metadata.filePath,
     allowErrors: allowErrors || context?.allowErrors,
     showErrors: showErrors || context?.showErrors,
-    value,
   })
   const lastLineIndex = tokens.length - 1
 
@@ -185,9 +216,4 @@ async function TokensAsync({
       })}
     </QuickInfoProvider>
   )
-}
-
-/** Renders syntax highlighted tokens for the `CodeBlock` component. */
-export function Tokens(props: TokensProps) {
-  return <TokensAsync {...props} />
 }

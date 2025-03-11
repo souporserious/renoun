@@ -11,6 +11,7 @@ export type ContextValue = {
   label?: string
   allowErrors?: boolean | string
   showErrors?: boolean
+  shouldAnalyze?: boolean
   highlightedLines?: string
   padding?: CSSProperties['padding']
   resolvers: PromiseWithResolvers<void>

@@ -23,10 +23,16 @@ import type { MDXComponents } from '../mdx/index.js'
 
 const mdxComponents = {
   pre: (props) => {
-    return <CodeBlock {...parsePreProps(props)} />
+    return <CodeBlock {...parsePreProps(props)} shouldAnalyze={false} />
   },
   code: (props) => {
-    return <CodeInline children={props.children} language="typescript" />
+    return (
+      <CodeInline
+        children={props.children}
+        language="typescript"
+        shouldAnalyze={false}
+      />
+    )
   },
   p: (props) => <p {...props} css={{ margin: 0 }} />,
 } satisfies MDXComponents
@@ -124,7 +130,11 @@ async function APIReferenceAsync({
                 {type.name}
               </h3>
 
-              <CodeInline children={type.text} language="typescript" />
+              <CodeInline
+                children={type.text}
+                language="typescript"
+                shouldAnalyze={false}
+              />
 
               {/* {type.path && <ViewSource href={type.path} />} */}
             </div>
@@ -181,7 +191,11 @@ async function APIReferenceAsync({
             {type.name}
           </h3>
 
-          <CodeInline children={type.text} language="typescript" />
+          <CodeInline
+            children={type.text}
+            language="typescript"
+            shouldAnalyze={false}
+          />
 
           {/* {type.path && <ViewSource href={type.path} />} */}
         </div>
@@ -214,7 +228,13 @@ function TypeChildren({
     type.kind === 'UtilityReference' ||
     type.kind === 'Reference'
   ) {
-    return <CodeInline children={type.text} language="typescript" />
+    return (
+      <CodeInline
+        children={type.text}
+        language="typescript"
+        shouldAnalyze={false}
+      />
+    )
   }
 
   if (
@@ -300,7 +320,11 @@ function TypeChildren({
                   borderTop: '1px solid var(--color-separator-secondary)',
                 }}
               />
-              <CodeInline children={signature.text} language="typescript" />
+              <CodeInline
+                children={signature.text}
+                language="typescript"
+                shouldAnalyze={false}
+              />
               {signature.description ? (
                 <MDXRenderer
                   children={signature.description}
@@ -316,6 +340,7 @@ function TypeChildren({
                     <CodeInline
                       children={signature.parameter.text}
                       language="typescript"
+                      shouldAnalyze={false}
                       css={{ display: 'inline-block', marginTop: '1.5rem' }}
                     />
                   ) : (
@@ -360,7 +385,11 @@ function TypeChildren({
                   borderTop: '1px solid var(--color-separator-secondary)',
                 }}
               />
-              <CodeInline children={signature.text} language="typescript" />
+              <CodeInline
+                children={signature.text}
+                language="typescript"
+                shouldAnalyze={false}
+              />
               {signature.description ? (
                 <MDXRenderer
                   children={signature.description}
@@ -387,6 +416,7 @@ function TypeChildren({
                   <CodeInline
                     children={signature.returnType}
                     language="typescript"
+                    shouldAnalyze={false}
                     css={{ maxWidth: '-webkit-fill-available' }}
                   />
                 </div>
@@ -402,7 +432,13 @@ function TypeChildren({
     if (type.type) {
       return <TypeChildren type={type.type} css={{ marginTop: '2rem' }} />
     } else {
-      return <CodeInline children={type.text} language="typescript" />
+      return (
+        <CodeInline
+          children={type.text}
+          language="typescript"
+          shouldAnalyze={false}
+        />
+      )
     }
   }
 
@@ -538,6 +574,7 @@ function TypeValue({
             <CodeInline
               children={type.text}
               language="typescript"
+              shouldAnalyze={false}
               paddingX="0.5rem"
               paddingY="0.2rem"
               css={{ fontSize: 'var(--font-size-body-2)' }}
@@ -557,6 +594,7 @@ function TypeValue({
               <CodeInline
                 children={JSON.stringify(defaultValue)}
                 language="typescript"
+                shouldAnalyze={false}
               />
             </span>
           ) : null}

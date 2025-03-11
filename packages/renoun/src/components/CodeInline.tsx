@@ -26,6 +26,9 @@ export type CodeInlineProps = {
   /** Show or hide error diagnostics when a `language` is specified. */
   showErrors?: boolean
 
+  /** Whether or not to analyze the source code for type errors and provide quick information on hover. */
+  shouldAnalyze?: boolean
+
   /** Horizontal padding to apply to the wrapping element. */
   paddingX?: string
 
@@ -46,6 +49,7 @@ export type CodeInlineProps = {
 export function CodeInline({
   paddingX = '0.25em',
   paddingY = '0.1em',
+  shouldAnalyze = false,
   ...props
 }: CodeInlineProps) {
   return (
@@ -74,7 +78,12 @@ export function CodeInline({
         </CodeFallback>
       }
     >
-      <CodeInlineAsync paddingX={paddingX} paddingY={paddingY} {...props} />
+      <CodeInlineAsync
+        paddingX={paddingX}
+        paddingY={paddingY}
+        shouldAnalyze={shouldAnalyze}
+        {...props}
+      />
     </Suspense>
   )
 }
@@ -90,6 +99,7 @@ async function CodeInlineAsync({
   style,
   allowErrors,
   showErrors,
+  shouldAnalyze,
 }: CodeInlineProps) {
   const theme = await getThemeColors()
   const [classNames, Styles] = css({
@@ -116,6 +126,7 @@ async function CodeInlineAsync({
       language={language}
       allowErrors={allowErrors}
       showErrors={showErrors}
+      shouldAnalyze={shouldAnalyze}
     >
       {children}
     </Tokens>
