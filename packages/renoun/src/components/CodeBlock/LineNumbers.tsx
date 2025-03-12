@@ -2,8 +2,7 @@ import React, { Fragment } from 'react'
 import { styled, type CSSObject } from 'restyle'
 
 import { getThemeColors } from '../../utils/get-theme.js'
-import { getContext } from '../../utils/context.js'
-import { Context } from './Context.js'
+import { getResolvedContext } from './Context.js'
 
 export interface LineNumbersProps {
   /** A string of comma separated lines and ranges to highlight. */
@@ -19,26 +18,14 @@ export interface LineNumbersProps {
   style?: React.CSSProperties
 }
 
-async function LineNumbersAsync({
+/** Renders line numbers for the `CodeBlock` component. */
+export async function LineNumbers({
   highlightRanges: highlightRangesProp,
   css,
   className,
   style,
 }: LineNumbersProps) {
-  const context = getContext(Context)
-
-  if (context) {
-    await context.resolvers.promise
-  }
-
-  const value = context?.value
-
-  if (!value) {
-    throw new Error(
-      '[renoun] `LineNumbers` must be used inside a `CodeBlock` component that specifies `Tokens`.'
-    )
-  }
-
+  const context = await getResolvedContext()
   const theme = await getThemeColors()
   const highlightRanges = highlightRangesProp || context?.highlightedLines
   const shouldHighlightLine = calculateLinesToHighlight(highlightRanges)
@@ -49,7 +36,7 @@ async function LineNumbersAsync({
       className={className}
       style={style}
     >
-      {value.split('\n').map((_: any, lineIndex: number) => {
+      {context.value.split('\n').map((_: any, lineIndex: number) => {
         const shouldHighlight = shouldHighlightLine(lineIndex)
         const content = shouldHighlight ? (
           <Highlighted css={{ color: theme.editorLineNumber.activeForeground }}>
@@ -68,11 +55,6 @@ async function LineNumbersAsync({
       })}
     </Container>
   )
-}
-
-/** Renders line numbers for the `CodeBlock` component. */
-export function LineNumbers(props: LineNumbersProps) {
-  return <LineNumbersAsync {...props} />
 }
 
 const Container = styled('span', {

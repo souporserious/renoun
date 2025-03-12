@@ -80,41 +80,44 @@ export async function Tokens({
     } else {
       value = await children
     }
-
-    if (context) {
-      context.value = value
-    }
-  } else {
-    value = context?.value
   }
-
-  context?.resolvers.resolve()
 
   if (value === undefined) {
     throw new Error(
-      '[renoun] No code value provided to Tokens component. Pass a string, a promise that resolves to a string, or wrap within a `CodeBlock` that defines a `source` prop.'
+      '[renoun] No code value provided to Tokens component. Pass a string, a promise that resolves to a string, or wrap within a `CodeBlock` component that defines `path` and `workingDirectory` props.'
     )
   }
 
-  /* When rendering `Tokens` inside of a `CodeBlock` component, we need to create a source file and analyze it. */
   const shouldAnalyze = shouldAnalyzeProp ?? context?.shouldAnalyze ?? true
   const metadata: Record<string, any> = {}
 
   if (shouldAnalyze) {
     const result = await getSourceTextMetadata({
+      filePath: context?.filePath,
+      workingDirectory: context?.workingDirectory,
       value,
       language,
       shouldFormat,
     })
+    metadata.value = result.value
+    metadata.language = result.language
     metadata.filePath = result.filePath
     metadata.label = result.label
-    metadata.language = result.language
-    metadata.value = result.value
   } else {
     metadata.value = value
     metadata.language = language
-    metadata.filePath = context?.filePath
     metadata.label = context?.label
+  }
+
+  // Now we can resolve the context values for other components like `LineNumbers`, `CopyButton`, etc.
+  if (context) {
+    context.resolved = {
+      value: metadata.value,
+      language: metadata.language,
+      filePath: metadata.filePath,
+      label: metadata.label,
+    }
+    context.resolvers.resolve()
   }
 
   const tokens = await getTokens({

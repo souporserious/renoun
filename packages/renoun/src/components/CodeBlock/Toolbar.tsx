@@ -2,14 +2,10 @@ import React from 'react'
 import { styled, type CSSObject } from 'restyle'
 
 import { getThemeColors } from '../../utils/get-theme.js'
-import { getContext } from '../../utils/context.js'
+import { getResolvedContext } from './Context.js'
 import { CopyButton } from './CopyButton.js'
-import { Context } from './Context.js'
 
 export interface ToolbarProps {
-  /** The value of the code block. */
-  value?: string
-
   /** Whether or not to allow copying the code block value. Accepts a boolean or a string that will be copied. */
   allowCopy?: boolean | string
 
@@ -27,19 +23,17 @@ export interface ToolbarProps {
 }
 
 async function ToolbarAsync({
-  value: valueProp,
   allowCopy,
   css,
   className,
   style,
   children,
 }: ToolbarProps) {
-  const context = getContext(Context)
+  const context = await getResolvedContext()
   const theme = await getThemeColors()
-  const value = valueProp ?? context?.value
   let childrenToRender = children
 
-  if (childrenToRender === undefined && context) {
+  if (childrenToRender === undefined) {
     childrenToRender = <Label>{context.label}</Label>
   }
 
@@ -51,9 +45,9 @@ async function ToolbarAsync({
     >
       {childrenToRender}
 
-      {allowCopy && value ? (
+      {allowCopy ? (
         <CopyButton
-          value={typeof allowCopy === 'string' ? allowCopy : value}
+          value={typeof allowCopy === 'string' ? allowCopy : context.value}
           css={{
             padding: 0,
             marginLeft: 'auto',

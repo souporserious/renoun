@@ -2,7 +2,6 @@ import React, { Suspense } from 'react'
 import { type CSSObject, styled } from 'restyle'
 
 import type { MDXComponents } from '../../mdx/index.js'
-import { getSourceTextMetadata } from '../../project/client.js'
 import { computeDirectionalStyles } from '../../utils/compute-directional-styles.js'
 import {
   getThemeColors,
@@ -11,7 +10,6 @@ import {
 import type { Languages } from '../../utils/get-language.js'
 import type { ContextValue } from './Context.js'
 import { Context } from './Context.js'
-import { CopyButtonContextProvider } from './contexts.js'
 import { CopyButton } from './CopyButton.js'
 import { LineNumbers } from './LineNumbers.js'
 import { Pre } from './Pre.js'
@@ -25,10 +23,13 @@ import {
 
 export type CodeBlockProps = {
   /** Pass a code string to highlight or override default rendering using `Tokens`, `LineNumbers`, and `Toolbar` components. */
-  children: React.ReactNode | Promise<string>
+  children: React.ReactNode
 
   /** Name or path of the code block. Ordered file names will be stripped from the name e.g. `01.index.tsx` becomes `index.tsx`. */
   path?: string
+
+  /** The working directory to use when analyzing the source code. This will read the local file system contents from the `workingDirectory` joined with the `path` prop instead of creating a virtual file. */
+  workingDirectory?: string
 
   /** Language of the source code. When used with `source`, the file extension will be used by default. */
   language?: Languages
@@ -229,7 +230,8 @@ export function CodeBlock({
 }
 
 async function CodeBlockAsync({
-  path: filePath,
+  path,
+  workingDirectory,
   language,
   highlightedLines,
   focusedLines,
@@ -252,59 +254,40 @@ async function CodeBlockAsync({
     css?.container,
     style?.container
   )
-  const isString = typeof children === 'string'
-  const isPromise =
-    children &&
-    typeof children === 'object' &&
-    typeof (children as any).then === 'function'
-  let value: any = ''
-
-  // Wait for the children string to resolve if it is a Promise
-  if (isPromise) {
-    value = await children
-  } else if (isString) {
-    value = children
-  }
-
-  const metadata = await getSourceTextMetadata({
-    value,
-    language,
-    filePath,
-    shouldFormat,
-  })
   const resolvers: any = {}
   resolvers.promise = new Promise<void>((resolve, reject) => {
     resolvers.resolve = resolve
     resolvers.reject = reject
   })
   const contextValue = {
-    value: metadata.value,
-    language: metadata.language,
-    filePath: metadata.filePath,
-    label: filePath ? metadata.label : undefined,
+    filePath: path,
     padding: containerPadding.all,
     allowErrors,
     showErrors,
     shouldAnalyze,
+    shouldFormat,
     highlightedLines,
+    language,
+    workingDirectory,
     resolvers,
   } satisfies ContextValue
+  let value: string
 
-  if (children) {
-    if (!isString && !isPromise) {
-      return (
-        <Context value={contextValue}>
-          <CopyButtonContextProvider value={metadata.value}>
-            {children}
-          </CopyButtonContextProvider>
-        </Context>
-      )
-    }
+  if (typeof children === 'string') {
+    value = children
+  } else if (
+    typeof children === 'object' &&
+    children !== null &&
+    'then' in children
+  ) {
+    value = (await children) as string
+  } else {
+    return <Context value={contextValue}>{children}</Context>
   }
 
   const theme = await getThemeColors()
   const shouldRenderToolbar = Boolean(
-    showToolbar === undefined ? filePath || allowCopy : showToolbar
+    showToolbar === undefined ? path || allowCopy : showToolbar
   )
   const highlightedLinesGradient = highlightedLines
     ? generateHighlightedLinesGradient(highlightedLines)
@@ -341,7 +324,7 @@ async function CodeBlockAsync({
       <Container {...containerProps}>
         {shouldRenderToolbar ? (
           <Toolbar
-            allowCopy={allowCopy === undefined ? Boolean(filePath) : allowCopy}
+            allowCopy={allowCopy === undefined ? Boolean(path) : allowCopy}
             css={{ padding: containerPadding.all, ...css?.toolbar }}
             className={className?.toolbar}
             style={style?.toolbar}
@@ -419,7 +402,7 @@ async function CodeBlockAsync({
                     popover: style?.popover,
                   }}
                 >
-                  {metadata.value}
+                  {value}
                 </Tokens>
               </Code>
             </>
@@ -445,7 +428,7 @@ async function CodeBlockAsync({
                   popover: style?.popover,
                 }}
               >
-                {metadata.value}
+                {value}
               </Tokens>
             </Code>
           )}
@@ -466,11 +449,6 @@ async function CodeBlockAsync({
               }}
               className={className?.copyButton}
               style={style?.copyButton}
-              value={
-                metadata.value.includes('export { }')
-                  ? metadata.value.split('\n').slice(0, -2).join('\n')
-                  : metadata.value
-              }
             />
           ) : null}
         </Pre>
