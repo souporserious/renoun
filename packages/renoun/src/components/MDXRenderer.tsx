@@ -4,15 +4,7 @@ import type { MDXComponents } from '@renoun/mdx'
 
 import { getMDXRuntimeValue } from '../utils/get-mdx-runtime-value.js'
 
-/** Compiles and renders a string of MDX content. */
-export async function MDXRenderer({
-  children,
-  components,
-  dependencies,
-  remarkPlugins,
-  rehypePlugins,
-  baseUrl,
-}: {
+export interface MDXRendererProps {
   /** The MDX content to render. */
   children: string
 
@@ -30,7 +22,17 @@ export async function MDXRenderer({
 
   /** Base URL to resolve imports and named exports from (e.g. `import.meta.url`) */
   baseUrl?: string
-}) {
+}
+
+/** Compiles and renders a string of MDX content. */
+export async function MDXRenderer({
+  children,
+  components,
+  dependencies,
+  remarkPlugins,
+  rehypePlugins,
+  baseUrl,
+}: MDXRendererProps) {
   const { default: Content } = await getMDXRuntimeValue({
     value: children,
     dependencies,

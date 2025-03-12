@@ -61,13 +61,19 @@ function getRectWithScroll(
   }
 }
 
+interface KeepElementInViewOptions {
+  maxWidth?: number
+  maxHeight?: number
+}
+
 /**
  * Adjust the element's position including potential flipping.
  * @internal
  */
 export function keepElementInView(
   popoverNode: HTMLElement,
-  anchorNode: HTMLElement
+  anchorNode: HTMLElement,
+  options?: KeepElementInViewOptions
 ) {
   const viewportRect = getClosestViewportRect(popoverNode)
   const popoverRect = getRectWithScroll(
@@ -85,6 +91,17 @@ export function keepElementInView(
     height: popoverRect.height,
     top: anchorRect.top - popoverRect.height,
     left: anchorRect.left,
+  }
+
+  if (options?.maxWidth !== undefined) {
+    const difference = styles.width - options.maxWidth
+    styles.width = Math.min(styles.width, options.maxWidth)
+    styles.left = styles.left + difference
+  }
+  if (options?.maxHeight !== undefined) {
+    const difference = styles.height - options.maxHeight
+    styles.height = Math.min(styles.height, options.maxHeight)
+    styles.top = styles.top + difference
   }
 
   if (styles.top < viewportRect.top) {
@@ -115,12 +132,6 @@ export function keepElementInView(
   popoverNode.style.left = styles.left + 'px'
   popoverNode.style.width = styles.width + 'px'
   popoverNode.style.height = styles.height + 'px'
-
-  if (popoverNode.scrollHeight > styles.height) {
-    const heightDifference = popoverNode.scrollHeight - styles.height
-    popoverNode.style.setProperty('top', styles.top - heightDifference + 'px')
-    popoverNode.style.setProperty('height', 'auto')
-  }
 }
 
 /** @internal */

@@ -8,6 +8,7 @@ import {
   JavaScriptFile,
   type JavaScriptFileExport,
 } from '../file-system/index.js'
+import { rehypePlugins, remarkPlugins } from '../mdx/index.js'
 import { createSlug } from '../utils/create-slug.js'
 import type {
   AllTypes,
@@ -19,23 +20,27 @@ import { isParameterType, isPropertyType } from '../utils/resolve-type.js'
 import { CodeBlock, parsePreProps } from './CodeBlock/index.js'
 import { CodeInline } from './CodeInline.js'
 import { MDXRenderer } from './MDXRenderer.js'
-import type { MDXComponents } from '../mdx/index.js'
+import type { MDXRendererProps } from './MDXRenderer.js'
 
-const mdxComponents = {
-  pre: (props) => {
-    return <CodeBlock {...parsePreProps(props)} shouldAnalyze={false} />
+const mdxRendererProps = {
+  components: {
+    pre: (props) => {
+      return <CodeBlock {...parsePreProps(props)} shouldAnalyze={false} />
+    },
+    code: (props) => {
+      return (
+        <CodeInline
+          children={props.children}
+          language="typescript"
+          shouldAnalyze={false}
+        />
+      )
+    },
+    p: (props) => <p {...props} css={{ margin: 0 }} />,
   },
-  code: (props) => {
-    return (
-      <CodeInline
-        children={props.children}
-        language="typescript"
-        shouldAnalyze={false}
-      />
-    )
-  },
-  p: (props) => <p {...props} css={{ margin: 0 }} />,
-} satisfies MDXComponents
+  rehypePlugins,
+  remarkPlugins,
+} satisfies Omit<MDXRendererProps, 'children'>
 
 interface SourceString {
   /** The file path to the source code. */
@@ -140,10 +145,7 @@ async function APIReferenceAsync({
             </div>
 
             {type.description ? (
-              <MDXRenderer
-                children={type.description}
-                components={mdxComponents}
-              />
+              <MDXRenderer children={type.description} {...mdxRendererProps} />
             ) : null}
           </div>
 
@@ -203,7 +205,7 @@ async function APIReferenceAsync({
         {type.description &&
         type.kind !== 'Function' &&
         type.kind !== 'Component' ? (
-          <MDXRenderer children={type.description} components={mdxComponents} />
+          <MDXRenderer children={type.description} {...mdxRendererProps} />
         ) : null}
       </div>
 
@@ -328,7 +330,7 @@ function TypeChildren({
               {signature.description ? (
                 <MDXRenderer
                   children={signature.description}
-                  components={mdxComponents}
+                  {...mdxRendererProps}
                 />
               ) : null}
               {signature.parameter ? (
@@ -393,7 +395,7 @@ function TypeChildren({
               {signature.description ? (
                 <MDXRenderer
                   children={signature.description}
-                  components={mdxComponents}
+                  {...mdxRendererProps}
                 />
               ) : null}
               {signature.parameters.length > 0 ? (
@@ -602,7 +604,7 @@ function TypeValue({
       </div>
 
       {type.description && (
-        <MDXRenderer children={type.description} components={mdxComponents} />
+        <MDXRenderer children={type.description} {...mdxRendererProps} />
       )}
 
       {type.kind === 'Object' && type.properties

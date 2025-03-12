@@ -1,14 +1,59 @@
 import React, { Fragment } from 'react'
 import { styled, type CSSObject } from 'restyle'
 
+import { rehypePlugins, remarkPlugins } from '../../mdx/index.js'
 import { getTokens } from '../../project/client.js'
 import {
   getThemeColors,
   getThemeTokenVariables,
 } from '../../utils/get-theme.js'
 import type { Token, TokenDiagnostic } from '../../utils/get-tokens.js'
-import { MDXRenderer } from '../MDXRenderer.js'
+import { MDXRenderer, type MDXRendererProps } from '../MDXRenderer.js'
 import { QuickInfoPopover } from './QuickInfoPopover.js'
+import { CodeInline } from '../CodeInline.js'
+import { CodeBlock, parsePreProps } from './CodeBlock.js'
+
+const Paragraph = styled('p', {
+  fontFamily: 'sans-serif',
+  fontSize: 'inherit',
+  lineHeight: 'inherit',
+  margin: 0,
+  textWrap: 'pretty',
+})
+
+const Table = styled('table', {
+  borderCollapse: 'collapse',
+  'th, td': {
+    padding: '0.25em 0.75em',
+    border: '1px solid var(--border)',
+  },
+})
+
+const mdxRendererProps = {
+  components: {
+    pre: (props) => {
+      return <CodeBlock {...parsePreProps(props)} shouldAnalyze={false} />
+    },
+    code: (props) => {
+      return (
+        <CodeInline
+          children={props.children}
+          shouldAnalyze={false}
+          css={{
+            display: 'inline',
+            fontSize: '0.9em',
+            whiteSpace: 'pre-wrap',
+            top: 2,
+          }}
+        />
+      )
+    },
+    p: Paragraph,
+    table: Table,
+  },
+  rehypePlugins,
+  remarkPlugins,
+} satisfies Omit<MDXRendererProps, 'children'>
 
 /**
  * A quick info popover that displays diagnostics and documentation.
@@ -87,16 +132,17 @@ export async function QuickInfo({
           {quickInfo?.documentationText.length ? (
             <>
               <Divider color={theme.panel.border} />
-              <MDXRenderer
-                components={{
-                  p: ({ children }) => (
-                    <Paragraph css={{ color: theme.foreground }}>
-                      {children}
-                    </Paragraph>
-                  ),
+              <MarkdownContainer
+                css={{
+                  '--border': theme.panel.border,
+                  color: theme.foreground,
                 }}
-                children={quickInfo.documentationText}
-              />
+              >
+                <MDXRenderer
+                  children={quickInfo.documentationText}
+                  {...mdxRendererProps}
+                />
+              </MarkdownContainer>
             </>
           ) : null}
         </ContentContainer>
@@ -119,6 +165,14 @@ const Container = styled('div', {
 const ContentContainer = styled('div', {
   fontSize: '0.875em',
   lineHeight: '1.4em',
+})
+
+const MarkdownContainer = styled('div', {
+  padding: '0.25em 0.5em',
+  textWrap: 'pretty',
+  '> *': {
+    marginBottom: '0.5em',
+  },
 })
 
 const DiagnosticContainer = styled('div', {
@@ -148,12 +202,3 @@ const DisplayTextContainer = styled('div', {
 })
 
 const TokenSpan = styled('span')
-
-const Paragraph = styled('p', {
-  fontFamily: 'sans-serif',
-  fontSize: 'inherit',
-  lineHeight: 'inherit',
-  padding: '0.25em 0.5em',
-  margin: 0,
-  textWrap: 'pretty',
-})
