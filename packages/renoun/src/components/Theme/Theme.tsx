@@ -1,28 +1,21 @@
 import React from 'react'
-import { GlobalStyles } from 'restyle'
 
-import { getThemeColorVariables } from '../../utils/get-theme.js'
 import { loadConfig } from '../../utils/load-config.js'
 import { ThemeContextProvider } from './ThemeContext.js'
+import { ThemeStyles } from './ThemeStyles.js'
 
 /** A provider that sets the theme colors for the entire application. */
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const config = loadConfig()
   return (
     <>
-      <ThemeStyles />
       <ThemeScripts />
+      <ThemeStyles />
       <ThemeContextProvider value={config.theme}>
         {children}
       </ThemeContextProvider>
     </>
   )
-}
-
-/** A component that sets the global theme colors. */
-export async function ThemeStyles() {
-  const colorVariables = await getThemeColorVariables()
-  return <GlobalStyles>{colorVariables}</GlobalStyles>
 }
 
 const themeScriptSource = `
@@ -43,6 +36,6 @@ const themeScriptSource = `
 `
 
 /** A script that sets the theme based on local storage immediately before the page renders. */
-export function ThemeScripts() {
+function ThemeScripts() {
   return <script dangerouslySetInnerHTML={{ __html: themeScriptSource }} />
 }

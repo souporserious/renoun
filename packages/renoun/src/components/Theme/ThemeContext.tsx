@@ -4,7 +4,7 @@ import React, { createContext } from 'react'
 import type { ConfigurationOptions } from '../../utils/load-config.js'
 
 /**
- * A context that provides the theme colors.
+ * A context that provides the current configured themes.
  * @internal
  */
 export const ThemeContext = createContext<ConfigurationOptions['theme'] | null>(
@@ -12,7 +12,7 @@ export const ThemeContext = createContext<ConfigurationOptions['theme'] | null>(
 )
 
 /**
- * A provider that sets the theme colors for the entire tree.
+ * A provider that captures the server theme configuration and provides it to the client.
  * @internal
  */
 export function ThemeContextProvider({

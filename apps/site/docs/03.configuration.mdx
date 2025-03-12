@@ -117,6 +117,31 @@ export function ThemePicker() {
 }
 ```
 
+### Only Loading Styles
+
+If you are using another theming solution, you can use the `ThemeStyles` component directly to only load the CSS Variables for the theme:
+
+```tsx
+import { ThemeStyles } from 'renoun/components'
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <html>
+      <body>
+        <ThemeStyles />
+        {children}
+      </body>
+    </html>
+  )
+}
+```
+
+This is not required if you are using the `ThemeProvider` component.
+
 ### Overriding Themes
 
 To override a theme, you can provide a tuple that specifies the theme values to override:
