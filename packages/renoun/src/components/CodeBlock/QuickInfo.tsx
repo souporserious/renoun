@@ -168,10 +168,10 @@ const ContentContainer = styled('div', {
 })
 
 const MarkdownContainer = styled('div', {
-  padding: '0.25em 0.5em',
+  padding: '0.25em 0.5em 0',
   textWrap: 'pretty',
   '> *': {
-    marginBottom: '0.5em',
+    marginBottom: '0.25em',
   },
 })
 
