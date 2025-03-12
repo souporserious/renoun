@@ -72,8 +72,7 @@ interface KeepElementInViewOptions {
  */
 export function keepElementInView(
   popoverNode: HTMLElement,
-  anchorNode: HTMLElement,
-  options?: KeepElementInViewOptions
+  anchorNode: HTMLElement
 ) {
   const viewportRect = getClosestViewportRect(popoverNode)
   const popoverRect = getRectWithScroll(
@@ -91,17 +90,6 @@ export function keepElementInView(
     height: popoverRect.height,
     top: anchorRect.top - popoverRect.height,
     left: anchorRect.left,
-  }
-
-  if (options?.maxWidth !== undefined) {
-    const difference = styles.width - options.maxWidth
-    styles.width = Math.min(styles.width, options.maxWidth)
-    styles.left = styles.left + difference
-  }
-  if (options?.maxHeight !== undefined) {
-    const difference = styles.height - options.maxHeight
-    styles.height = Math.min(styles.height, options.maxHeight)
-    styles.top = styles.top + difference
   }
 
   if (styles.top < viewportRect.top) {

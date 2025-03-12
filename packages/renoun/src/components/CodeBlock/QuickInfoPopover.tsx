@@ -16,7 +16,7 @@ export function QuickInfoPopover({ children }: { children: React.ReactNode }) {
     if (ref.current && quickInfo) {
       const popoverNode = ref.current.firstChild as HTMLElement
       const anchorNode = document.getElementById(quickInfo.anchorId)!
-      keepElementInView(popoverNode, anchorNode, { maxHeight: 250 })
+      keepElementInView(popoverNode, anchorNode)
       return () => {
         popoverNode.style.removeProperty('top')
         popoverNode.style.removeProperty('left')
