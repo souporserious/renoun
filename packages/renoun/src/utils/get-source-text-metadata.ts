@@ -13,6 +13,7 @@ export interface GetSourceTextMetadataOptions {
   language?: Languages
   filePath?: string
   shouldFormat?: boolean
+  workingDirectory?: string
 }
 
 export interface GetSourceTextMetadataResult {
@@ -39,6 +40,7 @@ export async function getSourceTextMetadata({
   language,
   shouldFormat = true,
   value,
+  workingDirectory,
 }: GetSourceTextMetadataOptions): Promise<GetSourceTextMetadataResult> {
   await waitForRefreshingProjects()
 
@@ -55,8 +57,13 @@ export async function getSourceTextMetadata({
     }
   }
 
-  if (!finalLanguage) {
-    finalLanguage = (filePathProp?.split('.').pop() as Languages) || 'plaintext'
+  if (finalLanguage === undefined) {
+    if (filePathProp) {
+      const extension = filePathProp.split('.').pop() as Languages
+      finalLanguage = extension
+    } else {
+      finalLanguage = 'txt'
+    }
   }
 
   if (typeof finalLanguage === 'string') {
@@ -69,7 +76,11 @@ export async function getSourceTextMetadata({
   const jsxOnly = isJavaScriptLikeLanguage ? isJsxOnly(finalValue) : false
   let filePath = filePathProp
 
-  if (!filePath) {
+  if (filePath) {
+    if (workingDirectory) {
+      filePath = join(workingDirectory, filePath)
+    }
+  } else {
     filePath = `${id}.${finalLanguage}`
     isGeneratedFileName = true
   }
@@ -95,8 +106,11 @@ export async function getSourceTextMetadata({
     }
   }
 
-  // Scope code block source files since they can conflict with other files on disk.
-  filePath = join(scopeId, filePath)
+  // Scope code block source files since they can conflict with other files on disk
+  // unless a working directory is provided in which case the file path is absolute.
+  if (workingDirectory === undefined) {
+    filePath = join(scopeId, filePath)
+  }
 
   // Store generated file names to provide better error messages
   if (isGeneratedFileName) {
@@ -107,7 +121,7 @@ export async function getSourceTextMetadata({
   if (isJavaScriptLikeLanguage && !filePath.includes('.')) {
     if (!finalLanguage) {
       throw new Error(
-        `[renoun] The "language" prop was not provided to the CodeBlock component and could not be inferred from the file path. Pass a valid "filePath" with extension or a "language" prop`
+        `[renoun] The "language" prop was not provided to the CodeBlock component and could not be inferred from the file path. Pass a valid "path" with extension or a "language" prop`
       )
     }
 
@@ -123,7 +137,8 @@ export async function getSourceTextMetadata({
 
       finalValue = sourceFile.getFullText().trim()
 
-      // If no imports or exports add an empty export declaration to coerce TypeScript to treat the file as a module
+      // Add an empty export declaration to coerce TypeScript to treat the file as a module
+      // This is needed due to a bug in ts-morph: https://github.com/dsherret/ts-morph/issues/1611
       const hasImports = sourceFile.getImportDeclarations().length > 0
       const hasExports = sourceFile.getExportDeclarations().length > 0
 

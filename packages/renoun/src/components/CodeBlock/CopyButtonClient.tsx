@@ -2,7 +2,6 @@
 import React, { use, useState } from 'react'
 import { css, type CSSObject } from 'restyle'
 
-import { CopyButtonContext } from './contexts.js'
 import { PreActiveContext } from './Pre.js'
 
 /**
@@ -10,7 +9,7 @@ import { PreActiveContext } from './Pre.js'
  * @internal
  */
 export function CopyButtonClient({
-  value: valueProp,
+  value,
   css: cssProp,
   className,
   ...props
@@ -20,9 +19,6 @@ export function CopyButtonClient({
     | ((event: React.MouseEvent<HTMLButtonElement, MouseEvent>) => string)
   css?: CSSObject
 } & Omit<React.ComponentProps<'button'>, 'value'>) {
-  const contextValue = use(CopyButtonContext)
-  const value = valueProp || contextValue
-
   if (!value) {
     throw new Error(
       '[renoun] The calculated value for the `CopyButton` component was `undefined` or an empty string. Use the `value` prop or use the `CopyButton` component within a `CodeBlock` component.'
