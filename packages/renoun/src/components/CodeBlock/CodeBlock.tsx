@@ -505,7 +505,7 @@ export function parsePreProps({
     language,
     ...props,
   } satisfies {
-    value: string
+    children: string
     language?: Languages
   } & Omit<React.ComponentProps<NonNullable<MDXComponents['pre']>>, 'children'>
 }
