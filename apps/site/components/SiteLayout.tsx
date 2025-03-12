@@ -43,7 +43,7 @@ export function SiteLayout({
           position: 'fixed',
           left: 0,
           right: 0,
-          zIndex: 1,
+          zIndex: 5,
         }}
       >
         {sidebar ? (
