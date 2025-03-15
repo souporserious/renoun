@@ -145,16 +145,26 @@ const themeFallbacks = {
   'editorLineNumber.foreground': ['editor.foreground'],
   'editorLineNumber.activeForeground': ['editorLineNumber.foreground'],
   'editorHoverWidget.background': [
+    'editorWidget.background',
     'editorSuggestWidget.background',
     'menu.background',
     'editor.background',
   ],
   'editorHoverWidget.foreground': [
+    'editorWidget.foreground',
     'editorSuggestWidget.foreground',
     'menu.foreground',
     'editor.foreground',
   ],
-  'editorHoverWidget.border': ['editorSuggestWidget.border', 'menu.border'],
+  'editorHoverWidget.border': [
+    'editorWidget.border',
+    'editorSuggestWidget.border',
+    'menu.border',
+    {
+      dark: '#454545',
+      light: '#c8c8c8',
+    },
+  ],
   'scrollbarSlider.background': [
     {
       dark: 'rgba(121, 121, 121, 0.4)',
