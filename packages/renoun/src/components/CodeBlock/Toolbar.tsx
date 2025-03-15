@@ -22,7 +22,8 @@ export interface ToolbarProps {
   children?: React.ReactNode
 }
 
-async function ToolbarAsync({
+/** A toolbar for the `CodeBlock` component that displays the file path, a source link, and copy button. */
+export async function Toolbar({
   allowCopy,
   css,
   className,
@@ -57,11 +58,6 @@ async function ToolbarAsync({
       ) : null}
     </Container>
   )
-}
-
-/** A toolbar for the `CodeBlock` component that displays the file path, a source link, and copy button. */
-export function Toolbar(props: ToolbarProps) {
-  return <ToolbarAsync {...props} />
 }
 
 const Container = styled('div', {
