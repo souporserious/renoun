@@ -33,6 +33,7 @@ export function getFileExports(
       )
 
       if (isExportable) {
+        // Skip function overload declarations
         if (tsMorph.Node.isFunctionDeclaration(declaration)) {
           const body = declaration.getBody()
 
