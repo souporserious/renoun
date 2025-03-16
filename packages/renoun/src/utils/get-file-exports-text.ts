@@ -71,12 +71,7 @@ export function getFileExportsText(
       exportedSymbolId,
       declarationMap
     )
-    const textSnippet = buildTextSnippet(
-      usedLocals,
-      sourceFile,
-      declarationMap,
-      importMap
-    )
+    const textSnippet = buildTextSnippet(usedLocals, sourceFile, declarationMap)
     const declaration = declarationMap.get(exportedSymbolId)!
 
     results.push({
@@ -335,8 +330,7 @@ function getUsedImports(
 function buildTextSnippet(
   usedLocals: Set<string>,
   sourceFile: SourceFile,
-  declarationMap: Map<string, DeclarationInfo>,
-  importMap: Map<string, ImportInfo>
+  declarationMap: Map<string, DeclarationInfo>
 ): string {
   const usedImports = getUsedImports(usedLocals, declarationMap)
   const fileStatements = sourceFile.getStatements()
