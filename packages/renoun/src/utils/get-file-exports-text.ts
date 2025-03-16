@@ -460,7 +460,7 @@ function pruneImportDeclaration(
     importDeclaration.getLastToken().getKind() ===
     tsMorph.SyntaxKind.SemicolonToken
 
-  return `import ${importClause} from ${moduleSpecifier}${endsWithSemicolon ? ';' : ''}`
+  return `import ${importClause} from ${moduleSpecifier}${endsWithSemicolon ? ';' : ''}\n`
 }
 
 /** Strip JSDoc from a statement. */
