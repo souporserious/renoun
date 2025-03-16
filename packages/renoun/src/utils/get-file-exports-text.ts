@@ -456,11 +456,14 @@ function pruneImportDeclaration(
   }
 
   const moduleSpecifier = importDeclaration.getModuleSpecifier().getText()
-  const endsWithSemicolon =
+  const hasSemicolon =
     importDeclaration.getLastToken().getKind() ===
     tsMorph.SyntaxKind.SemicolonToken
+  const semicolonText = hasSemicolon ? ';' : ''
+  const attributes = importDeclaration.compilerNode.attributes
+  const attributesText = attributes ? attributes.getText() : ''
 
-  return `import ${importClause} from ${moduleSpecifier}${endsWithSemicolon ? ';' : ''}\n`
+  return `import ${importClause} from ${moduleSpecifier}${attributesText}${semicolonText}`
 }
 
 /** Strip JSDoc from a statement. */
