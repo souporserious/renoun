@@ -336,18 +336,74 @@ function buildTextSnippet(
   const fileStatements = sourceFile.getStatements()
   const lines: string[] = []
 
-  // For each import, prune out unused aliases.
   for (const statement of fileStatements) {
     if (tsMorph.Node.isImportDeclaration(statement)) {
-      const prunedImport = pruneImportDeclaration(statement, usedImports)
-      if (prunedImport) {
-        lines.push(prunedImport)
+      const defaultImport = statement.getDefaultImport()?.getText()
+
+      if (defaultImport) {
+        statement.removeDefaultImport()
+
+        if (usedImports.has(defaultImport)) {
+          statement.setDefaultImport(defaultImport)
+        }
+      }
+
+      const namespaceImport = statement.getNamespaceImport()?.getText()
+
+      if (namespaceImport) {
+        statement.removeNamespaceImport()
+
+        if (usedImports.has(namespaceImport)) {
+          statement.setNamespaceImport(namespaceImport)
+        }
+      }
+
+      const namedImportStructures = statement
+        .getNamedImports()
+        .map((namedImport) => namedImport.getStructure())
+
+      statement.removeNamedImports()
+
+      const usedNamedImportStructures: tsMorph.ImportSpecifierStructure[] = []
+      const unusedNamedImportStructures: {
+        index: number
+        structure: tsMorph.ImportSpecifierStructure
+      }[] = []
+      const usedIndex: number[] = []
+      let usedCount = 0
+
+      for (let index = 0; index < namedImportStructures.length; index++) {
+        const structure = namedImportStructures[index]
+        const localName = structure.alias ?? structure.name
+        if (usedImports.has(localName)) {
+          usedNamedImportStructures.push(structure)
+          usedCount++
+        } else {
+          unusedNamedImportStructures.push({ index: index, structure })
+        }
+        usedIndex[index] = usedCount
+      }
+
+      statement.addNamedImports(usedNamedImportStructures)
+
+      if (usedNamedImportStructures.length > 0) {
+        lines.push(statement.getFullText())
+      }
+
+      if (defaultImport && !usedImports.has(defaultImport)) {
+        statement.setDefaultImport(defaultImport)
+      }
+
+      if (namespaceImport && !usedImports.has(namespaceImport)) {
+        statement.setNamespaceImport(namespaceImport)
+      }
+
+      for (const { index, structure } of unusedNamedImportStructures) {
+        const insertionIndex = index === 0 ? 0 : usedIndex[index - 1]
+        statement.insertNamedImport(insertionIndex, structure)
       }
     }
-  }
 
-  // keep local declarations in original order if they are in usedLocals
-  for (const statement of fileStatements) {
     // check if it's a top-level declaration we need to keep
     if (
       tsMorph.Node.isFunctionDeclaration(statement) ||
@@ -385,85 +441,6 @@ function buildTextSnippet(
   }
 
   return lines.join('').trim()
-}
-
-/**
- * Prune unused parts from an ImportDeclaration.
- *
- * - If the default import is used, keep it.
- * - If the namespace import is used, keep it.
- * - For named imports, filter the list to only those that are used.
- *
- * Returns a new import statement string or an empty string if nothing is used.
- */
-function pruneImportDeclaration(
-  importDeclaration: ImportDeclaration,
-  usedImports: Set<string>
-): string {
-  // Check default import (e.g. `import React from 'react'`)
-  const defaultImport = importDeclaration.getDefaultImport()
-  const defaultImportText =
-    defaultImport && usedImports.has(defaultImport.getText())
-      ? defaultImport.getText()
-      : null
-
-  // Check namespace import (e.g. `import * as system from 'system'`)
-  const namespaceImport = importDeclaration.getNamespaceImport()
-  const namespaceImportText =
-    namespaceImport && usedImports.has(namespaceImport.getText())
-      ? `* as ${namespaceImport.getText()}`
-      : null
-
-  // Check named imports (e.g. `import { Image, useHover as hoverMe } from '...'`)
-  const namedImports = importDeclaration.getNamedImports()
-  const usedNamedImports: string[] = []
-
-  for (const namedImport of namedImports) {
-    const aliasNode = namedImport.getAliasNode()
-    const nameNode = namedImport.getNameNode()
-    const localName = aliasNode ? aliasNode.getText() : nameNode.getText()
-    if (usedImports.has(localName)) {
-      // If there's an alias and it differs from the original name, include "original as alias"
-      if (aliasNode && aliasNode.getText() !== nameNode.getText()) {
-        usedNamedImports.push(`${nameNode.getText()} as ${aliasNode.getText()}`)
-      } else {
-        usedNamedImports.push(nameNode.getText())
-      }
-    }
-  }
-
-  // Build the import clause.
-  let importClause = ''
-  if (defaultImportText) {
-    importClause = defaultImportText
-  }
-
-  if (namespaceImportText) {
-    // If both a default and a namespace import exist, separate with a comma.
-    importClause = importClause
-      ? `${importClause}, ${namespaceImportText}`
-      : namespaceImportText
-  } else if (usedNamedImports.length > 0) {
-    const namedImportsClause = `{ ${usedNamedImports.join(', ')} }`
-    importClause = importClause
-      ? `${importClause}, ${namedImportsClause}`
-      : namedImportsClause
-  }
-
-  // If nothing was used, return an empty string
-  if (!importClause) {
-    return ''
-  }
-
-  const moduleSpecifier = importDeclaration.getModuleSpecifier().getText()
-  const hasSemicolon =
-    importDeclaration.getLastToken().getKind() ===
-    tsMorph.SyntaxKind.SemicolonToken
-  const semicolonText = hasSemicolon ? ';' : ''
-  const attributes = importDeclaration.compilerNode.attributes
-  const attributesText = attributes ? attributes.getText() : ''
-
-  return `import ${importClause} from ${moduleSpecifier}${attributesText}${semicolonText}`
 }
 
 /** Strip JSDoc from a statement. */

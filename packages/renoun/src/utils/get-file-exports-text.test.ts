@@ -4,6 +4,7 @@ import { Project } from 'ts-morph'
 import { getFileExportsText } from './get-file-exports-text.js'
 
 const sourceFileText = `
+import * as React from 'react'
 import { Image } from 'components'
 export { useFocus } from 'hooks'
 export * as system from 'system'
@@ -77,7 +78,7 @@ describe('getFileExportsText', () => {
         {
           "kind": 262,
           "name": "useHover",
-          "position": 214,
+          "position": 245,
           "text": "export function useHover() {
         return null
       }",
@@ -85,7 +86,7 @@ describe('getFileExportsText', () => {
         {
           "kind": 262,
           "name": "Avatar",
-          "position": 355,
+          "position": 386,
           "text": "import { Image } from 'components'
 
       export function Avatar() {
@@ -99,7 +100,7 @@ describe('getFileExportsText', () => {
         {
           "kind": 243,
           "name": "Box",
-          "position": 636,
+          "position": 667,
           "text": "type SystemProps = { as: any }
 
       type BoxProps = { children: any } & SystemProps
@@ -109,7 +110,7 @@ describe('getFileExportsText', () => {
         {
           "kind": 262,
           "name": "Badge",
-          "position": 773,
+          "position": 804,
           "text": "export function Badge(props: { children: any }) {
         return <div {...props} />
       }",
@@ -117,7 +118,7 @@ describe('getFileExportsText', () => {
         {
           "kind": 243,
           "name": "Button",
-          "position": 880,
+          "position": 911,
           "text": "const Stack = (props: { children: any; style?: any }) => <div {...props} />
 
       interface ButtonProps {}
@@ -127,13 +128,13 @@ describe('getFileExportsText', () => {
         {
           "kind": 243,
           "name": "Stack",
-          "position": 696,
+          "position": 727,
           "text": "const Stack = (props: { children: any; style?: any }) => <div {...props} />",
         },
         {
           "kind": 263,
           "name": "Car",
-          "position": 983,
+          "position": 1014,
           "text": "export class Car {
         wheels = 4
       }",
