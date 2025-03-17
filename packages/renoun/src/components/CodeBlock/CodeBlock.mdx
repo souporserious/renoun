@@ -1,6 +1,6 @@
 ## Style Overrides
 
-The `CodeBlock` component can be styled using the, `css`, `className`, and `style` props to target specific descendant components.
+The `CodeBlock` component can be styled using the, `css`, `className`, and `style` props to target specific descendant components. In most cases, its a good idea to create your own component that wraps the `CodeBlock` component and applies the style overrides you need:
 
 ```tsx
 import {
@@ -72,11 +72,17 @@ export function CodeBlock({
 
 <Note>
 
-This will only render highlighted tokens. Use the other `CodeBlock` components
+This will only render highlighted tokens. Use the other descendant `CodeBlock` components
 like `LineNumbers` and `Toolbar` to render the other parts of the code block.
 
 </Note>
 
 ## Formatting
 
-The `CodeBlock` source text is formatted using either the TypeScript compiler or using `prettier` if it is available to the workspace
+The `CodeBlock` source text is formatted by default using `prettier` if it is installed within the workspace. The `shouldFormat` prop can be used to disable this behavior:
+
+```tsx
+<CodeBlock language="ts" shouldFormat={false}>
+  const foo = 'bar'
+</CodeBlock>
+```
