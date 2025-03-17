@@ -21,7 +21,7 @@ import {
   getScrollContainerStyles,
 } from './utils.js'
 
-export type CodeBlockProps = {
+export interface CodeBlockProps {
   /** Pass a code string to highlight or override default rendering using `Tokens`, `LineNumbers`, and `Toolbar` components. */
   children: React.ReactNode
 
