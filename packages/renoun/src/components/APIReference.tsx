@@ -322,11 +322,6 @@ function TypeChildren({
                   borderTop: '1px solid var(--color-separator-secondary)',
                 }}
               />
-              <CodeInline
-                children={signature.text}
-                language="typescript"
-                shouldAnalyze={false}
-              />
               {signature.description ? (
                 <MDXRenderer
                   children={signature.description}
@@ -386,11 +381,6 @@ function TypeChildren({
                   border: 'none',
                   borderTop: '1px solid var(--color-separator-secondary)',
                 }}
-              />
-              <CodeInline
-                children={signature.text}
-                language="typescript"
-                shouldAnalyze={false}
               />
               {signature.description ? (
                 <MDXRenderer
