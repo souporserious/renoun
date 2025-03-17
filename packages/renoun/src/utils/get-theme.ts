@@ -87,15 +87,19 @@ export async function getTheme(themeName?: string): Promise<TextMateThemeRaw> {
   return finalTheme
 }
 
+const prefix = 'rn'
+
 /**
  * Helper to convert a theme key (e.g. "editorHoverWidget.background")
  * into a CSS variable name in kebab-case (e.g. "editor-hover-widget-background").
  */
 function toCssVariableName(key: string): string {
-  return key
+  const variable = key
     .split('.')
     .map((part) => part.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase())
     .join('-')
+
+  return `${prefix}-${variable}`
 }
 
 /** Generates CSS variables for all theme colors. */
