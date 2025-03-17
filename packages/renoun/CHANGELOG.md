@@ -1,5 +1,23 @@
 # renoun
 
+## 8.11.0
+
+### Minor Changes
+
+- a0c78fd: Exports the `ThemeStyles` component for more granular control of managing multiple themes.
+- 50f816b: Adds back the `workingDirectory` prop to the `CodeBlock` component for targeting local files. When defined, this will be joined with the `path` prop to load a source file located within the file system instead of creating a virtual file which allows imports and types to be resolved correctly.
+- 7107876: Fixes `parsePreProps` types to include `children`.
+- a4c6205: Optimizes the `JavaScriptFile#getText({ includeDependencies: true })` method to be more performant.
+- a7e75c3: Cleans up default styles for `Tokens` quick info popover.
+
+### Patch Changes
+
+- 0b0e28f: Fixes cached package dependency check causing missing formatting on initial load during development.
+- bce883d: Fix theme CSS variable collisions by prefixing theme variable names.
+- a0e39d8: Improves default colors for `QuickInfo` across themes.
+- 04421e0: Removes duplicate code text for functions and components in `APIReference`.
+- 23604c6: Fixes the `CodeBlock` component server context not restoring the previous value which causes the `Toolbar` component to receive the incorrect value.
+
 ## 8.10.0
 
 ### Minor Changes
