@@ -5,7 +5,7 @@ import { cwd } from 'node:process'
 
 import { getRootDirectory } from './get-root-directory.js'
 
-const dependencyCache: Map<string, boolean> = new Map()
+const dependencyCache = new Map<string, boolean>()
 
 /**
  * Determines if a dependency is defined in any package.json files starting
@@ -14,15 +14,22 @@ const dependencyCache: Map<string, boolean> = new Map()
 export async function findPackageDependency(
   dependencyName: string,
   startDirectory: string = cwd()
-): Promise<boolean> {
+) {
   let currentDirectory = resolve(startDirectory)
   const rootDirectory = getRootDirectory(currentDirectory)
+  const directories = []
 
   while (true) {
+    directories.push(currentDirectory)
     const cacheKey = `${currentDirectory}:${dependencyName}`
 
+    // If we have a cached result for this directory, propagate it
     if (dependencyCache.has(cacheKey)) {
-      return dependencyCache.get(cacheKey)!
+      const cachedResult = dependencyCache.get(cacheKey)!
+      directories.forEach((directory) =>
+        dependencyCache.set(`${directory}:${dependencyName}`, cachedResult)
+      )
+      return cachedResult
     }
 
     const packageJsonPath = join(currentDirectory, 'package.json')
@@ -35,19 +42,21 @@ export async function findPackageDependency(
         (dependencies && dependencies[dependencyName]) ||
         (devDependencies && devDependencies[dependencyName])
       ) {
-        dependencyCache.set(cacheKey, true)
+        // Cache a positive result for all traversed directories
+        directories.forEach((directory) =>
+          dependencyCache.set(`${directory}:${dependencyName}`, true)
+        )
         return true
       }
     }
 
-    dependencyCache.set(cacheKey, false)
-
-    if (currentDirectory === rootDirectory) {
-      break
-    }
-
+    if (currentDirectory === rootDirectory) break
     currentDirectory = dirname(currentDirectory)
   }
 
+  // If the dependency wasn't found, cache false for all traversed directories
+  directories.forEach((directory) =>
+    dependencyCache.set(`${directory}:${dependencyName}`, false)
+  )
   return false
 }
