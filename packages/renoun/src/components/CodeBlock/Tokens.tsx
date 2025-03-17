@@ -63,7 +63,7 @@ export async function Tokens({
   allowErrors,
   showErrors,
   shouldAnalyze: shouldAnalyzeProp,
-  shouldFormat,
+  shouldFormat = true,
   renderLine,
   css: cssProp = {},
   className = {},
