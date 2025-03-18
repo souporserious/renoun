@@ -1,5 +1,11 @@
 # renoun
 
+## 8.12.0
+
+### Minor Changes
+
+- a862ea2: Updates all dependencies to latest version.
+
 ## 8.11.0
 
 ### Minor Changes
