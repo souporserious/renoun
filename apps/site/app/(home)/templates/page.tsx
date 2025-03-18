@@ -94,8 +94,8 @@ export default function Templates() {
                 color: 'var(--color-foreground-secondary)',
               }}
             >
-              A comprehensive documentation site for design systems with
-              components, hooks, and utilities.
+              A comprehensive Next.js documentation site template for design
+              systems with components, hooks, and utilities.
             </p>
             <div
               css={{
@@ -110,12 +110,16 @@ export default function Templates() {
               <span
                 css={{
                   gridColumn: '1',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.1em',
                   fontSize: 'var(--font-size-heading-2)',
                   fontWeight: 'var(--font-weight-heading)',
                 }}
               >
                 <span
                   css={{
+                    fontSize: '0.8em',
                     fontWeight: 'var(--font-weight-body)',
                     color: 'var(--color-foreground-secondary)',
                   }}
@@ -159,16 +163,46 @@ export default function Templates() {
               flex: '1',
               minWidth: '300px',
               maxWidth: '500px',
+              position: 'relative',
             }}
           >
-            <Image
-              src={preview}
-              alt="Design System Documentation Template Preview"
-              style={{
-                maxWidth: '100%',
-                height: 'auto',
+            <div
+              css={{
+                display: 'block',
+                position: 'relative',
+                '&:hover > div': {
+                  opacity: 1,
+                },
+                '&:focus-within > div': {
+                  opacity: 1,
+                },
               }}
-            />
+            >
+              <Image
+                src={preview}
+                alt="Design System Documentation Template Preview"
+                style={{
+                  maxWidth: '100%',
+                  height: 'auto',
+                }}
+              />
+              <div
+                css={{
+                  position: 'absolute',
+                  inset: 0,
+                  backgroundColor: '#0e132166',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: 0,
+                  transition: 'opacity 0.2s ease-in-out',
+                }}
+              >
+                <ButtonLink href="https://design-system.renoun.dev">
+                  View Demo
+                </ButtonLink>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -231,7 +265,15 @@ function FeatureItem({
         gap: '1rem',
       }}
     >
-      <svg width="1rem" height="1rem" viewBox="0 0 32 32" fill="none">
+      <svg
+        width="1rem"
+        height="1rem"
+        viewBox="0 0 32 32"
+        fill="none"
+        css={{
+          flexShrink: 0,
+        }}
+      >
         <path
           d="M30.6667 16C30.6667 24.1002 24.1002 30.6667 16 30.6667C7.89982 30.6667 1.33333 24.1002 1.33333 16C1.33333 7.89982 7.89982 1.33333 16 1.33333C24.1002 1.33333 30.6667 7.89982 30.6667 16Z"
           fill="#B58422"
