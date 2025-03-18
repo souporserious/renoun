@@ -31,7 +31,7 @@ export interface CodeBlockProps {
   /** The working directory to use when analyzing the source code. This will read the local file system contents from the `workingDirectory` joined with the `path` prop instead of creating a virtual file. */
   workingDirectory?: string
 
-  /** Language of the source code. When used with `source`, the file extension will be used by default. */
+  /** Language of the source code provided to the `Tokens` component. When `path` is defined, the file extension will be used to determine the language by default. */
   language?: Languages
 
   /** A string of comma separated lines and ranges to highlight e.g. `'1, 3-5, 7'`. */
