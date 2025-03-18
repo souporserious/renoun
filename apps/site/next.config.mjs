@@ -11,6 +11,7 @@ const withMDX = createMDXPlugin({
 })
 
 export default withMDX({
+  images: { unoptimized: true },
   output: 'export',
   pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
   transpilePackages: ['renoun'],
