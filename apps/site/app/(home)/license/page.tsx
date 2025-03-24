@@ -103,7 +103,7 @@ function FeatureList({ features }: { features: string[] }) {
 function FreePlanCard() {
   const features = [
     'Blogs and content sites',
-    'Open-source project documentation',
+    'Project documentation',
     'Educational and community content',
     'Non-profit initiatives',
   ]
@@ -290,14 +290,14 @@ function CommercialPlanCard() {
 
 function PricingFooter() {
   return (
-    <div css={{ textAlign: 'center', marginTop: '6.4rem' }}>
+    <div css={{ textAlign: 'center' }}>
       <p
         css={{
           fontSize: 'var(--font-size-body-2)',
           lineHeight: 'var(--line-height-body-2)',
         }}
       >
-        Questions about using renoun for your project?{' '}
+        More questions about using renoun for your project?{' '}
         <a
           href="mailto:info@example.com"
           css={{
@@ -312,6 +312,129 @@ function PricingFooter() {
         </a>
       </p>
     </div>
+  )
+}
+
+function createArrowDataURI(color: string) {
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='${color}'><path d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/></svg>`
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`
+}
+
+function FAQItem({
+  question,
+  children,
+}: {
+  question: string
+  children: React.ReactNode
+}) {
+  return (
+    <details
+      css={{
+        '--open-close-duration': '0.3s',
+        width: '100%',
+        backgroundColor: 'var(--color-surface-interactive)',
+        borderRadius: '0.8rem',
+        overflow: 'hidden',
+        '&::-webkit-details-marker': { display: 'none' },
+        '&::details-content': {
+          display: 'block',
+          height: '0',
+          opacity: 0,
+          overflow: 'hidden',
+          transition:
+            'height var(--open-close-duration) ease, opacity 0.5s ease, content-visibility var(--open-close-duration)',
+          'transition-behavior': 'allow-discrete',
+        },
+        '&[open]::details-content': {
+          height: 'calc-size(auto, size)',
+          opacity: 1,
+        },
+        '&[open] summary::before': {
+          transform: 'rotate(-180deg)',
+        },
+      }}
+    >
+      <summary
+        css={{
+          fontSize: 'var(--font-size-heading-4)',
+          cursor: 'pointer',
+          userSelect: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          padding: '1.6rem',
+          '&::-webkit-details-marker': { display: 'none' },
+          '&::before': {
+            content: '""',
+            flexShrink: 0,
+            width: '1.25rem',
+            height: '1.25rem',
+            marginRight: '1rem',
+            backgroundImage: createArrowDataURI('hsl(200deg 20% 62%)'),
+            backgroundRepeat: 'no-repeat',
+            backgroundSize: '1.25rem',
+            transition: 'transform 0.2s ease-in-out',
+          },
+        }}
+      >
+        {question}
+      </summary>
+      <p
+        css={{
+          padding: '0 1.6rem 1.6rem',
+          fontSize: 'var(--font-size-body-1)',
+          lineHeight: 'var(--line-height-body-1)',
+          color: 'var(--color-foreground-secondary)',
+        }}
+      >
+        {children}
+      </p>
+    </details>
+  )
+}
+
+function FAQSection() {
+  return (
+    <section
+      css={{
+        width: '100%',
+        margin: '4rem 0',
+        padding: '0 2.4rem',
+      }}
+    >
+      <h2
+        css={{
+          textAlign: 'center',
+          fontSize: 'var(--font-size-heading-2)',
+          lineHeight: 'var(--line-height-heading-2)',
+          fontWeight: 'var(--font-weight-heading)',
+          marginBottom: '2.4rem',
+        }}
+      >
+        Frequently Asked Questions
+      </h2>
+      <div
+        css={{
+          display: 'grid',
+          gap: '1.6rem',
+        }}
+      >
+        <FAQItem question="Can I use renoun in my documentation site?">
+          Yes, you can use renoun on your documentation site. However, you
+          cannot sell an end SaaS product powered by renoun (for example, an API
+          endpoint that uses renoun).
+        </FAQItem>
+        <FAQItem question="What projects qualify as non-commercial?">
+          Non-commercial projects include blogs, open-source projects,
+          educational content, and other initiatives that do not generate
+          revenue. Please check our documentation for more details.
+        </FAQItem>
+        <FAQItem question="How do I upgrade to a Commercial License?">
+          If you plan to use renoun in a commercial product or service, please
+          contact our sales team via email so we can discuss licensing options
+          and terms.
+        </FAQItem>
+      </div>
+    </section>
   )
 }
 
@@ -342,6 +465,7 @@ export default function PricingPage() {
         <FreePlanCard />
         <CommercialPlanCard />
       </div>
+      <FAQSection />
       <PricingFooter />
     </div>
   )
