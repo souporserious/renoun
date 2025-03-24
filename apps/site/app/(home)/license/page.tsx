@@ -301,14 +301,15 @@ function FAQItem({
         },
         '&::details-content': {
           display: 'block',
-          height: '0',
+          height: 0,
           opacity: 0,
           overflow: 'hidden',
           transition: `height var(--open-close-duration) ease, opacity 0.5s ease, content-visibility var(--open-close-duration)`,
           transitionBehavior: 'allow-discrete',
+          interpolateSize: 'allow-keywords',
         },
         '&[open]::details-content': {
-          height: 'calc-size(auto, size)',
+          height: 'auto',
           opacity: 1,
         },
         '&[open] summary::before': {
