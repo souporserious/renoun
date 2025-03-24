@@ -52,74 +52,59 @@ function PricingHeader() {
   )
 }
 
-function FeatureList({ features }: { features: string[] }) {
-  return (
-    <ul
-      css={{
-        listStyle: 'none',
-        padding: 0,
-        margin: 0,
-        marginBottom: '2.4rem',
-      }}
-    >
-      {features.map((feature, index) => (
-        <li
-          key={index}
-          css={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '1rem',
-            marginBottom: '1.2rem',
-            fontSize: 'var(--font-size-body-2)',
-            lineHeight: 'var(--line-height-body-2)',
-          }}
-        >
-          <CheckIcon />
-          {feature}
-        </li>
-      ))}
-    </ul>
-  )
-}
-
-function FreePlanCard() {
-  const features = [
-    'Blogs and content sites',
-    'Project documentation',
-    'Educational and community content',
-    'Non-profit initiatives',
-  ]
-
+function FeatureCard({
+  title,
+  price,
+  priceSuffix,
+  description,
+  features,
+  cta,
+  isHighlighted = false,
+}: {
+  title: string
+  price: React.ReactNode
+  priceSuffix?: string
+  description: string
+  features: string[]
+  cta: React.ReactNode
+  isHighlighted?: boolean
+}) {
   return (
     <div
       css={{
-        border: '1px solid var(--color-separator)',
-        borderRadius: '0.8rem',
-        overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        boxShadow: '0 4px 6px rgba(0,0,0,0.05)',
+        padding: '2.8rem 3.6rem',
+        gap: '1.6rem',
+        border: '1px solid var(--color-separator)',
+        borderRadius: '0.8rem',
+        overflow: 'hidden',
       }}
     >
-      <div css={{ padding: '2.4rem' }}>
+      <div
+        css={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.6rem',
+        }}
+      >
         <h2
           css={{
             fontSize: 'var(--font-size-title)',
             fontWeight: 600,
             textTransform: 'uppercase',
             letterSpacing: '0.1rem',
-            marginBottom: '0.8rem',
           }}
         >
-          Non-Commercial License
+          {title}
         </h2>
+
         <div
           css={{
             fontSize: 'var(--font-size-body-1)',
             lineHeight: 'var(--line-height-body-1)',
             color: 'var(--color-foreground-secondary)',
-            marginTop: '0.8rem',
           }}
         >
           <span
@@ -129,26 +114,67 @@ function FreePlanCard() {
               color: 'var(--color-foreground)',
             }}
           >
-            $0
-          </span>{' '}
-          / forever
+            {price}
+          </span>
+          {priceSuffix}
         </div>
       </div>
-      <div css={{ padding: '0 2.4rem 2.4rem', flexGrow: 1 }}>
-        <p
-          css={{
-            marginBottom: '2.4rem',
-            fontSize: 'var(--font-size-body-2)',
-            lineHeight: 'var(--line-height-body-2)',
-            color: 'var(--color-foreground-secondary)',
-          }}
-        >
-          A generous non-commercial license ideal for blogs, documentation
-          sites, educational content, and more.
-        </p>
-        <FeatureList features={features} />
-      </div>
-      <div css={{ padding: '0 2.4rem 2.4rem' }}>
+
+      <p
+        css={{
+          fontSize: 'var(--font-size-body-2)',
+          lineHeight: 'var(--line-height-body-2)',
+          color: 'var(--color-foreground-secondary)',
+        }}
+      >
+        {description}
+      </p>
+
+      <ul
+        css={{
+          display: 'grid',
+          gap: '1rem',
+          listStyle: 'none',
+          padding: 0,
+          margin: '0.8rem 0',
+        }}
+      >
+        {features.map((feature, index) => (
+          <li
+            key={index}
+            css={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '1rem',
+              fontSize: 'var(--font-size-body-2)',
+              lineHeight: 'var(--line-height-body-2)',
+            }}
+          >
+            <CheckIcon />
+            {feature}
+          </li>
+        ))}
+      </ul>
+
+      {cta}
+    </div>
+  )
+}
+
+function FreePlan() {
+  return (
+    <FeatureCard
+      title="Non-Commercial License"
+      price="$0"
+      priceSuffix="/ forever"
+      description="A generous non-commercial license ideal for blogs, documentation sites, and educational content."
+      features={[
+        'Blogs and content sites',
+        'Project documentation',
+        'Educational and community content',
+        'Non-profit initiatives',
+      ]}
+      cta={
         <a
           href="/docs/getting-started"
           css={{
@@ -174,78 +200,26 @@ function FreePlanCard() {
         >
           Start Using renoun
         </a>
-      </div>
-    </div>
+      }
+    />
   )
 }
 
-function CommercialPlanCard() {
-  const features = [
-    'SaaS products',
-    'E-commerce platforms',
-    'Enterprise solutions',
-    'Priority support',
-  ]
-
+function CommercialPlan() {
   return (
-    <div
-      css={{
-        border: '2px solid var(--color-surface-primary)',
-        borderRadius: '0.8rem',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        boxShadow: '0 4px 12px rgba(0,112,243,0.1)',
-      }}
-    >
-      <div css={{ padding: '2.4rem' }}>
-        <h2
-          css={{
-            fontSize: 'var(--font-size-title)',
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: '0.1rem',
-            marginBottom: '0.8rem',
-          }}
-        >
-          Commercial License
-        </h2>
-        <div
-          css={{
-            fontSize: 'var(--font-size-body-1)',
-            lineHeight: 'var(--line-height-body-1)',
-            marginTop: '0.8rem',
-          }}
-        >
-          <span
-            css={{
-              fontWeight: 'var(--font-weight-heading)',
-              fontSize: 'var(--font-size-heading-2)',
-            }}
-          >
-            Contact Us
-          </span>
-        </div>
-      </div>
-      <div css={{ padding: '0 2.4rem 2.4rem', flexGrow: 1 }}>
-        <p
-          css={{
-            marginBottom: '2.4rem',
-            fontSize: 'var(--font-size-body-2)',
-            lineHeight: 'var(--line-height-body-2)',
-            color: 'var(--color-foreground-secondary)',
-          }}
-        >
-          If you plan to integrate renoun into a commercial product or service,
-          drop us an email.
-        </p>
-        <FeatureList features={features} />
-      </div>
-      <div css={{ padding: '0 2.4rem 2.4rem' }}>
-        <Contact />
-      </div>
-    </div>
+    <FeatureCard
+      title="Commercial License"
+      price="Contact Us"
+      description="If you plan to integrate renoun into a commercial product or service, drop us an email."
+      features={[
+        'SaaS products',
+        'E-commerce platforms',
+        'Enterprise solutions',
+        'Priority support',
+      ]}
+      cta={<Contact />}
+      isHighlighted
+    />
   )
 }
 
@@ -438,8 +412,8 @@ export default function PricingPage() {
           margin: '0 auto',
         }}
       >
-        <FreePlanCard />
-        <CommercialPlanCard />
+        <FreePlan />
+        <CommercialPlan />
       </div>
       <FAQSection />
       <PricingFooter />
