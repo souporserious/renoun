@@ -380,7 +380,7 @@ function FAQSection() {
           cannot sell an end SaaS product that uses renoun. For example, an API
           endpoint that uses renoun.
         </FAQItem>
-        <FAQItem question="What projects `qualify as non-commercial?">
+        <FAQItem question="What projects qualify as non-commercial?">
           Non-commercial projects include blogs, open-source projects,
           educational content, and other initiatives that do not directly
           generate revenue from the use of renoun.
