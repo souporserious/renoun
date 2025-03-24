@@ -140,8 +140,8 @@ function FreePlanCard() {
             color: 'var(--color-foreground-secondary)',
           }}
         >
-          Ideal for personal, educational, or open-source projects that do not
-          generate revenue.
+          A generous non-commercial license ideal for blogs, documentation
+          sites, educational content, and more.
         </p>
         <FeatureList features={features} />
       </div>
