@@ -292,7 +292,9 @@ function FAQItem({
         backgroundColor: 'var(--color-surface-interactive)',
         borderRadius: '0.8rem',
         overflow: 'hidden',
-        '&::-webkit-details-marker': { display: 'none' },
+        '&::-webkit-details-marker': {
+          display: 'none',
+        },
         '&::details-content': {
           display: 'block',
           height: '0',
@@ -309,6 +311,9 @@ function FAQItem({
         '&[open] summary::before': {
           transform: 'rotate(-180deg)',
         },
+        '&:has(:focus-visible)': {
+          backgroundColor: 'var(--color-surface-interactive-highlighted)',
+        },
       }}
     >
       <summary
@@ -319,7 +324,12 @@ function FAQItem({
           display: 'flex',
           alignItems: 'center',
           padding: '1.6rem',
-          '&::-webkit-details-marker': { display: 'none' },
+          '&:focus': {
+            outline: 'none',
+          },
+          '&::-webkit-details-marker': {
+            display: 'none',
+          },
           '&::before': {
             content: '""',
             flexShrink: 0,
