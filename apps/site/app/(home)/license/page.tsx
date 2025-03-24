@@ -28,8 +28,8 @@ function PricingHeader() {
     <div css={{ textAlign: 'center', marginBottom: '4.8rem' }}>
       <h1
         css={{
-          fontSize: 'var(--font-size-heading-1)',
-          lineHeight: 'var(--line-height-heading-1)',
+          fontSize: 'var(--font-size-heading-0)',
+          lineHeight: 'var(--line-height-heading-0)',
           fontWeight: 'var(--font-weight-heading)',
           marginBottom: '1.6rem',
         }}
@@ -38,8 +38,8 @@ function PricingHeader() {
       </h1>
       <p
         css={{
-          fontSize: 'var(--font-size-body-1)',
-          lineHeight: 'var(--line-height-body-1)',
+          fontSize: 'var(--font-size-heading-2)',
+          lineHeight: 'var(--line-height-heading-2)',
           maxWidth: '60rem',
           margin: '0 auto',
           color: 'var(--color-foreground-secondary)',
