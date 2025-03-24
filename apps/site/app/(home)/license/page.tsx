@@ -375,20 +375,24 @@ function FAQSection() {
           gap: '1.6rem',
         }}
       >
-        <FAQItem question="Can I use renoun in my documentation site?">
-          Yes, you can use renoun on your documentation site. However, you
-          cannot sell an end SaaS product powered by renoun (for example, an API
-          endpoint that uses renoun).
+        <FAQItem question="Can I use renoun in my documentation site for a paid product?">
+          Yes, you can use renoun in your documentation site. However, you
+          cannot sell an end SaaS product that uses renoun. For example, an API
+          endpoint that uses renoun.
         </FAQItem>
-        <FAQItem question="What projects qualify as non-commercial?">
+        <FAQItem question="What projects `qualify as non-commercial?">
           Non-commercial projects include blogs, open-source projects,
-          educational content, and other initiatives that do not generate
-          revenue. Please check our documentation for more details.
+          educational content, and other initiatives that do not directly
+          generate revenue from the use of renoun.
+        </FAQItem>
+        <FAQItem question="Can I use renoun behind a paywalled product like a course?">
+          Yes, you can use renoun in a paywalled product like course lessons.
+          However, you cannot use renoun in the core product that is sold, such
+          as an API or SaaS product.
         </FAQItem>
         <FAQItem question="How do I upgrade to a Commercial License?">
           If you plan to use renoun in a commercial product or service, please
-          contact our sales team via email so we can discuss licensing options
-          and terms.
+          contact us via email to discuss licensing options and terms.
         </FAQItem>
       </div>
     </section>
