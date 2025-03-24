@@ -230,7 +230,7 @@ export default function Templates() {
           >
             <FeatureItem
               title="Next.js App Router"
-              description="Advanced routing for seamless navigation and performance"
+              description="Fully integrated with React Server Components and Suspense for fast page transitions and optimized performance during development and production"
             />
             <FeatureItem
               title="Component Documentation"
@@ -243,6 +243,10 @@ export default function Templates() {
             <FeatureItem
               title="Theming"
               description="Easily customize colors, typography, spacing, and other design tokens or use your own design system"
+            />
+            <FeatureItem
+              title="Zod Validation"
+              description="Validate component props with Zod schemas to ensure consistent design system documentation"
             />
           </div>
         </div>
