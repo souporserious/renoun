@@ -14,7 +14,6 @@ function CheckIcon() {
       strokeLinejoin="round"
       css={{
         color: 'var(--color-surface-accent)',
-        marginRight: '1.6rem',
         flexShrink: 0,
       }}
     >
@@ -63,19 +62,20 @@ function FeatureList({ features }: { features: string[] }) {
         marginBottom: '2.4rem',
       }}
     >
-      {features.map((feature, idx) => (
+      {features.map((feature, index) => (
         <li
-          key={idx}
+          key={index}
           css={{
             display: 'flex',
-            alignItems: 'flex-start',
+            alignItems: 'center',
+            gap: '1rem',
             marginBottom: '1.2rem',
             fontSize: 'var(--font-size-body-2)',
             lineHeight: 'var(--line-height-body-2)',
           }}
         >
           <CheckIcon />
-          <span>{feature}</span>
+          {feature}
         </li>
       ))}
     </ul>
