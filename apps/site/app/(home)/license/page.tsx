@@ -380,7 +380,7 @@ function FAQItem({
       </summary>
       <p
         css={{
-          padding: '0 1.6rem 1.6rem',
+          padding: '0 1.6rem 1.6rem 3.85rem',
           fontSize: 'var(--font-size-body-1)',
           lineHeight: 'var(--line-height-body-1)',
           color: 'var(--color-foreground-secondary)',
