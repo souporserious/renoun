@@ -105,9 +105,10 @@ function FreePlanCard() {
       <div css={{ padding: '2.4rem' }}>
         <h2
           css={{
-            fontSize: 'var(--font-size-heading-3)',
-            lineHeight: 'var(--line-height-heading-3)',
-            fontWeight: 'var(--font-weight-heading)',
+            fontSize: 'var(--font-size-title)',
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            letterSpacing: '0.1rem',
             marginBottom: '0.8rem',
           }}
         >
@@ -117,6 +118,7 @@ function FreePlanCard() {
           css={{
             fontSize: 'var(--font-size-body-1)',
             lineHeight: 'var(--line-height-body-1)',
+            color: 'var(--color-foreground-secondary)',
             marginTop: '0.8rem',
           }}
         >
@@ -124,6 +126,7 @@ function FreePlanCard() {
             css={{
               fontWeight: 'var(--font-weight-heading)',
               fontSize: 'var(--font-size-heading-2)',
+              color: 'var(--color-foreground)',
             }}
           >
             $0
@@ -199,9 +202,10 @@ function CommercialPlanCard() {
       <div css={{ padding: '2.4rem' }}>
         <h2
           css={{
-            fontSize: 'var(--font-size-heading-3)',
-            lineHeight: 'var(--line-height-heading-3)',
-            fontWeight: 'var(--font-weight-heading)',
+            fontSize: 'var(--font-size-title)',
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            letterSpacing: '0.1rem',
             marginBottom: '0.8rem',
           }}
         >
