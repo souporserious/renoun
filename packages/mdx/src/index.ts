@@ -1,9 +1,5 @@
-import remarkFrontmatter from 'remark-frontmatter'
-import remarkMdxFrontmatter from 'remark-mdx-frontmatter'
 import remarkGfm from 'remark-gfm'
 import remarkSmartyPants from 'remark-smartypants'
-import remarkStripBadges from 'remark-strip-badges'
-import remarkSqueezeParagraphs from 'remark-squeeze-paragraphs'
 import rehypeInferReadingTimeMeta from 'rehype-infer-reading-time-meta'
 import rehypeUnwrapImages from 'rehype-unwrap-images'
 
@@ -18,12 +14,8 @@ export type { MDXHeadings } from './remark/add-headings.js'
 export type { MDXComponents, MDXContent } from 'mdx/types.js'
 
 export const remarkPlugins = [
-  remarkFrontmatter,
-  remarkMdxFrontmatter as any,
   remarkGfm,
   [remarkSmartyPants, { dashes: 'oldschool' }] as any,
-  remarkStripBadges,
-  remarkSqueezeParagraphs,
   removeImmediateParagraphs,
   transformRelativeLinks,
   addHeadings,

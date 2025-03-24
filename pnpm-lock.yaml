@@ -110,12 +110,6 @@ importers:
       react-dom:
         specifier: 'catalog:'
         version: 19.0.0(react@19.0.0)
-      remark-frontmatter:
-        specifier: ^5.0.0
-        version: 5.0.0
-      remark-mdx-frontmatter:
-        specifier: ^5.0.0
-        version: 5.0.0
       renoun:
         specifier: workspace:*
         version: link:../../packages/renoun
@@ -258,27 +252,15 @@ importers:
       rehype-unwrap-images:
         specifier: 1.0.0
         version: 1.0.0
-      remark-frontmatter:
-        specifier: 5.0.0
-        version: 5.0.0
       remark-gfm:
         specifier: 4.0.1
         version: 4.0.1
       remark-github:
         specifier: 12.0.0
         version: 12.0.0
-      remark-mdx-frontmatter:
-        specifier: 5.0.0
-        version: 5.0.0
       remark-smartypants:
         specifier: 3.0.2
         version: 3.0.2
-      remark-squeeze-paragraphs:
-        specifier: 6.0.0
-        version: 6.0.0
-      remark-strip-badges:
-        specifier: 7.0.0
-        version: 7.0.0
       unist-util-visit:
         specifier: ^5.0.0
         version: 5.0.0
@@ -2169,9 +2151,6 @@ packages:
   is-arrayish@0.3.2:
     resolution: {integrity: sha512-eVRqCvVlZbuw3GrM63ovNSNAeA1K16kaR/LRY/92w0zxQ5/1YzwblUX652i4Xs9RwAGjW9d9y6X88t8OaAJfWQ==}
 
-  is-badge@2.1.1:
-    resolution: {integrity: sha512-2X+3jjsHKu9BZk1RR3YKelt/JQ014lC5kJPaqA2gDadAgj0xpga9i+MgLh3Sqx4HUdWwrT8YCpxh/HioULpa1A==}
-
   is-buffer@2.0.5:
     resolution: {integrity: sha512-i2R6zNFDwgEHJyQUtJEk0XFi1i0dPFn/oqjK3/vPCcDeJvW5NQ83V8QbicfF1SupOaB0h8ntgBC2YiE7dfyctQ==}
     engines: {node: '>=4'}
@@ -2309,12 +2288,6 @@ packages:
 
   markdown-table@3.0.4:
     resolution: {integrity: sha512-wiYz4+JrLyb/DqW2hkFJxP7Vd7JuTDm77fvbM8VfEQdmSMqcImWeeRbHwZjBjIFki/VaMK2BhFi7oUUZeM5bqw==}
-
-  mdast-squeeze-paragraphs@6.0.0:
-    resolution: {integrity: sha512-6NDbJPTg0M0Ye+TlYwX1KJ1LFbp515P2immRJyJQhc9Na9cetHzSoHNYIQcXpANEAP1sm9yd/CTZU2uHqR5A+w==}
-
-  mdast-util-definitions@6.0.0:
-    resolution: {integrity: sha512-scTllyX6pnYNZH/AIp/0ePz6s4cZtARxImwoPJ7kS42n+MnVsI4XbnG6d4ibehRIldYMWM2LD7ImQblVhUejVQ==}
 
   mdast-util-find-and-replace@3.0.1:
     resolution: {integrity: sha512-SG21kZHGC3XRTSUhtofZkBzZTJNM5ecCi0SK2IMKmSXR8vO3peL+kb1O0z7Zl83jKtutG4k5Wv/W7V3/YHvzPA==}
@@ -2838,14 +2811,8 @@ packages:
     resolution: {integrity: sha512-ILTWeOriIluwEvPjv67v7Blgrcx+LZOkAUVtKI3putuhlZm84FnqDORNXPPm+HY3NdZOMhyDwZ1E+eZB/Df5dA==}
     engines: {node: '>=16.0.0'}
 
-  remark-squeeze-paragraphs@6.0.0:
-    resolution: {integrity: sha512-qOk1am0QjTGoCPsFuORIZteajsFzLV2m8ijOn3zX9Y0P0IE0lMgjzyP0BxICWnvNz3j+9B+LUNnLHquNu+IrBw==}
-
   remark-stringify@11.0.0:
     resolution: {integrity: sha512-1OSmLd3awB/t8qdoEOMazZkNsfVTeY4fTsgzcQFdXNq8ToTN4ZGwrMnlda4K6smTFKD+GRV6O48i6Z4iKgPPpw==}
-
-  remark-strip-badges@7.0.0:
-    resolution: {integrity: sha512-m6hr3qTUReyg0vl/fcsDREeh4y1//GjOpm7HCoDWdmF6JmnVnWeJmBYzJO20tCiXLvHjK8Rdt1CaKLXCeHXBuw==}
 
   require-directory@2.1.1:
     resolution: {integrity: sha512-fGxEI7+wsG9xrvdjsrlmL22OMTTiHRwAMroiEeMgq8gzoLC/PQr7RsRDSTLUg/bZAZtF+TVIkHc6/4RIKrui+Q==}
@@ -5291,8 +5258,6 @@ snapshots:
   is-arrayish@0.3.2:
     optional: true
 
-  is-badge@2.1.1: {}
-
   is-buffer@2.0.5: {}
 
   is-core-module@2.16.1:
@@ -5399,17 +5364,6 @@ snapshots:
   markdown-extensions@2.0.0: {}
 
   markdown-table@3.0.4: {}
-
-  mdast-squeeze-paragraphs@6.0.0:
-    dependencies:
-      '@types/mdast': 4.0.4
-      unist-util-visit: 5.0.0
-
-  mdast-util-definitions@6.0.0:
-    dependencies:
-      '@types/mdast': 4.0.4
-      '@types/unist': 3.0.3
-      unist-util-visit: 5.0.0
 
   mdast-util-find-and-replace@3.0.1:
     dependencies:
@@ -6294,23 +6248,11 @@ snapshots:
       unified: 11.0.5
       unist-util-visit: 5.0.0
 
-  remark-squeeze-paragraphs@6.0.0:
-    dependencies:
-      '@types/mdast': 4.0.4
-      mdast-squeeze-paragraphs: 6.0.0
-
   remark-stringify@11.0.0:
     dependencies:
       '@types/mdast': 4.0.4
       mdast-util-to-markdown: 2.1.2
       unified: 11.0.5
-
-  remark-strip-badges@7.0.0:
-    dependencies:
-      '@types/mdast': 4.0.4
-      is-badge: 2.1.1
-      mdast-util-definitions: 6.0.0
-      unist-util-visit: 5.0.0
 
   require-directory@2.1.1: {}
 
