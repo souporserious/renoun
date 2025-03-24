@@ -8,6 +8,7 @@
   --color-surface-primary: hsl(208.65deg 77.51% 42.83%);
   --color-surface-primary-highlighted: hsl(208.65deg 77.51% 47.83%);
   --color-surface-secondary: hsl(208deg 100% 80% / 6%);
+  --color-surface-accent: hsl(50deg 99.14% 45.5%);
   --color-surface-interactive: hsl(218deg 42% 12%);
   --color-surface-interactive-highlighted: hsl(212deg 40.8% 15.37%);
   --color-separator: hsl(206deg, 56%, 16%);

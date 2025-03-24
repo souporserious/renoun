@@ -109,19 +109,24 @@ export function SiteLayout({
             </NavigationLink>
             <NavigationLink href="/components">Components</NavigationLink>
             <NavigationLink href="/guides">Guides</NavigationLink>
+            <NavigationLink href="/sponsors">Sponsors</NavigationLink>
+            <NavigationLink href="/license">License</NavigationLink>
             <NavigationLink
-              href="/sponsors"
+              href="/templates"
               css={{
+                width: '6.15rem',
                 paddingInline: '0.5rem',
                 borderRadius: '0.25rem',
-                boxShadow: '0 0 0 1px #db61a2',
-                color: '#f588c2',
+                boxShadow: '0 0 0 1px #e7c201',
+                color: '#e7c201',
+                textAlign: 'center',
                 ':hover': {
-                  color: 'white',
+                  backgroundColor: '#e7c2011c',
+                  color: '#ffd738',
                 },
               }}
             >
-              Sponsors
+              Templates
             </NavigationLink>
           </div>
 
