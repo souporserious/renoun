@@ -59,7 +59,6 @@ function FeatureCard({
   description,
   features,
   cta,
-  isHighlighted = false,
 }: {
   title: string
   price: React.ReactNode
@@ -67,7 +66,6 @@ function FeatureCard({
   description: string
   features: string[]
   cta: React.ReactNode
-  isHighlighted?: boolean
 }) {
   return (
     <div
@@ -75,7 +73,7 @@ function FeatureCard({
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        padding: '2.8rem 3.6rem',
+        padding: '5rem 3.6rem',
         gap: '1.6rem',
         border: '1px solid var(--color-separator)',
         borderRadius: '0.8rem',
@@ -165,8 +163,7 @@ function FreePlan() {
   return (
     <FeatureCard
       title="Non-Commercial License"
-      price="$0"
-      priceSuffix="/ forever"
+      price="Free Forever"
       description="A generous non-commercial license ideal for blogs, documentation sites, and educational content."
       features={[
         'Blogs and content sites',
@@ -218,7 +215,6 @@ function CommercialPlan() {
         'Priority support',
       ]}
       cta={<Contact />}
-      isHighlighted
     />
   )
 }
