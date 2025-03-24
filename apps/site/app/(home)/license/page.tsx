@@ -304,16 +304,15 @@ function FAQItem({
           height: '0',
           opacity: 0,
           overflow: 'hidden',
-          transition:
-            'height var(--open-close-duration) ease, opacity 0.5s ease, content-visibility var(--open-close-duration)',
-          'transition-behavior': 'allow-discrete',
+          transition: `height var(--open-close-duration) ease, opacity 0.5s ease, content-visibility var(--open-close-duration)`,
+          transitionBehavior: 'allow-discrete',
         },
         '&[open]::details-content': {
           height: 'calc-size(auto, size)',
           opacity: 1,
         },
         '&[open] summary::before': {
-          transform: 'rotate(-180deg)',
+          rotate: '0deg',
         },
         '&:has(:focus-visible)': {
           backgroundColor: 'var(--color-surface-interactive-highlighted)',
@@ -343,7 +342,8 @@ function FAQItem({
             backgroundImage: createArrowDataURI('hsl(200deg 20% 62%)'),
             backgroundRepeat: 'no-repeat',
             backgroundSize: '1.25rem',
-            transition: 'transform 0.2s ease-in-out',
+            transition: 'rotate 0.2s ease-in-out',
+            rotate: '-90deg',
           },
         }}
       >
