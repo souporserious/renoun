@@ -13,15 +13,15 @@ interface CodeMetaElement extends Element {
   }
 }
 
-/** Parses `CodeBlock` and `CodeInline` props and adds them to `pre` and `code` element properties respectively. */
-export function addCodeMetaProps() {
-  return async (tree: Root) => {
+/** Parses the meta string from code fences as props and adds them to the parent `pre` element. */
+export default function addPreMetaProps() {
+  return (tree: Root) => {
     visit(tree, 'element', (element: CodeMetaElement) => {
       if (element.tagName === 'pre') {
-        const codeNode = element.children[0] as CodeMetaElement
+        const codeElement = element.children[0] as CodeMetaElement
 
         // Map meta string to props
-        const meta = codeNode.data?.meta
+        const meta = codeElement.data?.meta
         const props: Record<string, any> = {}
 
         meta?.split(' ').forEach((prop) => {
@@ -37,7 +37,7 @@ export function addCodeMetaProps() {
           }
         })
 
-        // Add props to code element
+        // Add props to pre element
         Object.assign(element.properties, props)
 
         return SKIP

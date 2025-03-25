@@ -29,6 +29,49 @@
     "dev": "tsc -w",
     "prepare": "pnpm run build"
   },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./rehype": {
+      "types": "./dist/rehype/index.d.ts",
+      "import": "./dist/rehype/index.js",
+      "default": "./dist/rehype/index.js"
+    },
+    "./rehype/*": {
+      "types": "./dist/rehype/*.d.ts",
+      "import": "./dist/rehype/*.js",
+      "default": "./dist/rehype/*.js"
+    },
+    "./remark": {
+      "types": "./dist/remark/index.d.ts",
+      "import": "./dist/remark/index.js",
+      "default": "./dist/remark/index.js"
+    },
+    "./remark/*": {
+      "types": "./dist/remark/*.d.ts",
+      "import": "./dist/remark/*.js",
+      "default": "./dist/remark/*.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "rehype": [
+        "./dist/rehype/index.d.ts"
+      ],
+      "rehype/*": [
+        "./dist/rehype/*.d.ts"
+      ],
+      "remark": [
+        "./dist/remark/index.d.ts"
+      ],
+      "remark/*": [
+        "./dist/remark/*.d.ts"
+      ]
+    }
+  },
   "devDependencies": {
     "@types/mdast": "^4.0.4",
     "@types/hast": "^3.0.4",

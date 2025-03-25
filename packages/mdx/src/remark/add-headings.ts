@@ -12,6 +12,7 @@ declare module 'mdast' {
   }
 }
 
+/** An array of headings metadata. */
 export type MDXHeadings = {
   id: any
   text: string
@@ -19,7 +20,7 @@ export type MDXHeadings = {
 }[]
 
 /** Adds an `id` to all headings and exports a `headings` prop. */
-export function addHeadings() {
+export default function addHeadings() {
   return function (tree: Root, file: VFile) {
     const headings: MDXHeadings = []
     const headingCounts = new Map()
