@@ -123,8 +123,8 @@
     "dedent": "^1.5.3",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "tm-grammars": "^1.23.4",
-    "tm-themes": "^1.10.1",
+    "tm-grammars": "^1.23.6",
+    "tm-themes": "^1.10.2",
     "valibot": "catalog:",
     "zod": "catalog:"
   },
