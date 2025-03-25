@@ -1,5 +1,11 @@
 # create-renoun
 
+## 1.2.0
+
+### Minor Changes
+
+- a862ea2: Updates all dependencies to latest version.
+
 ## 1.1.0
 
 ### Minor Changes
