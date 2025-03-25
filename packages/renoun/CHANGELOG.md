@@ -1,5 +1,18 @@
 # renoun
 
+## 8.12.0
+
+### Minor Changes
+
+- a862ea2: Updates all dependencies to latest version.
+
+### Patch Changes
+
+- Updated dependencies [d7d15f7]
+- Updated dependencies [b33e5ca]
+- Updated dependencies [6d6684f]
+  - @renoun/mdx@2.0.0
+
 ## 8.11.0
 
 ### Minor Changes
