@@ -362,8 +362,8 @@ function FAQSection() {
       >
         <FAQItem question="Can I use renoun in my documentation site for a paid product?">
           Yes, you can use renoun in your documentation site. However, you
-          cannot sell an end SaaS product that uses renoun. For example, an API
-          endpoint that uses renoun.
+          cannot sell an end SaaS product that uses renoun. For example, selling
+          access to an API endpoint that uses renoun.
         </FAQItem>
         <FAQItem question="What projects qualify as non-commercial?">
           Non-commercial projects include blogs, open-source projects,
