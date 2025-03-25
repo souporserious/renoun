@@ -1,4 +1,4 @@
-import type { Parent } from 'unist'
+import type { Root } from 'hast'
 import type { Element, Properties } from 'hast'
 import { visit, SKIP } from 'unist-util-visit'
 
@@ -15,7 +15,7 @@ interface CodeMetaElement extends Element {
 
 /** Parses `CodeBlock` and `CodeInline` props and adds them to `pre` and `code` element properties respectively. */
 export function addCodeMetaProps() {
-  return async (tree: Parent) => {
+  return async (tree: Root) => {
     visit(tree, 'element', (element: CodeMetaElement) => {
       if (element.tagName === 'pre') {
         const codeNode = element.children[0] as CodeMetaElement

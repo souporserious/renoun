@@ -1,6 +1,8 @@
 import 'mdast-util-mdx'
 import type { Root, Heading } from 'mdast'
+import type { VFile } from 'vfile'
 import { valueToEstree } from 'estree-util-value-to-estree'
+import { define } from 'unist-util-mdx-define'
 import { toString } from 'mdast-util-to-string'
 import { visit } from 'unist-util-visit'
 
@@ -18,7 +20,7 @@ export type MDXHeadings = {
 
 /** Adds an `id` to all headings and exports a `headings` prop. */
 export function addHeadings() {
-  return function (tree: Root) {
+  return function (tree: Root, file: VFile) {
     const headings: MDXHeadings = []
     const headingCounts = new Map()
 
@@ -51,37 +53,8 @@ export function addHeadings() {
       node.data.hProperties.id = heading.id
     })
 
-    tree.children.unshift({
-      type: 'mdxjsEsm',
-      value: '',
-      data: {
-        estree: {
-          type: 'Program',
-          body: [
-            {
-              type: 'ExportNamedDeclaration',
-              declaration: {
-                type: 'VariableDeclaration',
-                declarations: [
-                  {
-                    type: 'VariableDeclarator',
-                    id: {
-                      type: 'Identifier',
-                      name: 'headings',
-                    },
-                    init: valueToEstree(headings),
-                  },
-                ],
-                kind: 'const',
-              },
-              specifiers: [],
-              source: null,
-            },
-          ],
-          sourceType: 'module',
-          comments: [],
-        },
-      },
+    define(tree, file, {
+      headings: valueToEstree(headings),
     })
   }
 }

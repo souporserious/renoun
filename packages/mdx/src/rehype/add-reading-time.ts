@@ -1,46 +1,19 @@
-import type { Parent } from 'unist'
+import type { Root } from 'hast'
 import type { VFile } from 'vfile'
 import { valueToEstree } from 'estree-util-value-to-estree'
+import { define } from 'unist-util-mdx-define'
 
 /** Exports the reading time as a variable. */
 export function addReadingTime() {
-  return (tree: Parent, file: VFile) => {
+  return (tree: Root, file: VFile) => {
     const readingTime = file.data.meta?.readingTime
 
     if (!readingTime) {
       return
     }
 
-    tree.children.unshift({
-      type: 'mdxjsEsm',
-      data: {
-        estree: {
-          type: 'Program',
-          body: [
-            {
-              type: 'ExportNamedDeclaration',
-              declaration: {
-                type: 'VariableDeclaration',
-                declarations: [
-                  {
-                    type: 'VariableDeclarator',
-                    id: {
-                      type: 'Identifier',
-                      name: 'readingTime',
-                    },
-                    init: valueToEstree(readingTime),
-                  },
-                ],
-                kind: 'const',
-              },
-              specifiers: [],
-              source: null,
-            },
-          ],
-          sourceType: 'module',
-          comments: [],
-        },
-      },
+    define(tree, file, {
+      readingTime: valueToEstree(readingTime),
     })
   }
 }
