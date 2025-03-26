@@ -1,7 +1,7 @@
 import { Analytics } from '@vercel/analytics/react'
 import type { Metadata } from 'next'
 import { GeistSans } from 'geist/font/sans'
-import { PackageInstallScript } from 'renoun/components'
+import { PackageInstallScript, Refresh } from 'renoun/components'
 
 export const metadata = {
   title: 'renoun',
@@ -33,6 +33,7 @@ export default function RootLayout({
         />
         {children}
         <Analytics />
+        <Refresh />
       </body>
     </html>
   )
