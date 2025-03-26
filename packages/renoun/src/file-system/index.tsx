@@ -793,40 +793,7 @@ export class JavaScriptFileExport<Value> {
       )
     }
 
-    const exportValue = this.#file.parseExportValue(
-      this.#name,
-      fileModuleExport
-    )
-
-    /* Enable hot module reloading in development for Next.js component exports. */
-    if (process.env.NODE_ENV === 'development') {
-      const isReactComponent = exportValue
-        ? /^[A-Z]/.test(exportValue.name) && String(exportValue).includes('jsx')
-        : false
-
-      if (isReactComponent) {
-        const Component = exportValue as React.ComponentType
-        const WrappedComponent = async (props: Record<string, unknown>) => {
-          const { Refresh } = await import('./Refresh.js')
-          const port = process.env.RENOUN_SERVER_PORT
-
-          if (port === undefined) {
-            return <Component {...props} />
-          }
-
-          return (
-            <>
-              <Refresh port={port} />
-              <Component {...props} />
-            </>
-          )
-        }
-
-        return WrappedComponent as Value
-      }
-    }
-
-    return exportValue
+    return this.#file.parseExportValue(this.#name, fileModuleExport)
   }
 }
 
@@ -1141,22 +1108,28 @@ export class MDXFileExport<Value> {
     return value
   }
 
+  /**
+   * Get the runtime value of the export. An error will be thrown if the export
+   * is not found or the configured schema validation for the MDX file fails.
+   */
   async getRuntimeValue(): Promise<Value> {
     const fileModule = await this.#getModule()
 
-    if (!(this.#name in fileModule)) {
-      throw new FileExportNotFoundError(
-        this.#file.getAbsolutePath(),
-        this.#name,
-        MDXFile.name
+    if (this.#name in fileModule === false) {
+      throw new Error(
+        `[renoun] MDX file export "${String(this.#name)}" does not have a runtime value.`
       )
     }
 
     const fileModuleExport = fileModule[this.#name]
 
-    const exportValue = this.parseExportValue(this.#name, fileModuleExport)
+    if (fileModuleExport === undefined) {
+      throw new Error(
+        `[renoun] MDX file export "${this.#name}" not found in ${this.#file.getAbsolutePath()}`
+      )
+    }
 
-    return exportValue
+    return this.parseExportValue(this.#name, fileModuleExport)
   }
 
   #getModule() {

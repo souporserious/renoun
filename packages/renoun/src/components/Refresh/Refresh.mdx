@@ -1,0 +1,36 @@
+Add the `Refresh` component to the root layout of your application to enable hot module replacement when a source file changes:
+
+```tsx
+import { Refresh } from 'renoun/components'
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <html lang="en">
+      <body>
+        {children}
+        <Refresh />
+      </body>
+    </html>
+  )
+}
+```
+
+<Note>
+
+This requires the `renoun` server to be running during development:
+
+```json
+{
+  "scripts": {
+    "dev": "renoun next dev"
+  }
+}
+```
+
+</Note>
+
+This component only subscribes to the `renoun` server during development and will return `null` in production.
