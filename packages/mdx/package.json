@@ -27,7 +27,8 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc -w",
-    "prepare": "pnpm run build"
+    "prepare": "pnpm run build",
+    "test": "vitest --typecheck"
   },
   "exports": {
     ".": {
@@ -73,12 +74,14 @@
     }
   },
   "devDependencies": {
+    "@types/react": "catalog:",
     "@types/mdast": "^4.0.4",
     "@types/hast": "^3.0.4",
     "@types/unist": "^3.0.3",
     "vfile": "^6.0.3"
   },
   "dependencies": {
+    "@mdx-js/mdx": "^3.1.0",
     "@types/mdx": "catalog:",
     "estree-util-value-to-estree": "^3.3.2",
     "mdast-util-mdx": "^3.0.0",

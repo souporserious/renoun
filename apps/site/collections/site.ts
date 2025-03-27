@@ -5,8 +5,9 @@ const mdxSchema = {
   headings: z.array(
     z.object({
       id: z.string(),
+      level: z.number(),
+      children: z.custom<NonNullable<React.ReactNode>>(),
       text: z.string(),
-      depth: z.number(),
     })
   ),
   metadata: z.object({
