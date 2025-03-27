@@ -334,7 +334,7 @@ Or from a specific exports within a `File`:
 import { Directory } from 'renoun/file-system'
 import { APIReference } from 'renoun/components'
 
-const components = new Directory({ filePattern: 'components' })
+const components = new Directory({ path: 'components' })
 
 export default async function Page({
   params,
