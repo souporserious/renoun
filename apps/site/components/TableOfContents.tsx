@@ -58,16 +58,16 @@ export function TableOfContents({
           <li css={{ marginBottom: '1rem' }}>
             <h4 className="title">On this page</h4>
           </li>
-          {headings?.map(({ text, depth, id }, index) =>
-            depth > 1 ? (
+          {headings?.map(({ id, level, text, children }) =>
+            level > 1 ? (
               <li key={id} css={{ display: 'flex' }}>
                 <Link
                   id={id}
                   sectionObserver={sectionObserver}
-                  css={{ paddingLeft: (depth - 2) * 0.8 + 'rem' }}
+                  css={{ paddingLeft: (level - 2) * 0.8 + 'rem' }}
                   title={text}
                 >
-                  {text}
+                  {children}
                 </Link>
               </li>
             ) : null

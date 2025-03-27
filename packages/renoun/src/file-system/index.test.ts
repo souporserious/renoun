@@ -1589,8 +1589,9 @@ describe('file system', () => {
             headings: z.array(
               z.object({
                 id: z.string(),
+                level: z.number(),
                 text: z.string(),
-                depth: z.number(),
+                children: z.custom<React.ReactNode>(),
               })
             ),
             metadata: z.object({
