@@ -128,7 +128,6 @@ const StyledLink = styled(Link, {
 })
 
 interface Metadata {
-  default: MDXContent
   metadata: {
     title: string
     label?: string
@@ -171,12 +170,14 @@ async function resolveEntryMetadata(entry: FileSystemEntry) {
     return
   }
 
-  const metadataExport = await file.getExport('metadata').catch((error) => {
-    if (error instanceof FileExportNotFoundError) {
-      return undefined
-    }
-    throw error
-  })
+  const metadataExport = await file
+    .getNamedExport('metadata')
+    .catch((error) => {
+      if (error instanceof FileExportNotFoundError) {
+        return undefined
+      }
+      throw error
+    })
 
   if (metadataExport) {
     return metadataExport.getRuntimeValue()

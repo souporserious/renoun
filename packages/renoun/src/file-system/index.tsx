@@ -966,6 +966,28 @@ export class JavaScriptFile<
     throw new FileExportNotFoundError(this.getAbsolutePath(), name)
   }
 
+  /** Get a named export from the JavaScript file. */
+  async getNamedExport<ExportName extends Extract<keyof Types, string>>(
+    name: ExportName
+  ): Promise<JavaScriptFileExport<Types[ExportName]>> {
+    return this.getExport(name)
+  }
+
+  /** Get the default export from the JavaScript file. */
+  async getDefaultExport(
+    this: Types extends { default: infer _DefaultType }
+      ? JavaScriptFile<Types, DirectoryTypes, Path, Extension>
+      : never
+  ): Promise<
+    JavaScriptFileExport<
+      Types extends { default: infer DefaultType } ? DefaultType : never
+    >
+  > {
+    return (
+      this as JavaScriptFile<Types, DirectoryTypes, Path, Extension>
+    ).getExport<any>('default')
+  }
+
   /** Get the start position of an export in the JavaScript file. */
   async getExportLocation(name: string) {
     const fileExports = await this.#getExports()
@@ -1221,6 +1243,7 @@ export class MDXFile<
     }
 
     const fileModule = await this.#getModule()
+
     if (!(name in fileModule)) {
       throw new FileExportNotFoundError(
         this.getAbsolutePath(),
@@ -1229,11 +1252,27 @@ export class MDXFile<
       )
     }
 
-    const mdxExport = new MDXFileExport<
+    const fileExport = new MDXFileExport<
       ({ default: MDXContent } & Types)[ExportName]
     >(name, this as MDXFile<any>, this.#loader, this.#slugCasing)
-    this.#exports.set(name, mdxExport)
-    return mdxExport
+
+    this.#exports.set(name, fileExport)
+
+    return fileExport
+  }
+
+  /** Get a named export from the MDX file. */
+  async getNamedExport<ExportName extends Extract<keyof Types, string>>(
+    name: ExportName
+  ): Promise<MDXFileExport<Types[ExportName]>> {
+    return this.getExport(name)
+  }
+
+  /** Get the default export from the MDX file. */
+  async getDefaultExport(): Promise<MDXContent> {
+    return this.getExport('default').then((fileExport) =>
+      fileExport.getRuntimeValue()
+    )
   }
 
   async hasExport(name: string): Promise<boolean> {
@@ -1244,8 +1283,9 @@ export class MDXFile<
   async getExportValue<
     ExportName extends 'default' | Extract<keyof Types, string>,
   >(name: ExportName): Promise<({ default: MDXContent } & Types)[ExportName]> {
-    const mdxExport = await this.getExport(name)
-    return mdxExport.getRuntimeValue()
+    return this.getExport(name).then((fileExport) =>
+      fileExport.getRuntimeValue()
+    )
   }
 
   #getModule() {
