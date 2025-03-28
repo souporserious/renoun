@@ -477,7 +477,7 @@ describe('file system', () => {
     })
     const entries = await directory.getEntries()
 
-    expectTypeOf(entries).toMatchTypeOf<MDXFile<{ default: MDXContent }>[]>()
+    expectTypeOf(entries).toMatchTypeOf<MDXFile[]>()
 
     expect(entries).toHaveLength(1)
   })

@@ -9,6 +9,7 @@ import {
   type JavaScriptFile,
   type MDXFile,
 } from 'renoun/file-system'
+import type { MDXContent } from 'renoun/mdx'
 import { styled } from 'restyle'
 
 export async function SiblingLink({
@@ -127,6 +128,7 @@ const StyledLink = styled(Link, {
 })
 
 interface Metadata {
+  default: MDXContent
   metadata: {
     title: string
     label?: string

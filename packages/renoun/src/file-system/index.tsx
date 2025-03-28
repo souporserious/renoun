@@ -1165,24 +1165,24 @@ export interface MDXFileOptions<
   DirectoryTypes extends Record<string, any>,
   Path extends string,
 > extends FileOptions<DirectoryTypes, Path> {
-  loader?: ModuleLoader<Types>
+  loader?: ModuleLoader<{ default: MDXContent } & Types>
 }
 
 /** An MDX file in the file system. */
 export class MDXFile<
-  Types extends InferDefaultModuleTypes<Path>,
-  DirectoryTypes extends Record<string, any> = any,
+  Types extends Record<string, any> = { default: MDXContent },
+  DirectoryTypes extends Record<string, any> = Record<string, any>,
   const Path extends string = string,
   Extension extends string = ExtractFileExtension<Path>,
 > extends File<DirectoryTypes, Path, Extension> {
   #exports = new Map<string, MDXFileExport<any>>()
-  #loader?: ModuleLoader<Types>
+  #loader?: ModuleLoader<{ default: MDXContent } & Types>
   #slugCasing?: SlugCasings
 
   constructor({
     loader,
     ...fileOptions
-  }: MDXFileOptions<Types, DirectoryTypes, Path>) {
+  }: MDXFileOptions<{ default: MDXContent } & Types, DirectoryTypes, Path>) {
     super(fileOptions)
 
     if (loader === undefined) {
@@ -1213,9 +1213,9 @@ export class MDXFile<
     return Array.from(this.#exports.values())
   }
 
-  async getExport<ExportName extends Extract<keyof Types, string>>(
+  async getExport<ExportName extends 'default' | Extract<keyof Types, string>>(
     name: ExportName
-  ): Promise<MDXFileExport<Types[ExportName]>> {
+  ): Promise<MDXFileExport<({ default: MDXContent } & Types)[ExportName]>> {
     if (this.#exports.has(name)) {
       return this.#exports.get(name)!
     }
@@ -1229,12 +1229,9 @@ export class MDXFile<
       )
     }
 
-    const mdxExport = new MDXFileExport<Types[ExportName]>(
-      name,
-      this as MDXFile<any>,
-      this.#loader,
-      this.#slugCasing
-    )
+    const mdxExport = new MDXFileExport<
+      ({ default: MDXContent } & Types)[ExportName]
+    >(name, this as MDXFile<any>, this.#loader, this.#slugCasing)
     this.#exports.set(name, mdxExport)
     return mdxExport
   }
@@ -1244,9 +1241,9 @@ export class MDXFile<
     return name in fileModule
   }
 
-  async getExportValue<ExportName extends Extract<keyof Types, string>>(
-    name: ExportName
-  ): Promise<Types[ExportName]> {
+  async getExportValue<
+    ExportName extends 'default' | Extract<keyof Types, string>,
+  >(name: ExportName): Promise<({ default: MDXContent } & Types)[ExportName]> {
     const mdxExport = await this.getExport(name)
     return mdxExport.getRuntimeValue()
   }
