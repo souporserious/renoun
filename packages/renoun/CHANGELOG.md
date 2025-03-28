@@ -1,5 +1,82 @@
 # renoun
 
+## 8.13.0
+
+### Minor Changes
+
+- 6bf096d: Updates exported `headings` variable from the `addHeadings` remark plugin to include a new `children` property to allow rendering the JSX children of the heading element.
+
+  For example, headings with inline code or links:
+
+  ```mdx
+  # Heading with `code`
+  ```
+
+  Roughly yields:
+
+  ```mdx
+  export const headings = [
+    {
+      level: 1,
+      id: 'heading-with-code',
+      text: 'Heading with code',
+      children: (
+        <>
+          Heading with <code>code</code>
+        </>
+      ),
+    },
+  ]
+
+  # Heading with `code`
+  ```
+
+  ### Breaking Changes
+
+  The `depth` property of the heading metadata object was renamed to `level` to better reflect HTML nomenclature.
+
+- 899fb08: Adds back `getDefaultExport` and `getNamedExport` for both `JavaScriptFile` and `MDXFile` classes. These methods are useful as type guards to narrow types when building utilities that work with both JavaScript and MDX files.
+- f96a2be: Adds a first-class `Refresh` component for refreshing the server during development when a source file changes:
+
+  ```tsx
+  import { Refresh } from 'renoun/components'
+
+  export default function RootLayout({
+    children,
+  }: {
+    children: React.ReactNode
+  }) {
+    return (
+      <html lang="en">
+        <body>
+          {children}
+          <Refresh />
+        </body>
+      </html>
+    )
+  }
+  ```
+
+  This was previously automated for `JavaScriptFile` / `MDXFile` component exports. However, it did not provide a robust enough solution for all use cases. This new component ensures that only one listener will ever be added.
+
+- af2a21a: Includes `MDXContent` type by default now when using `MDXFile`. Previously, `{ default: MDXContent }` had to be defined explicitly. Now, it is merged in automatically with optional export types:
+
+  ```tsx
+  import { MDXFile } from 'renoun/file-system'
+
+  const file = new MDXFile<{
+    frontmatter: { title: string; date: Date }
+  }>({
+    path: 'path/to/file.mdx',
+  })
+  ```
+
+### Patch Changes
+
+- 36d62b6: Removes default `hr` margin in `QuickInfo` markdown container.
+- Updated dependencies [6bf096d]
+  - @renoun/mdx@2.1.0
+
 ## 8.12.0
 
 ### Minor Changes
