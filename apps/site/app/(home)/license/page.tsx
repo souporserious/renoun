@@ -371,9 +371,9 @@ function FAQSection() {
           generate revenue from the use of renoun.
         </FAQItem>
         <FAQItem question="Can I use renoun behind a paywalled product like a course?">
-          Yes, you can use renoun in a paywalled product like course lessons.
-          However, you cannot use renoun in the core product that is sold, such
-          as an API or SaaS product.
+          You may use renoun to serve secondary paywalled content (like a
+          private course) as long as you’re not charging for renoun itself or
+          building a SaaS platform using renoun.
         </FAQItem>
         <FAQItem question="How do I upgrade to a Commercial License?">
           If you plan to use renoun in a commercial product or service, please
