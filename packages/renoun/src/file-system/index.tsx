@@ -1593,12 +1593,26 @@ export class Directory<
 
       // Find an entry whose base name matches the slug of `currentSegment`
       for (const currentEntry of allEntries) {
-        const baseSegment = createSlug(
+        let name = currentEntry.getBaseName()
+
+        if (currentEntry instanceof File) {
+          const modifier = currentEntry.getModifierName()
+
+          if (modifier) {
+            name += `.${modifier}`
+          }
+        }
+
+        const baseSegment = createSlug(name, this.#slugCasing)
+        const baseSegmentWithoutModifier = createSlug(
           currentEntry.getBaseName(),
           this.#slugCasing
         )
 
-        if (baseSegment === currentSegment) {
+        if (
+          baseSegment === currentSegment ||
+          baseSegmentWithoutModifier === currentSegment
+        ) {
           const matchesModifier =
             (currentEntry instanceof File && currentEntry.getModifierName()) ===
             lastSegment
