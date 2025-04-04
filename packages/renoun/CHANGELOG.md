@@ -1,5 +1,11 @@
 # renoun
 
+## 8.13.1
+
+### Patch Changes
+
+- 9e0dce6: Fixes a bug in `Directory#getFile` where a file name modifier (e.g. `examples` in `Button.examples.tsx`) for the provided path was not being considered when checking if a file exists.
+
 ## 8.13.0
 
 ### Minor Changes
