@@ -1,5 +1,11 @@
 # renoun
 
+## 8.13.2
+
+### Patch Changes
+
+- 9e66320: Prevents scrollbar showing along vertical axis for `CodeInline`.
+
 ## 8.13.1
 
 ### Patch Changes
