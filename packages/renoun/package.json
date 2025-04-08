@@ -141,5 +141,8 @@
     "vscode-textmate": "^9.2.0",
     "ws": "^8.18.1"
   },
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "packageManager": "pnpm@10.1.0"
 }
