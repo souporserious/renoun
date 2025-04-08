@@ -140,5 +140,6 @@
     "ts-morph": "catalog:",
     "vscode-textmate": "^9.2.0",
     "ws": "^8.18.1"
-  }
+  },
+  "packageManager": "pnpm@10.1.0"
 }
