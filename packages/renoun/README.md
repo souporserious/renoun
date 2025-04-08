@@ -11,6 +11,12 @@ Meticulously crafted React components and utilities to<br/>help you author techn
   </p>
 </div>
 
+<div align="center">
+  <code>npx create-renoun@latest</code>
+</div>
+
+<br />
+
 - [Features](#features)
 - [Why renoun?](#why-renoun)
 - [Getting Started](#getting-started)
