@@ -2,26 +2,26 @@ import { APIReference } from 'renoun/components'
 
 export const metadata = {
   title: 'Getting Started',
-  description: 'Learn how to set up renoun in your project.',
+  description: 'Learn how to configure and start using renoun.',
 }
 
-Designed for building content and documentation sites, renoun is a versatile toolkit. This guide will help you set up renoun and start using it in your project.
+This guide will help you get started using renoun in your project. Designed as a powerful toolkit for building documentation and authoring content with MDX, renoun offers a suite of utilities and components to create beautiful, interactive documentation tailored exactly to your needs.
 
-<Note>
-
-The following getting started guide uses Next.js as an example, but renoun can be used with any framework or bundler that supports Server Components. Please see the [guides section](/guides) for more examples.
-
-</Note>
+In this getting started guide, Next.js will be used as an example. However, renoun works with any framework or bundler that supports React Server Components. For additional examples, please see the [guides section](/guides).
 
 ## Installation
 
-First, install renoun using your preferred package manager:
+First, install renoun using your preferred package manager and additionally `next` or a compatible framework if you haven't already:
 
 <PackageInstall packages={['renoun']} />
 
 ## Configuration
 
-The renoun CLI can be used alongside your framework. For example, when using Next.js, prepend the CLI to your Next.js `dev` and `build` commands in your project's `package.json`:
+### CLI
+
+A CLI is included with renoun to help isolate the processing required for syntax highlighting and resolving type information. This greatly improves performance of these operations by keeping them separate from your application's development and build processes.
+
+To use the CLI, prepend `renoun` to your Next.js `dev` and `build` commands in your project's `package.json`:
 
 ```json
 {
@@ -38,7 +38,7 @@ Then start the development server:
 npm run dev
 ```
 
-Prepending the renoun CLI ensures that the renoun process starts before your framework's server. The CLI starts a WebSocket server that will watch for changes to the file system and communicates with renoun components.
+Prepending the renoun CLI ensures that the renoun process starts before your framework's server. The CLI starts a WebSocket server that will watch for changes to the file system and communicates with renoun components and utilities.
 
 ### Path Aliases
 
@@ -55,42 +55,54 @@ To simplify imports, you can optionally set up path aliases in your project's `t
 }
 ```
 
-With this configuration, you can now import files using the `@/` alias which we will use in the following examples.
+With this configuration, you can now import files using the `@/` alias which we will use in the upcoming examples.
 
-## Querying the File System
+## MDX Content
 
-The `Directory` class is a core utility in renoun. This allows you to easily query and render files and directories within a file system. For example, to create a list of blog posts or documentation pages we can query all the MDX files in a directory:
+The renoun toolkit helps with authoring MDX using the `renoun/mdx` package, allowing you to write content with a mix of Markdown and React components. It is not required to use, but provides a set of [useful plugins](/guides/mdx#pre-configured-plugins).
 
-```tsx
-import { Directory } from 'renoun/file-system'
-
-const posts = new Directory({
-  path: 'posts',
-  include: '*.mdx',
-})
-```
-
-We can then add a loader to the directory that resolves the module of each MDX file using a dynamic import:
-
-```tsx highlightedLines="6-8"
-import { Directory } from 'renoun/file-system'
-
-const posts = new Directory({
-  path: 'posts',
-  include: '*.mdx',
-  loaders: {
-    mdx: (path) => import(`@/posts/${path}.mdx`),
-  },
-})
-```
+To start, create a new directory in your project called `posts` and add a new file called `build-a-button-component-in-react.mdx`:
 
 <Note>
 
-Ensure that your bundler is configured to handle the file extension you are targeting. For example, Next.js requires [custom configuration](https://nextjs.org/docs/app/building-your-application/configuring/mdx) to handle `.mdx` files.
+If you already have a directory of MDX files, you can [skip to the next step](#querying-the-file-system). The `posts` directory is just an example and can be named anything you like.
 
 </Note>
 
-Now we can use the configured directory to render the contents of our MDX files by querying them from the file system:
+````mdx path="build-a-button-component-in-react.mdx"
+---
+title: Build a Button Component in React
+date: 2024-03-01
+summary: Learn how to build a reusable Button component in React that can be used across your application.
+tags:
+  - react
+  - design systems
+---
+
+In modern web development, creating reusable UI components is a must for efficiency and scalability. React, with its component-based architecture, allows developers to build encapsulated components that manage their own state and can be reused throughout applications.
+
+## Building the Button Component
+
+Let's start by creating our Button component:
+
+```tsx
+import React from 'react'
+
+export function Button({ label, onClick, className }) {
+  return (
+    <button className={className} onClick={onClick}>
+      {label}
+    </button>
+  )
+}
+```
+````
+
+We are using [YAML front matter](https://jekyllrb.com/docs/front-matter/) to define metadata for the post, such as the `title`, `date`, `summary`, and `tags`. This metadata can be used to show a list of posts, filter by tags, or display the post's title and date.
+
+## Querying the File System
+
+The `Directory` class is a core utility in renoun. This allows you to easily query and render files and directories within a file system. To create a list of blog posts, query all of the MDX files in the `posts` directory we created earlier:
 
 ```tsx
 import { Directory } from 'renoun/file-system'
@@ -98,9 +110,17 @@ import { Directory } from 'renoun/file-system'
 const posts = new Directory({
   path: 'posts',
   include: '*.mdx',
-  loaders: {
-    mdx: (path) => import(`@/posts/${path}.mdx`),
-  },
+})
+```
+
+Now we can use the configured directory to render the contents of our MDX files by querying them from the file system. Create a new file in the `app/posts` directory called `[slug].tsx` and add the following:
+
+```tsx
+import { Directory } from 'renoun/file-system'
+
+const posts = new Directory({
+  path: 'posts',
+  include: '*.mdx',
 })
 
 export default async function Page({
@@ -116,11 +136,35 @@ export default async function Page({
 }
 ```
 
-This will create a collection of all MDX files in the `posts` directory and render them based on the provided slug. Collections are not limited to MDX files and can be used with _any file type_.
+This will create a collection of every MDX file in the `posts` directory and render the page based on the provided slug.
+
+### Loaders
+
+By default, the `Directory` class will load files using the MDX compiler. However, if you are using a bundler like Webpack, Turbopack, or Vite, it is recommended to define a loader that resolves the module. This is especially useful for MDX files, which are often processed by the bundler's loader.
+
+Use the `loaders` option in the `Directory` constructor to assign a specific loader for each file type. In the `posts` directory, for instance, you can use a dynamic import as the loader to ensure that the MDX files are processed by the bundler:
+
+```tsx highlightedLines="6-8"
+import { Directory } from 'renoun/file-system'
+
+const posts = new Directory({
+  path: 'posts',
+  include: '*.mdx',
+  loaders: {
+    mdx: (path) => import(`@/posts/${path}.mdx`),
+  },
+})
+```
+
+<Note>
+
+Ensure that your bundler is configured to handle the file extension you are targeting. Next.js requires [custom configuration](https://nextjs.org/docs/app/building-your-application/configuring/mdx) to handle `.mdx` files.
+
+</Note>
 
 ### Generating Links
 
-A file system entry's `getPath` method is used to generate a route path for each entry in the directory. For example, to generate a link to each post, you can map over the directory's entries using `getEntries` and then use the entry's `getPath` method to generate a list of links:
+A [File System](/utilities/file-system) entry's `getPath` method is used to generate a route path for each entry in the directory. To generate a link to each post, map over the directory's entries using `getEntries` and then use the entry's `getPath` method to generate a list of links:
 
 ```tsx
 import { Directory } from 'renoun/file-system'
@@ -162,48 +206,13 @@ The `getEntries` method is filtered by the `include` option provided to the `Dir
 
 </Note>
 
-## Authoring Content
-
-The renoun toolkit helps with authoring MDX using the `@renoun/mdx` package, allowing you to write content with a mix of Markdown and React components. It is not required, but provides a set of useful defaults.
-
-Here's an example of how you might structure a blog post:
-
-````mdx
----
-title: Build a Button Component in React
-date: 2024-03-01
-summary: Learn how to build a reusable Button component in React that can be used across your application.
-tags:
-  - react
-  - design systems
----
-
-In modern web development, creating reusable UI components is a must for efficiency and scalability. React, with its component-based architecture, allows developers to build encapsulated components that manage their own state and can be reused throughout applications.
-
-## Building the Button Component
-
-Let's start by creating our Button component:
-
-```tsx
-import React from 'react'
-
-export function Button({ label, onClick, className }) {
-  return (
-    <button className={className} onClick={onClick}>
-      {label}
-    </button>
-  )
-}
-```
-````
-
 ## Validating Exports
 
-By using schemas, you can validate module exports and ensure they remain consistent and properly documented. The following is an example of how to validate a module export with renoun using [Zod](https://zod.dev/).
+Alongside file loading, renoun can validate module exports to ensure that source code is documented and exported according to a consistent schema. This is especially beneficial in larger projects where multiple developers collaborate on the same codebase.
 
-Using our Button component example, we can validate the front matter of the MDX file at the call site of our directory using a schema:
+Below is an example demonstrating how to validate a `frontmatter` object exported from a module using [Zod](https://zod.dev/):
 
-```tsx
+```tsx path="posts.ts"
 import { Directory, withSchema } from 'renoun/file-system'
 import { z } from 'zod'
 
@@ -226,11 +235,19 @@ export const posts = new Directory({
 })
 ```
 
-Here we define a schema for the front matter of our MDX files and use it to validate the front matter of each file in the `posts` directory. This ensures that each file adheres to the schema and provides type safety when accessing the `frontmatter` export.
+Here we define a schema for the front matter of our MDX files and use it to validate each file in the `posts` directory. This ensures that each file adheres to the schema and provides type safety when accessing the `frontmatter` export:
+
+```tsx
+import { posts } from './posts.ts'
+
+const post = await posts.getFile('build-a-button-component-in-react.mdx')
+const frontmatter = await post.getExportValue('frontmatter')
+const { title, date, summary, tags } = frontmatter
+```
 
 ## Enhancing with Components
 
-The renoun toolkit provides several built-in components to enhance your documentation. For example, you can use the [`APIReference`](/components/api-reference) component to easily document your APIs:
+The renoun toolkit provides several built-in components to enhance your documentation like [`APIReference`](/components/api-reference) and [`CodeBlock`](/components/code-block). For example, you can use the `APIReference` component to document all exports from a module:
 
 ```mdx
 import { APIReference } from 'renoun/components'
