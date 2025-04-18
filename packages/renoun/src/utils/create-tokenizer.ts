@@ -237,9 +237,12 @@ export class Registry<Grammar extends string, Theme extends string> {
   }
 }
 
-const fontStyles = ['', 'italic', '', '', '']
-const fontWeights = ['', '', 'bold', '', '']
-const textDecorations = ['', '', '', '', 'underline']
+const FontStyle = {
+  Italic: 1,
+  Bold: 2,
+  Underline: 4,
+  Strikethrough: 8,
+}
 
 export class Tokenizer<Grammar extends string, Theme extends string> {
   #baseColors: Map<string, string> = new Map()
@@ -366,16 +369,26 @@ export class Tokenizer<Grammar extends string, Theme extends string> {
             const colorBits = (bits & 0b00000000111111111000000000000000) >>> 15
             const colorMap = themeColorMaps[token.themeIndex]
             const color = colorMap[colorBits] || ''
-            const fontBits = (bits & 0b00000000000000000011100000000000) >>> 11
-            const fontStyle = fontStyles[fontBits]
-            const fontWeight = fontWeights[fontBits]
-            const textDecoration = textDecorations[fontBits]
+            const fontFlags = (bits >>> 11) & 0b1111
+            const fontStyle = fontFlags & FontStyle.Italic ? 'italic' : ''
+            const fontWeight = fontFlags & FontStyle.Bold ? 'bold' : ''
+            let textDecoration = ''
+
+            if (fontFlags & FontStyle.Underline) {
+              textDecoration += 'underline'
+            }
+            if (fontFlags & FontStyle.Strikethrough) {
+              if (textDecoration) {
+                textDecoration += ' '
+              }
+              textDecoration += 'line-through'
+            }
 
             if (baseColor.toLowerCase() !== color.toLowerCase()) {
               isBaseColor = false
             }
 
-            if (fontStyle || fontWeight || textDecoration) {
+            if (fontFlags !== 0) {
               hasTextStyles = true
             }
 
