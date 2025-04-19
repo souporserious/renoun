@@ -20,14 +20,14 @@ Meticulously crafted React components and utilities to<br/>help you author techn
 - [Features](#features)
 - [Why renoun?](#why-renoun)
 - [Getting Started](#getting-started)
-  - [File System](#file-system)
+  - [Components](#components)
+    - [Syntax Highlighting](#syntax-highlighting)
+    - [API References](#api-references)
+  - [Utilities](#utilities)
     - [Querying File System Entries](#querying-file-system-entries)
     - [Generating Navigations](#generating-navigations)
     - [Type Checking File Exports](#type-checking-file-exports)
     - [Schema Validation](#schema-validation)
-  - [Components](#components)
-    - [Syntax Highlighting](#syntax-highlighting)
-    - [API References](#api-references)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -91,7 +91,129 @@ npm install renoun
 
 After installing the package, you can follow the [getting started guide](https://www.renoun.dev/docs/getting-started) or start creating content using your [favorite framework](https://www.renoun.dev/guides).
 
-### File System
+### Components
+
+Quickly build interactive and engaging documentation with renoun’s powerful set of React components.
+
+#### Syntax Highlighting
+
+Use the [`CodeBlock`](https://www.renoun.dev/components/code-block) component to render syntax-highlighted code blocks:
+
+```tsx
+import { CodeBlock } from 'renoun/components'
+
+export default function Page() {
+  return <CodeBlock language="jsx">{`<div>Hello, world!</div>`}</CodeBlock>
+}
+```
+
+Or take full control of the highlighting process by using the [`Tokens`](https://www.renoun.dev/components/code-block/tokens) component and related components like [`LineNumbers`](https://www.renoun.dev/components/code-block/line-numbers) and [`Toolbar`](https://www.renoun.dev/components/code-block/toolbar):
+
+```tsx
+import { CodeBlock, LineNumbers, Tokens, Toolbar } from 'renoun/components'
+
+export default function Page() {
+  return (
+    <CodeBlock language="jsx">
+      <div
+        style={{
+          fontSize: '1rem',
+          borderRadius: '0.25rem',
+          boxShadow: '0 0 0 1px var(--color-separator)',
+        }}
+      >
+        <Toolbar
+          allowCopy
+          css={{
+            padding: '0.5lh',
+            boxShadow: 'inset 0 -1px 0 0 var(--color-separator)',
+          }}
+        />
+        <pre
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'min-content max-content',
+            padding: '0.5lh 0',
+            lineHeight: 1.4,
+            whiteSpace: 'pre',
+            wordWrap: 'break-word',
+            overflow: 'auto',
+          }}
+        >
+          <LineNumbers css={{ padding: '0 0.5lh' }} />
+          <code style={{ paddingRight: '0.5lh' }}>
+            <Tokens>{`<div>Hello, world!</div>`}</Tokens>
+          </code>
+        </pre>
+      </div>
+    </CodeBlock>
+  )
+}
+```
+
+#### API References
+
+Quickly document your APIs with renoun’s [`APIReference`](https://www.renoun.dev/components/api-reference) component:
+
+```tsx
+import { APIReference } from 'renoun/components'
+
+export default function Page() {
+  return <APIReference source="src/components/Button.tsx" />
+}
+```
+
+API references can also be resolved from a `File` that will include references for all exports:
+
+```tsx
+import { Directory } from 'renoun/file-system'
+import { APIReference } from 'renoun/components'
+
+const components = new Directory({ path: 'components' })
+
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}) {
+  const { slug } = await params
+  const component = await components.getFile(slug, 'tsx')
+
+  return <APIReference source={component} />
+}
+```
+
+Or from a specific exports within a `File`:
+
+```tsx
+import { Directory } from 'renoun/file-system'
+import { APIReference } from 'renoun/components'
+
+const components = new Directory({ path: 'components' })
+
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}) {
+  const { slug } = await params
+  const component = await components.getFile(slug, 'tsx')
+  const componentExports = component.getExports()
+
+  return componentExports.map((source) => (
+    <section>
+      <h2>{source.getBaseName()}</h2>
+      <APIReference source={source} />
+    </section>
+  ))
+}
+```
+
+---
+
+The renoun toolkit offers many different components to help facilitate writing technical content. Visit the [components](https://www.renoun.dev/components) page to learn more.
+
+### Utilities
 
 The File System utilities offer a way to organize and query file-system data in renoun. It is a powerful tool that allows you to define a schema for file exports and query those exports using a simple API.
 
@@ -269,128 +391,6 @@ const posts = new Directory({
 ```
 
 The file system utilities are not limited to MDX files and can be used with _any file type_. By organizing content and source code into structured collections, you can easily generate static pages and manage complex routing and navigations. For a more in-depth look at the file system utilities, visit the [docs site](https://www.renoun.dev/).
-
-### Components
-
-Quickly build interactive and engaging documentation with renoun’s powerful set of React components.
-
-#### Syntax Highlighting
-
-Use the [`CodeBlock`](https://www.renoun.dev/components/code-block) component to render syntax-highlighted code blocks:
-
-```tsx
-import { CodeBlock } from 'renoun/components'
-
-export default function Page() {
-  return <CodeBlock language="jsx">{`<div>Hello, world!</div>`}</CodeBlock>
-}
-```
-
-Or take full control of the highlighting process by using the [`Tokens`](https://www.renoun.dev/components/code-block/tokens) component and related components like [`LineNumbers`](https://www.renoun.dev/components/code-block/line-numbers) and [`Toolbar`](https://www.renoun.dev/components/code-block/toolbar):
-
-```tsx
-import { CodeBlock, LineNumbers, Tokens, Toolbar } from 'renoun/components'
-
-export default function Page() {
-  return (
-    <CodeBlock language="jsx">
-      <div
-        style={{
-          fontSize: '1rem',
-          borderRadius: '0.25rem',
-          boxShadow: '0 0 0 1px var(--color-separator)',
-        }}
-      >
-        <Toolbar
-          allowCopy
-          css={{
-            padding: '0.5lh',
-            boxShadow: 'inset 0 -1px 0 0 var(--color-separator)',
-          }}
-        />
-        <pre
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'min-content max-content',
-            padding: '0.5lh 0',
-            lineHeight: 1.4,
-            whiteSpace: 'pre',
-            wordWrap: 'break-word',
-            overflow: 'auto',
-          }}
-        >
-          <LineNumbers css={{ padding: '0 0.5lh' }} />
-          <code style={{ paddingRight: '0.5lh' }}>
-            <Tokens>{`<div>Hello, world!</div>`}</Tokens>
-          </code>
-        </pre>
-      </div>
-    </CodeBlock>
-  )
-}
-```
-
-#### API References
-
-Quickly document your APIs with renoun’s [`APIReference`](https://www.renoun.dev/components/api-reference) component:
-
-```tsx
-import { APIReference } from 'renoun/components'
-
-export default function Page() {
-  return <APIReference source="src/components/Button.tsx" />
-}
-```
-
-API references can also be resolved from a `File` that will include references for all exports:
-
-```tsx
-import { Directory } from 'renoun/file-system'
-import { APIReference } from 'renoun/components'
-
-const components = new Directory({ path: 'components' })
-
-export default async function Page({
-  params,
-}: {
-  params: Promise<{ slug: string }>
-}) {
-  const { slug } = await params
-  const component = await components.getFile(slug, 'tsx')
-
-  return <APIReference source={component} />
-}
-```
-
-Or from a specific exports within a `File`:
-
-```tsx
-import { Directory } from 'renoun/file-system'
-import { APIReference } from 'renoun/components'
-
-const components = new Directory({ path: 'components' })
-
-export default async function Page({
-  params,
-}: {
-  params: Promise<{ slug: string }>
-}) {
-  const { slug } = await params
-  const component = await components.getFile(slug, 'tsx')
-  const componentExports = component.getExports()
-
-  return componentExports.map((source) => (
-    <section>
-      <h2>{source.getBaseName()}</h2>
-      <APIReference source={source} />
-    </section>
-  ))
-}
-```
-
----
-
-The renoun toolkit offers many different components to help facilitate writing technical content. Visit the [components](https://www.renoun.dev/components) page to learn more.
 
 ## Contributing
 
