@@ -20,6 +20,9 @@ Meticulously crafted React components and utilities to<br/>help you author techn
 - [Features](#features)
 - [Why renoun?](#why-renoun)
 - [Getting Started](#getting-started)
+  - [Install](#install)
+    - [Automated Setup](#automated-setup)
+    - [Manual Setup](#manual-setup)
   - [Components](#components)
     - [Syntax Highlighting](#syntax-highlighting)
     - [API References](#api-references)
@@ -84,6 +87,29 @@ Easily enable multiple themes for light and dark mode, extend functionality thro
 The renoun toolkit is a robust platform for creating engaging, maintainable, and deeply interactive technical content. Focus on crafting exceptional educational experiences, and leave the heavy lifting to renoun.
 
 ## Getting Started
+
+### Install
+
+#### Automated Setup
+
+The easiest way to get started with renoun is to use the `create-renoun` CLI tool. This will help you create a new project starting from an example.
+To create a new project or add to an existing project, run the following command in your terminal:
+
+```bash
+npx create-renoun@latest
+```
+
+This will prompt you to select an [example](/examples/) to install. Once the installation is complete, you can start your development server:
+
+```bash
+npm run dev
+```
+
+#### Manual Setup
+
+If you prefer to set up renoun manually, you can install the package directly into your existing project. This is useful if you want to integrate renoun into an existing codebase or if you want to customize the setup process.
+
+To install renoun, run the following command in your terminal:
 
 ```bash
 npm install renoun
