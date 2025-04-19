@@ -59,6 +59,10 @@ export function useThemePicker(): [
       { signal: controller.signal }
     )
 
+    requestAnimationFrame(() => {
+      document.documentElement.removeAttribute('data-theme-disable-transitions')
+    })
+
     return () => {
       controller.abort()
     }
@@ -68,10 +72,13 @@ export function useThemePicker(): [
     colorMode,
     useCallback(
       (mode?: string) => {
-        console.log('mode', mode)
         if (mode) {
           if (themeModes.includes(mode)) {
-            document.documentElement.dataset.theme = mode
+            document.documentElement.setAttribute(
+              'data-theme-disable-transitions',
+              ''
+            )
+            document.documentElement.setAttribute('data-theme', mode)
             setColorMode(mode)
             try {
               localStorage.setItem('colorMode', mode)
@@ -92,7 +99,11 @@ export function useThemePicker(): [
               const currentIndex = themeModes.indexOf(currentColorMode)
               nextColorMode = themeModes[(currentIndex + 1) % themeModes.length]
             }
-            document.documentElement.dataset.theme = nextColorMode
+            document.documentElement.setAttribute(
+              'data-theme-disable-transitions',
+              ''
+            )
+            document.documentElement.setAttribute('data-theme', nextColorMode)
             try {
               localStorage.setItem('colorMode', nextColorMode)
             } catch {
