@@ -8121,11 +8121,11 @@ describe('resolveType', () => {
                   "position": {
                     "end": {
                       "column": 52,
-                      "line": 2265,
+                      "line": 2276,
                     },
                     "start": {
                       "column": 9,
-                      "line": 2265,
+                      "line": 2276,
                     },
                   },
                   "signatures": [],
