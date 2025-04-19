@@ -43,17 +43,45 @@ Meticulously crafted React components and utilities to<br/>help you author techn
 
 ## Why renoun?
 
-Creating high-quality technical content often involves juggling multiple tools and manual workflows. With **renoun**, you can streamline the entire process using a single toolkit built from the ground up for technical creators, using JavaScript and React.
+Authoring technical documentation for JavaScript libraries often involves fragmented tooling and manual workflows. The **renoun** toolkit simplifies this by providing a cohesive, React-first solution, that integrates seamlessly into your development process.
 
-At its core, renoun treats your content like an **interactive IDE**—all powered by an easy-to-use toolkit. Rather than displaying static text and code blocks, renoun’s React components and utilities help you seamlessly integrate code examples, auto-generated API references, schema validation, and more. This approach not only keeps your content up-to-date, but also empowers deeper exploration of complex topics, inviting readers to engage with your content and documentation.
+Unlike traditional static documentation, the renoun toolkit delivers an interactive, developer-friendly experience specifically crafted for React. Meticulously designed components and powerful utilities enable you to effortlessly embed dynamic examples, automatic API references, and schema validation directly into your documentation.
 
-Here are some of the key features that make renoun stand out:
+### Designed for React Developers
 
-- **File System Utilities:** Easily query, type-check, and structure your file system. By managing files with a schema, renoun ensures that everything from personal blogs to large documentation sites and knowledge bases remain organized and accurate.
-- **Rich Code Visualization:** Showcase syntax-highlighted code snippets enhanced with embedded TypeScript quick info. More than just static blocks, renoun’s visualization features enable straightforward code previews, offering a deeper and more engaging learning experience.
-- **API References:** Automatically pull in type information, signatures, and usage examples from your code. This eliminates duplication and ensures your documentation always reflects your source code.
+#### Drop‑In Components
 
-Focus more on **what** you’re teaching and less on **how** to piece everything together. With the renoun toolkit, you have everything you need to build great technical content.
+Quickly get started with powerful components like `CodeBlock`, `APIReference`, `MDXRenderer`, `PackageInstall`, and more—no extra setup needed.
+
+[Explore components →](https://www.renoun.dev/components)
+
+#### Type‑Safe MDX Content
+
+Define front matter schemas using TypeScript, Arktype, Valibot, or Zod ensuring you catch mismatched data and invalid exports at compile time.
+
+[Learn about schemas →](https://www.renoun.dev/guides/zod)
+
+#### File System Utilities
+
+Easily query file system entries, generate navigations, and validate JavaScript module exports using a simple API. The file system utilities are not limited to MDX files and can be used with any file type.
+
+[Explore file system utilities →](https://www.renoun.dev/utilities/file-system)
+
+#### Automated API Documentation
+
+Effortlessly generate accurate, up‑to‑date source code documentation including, type signatures, prop tables, and usage examples directly from your source code.
+
+[Try the `APIReference` component →](https://www.renoun.dev/components/api-reference)
+
+#### Customizable Theming
+
+Easily enable multiple themes for light and dark mode, extend functionality through plugins, or fully override styles using an expanding ecosystem of utilities, aligning your docs precisely with your brand.
+
+[Learn about configuration →](https://www.renoun.dev/docs/configuration)
+
+---
+
+The renoun toolkit is a robust platform for creating engaging, maintainable, and deeply interactive technical content. Focus on crafting exceptional educational experiences, and leave the heavy lifting to renoun.
 
 ## Getting Started
 
