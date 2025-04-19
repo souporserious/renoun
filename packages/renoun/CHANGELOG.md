@@ -1,5 +1,20 @@
 # renoun
 
+## 8.14.0
+
+### Minor Changes
+
+- f83d4f5: Moves `useThemePicker` from `renoun/components` to `renoun/hooks`.
+- 91dc372: Adds `isDeprecated` field to symbol tokens using suggestion diagnostics. This also adds text strikethrough styling for deprecated symbols in the `Tokens` component.
+- ed4838a: Disables CSS transitions to prevent flashing when switching themes with `useThemePicker`.
+
+### Patch Changes
+
+- 9e66320: Prevents scrollbar showing along vertical axis for `CodeInline`.
+- fd7a1b1: Fixes strikethrough styles not being accounted for if set in the textmate theme.
+- affc0c0: Adds `node.engines` `package.json` field for minimum required Node.js version.
+- d00da22: Fixes `Refresh` component erroring during development when no server is present. This allows more easily testing synchronous behavior.
+
 ## 8.13.1
 
 ### Patch Changes
