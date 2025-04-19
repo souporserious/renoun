@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useCallback, useState, use } from 'react'
 
-import { ThemeContext } from './ThemeContext.js'
+import { ThemeContext } from '../components/Theme/ThemeContext.js'
 
 /** A hook that provides the current color mode and a function to set the color mode. */
 export function useThemePicker(): [

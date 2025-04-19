@@ -55,6 +55,16 @@
       "import": "./dist/file-system/index.js",
       "default": "./dist/file-system/index.js"
     },
+    "./hooks": {
+      "types": "./dist/hooks/index.d.ts",
+      "import": "./dist/hooks/index.js",
+      "default": "./dist/hooks/index.js"
+    },
+    "./hooks/*": {
+      "types": "./dist/hooks/*.d.ts",
+      "import": "./dist/hooks/*.js",
+      "default": "./dist/hooks/*.js"
+    },
     "./mdx": {
       "types": "./dist/mdx/index.d.ts",
       "import": "./dist/mdx/index.js",
