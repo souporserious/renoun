@@ -21,4 +21,19 @@ export default withMDX({
     }
     return config
   },
+  async redirects() {
+    const checkoutUrl = process.env.TEMPLATE_CHECKOUT_URL
+
+    if (!checkoutUrl) {
+      return []
+    }
+
+    return [
+      {
+        source: '/templates/checkout',
+        destination: checkoutUrl,
+        permanent: false,
+      },
+    ]
+  },
 })
