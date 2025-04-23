@@ -1,5 +1,11 @@
 # create-renoun
 
+## 1.2.1
+
+### Patch Changes
+
+- d0f3ab8: Fixes the working directory printed after configuring examples.
+
 ## 1.2.0
 
 ### Minor Changes
