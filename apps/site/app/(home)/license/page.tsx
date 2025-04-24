@@ -230,7 +230,7 @@ function PricingFooter() {
       >
         More questions about using renoun for your project?{' '}
         <a
-          href="mailto:info@example.com"
+          href="mailto:renoun@souporserious.com"
           css={{
             color: 'var(--color-surface-accent)',
             textDecoration: 'none',
