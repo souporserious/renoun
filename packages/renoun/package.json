@@ -1,7 +1,7 @@
 {
   "name": "renoun",
   "version": "8.14.0",
-  "description": "The Technical Content Toolkit for React",
+  "description": "The toolkit that works with your React framework to keep documentation polished, in sync, and on brand.",
   "author": "Travis Arnold",
   "license": "AGPL-3.0-or-later",
   "repository": {

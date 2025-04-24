@@ -5,9 +5,9 @@
       <img src="/packages/renoun/images/logo-light.png" alt="renoun" width="180"/>
     </picture>
   </a>
-  <h2>The Documentation Toolkit for React</h2>
+  <h2>Elevate Your Design System Docs</h2>
   <p>
-Meticulously crafted React components and utilities to<br/>help you author technical content and documentation.
+    The renoun toolkit uses your React framework to keep<br>documentation polished, in sync, and on brand.
   </p>
 </div>
 
@@ -36,25 +36,26 @@ Meticulously crafted React components and utilities to<br/>help you author techn
 
 ## Features
 
-- 📝 Quickly start authoring MDX content
-- 📊 Analyze and query file system metadata
-- 🛟 Validate JavaScript module exports
-- 📘 Generate JavaScript API references
-- 🌈 Accurately highlight code blocks
-- ✅ Type-check JavaScript code blocks
+- 📝 Author MDX content in seconds
+- 📊 Query and analyze file system metadata
+- 🛟 Validate module exports
+- 📘 Generate up‑to‑date API references
+- 🌈 Highlight code with precision
+- ✅ Type‑check code blocks
 - 🖼️ Render source code examples
+- 📦 Integrate with your favorite framework
 
 ## Why renoun?
 
-Authoring technical documentation for JavaScript libraries often involves fragmented tooling and manual workflows. The **renoun** toolkit simplifies this by providing a cohesive, React-first solution, that integrates seamlessly into your development process.
-
-Unlike traditional static documentation, the renoun toolkit delivers an interactive, developer-friendly experience specifically crafted for React. Meticulously designed components and powerful utilities enable you to effortlessly embed dynamic examples, automatic API references, and schema validation directly into your documentation.
+Maintaining consistent technical documentation at scale is hard, especially for design systems. The renoun toolkit simplifies this by providing a React‑first solution to author, validate, and render documentation that stays in sync with your code every step of the way.
 
 ### Designed for React Developers
 
+Built from the ground up for React, renoun gives you the full power of composition and templating making it easy to create interactive and engaging documentation suited exactly to your needs.
+
 #### Drop‑In Components
 
-Quickly get started with powerful components like `CodeBlock`, `APIReference`, `MDXRenderer`, `PackageInstall`, and more—no extra setup needed.
+Quickly get started with powerful components like [`APIReference`](https://www.renoun.dev/components/api-reference), [`CodeBlock`](https://www.renoun.dev/components/code-block), [`MDXRenderer`](https://www.renoun.dev/components/mdx-renderer), and more — no extra setup required.
 
 [Explore components →](https://www.renoun.dev/components)
 
@@ -70,9 +71,9 @@ Easily query file system entries, generate navigations, and validate JavaScript 
 
 [Explore file system utilities →](https://www.renoun.dev/utilities/file-system)
 
-#### Automated API Documentation
+#### Automated API References
 
-Effortlessly generate accurate, up‑to‑date source code documentation including, type signatures, prop tables, and usage examples directly from your source code.
+Effortlessly generate accurate, up‑to‑date API references, including type signatures and prop tables directly from your source code.
 
 [Try the `APIReference` component →](https://www.renoun.dev/components/api-reference)
 
@@ -82,17 +83,16 @@ Easily enable multiple themes for light and dark mode, extend functionality thro
 
 [Learn about configuration →](https://www.renoun.dev/docs/configuration)
 
----
-
-The renoun toolkit is a robust platform for creating engaging, maintainable, and deeply interactive technical content. Focus on crafting exceptional educational experiences, and leave the heavy lifting to renoun.
-
 ## Getting Started
+
+Whether you’re building a new design system or enhancing an existing library, renoun provides everything you need to create beautiful, interactive documentation that scales with your team.
 
 ### Install
 
+To get started with renoun, you can either use an automated setup starting from an [example](/examples) or install the package manually. The automated setup is the easiest way to get started, while the manual setup gives you full control over the installation process.
+
 #### Automated Setup
 
-The easiest way to get started with renoun is to use the `create-renoun` CLI tool. This will help you create a new project starting from an example.
 To create a new project or add to an existing project, run the following command in your terminal:
 
 ```bash

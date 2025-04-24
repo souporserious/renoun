@@ -4,8 +4,8 @@ import { GeistSans } from 'geist/font/sans'
 import { PackageInstallScript, Refresh } from 'renoun/components'
 
 export const metadata = {
-  title: 'renoun',
-  description: 'The Documentation Toolkit for React',
+  title: 'renoun - Elevate Your Design System Docs',
+  description: `The renoun toolkit uses your React framework to keep documentation polished, in sync, and on brand.`,
 } satisfies Metadata
 
 export default function RootLayout({
