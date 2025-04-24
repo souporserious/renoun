@@ -477,7 +477,7 @@ describe('file system', () => {
     })
     const entries = await directory.getEntries()
 
-    expectTypeOf(entries).toMatchTypeOf<MDXFile<{ default: MDXContent }>[]>()
+    expectTypeOf(entries).toMatchTypeOf<MDXFile[]>()
 
     expect(entries).toHaveLength(1)
   })
@@ -736,15 +736,66 @@ describe('file system', () => {
     }
   })
 
-  test('file name with modifier', async () => {
+  describe('file name with modifier', async () => {
     const fileSystem = new MemoryFileSystem({
-      'APIReference.examples.tsx': '',
-      'APIReference.tsx': '',
+      'components/APIReference.examples.tsx': '',
+      'components/APIReference.tsx': '',
     })
     const directory = new Directory({ fileSystem })
-    const entry = await directory.getEntry(['APIReference', 'examples'])
 
-    expect(entry.getAbsolutePath()).toBe('/APIReference.examples.tsx')
+    test('string path', async () => {
+      const entry = await directory.getEntry('components/APIReference/examples')
+
+      expect(entry.getAbsolutePath()).toBe(
+        '/components/APIReference.examples.tsx'
+      )
+
+      const file = await directory.getFile('components/APIReference/examples')
+
+      expect(file.getAbsolutePath()).toBe(
+        '/components/APIReference.examples.tsx'
+      )
+
+      const fileWithExtension = await directory.getFile(
+        'components/APIReference/examples',
+        'tsx'
+      )
+
+      expect(fileWithExtension.getAbsolutePath()).toBe(
+        '/components/APIReference.examples.tsx'
+      )
+    })
+
+    test('array path', async () => {
+      const entry = await directory.getEntry([
+        'components',
+        'APIReference',
+        'examples',
+      ])
+
+      expect(entry.getAbsolutePath()).toBe(
+        '/components/APIReference.examples.tsx'
+      )
+
+      const file = await directory.getFile([
+        'components',
+        'APIReference',
+        'examples',
+      ])
+
+      expect(file.getAbsolutePath()).toBe(
+        '/components/APIReference.examples.tsx'
+      )
+
+      const fileWithExtension = await directory.getFile(
+        ['components', 'APIReference', 'examples'],
+        'tsx'
+      )
+
+      expect(fileWithExtension.getAbsolutePath()).toBe(
+        '/components/APIReference.examples.tsx'
+      )
+    })
   })
 
   test('prioritizes base file name over file name with modifier', async () => {
@@ -1589,8 +1640,9 @@ describe('file system', () => {
             headings: z.array(
               z.object({
                 id: z.string(),
+                level: z.number(),
                 text: z.string(),
-                depth: z.number(),
+                children: z.custom<React.ReactNode>(),
               })
             ),
             metadata: z.object({

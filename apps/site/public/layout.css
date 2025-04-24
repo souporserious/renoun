@@ -190,6 +190,7 @@ a {
     line-height: var(--line-height-heading-2);
     color: var(--color-foreground-secondary);
     text-wrap: pretty;
+    margin-top: -0.5rem;
   }
 
   ul {

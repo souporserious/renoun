@@ -1,7 +1,7 @@
 {
   "name": "create-renoun",
   "type": "module",
-  "version": "1.1.0",
+  "version": "1.2.1",
   "author": "Travis Arnold",
   "license": "AGPL-3.0-or-later",
   "repository": {
@@ -24,8 +24,8 @@
   },
   "dependencies": {
     "@antfu/install-pkg": "^1.0.0",
-    "@clack/prompts": "^0.10.0",
+    "@clack/prompts": "^0.10.1",
     "picocolors": "^1.1.1",
-    "terminal-link": "^3.0.0"
+    "terminal-link": "^4.0.0"
   }
 }

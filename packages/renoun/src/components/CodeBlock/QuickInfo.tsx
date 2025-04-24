@@ -190,6 +190,7 @@ const DiagnosticCode = styled('span', {
 
 const Divider = styled('hr', ({ color }: { color: string }) => ({
   height: 1,
+  margin: 0,
   border: 'none',
   backgroundColor: color,
   opacity: 0.5,

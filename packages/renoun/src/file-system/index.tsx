@@ -793,40 +793,7 @@ export class JavaScriptFileExport<Value> {
       )
     }
 
-    const exportValue = this.#file.parseExportValue(
-      this.#name,
-      fileModuleExport
-    )
-
-    /* Enable hot module reloading in development for Next.js component exports. */
-    if (process.env.NODE_ENV === 'development') {
-      const isReactComponent = exportValue
-        ? /^[A-Z]/.test(exportValue.name) && String(exportValue).includes('jsx')
-        : false
-
-      if (isReactComponent) {
-        const Component = exportValue as React.ComponentType
-        const WrappedComponent = async (props: Record<string, unknown>) => {
-          const { Refresh } = await import('./Refresh.js')
-          const port = process.env.RENOUN_SERVER_PORT
-
-          if (port === undefined) {
-            return <Component {...props} />
-          }
-
-          return (
-            <>
-              <Refresh port={port} />
-              <Component {...props} />
-            </>
-          )
-        }
-
-        return WrappedComponent as Value
-      }
-    }
-
-    return exportValue
+    return this.#file.parseExportValue(this.#name, fileModuleExport)
   }
 }
 
@@ -999,6 +966,28 @@ export class JavaScriptFile<
     throw new FileExportNotFoundError(this.getAbsolutePath(), name)
   }
 
+  /** Get a named export from the JavaScript file. */
+  async getNamedExport<ExportName extends Extract<keyof Types, string>>(
+    name: ExportName
+  ): Promise<JavaScriptFileExport<Types[ExportName]>> {
+    return this.getExport(name)
+  }
+
+  /** Get the default export from the JavaScript file. */
+  async getDefaultExport(
+    this: Types extends { default: infer _DefaultType }
+      ? JavaScriptFile<Types, DirectoryTypes, Path, Extension>
+      : never
+  ): Promise<
+    JavaScriptFileExport<
+      Types extends { default: infer DefaultType } ? DefaultType : never
+    >
+  > {
+    return (
+      this as JavaScriptFile<Types, DirectoryTypes, Path, Extension>
+    ).getExport<any>('default')
+  }
+
   /** Get the start position of an export in the JavaScript file. */
   async getExportLocation(name: string) {
     const fileExports = await this.#getExports()
@@ -1141,22 +1130,28 @@ export class MDXFileExport<Value> {
     return value
   }
 
+  /**
+   * Get the runtime value of the export. An error will be thrown if the export
+   * is not found or the configured schema validation for the MDX file fails.
+   */
   async getRuntimeValue(): Promise<Value> {
     const fileModule = await this.#getModule()
 
-    if (!(this.#name in fileModule)) {
-      throw new FileExportNotFoundError(
-        this.#file.getAbsolutePath(),
-        this.#name,
-        MDXFile.name
+    if (this.#name in fileModule === false) {
+      throw new Error(
+        `[renoun] MDX file export "${String(this.#name)}" does not have a runtime value.`
       )
     }
 
     const fileModuleExport = fileModule[this.#name]
 
-    const exportValue = this.parseExportValue(this.#name, fileModuleExport)
+    if (fileModuleExport === undefined) {
+      throw new Error(
+        `[renoun] MDX file export "${this.#name}" not found in ${this.#file.getAbsolutePath()}`
+      )
+    }
 
-    return exportValue
+    return this.parseExportValue(this.#name, fileModuleExport)
   }
 
   #getModule() {
@@ -1192,24 +1187,24 @@ export interface MDXFileOptions<
   DirectoryTypes extends Record<string, any>,
   Path extends string,
 > extends FileOptions<DirectoryTypes, Path> {
-  loader?: ModuleLoader<Types>
+  loader?: ModuleLoader<{ default: MDXContent } & Types>
 }
 
 /** An MDX file in the file system. */
 export class MDXFile<
-  Types extends InferDefaultModuleTypes<Path>,
-  DirectoryTypes extends Record<string, any> = any,
+  Types extends Record<string, any> = { default: MDXContent },
+  DirectoryTypes extends Record<string, any> = Record<string, any>,
   const Path extends string = string,
   Extension extends string = ExtractFileExtension<Path>,
 > extends File<DirectoryTypes, Path, Extension> {
   #exports = new Map<string, MDXFileExport<any>>()
-  #loader?: ModuleLoader<Types>
+  #loader?: ModuleLoader<{ default: MDXContent } & Types>
   #slugCasing?: SlugCasings
 
   constructor({
     loader,
     ...fileOptions
-  }: MDXFileOptions<Types, DirectoryTypes, Path>) {
+  }: MDXFileOptions<{ default: MDXContent } & Types, DirectoryTypes, Path>) {
     super(fileOptions)
 
     if (loader === undefined) {
@@ -1240,14 +1235,15 @@ export class MDXFile<
     return Array.from(this.#exports.values())
   }
 
-  async getExport<ExportName extends Extract<keyof Types, string>>(
+  async getExport<ExportName extends 'default' | Extract<keyof Types, string>>(
     name: ExportName
-  ): Promise<MDXFileExport<Types[ExportName]>> {
+  ): Promise<MDXFileExport<({ default: MDXContent } & Types)[ExportName]>> {
     if (this.#exports.has(name)) {
       return this.#exports.get(name)!
     }
 
     const fileModule = await this.#getModule()
+
     if (!(name in fileModule)) {
       throw new FileExportNotFoundError(
         this.getAbsolutePath(),
@@ -1256,14 +1252,27 @@ export class MDXFile<
       )
     }
 
-    const mdxExport = new MDXFileExport<Types[ExportName]>(
-      name,
-      this as MDXFile<any>,
-      this.#loader,
-      this.#slugCasing
+    const fileExport = new MDXFileExport<
+      ({ default: MDXContent } & Types)[ExportName]
+    >(name, this as MDXFile<any>, this.#loader, this.#slugCasing)
+
+    this.#exports.set(name, fileExport)
+
+    return fileExport
+  }
+
+  /** Get a named export from the MDX file. */
+  async getNamedExport<ExportName extends Extract<keyof Types, string>>(
+    name: ExportName
+  ): Promise<MDXFileExport<Types[ExportName]>> {
+    return this.getExport(name)
+  }
+
+  /** Get the default export from the MDX file. */
+  async getDefaultExport(): Promise<MDXContent> {
+    return this.getExport('default').then((fileExport) =>
+      fileExport.getRuntimeValue()
     )
-    this.#exports.set(name, mdxExport)
-    return mdxExport
   }
 
   async hasExport(name: string): Promise<boolean> {
@@ -1271,11 +1280,12 @@ export class MDXFile<
     return name in fileModule
   }
 
-  async getExportValue<ExportName extends Extract<keyof Types, string>>(
-    name: ExportName
-  ): Promise<Types[ExportName]> {
-    const mdxExport = await this.getExport(name)
-    return mdxExport.getRuntimeValue()
+  async getExportValue<
+    ExportName extends 'default' | Extract<keyof Types, string>,
+  >(name: ExportName): Promise<({ default: MDXContent } & Types)[ExportName]> {
+    return this.getExport(name).then((fileExport) =>
+      fileExport.getRuntimeValue()
+    )
   }
 
   #getModule() {
@@ -1583,12 +1593,26 @@ export class Directory<
 
       // Find an entry whose base name matches the slug of `currentSegment`
       for (const currentEntry of allEntries) {
-        const baseSegment = createSlug(
+        let name = currentEntry.getBaseName()
+
+        if (currentEntry instanceof File) {
+          const modifier = currentEntry.getModifierName()
+
+          if (modifier) {
+            name += `.${modifier}`
+          }
+        }
+
+        const baseSegment = createSlug(name, this.#slugCasing)
+        const baseSegmentWithoutModifier = createSlug(
           currentEntry.getBaseName(),
           this.#slugCasing
         )
 
-        if (baseSegment === currentSegment) {
+        if (
+          baseSegment === currentSegment ||
+          baseSegmentWithoutModifier === currentSegment
+        ) {
           const matchesModifier =
             (currentEntry instanceof File && currentEntry.getModifierName()) ===
             lastSegment

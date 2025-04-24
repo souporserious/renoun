@@ -1,5 +1,116 @@
 # renoun
 
+## 8.14.0
+
+### Minor Changes
+
+- f83d4f5: Moves `useThemePicker` from `renoun/components` to `renoun/hooks`.
+- 91dc372: Adds `isDeprecated` field to symbol tokens using suggestion diagnostics. This also adds text strikethrough styling for deprecated symbols in the `Tokens` component.
+- ed4838a: Disables CSS transitions to prevent flashing when switching themes with `useThemePicker`.
+
+### Patch Changes
+
+- 9e66320: Prevents scrollbar showing along vertical axis for `CodeInline`.
+- fd7a1b1: Fixes strikethrough styles not being accounted for if set in the textmate theme.
+- affc0c0: Adds `node.engines` `package.json` field for minimum required Node.js version.
+- d00da22: Fixes `Refresh` component erroring during development when no server is present. This allows more easily testing synchronous behavior.
+
+## 8.13.1
+
+### Patch Changes
+
+- 9e0dce6: Fixes a bug in `Directory#getFile` where a file name modifier (e.g. `examples` in `Button.examples.tsx`) for the provided path was not being considered when checking if a file exists.
+
+## 8.13.0
+
+### Minor Changes
+
+- 6bf096d: Updates exported `headings` variable from the `addHeadings` remark plugin to include a new `children` property to allow rendering the JSX children of the heading element.
+
+  For example, headings with inline code or links:
+
+  ```mdx
+  # Heading with `code`
+  ```
+
+  Roughly yields:
+
+  ```mdx
+  export const headings = [
+    {
+      level: 1,
+      id: 'heading-with-code',
+      text: 'Heading with code',
+      children: (
+        <>
+          Heading with <code>code</code>
+        </>
+      ),
+    },
+  ]
+
+  # Heading with `code`
+  ```
+
+  ### Breaking Changes
+
+  The `depth` property of the heading metadata object was renamed to `level` to better reflect HTML nomenclature.
+
+- 899fb08: Adds back `getDefaultExport` and `getNamedExport` for both `JavaScriptFile` and `MDXFile` classes. These methods are useful as type guards to narrow types when building utilities that work with both JavaScript and MDX files.
+- f96a2be: Adds a first-class `Refresh` component for refreshing the server during development when a source file changes:
+
+  ```tsx
+  import { Refresh } from 'renoun/components'
+
+  export default function RootLayout({
+    children,
+  }: {
+    children: React.ReactNode
+  }) {
+    return (
+      <html lang="en">
+        <body>
+          {children}
+          <Refresh />
+        </body>
+      </html>
+    )
+  }
+  ```
+
+  This was previously automated for `JavaScriptFile` / `MDXFile` component exports. However, it did not provide a robust enough solution for all use cases. This new component ensures that only one listener will ever be added.
+
+- af2a21a: Includes `MDXContent` type by default now when using `MDXFile`. Previously, `{ default: MDXContent }` had to be defined explicitly. Now, it is merged in automatically with optional export types:
+
+  ```tsx
+  import { MDXFile } from 'renoun/file-system'
+
+  const file = new MDXFile<{
+    frontmatter: { title: string; date: Date }
+  }>({
+    path: 'path/to/file.mdx',
+  })
+  ```
+
+### Patch Changes
+
+- 36d62b6: Removes default `hr` margin in `QuickInfo` markdown container.
+- Updated dependencies [6bf096d]
+  - @renoun/mdx@2.1.0
+
+## 8.12.0
+
+### Minor Changes
+
+- a862ea2: Updates all dependencies to latest version.
+
+### Patch Changes
+
+- Updated dependencies [d7d15f7]
+- Updated dependencies [b33e5ca]
+- Updated dependencies [6d6684f]
+  - @renoun/mdx@2.0.0
+
 ## 8.11.0
 
 ### Minor Changes

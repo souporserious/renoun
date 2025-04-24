@@ -11,7 +11,6 @@ export async function DocumentEntry({
   shouldRenderUpdatedAt = true,
 }: {
   file: MDXFile<{
-    default: MDXContent
     headings: MDXHeadings
     metadata: {
       title: string

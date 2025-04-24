@@ -39,7 +39,7 @@ export default function Page() {
             margin: 0,
           }}
         >
-          The Documentation Toolkit for React
+          Elevate Your Design System Documentation
         </h1>
         <p
           css={{
@@ -50,8 +50,8 @@ export default function Page() {
             margin: 0,
           }}
         >
-          Meticulously crafted React components and utilities to help you create
-          engaging content and documentation.
+          The renoun toolkit works with your React framework to keep
+          documentation polished, in sync, and on brand.
         </p>
         <div
           css={{

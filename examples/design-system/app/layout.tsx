@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { ThemeProvider } from 'renoun/components'
+import { Refresh, ThemeProvider } from 'renoun/components'
 import Link from 'next/link'
 
 import './layout.css'
@@ -28,6 +28,7 @@ export default function RootLayout({
           </nav>
           {children}
         </ThemeProvider>
+        <Refresh />
       </body>
     </html>
   )

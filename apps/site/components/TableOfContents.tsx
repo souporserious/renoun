@@ -1,4 +1,5 @@
 'use client'
+import { useId } from 'react'
 import type { CSSObject } from 'restyle'
 import type { MDXHeadings } from 'renoun/mdx'
 
@@ -12,6 +13,7 @@ export function TableOfContents({
   headings: MDXHeadings
   editPath?: string
 }) {
+  const id = useId()
   const sectionObserver = useSectionObserver()
 
   return (
@@ -32,42 +34,44 @@ export function TableOfContents({
       }}
     >
       <nav
+        aria-labelledby={id}
         css={{
+          gridColumn: 6,
           pointerEvents: 'auto',
-          display: 'grid',
-          gridTemplateColumns: 'subgrid',
-          gridColumn: '6 / -1',
+          display: 'flex',
+          flexDirection: 'column',
           height: 'var(--body-height)',
-          padding: '4rem 0',
+          padding: '4rem 1rem',
           marginTop: 'var(--header-height)',
+          gap: '1rem',
           overflowY: 'auto',
           overscrollBehavior: 'contain',
         }}
       >
-        <ul
+        <h4 className="title" id={id}>
+          On this page
+        </h4>
+        <ol
           css={{
             gridColumn: '1 / 2',
             gridRow: '1 / -1',
             listStyle: 'none',
             display: 'flex',
             flexDirection: 'column',
-            padding: '0 1rem',
+            padding: 0,
             margin: 0,
           }}
         >
-          <li css={{ marginBottom: '1rem' }}>
-            <h4 className="title">On this page</h4>
-          </li>
-          {headings?.map(({ text, depth, id }, index) =>
-            depth > 1 ? (
+          {headings?.map(({ id, level, text, children }) =>
+            level > 1 ? (
               <li key={id} css={{ display: 'flex' }}>
                 <Link
                   id={id}
                   sectionObserver={sectionObserver}
-                  css={{ paddingLeft: (depth - 2) * 0.8 + 'rem' }}
+                  css={{ paddingLeft: (level - 2) * 0.8 + 'rem' }}
                   title={text}
                 >
-                  {text}
+                  {children}
                 </Link>
               </li>
             ) : null
@@ -88,7 +92,7 @@ export function TableOfContents({
               </li>
             </>
           ) : null}
-        </ul>
+        </ol>
       </nav>
     </aside>
   )

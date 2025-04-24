@@ -45,6 +45,7 @@ export type Token = {
   end: number
   hasTextStyles: boolean
   isBaseColor: boolean
+  isDeprecated: boolean
   isSymbol: boolean
   isWhiteSpace: boolean
   diagnostics?: TokenDiagnostic[]
@@ -103,6 +104,7 @@ export async function getTokens({
           end: value.length,
           hasTextStyles: false,
           isBaseColor: true,
+          isDeprecated: false,
           isWhiteSpace: false,
           isSymbol: false,
           style: {},
@@ -146,7 +148,22 @@ export async function getTokens({
   const identifiers = sourceFile
     ? sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)
     : []
-  const symbolRanges = [...importSpecifiers, ...identifiers]
+  const suggestionDiagnostics = sourceFile
+    ? project
+        .getLanguageService()
+        .compilerObject.getSuggestionDiagnostics(sourceFile.getFilePath())
+    : []
+  const deprecatedRanges = suggestionDiagnostics
+    .filter(
+      (diagnostic) =>
+        (diagnostic.reportsDeprecated || diagnostic.code === 6385) &&
+        diagnostic.start !== undefined
+    )
+    .map((diagnostic) => ({
+      start: diagnostic.start,
+      end: diagnostic.start + (diagnostic.length ?? 0),
+    }))
+  const symbolMetadata = [...importSpecifiers, ...identifiers]
     .filter((node) => {
       const parent = node.getParent()
       const isJsxOnlyImport = jsxOnly
@@ -157,18 +174,24 @@ export async function getTokens({
       )
     })
     .map((node) => {
+      let start = node.getStart()
+      let end = node.getEnd()
+
       // Offset module specifiers since they contain quotes which are tokenized separately
       // e.g. import React from 'react' -> ["'", "react", "'"]
       if (Node.isStringLiteral(node)) {
-        return {
-          start: node.getStart() + 1,
-          end: node.getEnd() - 1,
-        }
+        start += 1
+        end -= 1
       }
+
+      const isDeprecated = deprecatedRanges.some(
+        (range) => range.start === start && range.end === end
+      )
 
       return {
         start: node.getStart(),
         end: node.getEnd(),
+        isDeprecated,
       }
     })
   const rootDirectory = getRootDirectory()
@@ -195,6 +218,7 @@ export async function getTokens({
         hasTextStyles: baseToken.hasTextStyles,
         isBaseColor: baseToken.isBaseColor,
         isWhiteSpace: baseToken.isWhiteSpace,
+        isDeprecated: false,
         isSymbol: false,
         style: baseToken.style,
       }
@@ -202,16 +226,20 @@ export async function getTokens({
       // Split this token further if it intersects symbol ranges
       let processedTokens: Tokens = []
 
-      if (symbolRanges.length) {
-        const symbolRange = symbolRanges.find((range) => {
+      if (symbolMetadata.length) {
+        const symbol = symbolMetadata.find((range) => {
           return range.start >= tokenStart && range.end <= tokenEnd
         })
-        const inFullRange = symbolRange
-          ? symbolRange.start === tokenStart && symbolRange.end === tokenEnd
+        const inFullRange = symbol
+          ? symbol.start === tokenStart && symbol.end === tokenEnd
           : false
 
-        if (symbolRange && !inFullRange) {
-          processedTokens = splitTokenByRanges(initialToken, symbolRanges)
+        if (symbol) {
+          initialToken.isDeprecated = symbol.isDeprecated
+        }
+
+        if (symbol && !inFullRange) {
+          processedTokens = splitTokenByRanges(initialToken, symbolMetadata)
         } else {
           processedTokens.push({
             ...initialToken,

@@ -2,7 +2,6 @@ import React, { Fragment, Suspense } from 'react'
 import { css, styled, type CSSObject } from 'restyle'
 
 import type { MDXComponents } from '../mdx/index.js'
-import { getTokens } from '../project/client.js'
 import type { Languages } from '../textmate/index.js'
 import { grammars } from '../textmate/index.js'
 import { getThemeColors, getThemeTokenVariables } from '../utils/get-theme.js'
@@ -114,6 +113,7 @@ async function CodeInlineAsync({
     borderRadius: 5,
     whiteSpace: 'nowrap',
     position: 'relative',
+    overflowY: 'hidden',
     ...getScrollContainerStyles({
       paddingBottom: paddingY,
       color: theme.scrollbarSlider.hoverBackground,
@@ -174,6 +174,7 @@ const CodeFallback = styled('code', {
   gap: '1ch',
   whiteSpace: 'nowrap',
   overflowX: 'scroll',
+  overflowY: 'hidden',
 })
 
 /** Parses the props of an MDX `code` element for passing to `CodeInline`. */

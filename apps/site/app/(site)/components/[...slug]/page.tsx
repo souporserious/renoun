@@ -96,21 +96,23 @@ export default async function Component({
   let headings: MDXHeadings = []
 
   if (mdxHeadings) {
-    headings.push(...mdxHeadings)
+    headings.push(...(mdxHeadings as MDXHeadings))
   }
 
   if (examplesExports.length) {
     const parsedExports = examplesExports.map((exampleExport) => ({
+      level: 3,
       id: exampleExport.getSlug(),
+      children: exampleExport.getTitle(),
       text: exampleExport.getTitle(),
-      depth: 3,
     }))
 
     headings.push(
       {
+        level: 2,
         id: 'examples',
+        children: 'Examples',
         text: 'Examples',
-        depth: 2,
       },
       ...parsedExports
     )
@@ -119,14 +121,16 @@ export default async function Component({
   if (componentExports) {
     headings.push(
       {
+        level: 2,
         id: 'api-reference',
+        children: 'API Reference',
         text: 'API Reference',
-        depth: 2,
       },
       ...componentExports.map((componentExport) => ({
+        level: 3,
         id: componentExport.getSlug(),
+        children: componentExport.getName(),
         text: componentExport.getName(),
-        depth: 3,
       }))
     )
   }

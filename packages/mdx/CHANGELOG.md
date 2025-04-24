@@ -1,5 +1,97 @@
 # @renoun/mdx
 
+## 2.1.0
+
+### Minor Changes
+
+- 6bf096d: Updates exported `headings` variable from the `addHeadings` remark plugin to include a new `children` property to allow rendering the JSX children of the heading element.
+
+  For example, headings with inline code or links:
+
+  ```mdx
+  # Heading with `code`
+  ```
+
+  Roughly yields:
+
+  ```mdx
+  export const headings = [
+    {
+      level: 1,
+      id: 'heading-with-code',
+      text: 'Heading with code',
+      children: (
+        <>
+          Heading with <code>code</code>
+        </>
+      ),
+    },
+  ]
+
+  # Heading with `code`
+  ```
+
+  ### Breaking Changes
+
+  The `depth` property of the heading metadata object was renamed to `level` to better reflect HTML nomenclature.
+
+## 2.0.0
+
+### Major Changes
+
+- b33e5ca: This simplifies the `renoun/mdx` package by removing unnecessary plugins.
+
+  ### Breaking Changes
+
+  The `remark-frontmatter`, `remark-mdx-frontmatter`, `remark-squeeze-paragraphs`, and `remark-strip-badges` plugins were removed from the `renoun/mdx` package. To add the same functionality as before, you will need to install and import them manually:
+
+  ```bash
+  npm install remark-frontmatter remark-mdx-frontmatter remark-squeeze-paragraphs remark-strip-badges
+  ```
+
+  ```js
+  import remarkFrontmatter from 'remark-frontmatter'
+  import remarkMdxFrontmatter from 'remark-mdx-frontmatter'
+  import remarkSqueezeParagraphs from 'remark-squeeze-paragraphs'
+  import remarkStripBadges from 'remark-strip-badges'
+
+  export default {
+    remarkPlugins: [
+      remarkFrontmatter,
+      remarkMdxFrontmatter,
+      remarkSqueezeParagraphs,
+      remarkStripBadges,
+    ],
+  }
+  ```
+
+  A more simplified approach can be used for front matter by exporting a `frontmatter` or `metadata` object from the MDX file directly:
+
+  ```tsx
+  export const frontmatter = {
+    title: 'Hello World',
+    date: '2025-03-24',
+  }
+  ```
+
+### Minor Changes
+
+- d7d15f7: Adds exports for all `remark` and `rehype` plugins. Plugins can now be imported as grouped plugins:
+
+  ```tsx
+  import remarkRenoun from '@renoun/mdx/remark'
+  import rehypeRenoun from '@renoun/mdx/rehype'
+  ```
+
+  Or as individual plugins:
+
+  ```tsx
+  import rehypeAddReadingTime from '@renoun/mdx/rehype/add-reading-time'
+  import remarkAddHeadings from '@renoun/mdx/remark/add-headings'
+  ```
+
+- 6d6684f: Cleans up manually constructing export AST by using `unist-util-mdx-define`.
+
 ## 1.6.0
 
 ### Minor Changes

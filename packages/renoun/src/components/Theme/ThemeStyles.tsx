@@ -11,5 +11,15 @@ import { getThemeColorVariables } from '../../utils/get-theme.js'
  */
 export async function ThemeStyles() {
   const colorVariables = await getThemeColorVariables()
-  return <GlobalStyles>{colorVariables}</GlobalStyles>
+
+  return (
+    <GlobalStyles>
+      {{
+        '[data-theme-disable-transitions] *': {
+          transition: 'none !important',
+        },
+        ...colorVariables,
+      }}
+    </GlobalStyles>
+  )
 }
