@@ -195,7 +195,7 @@ function FreePlan() {
             },
           }}
         >
-          Start Using renoun
+          Start using renoun
         </a>
       }
     />

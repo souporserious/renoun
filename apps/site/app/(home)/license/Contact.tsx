@@ -30,7 +30,7 @@ export function Contact() {
       }}
     >
       <MailIcon />
-      Discuss Licensing
+      Discuss licensing
     </a>
   )
 }
