@@ -50,8 +50,8 @@ export default function Page() {
             margin: 0,
           }}
         >
-          The renoun toolkit works with your React framework to keep
-          documentation polished, in sync, and on brand.
+          The renoun toolkit uses your React framework to keep documentation
+          polished, in sync, and on brand.
         </p>
         <div
           css={{
