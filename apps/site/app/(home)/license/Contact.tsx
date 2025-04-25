@@ -1,8 +1,10 @@
 'use client'
 
+import { EmailLink } from './EmailLink'
+
 export function Contact() {
   return (
-    <a
+    <EmailLink
       css={{
         display: 'flex',
         alignItems: 'center',
@@ -24,14 +26,11 @@ export function Contact() {
           backgroundColor: 'var(--color-surface-primary-highlighted)',
         },
       }}
-      onClick={(event) => {
-        event.preventDefault()
-        window.location.href = `mailto:sales@souporserious.com?subject=${encodeURIComponent('Commercial Licensing Inquiry for renoun')}`
-      }}
+      subject="Commercial Licensing Inquiry for renoun"
     >
       <MailIcon />
       Discuss licensing
-    </a>
+    </EmailLink>
   )
 }
 

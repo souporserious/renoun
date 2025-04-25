@@ -1,4 +1,5 @@
 import { Contact } from './Contact'
+import { EmailLink } from './EmailLink'
 
 function CheckIcon() {
   return (
@@ -167,7 +168,7 @@ function FreePlan() {
       description="A generous non-commercial license ideal for blogs, documentation sites, and educational content."
       features={[
         'Blogs and content sites',
-        'Project documentation',
+        'Application documentation',
         'Educational and community content',
         'Non-profit initiatives',
       ]}
@@ -211,7 +212,7 @@ function CommercialPlan() {
       features={[
         'SaaS products',
         'E-commerce platforms',
-        'Enterprise solutions',
+        'AI Chatbots',
         'Priority support',
       ]}
       cta={<Contact />}
@@ -229,8 +230,7 @@ function PricingFooter() {
         }}
       >
         More questions about using renoun for your project?{' '}
-        <a
-          href="mailto:renoun@souporserious.com"
+        <EmailLink
           css={{
             color: 'var(--color-surface-accent)',
             textDecoration: 'none',
@@ -238,9 +238,10 @@ function PricingFooter() {
               textDecoration: 'underline',
             },
           }}
+          subject="Question about using renoun for my project"
         >
           Contact us
-        </a>
+        </EmailLink>
       </p>
     </div>
   )
@@ -361,9 +362,9 @@ function FAQSection() {
         }}
       >
         <FAQItem question="Can I use renoun in my documentation site for a paid product?">
-          Yes, you can use renoun in your documentation site. However, you
-          cannot sell an end SaaS product that uses renoun. For example, selling
-          access to an API endpoint that uses renoun.
+          Yes, provided the documentation site itself is publicly accessible and
+          free. If any part of the documentation is behind a paywall or
+          subscription, you will need a commercial license.
         </FAQItem>
         <FAQItem question="What projects qualify as non-commercial?">
           Non-commercial projects include blogs, open-source projects,
@@ -371,13 +372,14 @@ function FAQSection() {
           generate revenue from the use of renoun.
         </FAQItem>
         <FAQItem question="Can I use renoun behind a paywalled product like a course?">
-          You may use renoun to serve secondary paywalled content (like a
-          private course) as long as you’re not charging for renoun itself or
-          building a SaaS platform using renoun.
+          No. Using renoun on a site that charges visitors (for example, a paid
+          course portal) is considered commercial use and requires a commercial
+          license.
         </FAQItem>
         <FAQItem question="How do I upgrade to a Commercial License?">
           If you plan to use renoun in a commercial product or service, please
-          contact us via email to discuss licensing options and terms.
+          contact us via <EmailLink>email</EmailLink> to discuss licensing
+          options and terms.
         </FAQItem>
       </div>
     </section>
