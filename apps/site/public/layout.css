@@ -210,7 +210,7 @@ a {
   line-height: var(--line-height-heading-2);
   color: var(--color-foreground-secondary);
   text-wrap: pretty;
-  margin-top: -1rem;
+  margin-top: -0.6rem;
 }
 
 .prose-alternate {
