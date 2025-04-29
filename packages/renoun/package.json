@@ -1,9 +1,9 @@
 {
   "name": "renoun",
   "version": "8.14.0",
-  "description": "The toolkit that works with your React framework to keep documentation polished, in sync, and on brand.",
+  "description": "The renoun toolkit keeps documentation polished, in sync, and on brand.",
   "author": "Travis Arnold",
-  "license": "AGPL-3.0-or-later",
+  "license": "SEE LICENSE IN LICENSE.md",
   "repository": {
     "type": "git",
     "url": "https://github.com/souporserious/renoun",
