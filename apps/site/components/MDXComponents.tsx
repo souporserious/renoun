@@ -59,16 +59,19 @@ export const MDXComponents = {
         css={{
           '--padding-x': '1.5rem',
           '--padding-y': '1rem',
-          '--border-width': '5px',
           display: 'flex',
           flexDirection: 'column',
           padding: 'var(--padding-y) var(--padding-x)',
           gap: '1rem',
           backgroundColor: '#1b487d',
           color: 'white',
-          borderLeft: 'var(--border-width) solid #82aaff',
+          borderLeft: '5px solid #82aaff',
           borderRadius: 5,
           position: 'relative',
+
+          '& a': {
+            color: '#b1d5ff',
+          },
 
           '& p': {
             fontSize: 'var(--font-size-body-2) !important',

@@ -15,11 +15,8 @@
     "next": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "remark-frontmatter": "^5.0.0",
-    "remark-mdx-frontmatter": "^5.0.0",
     "renoun": "workspace:*",
     "restyle": "catalog:",
-    "shiki": "catalog:",
     "ts-morph": "catalog:"
   }
 }

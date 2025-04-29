@@ -2,13 +2,14 @@ import React, { Suspense } from 'react'
 import { type CSSObject, styled } from 'restyle'
 
 import type { MDXComponents } from '../../mdx/index.js'
-import { analyzeSourceText } from '../../project/client.js'
 import { computeDirectionalStyles } from '../../utils/compute-directional-styles.js'
-import { getThemeColors } from '../../utils/get-theme-colors.js'
+import {
+  getThemeColors,
+  getThemeTokenVariables,
+} from '../../utils/get-theme.js'
 import type { Languages } from '../../utils/get-language.js'
 import type { ContextValue } from './Context.js'
 import { Context } from './Context.js'
-import { CopyButtonContextProvider } from './contexts.js'
 import { CopyButton } from './CopyButton.js'
 import { LineNumbers } from './LineNumbers.js'
 import { Pre } from './Pre.js'
@@ -20,11 +21,17 @@ import {
   getScrollContainerStyles,
 } from './utils.js'
 
-export type BaseCodeBlockProps = {
-  /** Name or path of the code block. Ordered filenames will be stripped from the name e.g. `01.index.tsx` becomes `index.tsx`. */
-  filename?: string
+export interface CodeBlockProps {
+  /** Pass a code string to highlight or override default rendering using `Tokens`, `LineNumbers`, and `Toolbar` components. */
+  children: React.ReactNode
 
-  /** Language of the source code. When used with `source`, the file extension will be used by default. */
+  /** Name or path of the code block. Ordered file names will be stripped from the name e.g. `01.index.tsx` becomes `index.tsx`. */
+  path?: string
+
+  /** The working directory to use when analyzing the source code. This will read the local file system contents from the `workingDirectory` joined with the `path` prop instead of creating a virtual file. */
+  workingDirectory?: string
+
+  /** Language of the source code provided to the `Tokens` component. When `path` is defined, the file extension will be used to determine the language by default. */
   language?: Languages
 
   /** A string of comma separated lines and ranges to highlight e.g. `'1, 3-5, 7'`. */
@@ -36,8 +43,8 @@ export type BaseCodeBlockProps = {
   /** Opacity of unfocused lines when using `focusedLines`. */
   unfocusedLinesOpacity?: number
 
-  /** Show or hide a button that copies the source code to the clipboard. */
-  allowCopy?: boolean
+  /** Show or hide a button that copies the source code to the clipboard. Accepts a boolean or a string that will be copied. */
+  allowCopy?: boolean | string
 
   /** Whether or not to allow errors. Accepts a boolean or comma-separated list of allowed error codes. */
   allowErrors?: boolean | string
@@ -51,6 +58,9 @@ export type BaseCodeBlockProps = {
   /** Show or hide the toolbar. */
   showToolbar?: boolean
 
+  /** Whether or not to analyze the source code for type errors and provide quick information on hover. */
+  shouldAnalyze?: boolean
+
   /** Whether or not to format the source code using `prettier` if installed. */
   shouldFormat?: boolean
 
@@ -61,6 +71,7 @@ export type BaseCodeBlockProps = {
     lineNumbers?: CSSObject
     token?: CSSObject
     popover?: CSSObject
+    copyButton?: CSSObject
   }
 
   /** Class names to apply to code block elements. */
@@ -70,6 +81,7 @@ export type BaseCodeBlockProps = {
     lineNumbers?: string
     token?: string
     popover?: string
+    copyButton?: string
   }
 
   /** Styles to apply to code block elements. */
@@ -79,111 +91,203 @@ export type BaseCodeBlockProps = {
     lineNumbers?: React.CSSProperties
     token?: React.CSSProperties
     popover?: React.CSSProperties
+    copyButton?: React.CSSProperties
   }
-
-  /** Overrides default rendering to allow full control over styles using `CodeBlock` components like `Tokens`, `LineNumbers`, and `Toolbar`. */
-  children?: React.ReactNode
 }
 
-export type CodeBlockProps =
-  | ({
-      /** Source code to highlight. */
-      value: string | Promise<string>
-    } & BaseCodeBlockProps)
-  | ({
-      /** Path to the source file on disk to highlight. */
-      source: string
-
-      /** The working directory for the `source`. */
-      workingDirectory?: string
-    } & BaseCodeBlockProps)
-
-async function CodeBlockAsync({
-  filename,
-  language,
-  highlightedLines,
-  focusedLines,
+/**
+ * Renders a code block with tokenized source code, line numbers, and a toolbar.
+ *
+ * When targeting JavaScript or TypeScript languages, the provided source code is
+ * type-checked and will throw errors that can be optionally displayed. Additionally,
+ * the source code will be formatted using `prettier` if installed and quick info
+ * is available when hovering symbols.
+ */
+export function CodeBlock({
+  shouldAnalyze = true,
   unfocusedLinesOpacity = 0.6,
-  allowCopy,
-  allowErrors,
-  showErrors,
-  showLineNumbers,
-  showToolbar,
-  shouldFormat,
   ...props
 }: CodeBlockProps) {
+  if (typeof props.children !== 'string') {
+    return (
+      <CodeBlockAsync
+        shouldAnalyze={shouldAnalyze}
+        unfocusedLinesOpacity={unfocusedLinesOpacity}
+        {...props}
+      />
+    )
+  }
+
   const containerPadding = computeDirectionalStyles(
     'padding',
     '0.5lh',
     props.css?.container,
     props.style?.container
   )
-  const hasValue = 'value' in props
-  const hasSource = 'source' in props
-  const options: any = {}
+  const shouldRenderToolbar = Boolean(
+    props.showToolbar === undefined
+      ? props.path || props.allowCopy
+      : props.showToolbar
+  )
+  const Container = shouldRenderToolbar ? StyledContainer : React.Fragment
 
-  if (hasValue) {
-    if (props.value === undefined || props.value === '') {
-      throw new Error(
-        '[renoun] The `CodeBlock` component `value` prop cannot be `undefined` or an empty string.'
-      )
-    }
+  return (
+    <Suspense
+      fallback={
+        <Container
+          css={
+            shouldRenderToolbar
+              ? {
+                  borderRadius: 5,
+                  boxShadow: '0 0 0 1px #666',
+                  ...props.css?.container,
+                  padding: 0,
+                }
+              : {}
+          }
+          className={
+            shouldRenderToolbar ? props.className?.container : undefined
+          }
+          style={shouldRenderToolbar ? props.style?.container : undefined}
+        >
+          {shouldRenderToolbar && (
+            <FallbackToolbar
+              css={{ padding: containerPadding.all, ...props.css?.toolbar }}
+              className={props.className?.toolbar}
+              style={props.style?.toolbar}
+            />
+          )}
+          <FallbackPre
+            css={{
+              WebkitTextSizeAdjust: 'none',
+              textSizeAdjust: 'none',
+              position: 'relative',
+              whiteSpace: 'pre',
+              wordWrap: 'break-word',
+              display: 'grid',
+              gridAutoRows: 'max-content',
+              gridTemplateColumns: props.showLineNumbers
+                ? 'auto 1fr'
+                : undefined,
+              margin: 0,
+              backgroundColor: shouldRenderToolbar ? 'inherit' : 'transparent',
+              color: shouldRenderToolbar ? undefined : 'inherit',
+              borderRadius: shouldRenderToolbar ? 'inherit' : 5,
+              boxShadow: shouldRenderToolbar ? undefined : '0 0 0 1px #666',
+              ...getScrollContainerStyles({
+                paddingBottom: containerPadding.bottom,
+              }),
+              ...(shouldRenderToolbar ? {} : props.css?.container),
+              padding: 0,
+            }}
+            className={
+              shouldRenderToolbar ? undefined : props.className?.container
+            }
+            style={shouldRenderToolbar ? undefined : props.style?.container}
+          >
+            {props.showLineNumbers && (
+              <FallbackLineNumbers
+                css={{
+                  padding: containerPadding.all,
+                  gridColumn: 1,
+                  gridRow: '1 / -1',
+                  width: '4ch',
+                  backgroundPosition: 'inherit',
+                  backgroundImage: 'inherit',
+                  ...props.css?.lineNumbers,
+                }}
+                className={props.className?.lineNumbers}
+                style={props.style?.lineNumbers}
+              >
+                {Array.from(
+                  { length: props.children.split('\n').length },
+                  (_, index) => index + 1
+                ).join('\n')}
+              </FallbackLineNumbers>
+            )}
 
-    // Wait for the value to resolve if it is a Promise
-    if (
-      typeof props.value === 'object' &&
-      typeof props.value.then === 'function'
-    ) {
-      options.value = await props.value
-    } else {
-      options.value = props.value
-    }
-  } else if (hasSource) {
-    options.source = props.source
-
-    if (props.workingDirectory) {
-      if (URL.canParse(props.workingDirectory)) {
-        const { pathname } = new URL(props.workingDirectory)
-        options.workingDirectory = pathname.slice(0, pathname.lastIndexOf('/'))
-      } else {
-        options.workingDirectory = props.workingDirectory
+            <FallbackCode
+              css={{
+                gridColumn: props.showLineNumbers ? 2 : 1,
+                padding: props.showLineNumbers
+                  ? `${containerPadding.vertical} ${containerPadding.horizontal} 0 0`
+                  : `${containerPadding.vertical} ${containerPadding.horizontal} 0`,
+              }}
+            >
+              {props.children}
+            </FallbackCode>
+          </FallbackPre>
+        </Container>
       }
-    }
-  } else {
-    throw new Error(
-      '[renoun] The `CodeBlock` component requires a `value` or `source` prop.'
-    )
-  }
+    >
+      <CodeBlockAsync
+        shouldAnalyze={shouldAnalyze}
+        unfocusedLinesOpacity={unfocusedLinesOpacity}
+        {...props}
+      />
+    </Suspense>
+  )
+}
 
-  const { tokens, value, label } = await analyzeSourceText({
-    filename,
-    language,
-    allowErrors,
-    showErrors,
-    shouldFormat,
-    ...options,
+async function CodeBlockAsync({
+  path,
+  workingDirectory,
+  language,
+  highlightedLines,
+  focusedLines,
+  unfocusedLinesOpacity,
+  allowCopy,
+  allowErrors,
+  showErrors,
+  showLineNumbers,
+  showToolbar,
+  shouldAnalyze,
+  shouldFormat,
+  children,
+  className,
+  css,
+  style,
+}: CodeBlockProps) {
+  const containerPadding = computeDirectionalStyles(
+    'padding',
+    '0.5lh',
+    css?.container,
+    style?.container
+  )
+  const resolvers: any = {}
+  resolvers.promise = new Promise<void>((resolve, reject) => {
+    resolvers.resolve = resolve
+    resolvers.reject = reject
   })
   const contextValue = {
-    filenameLabel: filename || hasSource ? label : undefined,
+    filePath: path,
     padding: containerPadding.all,
-    value,
+    allowErrors,
+    showErrors,
+    shouldAnalyze,
+    shouldFormat,
     highlightedLines,
-    tokens,
+    language,
+    workingDirectory,
+    resolvers,
   } satisfies ContextValue
+  let value: string
 
-  if ('children' in props) {
-    return (
-      <Context value={contextValue}>
-        <CopyButtonContextProvider value={value}>
-          {props.children}
-        </CopyButtonContextProvider>
-      </Context>
-    )
+  if (typeof children === 'string') {
+    value = children
+  } else if (
+    typeof children === 'object' &&
+    children !== null &&
+    'then' in children
+  ) {
+    value = (await children) as string
+  } else {
+    return <Context value={contextValue}>{children}</Context>
   }
 
   const theme = await getThemeColors()
   const shouldRenderToolbar = Boolean(
-    showToolbar === undefined ? filename || hasSource || allowCopy : showToolbar
+    showToolbar === undefined ? path || allowCopy : showToolbar
   )
   const highlightedLinesGradient = highlightedLines
     ? generateHighlightedLinesGradient(highlightedLines)
@@ -195,15 +299,15 @@ async function CodeBlockAsync({
   const containerProps = shouldRenderToolbar
     ? {
         css: {
-          backgroundColor: theme.background,
-          color: theme.foreground,
           borderRadius: 5,
           boxShadow: `0 0 0 1px ${theme.panel.border}`,
-          ...props.css?.container,
+          backgroundColor: theme.background,
+          color: theme.foreground,
+          ...css?.container,
           padding: 0,
         } satisfies CSSObject,
-        className: props.className?.container,
-        style: props.style?.container,
+        className: className?.container,
+        style: style?.container,
       }
     : {}
   const focusedLinesStyles = focusedLines
@@ -220,10 +324,10 @@ async function CodeBlockAsync({
       <Container {...containerProps}>
         {shouldRenderToolbar ? (
           <Toolbar
-            allowCopy={allowCopy === undefined ? Boolean(filename) : allowCopy}
-            css={{ padding: containerPadding.all, ...props.css?.toolbar }}
-            className={props.className?.toolbar}
-            style={props.style?.toolbar}
+            allowCopy={allowCopy === undefined ? Boolean(path) : allowCopy}
+            css={{ padding: containerPadding.all, ...css?.toolbar }}
+            className={className?.toolbar}
+            style={style?.toolbar}
           />
         ) : null}
         <Pre
@@ -255,18 +359,17 @@ async function CodeBlockAsync({
                   backgroundImage: highlightedLinesGradient,
                 }
               : {}),
-            ...(shouldRenderToolbar ? {} : props.css?.container),
+            ...(shouldRenderToolbar ? {} : css?.container),
+            ...getThemeTokenVariables(),
             padding: 0,
           }}
-          className={
-            shouldRenderToolbar ? undefined : props.className?.container
-          }
-          style={shouldRenderToolbar ? undefined : props.style?.container}
+          className={shouldRenderToolbar ? undefined : className?.container}
+          style={shouldRenderToolbar ? undefined : style?.container}
         >
           {showLineNumbers ? (
             <>
               <LineNumbers
-                className={props.className?.lineNumbers}
+                className={className?.lineNumbers}
                 css={{
                   padding: containerPadding.all,
                   gridColumn: 1,
@@ -274,9 +377,9 @@ async function CodeBlockAsync({
                   width: '4ch',
                   backgroundPosition: 'inherit',
                   backgroundImage: 'inherit',
-                  ...props.css?.lineNumbers,
+                  ...css?.lineNumbers,
                 }}
-                style={props.style?.lineNumbers}
+                style={style?.lineNumbers}
               />
               <Code
                 css={{
@@ -287,18 +390,20 @@ async function CodeBlockAsync({
               >
                 <Tokens
                   css={{
-                    token: props.css?.token,
-                    popover: props.css?.popover,
+                    token: css?.token,
+                    popover: css?.popover,
                   }}
                   className={{
-                    token: props.className?.token,
-                    popover: props.className?.popover,
+                    token: className?.token,
+                    popover: className?.popover,
                   }}
                   style={{
-                    token: props.style?.token,
-                    popover: props.style?.popover,
+                    token: style?.token,
+                    popover: style?.popover,
                   }}
-                />
+                >
+                  {value}
+                </Tokens>
               </Code>
             </>
           ) : (
@@ -311,18 +416,20 @@ async function CodeBlockAsync({
             >
               <Tokens
                 css={{
-                  token: props.css?.token,
-                  popover: props.css?.popover,
+                  token: css?.token,
+                  popover: css?.popover,
                 }}
                 className={{
-                  token: props.className?.token,
-                  popover: props.className?.popover,
+                  token: className?.token,
+                  popover: className?.popover,
                 }}
                 style={{
-                  token: props.style?.token,
-                  popover: props.style?.popover,
+                  token: style?.token,
+                  popover: style?.popover,
                 }}
-              />
+              >
+                {value}
+              </Tokens>
             </Code>
           )}
           {allowCopy !== false && !shouldRenderToolbar ? (
@@ -333,141 +440,20 @@ async function CodeBlockAsync({
                 gridRow: '1 / -1',
                 position: 'sticky',
                 top: containerPadding.top,
-                right: containerPadding.right,
-                boxShadow: `0 0 0 1px ${theme.panel.border}`,
+                right: '1ch',
+                boxShadow: `inset 0 0 0 1px ${theme.panel.border}`,
                 backgroundColor: theme.activityBar.background,
                 color: theme.activityBar.foreground,
                 borderRadius: 5,
+                ...css?.copyButton,
               }}
-              value={
-                value.includes('export { }')
-                  ? value.split('\n').slice(0, -2).join('\n')
-                  : value
-              }
+              className={className?.copyButton}
+              style={style?.copyButton}
             />
           ) : null}
         </Pre>
       </Container>
     </Context>
-  )
-}
-
-/** Renders a `pre` element with syntax highlighting, type information, and type checking. */
-export function CodeBlock(props: CodeBlockProps) {
-  if ('children' in props) {
-    return <CodeBlockAsync {...props} />
-  }
-
-  const containerPadding = computeDirectionalStyles(
-    'padding',
-    '0.5lh',
-    props.css?.container,
-    props.style?.container
-  )
-  const shouldRenderToolbar = Boolean(
-    props.showToolbar === undefined
-      ? props.filename || ('source' in props && props.source) || props.allowCopy
-      : props.showToolbar
-  )
-  const Container = shouldRenderToolbar ? StyledContainer : React.Fragment
-
-  return (
-    <Suspense
-      fallback={
-        'value' in props && props.value ? (
-          <Container
-            css={
-              shouldRenderToolbar
-                ? {
-                    borderRadius: 5,
-                    boxShadow: '0 0 0 1px #666',
-                    ...props.css?.container,
-                    padding: 0,
-                  }
-                : {}
-            }
-            className={
-              shouldRenderToolbar ? props.className?.container : undefined
-            }
-            style={shouldRenderToolbar ? props.style?.container : undefined}
-          >
-            {shouldRenderToolbar && (
-              <FallbackToolbar
-                css={{ padding: containerPadding.all, ...props.css?.toolbar }}
-                className={props.className?.toolbar}
-                style={props.style?.toolbar}
-              />
-            )}
-            <FallbackPre
-              css={{
-                WebkitTextSizeAdjust: 'none',
-                textSizeAdjust: 'none',
-                position: 'relative',
-                whiteSpace: 'pre',
-                wordWrap: 'break-word',
-                display: 'grid',
-                gridAutoRows: 'max-content',
-                gridTemplateColumns: props.showLineNumbers
-                  ? 'auto 1fr'
-                  : undefined,
-                margin: 0,
-                backgroundColor: shouldRenderToolbar
-                  ? 'inherit'
-                  : 'transparent',
-                color: shouldRenderToolbar ? undefined : 'inherit',
-                borderRadius: shouldRenderToolbar ? 'inherit' : 5,
-                boxShadow: shouldRenderToolbar ? undefined : '0 0 0 1px #666',
-                ...getScrollContainerStyles({
-                  paddingBottom: containerPadding.bottom,
-                }),
-                ...(shouldRenderToolbar ? {} : props.css?.container),
-                padding: 0,
-              }}
-              className={
-                shouldRenderToolbar ? undefined : props.className?.container
-              }
-              style={shouldRenderToolbar ? undefined : props.style?.container}
-            >
-              {props.showLineNumbers && (
-                <FallbackLineNumbers
-                  css={{
-                    padding: containerPadding.all,
-                    gridColumn: 1,
-                    gridRow: '1 / -1',
-                    width: '4ch',
-                    backgroundPosition: 'inherit',
-                    backgroundImage: 'inherit',
-                    ...props.css?.lineNumbers,
-                  }}
-                  className={props.className?.lineNumbers}
-                  style={props.style?.lineNumbers}
-                >
-                  {typeof props.value === 'string'
-                    ? Array.from(
-                        { length: props.value.split('\n').length },
-                        (_, index) => index + 1
-                      ).join('\n')
-                    : null}
-                </FallbackLineNumbers>
-              )}
-
-              <FallbackCode
-                css={{
-                  gridColumn: props.showLineNumbers ? 2 : 1,
-                  padding: props.showLineNumbers
-                    ? `${containerPadding.vertical} ${containerPadding.horizontal} 0 0`
-                    : `${containerPadding.vertical} ${containerPadding.horizontal} 0`,
-                }}
-              >
-                {props.value}
-              </FallbackCode>
-            </FallbackPre>
-          </Container>
-        ) : null
-      }
-    >
-      <CodeBlockAsync {...props} />
-    </Suspense>
   )
 }
 
@@ -483,18 +469,21 @@ export function parsePreProps({
     className: `language-${string}`
     children: string
   }>
-  const languageClassName = code.props.className
+  const fileName = code.props.className
     ?.split(' ')
     .find((className) => className.startsWith(languageKey))
+  const language = fileName
+    ? fileName.includes('.')
+      ? fileName.split('.').pop()
+      : fileName.slice(languageLength)
+    : 'plaintext'
 
   return {
-    value: code.props.children.trim(),
-    language: (languageClassName
-      ? languageClassName.slice(languageLength)
-      : 'plain') as Languages,
+    children: code.props.children.trim(),
+    language,
     ...props,
-  } as {
-    value: string
+  } satisfies {
+    children: string
     language?: Languages
   } & Omit<React.ComponentProps<NonNullable<MDXComponents['pre']>>, 'children'>
 }
@@ -505,6 +494,7 @@ const Code = styled('code', {
   gridRow: '1 / -1',
   display: 'block',
   width: 'max-content',
+  minWidth: 'stretch',
   backgroundColor: 'transparent',
 })
 

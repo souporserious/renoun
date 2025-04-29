@@ -67,12 +67,9 @@ async function Page({ slug }: { slug: string }) {
 
 function Page() {
   return (
-    <CodeBlock
-      language="tsx"
-      value={\`import { CodeBlock } from 'renoun/components'\`} 
-    >
+    <CodeBlock language="tsx">
       <pre>
-        <Tokens />
+        <Tokens>const a = 1; const b = 2; a + b;</Tokens>
       </pre>
     </CodeBlock>
   )
@@ -191,7 +188,6 @@ export function QuickSteps() {
               </figcaption>
               <CodeBlock
                 language="tsx"
-                value={step.code}
                 css={{
                   container: {
                     alignSelf: 'start',
@@ -199,7 +195,9 @@ export function QuickSteps() {
                   },
                 }}
                 {...step.codeBlockProps}
-              />
+              >
+                {step.code}
+              </CodeBlock>
             </figure>
           </li>
         ))}

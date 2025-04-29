@@ -1,5 +1,4 @@
 import { join, posix } from 'node:path'
-import type { bundledThemes } from 'shiki/bundle/web'
 import type { Diagnostic, Project, SourceFile, ts } from 'ts-morph'
 import tsMorph from 'ts-morph'
 
@@ -7,15 +6,12 @@ import type { Highlighter } from './create-highlighter.js'
 import { getDiagnosticMessageText } from './get-diagnostic-message.js'
 import { getLanguage, type Languages } from './get-language.js'
 import { getRootDirectory } from './get-root-directory.js'
-import { getThemeColors } from './get-theme-colors.js'
-import { getTrimmedSourceFileText } from './get-trimmed-source-file-text.js'
 import { isJsxOnly } from './is-jsx-only.js'
-import { generatedFilenames } from './parse-source-text-metadata.js'
+import { loadConfig } from './load-config.js'
+import { generatedFilenames } from './get-source-text-metadata.js'
 import { splitTokenByRanges } from './split-tokens-by-ranges.js'
 
 const { Node, SyntaxKind } = tsMorph
-
-export type Themes = keyof typeof bundledThemes
 
 type Color = string
 
@@ -47,50 +43,71 @@ export type Token = {
   value: string
   start: number
   end: number
-  color?: string
-  fontStyle?: string
-  fontWeight?: string
-  textDecoration?: string
+  hasTextStyles: boolean
   isBaseColor: boolean
-  isWhitespace: boolean
+  isDeprecated: boolean
   isSymbol: boolean
-  quickInfo?: { displayText: string; documentationText: string }
+  isWhiteSpace: boolean
   diagnostics?: TokenDiagnostic[]
+  quickInfo?: {
+    displayText: string
+    documentationText: string
+  }
+  style:
+    | {
+        color?: string
+        fontStyle?: string
+        fontWeight?: string
+        textDecoration?: string
+      }
+    | {
+        [property: `--${string}`]: string
+      }
 }
 
 export type Tokens = Token[]
 
-export type GetTokens = (
-  value: string,
-  language?: Languages,
-  filename?: string,
-  allowErrors?: string | boolean,
-  showErrors?: boolean,
+export type TokenizedLines = Tokens[]
+
+export interface GetTokensOptions {
+  project: Project
+  value: string
+  language?: Languages
+  filePath?: string
+  allowErrors?: boolean | string
+  showErrors?: boolean
+  highlighter: Highlighter | null
   sourcePath?: string | false
-) => Promise<Tokens[]>
+}
 
 /** Converts a string of code to an array of highlighted tokens. */
-export async function getTokens(
-  project: Project,
-  value: string,
-  language: Languages = 'plaintext',
-  filename?: string,
-  allowErrors: string | boolean = false,
-  showErrors: boolean = false,
-  isInline: boolean = false,
-  highlighter: Highlighter | null = null,
-  sourcePath?: string | false
-) {
-  if (language === 'plaintext' || language === 'diff') {
+export async function getTokens({
+  project,
+  value,
+  language = 'plaintext',
+  filePath,
+  allowErrors,
+  showErrors,
+  highlighter = null,
+}: GetTokensOptions): Promise<TokenizedLines> {
+  if (
+    language === 'plaintext' ||
+    language === 'text' ||
+    language === 'txt' ||
+    language === 'diff' // TODO: add support for diff highlighting
+  ) {
     return [
       [
         {
           value,
           start: 0,
           end: value.length,
+          hasTextStyles: false,
           isBaseColor: true,
-          isWhitespace: false,
+          isDeprecated: false,
+          isWhiteSpace: false,
           isSymbol: false,
+          style: {},
         } satisfies Token,
       ],
     ]
@@ -102,33 +119,21 @@ export async function getTokens(
     )
   }
 
-  const componentName = isInline ? 'CodeInline' : 'CodeBlock'
   const isJavaScriptLikeLanguage = ['js', 'jsx', 'ts', 'tsx'].includes(language)
   const jsxOnly = isJavaScriptLikeLanguage ? isJsxOnly(value) : false
-  const sourceFile = filename ? project.getSourceFile(filename) : undefined
   const finalLanguage = getLanguage(language)
-  const theme = await getThemeColors()
-  const sourceText = sourceFile ? getTrimmedSourceFileText(sourceFile) : value
-  let tokens: ReturnType<Highlighter['codeToTokens']>['tokens'] = []
-
-  try {
-    const result = highlighter.codeToTokens(sourceText, {
-      theme: 'renoun',
-      // TODO: this is temporary until the JavaScript regex engine supports MDX
-      lang: finalLanguage === 'mdx' ? 'markdown' : finalLanguage,
-    })
-    tokens = result.tokens
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(
-        `[renoun] Error highlighting the following source text${
-          sourcePath ? ` at "${sourcePath}"` : ''
-        } for language "${finalLanguage}":\n\n${sourceText}\n\nReceived the following error:\n\n${error.message}`,
-        { cause: error }
-      )
-    }
-  }
-
+  const config = loadConfig()
+  const themeNames =
+    typeof config.theme === 'string'
+      ? [config.theme]
+      : Object.values(config.theme).map((theme) => {
+          if (typeof theme === 'string') {
+            return theme
+          }
+          return theme[0]
+        })
+  const tokens = await highlighter(value, finalLanguage, themeNames)
+  const sourceFile = filePath ? project.getSourceFile(filePath) : undefined
   const sourceFileDiagnostics = getDiagnostics(
     sourceFile,
     allowErrors,
@@ -143,7 +148,22 @@ export async function getTokens(
   const identifiers = sourceFile
     ? sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)
     : []
-  const symbolRanges = [...importSpecifiers, ...identifiers]
+  const suggestionDiagnostics = sourceFile
+    ? project
+        .getLanguageService()
+        .compilerObject.getSuggestionDiagnostics(sourceFile.getFilePath())
+    : []
+  const deprecatedRanges = suggestionDiagnostics
+    .filter(
+      (diagnostic) =>
+        (diagnostic.reportsDeprecated || diagnostic.code === 6385) &&
+        diagnostic.start !== undefined
+    )
+    .map((diagnostic) => ({
+      start: diagnostic.start,
+      end: diagnostic.start + (diagnostic.length ?? 0),
+    }))
+  const symbolMetadata = [...importSpecifiers, ...identifiers]
     .filter((node) => {
       const parent = node.getParent()
       const isJsxOnlyImport = jsxOnly
@@ -154,62 +174,72 @@ export async function getTokens(
       )
     })
     .map((node) => {
+      let start = node.getStart()
+      let end = node.getEnd()
+
       // Offset module specifiers since they contain quotes which are tokenized separately
       // e.g. import React from 'react' -> ["'", "react", "'"]
       if (Node.isStringLiteral(node)) {
-        return {
-          start: node.getStart() + 1,
-          end: node.getEnd() - 1,
-        }
+        start += 1
+        end -= 1
       }
+
+      const isDeprecated = deprecatedRanges.some(
+        (range) => range.start === start && range.end === end
+      )
 
       return {
         start: node.getStart(),
         end: node.getEnd(),
+        isDeprecated,
       }
     })
   const rootDirectory = getRootDirectory()
   const baseDirectory = process.cwd().replace(rootDirectory, '')
   let previousTokenStart = 0
-  let parsedTokens = tokens.map((line) => {
-    // increment position for line breaks
+  let parsedTokens: Token[][] = tokens.map((line) => {
+    // increment position for line breaks if the line is empty
     if (line.length === 0) {
       previousTokenStart += 1
     }
-    return line.flatMap((token, tokenIndex) => {
+
+    return line.flatMap((baseToken, tokenIndex) => {
       const tokenStart = previousTokenStart
-      const tokenEnd = tokenStart + token.content.length
+      const tokenEnd = tokenStart + baseToken.value.length
       const lastToken = tokenIndex === line.length - 1
 
       // account for newlines
       previousTokenStart = lastToken ? tokenEnd + 1 : tokenEnd
 
-      const fontStyle = token.fontStyle ? getFontStyle(token.fontStyle) : {}
       const initialToken: Token = {
-        value: token.content,
+        value: baseToken.value,
         start: tokenStart,
         end: tokenEnd,
-        color: token.color,
-        isBaseColor: token.color
-          ? token.color.toLowerCase() === theme.foreground.toLowerCase()
-          : false,
-        isWhitespace: token.content.trim() === '',
+        hasTextStyles: baseToken.hasTextStyles,
+        isBaseColor: baseToken.isBaseColor,
+        isWhiteSpace: baseToken.isWhiteSpace,
+        isDeprecated: false,
         isSymbol: false,
-        ...fontStyle,
+        style: baseToken.style,
       }
+
+      // Split this token further if it intersects symbol ranges
       let processedTokens: Tokens = []
 
-      // split tokens by symbol ranges
-      if (symbolRanges.length) {
-        const symbolRange = symbolRanges.find((range) => {
+      if (symbolMetadata.length) {
+        const symbol = symbolMetadata.find((range) => {
           return range.start >= tokenStart && range.end <= tokenEnd
         })
-        const inFullRange = symbolRange
-          ? symbolRange.start === tokenStart && symbolRange.end === tokenEnd
+        const inFullRange = symbol
+          ? symbol.start === tokenStart && symbol.end === tokenEnd
           : false
 
-        if (symbolRange && !inFullRange) {
-          processedTokens = splitTokenByRanges(initialToken, symbolRanges)
+        if (symbol) {
+          initialToken.isDeprecated = symbol.isDeprecated
+        }
+
+        if (symbol && !inFullRange) {
+          processedTokens = splitTokenByRanges(initialToken, symbolMetadata)
         } else {
           processedTokens.push({
             ...initialToken,
@@ -240,10 +270,10 @@ export async function getTokens(
             message: getDiagnosticMessageText(diagnostic.getMessageText()),
           }))
         const quickInfo =
-          sourceFile && filename
+          sourceFile && filePath
             ? getQuickInfo(
                 sourceFile,
-                filename,
+                filePath,
                 token.start,
                 rootDirectory,
                 baseDirectory
@@ -264,17 +294,17 @@ export async function getTokens(
     const firstJsxLineIndex = parsedTokens.findIndex((line) =>
       line.find((token) => token.value === '<')
     )
-    parsedTokens = parsedTokens.slice(firstJsxLineIndex)
+    if (firstJsxLineIndex > 0) {
+      parsedTokens = parsedTokens.slice(firstJsxLineIndex)
+    }
   }
 
   if (allowErrors === false && sourceFile && sourceFileDiagnostics.length > 0) {
     throwDiagnosticErrors(
-      componentName,
-      filename,
+      filePath,
       sourceFile,
       sourceFileDiagnostics,
-      parsedTokens,
-      sourcePath
+      parsedTokens
     )
   }
 
@@ -352,12 +382,12 @@ const quickInfoCache = new Map<
 /** Get the quick info a token */
 function getQuickInfo(
   sourceFile: SourceFile,
-  filename: string,
+  filePath: string,
   tokenStart: number,
   rootDirectory: string,
   baseDirectory: string
 ) {
-  const cacheKey = `${filename}:${tokenStart}`
+  const cacheKey = `${filePath}:${tokenStart}`
 
   if (quickInfoCache.has(cacheKey)) {
     return quickInfoCache.get(cacheKey)
@@ -366,7 +396,7 @@ function getQuickInfo(
   const quickInfo = sourceFile
     .getProject()
     .getLanguageService()
-    .compilerObject.getQuickInfoAtPosition(filename, tokenStart)
+    .compilerObject.getQuickInfoAtPosition(filePath, tokenStart)
 
   if (!quickInfo) {
     return
@@ -378,7 +408,7 @@ function getQuickInfo(
     .join('')
     // First, replace root directory to handle root node_modules
     .replaceAll(rootDirectory, '.')
-    // Next, replace base directory for on disk paths
+    // Next, replace base directory for on-disk paths
     .replaceAll(baseDirectory, '')
     // Finally, replace the in-memory renoun directory
     .replaceAll('/renoun', '')
@@ -392,38 +422,6 @@ function getQuickInfo(
   quickInfoCache.set(cacheKey, result)
 
   return result
-}
-
-const FontStyle = {
-  Italic: 1,
-  Bold: 2,
-  Underline: 4,
-  Strikethrough: 8,
-}
-
-function getFontStyle(fontStyle: number) {
-  const style: {
-    fontStyle?: 'italic'
-    fontWeight?: 'bold'
-    textDecoration?: 'underline' | 'line-through'
-  } = {
-    fontStyle: undefined,
-    fontWeight: undefined,
-    textDecoration: undefined,
-  }
-  if (fontStyle === FontStyle.Italic) {
-    style['fontStyle'] = 'italic'
-  }
-  if (fontStyle === FontStyle.Bold) {
-    style['fontWeight'] = 'bold'
-  }
-  if (fontStyle === FontStyle.Underline) {
-    style['textDecoration'] = 'underline'
-  }
-  if (fontStyle === FontStyle.Strikethrough) {
-    style['textDecoration'] = 'line-through'
-  }
-  return style
 }
 
 /** Converts tokens to plain text. */
@@ -448,7 +446,7 @@ function tokensToPlainText(tokens: Token[][]) {
     }
 
     let lineContent = ''
-    let errorMarkers = []
+    const errorMarkers: { startIndex: number; tokenLength: number }[] = []
 
     for (const token of line) {
       lineContent += token.value
@@ -481,17 +479,15 @@ function tokensToPlainText(tokens: Token[][]) {
 
 /** Throws diagnostic errors, formatting them for display. */
 function throwDiagnosticErrors(
-  componentName: string,
-  filename: string | undefined,
+  fileName: string | undefined,
   sourceFile: SourceFile,
   diagnostics: Diagnostic[],
-  tokens: Token[][],
-  sourcePath?: string | false
+  tokens: Token[][]
 ) {
   const workingDirectory = join(process.cwd(), 'renoun', posix.sep)
-  const formattedPath = generatedFilenames.has(filename!)
+  const formattedPath = generatedFilenames.has(fileName!)
     ? ''
-    : `for filename "${sourceFile.getFilePath().replace(workingDirectory, '')}"`
+    : `for file path "${sourceFile.getFilePath().replace(workingDirectory, '')}"`
   const errorMessages = diagnostics.map((diagnostic) => {
     const message = getDiagnosticMessageText(diagnostic.getMessageText())
     const start = diagnostic.getStart()
@@ -507,17 +503,15 @@ function throwDiagnosticErrors(
   })
   const formattedErrors = errorMessages.join('\n')
   const actionsToTake = `You can fix this error by taking one of the following actions:
-  - Use the diagnostic ${errorMessages.length > 1 ? 'messages' : 'message'} above to identify and fix any issues in the ${componentName} component.
+  - Use the diagnostic ${errorMessages.length > 1 ? 'messages' : 'message'} above to identify and fix any issues.
   - If type declarations are missing, ensure that the necessary types are installed and available in the targeted workspace.
-  - Make sure "filename" is unique and does not conflict with other filenames in the same module. Prefix the filename with a number for progressive examples e.g. filename="01.${filename}".
-  - If this error is expected for educational purposes or temporary migrations, pass the "allowErrors" prop to the ${componentName} component.
+  - Make sure the "path" is unique and does not conflict with other file paths in the same project. Prefix the file name with a number for progressive examples e.g. path="01.${fileName}".
+  - If this error is expected for educational purposes or temporary migrations, pass the "allowErrors" prop to the component.
   - If you are unable to resolve this error, please file an issue at: https://github.com/souporserious/renoun/issues
   `
   const errorMessage = `${formattedErrors}\n\n${tokensToPlainText(tokens)}\n\n${actionsToTake}`
 
   throw new Error(
-    `[renoun] ${componentName} type errors found ${
-      sourcePath ? `at "${sourcePath}" ` : ''
-    }${formattedPath}\n\n${errorMessage}\n\n`
+    `[renoun] Type errors found when rendering Tokens component for ${formattedPath}\n\n${errorMessage}\n\n`
   )
 }

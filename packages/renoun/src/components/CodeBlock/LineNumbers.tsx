@@ -1,15 +1,10 @@
 import React, { Fragment } from 'react'
 import { styled, type CSSObject } from 'restyle'
 
-import { getThemeColors } from '../../utils/get-theme-colors.js'
-import { getContext } from '../../utils/context.js'
-import type { getTokens } from '../../utils/get-tokens.js'
-import { Context } from './Context.js'
+import { getThemeColors } from '../../utils/get-theme.js'
+import { getResolvedContext } from './Context.js'
 
 export interface LineNumbersProps {
-  /** Tokens to render from `getTokens`. */
-  tokens?: Awaited<ReturnType<typeof getTokens>>
-
   /** A string of comma separated lines and ranges to highlight. */
   highlightRanges?: string
 
@@ -23,22 +18,14 @@ export interface LineNumbersProps {
   style?: React.CSSProperties
 }
 
-async function LineNumbersAsync({
-  tokens: tokensProp,
+/** Renders line numbers for the `CodeBlock` component. */
+export async function LineNumbers({
   highlightRanges: highlightRangesProp,
   css,
   className,
   style,
 }: LineNumbersProps) {
-  const context = getContext(Context)
-  const tokens = tokensProp || context?.tokens
-
-  if (!tokens) {
-    throw new Error(
-      '[renoun] `LineNumbers` must be provided a `tokens` prop or used inside a `CodeBlock` component.'
-    )
-  }
-
+  const context = await getResolvedContext()
   const theme = await getThemeColors()
   const highlightRanges = highlightRangesProp || context?.highlightedLines
   const shouldHighlightLine = calculateLinesToHighlight(highlightRanges)
@@ -49,7 +36,7 @@ async function LineNumbersAsync({
       className={className}
       style={style}
     >
-      {tokens.map((_: any, lineIndex: number) => {
+      {context.value.split('\n').map((_: any, lineIndex: number) => {
         const shouldHighlight = shouldHighlightLine(lineIndex)
         const content = shouldHighlight ? (
           <Highlighted css={{ color: theme.editorLineNumber.activeForeground }}>
@@ -68,11 +55,6 @@ async function LineNumbersAsync({
       })}
     </Container>
   )
-}
-
-/** Renders line numbers for the `CodeBlock` component. */
-export function LineNumbers(props: LineNumbersProps) {
-  return <LineNumbersAsync {...props} />
 }
 
 const Container = styled('span', {

@@ -1,3 +1,4 @@
+import React from 'react'
 import { AsyncLocalStorage } from 'node:async_hooks'
 
 const contexts = new Map<any, any>()
@@ -5,6 +6,13 @@ const contexts = new Map<any, any>()
 /** Creates a context value provider with an initial value. */
 export function createContext<Value>(initialValue: Value) {
   const localStorage = new AsyncLocalStorage()
+
+  function Restore({ previousValue }: { previousValue?: Value }) {
+    if (previousValue !== undefined) {
+      localStorage.enterWith(previousValue)
+    }
+    return null
+  }
 
   /** Sets the context value for its descendants. */
   function Context({
@@ -14,8 +22,14 @@ export function createContext<Value>(initialValue: Value) {
     children: React.ReactNode
     value: Value
   }) {
+    const previousValue = localStorage.getStore() as Value | undefined
     localStorage.enterWith(value)
-    return children
+    return (
+      <>
+        {children}
+        <Restore previousValue={previousValue} />
+      </>
+    )
   }
 
   contexts.set(Context, { localStorage, initialValue })

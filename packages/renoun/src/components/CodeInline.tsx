@@ -2,25 +2,31 @@ import React, { Fragment, Suspense } from 'react'
 import { css, styled, type CSSObject } from 'restyle'
 
 import type { MDXComponents } from '../mdx/index.js'
-import { analyzeSourceText } from '../project/client.js'
-import type { Languages } from '../utils/get-language.js'
-import { getThemeColors } from '../utils/get-theme-colors.js'
-import type { Token } from '../utils/get-tokens.js'
+import type { Languages } from '../textmate/index.js'
+import { grammars } from '../textmate/index.js'
+import { getThemeColors, getThemeTokenVariables } from '../utils/get-theme.js'
 import { CopyButton } from './CodeBlock/CopyButton.js'
+import { Tokens } from './CodeBlock/Tokens.js'
 import { getScrollContainerStyles } from './CodeBlock/utils.js'
 
 export type CodeInlineProps = {
   /** Code snippet to be highlighted. */
-  value: string
+  children: string
 
   /** Language of the code snippet. */
   language?: Languages
 
-  /** Show or hide a persistent button that copies the `value` to the clipboard. */
-  allowCopy?: boolean
+  /** Show or hide a persistent button that copies the `children` string or provided text to the clipboard. */
+  allowCopy?: boolean | string
 
-  /** Whether or not to allow errors. Accepts a boolean or comma-separated list of allowed error codes. */
+  /** Whether or not to allow errors when a `language` is specified. Accepts a boolean or comma-separated list of allowed error codes. */
   allowErrors?: boolean | string
+
+  /** Show or hide error diagnostics when a `language` is specified. */
+  showErrors?: boolean
+
+  /** Whether or not to analyze the source code for type errors and provide quick information on hover. */
+  shouldAnalyze?: boolean
 
   /** Horizontal padding to apply to the wrapping element. */
   paddingX?: string
@@ -38,28 +44,51 @@ export type CodeInlineProps = {
   style?: React.CSSProperties
 }
 
-function Token({ token }: { token: Token }) {
-  if (token.isBaseColor || token.isWhitespace) {
-    return token.value
-  }
-
-  const [classNames, Styles] = css({
-    fontStyle: token.fontStyle,
-    fontWeight: token.fontWeight,
-    textDecoration: token.textDecoration,
-    color: token.color,
-  })
-
+/** Renders an inline `code` element with optional syntax highlighting and copy button. */
+export function CodeInline({
+  paddingX = '0.25em',
+  paddingY = '0.1em',
+  shouldAnalyze = false,
+  ...props
+}: CodeInlineProps) {
   return (
-    <span className={classNames}>
-      {token.value}
-      <Styles />
-    </span>
+    <Suspense
+      fallback={
+        <CodeFallback
+          css={{
+            display: props.allowCopy ? 'inline-flex' : 'inline-block',
+            alignItems: props.allowCopy ? 'center' : undefined,
+            verticalAlign: 'text-bottom',
+            padding: `${paddingY} ${paddingX} 0`,
+            paddingRight: props.allowCopy
+              ? `calc(1ch + 1lh + ${paddingX})`
+              : undefined,
+            gap: props.allowCopy ? '1ch' : undefined,
+            borderRadius: 5,
+            whiteSpace: 'nowrap',
+            position: 'relative',
+            ...getScrollContainerStyles({ paddingBottom: paddingY }),
+            ...props.css,
+          }}
+          className={props.className}
+          style={props.style}
+        >
+          {props.children}
+        </CodeFallback>
+      }
+    >
+      <CodeInlineAsync
+        paddingX={paddingX}
+        paddingY={paddingY}
+        shouldAnalyze={shouldAnalyze}
+        {...props}
+      />
+    </Suspense>
   )
 }
 
 async function CodeInlineAsync({
-  value,
+  children,
   language,
   allowCopy,
   paddingX,
@@ -68,41 +97,41 @@ async function CodeInlineAsync({
   className,
   style,
   allowErrors,
+  showErrors,
+  shouldAnalyze,
 }: CodeInlineProps) {
-  const { tokens } = await analyzeSourceText({
-    isInline: true,
-    shouldFormat: false,
-    value,
-    language,
-    allowErrors,
-  })
   const theme = await getThemeColors()
   const [classNames, Styles] = css({
-    display: allowCopy ? 'inline-grid' : 'inline-block',
+    display: allowCopy ? 'inline-grid' : 'inline',
     alignItems: allowCopy ? 'center' : undefined,
     verticalAlign: 'text-bottom',
     padding: `${paddingY} ${paddingX} 0`,
     gap: allowCopy ? '1ch' : undefined,
-    color: theme.editor.foreground,
-    backgroundColor: theme.editor.background,
+    color: theme.foreground,
+    backgroundColor: theme.background,
     boxShadow: `0 0 0 1px ${theme.panel.border}`,
     borderRadius: 5,
-    whiteSpace: 'nowrap',
     position: 'relative',
+    overflowY: 'hidden',
     ...getScrollContainerStyles({
       paddingBottom: paddingY,
       color: theme.scrollbarSlider.hoverBackground,
     }),
     ...cssProp,
+    ...getThemeTokenVariables(),
   })
-  const children = tokens.map((line, lineIndex) => (
-    <Fragment key={lineIndex}>
-      {line.map((token, tokenIndex) => (
-        <Token key={tokenIndex} token={token} />
-      ))}
-      {lineIndex === tokens.length - 1 ? null : '\n'}
-    </Fragment>
-  ))
+  const childrenToRender = language ? (
+    <Tokens
+      language={language}
+      allowErrors={allowErrors}
+      showErrors={showErrors}
+      shouldAnalyze={shouldAnalyze}
+    >
+      {children}
+    </Tokens>
+  ) : (
+    children
+  )
 
   return (
     <>
@@ -110,10 +139,14 @@ async function CodeInlineAsync({
         className={className ? `${classNames} ${className}` : classNames}
         style={style}
       >
-        {allowCopy ? <Container>{children}</Container> : children}
+        {allowCopy ? (
+          <Container>{childrenToRender}</Container>
+        ) : (
+          childrenToRender
+        )}
         {allowCopy ? (
           <CopyButton
-            value={value}
+            value={typeof allowCopy === 'string' ? allowCopy : children}
             css={{
               position: 'sticky',
               right: 0,
@@ -140,57 +173,35 @@ const CodeFallback = styled('code', {
   gap: '1ch',
   whiteSpace: 'nowrap',
   overflowX: 'scroll',
+  overflowY: 'hidden',
 })
-
-/** Renders an inline `code` element with optional syntax highlighting and copy button. */
-export function CodeInline({
-  paddingX = '0.25em',
-  paddingY = '0.1em',
-  ...props
-}: CodeInlineProps) {
-  return (
-    <Suspense
-      fallback={
-        'value' in props && props.value ? (
-          <CodeFallback
-            css={{
-              display: props.allowCopy ? 'inline-flex' : 'inline-block',
-              alignItems: props.allowCopy ? 'center' : undefined,
-              verticalAlign: 'text-bottom',
-              padding: `${paddingY} ${paddingX} 0`,
-              paddingRight: props.allowCopy
-                ? `calc(1ch + 1lh + ${paddingX})`
-                : undefined,
-              gap: props.allowCopy ? '1ch' : undefined,
-              borderRadius: 5,
-              whiteSpace: 'nowrap',
-              position: 'relative',
-              ...getScrollContainerStyles({ paddingBottom: paddingY }),
-              ...props.css,
-            }}
-            className={props.className}
-            style={props.style}
-          >
-            {props.value}
-          </CodeFallback>
-        ) : null
-      }
-    >
-      <CodeInlineAsync paddingX={paddingX} paddingY={paddingY} {...props} />
-    </Suspense>
-  )
-}
 
 /** Parses the props of an MDX `code` element for passing to `CodeInline`. */
 export function parseCodeProps({
   children,
   ...props
 }: React.ComponentProps<NonNullable<MDXComponents['code']>>) {
+  let language: Languages | undefined
+  const firstSpaceIndex = children.indexOf(' ')
+
+  if (firstSpaceIndex > -1) {
+    const possibleLanguage = children.substring(0, firstSpaceIndex) as Languages
+    const isValidLanguage = Object.entries(grammars).some(
+      ([, [, ...grammar]]) => grammar.includes(possibleLanguage)
+    )
+
+    if (isValidLanguage) {
+      language = possibleLanguage
+      children = children.slice(firstSpaceIndex + 1)
+    }
+  }
+
   return {
-    value: (children as string).trim(),
+    children,
+    language,
     ...props,
   } as {
-    value: string
+    children: string
     language?: Languages
   } & Omit<React.ComponentProps<NonNullable<MDXComponents['code']>>, 'children'>
 }

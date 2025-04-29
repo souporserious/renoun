@@ -1,37 +1,29 @@
-import remarkFrontmatter from 'remark-frontmatter'
-import remarkMdxFrontmatter from 'remark-mdx-frontmatter'
+import rehypeUnwrapImages from 'rehype-unwrap-images'
 import remarkGfm from 'remark-gfm'
 import remarkSmartyPants from 'remark-smartypants'
-import remarkStripBadges from 'remark-strip-badges'
-import remarkSqueezeParagraphs from 'remark-squeeze-paragraphs'
-import rehypeInferReadingTimeMeta from 'rehype-infer-reading-time-meta'
-import rehypeUnwrapImages from 'rehype-unwrap-images'
 
-import { addCodeMetaProps } from './rehype/add-code-meta-props.js'
-import { addReadingTime } from './rehype/add-reading-time.js'
-import { addHeadings } from './remark/add-headings.js'
-import { removeImmediateParagraphs } from './remark/remove-immediate-paragraphs.js'
-import { transformRelativeLinks } from './remark/transform-relative-links.js'
-
-export type { MDXHeadings } from './remark/add-headings.js'
+import rehypeAddPreMetaProps from './rehype/add-pre-meta-props.js'
+import rehypeAddReadingTime from './rehype/add-reading-time.js'
+import remarkAddHeadings from './remark/add-headings.js'
+import remarkRemoveImmediateParagraphs from './remark/remove-immediate-paragraphs.js'
+import remarkTransformRelativeLinks from './remark/transform-relative-links.js'
 
 export type { MDXComponents, MDXContent } from 'mdx/types.js'
 
-export const remarkPlugins = [
-  remarkFrontmatter,
-  remarkMdxFrontmatter as any,
-  remarkGfm,
-  [remarkSmartyPants, { dashes: 'oldschool' }] as any,
-  remarkStripBadges,
-  remarkSqueezeParagraphs,
-  removeImmediateParagraphs,
-  transformRelativeLinks,
-  addHeadings,
-]
+export type { MDXReadingTime } from './rehype/add-reading-time.js'
+
+export type { MDXHeadings } from './remark/add-headings.js'
 
 export const rehypePlugins = [
-  rehypeInferReadingTimeMeta,
+  rehypeAddPreMetaProps,
+  rehypeAddReadingTime,
   rehypeUnwrapImages,
-  addReadingTime,
-  addCodeMetaProps,
+]
+
+export const remarkPlugins = [
+  remarkGfm,
+  [remarkSmartyPants, { dashes: 'oldschool' }] as any,
+  remarkAddHeadings,
+  remarkRemoveImmediateParagraphs,
+  remarkTransformRelativeLinks,
 ]

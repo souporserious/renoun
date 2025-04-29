@@ -1,7 +1,6 @@
 'use client'
-import React, { useContext, useEffect, useId, useRef, useState } from 'react'
+import React, { useEffect, useId, useRef } from 'react'
 
-import { PreActiveContext } from './Pre.js'
 import { useQuickInfoContext } from './QuickInfoProvider.js'
 import { getClosestViewport } from './utils.js'
 
@@ -24,25 +23,8 @@ export function Symbol({
 }) {
   const anchorId = useId()
   const symbolRef = useRef<HTMLSpanElement>(null)
-  const preActive = useContext(PreActiveContext)
   const { quickInfo, setQuickInfo, resetQuickInfo } = useQuickInfoContext()
   const isHighlighted = quickInfo?.anchorId === anchorId
-  const [isInitialHighlight, setIsInitialHighlight] = useState(false)
-
-  useEffect(() => {
-    if (preActive) {
-      setIsInitialHighlight(true)
-
-      const timeoutId = setTimeout(() => {
-        setIsInitialHighlight(false)
-      }, 600)
-
-      return () => {
-        clearTimeout(timeoutId)
-        setIsInitialHighlight(false)
-      }
-    }
-  }, [preActive])
 
   useEffect(() => {
     if (symbolRef.current && quickInfo) {
@@ -58,8 +40,6 @@ export function Symbol({
       }
     }
   }, [quickInfo])
-
-  const shouldHighlight = isInitialHighlight || isHighlighted
 
   return (
     <span
@@ -79,8 +59,7 @@ export function Symbol({
       }}
       className={className}
       style={{
-        backgroundColor: shouldHighlight ? highlightColor : undefined,
-        transition: 'background-color 200ms',
+        backgroundColor: isHighlighted ? highlightColor : undefined,
         ...style,
       }}
     >

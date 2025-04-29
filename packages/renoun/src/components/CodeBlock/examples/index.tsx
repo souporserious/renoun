@@ -2,85 +2,84 @@ import React from 'react'
 import { CodeBlock, LineNumbers, Tokens, Toolbar } from 'renoun/components'
 
 export function Basic() {
-  return (
-    <CodeBlock
-      source="./counter/useCounter.ts"
-      workingDirectory={import.meta.url}
-    />
-  )
+  return <CodeBlock language="ts">const beep = 'boop'</CodeBlock>
 }
 
 export function TypeChecking() {
   return (
-    <CodeBlock
-      value={`const a = 1; a + b;`}
-      language="ts"
-      allowCopy={false}
-      allowErrors
-      showErrors
-    />
+    <CodeBlock language="ts" allowCopy={false} allowErrors showErrors>
+      const a = 1; a + b;
+    </CodeBlock>
   )
 }
 
 export function Ordered() {
   return (
     <div style={{ display: 'grid', gap: '2rem' }}>
-      <CodeBlock filename="01.example.ts" value="const a = 1;" />
-      <CodeBlock filename="02.example.ts" value="const a = 1; const b = 2;" />
+      <CodeBlock path="01.example.ts">const a = 1;</CodeBlock>
+      <CodeBlock path="02.example.ts">const a = 1; const b = 2;</CodeBlock>
     </div>
   )
 }
 
 export function LineNumbering() {
   return (
-    <CodeBlock
-      filename="line-numbers.ts"
-      value={`const a = 1;\nconst b = 2;\n\nconst add = a + b\nconst subtract = a - b`}
-      showLineNumbers
-      highlightedLines="4"
-    />
+    <CodeBlock path="line-numbers.ts" showLineNumbers highlightedLines="4">
+      {`const a = 1;\nconst b = 2;\n\nconst add = a + b\nconst subtract = a - b`}
+    </CodeBlock>
   )
 }
 
 export function LineHighlighting() {
   return (
-    <CodeBlock
-      filename="line-highlight.ts"
-      value={`const a = 1;\nconst b = 2;\n\nconst add = a + b\nconst subtract = a - b`}
-      highlightedLines="2, 4"
-    />
+    <CodeBlock path="line-highlight.ts" highlightedLines="2, 4">
+      {`const a = 1;\nconst b = 2;\n\nconst add = a + b\nconst subtract = a - b`}
+    </CodeBlock>
   )
 }
 
 export function LineFocusing() {
   return (
-    <CodeBlock
-      filename="line-focus.ts"
-      value={`const a = 1;\nconst b = 2;\n\nconst add = a + b\nconst subtract = a - b`}
-      focusedLines="2, 4"
-    />
+    <CodeBlock path="line-focus.ts" focusedLines="2, 4">
+      {`const a = 1;\nconst b = 2;\n\nconst add = a + b\nconst subtract = a - b`}
+    </CodeBlock>
   )
 }
 
 export function LineHighlightAndFocus() {
   return (
     <CodeBlock
-      filename="line-highlight-and-focus.ts"
-      value={`const a = 1;\nconst b = 2;\n\nconst add = a + b\nconst subtract = a - b`}
+      path="line-highlight-and-focus.ts"
       highlightedLines="2, 4"
       focusedLines="2, 4"
-    />
+    >
+      {`const a = 1;\nconst b = 2;\n\nconst add = a + b\nconst subtract = a - b`}
+    </CodeBlock>
   )
 }
 
-export function CustomStyles() {
+export function TokensOnly() {
   return (
-    <CodeBlock
-      allowErrors="2307"
-      filename="toolbar.tsx"
-      source="./counter/Counter.tsx"
-      workingDirectory={import.meta.url}
-    >
+    <pre>
+      <Tokens language="ts">{`const a = 1\nconst b = 2\na + b`}</Tokens>
+    </pre>
+  )
+}
+
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { readFile } from 'node:fs/promises'
+
+const directoryPath = dirname(fileURLToPath(import.meta.url))
+
+export async function CustomStyles() {
+  const code = await readFile(
+    join(directoryPath, './counter/Counter.tsx'),
+    'utf-8'
+  )
+
+  return (
+    <CodeBlock path="./counter/Counter.tsx" workingDirectory={directoryPath}>
       <div
         style={{
           fontSize: '1rem',
@@ -113,7 +112,7 @@ export function CustomStyles() {
             }}
           />
           <code style={{ paddingRight: '0.5lh' }}>
-            <Tokens />
+            <Tokens>{code}</Tokens>
           </code>
         </pre>
       </div>

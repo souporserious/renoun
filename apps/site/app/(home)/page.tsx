@@ -39,7 +39,7 @@ export default function Page() {
             margin: 0,
           }}
         >
-          The Documentation Toolkit for React
+          Elevate Your Design System Documentation
         </h1>
         <p
           css={{
@@ -50,8 +50,8 @@ export default function Page() {
             margin: 0,
           }}
         >
-          Meticulously crafted React components and utilities to help you create
-          engaging content and documentation.
+          The renoun toolkit uses your React framework to keep documentation
+          polished, in sync, and on brand.
         </p>
         <div
           css={{
@@ -67,13 +67,14 @@ export default function Page() {
         >
           <ButtonLink href="/docs/getting-started">Start Writing</ButtonLink>
           <CodeInline
-            allowCopy
-            value={`npx create-renoun`}
+            allowCopy="npx create-renoun@latest"
             language="bash"
             paddingX="0.8em"
             paddingY="0.5em"
             css={{ fontSize: 'var(--font-size-code-1)' }}
-          />
+          >
+            npx create-renoun
+          </CodeInline>
         </div>
       </div>
 

@@ -66,6 +66,17 @@ export function Sidebar() {
               gap: '1rem',
             }}
           >
+            <h3 className="title">Components</h3>
+            <TreeNavigation collection={ComponentsCollection} variant="name" />
+          </li>
+
+          <li
+            css={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1rem',
+            }}
+          >
             <h3 className="title">Utilities</h3>
             <ul
               css={{
@@ -83,17 +94,6 @@ export function Sidebar() {
                 />
               </li>
             </ul>
-          </li>
-
-          <li
-            css={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '1rem',
-            }}
-          >
-            <h3 className="title">Components</h3>
-            <TreeNavigation collection={ComponentsCollection} variant="name" />
           </li>
 
           <li

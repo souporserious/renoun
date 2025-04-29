@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { zodToJsonSchema } from 'zod-to-json-schema'
-import { bundledThemesInfo, bundledLanguagesInfo } from 'shiki'
+import { themes, grammars } from 'renoun/textmate'
 
 const themeValueSchema = z.union([
   z
-    .enum(bundledThemesInfo.map((theme) => theme.id) as [string])
-    .describe('A bundled Shiki theme.'),
+    .enum(Object.keys(themes) as [string, ...string[]])
+    .describe('A bundled textmate theme.'),
   z
     .string()
     .describe(
@@ -14,21 +14,69 @@ const themeValueSchema = z.union([
     ),
 ])
 
-const themeSchema = z.union([
+const themeOverrideSchema = z
+  .object({
+    colors: z
+      .record(z.string())
+      .optional()
+      .describe('Overrides for theme colors.'),
+    tokenColors: z
+      .array(
+        z.object({
+          scope: z
+            .union([z.string(), z.array(z.string())])
+            .optional()
+            .describe(
+              'One or more token scopes where the settings will be applied.'
+            ),
+          settings: z
+            .object({
+              foreground: z
+                .string()
+                .optional()
+                .describe('The foreground color.'),
+              background: z
+                .string()
+                .optional()
+                .describe('The background color.'),
+              fontStyle: z
+                .string()
+                .optional()
+                .describe(
+                  'Font style (e.g. "italic", "bold", or a combination thereof).'
+                ),
+            })
+            .optional()
+            .describe('Token style settings.'),
+        })
+      )
+      .optional()
+      .describe('Overrides for token colors.'),
+    semanticTokenColors: z
+      .record(z.union([z.string(), z.object({}).passthrough()]))
+      .optional()
+      .describe('Overrides for semantic token colors.'),
+  })
+  .passthrough()
+  .describe('Theme override configuration.')
+
+const themeOptionSchema = z.union([
   themeValueSchema,
+  z.tuple([themeValueSchema, themeOverrideSchema]),
+])
+
+const themeSchema = z.union([
+  themeOptionSchema,
   z
     .object({})
-    .catchall(themeValueSchema)
+    .catchall(themeOptionSchema)
     .describe(
-      `Define multiple named themes using an object \`{ light: 'vitesse-light', dark: 'vitesse-dark' }\`. The first theme defined in the object will be used as the default theme.`
+      `Define multiple named themes using an object, e.g. { light: 'vitesse-light', dark: 'vitesse-dark' }. The first theme defined in the object will be used as the default theme.`
     ),
 ])
 
 const languagesSchema = z.enum(
-  bundledLanguagesInfo.flatMap((language) => [
-    language.id,
-    ...(language.aliases ?? []),
-  ]) as [string]
+  Object.values(grammars).map(([, id]) => id) as [string, ...string[]]
 )
 
 const gitSchema = z.object({
@@ -65,18 +113,6 @@ const renounConfigSchema = z.object({
   theme: themeSchema.describe('Theme configuration object').optional(),
   languages: z
     .array(languagesSchema)
-    .default([
-      'css',
-      'js',
-      'jsx',
-      'ts',
-      'tsx',
-      'md',
-      'mdx',
-      'sh',
-      'json',
-      'html',
-    ])
     .describe('List of language grammars to load.')
     .optional(),
   git: gitSchema.describe('Git configuration object').optional(),

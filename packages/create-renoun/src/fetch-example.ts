@@ -123,9 +123,9 @@ export async function fetchExample(exampleSlug: string, message: string = '') {
   const introInstallInstructions =
     workingDirectory === process.cwd()
       ? `Run ${color.bold(`${packageManager ?? 'npm'} install`)} to install the dependencies and get started.`
-      : `Change to the ${color.bold(
-          directoryName
-        )} directory and run ${color.bold(
+      : `Change to the directory (cd ${color.bold(
+          workingDirectory
+        )}) and run ${color.bold(
           `${packageManager ?? 'npm'} install`
         )} to install the dependencies and get started.`
 

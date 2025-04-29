@@ -73,10 +73,10 @@ export function getProject(options?: ProjectOptions) {
     const watcher = watch(
       projectDirectory,
       { recursive: true },
-      async (eventType, filename) => {
-        if (!filename) return
+      async (eventType, fileName) => {
+        if (!fileName) return
 
-        const filePath = join(projectDirectory, filename)
+        const filePath = join(projectDirectory, fileName)
 
         if (isFilePathGitIgnored(filePath)) {
           return
@@ -84,7 +84,7 @@ export function getProject(options?: ProjectOptions) {
 
         const isDirectory = existsSync(filePath)
           ? statSync(filePath).isDirectory()
-          : extname(filename) === ''
+          : extname(fileName) === ''
 
         try {
           const projectsToUpdate = directoryToProjects.get(projectDirectory)
@@ -137,7 +137,7 @@ export function getProject(options?: ProjectOptions) {
         } catch (error) {
           if (error instanceof Error) {
             throw new Error(
-              `[renoun] An error occurred in the file system watcher while trying to ${eventType} the file path at: ${filename}`,
+              `[renoun] An error occurred in the file system watcher while trying to ${eventType} the file path at: ${fileName}`,
               { cause: error }
             )
           }

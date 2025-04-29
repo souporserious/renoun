@@ -3,5 +3,17 @@
   "git": {
     "source": "https://github.com/souporserious/renoun"
   },
-  "siteUrl": "https://renoun.dev"
+  "siteUrl": "https://renoun.dev",
+  "theme": {
+    "light": "everforest-light",
+    "dark": [
+      "dracula-soft",
+      {
+        "colors": {
+          "panel.border": "#666"
+        }
+      }
+    ]
+  },
+  "languages": ["tsx", "typescript"]
 }

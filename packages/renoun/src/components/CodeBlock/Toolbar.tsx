@@ -1,17 +1,13 @@
 import React from 'react'
 import { styled, type CSSObject } from 'restyle'
 
-import { getThemeColors } from '../../utils/get-theme-colors.js'
-import { getContext } from '../../utils/context.js'
+import { getThemeColors } from '../../utils/get-theme.js'
+import { getResolvedContext } from './Context.js'
 import { CopyButton } from './CopyButton.js'
-import { Context } from './Context.js'
 
 export interface ToolbarProps {
-  /** The value of the code block. */
-  value?: string
-
-  /** Whether or not to allow copying the code block value. */
-  allowCopy?: boolean
+  /** Whether or not to allow copying the code block value. Accepts a boolean or a string that will be copied. */
+  allowCopy?: boolean | string
 
   /** CSS object to apply to the toolbar. */
   css?: CSSObject
@@ -26,21 +22,20 @@ export interface ToolbarProps {
   children?: React.ReactNode
 }
 
-async function ToolbarAsync({
-  value: valueProp,
+/** A toolbar for the `CodeBlock` component that displays the file path, a source link, and copy button. */
+export async function Toolbar({
   allowCopy,
   css,
   className,
   style,
   children,
 }: ToolbarProps) {
-  const context = getContext(Context)
+  const context = await getResolvedContext()
   const theme = await getThemeColors()
-  const value = valueProp ?? context?.value
   let childrenToRender = children
 
-  if (childrenToRender === undefined && context) {
-    childrenToRender = <Label>{context.filenameLabel}</Label>
+  if (childrenToRender === undefined) {
+    childrenToRender = <Label>{context.label}</Label>
   }
 
   return (
@@ -51,9 +46,9 @@ async function ToolbarAsync({
     >
       {childrenToRender}
 
-      {allowCopy && value ? (
+      {allowCopy ? (
         <CopyButton
-          value={value}
+          value={typeof allowCopy === 'string' ? allowCopy : context.value}
           css={{
             padding: 0,
             marginLeft: 'auto',
@@ -63,11 +58,6 @@ async function ToolbarAsync({
       ) : null}
     </Container>
   )
-}
-
-/** A toolbar for the `CodeBlock` component that displays the filename, a source link, and copy button. */
-export function Toolbar(props: ToolbarProps) {
-  return <ToolbarAsync {...props} />
 }
 
 const Container = styled('div', {

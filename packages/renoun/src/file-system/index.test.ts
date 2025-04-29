@@ -15,6 +15,8 @@ import {
   Directory,
   JavaScriptFile,
   JavaScriptFileExport,
+  MDXFile,
+  MDXFileExport,
   EntryGroup,
   isDirectory,
   isFile,
@@ -24,11 +26,10 @@ import {
   FileExportNotFoundError,
 } from './index'
 import type { Expect, Is, IsNotAny } from './types'
-import { title } from 'node:process'
 
 describe('file system', () => {
   describe('File', () => {
-    test('parses full filename', () => {
+    test('parses full file name', () => {
       const file = new File({ path: '02.generics.exercise.ts' })
 
       expect(file.getOrder()).toBe('02')
@@ -55,7 +56,7 @@ describe('file system', () => {
       expect(file.getExtension()).toBe('txt')
     })
 
-    test('handles filenames with only base', () => {
+    test('handles file names with only base', () => {
       const file = new File({ path: 'foo' })
 
       expect(file.getOrder()).toBeUndefined()
@@ -196,7 +197,7 @@ describe('file system', () => {
               date: z.coerce.date(),
             }),
           },
-          (path) => import(`./posts/${path}.mdx`)
+          (path) => import(`#fixtures/posts/${path}.mdx`)
         ),
       },
       include: async (entry) => {
@@ -407,7 +408,7 @@ describe('file system', () => {
     const files = await posts.getEntries()
 
     expectTypeOf(files).toMatchTypeOf<
-      JavaScriptFile<{ default: MDXContent } & PostType>[]
+      MDXFile<{ default: MDXContent } & PostType>[]
     >()
     expect(files).toHaveLength(1)
   })
@@ -429,7 +430,7 @@ describe('file system', () => {
     const files = await posts.getEntries()
 
     expectTypeOf(files).toMatchTypeOf<
-      JavaScriptFile<{ default: MDXContent } & PostType>[]
+      MDXFile<{ default: MDXContent } & PostType>[]
     >()
     expect(files).toHaveLength(1)
   })
@@ -476,9 +477,7 @@ describe('file system', () => {
     })
     const entries = await directory.getEntries()
 
-    expectTypeOf(entries).toMatchTypeOf<
-      JavaScriptFile<{ default: MDXContent }>[]
-    >()
+    expectTypeOf(entries).toMatchTypeOf<MDXFile[]>()
 
     expect(entries).toHaveLength(1)
   })
@@ -737,15 +736,66 @@ describe('file system', () => {
     }
   })
 
-  test('file name with modifier', async () => {
+  describe('file name with modifier', async () => {
     const fileSystem = new MemoryFileSystem({
-      'APIReference.examples.tsx': '',
-      'APIReference.tsx': '',
+      'components/APIReference.examples.tsx': '',
+      'components/APIReference.tsx': '',
     })
     const directory = new Directory({ fileSystem })
-    const entry = await directory.getEntry(['APIReference', 'examples'])
 
-    expect(entry.getAbsolutePath()).toBe('/APIReference.examples.tsx')
+    test('string path', async () => {
+      const entry = await directory.getEntry('components/APIReference/examples')
+
+      expect(entry.getAbsolutePath()).toBe(
+        '/components/APIReference.examples.tsx'
+      )
+
+      const file = await directory.getFile('components/APIReference/examples')
+
+      expect(file.getAbsolutePath()).toBe(
+        '/components/APIReference.examples.tsx'
+      )
+
+      const fileWithExtension = await directory.getFile(
+        'components/APIReference/examples',
+        'tsx'
+      )
+
+      expect(fileWithExtension.getAbsolutePath()).toBe(
+        '/components/APIReference.examples.tsx'
+      )
+    })
+
+    test('array path', async () => {
+      const entry = await directory.getEntry([
+        'components',
+        'APIReference',
+        'examples',
+      ])
+
+      expect(entry.getAbsolutePath()).toBe(
+        '/components/APIReference.examples.tsx'
+      )
+
+      const file = await directory.getFile([
+        'components',
+        'APIReference',
+        'examples',
+      ])
+
+      expect(file.getAbsolutePath()).toBe(
+        '/components/APIReference.examples.tsx'
+      )
+
+      const fileWithExtension = await directory.getFile(
+        ['components', 'APIReference', 'examples'],
+        'tsx'
+      )
+
+      expect(fileWithExtension.getAbsolutePath()).toBe(
+        '/components/APIReference.examples.tsx'
+      )
+    })
   })
 
   test('prioritizes base file name over file name with modifier', async () => {
@@ -1329,7 +1379,7 @@ describe('file system', () => {
     expect(isDirectory(file)).toBe(false)
 
     expectTypeOf(file).toMatchTypeOf<
-      JavaScriptFile<{
+      MDXFile<{
         default: MDXContent
         frontmatter: {
           title: string
@@ -1431,9 +1481,9 @@ describe('file system', () => {
       'mdx'
     )
 
-    expect(mdxFile).toBeInstanceOf(JavaScriptFile)
+    expect(mdxFile).toBeInstanceOf(MDXFile)
     expectTypeOf(mdxFile).toMatchTypeOf<
-      JavaScriptFile<{ default: MDXContent } & InferModuleExports<FrontMatter>>
+      MDXFile<{ default: MDXContent } & InferModuleExports<FrontMatter>>
     >()
 
     const file = await group.getFile(['posts', 'meta'], 'js')
@@ -1549,7 +1599,7 @@ describe('file system', () => {
     const file = await group.getFile('Button', 'mdx')
 
     expectTypeOf(file).toMatchTypeOf<
-      JavaScriptFile<{ default: MDXContent } & MDXTypes>
+      MDXFile<{ default: MDXContent } & MDXTypes>
     >()
 
     const entry = await group.getEntry('Button')
@@ -1562,14 +1612,14 @@ describe('file system', () => {
 
     if (directoryA.hasFile(entry, 'mdx')) {
       expectTypeOf(entry).toMatchTypeOf<
-        JavaScriptFile<{ default: MDXContent } & MDXTypes>
+        MDXFile<{ default: MDXContent } & MDXTypes>
       >()
     }
   })
 
   test('entry group works with type abstractions', async () => {
     function Document(props: {
-      file?: JavaScriptFile<{
+      file?: MDXFile<{
         default: MDXContent
         headings: MDXHeadings
         metadata: {
@@ -1590,8 +1640,9 @@ describe('file system', () => {
             headings: z.array(
               z.object({
                 id: z.string(),
+                level: z.number(),
                 text: z.string(),
-                depth: z.number(),
+                children: z.custom<React.ReactNode>(),
               })
             ),
             metadata: z.object({

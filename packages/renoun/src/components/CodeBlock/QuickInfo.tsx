@@ -1,11 +1,59 @@
 import React, { Fragment } from 'react'
 import { styled, type CSSObject } from 'restyle'
 
-import { analyzeSourceText } from '../../project/client.js'
-import { getThemeColors } from '../../utils/get-theme-colors.js'
+import { rehypePlugins, remarkPlugins } from '../../mdx/index.js'
+import { getTokens } from '../../project/client.js'
+import {
+  getThemeColors,
+  getThemeTokenVariables,
+} from '../../utils/get-theme.js'
 import type { Token, TokenDiagnostic } from '../../utils/get-tokens.js'
-import { MDXRenderer } from '../MDXRenderer.js'
+import { MDXRenderer, type MDXRendererProps } from '../MDXRenderer.js'
 import { QuickInfoPopover } from './QuickInfoPopover.js'
+import { CodeInline } from '../CodeInline.js'
+import { CodeBlock, parsePreProps } from './CodeBlock.js'
+
+const Paragraph = styled('p', {
+  fontFamily: 'sans-serif',
+  fontSize: 'inherit',
+  lineHeight: 'inherit',
+  margin: 0,
+  textWrap: 'pretty',
+})
+
+const Table = styled('table', {
+  borderCollapse: 'collapse',
+  'th, td': {
+    padding: '0.25em 0.75em',
+    border: '1px solid var(--border)',
+  },
+})
+
+const mdxRendererProps = {
+  components: {
+    pre: (props) => {
+      return <CodeBlock {...parsePreProps(props)} shouldAnalyze={false} />
+    },
+    code: (props) => {
+      return (
+        <CodeInline
+          children={props.children}
+          shouldAnalyze={false}
+          css={{
+            display: 'inline',
+            fontSize: '0.9em',
+            whiteSpace: 'pre-wrap',
+            top: 2,
+          }}
+        />
+      )
+    },
+    p: Paragraph,
+    table: Table,
+  },
+  rehypePlugins,
+  remarkPlugins,
+} satisfies Omit<MDXRendererProps, 'children'>
 
 /**
  * A quick info popover that displays diagnostics and documentation.
@@ -28,10 +76,9 @@ export async function QuickInfo({
   let displayTextTokens: Token[][] = []
 
   if (quickInfo?.displayText) {
-    const { tokens } = await analyzeSourceText({
+    const tokens = await getTokens({
       value: quickInfo.displayText,
       language: 'typescript',
-      shouldFormat: false,
     })
     displayTextTokens = tokens
   }
@@ -40,9 +87,13 @@ export async function QuickInfo({
     <QuickInfoPopover>
       <Container
         css={{
-          border: `1px solid ${theme.panel.border}`,
-          backgroundColor: theme.panel.background,
-          color: theme.foreground,
+          boxSizing: 'border-box',
+          border: theme.editorHoverWidget.border
+            ? `1px solid ${theme.editorHoverWidget.border}`
+            : undefined,
+          backgroundColor: theme.editorHoverWidget.background,
+          color: theme.editorHoverWidget.foreground,
+          ...getThemeTokenVariables(),
           ...css,
         }}
         className={className}
@@ -68,7 +119,7 @@ export async function QuickInfo({
                   <Fragment key={index}>
                     {index === 0 ? null : '\n'}
                     {line.map((token, index) => (
-                      <TokenSpan key={index} css={{ color: token.color }}>
+                      <TokenSpan key={index} css={token.style}>
                         {token.value}
                       </TokenSpan>
                     ))}
@@ -81,16 +132,17 @@ export async function QuickInfo({
           {quickInfo?.documentationText.length ? (
             <>
               <Divider color={theme.panel.border} />
-              <MDXRenderer
-                components={{
-                  p: ({ children }) => (
-                    <Paragraph css={{ color: theme.foreground }}>
-                      {children}
-                    </Paragraph>
-                  ),
+              <MarkdownContainer
+                css={{
+                  '--border': theme.panel.border,
+                  color: theme.foreground,
                 }}
-                value={quickInfo.documentationText}
-              />
+              >
+                <MDXRenderer
+                  children={quickInfo.documentationText}
+                  {...mdxRendererProps}
+                />
+              </MarkdownContainer>
             </>
           ) : null}
         </ContentContainer>
@@ -115,6 +167,14 @@ const ContentContainer = styled('div', {
   lineHeight: '1.4em',
 })
 
+const MarkdownContainer = styled('div', {
+  padding: '0.25em 0.5em 0',
+  textWrap: 'pretty',
+  '> *': {
+    marginBottom: '0.25em',
+  },
+})
+
 const DiagnosticContainer = styled('div', {
   padding: '0.25em 0.5em',
 })
@@ -130,6 +190,7 @@ const DiagnosticCode = styled('span', {
 
 const Divider = styled('hr', ({ color }: { color: string }) => ({
   height: 1,
+  margin: 0,
   border: 'none',
   backgroundColor: color,
   opacity: 0.5,
@@ -142,12 +203,3 @@ const DisplayTextContainer = styled('div', {
 })
 
 const TokenSpan = styled('span')
-
-const Paragraph = styled('p', {
-  fontFamily: 'sans-serif',
-  fontSize: 'inherit',
-  lineHeight: 'inherit',
-  padding: '0.25em 0.5em',
-  margin: 0,
-  textWrap: 'pretty',
-})

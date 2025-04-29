@@ -2,17 +2,33 @@ import React, { Fragment } from 'react'
 import type { CSSObject } from 'restyle'
 import { css } from 'restyle/css'
 
-import { getThemeColors } from '../../utils/get-theme-colors.js'
+import { getSourceTextMetadata, getTokens } from '../../project/client.js'
+import type { Languages } from '../../textmate/index.js'
 import { getContext } from '../../utils/context.js'
-import type { GetTokens } from '../../utils/get-tokens.js'
-import { Context } from './Context.js'
+import { getThemeColors } from '../../utils/get-theme.js'
 import { QuickInfo } from './QuickInfo.js'
 import { QuickInfoProvider } from './QuickInfoProvider.js'
+import { Context } from './Context.js'
 import { Symbol } from './Symbol.js'
 
 export interface TokensProps {
-  /** Syntax highlighted tokens from `getTokens` to render. */
-  tokens?: Awaited<ReturnType<GetTokens>>
+  /** Code string to highlight and render as tokens. */
+  children?: string | Promise<string>
+
+  /** Whether to allow errors to be displayed. */
+  allowErrors?: boolean | string
+
+  /** Whether to show errors. */
+  showErrors?: boolean
+
+  /** Whether or not to analyze the source code for type errors and provide quick information on hover. */
+  shouldAnalyze?: boolean
+
+  /** Whether or not to format the source code using `prettier` if installed. */
+  shouldFormat?: boolean
+
+  /** Language to use for syntax highlighting. */
+  language?: Languages
 
   /** CSS style object to apply to the tokens and popover elements. */
   css?: {
@@ -40,8 +56,14 @@ export interface TokensProps {
   }) => React.ReactNode
 }
 
-async function TokensAsync({
-  tokens: tokensProp,
+/** Renders syntax highlighted tokens for the `CodeBlock` component. */
+export async function Tokens({
+  children,
+  language: languageProp,
+  allowErrors,
+  showErrors,
+  shouldAnalyze: shouldAnalyzeProp,
+  shouldFormat = true,
   renderLine,
   css: cssProp = {},
   className = {},
@@ -49,54 +71,96 @@ async function TokensAsync({
 }: TokensProps) {
   const context = getContext(Context)
   const theme = await getThemeColors()
-  const tokens = tokensProp || context?.tokens
+  const language = languageProp || context?.language
+  let value
 
-  if (!tokens) {
+  if (children) {
+    if (typeof children === 'string') {
+      value = children
+    } else {
+      value = await children
+    }
+  }
+
+  if (value === undefined) {
     throw new Error(
-      '[renoun] The `Tokens` component must be used within a `CodeBlock` component or provided a `tokens` prop.'
+      '[renoun] No code value provided to Tokens component. Pass a string, a promise that resolves to a string, or wrap within a `CodeBlock` component that defines `path` and `workingDirectory` props.'
     )
   }
 
+  const shouldAnalyze = shouldAnalyzeProp ?? context?.shouldAnalyze ?? true
+  const metadata: Record<string, any> = {}
+
+  if (shouldAnalyze) {
+    const result = await getSourceTextMetadata({
+      filePath: context?.filePath,
+      workingDirectory: context?.workingDirectory,
+      value,
+      language,
+      shouldFormat,
+    })
+    metadata.value = result.value
+    metadata.language = result.language
+    metadata.filePath = result.filePath
+    metadata.label = result.label
+  } else {
+    metadata.value = value
+    metadata.language = language
+    metadata.label = context?.label
+  }
+
+  // Now we can resolve the context values for other components like `LineNumbers`, `CopyButton`, etc.
+  if (context) {
+    context.resolved = {
+      value: metadata.value,
+      language: metadata.language,
+      filePath: metadata.filePath,
+      label: metadata.label,
+    }
+    context.resolvers.resolve()
+  }
+
+  const tokens = await getTokens({
+    value: metadata.value,
+    language: metadata.language,
+    filePath: metadata.filePath,
+    allowErrors: allowErrors || context?.allowErrors,
+    showErrors: showErrors || context?.showErrors,
+  })
   const lastLineIndex = tokens.length - 1
 
   return (
     <QuickInfoProvider>
       {tokens.map((line, lineIndex) => {
-        const lineChildren = line.map((token) => {
-          const hasTextStyles = Boolean(
-            token.fontStyle || token.fontWeight || token.textDecoration
-          )
+        const lineChildren = line.map((token, tokenIndex) => {
           const hasSymbolMeta = token.diagnostics || token.quickInfo
 
           if (
-            token.isWhitespace ||
-            (!hasTextStyles && !hasSymbolMeta && token.isBaseColor)
+            token.isWhiteSpace ||
+            (!hasSymbolMeta && !token.hasTextStyles && token.isBaseColor)
           ) {
             return token.value
           }
 
-          const tokenStyles = {
-            fontStyle: token.fontStyle,
-            fontWeight: token.fontWeight,
-            textDecoration: token.textDecoration,
-            color: token.isBaseColor ? undefined : token.color,
-          } satisfies CSSObject
-
           if (hasSymbolMeta) {
+            const deprecatedStyles = {
+              textDecoration: 'line-through',
+            }
             const diagnosticStyles = {
               backgroundImage: `url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%206%203'%20enable-background%3D'new%200%200%206%203'%20height%3D'3'%20width%3D'6'%3E%3Cg%20fill%3D'%23f14c4c'%3E%3Cpolygon%20points%3D'5.5%2C0%202.5%2C3%201.1%2C3%204.1%2C0'%2F%3E%3Cpolygon%20points%3D'4%2C0%206%2C2%206%2C0.6%205.4%2C0'%2F%3E%3Cpolygon%20points%3D'0%2C2%201%2C3%202.4%2C3%200%2C0.6'%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E")`,
               backgroundRepeat: 'repeat-x',
               backgroundPosition: 'bottom left',
             }
             const [symbolClassName, Styles] = css({
-              ...tokenStyles,
+              ...token.style,
+              ...(token.isDeprecated && deprecatedStyles),
               ...(token.diagnostics && diagnosticStyles),
               ...cssProp.token,
             })
 
             return (
               <Symbol
-                key={token.start}
+                key={tokenIndex}
                 highlightColor={theme.editor.hoverHighlightBackground}
                 popover={
                   <QuickInfo
@@ -120,11 +184,11 @@ async function TokensAsync({
             )
           }
 
-          const [classNames, Styles] = css(tokenStyles)
+          const [classNames, Styles] = css(token.style)
 
           return (
             <span
-              key={token.start}
+              key={tokenIndex}
               className={
                 className.token
                   ? `${classNames} ${className.token}`
@@ -159,9 +223,4 @@ async function TokensAsync({
       })}
     </QuickInfoProvider>
   )
-}
-
-/** Renders syntax highlighted tokens for the `CodeBlock` component. */
-export function Tokens(props: TokensProps) {
-  return <TokensAsync {...props} />
 }

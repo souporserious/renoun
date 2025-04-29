@@ -1,7 +1,7 @@
 import React from 'react'
 import { styled, type CSSObject } from 'restyle'
 
-import { getThemeColors } from '../../utils/get-theme-colors.js'
+import { getThemeColors } from '../../utils/get-theme.js'
 import { CodeBlock } from '../CodeBlock/CodeBlock.js'
 import { Tokens } from '../CodeBlock/Tokens.js'
 import { CopyCommand } from './CopyCommand.js'
@@ -157,8 +157,8 @@ async function PackageInstallAsync({
           suppressHydrationWarning
         >
           <Code css={css?.code} className={className?.code}>
-            <CodeBlock value={installCommand} language="sh">
-              <Tokens />
+            <CodeBlock language="sh">
+              <Tokens>{installCommand}</Tokens>
             </CodeBlock>
           </Code>
         </TabPanel>

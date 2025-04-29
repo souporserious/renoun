@@ -6,10 +6,9 @@ export function Basic() {
     <div style={{ display: 'grid', gap: '2rem' }}>
       <div style={{ display: 'grid', gap: '1rem' }}>
         <h2>Input</h2>
-        <CodeBlock
-          language="jsx"
-          value="<h1 style={{ fontSize: '6rem' }}>Hello World</h1>"
-        />
+        <CodeBlock language="jsx">
+          {`<h1 style={{ fontSize: '6rem' }}>Hello World</h1>`}
+        </CodeBlock>
       </div>
       <div style={{ display: 'grid', gap: '1rem' }}>
         <h2>Output</h2>
@@ -26,11 +25,9 @@ export function IncludeHtml() {
     <div style={{ display: 'grid', gap: '2rem' }}>
       <div style={{ display: 'grid', gap: '1rem' }}>
         <h2>Input</h2>
-        <CodeBlock
-          allowErrors
-          language="jsx"
-          value={`export default function Page() {\nreturn <><h1>Hello World</h1>\n<style href="h1" precedence="low">\n{\`h1 { font-size: 6rem;}\`}\n</style></>\n}`}
-        />
+        <CodeBlock allowErrors language="jsx">
+          {`export default function Page() {\nreturn <><h1>Hello World</h1>\n<style href="h1" precedence="low">\n{\`h1 { font-size: 6rem;}\`}\n</style></>\n}`}
+        </CodeBlock>
       </div>
       <div style={{ display: 'grid', gap: '1rem' }}>
         <h2>Output</h2>

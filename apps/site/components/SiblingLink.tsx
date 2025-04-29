@@ -4,8 +4,10 @@ import {
   FileNotFoundError,
   isDirectory,
   isJavaScriptFile,
+  isMDXFile,
   type FileSystemEntry,
   type JavaScriptFile,
+  type MDXFile,
 } from 'renoun/file-system'
 import { styled } from 'restyle'
 
@@ -19,6 +21,15 @@ export async function SiblingLink({
   variant?: 'name' | 'title'
 }) {
   const metadata = await resolveEntryMetadata(entry)
+  let baseName = entry.getBaseName()
+
+  if (baseName.includes('-') && isJavaScriptFile(entry)) {
+    const firstExport = await entry
+      .getExports()
+      .then((fileExports) => fileExports[0])
+
+    baseName = firstExport.getName()
+  }
 
   return (
     <StyledLink
@@ -73,7 +84,7 @@ export async function SiblingLink({
         <span>
           {variant === 'title'
             ? metadata?.label || metadata?.title || entry.getTitle()
-            : entry.getBaseName()}
+            : baseName}
         </span>
         {direction === 'next' ? (
           <svg
@@ -124,7 +135,7 @@ interface Metadata {
 
 /** Resolves metadata from a file system entry. */
 async function resolveEntryMetadata(entry: FileSystemEntry) {
-  let file: JavaScriptFile<Metadata>
+  let file: JavaScriptFile<Metadata> | MDXFile<Metadata>
 
   if (isDirectory(entry)) {
     const indexFile = await entry
@@ -152,18 +163,20 @@ async function resolveEntryMetadata(entry: FileSystemEntry) {
         return
       }
     }
-  } else if (isJavaScriptFile<Metadata>(entry)) {
+  } else if (isJavaScriptFile<Metadata>(entry) || isMDXFile<Metadata>(entry)) {
     file = entry
   } else {
     return
   }
 
-  const metadataExport = await file.getExport('metadata').catch((error) => {
-    if (error instanceof FileExportNotFoundError) {
-      return undefined
-    }
-    throw error
-  })
+  const metadataExport = await file
+    .getNamedExport('metadata')
+    .catch((error) => {
+      if (error instanceof FileExportNotFoundError) {
+        return undefined
+      }
+      throw error
+    })
 
   if (metadataExport) {
     return metadataExport.getRuntimeValue()

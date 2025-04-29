@@ -1,4 +1,4 @@
-import { minimatch } from 'minimatch'
+import { Minimatch } from 'minimatch'
 import type { SyntaxKind } from 'ts-morph'
 
 import {
@@ -31,7 +31,8 @@ export interface FileSystemOptions {
 export abstract class FileSystem {
   #rootPath: string
   #tsConfigPath: string
-  #tsConfig?: any
+  #tsConfig?: Record<string, unknown>
+  #exclude?: Minimatch[]
 
   constructor(options: FileSystemOptions = {}) {
     this.#rootPath = options.rootPath || '/'
@@ -49,7 +50,6 @@ export abstract class FileSystem {
 
   getRelativePathToWorkspace(path: string) {
     const rootDirectory = getRootDirectory()
-
     return relativePath(rootDirectory, this.getAbsolutePath(path))
   }
 
@@ -83,13 +83,16 @@ export abstract class FileSystem {
     try {
       const tsConfigContents = this.readFileSync(this.#tsConfigPath)
       try {
-        const parsedTsConfig = JSON.parse(tsConfigContents)
+        const parsedTsConfig = JSON.parse(tsConfigContents) as Record<
+          string,
+          unknown
+        >
         return parsedTsConfig
       } catch (error) {
         throw new Error('Failed to parse tsconfig.json', { cause: error })
       }
     } catch (error) {
-      return null
+      return
     }
   }
 
@@ -108,16 +111,20 @@ export abstract class FileSystem {
     }
 
     if (this.#tsConfig === undefined) {
-      this.#tsConfig = this.#getTsConfig()
+      const tsConfig = this.#getTsConfig()
+
+      this.#tsConfig = tsConfig
+
+      if (Array.isArray(tsConfig?.exclude)) {
+        this.#exclude = tsConfig.exclude.map(
+          (pattern: string) => new Minimatch(pattern, { dot: true })
+        )
+      }
     }
 
-    if (this.#tsConfig === null) {
-      return false
-    }
-
-    if (this.#tsConfig.exclude?.length) {
-      for (const exclude of this.#tsConfig.exclude) {
-        if (minimatch(relativeFilePath, exclude)) {
+    if (this.#exclude) {
+      for (const matcher of this.#exclude) {
+        if (matcher.match(relativeFilePath)) {
           return true
         }
       }

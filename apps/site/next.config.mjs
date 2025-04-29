@@ -11,6 +11,7 @@ const withMDX = createMDXPlugin({
 })
 
 export default withMDX({
+  images: { unoptimized: true },
   output: 'export',
   pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
   transpilePackages: ['renoun'],
@@ -19,5 +20,20 @@ export default withMDX({
       '.js': ['.ts', '.tsx', '.js'],
     }
     return config
+  },
+  async redirects() {
+    const checkoutUrl = process.env.TEMPLATE_CHECKOUT_URL
+
+    if (!checkoutUrl) {
+      return []
+    }
+
+    return [
+      {
+        source: '/templates/checkout',
+        destination: checkoutUrl,
+        permanent: false,
+      },
+    ]
   },
 })

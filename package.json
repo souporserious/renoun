@@ -9,6 +9,7 @@
     "dev": "turbo run dev",
     "dev:site": "pnpm dev --filter=renoun --filter=@apps/site",
     "dev:examples": "pnpm dev --filter=renoun --filter=@examples/*",
+    "dev:example": "bash -c 'pnpm dev --filter=renoun  --filter=@examples/$1'",
     "test": "turbo run test",
     "format": "prettier --write '**/**/*.{js,ts,tsx,json,css}'",
     "ci:version": "pnpm changeset version && pnpm install --no-frozen-lockfile && git add .",
@@ -17,13 +18,13 @@
     "postinstall": "turbo run build --filter=renoun"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.28.0",
-    "@types/node": "^22.13.4",
-    "prettier": "3.5.1",
+    "@changesets/cli": "^2.29.2",
+    "@types/node": "^22.14.1",
+    "prettier": "3.5.3",
     "tsx": "4.19.3",
-    "turbo": "^2.4.2",
-    "typescript": "^5.7.3",
-    "vitest": "^3.0.6"
+    "turbo": "^2.5.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.1"
   },
   "engines": {
     "node": "20 || >=22"

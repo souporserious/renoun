@@ -1,5 +1,413 @@
 # renoun
 
+## 8.14.0
+
+### Minor Changes
+
+- f83d4f5: Moves `useThemePicker` from `renoun/components` to `renoun/hooks`.
+- 91dc372: Adds `isDeprecated` field to symbol tokens using suggestion diagnostics. This also adds text strikethrough styling for deprecated symbols in the `Tokens` component.
+- ed4838a: Disables CSS transitions to prevent flashing when switching themes with `useThemePicker`.
+
+### Patch Changes
+
+- 9e66320: Prevents scrollbar showing along vertical axis for `CodeInline`.
+- fd7a1b1: Fixes strikethrough styles not being accounted for if set in the textmate theme.
+- affc0c0: Adds `node.engines` `package.json` field for minimum required Node.js version.
+- d00da22: Fixes `Refresh` component erroring during development when no server is present. This allows more easily testing synchronous behavior.
+
+## 8.13.1
+
+### Patch Changes
+
+- 9e0dce6: Fixes a bug in `Directory#getFile` where a file name modifier (e.g. `examples` in `Button.examples.tsx`) for the provided path was not being considered when checking if a file exists.
+
+## 8.13.0
+
+### Minor Changes
+
+- 6bf096d: Updates exported `headings` variable from the `addHeadings` remark plugin to include a new `children` property to allow rendering the JSX children of the heading element.
+
+  For example, headings with inline code or links:
+
+  ```mdx
+  # Heading with `code`
+  ```
+
+  Roughly yields:
+
+  ```mdx
+  export const headings = [
+    {
+      level: 1,
+      id: 'heading-with-code',
+      text: 'Heading with code',
+      children: (
+        <>
+          Heading with <code>code</code>
+        </>
+      ),
+    },
+  ]
+
+  # Heading with `code`
+  ```
+
+  ### Breaking Changes
+
+  The `depth` property of the heading metadata object was renamed to `level` to better reflect HTML nomenclature.
+
+- 899fb08: Adds back `getDefaultExport` and `getNamedExport` for both `JavaScriptFile` and `MDXFile` classes. These methods are useful as type guards to narrow types when building utilities that work with both JavaScript and MDX files.
+- f96a2be: Adds a first-class `Refresh` component for refreshing the server during development when a source file changes:
+
+  ```tsx
+  import { Refresh } from 'renoun/components'
+
+  export default function RootLayout({
+    children,
+  }: {
+    children: React.ReactNode
+  }) {
+    return (
+      <html lang="en">
+        <body>
+          {children}
+          <Refresh />
+        </body>
+      </html>
+    )
+  }
+  ```
+
+  This was previously automated for `JavaScriptFile` / `MDXFile` component exports. However, it did not provide a robust enough solution for all use cases. This new component ensures that only one listener will ever be added.
+
+- af2a21a: Includes `MDXContent` type by default now when using `MDXFile`. Previously, `{ default: MDXContent }` had to be defined explicitly. Now, it is merged in automatically with optional export types:
+
+  ```tsx
+  import { MDXFile } from 'renoun/file-system'
+
+  const file = new MDXFile<{
+    frontmatter: { title: string; date: Date }
+  }>({
+    path: 'path/to/file.mdx',
+  })
+  ```
+
+### Patch Changes
+
+- 36d62b6: Removes default `hr` margin in `QuickInfo` markdown container.
+- Updated dependencies [6bf096d]
+  - @renoun/mdx@2.1.0
+
+## 8.12.0
+
+### Minor Changes
+
+- a862ea2: Updates all dependencies to latest version.
+
+### Patch Changes
+
+- Updated dependencies [d7d15f7]
+- Updated dependencies [b33e5ca]
+- Updated dependencies [6d6684f]
+  - @renoun/mdx@2.0.0
+
+## 8.11.0
+
+### Minor Changes
+
+- a0c78fd: Exports the `ThemeStyles` component for more granular control of managing multiple themes.
+- 50f816b: Adds back the `workingDirectory` prop to the `CodeBlock` component for targeting local files. When defined, this will be joined with the `path` prop to load a source file located within the file system instead of creating a virtual file which allows imports and types to be resolved correctly.
+- 7107876: Fixes `parsePreProps` types to include `children`.
+- a4c6205: Optimizes the `JavaScriptFile#getText({ includeDependencies: true })` method to be more performant.
+- a7e75c3: Cleans up default styles for `Tokens` quick info popover.
+
+### Patch Changes
+
+- 0b0e28f: Fixes cached package dependency check causing missing formatting on initial load during development.
+- bce883d: Fix theme CSS variable collisions by prefixing theme variable names.
+- a0e39d8: Improves default colors for `QuickInfo` across themes.
+- 04421e0: Removes duplicate code text for functions and components in `APIReference`.
+- 23604c6: Fixes the `CodeBlock` component server context not restoring the previous value which causes the `Toolbar` component to receive the incorrect value.
+
+## 8.10.0
+
+### Minor Changes
+
+- 41d7551: Renames `CodeBlock` `filename` prop to `path` to better reflect its purpose since a nested file path can be defined.
+
+  ### Breaking Changes
+
+  The `filename` prop in the `CodeBlock` component has been renamed to `path`. Update any references to the `filename` prop in components or MDX pages that use the `CodeBlock` component for rendering code fences.
+
+- 78e5234: Adds a `shouldAnalyze` prop to `CodeBlock`, `CodeInline`, and `Tokens` components for controlling whether or not to analyze and type-check source code.
+- 5c966d1: Uses the `Tokens` component within `CodeInline` when a `language` is provided.
+- e3e2dea: Removes `source` and `workingDirectory` props from `CodeBlock` component since these can be calculated using `readFile` explicitly.
+
+  ### Breaking Changes
+
+  The `source` and `workingDirectory` props from `CodeBlock` component have been removed. Use `readFile` to read the source file contents:
+
+  ```tsx
+  import { CodeBlock } from 'renoun/components'
+  import { readFile } from 'node:fs/promises'
+
+  export function CodeBlock() {
+    return (
+      <CodeBlock language="tsx">
+        {readFile('src/components/Button.tsx', 'utf-8')}
+      </CodeBlock>
+    )
+  }
+  ```
+
+### Patch Changes
+
+- 8d232ac: Fixes `LineNumbers` not awaiting the text value from `Tokens`.
+- 417155e: Fixes duplicate key warning in development for `Tokens` component.
+- bdbc887: Fixes `CodeInline` fallback state causing layout shift.
+- 120e0eb: Fixes `CodeBlock` erroring for `text` and `txt` languages.
+
+## 8.9.0
+
+### Minor Changes
+
+- 49f6179: Adds `copyButton` property to `CodeBlock` `css`, `className`, and `style` props for overriding `CopyButton` styles.
+- 90417e5: Improves composition for `CodeBlock` by allowing `Tokens` to accept string children to be tokenized and highlighted:
+
+  ```tsx
+  import { Tokens } from 'renoun/components'
+
+  export function App() {
+    return <Tokens>const foo = 'bar';</Tokens>
+  }
+  ```
+
+  This removes the need to pass a `value` prop to `CodeBlock`.
+
+  ### Breaking Changes
+
+  The `CodeBlock` `value` prop should now be passed as a child to the `Tokens` component:
+
+  ```diff
+  -<CodeBlock language="ts" value="const foo = 'bar';" />
+  +<CodeBlock language="ts">const foo = 'bar';</CodeBlock>
+  ```
+
+- 72567ea: Renames the `MDXRenderer` `value` prop to `children` to be consistent with other components.
+
+  ### Breaking Changes
+
+  The `MDXRenderer` `value` prop has been renamed to `children`:
+
+  ```diff
+  -<MDXRenderer value="# Hello World" />
+  +<MDXRenderer># Hello World</MDXRenderer>
+  ```
+
+- 24a31df: Allows passing a string to `allowCopy` for both `CodeBlock` and `CodeInline` components:
+
+  ```tsx
+  <CodeInline allowCopy="npx create-renoun@latest" language="bash">
+    npx create-renoun
+  </CodeInline>
+  ```
+
+- 89ce87f: Optimizes calculating whether or not to apply the base color for a token by moving the calculation to the `Tokenizer` class.
+- e67e284: Moves inline code `language` parsing to `parseCodeProps` utility.
+- ff7f63d: Renames the `CodeInline` `value` prop to `children` to better integrate with Markdown and MDX renderers.
+
+  ### Breaking Changes
+
+  The `CodeInline` `value` prop has been renamed to `children`:
+
+  ```diff
+  -<CodeInline language="js" value="const foo = 'bar';" />
+  +<CodeInline language="js">const foo = 'bar';</CodeInline>
+  ```
+
+### Patch Changes
+
+- 7d9b83a: Fixes parsing language from Markdown and MDX when using filenames:
+
+  ````mdx
+  ```use-hover.ts
+  export function useHover() {
+    // ...
+  }
+  ```
+  ````
+
+- Updated dependencies [3dac737]
+- Updated dependencies [e67e284]
+  - @renoun/mdx@1.6.0
+
+## 8.8.0
+
+### Minor Changes
+
+- 3ef7096: Removes initial symbol highlighting styles that were triggered when the pointer entered the `CodeBlock` component. These styles are too opinionated and should be left for the user to define.
+- 22eec86: Improves the fallback theme colors used throughout components to better match the theme author's intent.
+- 836a6b3: Adds a new `useThemePicker` hook for selecting a theme from the configured themes:
+
+  ```tsx
+  'use client'
+  import { useThemePicker } from 'renoun/components'
+
+  export function ThemePicker() {
+    const [theme, setTheme] = useThemePicker()
+
+    return (
+      <select value={theme} onChange={(event) => setTheme(event.target.value)}>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
+    )
+  }
+  ```
+
+  The theme can be toggled or set explicitly using the `setTheme` function. Note, that `theme` is always initially set to `undefined` since it cannot be known until the React tree is hydrated. Use the `data-theme` attribute to style the app based on the selected theme.
+
+- bed53d7: Replaces [shiki](https://github.com/shikijs/shiki) with an internal `createTokenizer` utility that uses [oniguruma-to-es](https://github.com/slevithan/oniguruma-to-es) and [vscode-textmate](https://github.com/shikijs/vscode-textmate) directly. This implementation is based on both [textmate-highlighter](https://github.com/fabiospampinato/textmate-highlighter) and `shiki` to provide a smaller, focused highlighter that allows for more granular control.
+
+### Patch Changes
+
+- da9b603: Fixes a regression from when multiple themes were introduced that had removed token rendering optimizations. Now tokens across themes that are not a symbol and match the foreground color will not be wrapped in an element.
+- bed53d7: Fixes an issue when highlighting multiple themes where tokens were only generated correctly for the first theme.
+- 970102c: Fixes `QuickInfo` popover not staying contained within the viewport for smaller screens.
+- 2100b91: Fixes `CopyButton` icon size filling the entire container.
+- Updated dependencies [a5c470c]
+  - @renoun/mdx@1.5.0
+
+## 8.7.0
+
+### Minor Changes
+
+- e6ad215: Adds `MDXFile`, `MDXFileExport`, and `isMDXFile` classes and utilities to better differentiate between specific MDX and JavaScript file methods. This also helps with performance since we should never attempt to analyze an MDX file using the TypeScript compiler and allows for future MDX-specific methods to be added.
+
+  ### Breaking Changes
+
+  In some cases there may be breaking changes if you were loading mdx files and targeting `JavaScriptFile` related classes or types. These should be transitioned to the new `MDXFile`, `MDXFileExport`, and `isMDXFile` respectively.
+
+- 073b6d1: Adds a cache for `Directory#getEntries` and `JavaScriptFile#getFileExports` during production builds to help with performance since these methods can be called multiple times during a build.
+
+### Patch Changes
+
+- 29e19e5: Fixes default MDX file system loader not including all exports.
+- f1d6b47: Improves `exclude` filtering performance by caching the minimatch pattern.
+- 5c4e0ec: Fixes default MDX loader to parse inline code props.
+- Updated dependencies [b325412]
+  - @renoun/mdx@1.4.1
+
+## 8.6.0
+
+### Minor Changes
+
+- edbee62: Adds [Pierre](https://pierre.co/) as a git provider option that can be configured in the `renoun.json` file:
+
+  ```json
+  {
+    "git": {
+      "source": "https://pierre.co/souporserious/renoun"
+    }
+  }
+  ```
+
+### Patch Changes
+
+- 7b13d1e: Throws better error message when missing git configuration.
+
+## 8.5.0
+
+### Minor Changes
+
+- 720e101: Adds the ability to override specific theme values. You can now provide a tuple when configuring themes that specifies the specific theme values to override:
+
+  ```json
+  {
+    "theme": {
+      "light": "vitesse-light",
+      "dark": [
+        "vitesse-dark",
+        {
+          "colors": {
+            "editor.background": "#000000",
+            "panel.border": "#666666"
+          }
+        }
+      ]
+    }
+  }
+  ```
+
+  This accepts a subset of a VS Code theme to override, specifically the `colors`, `tokenColors`, and `semanticTokenColors` properties.
+
+### Patch Changes
+
+- abaa0f9: Fixes font styles when using multiple themes.
+- 6abb6ad: Fixes error when tokens are different among multiple themes.
+- 0e884db: Fixes `QuickInfo` syntax highlighting when using multiple themes.
+- 9e97dc7: Fixes forced theme on `CodeBlock`.
+- f056a45: Uses correct CSS style selector for theme token variables.
+- 17b33f0: Fixes loading local theme when using multiple themes.
+- 31f7f4e: Updates `CodeInline` background color to be consistent with `CodeBlock`.
+
+## 8.4.0
+
+### Minor Changes
+
+- 4079759: Allows `CodeBlock` `value` prop to accept a promise that will resolve within the Suspense boundary.
+- 5f524f5: Updates all dependencies to their latest version.
+- fba9490: Adds support for defining multiple syntax highlighting themes in `renoun.json`:
+
+  ```json
+  {
+    "theme": {
+      "light": "vitesse-light",
+      "dark": "vitesse-dark"
+    }
+  }
+  ```
+
+  This requires using a new `ThemeProvider` component that will inject the proper CSS Variables in the head of the document:
+
+  ```tsx
+  import { ThemeProvider } from 'renoun/components'
+
+  export default function RootLayout({
+    children,
+  }: {
+    children: React.ReactNode
+  }) {
+    return (
+      <html lang="en">
+        <body>
+          <ThemeProvider />
+          {children}
+        </body>
+      </html>
+    )
+  }
+  ```
+
+  To use a specific theme, append a `data-theme` attribute to the `html` element or another parent element:
+
+  ```html
+  <html data-theme="dark" lang="en">
+    ...
+  </html>
+  ```
+
+- 26757a9: Adds `includeDependencies` option to `JavaScriptFileExport#getText` method. When enabled, this will include all dependencies of the export declaration in the returned text.
+- c831cb6: Updates a project's default compiler options to only be set when using `MemoryFileSystem`. This makes sure to respect the local `tsconfig.json` file without any implicit overrides when using `NodeFileSystem`.
+
+### Patch Changes
+
+- 33b0adb: Exports `DefaultModuleTypes` to ensure all types used in public API declarations are explicitly available.
+- b55efb0: Fixes `File#getSlug` appending an extension.
+- 0a2f85c: Fixes Next.js warning for wrong `NODE_ENV` set to production during development.
+- Updated dependencies [5f524f5]
+  - @renoun/mdx@1.4.0
+
 ## 8.3.2
 
 ### Patch Changes
@@ -1411,7 +1819,7 @@
 
   Use `getSources` to render a list of the immediate sources in the collection:
 
-  ```tsx filename="app/posts/page.tsx"
+  ```tsx path="app/posts/page.tsx"
   export default async function Page() {
     return (
       <>
@@ -1430,7 +1838,7 @@
 
   Similar to list navigation, we can use `getSources` recursively to render a tree of links:
 
-  ```tsx filename="app/posts/layout.tsx"
+  ```tsx path="app/posts/layout.tsx"
   import { PostsCollection } from '@/collections'
 
   export default async function Layout() {
@@ -1482,7 +1890,7 @@
 
   Use `getSiblings` to get the previous and next sources in the collection:
 
-  ```tsx filename="app/posts/[slug]/page.tsx"
+  ```tsx path="app/posts/[slug]/page.tsx"
   export default async function Page({ params }) {
     const postSource = Posts.getSource(params.slug)
 

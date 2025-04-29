@@ -15,12 +15,7 @@ export interface FileExport {
 export function getFileExports(
   filePath: string,
   project: Project
-): {
-  name: string
-  path: string
-  position: number
-  kind: tsMorph.SyntaxKind
-}[] {
+): FileExport[] {
   let sourceFile = project.getSourceFile(filePath)
 
   if (!sourceFile) {
@@ -38,6 +33,7 @@ export function getFileExports(
       )
 
       if (isExportable) {
+        // Skip function overload declarations
         if (tsMorph.Node.isFunctionDeclaration(declaration)) {
           const body = declaration.getBody()
 

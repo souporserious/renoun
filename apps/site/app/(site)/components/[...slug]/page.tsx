@@ -96,21 +96,23 @@ export default async function Component({
   let headings: MDXHeadings = []
 
   if (mdxHeadings) {
-    headings.push(...mdxHeadings)
+    headings.push(...(mdxHeadings as MDXHeadings))
   }
 
   if (examplesExports.length) {
     const parsedExports = examplesExports.map((exampleExport) => ({
+      level: 3,
       id: exampleExport.getSlug(),
-      text: exampleExport.getName(),
-      depth: 3,
+      children: exampleExport.getTitle(),
+      text: exampleExport.getTitle(),
     }))
 
     headings.push(
       {
+        level: 2,
         id: 'examples',
+        children: 'Examples',
         text: 'Examples',
-        depth: 2,
       },
       ...parsedExports
     )
@@ -119,17 +121,27 @@ export default async function Component({
   if (componentExports) {
     headings.push(
       {
+        level: 2,
         id: 'api-reference',
+        children: 'API Reference',
         text: 'API Reference',
-        depth: 2,
       },
       ...componentExports.map((componentExport) => ({
+        level: 3,
         id: componentExport.getSlug(),
+        children: componentExport.getName(),
         text: componentExport.getName(),
-        depth: 3,
       }))
     )
   }
+
+  const baseName = componentEntry.getBaseName()
+  // If base name is kebab case, use the first export name as the title
+  const title = baseName.includes('-')
+    ? componentExports?.length
+      ? componentExports[0].getName()
+      : baseName
+    : baseName
 
   return (
     <>
@@ -138,15 +150,14 @@ export default async function Component({
           {description || Content ? (
             <div className="prose">
               <h1 css={{ fontSize: '3rem', margin: 0 }}>
-                {componentEntry.getBaseName()}{' '}
-                {isExamplesPage ? 'Examples' : ''}
+                {title} {isExamplesPage ? 'Examples' : ''}
               </h1>
-              {description ? <MDXRenderer value={description} /> : null}
+              {description ? <MDXRenderer>{description}</MDXRenderer> : null}
               {Content ? <Content /> : null}
             </div>
           ) : (
             <h1 css={{ fontSize: '3rem', margin: 0 }}>
-              {componentEntry.getBaseName()} {isExamplesPage ? 'Examples' : ''}
+              {title} {isExamplesPage ? 'Examples' : ''}
             </h1>
           )}
         </div>
@@ -308,7 +319,7 @@ async function Preview({
             <Value />
           </div>
         ) : null}
-        <CodeBlock allowErrors value={fileExport.getText()!} language="tsx">
+        <CodeBlock language="tsx">
           <pre
             css={{
               position: 'relative',
@@ -325,7 +336,7 @@ async function Preview({
             }}
             className={GeistMono.className}
           >
-            <Tokens />
+            <Tokens>{fileExport.getText({ includeDependencies: true })}</Tokens>
           </pre>
         </CodeBlock>
       </div>

@@ -16,7 +16,6 @@ export {
   Tokens,
   Toolbar,
   parsePreProps,
-  type BaseCodeBlockProps,
   type CodeBlockProps,
   type TokensProps,
   type ToolbarProps,
@@ -30,4 +29,6 @@ export { Copyright } from './Copyright.js'
 export { GitProviderLogo, GitProviderLink } from './GitProvider.js'
 export { MDXRenderer } from './MDXRenderer.js'
 export { PackageInstall, PackageInstallScript } from './PackageInstall/index.js'
+export { Refresh } from './Refresh/index.js'
 export { RenderedHTML } from './RenderedHTML.js'
+export { ThemeProvider, ThemeStyles } from './Theme/index.js'

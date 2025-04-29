@@ -48,7 +48,7 @@ function getPrettierParser(filePath: string, language?: string) {
 function loadPrettier() {
   return loadPackage<{
     format: (sourceText: string, options?: Record<string, unknown>) => string
-    resolveConfig: (filename: string) => Promise<Record<string, unknown> | null>
+    resolveConfig: (fileName: string) => Promise<Record<string, unknown> | null>
   }>('prettier', () => require('prettier'))
 }
 

@@ -1,9 +1,5 @@
 import type { SyntaxKind } from 'ts-morph'
 
-import type {
-  AnalyzeSourceTextOptions,
-  AnalyzeSourceTextResult,
-} from '../utils/analyze-source-text.js'
 import {
   createHighlighter,
   type Highlighter,
@@ -12,6 +8,11 @@ import type {
   FileExport,
   getFileExportMetadata as baseGetFileExportMetadata,
 } from '../utils/get-file-exports.js'
+import type { GetTokensOptions, TokenizedLines } from '../utils/get-tokens.js'
+import type {
+  GetSourceTextMetadataOptions,
+  GetSourceTextMetadataResult,
+} from '../utils/get-source-text-metadata.js'
 import type { ResolvedType, SymbolFilter } from '../utils/resolve-type.js'
 import type { resolveTypeAtLocation as baseResolveTypeAtLocation } from '../utils/resolve-type-at-location.js'
 import type { DistributiveOmit } from '../types.js'
@@ -25,9 +26,43 @@ if (process.env.RENOUN_SERVER_PORT !== undefined) {
   client = new WebSocketClient()
 }
 
+/**
+ * Parses and normalizes source text metadata. This also optionally formats the
+ * source text using the project's installed formatter.
+ * @internal
+ */
+export async function getSourceTextMetadata(
+  options: DistributiveOmit<GetSourceTextMetadataOptions, 'project'> & {
+    projectOptions?: ProjectOptions
+  }
+): Promise<GetSourceTextMetadataResult> {
+  if (client) {
+    return client.callMethod<
+      DistributiveOmit<GetSourceTextMetadataOptions, 'project'> & {
+        projectOptions?: ProjectOptions
+      },
+      GetSourceTextMetadataResult
+    >('getSourceTextMetadata', options)
+  }
+
+  /* Switch to synchronous analysis when building for production to prevent timeouts. */
+  const { projectOptions, ...getSourceTextMetadataOptions } = options
+  const project = getProject(projectOptions)
+
+  return import('../utils/get-source-text-metadata.js').then(
+    ({ getSourceTextMetadata }) => {
+      return getSourceTextMetadata({
+        ...getSourceTextMetadataOptions,
+        project,
+      })
+    }
+  )
+}
+
 let currentHighlighter: { current: Highlighter | null } = { current: null }
 let highlighterPromise: Promise<void> | null = null
 
+/** Wait for the highlighter to be loaded. */
 function untilHighlighterLoaded(): Promise<void> {
   if (highlighterPromise) return highlighterPromise
 
@@ -39,44 +74,39 @@ function untilHighlighterLoaded(): Promise<void> {
 }
 
 /**
- * Analyze source text and return highlighted tokens with diagnostics.
+ * Tokenize source text based on a language and return highlighted tokens.
  * @internal
  */
-export async function analyzeSourceText(
-  options: DistributiveOmit<AnalyzeSourceTextOptions, 'project'> & {
+export async function getTokens(
+  options: Omit<GetTokensOptions, 'highlighter' | 'project'> & {
     projectOptions?: ProjectOptions
   }
-): Promise<AnalyzeSourceTextResult> {
+): Promise<TokenizedLines> {
   if (client) {
     return client.callMethod<
-      DistributiveOmit<AnalyzeSourceTextOptions, 'project'> & {
+      Omit<GetTokensOptions, 'highlighter' | 'project'> & {
         projectOptions?: ProjectOptions
       },
-      AnalyzeSourceTextResult
-    >('analyzeSourceText', options)
+      TokenizedLines
+    >('getTokens', options)
   }
 
-  /* Switch to synchronous analysis when building for production to prevent timeouts. */
-  const { projectOptions, ...analyzeOptions } = options
+  const { projectOptions, ...getTokensOptions } = options
   const project = getProject(projectOptions)
 
   await untilHighlighterLoaded()
 
-  return import('../utils/analyze-source-text.js').then(
-    ({ analyzeSourceText }) => {
-      if (currentHighlighter.current === null) {
-        throw new Error(
-          '[renoun] Highlighter is not initialized in "analyzeSourceText"'
-        )
-      }
-
-      return analyzeSourceText({
-        ...analyzeOptions,
-        highlighter: currentHighlighter.current,
-        project,
-      })
+  return import('../utils/get-tokens.js').then(({ getTokens }) => {
+    if (currentHighlighter.current === null) {
+      throw new Error('[renoun] Highlighter is not initialized in "getTokens"')
     }
-  )
+
+    return getTokens({
+      ...getTokensOptions,
+      highlighter: currentHighlighter.current,
+      project,
+    })
+  })
 }
 
 /**
@@ -125,6 +155,8 @@ export async function resolveTypeAtLocation(
   )
 }
 
+const fileExportsCache = new Map<string, FileExport[]>()
+
 /**
  * Get the exports of a file.
  * @internal
@@ -133,8 +165,17 @@ export async function getFileExports(
   filePath: string,
   projectOptions?: ProjectOptions
 ) {
+  let cacheKey: string
+
+  if (process.env.NODE_ENV === 'production') {
+    cacheKey = filePath + getProjectOptionsCacheKey(projectOptions)
+    if (fileExportsCache.has(cacheKey)) {
+      return fileExportsCache.get(cacheKey)!
+    }
+  }
+
   if (client) {
-    return client.callMethod<
+    const fileExports = await client.callMethod<
       {
         filePath: string
         projectOptions?: ProjectOptions
@@ -144,11 +185,23 @@ export async function getFileExports(
       filePath,
       projectOptions,
     })
+
+    if (process.env.NODE_ENV === 'production') {
+      fileExportsCache.set(cacheKey!, fileExports)
+    }
+
+    return fileExports
   }
 
   return import('../utils/get-file-exports.js').then(({ getFileExports }) => {
     const project = getProject(projectOptions)
-    return getFileExports(filePath, project)
+    const fileExports = getFileExports(filePath, project)
+
+    if (process.env.NODE_ENV === 'production') {
+      fileExportsCache.set(cacheKey, fileExports)
+    }
+
+    return fileExports
   })
 }
 
@@ -290,4 +343,50 @@ export async function transpileSourceFile(
       return transpileSourceFile(filePath, project)
     }
   )
+}
+
+/**
+ * Generate a cache key for a project's options.
+ * @internal
+ */
+export function getProjectOptionsCacheKey(options?: ProjectOptions): string {
+  if (!options) {
+    return ''
+  }
+
+  let key = ''
+
+  if (options.theme) {
+    key += `t:${options.theme};`
+  }
+  if (options.siteUrl) {
+    key += `u:${options.siteUrl};`
+  }
+  if (options.gitSource) {
+    key += `s:${options.gitSource};`
+  }
+  if (options.gitBranch) {
+    key += `b:${options.gitBranch};`
+  }
+  if (options.gitProvider) {
+    key += `p:${options.gitProvider};`
+  }
+  if (options.projectId) {
+    key += `i:${options.projectId};`
+  }
+  if (options.tsConfigFilePath) {
+    key += `f:${options.tsConfigFilePath};`
+  }
+
+  key += `m:${options.useInMemoryFileSystem ? 1 : 0};`
+
+  if (options.compilerOptions) {
+    key += 'c:'
+    for (const k in options.compilerOptions) {
+      const value = options.compilerOptions[k]
+      key += `${k}=${value};`
+    }
+  }
+
+  return key
 }
