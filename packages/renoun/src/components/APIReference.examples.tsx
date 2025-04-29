@@ -1,11 +1,16 @@
 import React from 'react'
-import { APIReference } from 'renoun/components'
+import { APIReference, TypeDisplay } from 'renoun/components'
 
-export function FilePath() {
+export function BasicUsage() {
   return (
-    <APIReference
-      source="./GitProvider.tsx"
-      workingDirectory={import.meta.url}
-    />
+    <section>
+      <h2>API Reference</h2>
+      <APIReference
+        source="./GitProvider.tsx"
+        workingDirectory={import.meta.url}
+      >
+        <TypeDisplay />
+      </APIReference>
+    </section>
   )
 }
