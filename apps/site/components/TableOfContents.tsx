@@ -2,8 +2,8 @@
 import { useId } from 'react'
 import type { CSSObject } from 'restyle'
 import type { MDXHeadings } from 'renoun/mdx'
+import { useSectionObserver } from 'renoun/hooks'
 
-import { useSectionObserver } from 'hooks/use-section-observer'
 import { ViewSource } from './ViewSource'
 
 export function TableOfContents({
