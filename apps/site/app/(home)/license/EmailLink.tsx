@@ -11,7 +11,10 @@ export function EmailLink({
 } & React.AnchorHTMLAttributes<HTMLAnchorElement>) {
   return (
     <a
-      css={css}
+      css={{
+        cursor: 'pointer',
+        ...css,
+      }}
       onClick={(event) => {
         event.preventDefault()
         window.location.href = subject
@@ -19,8 +22,6 @@ export function EmailLink({
           : `mailto:sales@souporserious.com`
       }}
       {...props}
-    >
-      Discuss licensing
-    </a>
+    />
   )
 }
