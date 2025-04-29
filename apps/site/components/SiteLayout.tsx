@@ -104,10 +104,10 @@ export function SiteLayout({
             >
               Docs
             </NavigationLink>
+            <NavigationLink href="/components">Components</NavigationLink>
             <NavigationLink href="/utilities/file-system">
               Utilities
             </NavigationLink>
-            <NavigationLink href="/components">Components</NavigationLink>
             <NavigationLink href="/guides">Guides</NavigationLink>
             <NavigationLink href="/sponsors">Sponsors</NavigationLink>
             <NavigationLink href="/license">License</NavigationLink>
