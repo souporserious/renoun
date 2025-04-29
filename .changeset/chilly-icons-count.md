@@ -8,12 +8,6 @@ Adds `useSectionObserver` hook for tracking the active section currently in view
 import React from 'react'
 import { useSectionObserver } from 'renoun/hooks'
 
-const sections = [
-  { id: 'intro', label: 'Introduction' },
-  { id: 'usage', label: 'Usage' },
-  { id: 'api', label: 'API Reference' },
-]
-
 export function TableOfContents() {
   const observer = useSectionObserver()
 
@@ -21,7 +15,11 @@ export function TableOfContents() {
     <div style={{ display: 'flex', gap: '2rem' }}>
       <aside style={{ position: 'sticky', top: '1rem' }}>
         <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-          {sections.map(({ id, label }) => (
+          {[
+            { id: 'intro', label: 'Introduction' },
+            { id: 'usage', label: 'Usage' },
+            { id: 'api', label: 'API Reference' },
+          ].map(({ id, label }) => (
             <SectionLink key={id} id={id} label={label} observer={observer} />
           ))}
         </ul>
@@ -44,6 +42,34 @@ export function TableOfContents() {
         </section>
       </main>
     </div>
+  )
+}
+
+function SectionLink({
+  id,
+  label,
+  observer,
+}: {
+  id: string
+  label: string
+  observer: ReturnType<typeof useSectionObserver>
+}) {
+  const [isActive, linkProps] = observer.useLink(id)
+
+  return (
+    <li style={{ marginBottom: '0.5rem' }}>
+      <a
+        href={`#${id}`}
+        {...linkProps}
+        style={{
+          color: isActive ? 'crimson' : 'black',
+          fontWeight: isActive ? 'bold' : 'normal',
+          textDecoration: 'none',
+        }}
+      >
+        {label}
+      </a>
+    </li>
   )
 }
 ```
