@@ -111,23 +111,6 @@ export function SiteLayout({
             <NavigationLink href="/guides">Guides</NavigationLink>
             <NavigationLink href="/sponsors">Sponsors</NavigationLink>
             <NavigationLink href="/license">License</NavigationLink>
-            <NavigationLink
-              href="/templates"
-              css={{
-                width: '6.15rem',
-                paddingInline: '0.5rem',
-                borderRadius: '0.25rem',
-                boxShadow: '0 0 0 1px #e7c201',
-                color: '#e7c201',
-                textAlign: 'center',
-                ':hover': {
-                  backgroundColor: '#e7c2011c',
-                  color: '#ffd738',
-                },
-              }}
-            >
-              Templates
-            </NavigationLink>
           </div>
 
           <div
