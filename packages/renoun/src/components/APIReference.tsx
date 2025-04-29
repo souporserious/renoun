@@ -1,5 +1,6 @@
 import React, { Fragment, Suspense } from 'react'
 import { resolve } from 'node:path'
+
 import {
   CodeInline,
   MDXRenderer,
@@ -35,14 +36,6 @@ function useAPIReferenceConfig() {
   return getContext(APIReferenceConfigContext)
 }
 
-const APIReferenceDataContext = createContext<
-  ResolvedType | ResolvedType[] | undefined
->(undefined)
-
-function useAPIReferenceData() {
-  return getContext(APIReferenceDataContext)
-}
-
 export interface APIReferenceProps {
   /** The source of the API reference data. */
   source: string | JavaScriptFile<any> | JavaScriptFileExport<any>
@@ -59,12 +52,14 @@ export interface APIReferenceProps {
    */
   components?: Partial<APIReferenceComponents>
 
-  children?: React.ReactNode
+  children?:
+    | React.ReactNode
+    | ((type: ResolvedType | ResolvedType[]) => React.ReactNode)
 }
 
 export function APIReference(props: APIReferenceProps) {
   return (
-    <Suspense fallback="Loading API references...">
+    <Suspense>
       <APIReferenceAsync {...props} />
     </Suspense>
   )
@@ -89,6 +84,10 @@ async function APIReferenceAsync({
 
   if (!data) {
     return null
+  }
+
+  if (typeof children === 'function') {
+    return children(data)
   }
 
   if (Array.isArray(data)) {
@@ -187,12 +186,12 @@ export function TypeDisplay() {
         {type.name}
       </h3>
 
-      <CodeInline value={type.text} language="typescript" />
+      <CodeInline children={type.text} language="typescript" />
 
       {type.description &&
       type.kind !== 'Function' &&
       type.kind !== 'Component' ? (
-        <MDXRenderer value={type.description} />
+        <MDXRenderer children={type.description} />
       ) : null}
 
       <TypeChildren />
@@ -214,7 +213,7 @@ export function TypeChildren() {
     type.kind === 'UtilityReference' ||
     type.kind === 'Reference'
   ) {
-    return <CodeInline value={type.text} language="typescript" />
+    return <CodeInline children={type.text} language="typescript" />
   }
 
   if (
@@ -245,7 +244,7 @@ export function TypeChildren() {
         </TypeProvider>
       )
     }
-    return <CodeInline value={type.text} language="typescript" />
+    return <CodeInline children={type.text} language="typescript" />
   }
 
   return null
@@ -329,14 +328,14 @@ export function TypeValue() {
         {!isNameSameAsType && (
           <>
             {' '}
-            <CodeInline value={type.text} language="typescript" />
+            <CodeInline children={type.text} language="typescript" />
           </>
         )}
         {defaultValue !== undefined && (
           <>
             {' = '}
             <CodeInline
-              value={JSON.stringify(defaultValue)}
+              children={JSON.stringify(defaultValue)}
               language="typescript"
             />
           </>
@@ -345,7 +344,7 @@ export function TypeValue() {
 
       {type.description && (
         <div>
-          <MDXRenderer value={type.description} />
+          <MDXRenderer children={type.description} />
         </div>
       )}
 
@@ -447,16 +446,17 @@ export function FunctionKind() {
   }
 
   const { signatures } = type
+
   return (
     <div>
       {signatures.length > 1 && <h4>Overloads</h4>}
       {signatures.map((signature, index) => (
         <Fragment key={index}>
           <hr />
-          <CodeInline value={signature.text} language="typescript" />
+          <CodeInline children={signature.text} language="typescript" />
           {signature.description && (
             <div>
-              <MDXRenderer value={signature.description} />
+              <MDXRenderer children={signature.description} />
             </div>
           )}
           {signature.parameters.length > 0 && (
@@ -472,7 +472,10 @@ export function FunctionKind() {
           {signature.returnType && (
             <div>
               <h5>Returns</h5>
-              <CodeInline value={signature.returnType} language="typescript" />
+              <CodeInline
+                children={signature.returnType}
+                language="typescript"
+              />
             </div>
           )}
         </Fragment>
@@ -490,15 +493,16 @@ export function ComponentKind() {
   }
 
   const { signatures } = type
+
   return (
     <div>
       {signatures.length > 1 && <h4>Overloads</h4>}
       {signatures.map((signature, index) => (
         <Fragment key={index}>
           <hr />
-          <CodeInline value={signature.text} language="typescript" />
+          <CodeInline children={signature.text} language="typescript" />
           {signature.description ? (
-            <MDXRenderer value={signature.description} />
+            <MDXRenderer children={signature.description} />
           ) : null}
           {signature.parameter && (
             <div>
@@ -509,7 +513,7 @@ export function ComponentKind() {
                 </TypeProvider>
               ) : signature.parameter.kind === 'Reference' ? (
                 <CodeInline
-                  value={signature.parameter.text}
+                  children={signature.parameter.text}
                   language="typescript"
                 />
               ) : (
