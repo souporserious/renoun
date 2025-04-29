@@ -102,7 +102,7 @@ async function CodeInlineAsync({
 }: CodeInlineProps) {
   const theme = await getThemeColors()
   const [classNames, Styles] = css({
-    display: allowCopy ? 'inline-grid' : 'inline-block',
+    display: allowCopy ? 'inline-grid' : 'inline',
     alignItems: allowCopy ? 'center' : undefined,
     verticalAlign: 'text-bottom',
     padding: `${paddingY} ${paddingX} 0`,
@@ -111,7 +111,6 @@ async function CodeInlineAsync({
     backgroundColor: theme.background,
     boxShadow: `0 0 0 1px ${theme.panel.border}`,
     borderRadius: 5,
-    whiteSpace: 'nowrap',
     position: 'relative',
     overflowY: 'hidden',
     ...getScrollContainerStyles({

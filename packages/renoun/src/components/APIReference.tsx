@@ -22,6 +22,10 @@ import { CodeInline } from './CodeInline.js'
 import { MDXRenderer } from './MDXRenderer.js'
 import type { MDXRendererProps } from './MDXRenderer.js'
 
+const codeInlineStyles = {
+  display: 'inline-block',
+  whiteSpace: 'nowrap',
+} satisfies CSSObject
 const mdxRendererProps = {
   components: {
     pre: (props) => {
@@ -33,6 +37,7 @@ const mdxRendererProps = {
           children={props.children}
           language="typescript"
           shouldAnalyze={false}
+          css={codeInlineStyles}
         />
       )
     },
@@ -139,6 +144,7 @@ async function APIReferenceAsync({
                 children={type.text}
                 language="typescript"
                 shouldAnalyze={false}
+                css={codeInlineStyles}
               />
 
               {/* {type.path && <ViewSource href={type.path} />} */}
@@ -197,6 +203,7 @@ async function APIReferenceAsync({
             children={type.text}
             language="typescript"
             shouldAnalyze={false}
+            css={codeInlineStyles}
           />
 
           {/* {type.path && <ViewSource href={type.path} />} */}
@@ -235,6 +242,7 @@ function TypeChildren({
         children={type.text}
         language="typescript"
         shouldAnalyze={false}
+        css={codeInlineStyles}
       />
     )
   }
@@ -338,7 +346,10 @@ function TypeChildren({
                       children={signature.parameter.text}
                       language="typescript"
                       shouldAnalyze={false}
-                      css={{ display: 'inline-block', marginTop: '1.5rem' }}
+                      css={{
+                        ...codeInlineStyles,
+                        marginTop: '1.5rem',
+                      }}
                     />
                   ) : (
                     <TypeValue type={signature.parameter} />
@@ -409,7 +420,10 @@ function TypeChildren({
                     children={signature.returnType}
                     language="typescript"
                     shouldAnalyze={false}
-                    css={{ maxWidth: '-webkit-fill-available' }}
+                    css={{
+                      ...codeInlineStyles,
+                      maxWidth: '-webkit-fill-available',
+                    }}
                   />
                 </div>
               ) : null}
@@ -429,6 +443,7 @@ function TypeChildren({
           children={type.text}
           language="typescript"
           shouldAnalyze={false}
+          css={codeInlineStyles}
         />
       )
     }
@@ -569,7 +584,10 @@ function TypeValue({
               shouldAnalyze={false}
               paddingX="0.5rem"
               paddingY="0.2rem"
-              css={{ fontSize: 'var(--font-size-body-2)' }}
+              css={{
+                ...codeInlineStyles,
+                fontSize: 'var(--font-size-body-2)',
+              }}
             />
           )}
           {defaultValue ? (
@@ -587,6 +605,7 @@ function TypeValue({
                 children={JSON.stringify(defaultValue)}
                 language="typescript"
                 shouldAnalyze={false}
+                css={codeInlineStyles}
               />
             </span>
           ) : null}
