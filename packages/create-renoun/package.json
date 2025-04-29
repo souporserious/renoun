@@ -3,7 +3,7 @@
   "type": "module",
   "version": "1.2.1",
   "author": "Travis Arnold",
-  "license": "AGPL-3.0-or-later",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/souporserious/renoun",
