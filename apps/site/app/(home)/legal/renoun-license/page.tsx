@@ -1,1 +1,5 @@
-export { default } from '../../../../../../packages/renoun/LICENSE.md'
+import License from '../../../../../../packages/renoun/LICENSE.md'
+
+export default function Page() {
+  return <License />
+}
