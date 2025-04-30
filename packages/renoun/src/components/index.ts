@@ -7,6 +7,8 @@ export {
   TypeDisplay,
   TypeProperties,
   TypeValue,
+  getAPIReferenceConfig,
+  getAPIReferenceType,
   type APIReferenceProps,
 } from './APIReference.js'
 export {

@@ -11,8 +11,7 @@ import {
   type JavaScriptFileExport,
 } from '../file-system/index.js'
 import {
-  isParameterType,
-  isPropertyType,
+  isMemberType,
   type ClassAccessorType,
   type ClassMethodType,
   type FunctionSignatureType,
@@ -32,7 +31,7 @@ const APIReferenceConfigContext = createContext<APIReferenceComponents>({
   MDXRenderer: MDXRenderer,
 })
 
-function useAPIReferenceConfig() {
+export function getAPIReferenceConfig() {
   return getContext(APIReferenceConfigContext)
 }
 
@@ -52,9 +51,8 @@ export interface APIReferenceProps {
    */
   components?: Partial<APIReferenceComponents>
 
-  children?:
-    | React.ReactNode
-    | ((type: ResolvedType | ResolvedType[]) => React.ReactNode)
+  /** Optional children to render the API reference data. */
+  children?: React.ReactNode
 }
 
 export function APIReference(props: APIReferenceProps) {
@@ -84,10 +82,6 @@ async function APIReferenceAsync({
 
   if (!data) {
     return null
-  }
-
-  if (typeof children === 'function') {
-    return children(data)
   }
 
   if (Array.isArray(data)) {
@@ -146,7 +140,7 @@ async function resolveSourceTypeData({
   return data
 }
 
-const CurrentTypeContext = createContext<
+export const APIReferenceTypeContext = createContext<
   | ResolvedType
   | ClassAccessorType
   | ClassMethodType
@@ -154,8 +148,8 @@ const CurrentTypeContext = createContext<
   | null
 >(null)
 
-function useCurrentType() {
-  return getContext(CurrentTypeContext)
+export function getAPIReferenceType() {
+  return getContext(APIReferenceTypeContext)
 }
 
 function TypeProvider({
@@ -169,12 +163,14 @@ function TypeProvider({
     | FunctionSignatureType
   children?: React.ReactNode
 }) {
-  return <CurrentTypeContext value={type}>{children}</CurrentTypeContext>
+  return (
+    <APIReferenceTypeContext value={type}>{children}</APIReferenceTypeContext>
+  )
 }
 
 export function TypeDisplay() {
-  const type = useCurrentType()
-  const { MDXRenderer, CodeInline } = useAPIReferenceConfig()
+  const type = getAPIReferenceType()
+  const { MDXRenderer, CodeInline } = getAPIReferenceConfig()
 
   if (!type) {
     return null
@@ -200,8 +196,8 @@ export function TypeDisplay() {
 }
 
 export function TypeChildren() {
-  const type = useCurrentType()
-  const { CodeInline } = useAPIReferenceConfig()
+  const type = getAPIReferenceType()
+  const { CodeInline } = getAPIReferenceConfig()
 
   if (!type) {
     return null
@@ -250,8 +246,12 @@ export function TypeChildren() {
   return null
 }
 
-export function TypeProperties() {
-  const type = useCurrentType()
+export function TypeProperties({
+  Value = TypeValue,
+}: {
+  Value?: React.ComponentType
+}) {
+  const type = getAPIReferenceType()
 
   if (!type) {
     return null
@@ -268,7 +268,7 @@ export function TypeProperties() {
           ) {
             return (
               <TypeProvider key={index} type={member}>
-                <TypeProperties />
+                <TypeProperties Value={Value} />
               </TypeProvider>
             )
           }
@@ -277,7 +277,7 @@ export function TypeProperties() {
           }
           return (
             <TypeProvider key={index} type={member}>
-              <TypeValue />
+              <Value />
             </TypeProvider>
           )
         })}
@@ -294,7 +294,7 @@ export function TypeProperties() {
         <h5>Properties</h5>
         {type.properties.map((prop, index) => (
           <TypeProvider key={index} type={prop}>
-            <TypeValue />
+            <Value />
           </TypeProvider>
         ))}
       </div>
@@ -305,8 +305,8 @@ export function TypeProperties() {
 }
 
 export function TypeValue() {
-  const type = useCurrentType()
-  const { MDXRenderer, CodeInline } = useAPIReferenceConfig()
+  const type = getAPIReferenceType()
+  const { MDXRenderer, CodeInline } = getAPIReferenceConfig()
 
   if (!type) {
     return null
@@ -316,7 +316,7 @@ export function TypeValue() {
   let isRequired = false
   let defaultValue
 
-  if (isParameterType(type) || isPropertyType(type)) {
+  if (isMemberType(type)) {
     isRequired = !type.isOptional
     defaultValue = type.defaultValue
   }
@@ -378,7 +378,7 @@ export function TypeValue() {
 }
 
 export function ClassKind() {
-  const type = useCurrentType()
+  const type = getAPIReferenceType()
 
   if (!type) {
     return null
@@ -438,8 +438,8 @@ export function ClassKind() {
 }
 
 export function FunctionKind() {
-  const { MDXRenderer, CodeInline } = useAPIReferenceConfig()
-  const type = useCurrentType()
+  const { MDXRenderer, CodeInline } = getAPIReferenceConfig()
+  const type = getAPIReferenceType()
 
   if (!type || type.kind !== 'Function') {
     return null
@@ -485,8 +485,8 @@ export function FunctionKind() {
 }
 
 export function ComponentKind() {
-  const { MDXRenderer, CodeInline } = useAPIReferenceConfig()
-  const type = useCurrentType()
+  const { MDXRenderer, CodeInline } = getAPIReferenceConfig()
+  const type = getAPIReferenceType()
 
   if (!type || type.kind !== 'Component') {
     return null
