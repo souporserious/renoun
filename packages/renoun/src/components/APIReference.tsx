@@ -2,11 +2,6 @@ import React, { Fragment, Suspense } from 'react'
 import { resolve } from 'node:path'
 
 import {
-  CodeInline,
-  MDXRenderer,
-  type CodeInlineProps,
-} from '../components/index.js'
-import {
   JavaScriptFile,
   type JavaScriptFileExport,
 } from '../file-system/index.js'
@@ -20,6 +15,8 @@ import {
 } from '../utils/resolve-type.js'
 import { createContext, getContext } from '../utils/context.js'
 import { createSlug } from '../utils/create-slug.js'
+import { CodeInline, type CodeInlineProps } from './CodeInline.js'
+import { MDXRenderer } from './MDXRenderer.js'
 
 export interface APIReferenceComponents {
   CodeInline: React.ComponentType<CodeInlineProps>
