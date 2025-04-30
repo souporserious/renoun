@@ -78,7 +78,7 @@ describe('getFileExportsText', () => {
         {
           "kind": 262,
           "name": "useHover",
-          "position": 245,
+          "position": 243,
           "text": "export function useHover() {
         return null
       }",
@@ -86,8 +86,8 @@ describe('getFileExportsText', () => {
         {
           "kind": 262,
           "name": "Avatar",
-          "position": 386,
-          "text": "import { Image } from 'components'
+          "position": 384,
+          "text": "import { Image } from "components";
 
       export function Avatar() {
         const unusedNestedVariable = 'foo'
@@ -98,9 +98,9 @@ describe('getFileExportsText', () => {
       }",
         },
         {
-          "kind": 243,
+          "kind": 260,
           "name": "Box",
-          "position": 667,
+          "position": 703,
           "text": "type SystemProps = { as: any }
 
       type BoxProps = { children: any } & SystemProps
@@ -110,15 +110,15 @@ describe('getFileExportsText', () => {
         {
           "kind": 262,
           "name": "Badge",
-          "position": 804,
+          "position": 826,
           "text": "export function Badge(props: { children: any }) {
         return <div {...props} />
       }",
         },
         {
-          "kind": 243,
+          "kind": 260,
           "name": "Button",
-          "position": 911,
+          "position": 947,
           "text": "const Stack = (props: { children: any; style?: any }) => <div {...props} />
 
       interface ButtonProps {}
@@ -126,15 +126,15 @@ describe('getFileExportsText', () => {
       export const Button = (props: ButtonProps) => <Stack>Hello Button</Stack>",
         },
         {
-          "kind": 243,
+          "kind": 260,
           "name": "Stack",
-          "position": 727,
+          "position": 756,
           "text": "const Stack = (props: { children: any; style?: any }) => <div {...props} />",
         },
         {
           "kind": 263,
           "name": "Car",
-          "position": 1014,
+          "position": 1036,
           "text": "export class Car {
         wheels = 4
       }",

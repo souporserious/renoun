@@ -1,11 +1,10 @@
 import type { Project } from 'ts-morph'
 import * as tsMorph from 'ts-morph'
 
-import { getFileExportsText } from './get-file-exports-text.js'
+import { createProjectFileCache } from '../project/cache.js'
 import { getFileExportDeclaration } from './get-file-exports.js'
-
-/** Temporary offset to adjust the position of file exports until getFileExports and getFileExportsText can be normalized. */
-const fileExportPositionOffset = 2
+import { getFileExportsText } from './get-file-exports-text.js'
+import { getRootDirectory } from './get-root-directory.js'
 
 /** Get a specific file export's text by identifier, optionally including its dependencies. */
 export async function getFileExportText({
@@ -22,12 +21,14 @@ export async function getFileExportText({
   includeDependencies?: boolean
 }) {
   if (includeDependencies) {
-    const fileExportsText = getCachedFileExportsText(filePath, project)
+    const fileExportsText = await createProjectFileCache(
+      project,
+      filePath,
+      'fileExportsText',
+      () => getFileExportsText(filePath, project)
+    )
     const fileExportText = fileExportsText.find((fileExport) => {
-      return (
-        fileExport.position - fileExportPositionOffset === position &&
-        fileExport.kind === kind
-      )
+      return fileExport.position === position && fileExport.kind === kind
     })
 
     if (!fileExportText) {
@@ -73,21 +74,4 @@ export async function getFileExportText({
   )
 
   return exportDeclaration.getText()
-}
-
-const fileExportsTextCache = new Map<
-  string,
-  ReturnType<typeof getFileExportsText>
->()
-
-function getCachedFileExportsText(filePath: string, project: Project) {
-  if (fileExportsTextCache.has(filePath)) {
-    return fileExportsTextCache.get(filePath)!
-  }
-
-  const fileExportsText = getFileExportsText(filePath, project)
-
-  fileExportsTextCache.set(filePath, fileExportsText)
-
-  return fileExportsText
 }
