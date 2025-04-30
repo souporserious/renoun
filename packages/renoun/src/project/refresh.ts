@@ -25,17 +25,17 @@ export function completeRefreshingProjects() {
 
 /** Emit an event when all projects have finished refreshing. */
 export async function waitForRefreshingProjects() {
-  if (!isRefreshingProjects) return
+  if (!isRefreshingProjects) return false
 
-  return new Promise<void>((resolve) => {
+  return new Promise<boolean>((resolve) => {
     const timeoutId = setTimeout(() => {
       emitter.removeAllListeners(REFRESHING_COMPLETED)
-      resolve()
+      resolve(false)
     }, 10000)
 
     emitter.once(REFRESHING_COMPLETED, () => {
       clearTimeout(timeoutId)
-      resolve()
+      resolve(true)
     })
   })
 }
