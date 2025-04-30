@@ -7,6 +7,8 @@ import type {
 } from 'ts-morph'
 import * as tsMorph from 'ts-morph'
 
+import { getPrinter } from '../project/get-printer.js'
+
 interface DeclarationInfo {
   /** The symbol ID of the declaration */
   symbolId: string
@@ -55,6 +57,7 @@ export function getFileExportsText(
   filePath: string,
   project: Project
 ): Array<FileExport> {
+  const printer = getPrinter(project)
   const sourceFile = project.getSourceFileOrThrow(filePath)
   const importMap = getImportInfo(sourceFile)
   const declarationMap = buildDeclarationMap(sourceFile)
@@ -71,14 +74,21 @@ export function getFileExportsText(
       exportedSymbolId,
       declarationMap
     )
-    const textSnippet = buildTextSnippet(usedLocals, sourceFile, declarationMap)
     const declaration = declarationMap.get(exportedSymbolId)!
+    const position = declaration.node.getPos()
+    const kind = declaration.node.getKind()
+    const textSnippet = buildTextSnippet(
+      usedLocals,
+      sourceFile,
+      declarationMap,
+      printer
+    )
 
     results.push({
       name: exportedSymbolId,
       text: textSnippet,
-      position: declaration.node.getStart(),
-      kind: declaration.node.getKind(),
+      position,
+      kind,
     })
   }
 
@@ -161,15 +171,15 @@ function buildDeclarationMap(
         importsUsed: new Set(),
       })
     } else if (tsMorph.Node.isVariableStatement(statement)) {
-      for (const decl of statement.getDeclarationList().getDeclarations()) {
-        const nameNode = decl.getNameNode()
+      for (const node of statement.getDeclarationList().getDeclarations()) {
+        const nameNode = node.getNameNode()
 
         if (tsMorph.Node.isIdentifier(nameNode)) {
           const symbolId = nameNode.getText()
 
           map.set(symbolId, {
             symbolId,
-            node: statement, // the entire "export const x = 0, y = 0"
+            node,
             dependsOn: new Set(),
             importsUsed: new Set(),
           })
@@ -330,7 +340,8 @@ function getUsedImports(
 function buildTextSnippet(
   usedLocals: Set<string>,
   sourceFile: SourceFile,
-  declarationMap: Map<string, DeclarationInfo>
+  declarationMap: Map<string, DeclarationInfo>,
+  printer: tsMorph.ts.Printer
 ): string {
   const usedImports = getUsedImports(usedLocals, declarationMap)
   const fileStatements = sourceFile.getStatements()
@@ -338,70 +349,15 @@ function buildTextSnippet(
 
   for (const statement of fileStatements) {
     if (tsMorph.Node.isImportDeclaration(statement)) {
-      const defaultImport = statement.getDefaultImport()?.getText()
-
-      if (defaultImport) {
-        statement.removeDefaultImport()
-
-        if (usedImports.has(defaultImport)) {
-          statement.setDefaultImport(defaultImport)
-        }
+      const importText = printFilteredImportStatement(
+        statement,
+        usedImports,
+        printer
+      )
+      if (importText) {
+        lines.push(importText)
       }
-
-      const namespaceImport = statement.getNamespaceImport()?.getText()
-
-      if (namespaceImport) {
-        statement.removeNamespaceImport()
-
-        if (usedImports.has(namespaceImport)) {
-          statement.setNamespaceImport(namespaceImport)
-        }
-      }
-
-      const namedImportStructures = statement
-        .getNamedImports()
-        .map((namedImport) => namedImport.getStructure())
-
-      statement.removeNamedImports()
-
-      const usedNamedImportStructures: tsMorph.ImportSpecifierStructure[] = []
-      const unusedNamedImportStructures: {
-        index: number
-        structure: tsMorph.ImportSpecifierStructure
-      }[] = []
-      const usedIndex: number[] = []
-      let usedCount = 0
-
-      for (let index = 0; index < namedImportStructures.length; index++) {
-        const structure = namedImportStructures[index]
-        const localName = structure.alias ?? structure.name
-        if (usedImports.has(localName)) {
-          usedNamedImportStructures.push(structure)
-          usedCount++
-        } else {
-          unusedNamedImportStructures.push({ index: index, structure })
-        }
-        usedIndex[index] = usedCount
-      }
-
-      statement.addNamedImports(usedNamedImportStructures)
-
-      if (usedNamedImportStructures.length > 0) {
-        lines.push(statement.getFullText())
-      }
-
-      if (defaultImport && !usedImports.has(defaultImport)) {
-        statement.setDefaultImport(defaultImport)
-      }
-
-      if (namespaceImport && !usedImports.has(namespaceImport)) {
-        statement.setNamespaceImport(namespaceImport)
-      }
-
-      for (const { index, structure } of unusedNamedImportStructures) {
-        const insertionIndex = index === 0 ? 0 : usedIndex[index - 1]
-        statement.insertNamedImport(insertionIndex, structure)
-      }
+      continue
     }
 
     // check if it's a top-level declaration we need to keep
@@ -421,8 +377,9 @@ function buildTextSnippet(
       const symbolId = nameNode.getText()
 
       if (usedLocals.has(symbolId)) {
-        stripJsDocs(statement)
-        lines.push(statement.getFullText())
+        lines.push(
+          statement.getFullText().replace(/\/\*\*[\s\S]*?\*\/\s*/g, '')
+        )
       }
     } else if (tsMorph.Node.isVariableStatement(statement)) {
       const declarations = statement.getDeclarationList().getDeclarations()
@@ -434,8 +391,9 @@ function buildTextSnippet(
         )
       })
       if (matched) {
-        stripJsDocs(statement)
-        lines.push(statement.getFullText())
+        lines.push(
+          statement.getFullText().replace(/\/\*\*[\s\S]*?\*\/\s*/g, '')
+        )
       }
     }
   }
@@ -443,11 +401,63 @@ function buildTextSnippet(
   return lines.join('').trim()
 }
 
-/** Strip JSDoc from a statement. */
-function stripJsDocs(statement: Node) {
-  if (tsMorph.Node.isJSDocable(statement)) {
-    for (const doc of statement.getJsDocs()) {
-      doc.remove()
-    }
+/** Print a filtered import statement, removing unused imports. */
+function printFilteredImportStatement(
+  declaration: ImportDeclaration,
+  usedAliases: Set<string>,
+  printer: tsMorph.ts.Printer
+): string | undefined {
+  const ts = tsMorph.ts
+  const { factory } = ts
+
+  const moduleSpecifier = factory.createStringLiteral(
+    declaration.getModuleSpecifierValue()
+  )
+
+  const defaultId = declaration.getDefaultImport()?.getText()
+  const keepDefault = defaultId && usedAliases.has(defaultId)
+
+  const namespaceId = declaration.getNamespaceImport()?.getText()
+  const keepNamespace = namespaceId && usedAliases.has(namespaceId)
+
+  const namedSpecs = declaration
+    .getNamedImports()
+    .map((ni) => ({
+      name: ni.getNameNode().getText(),
+      alias: ni.getAliasNode()?.getText(),
+    }))
+    .filter(({ name, alias }) => usedAliases.has(alias ?? name))
+    .map(({ name, alias }) =>
+      factory.createImportSpecifier(
+        false,
+        alias ? factory.createIdentifier(name) : undefined,
+        factory.createIdentifier(alias ?? name)
+      )
+    )
+
+  if (!keepDefault && !keepNamespace && namedSpecs.length === 0) {
+    return undefined
   }
+
+  const importClause = factory.createImportClause(
+    false,
+    keepDefault ? factory.createIdentifier(defaultId!) : undefined,
+    keepNamespace
+      ? factory.createNamespaceImport(factory.createIdentifier(namespaceId!))
+      : namedSpecs.length
+        ? factory.createNamedImports(namedSpecs)
+        : undefined
+  )
+
+  const importDeclaration = factory.createImportDeclaration(
+    undefined,
+    importClause,
+    moduleSpecifier
+  )
+
+  return printer.printNode(
+    ts.EmitHint.Unspecified,
+    importDeclaration,
+    declaration.getSourceFile().compilerNode
+  )
 }

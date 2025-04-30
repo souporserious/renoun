@@ -84,6 +84,11 @@
       "types": "./dist/textmate/index.d.ts",
       "import": "./dist/textmate/index.js",
       "default": "./dist/textmate/index.js"
+    },
+    "./utils": {
+      "types": "./dist/utils/index.d.ts",
+      "import": "./dist/utils/index.js",
+      "default": "./dist/utils/index.js"
     }
   },
   "typesVersions": {
@@ -111,6 +116,9 @@
       ],
       "textmate": [
         "./dist/textmate/index.d.ts"
+      ],
+      "utils": [
+        "./dist/utils/index.d.ts"
       ]
     }
   },

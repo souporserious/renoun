@@ -311,6 +311,13 @@ export function isPropertyType(property: AllTypes): property is PropertyTypes {
   return property.context === 'property'
 }
 
+/** Determines if the type is a parameter or property type. */
+export function isMemberType(
+  property: AllTypes
+): property is ParameterTypes | PropertyTypes {
+  return isParameterType(property) || isPropertyType(property)
+}
+
 /** Process type metadata. */
 export function resolveType(
   type: Type,

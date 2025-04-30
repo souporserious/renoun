@@ -5,6 +5,7 @@ import type { FSWatcher } from 'node:fs'
 
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.js'
 import { resolvedTypeCache } from '../utils/resolve-type-at-location.js'
+import { invalidateProjectFileCache } from './cache.js'
 import {
   activeRefreshingProjects,
   completeRefreshingProjects,
@@ -92,6 +93,8 @@ export function getProject(options?: ProjectOptions) {
           if (!projectsToUpdate) return
 
           for (const currentProject of projectsToUpdate) {
+            invalidateProjectFileCache(currentProject, filePath)
+
             if (eventType === 'rename') {
               if (existsSync(filePath)) {
                 if (isDirectory) {
