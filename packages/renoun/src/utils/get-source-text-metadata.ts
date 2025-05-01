@@ -135,6 +135,19 @@ export async function getSourceTextMetadata({
         overwrite: true,
       })
 
+      // Attempt to fix imports for JSX-only files
+      if (jsxOnly) {
+        sourceFile.fixMissingImports()
+
+        // Remove `type` keyword from import declarations this is added by `fixMissingImports`
+        // which prefers type-only imports causing an error since this is JSX
+        for (const importDeclaration of sourceFile.getImportDeclarations()) {
+          if (importDeclaration.isTypeOnly()) {
+            importDeclaration.setIsTypeOnly(false)
+          }
+        }
+      }
+
       finalValue = sourceFile.getFullText().trim()
 
       // Add an empty export declaration to coerce TypeScript to treat the file as a module
