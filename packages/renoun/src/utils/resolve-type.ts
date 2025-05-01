@@ -387,6 +387,7 @@ export function resolveType(
   ) {
     return {
       kind: 'Reference',
+      name: symbolMetadata.name,
       text: typeText,
       ...declarationLocation,
     } satisfies ReferenceType
@@ -458,6 +459,7 @@ export function resolveType(
           }
           return {
             kind: 'Reference',
+            name: symbolMetadata.name,
             text: typeText,
             ...declarationLocation,
           } satisfies ReferenceType
@@ -501,6 +503,7 @@ export function resolveType(
       if (filter === defaultFilter ? true : !filter(symbolMetadata)) {
         return {
           kind: 'Reference',
+          name: symbolMetadata.name,
           text: typeText,
           ...declarationLocation,
         } satisfies ReferenceType
@@ -964,7 +967,36 @@ export function resolveType(
           if (!keepReferences) {
             rootReferences.delete(type)
           }
-          return
+
+          const resolvedTypeArguments = typeArguments
+            .map((type) =>
+              resolveType(
+                type,
+                declaration,
+                filter,
+                false,
+                defaultValues,
+                keepReferences,
+                dependencies
+              )
+            )
+            .filter(Boolean) as ResolvedType[]
+
+          if (resolvedTypeArguments.length > 0) {
+            resolvedType = {
+              kind: 'UtilityReference',
+              name: symbolMetadata.name,
+              text: typeText,
+              typeName: typeName!,
+              arguments: resolvedTypeArguments,
+            } satisfies UtilityReferenceType
+          } else {
+            resolvedType = {
+              kind: 'Reference',
+              name: symbolMetadata.name,
+              text: typeText,
+            } satisfies ReferenceType
+          }
         } else {
           resolvedType = {
             kind: 'Object',
