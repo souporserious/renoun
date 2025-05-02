@@ -6066,6 +6066,142 @@ describe('resolveType', () => {
     `)
   })
 
+  test('union type filters undefined types', () => {
+    const project = new Project({
+      compilerOptions: {
+        strictNullChecks: true,
+      },
+    })
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      function Button(props: { variant?: 'primary' | 'secondary' }) {}
+      `,
+      { overwrite: true }
+    )
+    const functionDeclaration = sourceFile.getFunctionOrThrow('Button')
+    const types = resolveType(
+      functionDeclaration.getType(),
+      functionDeclaration
+    )
+    expect(types).toMatchInlineSnapshot(`
+      {
+        "filePath": "test.ts",
+        "kind": "Component",
+        "name": "Button",
+        "position": {
+          "end": {
+            "column": 65,
+            "line": 1,
+          },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "signatures": [
+          {
+            "filePath": "test.ts",
+            "generics": [],
+            "kind": "ComponentSignature",
+            "modifier": undefined,
+            "parameter": {
+              "context": "parameter",
+              "defaultValue": undefined,
+              "description": undefined,
+              "filePath": "test.ts",
+              "isOptional": false,
+              "kind": "Object",
+              "name": "props",
+              "position": {
+                "end": {
+                  "column": 61,
+                  "line": 1,
+                },
+                "start": {
+                  "column": 17,
+                  "line": 1,
+                },
+              },
+              "properties": [
+                {
+                  "context": "property",
+                  "defaultValue": undefined,
+                  "filePath": "test.ts",
+                  "isOptional": true,
+                  "isReadonly": false,
+                  "kind": "Union",
+                  "members": [
+                    {
+                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                      "kind": "String",
+                      "name": undefined,
+                      "position": {
+                        "end": {
+                          "column": 4402,
+                          "line": 4,
+                        },
+                        "start": {
+                          "column": 3482,
+                          "line": 4,
+                        },
+                      },
+                      "text": ""primary"",
+                      "value": "primary",
+                    },
+                    {
+                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                      "kind": "String",
+                      "name": undefined,
+                      "position": {
+                        "end": {
+                          "column": 4402,
+                          "line": 4,
+                        },
+                        "start": {
+                          "column": 3482,
+                          "line": 4,
+                        },
+                      },
+                      "text": ""secondary"",
+                      "value": "secondary",
+                    },
+                  ],
+                  "name": "variant",
+                  "position": {
+                    "end": {
+                      "column": 59,
+                      "line": 1,
+                    },
+                    "start": {
+                      "column": 26,
+                      "line": 1,
+                    },
+                  },
+                  "text": ""primary" | "secondary"",
+                },
+              ],
+              "text": "{ variant?: "primary" | "secondary"; }",
+            },
+            "position": {
+              "end": {
+                "column": 65,
+                "line": 1,
+              },
+              "start": {
+                "column": 1,
+                "line": 1,
+              },
+            },
+            "returnType": "void",
+            "text": "function Button(props: { variant?: "primary" | "secondary"; }): void",
+          },
+        ],
+        "text": "(props: { variant?: "primary" | "secondary"; }) => void",
+      }
+    `)
+  })
+
   test('index types', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
@@ -8221,7 +8357,7 @@ describe('resolveType', () => {
                       "line": 6,
                     },
                   },
-                  "text": "ButtonVariant",
+                  "text": ""primary" | "secondary" | "danger"",
                 },
                 {
                   "context": "property",
