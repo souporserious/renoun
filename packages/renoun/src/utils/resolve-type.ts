@@ -686,11 +686,20 @@ export function resolveType(
         )
       }
     } else if (type.isUnion()) {
-      const typeNode = tsMorph.Node.isTypeAliasDeclaration(symbolDeclaration)
-        ? symbolDeclaration.getTypeNode()
-        : undefined
+      let typeNode: tsMorph.TypeNode | undefined
 
-      /* type.isIntersection() will be `false` when mixed with unions so we resolve the type nodes individually instead. */
+      if (tsMorph.Node.isTypeAliasDeclaration(symbolDeclaration)) {
+        typeNode = symbolDeclaration.getTypeNode()
+      } else if (
+        tsMorph.Node.isTypeAliasDeclaration(enclosingNode) ||
+        tsMorph.Node.isPropertySignature(enclosingNode) ||
+        tsMorph.Node.isPropertyDeclaration(enclosingNode) ||
+        tsMorph.Node.isParameterDeclaration(enclosingNode)
+      ) {
+        typeNode = enclosingNode.getTypeNode()
+      }
+
+      // Mixed intersection inside union (`A & B | C`)
       if (tsMorph.Node.isIntersectionTypeNode(typeNode)) {
         const resolvedIntersectionTypes = typeNode
           .getTypeNodes()
@@ -721,12 +730,17 @@ export function resolveType(
           properties: resolvedIntersectionTypes,
         } satisfies IntersectionType
       } else {
-        const resolvedUnionTypes: ResolvedType[] = []
+        const unionMembers: ResolvedType[] = []
+        const unionTypeNodes = tsMorph.Node.isUnionTypeNode(typeNode)
+          ? typeNode
+              .getTypeNodes()
+              .map((node) => ({ node, type: node.getType() }))
+          : type.getUnionTypes().map((type) => ({ node: declaration, type }))
 
-        for (const unionType of type.getUnionTypes()) {
-          const resolvedType = resolveType(
-            unionType,
-            declaration,
+        for (const { node: memberNode, type: memberType } of unionTypeNodes) {
+          const resolved = resolveType(
+            memberType,
+            memberNode,
             filter,
             false,
             defaultValues,
@@ -734,44 +748,31 @@ export function resolveType(
             dependencies
           )
 
-          if (resolvedType) {
-            const previousProperty = resolvedUnionTypes.at(-1)
-
-            // Flatten boolean literals to just 'boolean' if both values are present
-            if (
-              resolvedType.kind === 'Boolean' &&
-              previousProperty?.kind === 'Boolean'
-            ) {
-              resolvedUnionTypes.pop()
-              resolvedType.text = 'boolean'
+          if (resolved) {
+            const previous = unionMembers.at(-1)
+            /* Collapse `true | false` to just `boolean` */
+            if (resolved.kind === 'Boolean' && previous?.kind === 'Boolean') {
+              unionMembers.pop()
+              resolved.text = 'boolean'
             }
-
-            resolvedUnionTypes.push(resolvedType)
+            unionMembers.push(resolved)
           }
         }
 
         const uniqueUnionTypes: ResolvedType[] = []
 
-        for (const unionType of resolvedUnionTypes) {
-          if (
-            !uniqueUnionTypes.some((uniqueUnionType) => {
-              const sameStart =
-                unionType.position?.start.line ===
-                uniqueUnionType.position?.start.line
-              const sameEnd =
-                unionType.position?.end.line ===
-                uniqueUnionType.position?.end.line
-
-              return (
-                uniqueUnionType.kind === unionType.kind &&
-                uniqueUnionType.text === unionType.text &&
-                uniqueUnionType.path === unionType.path &&
-                sameStart &&
-                sameEnd
-              )
-            })
-          ) {
-            uniqueUnionTypes.push(unionType)
+        for (const member of unionMembers) {
+          const duplicate = uniqueUnionTypes.some((unionType) => {
+            return (
+              unionType.kind === member.kind &&
+              unionType.text === member.text &&
+              unionType.path === member.path &&
+              member.position?.start.line === unionType.position?.start.line &&
+              member.position?.end.line === unionType.position?.end.line
+            )
+          })
+          if (!duplicate) {
+            uniqueUnionTypes.push(member)
           }
         }
 
@@ -920,7 +921,9 @@ export function resolveType(
           enclosingNode,
           filter,
           false,
-          defaultValues
+          defaultValues,
+          keepReferences,
+          dependencies
         )
 
         if (
@@ -1263,7 +1266,9 @@ export function resolveTypeProperties(
   enclosingNode?: Node,
   filter: SymbolFilter = defaultFilter,
   isRootType: boolean = true,
-  defaultValues?: Record<string, unknown> | unknown
+  defaultValues?: Record<string, unknown> | unknown,
+  keepReferences: boolean = false,
+  dependencies?: Set<string>
 ): ResolvedType[] {
   const isReadonly = isTypeReadonly(type, enclosingNode)
 
@@ -1294,15 +1299,17 @@ export function resolveTypeProperties(
         enclosingNodeMetadata.set(declaration, symbolMetadata)
 
         const propertyType = property.getTypeAtLocation(declaration)
-        const resolvedProperty = resolveType(
+        const resolvedPropertyType = resolveType(
           propertyType,
           declaration,
           filter,
           isRootType,
-          defaultValue
+          defaultValue,
+          keepReferences,
+          dependencies
         )
 
-        if (resolvedProperty) {
+        if (resolvedPropertyType) {
           const isOptional = Boolean(
             propertyDeclaration?.hasQuestionToken() || defaultValue
           )
@@ -1313,7 +1320,7 @@ export function resolveTypeProperties(
             : false
 
           return {
-            ...resolvedProperty,
+            ...resolvedPropertyType,
             ...getJsDocMetadata(declaration),
             context: 'property',
             name,
