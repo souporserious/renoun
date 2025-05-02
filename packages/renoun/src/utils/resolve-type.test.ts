@@ -436,34 +436,34 @@ describe('resolveType', () => {
           "kind": "Union",
           "members": [
             {
-              "filePath": "test.ts",
+              "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
               "kind": "String",
               "name": undefined,
               "position": {
                 "end": {
-                  "column": 30,
-                  "line": 25,
+                  "column": 4402,
+                  "line": 4,
                 },
                 "start": {
-                  "column": 7,
-                  "line": 25,
+                  "column": 3482,
+                  "line": 4,
                 },
               },
               "text": "string",
               "value": undefined,
             },
             {
-              "filePath": "test.ts",
+              "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
               "kind": "Number",
               "name": undefined,
               "position": {
                 "end": {
-                  "column": 30,
-                  "line": 25,
+                  "column": 4943,
+                  "line": 4,
                 },
                 "start": {
-                  "column": 7,
-                  "line": 25,
+                  "column": 4755,
+                  "line": 4,
                 },
               },
               "text": "number",
@@ -493,32 +493,15 @@ describe('resolveType', () => {
           "members": [
             {
               "filePath": "test.ts",
-              "kind": "String",
-              "name": undefined,
-              "position": {
-                "end": {
-                  "column": 119,
-                  "line": 26,
-                },
-                "start": {
-                  "column": 7,
-                  "line": 26,
-                },
-              },
-              "text": "string",
-              "value": undefined,
-            },
-            {
-              "filePath": "test.ts",
               "kind": "Function",
               "name": undefined,
               "position": {
                 "end": {
-                  "column": 119,
+                  "column": 52,
                   "line": 26,
                 },
                 "start": {
-                  "column": 7,
+                  "column": 22,
                   "line": 26,
                 },
               },
@@ -573,11 +556,11 @@ describe('resolveType', () => {
               "name": undefined,
               "position": {
                 "end": {
-                  "column": 119,
+                  "column": 69,
                   "line": 26,
                 },
                 "start": {
-                  "column": 7,
+                  "column": 56,
                   "line": 26,
                 },
               },
@@ -612,11 +595,11 @@ describe('resolveType', () => {
               "name": undefined,
               "position": {
                 "end": {
-                  "column": 119,
+                  "column": 109,
                   "line": 26,
                 },
                 "start": {
-                  "column": 7,
+                  "column": 72,
                   "line": 26,
                 },
               },
@@ -716,6 +699,23 @@ describe('resolveType', () => {
                 },
               ],
               "text": "{ b: number; c: (string | number)[]; }",
+            },
+            {
+              "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+              "kind": "String",
+              "name": undefined,
+              "position": {
+                "end": {
+                  "column": 4402,
+                  "line": 4,
+                },
+                "start": {
+                  "column": 3482,
+                  "line": 4,
+                },
+              },
+              "text": "string",
+              "value": undefined,
             },
           ],
           "name": "complexUnion",
@@ -1040,23 +1040,6 @@ describe('resolveType', () => {
         "kind": "Union",
         "members": [
           {
-            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-            "kind": "String",
-            "name": undefined,
-            "position": {
-              "end": {
-                "column": 4402,
-                "line": 4,
-              },
-              "start": {
-                "column": 3482,
-                "line": 4,
-              },
-            },
-            "text": "string",
-            "value": undefined,
-          },
-          {
             "filePath": "test.ts",
             "kind": "Intersection",
             "name": "FillVariant",
@@ -1165,6 +1148,23 @@ describe('resolveType', () => {
               },
             ],
             "text": "OutlineVariant",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "String",
+            "name": undefined,
+            "position": {
+              "end": {
+                "column": 4402,
+                "line": 4,
+              },
+              "start": {
+                "column": 3482,
+                "line": 4,
+              },
+            },
+            "text": "string",
+            "value": undefined,
           },
         ],
         "name": "Variant",
@@ -2600,34 +2600,34 @@ describe('resolveType', () => {
             "kind": "Union",
             "members": [
               {
-                "filePath": "test.ts",
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                 "kind": "String",
                 "name": undefined,
                 "position": {
                   "end": {
-                    "column": 31,
-                    "line": 12,
+                    "column": 4402,
+                    "line": 4,
                   },
                   "start": {
-                    "column": 3,
-                    "line": 12,
+                    "column": 3482,
+                    "line": 4,
                   },
                 },
                 "text": "string",
                 "value": undefined,
               },
               {
-                "filePath": "test.ts",
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                 "kind": "Number",
                 "name": undefined,
                 "position": {
                   "end": {
-                    "column": 31,
-                    "line": 12,
+                    "column": 4943,
+                    "line": 4,
                   },
                   "start": {
-                    "column": 3,
-                    "line": 12,
+                    "column": 4755,
+                    "line": 4,
                   },
                 },
                 "text": "number",
@@ -3808,36 +3808,36 @@ describe('resolveType', () => {
             "kind": "Union",
             "members": [
               {
-                "filePath": "test.ts",
-                "kind": "Primitive",
-                "position": {
-                  "end": {
-                    "column": 29,
-                    "line": 2,
-                  },
-                  "start": {
-                    "column": 3,
-                    "line": 2,
-                  },
-                },
-                "text": "undefined",
-              },
-              {
-                "filePath": "test.ts",
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                 "kind": "String",
                 "name": undefined,
                 "position": {
                   "end": {
-                    "column": 29,
-                    "line": 2,
+                    "column": 4402,
+                    "line": 4,
                   },
                   "start": {
-                    "column": 3,
-                    "line": 2,
+                    "column": 3482,
+                    "line": 4,
                   },
                 },
                 "text": "string",
                 "value": undefined,
+              },
+              {
+                "filePath": "test.ts",
+                "kind": "Primitive",
+                "position": {
+                  "end": {
+                    "column": 28,
+                    "line": 2,
+                  },
+                  "start": {
+                    "column": 19,
+                    "line": 2,
+                  },
+                },
+                "text": "undefined",
               },
             ],
             "name": "color",
@@ -5496,11 +5496,11 @@ describe('resolveType', () => {
                   "name": undefined,
                   "position": {
                     "end": {
-                      "column": 77,
+                      "column": 44,
                       "line": 3,
                     },
                     "start": {
-                      "column": 1,
+                      "column": 14,
                       "line": 3,
                     },
                   },
@@ -5556,11 +5556,11 @@ describe('resolveType', () => {
                   "name": undefined,
                   "position": {
                     "end": {
-                      "column": 77,
+                      "column": 76,
                       "line": 3,
                     },
                     "start": {
-                      "column": 1,
+                      "column": 47,
                       "line": 3,
                     },
                   },
@@ -5826,11 +5826,11 @@ describe('resolveType', () => {
                   "name": undefined,
                   "position": {
                     "end": {
-                      "column": 77,
+                      "column": 44,
                       "line": 3,
                     },
                     "start": {
-                      "column": 1,
+                      "column": 14,
                       "line": 3,
                     },
                   },
@@ -5881,11 +5881,11 @@ describe('resolveType', () => {
                   "name": undefined,
                   "position": {
                     "end": {
-                      "column": 77,
+                      "column": 76,
                       "line": 3,
                     },
                     "start": {
-                      "column": 1,
+                      "column": 47,
                       "line": 3,
                     },
                   },
@@ -5959,6 +5959,109 @@ describe('resolveType', () => {
           },
         ],
         "text": "(props: Props) => void",
+      }
+    `)
+  })
+
+  test('union types with member references', () => {
+    project.createSourceFile(
+      'types.ts',
+      dedent`
+  export type Languages = 'jsx' | 'tsx'
+  `,
+      { overwrite: true }
+    )
+    const sourceFile = project.createSourceFile(
+      'test.tsx',
+      dedent`
+    import type { Languages } from './types'
+
+    export interface CodeBlockProps {
+      language?: Languages | 'mdx'
+    }
+
+    export function CodeBlock({ language }: CodeBlockProps) {
+      return <pre />
+    }
+    `,
+      { overwrite: true }
+    )
+    const declaration = sourceFile.getInterfaceOrThrow('CodeBlockProps')
+    const types = resolveType(declaration.getType(), declaration)
+
+    expect(types).toMatchInlineSnapshot(`
+      {
+        "filePath": "test.tsx",
+        "kind": "Object",
+        "name": "CodeBlockProps",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 5,
+          },
+          "start": {
+            "column": 1,
+            "line": 3,
+          },
+        },
+        "properties": [
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.tsx",
+            "isOptional": true,
+            "isReadonly": false,
+            "kind": "Union",
+            "members": [
+              {
+                "filePath": "types.ts",
+                "kind": "Reference",
+                "name": "Languages",
+                "position": {
+                  "end": {
+                    "column": 38,
+                    "line": 1,
+                  },
+                  "start": {
+                    "column": 1,
+                    "line": 1,
+                  },
+                },
+                "text": "Languages",
+              },
+              {
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "kind": "String",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 4402,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3482,
+                    "line": 4,
+                  },
+                },
+                "text": ""mdx"",
+                "value": "mdx",
+              },
+            ],
+            "name": "language",
+            "position": {
+              "end": {
+                "column": 31,
+                "line": 4,
+              },
+              "start": {
+                "column": 3,
+                "line": 4,
+              },
+            },
+            "text": "Languages | "mdx"",
+          },
+        ],
+        "text": "CodeBlockProps",
       }
     `)
   })
@@ -6365,85 +6468,85 @@ describe('resolveType', () => {
             "kind": "Union",
             "members": [
               {
-                "filePath": "test.ts",
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                 "kind": "String",
                 "name": undefined,
                 "position": {
                   "end": {
-                    "column": 68,
-                    "line": 2,
+                    "column": 4402,
+                    "line": 4,
                   },
                   "start": {
-                    "column": 3,
-                    "line": 2,
+                    "column": 3482,
+                    "line": 4,
                   },
                 },
                 "text": ""heading1"",
                 "value": "heading1",
               },
               {
-                "filePath": "test.ts",
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                 "kind": "String",
                 "name": undefined,
                 "position": {
                   "end": {
-                    "column": 68,
-                    "line": 2,
+                    "column": 4402,
+                    "line": 4,
                   },
                   "start": {
-                    "column": 3,
-                    "line": 2,
+                    "column": 3482,
+                    "line": 4,
                   },
                 },
                 "text": ""heading2"",
                 "value": "heading2",
               },
               {
-                "filePath": "test.ts",
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                 "kind": "String",
                 "name": undefined,
                 "position": {
                   "end": {
-                    "column": 68,
-                    "line": 2,
+                    "column": 4402,
+                    "line": 4,
                   },
                   "start": {
-                    "column": 3,
-                    "line": 2,
+                    "column": 3482,
+                    "line": 4,
                   },
                 },
                 "text": ""heading3"",
                 "value": "heading3",
               },
               {
-                "filePath": "test.ts",
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                 "kind": "String",
                 "name": undefined,
                 "position": {
                   "end": {
-                    "column": 68,
-                    "line": 2,
+                    "column": 4402,
+                    "line": 4,
                   },
                   "start": {
-                    "column": 3,
-                    "line": 2,
+                    "column": 3482,
+                    "line": 4,
                   },
                 },
                 "text": ""body1"",
                 "value": "body1",
               },
               {
-                "filePath": "test.ts",
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                 "kind": "String",
                 "name": undefined,
                 "position": {
                   "end": {
-                    "column": 68,
-                    "line": 2,
+                    "column": 4402,
+                    "line": 4,
                   },
                   "start": {
-                    "column": 3,
-                    "line": 2,
+                    "column": 3482,
+                    "line": 4,
                   },
                 },
                 "text": ""body2"",
@@ -6472,34 +6575,34 @@ describe('resolveType', () => {
             "kind": "Union",
             "members": [
               {
-                "filePath": "test.ts",
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                 "kind": "String",
                 "name": undefined,
                 "position": {
                   "end": {
-                    "column": 26,
-                    "line": 3,
+                    "column": 4402,
+                    "line": 4,
                   },
                   "start": {
-                    "column": 3,
-                    "line": 3,
+                    "column": 3482,
+                    "line": 4,
                   },
                 },
                 "text": "string",
                 "value": undefined,
               },
               {
-                "filePath": "test.ts",
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                 "kind": "Number",
                 "name": undefined,
                 "position": {
                   "end": {
-                    "column": 26,
-                    "line": 3,
+                    "column": 4943,
+                    "line": 4,
                   },
                   "start": {
-                    "column": 3,
-                    "line": 3,
+                    "column": 4755,
+                    "line": 4,
                   },
                 },
                 "text": "number",
@@ -6570,85 +6673,85 @@ describe('resolveType', () => {
             "kind": "Union",
             "members": [
               {
-                "filePath": "test.ts",
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                 "kind": "String",
                 "name": undefined,
                 "position": {
                   "end": {
-                    "column": 68,
-                    "line": 5,
+                    "column": 4402,
+                    "line": 4,
                   },
                   "start": {
-                    "column": 3,
-                    "line": 5,
+                    "column": 3482,
+                    "line": 4,
                   },
                 },
                 "text": ""heading1"",
                 "value": "heading1",
               },
               {
-                "filePath": "test.ts",
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                 "kind": "String",
                 "name": undefined,
                 "position": {
                   "end": {
-                    "column": 68,
-                    "line": 5,
+                    "column": 4402,
+                    "line": 4,
                   },
                   "start": {
-                    "column": 3,
-                    "line": 5,
+                    "column": 3482,
+                    "line": 4,
                   },
                 },
                 "text": ""heading2"",
                 "value": "heading2",
               },
               {
-                "filePath": "test.ts",
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                 "kind": "String",
                 "name": undefined,
                 "position": {
                   "end": {
-                    "column": 68,
-                    "line": 5,
+                    "column": 4402,
+                    "line": 4,
                   },
                   "start": {
-                    "column": 3,
-                    "line": 5,
+                    "column": 3482,
+                    "line": 4,
                   },
                 },
                 "text": ""heading3"",
                 "value": "heading3",
               },
               {
-                "filePath": "test.ts",
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                 "kind": "String",
                 "name": undefined,
                 "position": {
                   "end": {
-                    "column": 68,
-                    "line": 5,
+                    "column": 4402,
+                    "line": 4,
                   },
                   "start": {
-                    "column": 3,
-                    "line": 5,
+                    "column": 3482,
+                    "line": 4,
                   },
                 },
                 "text": ""body1"",
                 "value": "body1",
               },
               {
-                "filePath": "test.ts",
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                 "kind": "String",
                 "name": undefined,
                 "position": {
                   "end": {
-                    "column": 68,
-                    "line": 5,
+                    "column": 4402,
+                    "line": 4,
                   },
                   "start": {
-                    "column": 3,
-                    "line": 5,
+                    "column": 3482,
+                    "line": 4,
                   },
                 },
                 "text": ""body2"",
@@ -6677,34 +6780,34 @@ describe('resolveType', () => {
             "kind": "Union",
             "members": [
               {
-                "filePath": "test.ts",
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                 "kind": "String",
                 "name": undefined,
                 "position": {
                   "end": {
-                    "column": 26,
-                    "line": 6,
+                    "column": 4402,
+                    "line": 4,
                   },
                   "start": {
-                    "column": 3,
-                    "line": 6,
+                    "column": 3482,
+                    "line": 4,
                   },
                 },
                 "text": "string",
                 "value": undefined,
               },
               {
-                "filePath": "test.ts",
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                 "kind": "Number",
                 "name": undefined,
                 "position": {
                   "end": {
-                    "column": 26,
-                    "line": 6,
+                    "column": 4943,
+                    "line": 4,
                   },
                   "start": {
-                    "column": 3,
-                    "line": 6,
+                    "column": 4755,
+                    "line": 4,
                   },
                 },
                 "text": "number",
@@ -7599,11 +7702,11 @@ describe('resolveType', () => {
                 "name": undefined,
                 "position": {
                   "end": {
-                    "column": 5,
-                    "line": 10,
+                    "column": 4,
+                    "line": 6,
                   },
                   "start": {
-                    "column": 3,
+                    "column": 13,
                     "line": 3,
                   },
                 },
@@ -7659,12 +7762,12 @@ describe('resolveType', () => {
                 "name": undefined,
                 "position": {
                   "end": {
-                    "column": 5,
+                    "column": 4,
                     "line": 10,
                   },
                   "start": {
-                    "column": 3,
-                    "line": 3,
+                    "column": 7,
+                    "line": 6,
                   },
                 },
                 "properties": [
@@ -7807,11 +7910,11 @@ describe('resolveType', () => {
                     "name": undefined,
                     "position": {
                       "end": {
-                        "column": 107,
+                        "column": 53,
                         "line": 2,
                       },
                       "start": {
-                        "column": 3,
+                        "column": 13,
                         "line": 2,
                       },
                     },
@@ -7871,7 +7974,7 @@ describe('resolveType', () => {
                         "line": 2,
                       },
                       "start": {
-                        "column": 3,
+                        "column": 56,
                         "line": 2,
                       },
                     },
@@ -8321,12 +8424,12 @@ describe('resolveType', () => {
                   "name": undefined,
                   "position": {
                     "end": {
-                      "column": 67,
-                      "line": 24,
+                      "column": 50,
+                      "line": 23,
                     },
                     "start": {
-                      "column": 1,
-                      "line": 22,
+                      "column": 5,
+                      "line": 23,
                     },
                   },
                   "properties": [
@@ -8488,8 +8591,8 @@ describe('resolveType', () => {
                       "line": 24,
                     },
                     "start": {
-                      "column": 1,
-                      "line": 22,
+                      "column": 5,
+                      "line": 24,
                     },
                   },
                   "properties": [
@@ -9247,34 +9350,34 @@ describe('resolveType', () => {
                 "kind": "Union",
                 "members": [
                   {
-                    "filePath": "test.ts",
+                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                     "kind": "String",
                     "name": undefined,
                     "position": {
                       "end": {
-                        "column": 49,
-                        "line": 11,
+                        "column": 4402,
+                        "line": 4,
                       },
                       "start": {
-                        "column": 25,
-                        "line": 11,
+                        "column": 3482,
+                        "line": 4,
                       },
                     },
                     "text": "string",
                     "value": undefined,
                   },
                   {
-                    "filePath": "test.ts",
+                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                     "kind": "Boolean",
                     "name": undefined,
                     "position": {
                       "end": {
-                        "column": 49,
-                        "line": 11,
+                        "column": 4613,
+                        "line": 4,
                       },
                       "start": {
-                        "column": 25,
-                        "line": 11,
+                        "column": 4576,
+                        "line": 4,
                       },
                     },
                     "text": "boolean",
