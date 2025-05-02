@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { Fragment } from 'react'
 import { AsyncLocalStorage } from 'node:async_hooks'
 
 const contexts = new Map<any, any>()
@@ -25,10 +25,10 @@ export function createContext<Value>(initialValue: Value) {
     const previousValue = localStorage.getStore() as Value | undefined
     localStorage.enterWith(value)
     return (
-      <>
-        {children}
+      <Fragment>
+        <Fragment>{children}</Fragment>
         <Restore previousValue={previousValue} />
-      </>
+      </Fragment>
     )
   }
 

@@ -177,10 +177,19 @@ const CodeFallback = styled('code', {
 })
 
 /** Parses the props of an MDX `code` element for passing to `CodeInline`. */
-export function parseCodeProps({
-  children,
-  ...props
-}: React.ComponentProps<NonNullable<MDXComponents['code']>>) {
+export function parseCodeProps(props: React.ComponentProps<'code'>): {
+  children: string
+  language?: Languages
+} & Omit<React.ComponentProps<'code'>, 'children' | 'className' | 'style'> {
+  let { children, className, style, ...restProps } = props
+
+  if (typeof children !== 'string') {
+    throw new Error(
+      '[renoun] CodeInline only supports string children. Use a different component for non-string children.'
+    )
+  }
+
+  let childrenToRender: string = children
   let language: Languages | undefined
   const firstSpaceIndex = children.indexOf(' ')
 
@@ -192,16 +201,13 @@ export function parseCodeProps({
 
     if (isValidLanguage) {
       language = possibleLanguage
-      children = children.slice(firstSpaceIndex + 1)
+      childrenToRender = children.slice(firstSpaceIndex + 1)
     }
   }
 
   return {
-    children,
+    children: childrenToRender,
     language,
-    ...props,
-  } as {
-    children: string
-    language?: Languages
-  } & Omit<React.ComponentProps<NonNullable<MDXComponents['code']>>, 'children'>
+    ...restProps,
+  }
 }

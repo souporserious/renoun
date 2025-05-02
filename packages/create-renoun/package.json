@@ -2,7 +2,10 @@
   "name": "create-renoun",
   "type": "module",
   "version": "1.2.1",
-  "author": "Travis Arnold",
+  "author": {
+    "name": "souporserious",
+    "email": "support@souporserious.com"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",

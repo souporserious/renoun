@@ -2,7 +2,10 @@
   "name": "@renoun/mdx",
   "version": "2.1.0",
   "description": "MDX plugins for renoun",
-  "author": "Travis Arnold",
+  "author": {
+    "name": "souporserious",
+    "email": "support@souporserious.com"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
