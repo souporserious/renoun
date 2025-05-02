@@ -1129,6 +1129,10 @@ function resolveSignature(
         )
 
         if (resolvedParameterType) {
+          const resolvedType =
+            (isOptional ?? Boolean(defaultValue))
+              ? filterUndefinedFromUnion(resolvedParameterType)
+              : resolvedParameterType
           let name: string | undefined = parameter.getName()
 
           if (name.startsWith('__')) {
@@ -1136,7 +1140,7 @@ function resolveSignature(
           }
 
           return {
-            ...resolvedParameterType,
+            ...resolvedType,
             context: 'parameter',
             name,
             defaultValue,
@@ -1318,9 +1322,13 @@ export function resolveTypeProperties(
               ? propertyDeclaration.isReadonly()
               : false
             : false
+          const resolvedType =
+            (isOptional ?? Boolean(defaultValue))
+              ? filterUndefinedFromUnion(resolvedPropertyType)
+              : resolvedPropertyType
 
           return {
-            ...resolvedPropertyType,
+            ...resolvedType,
             ...getJsDocMetadata(declaration),
             context: 'property',
             name,
@@ -1637,6 +1645,32 @@ function getScope(
   if (node.isStatic()) {
     return 'static'
   }
+}
+
+/** Filters out undefined from a union type. */
+function filterUndefinedFromUnion<Type extends ResolvedType>(type: Type): Type {
+  if (type.kind !== 'Union') return type
+
+  const filteredMembers = type.members.filter(
+    (member) => !(member.kind === 'Primitive' && member.text === 'undefined')
+  )
+
+  // Leave untouched if union only contained undefined
+  if (filteredMembers.length === 0) {
+    return type
+  }
+
+  // If exactly one member remains, collapse the union
+  if (filteredMembers.length === 1) {
+    return filteredMembers[0] as unknown as Type
+  }
+
+  // Otherwise return a narrowed union
+  return {
+    ...type,
+    members: filteredMembers,
+    text: filteredMembers.map((member) => member.text).join(' | '),
+  } as Type
 }
 
 /** Processes a class declaration into a metadata object. */
