@@ -1,7 +1,6 @@
 import React, { Suspense } from 'react'
 import { type CSSObject, styled } from 'restyle'
 
-import type { MDXComponents } from '../../mdx/index.js'
 import { computeDirectionalStyles } from '../../utils/compute-directional-styles.js'
 import {
   getThemeColors,
@@ -103,17 +102,19 @@ export interface CodeBlockProps {
  * the source code will be formatted using `prettier` if installed and quick info
  * is available when hovering symbols.
  */
-export function CodeBlock({
-  shouldAnalyze = true,
-  unfocusedLinesOpacity = 0.6,
-  ...props
-}: CodeBlockProps) {
-  if (typeof props.children !== 'string') {
+export function CodeBlock(props: CodeBlockProps) {
+  const {
+    shouldAnalyze = true,
+    unfocusedLinesOpacity = 0.6,
+    ...restProps
+  } = props
+
+  if (typeof restProps.children !== 'string') {
     return (
       <CodeBlockAsync
         shouldAnalyze={shouldAnalyze}
         unfocusedLinesOpacity={unfocusedLinesOpacity}
-        {...props}
+        {...restProps}
       />
     )
   }
@@ -121,13 +122,13 @@ export function CodeBlock({
   const containerPadding = computeDirectionalStyles(
     'padding',
     '0.5lh',
-    props.css?.container,
-    props.style?.container
+    restProps.css?.container,
+    restProps.style?.container
   )
   const shouldRenderToolbar = Boolean(
-    props.showToolbar === undefined
-      ? props.path || props.allowCopy
-      : props.showToolbar
+    restProps.showToolbar === undefined
+      ? restProps.path || restProps.allowCopy
+      : restProps.showToolbar
   )
   const Container = shouldRenderToolbar ? StyledContainer : React.Fragment
 
@@ -140,21 +141,21 @@ export function CodeBlock({
               ? {
                   borderRadius: 5,
                   boxShadow: '0 0 0 1px #666',
-                  ...props.css?.container,
+                  ...restProps.css?.container,
                   padding: 0,
                 }
               : {}
           }
           className={
-            shouldRenderToolbar ? props.className?.container : undefined
+            shouldRenderToolbar ? restProps.className?.container : undefined
           }
-          style={shouldRenderToolbar ? props.style?.container : undefined}
+          style={shouldRenderToolbar ? restProps.style?.container : undefined}
         >
           {shouldRenderToolbar && (
             <FallbackToolbar
-              css={{ padding: containerPadding.all, ...props.css?.toolbar }}
-              className={props.className?.toolbar}
-              style={props.style?.toolbar}
+              css={{ padding: containerPadding.all, ...restProps.css?.toolbar }}
+              className={restProps.className?.toolbar}
+              style={restProps.style?.toolbar}
             />
           )}
           <FallbackPre
@@ -166,7 +167,7 @@ export function CodeBlock({
               wordWrap: 'break-word',
               display: 'grid',
               gridAutoRows: 'max-content',
-              gridTemplateColumns: props.showLineNumbers
+              gridTemplateColumns: restProps.showLineNumbers
                 ? 'auto 1fr'
                 : undefined,
               margin: 0,
@@ -177,15 +178,15 @@ export function CodeBlock({
               ...getScrollContainerStyles({
                 paddingBottom: containerPadding.bottom,
               }),
-              ...(shouldRenderToolbar ? {} : props.css?.container),
+              ...(shouldRenderToolbar ? {} : restProps.css?.container),
               padding: 0,
             }}
             className={
-              shouldRenderToolbar ? undefined : props.className?.container
+              shouldRenderToolbar ? undefined : restProps.className?.container
             }
-            style={shouldRenderToolbar ? undefined : props.style?.container}
+            style={shouldRenderToolbar ? undefined : restProps.style?.container}
           >
-            {props.showLineNumbers && (
+            {restProps.showLineNumbers && (
               <FallbackLineNumbers
                 css={{
                   padding: containerPadding.all,
@@ -194,13 +195,13 @@ export function CodeBlock({
                   width: '4ch',
                   backgroundPosition: 'inherit',
                   backgroundImage: 'inherit',
-                  ...props.css?.lineNumbers,
+                  ...restProps.css?.lineNumbers,
                 }}
-                className={props.className?.lineNumbers}
-                style={props.style?.lineNumbers}
+                className={restProps.className?.lineNumbers}
+                style={restProps.style?.lineNumbers}
               >
                 {Array.from(
-                  { length: props.children.split('\n').length },
+                  { length: restProps.children.split('\n').length },
                   (_, index) => index + 1
                 ).join('\n')}
               </FallbackLineNumbers>
@@ -208,13 +209,13 @@ export function CodeBlock({
 
             <FallbackCode
               css={{
-                gridColumn: props.showLineNumbers ? 2 : 1,
-                padding: props.showLineNumbers
+                gridColumn: restProps.showLineNumbers ? 2 : 1,
+                padding: restProps.showLineNumbers
                   ? `${containerPadding.vertical} ${containerPadding.horizontal} 0 0`
                   : `${containerPadding.vertical} ${containerPadding.horizontal} 0`,
               }}
             >
-              {props.children}
+              {restProps.children}
             </FallbackCode>
           </FallbackPre>
         </Container>
@@ -223,7 +224,7 @@ export function CodeBlock({
       <CodeBlockAsync
         shouldAnalyze={shouldAnalyze}
         unfocusedLinesOpacity={unfocusedLinesOpacity}
-        {...props}
+        {...restProps}
       />
     </Suspense>
   )
@@ -461,10 +462,11 @@ const languageKey = 'language-'
 const languageLength = languageKey.length
 
 /** Parses the props of an MDX `pre` element for passing to `CodeBlock`. */
-export function parsePreProps({
-  children,
-  ...props
-}: React.ComponentProps<NonNullable<MDXComponents['pre']>>) {
+export function parsePreProps(props: React.ComponentProps<'pre'>): {
+  children: string
+  language?: Languages
+} & Omit<React.ComponentProps<'pre'>, 'children' | 'className' | 'style'> {
+  const { children, className, style, ...restProps } = props
   const code = children as React.ReactElement<{
     className: `language-${string}`
     children: string
@@ -472,20 +474,19 @@ export function parsePreProps({
   const fileName = code.props.className
     ?.split(' ')
     .find((className) => className.startsWith(languageKey))
-  const language = fileName
-    ? fileName.includes('.')
-      ? fileName.split('.').pop()
-      : fileName.slice(languageLength)
-    : 'plaintext'
+  const language = (
+    fileName
+      ? fileName.includes('.')
+        ? fileName.split('.').pop()
+        : fileName.slice(languageLength)
+      : 'plaintext'
+  ) as Languages
 
   return {
     children: code.props.children.trim(),
     language,
-    ...props,
-  } satisfies {
-    children: string
-    language?: Languages
-  } & Omit<React.ComponentProps<NonNullable<MDXComponents['pre']>>, 'children'>
+    ...restProps,
+  }
 }
 
 const StyledContainer = styled('div')
