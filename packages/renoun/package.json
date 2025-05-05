@@ -146,6 +146,7 @@
     "tm-grammars": "^1.23.14",
     "tm-themes": "^1.10.5",
     "valibot": "catalog:",
+    "vfile-message": "^4.0.2",
     "zod": "catalog:"
   },
   "dependencies": {
