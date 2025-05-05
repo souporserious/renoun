@@ -22,7 +22,7 @@ export function getFileExports(
     sourceFile = project.addSourceFileAtPath(filePath)
   }
 
-  const exportDeclarations = []
+  const exportDeclarations: FileExport[] = []
 
   for (const [name, declarations] of sourceFile.getExportedDeclarations()) {
     for (const declaration of declarations) {
@@ -42,12 +42,27 @@ export function getFileExports(
           }
         }
 
-        exportDeclarations.push({
+        const fileExport: FileExport = {
           name,
           path: declaration.getSourceFile().getFilePath(),
           position: declaration.getPos(),
           kind: declaration.getKind(),
-        })
+        }
+        let insertAt = exportDeclarations.length
+
+        for (let index = 0; index < insertAt; index++) {
+          const existing = exportDeclarations[index]
+          const isPathBefore = fileExport.path.localeCompare(existing.path) < 0
+          const isSamePath = fileExport.path === existing.path
+          const isPositionBefore = fileExport.position < existing.position
+
+          if (isPathBefore || (isSamePath && isPositionBefore)) {
+            insertAt = index
+            break
+          }
+        }
+
+        exportDeclarations.splice(insertAt, 0, fileExport)
       }
     }
   }
