@@ -1,7 +1,9 @@
 import React, { Suspense } from 'react'
 import { type CSSObject, styled } from 'restyle'
 
+import { WorkingDirectoryContext } from '../Context.js'
 import { computeDirectionalStyles } from '../../utils/compute-directional-styles.js'
+import { getContext } from '../../utils/context.js'
 import {
   getThemeColors,
   getThemeTokenVariables,
@@ -106,14 +108,18 @@ export function CodeBlock(props: CodeBlockProps) {
   const {
     shouldAnalyze = true,
     unfocusedLinesOpacity = 0.6,
+    workingDirectory: workingDirectoryProp,
     ...restProps
   } = props
+  const workingDirectoryContext = getContext(WorkingDirectoryContext)
+  const workingDirectory = workingDirectoryProp ?? workingDirectoryContext
 
   if (typeof restProps.children !== 'string') {
     return (
       <CodeBlockAsync
         shouldAnalyze={shouldAnalyze}
         unfocusedLinesOpacity={unfocusedLinesOpacity}
+        workingDirectory={workingDirectory}
         {...restProps}
       />
     )
@@ -224,6 +230,7 @@ export function CodeBlock(props: CodeBlockProps) {
       <CodeBlockAsync
         shouldAnalyze={shouldAnalyze}
         unfocusedLinesOpacity={unfocusedLinesOpacity}
+        workingDirectory={workingDirectory}
         {...restProps}
       />
     </Suspense>
