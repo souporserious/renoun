@@ -1,78 +1,83 @@
-/** @jsxImportSource restyle */
-/** @jsxRuntime automatic */
-import { Fragment, Suspense } from 'react'
-import type { CSSObject } from 'restyle'
-import { resolve } from 'node:path'
+import React, { Fragment, Suspense } from 'react'
+import { dirname, resolve } from 'node:path'
 
 import {
   JavaScriptFile,
   type JavaScriptFileExport,
 } from '../file-system/index.js'
-import { rehypePlugins, remarkPlugins } from '../mdx/index.js'
-import { createSlug } from '../utils/create-slug.js'
-import type {
-  AllTypes,
-  ResolvedType,
-  SymbolFilter,
-  TypeOfKind,
+import {
+  isMemberType,
+  type ClassAccessorType,
+  type ClassMethodType,
+  type FunctionSignatureType,
+  type ResolvedType,
+  type SymbolFilter,
 } from '../utils/resolve-type.js'
-import { isParameterType, isPropertyType } from '../utils/resolve-type.js'
-import { CodeBlock, parsePreProps } from './CodeBlock/index.js'
-import { CodeInline } from './CodeInline.js'
-import { MDXRenderer } from './MDXRenderer.js'
-import type { MDXRendererProps } from './MDXRenderer.js'
+import { createContext, getContext } from '../utils/context.js'
+import { createSlug } from '../utils/create-slug.js'
+import {
+  CodeInline as CodeInlineDefault,
+  type CodeInlineProps,
+} from './CodeInline.js'
+import { MDXRenderer as MDXRendererDefault } from './MDXRenderer.js'
+import { WorkingDirectoryContext } from './Context.js'
 
-const codeInlineStyles = {
-  display: 'inline-block',
-  whiteSpace: 'nowrap',
-} satisfies CSSObject
-const mdxRendererProps = {
-  components: {
-    pre: (props) => {
-      return <CodeBlock {...parsePreProps(props)} shouldAnalyze={false} />
-    },
-    code: (props) => {
-      return (
-        <CodeInline
-          children={props.children}
-          language="typescript"
-          shouldAnalyze={false}
-          css={codeInlineStyles}
-        />
-      )
-    },
-    p: (props) => <p {...props} css={{ margin: 0 }} />,
-  },
-  rehypePlugins,
-  remarkPlugins,
-} satisfies Omit<MDXRendererProps, 'children'>
-
-interface SourceString {
-  /** The file path to the source code. */
-  source: string
-
-  /** The working directory to resolve the file path from. Will use the base URL if a URL is provided. */
-  workingDirectory?: string
+export interface APIReferenceComponents {
+  CodeInline: React.ComponentType<CodeInlineProps>
+  MDXRenderer: React.ComponentType<
+    React.ComponentProps<typeof MDXRendererDefault>
+  >
+  TypeValue: React.ComponentType
+  TypeProperties: React.ComponentType<any>
+  FunctionKind: React.ComponentType
+  ComponentKind: React.ComponentType
 }
 
-interface SourceExport {
-  /** The export source from a collection export source to get types from. */
-  source: JavaScriptFile<any> | JavaScriptFileExport<any>
+const defaultComponents: APIReferenceComponents = {
+  CodeInline: CodeInlineDefault,
+  MDXRenderer: MDXRendererDefault,
+  TypeValue: () => null,
+  TypeProperties: () => null,
+  FunctionKind: () => null,
+  ComponentKind: () => null,
 }
 
-interface Filter {
-  /** A filter to apply to the exported types. */
+const APIReferenceConfigContext =
+  createContext<APIReferenceComponents>(defaultComponents)
+
+export function getAPIReferenceConfig() {
+  return getContext(APIReferenceConfigContext)
+}
+
+export interface APIReferenceProps {
+  /** The file path, source file, or export type reference to resolve. */
+  source: string | JavaScriptFile<any> | JavaScriptFileExport<any>
+
+  /** Optional filter for exported symbols. */
   filter?: SymbolFilter
+
+  /** Base directory for relative `source` values. */
+  workingDirectory?: string
+
+  /**
+   * Override default component renderers.
+   *
+   * ```tsx
+   * <APIReference
+   *   source="./Button.tsx"
+   *   components={{ CodeInline: CustomCodeInline, TypeValue: CustomTypeValue }}
+   * />
+   * ```
+   */
+  components?: Partial<APIReferenceComponents>
+
+  /** Optional children to override the default rendering. */
+  children?: React.ReactNode
 }
 
-export type APIReferenceProps =
-  | (SourceString & Filter)
-  | (SourceExport & Filter)
-
-/** Displays type documentation for all types exported from a file path, `JavaScriptFile`, or `JavaScriptFileExport`. */
 export function APIReference(props: APIReferenceProps) {
   return (
-    <Suspense fallback="Loading API references...">
+    <Suspense>
       <APIReferenceAsync {...props} />
     </Suspense>
   )
@@ -81,170 +86,442 @@ export function APIReference(props: APIReferenceProps) {
 async function APIReferenceAsync({
   source,
   filter,
-  ...props
+  workingDirectory,
+  components,
+  children,
 }: APIReferenceProps) {
+  let filePath: string | undefined = undefined
+
   if (typeof source === 'string') {
-    let workingDirectory: string | undefined
-
-    if ('workingDirectory' in props && props.workingDirectory) {
-      if (URL.canParse(props.workingDirectory)) {
-        const { pathname } = new URL(props.workingDirectory)
+    if (workingDirectory) {
+      if (URL.canParse(workingDirectory)) {
+        const { pathname } = new URL(workingDirectory)
         workingDirectory = pathname.slice(0, pathname.lastIndexOf('/'))
-      } else {
-        workingDirectory = props.workingDirectory
       }
+      filePath = resolve(workingDirectory, source)
+    } else {
+      filePath = source
     }
-
-    source = new JavaScriptFile({
-      path: workingDirectory ? resolve(workingDirectory, source) : source,
-    })
+    source = new JavaScriptFile({ path: filePath })
   }
+
+  let resolvedType: ResolvedType | ResolvedType[] | undefined
 
   if (source instanceof JavaScriptFile) {
-    const exportedTypes = await Promise.all(
-      (await source.getExports()).map((exportSource) =>
-        exportSource.getType(filter)
+    const exported = await Promise.all(
+      (await source.getExports()).map((fileExport) =>
+        fileExport.getType(filter)
       )
     )
-
-    return exportedTypes
-      .filter((type): type is ResolvedType => Boolean(type))
-      .map((type) => (
-        <div
-          key={type.name}
-          css={{
-            display: 'flex',
-            flexDirection: 'column',
-            padding: '1.6rem 0',
-            borderBottom: '1px solid var(--color-separator-secondary)',
-          }}
-        >
-          <div
-            css={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.8rem',
-            }}
-          >
-            <div
-              css={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '1rem',
-              }}
-            >
-              <h3
-                id={type.name ? createSlug(type.name, 'kebab') : undefined}
-                css={{ flexShrink: 0, margin: '0 !important' }}
-              >
-                {type.name}
-              </h3>
-
-              <CodeInline
-                children={type.text}
-                language="typescript"
-                shouldAnalyze={false}
-                css={codeInlineStyles}
-              />
-
-              {/* {type.path && <ViewSource href={type.path} />} */}
-            </div>
-
-            {type.description ? (
-              <MDXRenderer children={type.description} {...mdxRendererProps} />
-            ) : null}
-          </div>
-
-          <div css={{ display: 'flex' }}>
-            <TypeChildren type={type} css={{ marginTop: '2rem' }} />
-          </div>
-        </div>
-      ))
+    resolvedType = exported.filter(Boolean) as ResolvedType[]
+  } else {
+    resolvedType = await source.getType(filter)
   }
 
-  const type = await source.getType(filter)
-
-  if (type === undefined) {
+  if (!resolvedType) {
     return null
   }
 
+  const mergedComponents: APIReferenceComponents = {
+    ...defaultComponents,
+    ...components,
+  }
+
   return (
-    <div
-      key={type.name}
-      css={{
-        display: 'flex',
-        flexDirection: 'column',
-        padding: '1.6rem 0',
-        borderBottom: '1px solid var(--color-separator-secondary)',
-      }}
-    >
-      <div
-        css={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '0.8rem',
-        }}
-      >
-        <div
-          css={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '1rem',
-          }}
-        >
-          <h3
-            id={type.name ? createSlug(type.name, 'kebab') : undefined}
-            css={{ flexShrink: 0, margin: 0 }}
-          >
-            {type.name}
-          </h3>
+    <WorkingDirectoryContext value={filePath ? dirname(filePath) : undefined}>
+      <APIReferenceConfigContext value={mergedComponents}>
+        {Array.isArray(resolvedType) ? (
+          resolvedType.map((type, index) => (
+            <TypeContext key={index} value={type}>
+              {children}
+            </TypeContext>
+          ))
+        ) : (
+          <TypeContext value={resolvedType}>{children}</TypeContext>
+        )}
+      </APIReferenceConfigContext>
+    </WorkingDirectoryContext>
+  )
+}
 
-          <CodeInline
-            children={type.text}
-            language="typescript"
-            shouldAnalyze={false}
-            css={codeInlineStyles}
-          />
+async function resolveSourceType({
+  source,
+  filter,
+  workingDirectory,
+}: Pick<APIReferenceProps, 'source' | 'filter' | 'workingDirectory'>) {
+  if (typeof source === 'string') {
+    let path = source
+    if (workingDirectory) {
+      if (URL.canParse(workingDirectory)) {
+        const { pathname } = new URL(workingDirectory)
+        workingDirectory = pathname.slice(0, pathname.lastIndexOf('/'))
+      }
+      path = resolve(workingDirectory, source)
+    }
+    source = new JavaScriptFile({ path })
+  }
 
-          {/* {type.path && <ViewSource href={type.path} />} */}
+  if (source instanceof JavaScriptFile) {
+    const exported = await Promise.all(
+      (await source.getExports()).map((fileExport) =>
+        fileExport.getType(filter)
+      )
+    )
+    return exported.filter(Boolean) as ResolvedType[]
+  }
+
+  return source.getType(filter)
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ *  3. Type context
+ * ──────────────────────────────────────────────────────────────────────── */
+
+export const TypeContext = createContext<
+  | ResolvedType
+  | ClassAccessorType
+  | ClassMethodType
+  | FunctionSignatureType
+  | null
+>(null)
+
+export function getAPIReferenceType() {
+  return getContext(TypeContext)
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ *  4. Leaf renderers – overridable wrappers
+ *      • Each wrapper consults context for a replacement
+ *      • If none, falls back to its “Base” implementation
+ * ──────────────────────────────────────────────────────────────────────── */
+
+function withOverride<K extends keyof APIReferenceComponents>(
+  key: K,
+  Base: React.ComponentType<any>
+): React.ComponentType<any> {
+  function Wrapper(props: any) {
+    const Comp = getAPIReferenceConfig()[key] || Base
+    // Avoid infinite loop if user sets Comp === Wrapper
+    return Comp === Wrapper ? <Base {...props} /> : <Comp {...props} />
+  }
+  Wrapper.displayName = `APIReference(${key})`
+  return Wrapper
+}
+
+/* ———————————————————————————————————————————— 4a. TypeValue ———————— */
+
+function TypeValueBase() {
+  const type = getAPIReferenceType()
+  const { CodeInline, MDXRenderer } = getAPIReferenceConfig()
+  if (!type) return null
+
+  const isNameSameAsType = type.name === type.text
+  const isRequired = isMemberType(type) ? !type.isOptional : false
+  const defaultValue = isMemberType(type) ? type.defaultValue : undefined
+
+  return (
+    <div>
+      <div>
+        <strong>{type.name}</strong>
+        {isRequired && <span>*</span>}
+        {!isNameSameAsType && (
+          <>
+            {' '}
+            <CodeInline children={type.text} language="typescript" />
+          </>
+        )}
+        {defaultValue !== undefined && (
+          <>
+            {' = '}
+            <CodeInline
+              children={JSON.stringify(defaultValue)}
+              language="typescript"
+            />
+          </>
+        )}
+      </div>
+
+      {type.description && (
+        <div>
+          <MDXRenderer children={type.description} />
         </div>
-
-        {type.description &&
-        type.kind !== 'Function' &&
-        type.kind !== 'Component' ? (
-          <MDXRenderer children={type.description} {...mdxRendererProps} />
-        ) : null}
-      </div>
-
-      <div css={{ display: 'flex' }}>
-        <TypeChildren type={type} css={{ marginTop: '2rem' }} />
-      </div>
+      )}
     </div>
   )
 }
 
-/** Determines how to render the immediate type children based on its kind. */
-function TypeChildren({
-  type,
-  css: cssProp,
+export const TypeValue = withOverride('TypeValue', TypeValueBase)
+
+/* ———————————————————————————————————————————— 4b. TypeProperties ———— */
+
+export function TypeProperties({
+  Value,
 }: {
-  type: ResolvedType
-  css: CSSObject
+  /** How to render a leaf member/property */
+  Value?: React.ComponentType
 }) {
+  const type = getAPIReferenceType()
+  const { TypeValue: DefaultValue } = getAPIReferenceConfig()
+  const Leaf = Value || DefaultValue || TypeValueBase
+  if (!type) return null
+
+  const recurse = (child: any, key: React.Key) => (
+    <TypeContext key={key} value={child}>
+      <TypeProperties Value={Leaf} />
+    </TypeContext>
+  )
+
+  // Unions
+  if (type.kind === 'Union') {
+    return type.members.map((m, i) => {
+      if (
+        m.kind === 'Object' ||
+        m.kind === 'Intersection' ||
+        m.kind === 'Union'
+      )
+        return recurse(m, i)
+      if (m.kind === 'Reference') return <Fragment key={i}>{m.text}</Fragment>
+      return (
+        <TypeContext key={i} value={m}>
+          <Leaf />
+        </TypeContext>
+      )
+    })
+  }
+
+  // Objects / Intersections
+  if (
+    (type.kind === 'Object' || type.kind === 'Intersection') &&
+    type.properties?.length
+  ) {
+    return type.properties.map((p, i) => (
+      <TypeContext key={i} value={p}>
+        <Leaf />
+      </TypeContext>
+    ))
+  }
+
+  // Components → drill into props parameter
+  if (type.kind === 'Component' && type.signatures?.length) {
+    const sig = type.signatures[0]
+    if (sig.parameter) {
+      const param = sig.parameter
+
+      if (param.kind === 'Object') return recurse(param, 'comp-param')
+      return (
+        <TypeContext value={param}>
+          <Leaf />
+        </TypeContext>
+      )
+    }
+    return null
+  }
+
+  // Functions → list parameters
+  if (type.kind === 'Function' && type.signatures?.length) {
+    const sig = type.signatures[0]
+    if (sig.parameters?.length) {
+      return sig.parameters.map((p, i) => (
+        <TypeContext key={i} value={p}>
+          {p.kind === 'Object' ||
+          p.kind === 'Intersection' ||
+          p.kind === 'Union' ? (
+            <TypeProperties Value={Leaf} />
+          ) : (
+            <Leaf />
+          )}
+        </TypeContext>
+      ))
+    }
+    return null
+  }
+
+  return null
+}
+defaultComponents.TypeProperties = TypeProperties // attach default
+
+/* ———————————————————————————————————————————— 4c. FunctionKind ———— */
+
+function FunctionKindBase() {
+  const { MDXRenderer, CodeInline } = getAPIReferenceConfig()
+  const type = getAPIReferenceType()
+  if (!type || type.kind !== 'Function') return null
+
+  return (
+    <div>
+      {type.signatures.length > 1 && <h4>Overloads</h4>}
+      {type.signatures.map((sig, i) => (
+        <Fragment key={i}>
+          <hr />
+          <CodeInline children={sig.text} language="typescript" />
+          {sig.description && <MDXRenderer children={sig.description} />}
+          {sig.parameters.length > 0 && (
+            <div>
+              <h5>Parameters</h5>
+              {sig.parameters.map((p, j) => (
+                <TypeContext key={j} value={p}>
+                  <TypeValue />
+                </TypeContext>
+              ))}
+            </div>
+          )}
+          {sig.returnType && (
+            <div>
+              <h5>Returns</h5>
+              <CodeInline children={sig.returnType} language="typescript" />
+            </div>
+          )}
+        </Fragment>
+      ))}
+    </div>
+  )
+}
+export const FunctionKind = withOverride('FunctionKind', FunctionKindBase)
+defaultComponents.FunctionKind = FunctionKind
+
+/* ———————————————————————————————————————————— 4d. ComponentKind ———— */
+
+function ComponentKindBase() {
+  const { MDXRenderer, CodeInline } = getAPIReferenceConfig()
+  const type = getAPIReferenceType()
+  if (!type || type.kind !== 'Component') return null
+
+  return (
+    <div>
+      {type.signatures.length > 1 && <h4>Overloads</h4>}
+      {type.signatures.map((sig, i) => (
+        <Fragment key={i}>
+          <hr />
+          <CodeInline children={sig.text} language="typescript" />
+          {sig.description && <MDXRenderer children={sig.description} />}
+          {sig.parameter && (
+            <div>
+              <h5>Parameters</h5>
+              {sig.parameter.kind === 'Object' ? (
+                <TypeContext value={sig.parameter}>
+                  <TypeProperties />
+                </TypeContext>
+              ) : sig.parameter.kind === 'Reference' ? (
+                <CodeInline
+                  children={sig.parameter.text}
+                  language="typescript"
+                />
+              ) : (
+                <TypeContext value={sig.parameter}>
+                  <TypeValue />
+                </TypeContext>
+              )}
+            </div>
+          )}
+          {sig.returnType && (
+            <div>
+              <h5>Returns</h5>
+              {sig.returnType}
+            </div>
+          )}
+        </Fragment>
+      ))}
+    </div>
+  )
+}
+export const ComponentKind = withOverride('ComponentKind', ComponentKindBase)
+defaultComponents.ComponentKind = ComponentKind
+
+/* ———————————————————————————————————————————— 4e. ClassKind ———— */
+
+export function ClassKind() {
+  const type = getAPIReferenceType()
+  if (!type || type.kind !== 'Class') return null
+
+  return (
+    <div>
+      {type.accessors?.length ? (
+        <section>
+          <h4>Accessors</h4>
+          {type.accessors.map((a, i) => (
+            <TypeContext key={i} value={a}>
+              <TypeValue />
+            </TypeContext>
+          ))}
+        </section>
+      ) : null}
+
+      {type.constructors?.length ? (
+        <section>
+          <h4>Constructors</h4>
+          {type.constructors.map((c, i) => (
+            <TypeContext key={i} value={c}>
+              <TypeValue />
+            </TypeContext>
+          ))}
+        </section>
+      ) : null}
+
+      {type.methods?.length ? (
+        <section>
+          <h4>Methods</h4>
+          {type.methods.map((m, i) => (
+            <TypeContext key={i} value={m}>
+              <TypeValue />
+            </TypeContext>
+          ))}
+        </section>
+      ) : null}
+
+      {type.properties?.length ? (
+        <section>
+          <h5>Properties</h5>
+          {type.properties.map((p, i) => (
+            <TypeContext key={i} value={p}>
+              <TypeValue />
+            </TypeContext>
+          ))}
+        </section>
+      ) : null}
+    </div>
+  )
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ *  5. Generic display components
+ * ──────────────────────────────────────────────────────────────────────── */
+
+export function TypeDisplay() {
+  const type = getAPIReferenceType()
+  const { MDXRenderer, CodeInline } = getAPIReferenceConfig()
+  if (!type) return null
+
+  return (
+    <div>
+      <h3 id={type.name ? createSlug(type.name, 'kebab') : undefined}>
+        {type.name}
+      </h3>
+
+      <CodeInline children={type.text} language="typescript" />
+
+      {type.description &&
+      type.kind !== 'Function' &&
+      type.kind !== 'Component' ? (
+        <MDXRenderer children={type.description} />
+      ) : null}
+
+      <TypeChildren />
+    </div>
+  )
+}
+
+export function TypeChildren() {
+  const type = getAPIReferenceType()
+  const { CodeInline } = getAPIReferenceConfig()
+  if (!type) return null
+
   if (
     type.kind === 'Enum' ||
     type.kind === 'Symbol' ||
     type.kind === 'UtilityReference' ||
     type.kind === 'Reference'
   ) {
-    return (
-      <CodeInline
-        children={type.text}
-        language="typescript"
-        shouldAnalyze={false}
-        css={codeInlineStyles}
-      />
-    )
+    return <CodeInline children={type.text} language="typescript" />
   }
 
   if (
@@ -252,391 +529,22 @@ function TypeChildren({
     type.kind === 'Intersection' ||
     type.kind === 'Union'
   ) {
-    return <TypeProperties type={type} css={cssProp} />
+    return <TypeProperties />
   }
 
-  if (type.kind === 'Class') {
-    return (
-      <div
-        css={{
-          display: 'flex',
-          flexDirection: 'column',
-          marginTop: '1.5rem',
-          gap: '1.2rem',
-          minWidth: 0,
-          ...cssProp,
-        }}
-      >
-        {type.accessors && type.accessors.length > 0 ? (
-          <div>
-            <h4 css={{ margin: 0 }}>Accessors</h4>
-            {type.accessors.map((accessor, index) => (
-              <TypeValue key={index} type={accessor} />
-            ))}
-          </div>
-        ) : null}
-
-        {type.constructors && type.constructors.length > 0 ? (
-          <div>
-            <h4 css={{ margin: 0 }}>Constructors</h4>
-            {type.constructors.map((constructor, index) => (
-              <TypeValue key={index} type={constructor} />
-            ))}
-          </div>
-        ) : null}
-
-        {type.methods && type.methods.length > 0 ? (
-          <div>
-            <h4 css={{ margin: 0 }}>Methods</h4>
-            {type.methods.map((method, index) => (
-              <TypeValue key={index} type={method} />
-            ))}
-          </div>
-        ) : null}
-
-        {type.properties && type.properties.length > 0 ? (
-          <div>
-            <h5 css={{ margin: 0 }}>Properties</h5>
-            {type.properties.map((property, index) => (
-              <TypeValue key={index} type={property} />
-            ))}
-          </div>
-        ) : null}
-      </div>
-    )
-  }
-
-  if (type.kind === 'Component') {
-    return (
-      <div
-        css={{
-          display: 'flex',
-          flexDirection: 'column',
-          marginTop: '1.5rem',
-          gap: '1.2rem',
-          minWidth: 0,
-          ...cssProp,
-        }}
-      >
-        {type.signatures.length > 1 ? (
-          <h4 css={{ margin: 0, marginBottom: '1rem' }}>Overloads</h4>
-        ) : null}
-        {type.signatures.map((signature, index) => {
-          return (
-            <Fragment key={index}>
-              <hr
-                css={{
-                  border: 'none',
-                  borderTop: '1px solid var(--color-separator-secondary)',
-                }}
-              />
-              {signature.description ? (
-                <MDXRenderer
-                  children={signature.description}
-                  {...mdxRendererProps}
-                />
-              ) : null}
-              {signature.parameter ? (
-                <div>
-                  <h5 css={{ margin: '0' }}>Parameters</h5>
-                  {signature.parameter.kind === 'Object' ? (
-                    <TypeProperties type={signature.parameter} />
-                  ) : signature.parameter.kind === 'Reference' ? (
-                    <CodeInline
-                      children={signature.parameter.text}
-                      language="typescript"
-                      shouldAnalyze={false}
-                      css={{
-                        ...codeInlineStyles,
-                        marginTop: '1.5rem',
-                      }}
-                    />
-                  ) : (
-                    <TypeValue type={signature.parameter} />
-                  )}
-                </div>
-              ) : null}
-              {signature.returnType ? (
-                <div>
-                  <h5 css={{ margin: 0, marginBottom: '1.5rem' }}>Returns</h5>
-                  {signature.returnType}
-                </div>
-              ) : null}
-            </Fragment>
-          )
-        })}
-      </div>
-    )
-  }
-
-  if (type.kind === 'Function') {
-    return (
-      <div
-        css={{
-          display: 'flex',
-          flexDirection: 'column',
-          marginTop: '1.5rem',
-          gap: '1.2rem',
-          minWidth: 0,
-          ...cssProp,
-        }}
-      >
-        {type.signatures.length > 1 ? (
-          <h4 css={{ margin: 0, marginBottom: '1rem' }}>Overloads</h4>
-        ) : null}
-        {type.signatures.map((signature, index) => {
-          return (
-            <Fragment key={index}>
-              <hr
-                css={{
-                  border: 'none',
-                  borderTop: '1px solid var(--color-separator-secondary)',
-                }}
-              />
-              {signature.description ? (
-                <MDXRenderer
-                  children={signature.description}
-                  {...mdxRendererProps}
-                />
-              ) : null}
-              {signature.parameters.length > 0 ? (
-                <div>
-                  <h5 css={{ margin: 0 }}>Parameters</h5>
-                  {signature.parameters.map((parameter, index) => (
-                    <TypeValue key={index} type={parameter} />
-                  ))}
-                </div>
-              ) : null}
-              {signature.returnType ? (
-                <div
-                  css={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'start',
-                  }}
-                >
-                  <h5 css={{ margin: 0, marginBottom: '1.5rem' }}>Returns</h5>
-                  <CodeInline
-                    children={signature.returnType}
-                    language="typescript"
-                    shouldAnalyze={false}
-                    css={{
-                      ...codeInlineStyles,
-                      maxWidth: '-webkit-fill-available',
-                    }}
-                  />
-                </div>
-              ) : null}
-            </Fragment>
-          )
-        })}
-      </div>
-    )
-  }
+  if (type.kind === 'Class') return <ClassKind />
+  if (type.kind === 'Component') return <ComponentKind />
+  if (type.kind === 'Function') return <FunctionKind />
 
   if (type.kind === 'Utility') {
-    if (type.type) {
-      return <TypeChildren type={type.type} css={{ marginTop: '2rem' }} />
-    } else {
-      return (
-        <CodeInline
-          children={type.text}
-          language="typescript"
-          shouldAnalyze={false}
-          css={codeInlineStyles}
-        />
-      )
-    }
-  }
-
-  console.log('[APIReference:TypeChildren] Did not render: ', type)
-
-  return null
-}
-
-/** Determines how to render the immediate type properties accounting for unions. */
-function TypeProperties({
-  type,
-  css: cssProp,
-}: {
-  type: TypeOfKind<'Object' | 'Intersection' | 'Union'>
-  css?: CSSObject
-}) {
-  if (type.kind === 'Union') {
-    return (
-      <div
-        css={{
-          display: 'flex',
-          flexDirection: 'column',
-          marginTop: '1.5rem',
-          gap: '1.2rem',
-          minWidth: 0,
-          ...cssProp,
-        }}
-      >
-        {type.members.map((member, index) =>
-          member.kind === 'Object' ||
-          member.kind === 'Intersection' ||
-          member.kind === 'Union' ? (
-            <TypeProperties key={index} type={member} />
-          ) : member.kind === 'Reference' ? (
-            member.text
-          ) : (
-            <TypeValue key={index} type={member} />
-          )
-        )}
-      </div>
+    return type.type ? (
+      <TypeContext value={type.type}>
+        <TypeChildren />
+      </TypeContext>
+    ) : (
+      <CodeInline children={type.text} language="typescript" />
     )
   }
 
-  if (type.properties.length) {
-    return (
-      <div
-        css={{
-          display: 'flex',
-          flexDirection: 'column',
-          marginTop: '1.5rem',
-          gap: '1.2rem',
-          minWidth: 0,
-          ...cssProp,
-        }}
-      >
-        <h5 css={{ margin: 0, color: 'var(--color-foreground-secondary)' }}>
-          Properties
-        </h5>
-        {type.properties.map((propertyType, index) => (
-          <TypeValue key={index} type={propertyType} />
-        ))}
-      </div>
-    )
-  }
-
-  console.log('[APIReference:TypeProperties] Did not render: ', type)
-
   return null
-}
-
-/** Renders a type value with its name, type, and description. */
-function TypeValue({
-  type,
-  css: cssProp,
-}: {
-  type: AllTypes
-  css?: CSSObject
-}) {
-  const isNameSameAsType = type.name === type.text
-  let isRequired = false
-  let defaultValue
-
-  if (isParameterType(type) || isPropertyType(type)) {
-    isRequired = !type.isOptional
-    defaultValue = type.defaultValue
-  }
-
-  return (
-    <div
-      key={type.name + type.text}
-      css={{
-        display: 'flex',
-        flexDirection: 'column',
-        padding: '1.5rem 0',
-        gap: '0.8rem',
-        minWidth: 0,
-        ...cssProp,
-      }}
-    >
-      <div
-        css={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-        }}
-      >
-        <h4
-          css={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            flexShrink: 0,
-            margin: 0,
-            fontWeight: 400,
-            color: 'var(--color-foreground-secondary)',
-          }}
-        >
-          {type.name}{' '}
-          {isRequired && (
-            <span css={{ color: 'oklch(0.8 0.15 36.71)' }} title="required">
-              *
-            </span>
-          )}
-        </h4>
-        <div
-          css={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.25rem',
-            minWidth: 0,
-          }}
-        >
-          {isNameSameAsType ? null : (
-            <CodeInline
-              children={type.text}
-              language="typescript"
-              shouldAnalyze={false}
-              paddingX="0.5rem"
-              paddingY="0.2rem"
-              css={{
-                ...codeInlineStyles,
-                fontSize: 'var(--font-size-body-2)',
-              }}
-            />
-          )}
-          {defaultValue ? (
-            <span
-              css={{
-                flexShrink: 0,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.25rem',
-                minWidth: 0,
-              }}
-            >
-              ={' '}
-              <CodeInline
-                children={JSON.stringify(defaultValue)}
-                language="typescript"
-                shouldAnalyze={false}
-                css={codeInlineStyles}
-              />
-            </span>
-          ) : null}
-        </div>
-      </div>
-
-      {type.description && (
-        <MDXRenderer children={type.description} {...mdxRendererProps} />
-      )}
-
-      {type.kind === 'Object' && type.properties
-        ? type.properties.map((propertyType, index) => (
-            <TypeValue
-              key={index}
-              type={propertyType}
-              css={{ paddingLeft: '1.5rem' }}
-            />
-          ))
-        : null}
-
-      {type.kind === 'Function' && type.signatures && type.signatures.length
-        ? type.signatures.map((signature) =>
-            signature.parameters.map((parameter, index) => (
-              <TypeValue
-                key={index}
-                type={parameter}
-                css={{ paddingLeft: '1.5rem' }}
-              />
-            ))
-          )
-        : null}
-    </div>
-  )
 }

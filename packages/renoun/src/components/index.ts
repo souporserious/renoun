@@ -1,4 +1,16 @@
-export { APIReference } from './APIReference.js'
+export {
+  APIReference,
+  ClassKind,
+  ComponentKind,
+  FunctionKind,
+  TypeChildren,
+  TypeDisplay,
+  TypeProperties,
+  TypeValue,
+  getAPIReferenceConfig,
+  getAPIReferenceType,
+  type APIReferenceProps,
+} from './APIReference.js'
 export {
   CodeBlock,
   CopyButton,
