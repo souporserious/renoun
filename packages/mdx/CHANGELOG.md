@@ -1,5 +1,11 @@
 # @renoun/mdx
 
+## 3.0.0
+
+### Major Changes
+
+- 7e38b82: Updates `create-renoun` and `@renoun/mdx` licensing to use `MIT` license.
+
 ## 2.1.0
 
 ### Minor Changes
