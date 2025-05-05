@@ -1,5 +1,4 @@
-import crypto from 'node:crypto'
-import { join, posix } from 'node:path'
+import { dirname, join, posix, isAbsolute } from 'node:path'
 import type { Project } from 'ts-morph'
 
 import { waitForRefreshingProjects } from '../project/refresh.js'
@@ -49,12 +48,16 @@ export async function getSourceTextMetadata({
   let isGeneratedFileName = false
   let id = filePathProp
 
-  // generate a unique id for the code block based on the contents if a file path is not provided
+  // hash the code block based on the contents using the FNV‑1a algorithm if no file path is provided
   if (filePathProp === undefined) {
-    const hex = crypto.createHash('sha256').update(value).digest('hex')
-    if (hex) {
-      id = hex
+    let hash = 0x811c9dc5
+
+    for (let index = 0, length = value.length; index < length; index++) {
+      hash ^= value.charCodeAt(index)
+      hash = Math.imul(hash, 0x01000193)
     }
+
+    id = (hash >>> 0).toString(16)
   }
 
   if (finalLanguage === undefined) {
@@ -76,13 +79,20 @@ export async function getSourceTextMetadata({
   const jsxOnly = isJavaScriptLikeLanguage ? isJsxOnly(finalValue) : false
   let filePath = filePathProp
 
-  if (filePath) {
-    if (workingDirectory) {
-      filePath = join(workingDirectory, filePath)
-    }
-  } else {
+  if (!filePath) {
     filePath = `${id}.${finalLanguage}`
     isGeneratedFileName = true
+  }
+
+  if (workingDirectory) {
+    if (isAbsolute(workingDirectory)) {
+      filePath = join(workingDirectory, filePath)
+    } else {
+      // TODO: we need to account for nested tsconfig.json files
+      const { configFilePath } = project.getCompilerOptions()
+      const tsconfigDirectory = dirname(String(configFilePath))
+      filePath = join(tsconfigDirectory, workingDirectory, filePath)
+    }
   }
 
   // Format source text if enabled.

@@ -160,9 +160,9 @@ type WithSchema<Types extends ModuleExports> = {
 
 /**
  * Union of all possible loader types:
- * - A direct loader function (path) => Promise<...>
- * - An already-invoked withSchema(...) object { schema?: ..., runtime?: ... }
- * - The raw “withSchema<...>” factory function
+ * - A direct loader `function (path) => Promise<...>`
+ * - An already-invoked `withSchema(...) object { schema?: ..., runtime?: ... }`
+ * - The raw `withSchema<...>` factory function
  */
 type ModuleLoader<Exports extends ModuleExports = ModuleExports> =
   | ModuleRuntimeLoader<Exports>

@@ -2,4 +2,4 @@
 'renoun': patch
 ---
 
-Fixes `JavaScriptFile#getType` not capturing all signature parameters.
+Fixes `JavaScriptFileExport#getType` not capturing all signature parameters.

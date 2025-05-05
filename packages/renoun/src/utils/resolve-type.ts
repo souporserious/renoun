@@ -192,7 +192,7 @@ export interface FunctionType extends BaseType {
 export interface ComponentSignatureType extends BaseType {
   kind: 'ComponentSignature'
   modifier?: 'async' | 'generator'
-  parameter?: ObjectType | ReferenceType
+  parameter?: ObjectType | ReferenceType | UtilityReferenceType
   returnType: string
 }
 
@@ -1117,7 +1117,11 @@ function resolveSignature(
         const defaultValue = parameterDeclaration
           ? getPropertyDefaultValue(parameterDeclaration)
           : undefined
-        const parameterType = parameter.getTypeAtLocation(signatureDeclaration)
+        const parameterType = getTypeAtLocation(
+          parameter,
+          signatureDeclaration,
+          parameterDeclaration
+        )
         const resolvedParameterType = resolveType(
           parameterType,
           declaration,
@@ -1302,7 +1306,11 @@ export function resolveTypeProperties(
         // Store the metadata of the enclosing node for file location comparison used in resolveType
         enclosingNodeMetadata.set(declaration, symbolMetadata)
 
-        const propertyType = property.getTypeAtLocation(declaration)
+        const propertyType = getTypeAtLocation(
+          property,
+          enclosingNode ?? propertyDeclaration ?? declaration,
+          propertyDeclaration
+        )
         const resolvedPropertyType = resolveType(
           propertyType,
           declaration,
@@ -1991,6 +1999,67 @@ function isComponent(
     const parameterCount = signature.parameters.length
     return parameterCount === 0 || parameterCount === 1
   })
+}
+
+/** Checks if a type contains free type parameters that are not bound to a specific type. */
+function containsFreeTypeParameter(type: Type | undefined): boolean {
+  if (!type) {
+    return false
+  }
+
+  if (type.isTypeParameter()) {
+    return true
+  }
+
+  const aliasArguments = type.getAliasTypeArguments()
+  for (let index = 0, length = aliasArguments.length; index < length; ++index) {
+    if (containsFreeTypeParameter(aliasArguments[index])) {
+      return true
+    }
+  }
+
+  const typeArguments = type.getTypeArguments()
+  for (let index = 0, length = typeArguments.length; index < length; ++index) {
+    if (containsFreeTypeParameter(typeArguments[index])) {
+      return true
+    }
+  }
+
+  return false
+}
+
+/** Gets the declared annotation type of a node. */
+function getDeclaredAnnotationType(declaration?: Node): Type | undefined {
+  if (!declaration) return undefined
+
+  let typeNode: TypeNode | undefined
+
+  if (
+    tsMorph.Node.isPropertySignature(declaration) ||
+    tsMorph.Node.isPropertyDeclaration(declaration) ||
+    tsMorph.Node.isVariableDeclaration(declaration) ||
+    tsMorph.Node.isParameterDeclaration(declaration)
+  ) {
+    typeNode = declaration.getTypeNode()
+  } else if (
+    tsMorph.Node.isGetAccessorDeclaration(declaration) ||
+    tsMorph.Node.isSetAccessorDeclaration(declaration)
+  ) {
+    typeNode = declaration.getReturnTypeNode()
+  }
+
+  const type = typeNode ? typeNode.getType() : undefined
+
+  return containsFreeTypeParameter(type) ? undefined : type
+}
+
+/** Preserves aliases when the declaration has an explicit annotation. */
+export function getTypeAtLocation<
+  Symbol extends { getTypeAtLocation(node: Node): Type },
+>(symbol: Symbol, location: Node, declaration?: Node): Type {
+  return (
+    getDeclaredAnnotationType(declaration) ?? symbol.getTypeAtLocation(location)
+  )
 }
 
 /** Prints helpful information about a node for debugging. */
