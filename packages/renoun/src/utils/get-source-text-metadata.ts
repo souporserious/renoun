@@ -1,4 +1,4 @@
-import { join, posix } from 'node:path'
+import { dirname, join, posix, isAbsolute } from 'node:path'
 import type { Project } from 'ts-morph'
 
 import { waitForRefreshingProjects } from '../project/refresh.js'
@@ -79,13 +79,20 @@ export async function getSourceTextMetadata({
   const jsxOnly = isJavaScriptLikeLanguage ? isJsxOnly(finalValue) : false
   let filePath = filePathProp
 
-  if (filePath) {
-    if (workingDirectory) {
-      filePath = join(workingDirectory, filePath)
-    }
-  } else {
+  if (!filePath) {
     filePath = `${id}.${finalLanguage}`
     isGeneratedFileName = true
+  }
+
+  if (workingDirectory) {
+    if (isAbsolute(workingDirectory)) {
+      filePath = join(workingDirectory, filePath)
+    } else {
+      // TODO: we need to account for nested tsconfig.json files
+      const { configFilePath } = project.getCompilerOptions()
+      const tsconfigDirectory = dirname(String(configFilePath))
+      filePath = join(tsconfigDirectory, workingDirectory, filePath)
+    }
   }
 
   // Format source text if enabled.
