@@ -2354,12 +2354,31 @@ describe('resolveType', () => {
             },
             "properties": [
               {
+                "arguments": [
+                  {
+                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                    "kind": "Number",
+                    "name": undefined,
+                    "position": {
+                      "end": {
+                        "column": 4943,
+                        "line": 4,
+                      },
+                      "start": {
+                        "column": 4755,
+                        "line": 4,
+                      },
+                    },
+                    "text": "number",
+                    "value": undefined,
+                  },
+                ],
                 "context": "property",
                 "defaultValue": undefined,
                 "filePath": "test.ts",
                 "isOptional": false,
                 "isReadonly": false,
-                "kind": "Number",
+                "kind": "UtilityReference",
                 "name": "a",
                 "position": {
                   "end": {
@@ -2371,8 +2390,8 @@ describe('resolveType', () => {
                     "line": 11,
                   },
                 },
-                "text": "number",
-                "value": undefined,
+                "text": "Promise<number>",
+                "typeName": "Promise",
               },
               {
                 "context": "property",
@@ -10387,6 +10406,249 @@ describe('resolveType', () => {
         "tags": undefined,
         "text": "{ <Types>(loader: Loader<Types>): Loader<Types>; <Types extends Record<string, any>>(schema: Schema<Types>, loader: Loader<{ [Key in keyof Types]: Types[Key]; }>): Loader<{ [Key in keyof Types]: Types[Key]; }>; }",
       }
+    `)
+  })
+
+  test('property references work with strict null checks', () => {
+    const project = new Project({
+      compilerOptions: {
+        strictNullChecks: true,
+      },
+    })
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+  import React from 'react'
+  
+  /** All appearance variants supported by \`Button\`. */
+  export type ButtonVariant = 'primary' | 'secondary' | 'danger'
+  
+  export interface ButtonProps
+    extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+    /** Visual style to apply. */
+    variant?: ButtonVariant
+  }
+
+  /** A minimal, accessible button that follows design‑system color tokens. */
+  export function Button({
+    variant = 'primary',
+    className = '',
+    children,
+    ...props
+  }: ButtonProps) {
+    return (
+      <button
+        {...props}
+      >
+        {children}
+      </button>
+    )
+  }
+  `,
+      { overwrite: true }
+    )
+    const exportedDeclarations = sourceFile.getExportedDeclarations()
+    const exportedTypes = Array.from(exportedDeclarations.entries()).map(
+      ([name, declarations]) => [
+        name,
+        declarations.map((declaration) =>
+          resolveType(declaration.getType(), declaration)
+        ),
+      ]
+    )
+
+    expect(exportedTypes).toMatchInlineSnapshot(`
+      [
+        [
+          "Button",
+          [
+            {
+              "description": "A minimal, accessible button that follows design‑system color tokens.",
+              "filePath": "test.ts",
+              "kind": "Component",
+              "name": "Button",
+              "position": {
+                "end": {
+                  "column": 2,
+                  "line": 26,
+                },
+                "start": {
+                  "column": 1,
+                  "line": 13,
+                },
+              },
+              "signatures": [
+                {
+                  "description": "A minimal, accessible button that follows design‑system color tokens.",
+                  "filePath": "test.ts",
+                  "generics": [],
+                  "kind": "ComponentSignature",
+                  "modifier": undefined,
+                  "parameter": {
+                    "context": "parameter",
+                    "defaultValue": {
+                      "className": "",
+                      "variant": "primary",
+                    },
+                    "description": undefined,
+                    "filePath": "test.ts",
+                    "isOptional": false,
+                    "kind": "Reference",
+                    "name": undefined,
+                    "position": {
+                      "end": {
+                        "column": 15,
+                        "line": 18,
+                      },
+                      "start": {
+                        "column": 24,
+                        "line": 13,
+                      },
+                    },
+                    "text": "ButtonProps",
+                  },
+                  "position": {
+                    "end": {
+                      "column": 2,
+                      "line": 26,
+                    },
+                    "start": {
+                      "column": 1,
+                      "line": 13,
+                    },
+                  },
+                  "returnType": "boolean",
+                  "tags": undefined,
+                  "text": "function Button(ButtonProps): boolean",
+                },
+              ],
+              "tags": undefined,
+              "text": "({ variant, className, children, ...props }: ButtonProps) => boolean",
+            },
+          ],
+        ],
+        [
+          "ButtonVariant",
+          [
+            {
+              "description": "All appearance variants supported by \`Button\`.",
+              "filePath": "test.ts",
+              "kind": "Union",
+              "members": [
+                {
+                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                  "kind": "String",
+                  "name": undefined,
+                  "position": {
+                    "end": {
+                      "column": 4402,
+                      "line": 4,
+                    },
+                    "start": {
+                      "column": 3482,
+                      "line": 4,
+                    },
+                  },
+                  "text": ""primary"",
+                  "value": "primary",
+                },
+                {
+                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                  "kind": "String",
+                  "name": undefined,
+                  "position": {
+                    "end": {
+                      "column": 4402,
+                      "line": 4,
+                    },
+                    "start": {
+                      "column": 3482,
+                      "line": 4,
+                    },
+                  },
+                  "text": ""secondary"",
+                  "value": "secondary",
+                },
+                {
+                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                  "kind": "String",
+                  "name": undefined,
+                  "position": {
+                    "end": {
+                      "column": 4402,
+                      "line": 4,
+                    },
+                    "start": {
+                      "column": 3482,
+                      "line": 4,
+                    },
+                  },
+                  "text": ""danger"",
+                  "value": "danger",
+                },
+              ],
+              "name": "ButtonVariant",
+              "position": {
+                "end": {
+                  "column": 63,
+                  "line": 4,
+                },
+                "start": {
+                  "column": 1,
+                  "line": 4,
+                },
+              },
+              "tags": undefined,
+              "text": "ButtonVariant",
+            },
+          ],
+        ],
+        [
+          "ButtonProps",
+          [
+            {
+              "filePath": "test.ts",
+              "kind": "Object",
+              "name": "ButtonProps",
+              "position": {
+                "end": {
+                  "column": 2,
+                  "line": 10,
+                },
+                "start": {
+                  "column": 1,
+                  "line": 6,
+                },
+              },
+              "properties": [
+                {
+                  "context": "property",
+                  "defaultValue": undefined,
+                  "description": "Visual style to apply.",
+                  "filePath": "test.ts",
+                  "isOptional": true,
+                  "isReadonly": false,
+                  "kind": "Reference",
+                  "name": "variant",
+                  "position": {
+                    "end": {
+                      "column": 26,
+                      "line": 9,
+                    },
+                    "start": {
+                      "column": 3,
+                      "line": 9,
+                    },
+                  },
+                  "tags": undefined,
+                  "text": "ButtonVariant",
+                },
+              ],
+              "text": "ButtonProps",
+            },
+          ],
+        ],
+      ]
     `)
   })
 })
