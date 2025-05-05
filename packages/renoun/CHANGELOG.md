@@ -1,5 +1,125 @@
 # renoun
 
+## 9.0.0
+
+### Major Changes
+
+- 7e38b82: Updates the `renoun` license from `AGPLv3` to the `renoun Non-Commercial License 1.0` license. The renoun source code is now provided under the non-commercial [renoun license](/LICENSE.md) ideal for blogs, documentation sites, and educational content. If you plan to integrate renoun into a commercial product or service, reach out to sales@souporserious.com to discuss options.
+
+### Minor Changes
+
+- 23f3501: Adds `renoun/utils` package export. To start, this will include utilities for working with the `APIReference` component.
+- a487bcd: Adds `useSectionObserver` hook for tracking the active section currently in view:
+
+  ```tsx
+  import React from 'react'
+  import { useSectionObserver } from 'renoun/hooks'
+
+  export function TableOfContents() {
+    const observer = useSectionObserver()
+
+    return (
+      <div style={{ display: 'flex', gap: '2rem' }}>
+        <aside style={{ position: 'sticky', top: '1rem' }}>
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {[
+              { id: 'intro', label: 'Introduction' },
+              { id: 'usage', label: 'Usage' },
+              { id: 'api', label: 'API Reference' },
+            ].map(({ id, label }) => (
+              <SectionLink key={id} id={id} label={label} observer={observer} />
+            ))}
+          </ul>
+        </aside>
+
+        <main>
+          <section id="intro">
+            <h2>Introduction</h2>
+            <p>…</p>
+          </section>
+
+          <section id="usage">
+            <h2>Usage</h2>
+            <p>…</p>
+          </section>
+
+          <section id="api">
+            <h2>API Reference</h2>
+            <p>…</p>
+          </section>
+        </main>
+      </div>
+    )
+  }
+
+  function SectionLink({
+    id,
+    label,
+    observer,
+  }: {
+    id: string
+    label: string
+    observer: ReturnType<typeof useSectionObserver>
+  }) {
+    const [isActive, linkProps] = observer.useLink(id)
+
+    return (
+      <li style={{ marginBottom: '0.5rem' }}>
+        <a
+          href={`#${id}`}
+          {...linkProps}
+          style={{
+            color: isActive ? 'crimson' : 'black',
+            fontWeight: isActive ? 'bold' : 'normal',
+            textDecoration: 'none',
+          }}
+        >
+          {label}
+        </a>
+      </li>
+    )
+  }
+  ```
+
+- 3f2b8fa: `JavaScriptFile#getExports` now sorts exports by their position. Previously, the order was determined by the TypeScript compiler which will hoist function declarations to the top of the file. This change ensures that the order of exports is consistent with the source file.
+- 0dfbfc5: Allow passing relative `workingDirectory` to `CodeBlock` component, this allows more easily creating virtual files in a specific directory relative to the current working directory:
+
+  ```tsx
+  import { CodeBlock } from 'renoun/components'
+
+  export default function Example() {
+    return (
+      <CodeBlock
+        workingDirectory="src/components"
+        children={`
+          import { Button } from './Button';
+  
+          export default function Example() {
+            return <Button>Click me</Button>;
+          }
+        `}
+      />
+    )
+  }
+  ```
+
+- 2324815: Filters `undefined` union members from optional properties in `JavaScriptFileExport#getType`. When using `strictNullChecks`, optional properties would previously add an `undefined` member to the union type. However, this is not necessary for the generated metadata and adds noise to the type text.
+
+### Patch Changes
+
+- ca8c010: Updates source files without a file path to use a FNV‑1a hashing algorithm based on the file contents to generate a smaller hash.
+- b0f69a7: Fixes `CodeBlock` throwing type errors about missing imports for JSX-only source code. It now attempts to auto-fix the missing imports.
+- 846d4c1: Fixes `JavaScriptFileExport#getType` references being collapsed when `strictNullChecks` is configured in the project's compiler options. The presence of generic type arguments are now considered before further resolving parameter and property types.
+- 8ec38b0: Fixes `JavaScriptFileExport#getType` union member references that point to external unions from resolving to their intrinsic type. References are now preserved correctly for all union members even when the member itself a union. An example of where this was previously broken could be seen in the `CodeBlock` `language` prop that used an external `Languages` type. This would previously resolve to flat union members `jsx | tsx | mdx` instead of `Languages | 'mdx'`. This is now fixed and the type will resolve to `Languages | 'mdx'` as expected.
+- 8846cde: Fixes the internal server context not propagating the value correctly when used in a loop.
+- 9b90ead: Improves the error message for `getFileExportText` to provide more information about where the error occurred and what the kind name was expected to be.
+- 7dfd791: Improves `MDXRenderer` compiler error message to show line and column of each error.
+- 1f95459: Fixes `CodeInline` not wrapping correctly when used in paragraph.
+- bf0e5e1: Fixes `JavaScriptFileExport#getType` not capturing all signature parameters.
+- a7f9509: Fixes `getFileExportsText` to use the correct node position across subsequent calls by removing AST node mutations which avoids the position from being changed.
+- Updated dependencies [7e38b82]
+  - @renoun/mdx@3.0.0
+
 ## 8.14.0
 
 ### Minor Changes
