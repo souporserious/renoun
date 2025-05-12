@@ -1966,10 +1966,11 @@ describe('resolveType', () => {
         "name": "FileSystemSource",
         "parameters": [
           {
-            "arguments": [],
+            "constraint": undefined,
+            "defaultType": undefined,
             "filePath": "test.ts",
-            "kind": "TypeReference",
-            "name": undefined,
+            "kind": "TypeParameter",
+            "name": "Exports",
             "position": {
               "end": {
                 "column": 30,
@@ -1980,7 +1981,7 @@ describe('resolveType', () => {
                 "line": 1,
               },
             },
-            "text": "{}",
+            "text": "Exports",
           },
         ],
         "position": {
@@ -3374,76 +3375,93 @@ describe('resolveType', () => {
         "name": "ModuleData",
         "parameters": [
           {
+            "constraint": {
+              "filePath": "test.ts",
+              "kind": "Object",
+              "name": undefined,
+              "position": {
+                "end": {
+                  "column": 66,
+                  "line": 1,
+                },
+                "start": {
+                  "column": 30,
+                  "line": 1,
+                },
+              },
+              "properties": [
+                {
+                  "arguments": [
+                    {
+                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                      "kind": "String",
+                      "name": undefined,
+                      "position": {
+                        "end": {
+                          "column": 4402,
+                          "line": 4,
+                        },
+                        "start": {
+                          "column": 3482,
+                          "line": 4,
+                        },
+                      },
+                      "text": "string",
+                      "value": undefined,
+                    },
+                    {
+                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                      "kind": "Primitive",
+                      "position": {
+                        "end": {
+                          "column": 315,
+                          "line": 6,
+                        },
+                        "start": {
+                          "column": 266,
+                          "line": 6,
+                        },
+                      },
+                      "text": "any",
+                    },
+                  ],
+                  "context": "property",
+                  "defaultValue": undefined,
+                  "filePath": "test.ts",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "TypeReference",
+                  "name": "frontMatter",
+                  "position": {
+                    "end": {
+                      "column": 64,
+                      "line": 1,
+                    },
+                    "start": {
+                      "column": 32,
+                      "line": 1,
+                    },
+                  },
+                  "text": "Record<string, any>",
+                },
+              ],
+              "text": "{ frontMatter: Record<string, any>; }",
+            },
+            "defaultType": undefined,
             "filePath": "test.ts",
-            "kind": "Object",
-            "name": undefined,
+            "kind": "TypeParameter",
+            "name": "Type",
             "position": {
               "end": {
                 "column": 66,
                 "line": 1,
               },
               "start": {
-                "column": 30,
+                "column": 17,
                 "line": 1,
               },
             },
-            "properties": [
-              {
-                "arguments": [
-                  {
-                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                    "kind": "String",
-                    "name": undefined,
-                    "position": {
-                      "end": {
-                        "column": 4402,
-                        "line": 4,
-                      },
-                      "start": {
-                        "column": 3482,
-                        "line": 4,
-                      },
-                    },
-                    "text": "string",
-                    "value": undefined,
-                  },
-                  {
-                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                    "kind": "Primitive",
-                    "position": {
-                      "end": {
-                        "column": 315,
-                        "line": 6,
-                      },
-                      "start": {
-                        "column": 266,
-                        "line": 6,
-                      },
-                    },
-                    "text": "any",
-                  },
-                ],
-                "context": "property",
-                "defaultValue": undefined,
-                "filePath": "test.ts",
-                "isOptional": false,
-                "isReadonly": false,
-                "kind": "TypeReference",
-                "name": "frontMatter",
-                "position": {
-                  "end": {
-                    "column": 64,
-                    "line": 1,
-                  },
-                  "start": {
-                    "column": 32,
-                    "line": 1,
-                  },
-                },
-                "text": "Record<string, any>",
-              },
-            ],
-            "text": "{ frontMatter: Record<string, any>; }",
+            "text": "Type",
           },
         ],
         "position": {

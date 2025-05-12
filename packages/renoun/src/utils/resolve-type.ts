@@ -611,17 +611,16 @@ export function resolveType(
       name: symbolMetadata.name,
       text: typeText,
       type: resolvedUtilityType,
-      parameters: aliasTypeArguments.map((type) => {
-        return resolveType(
+      parameters: aliasTypeArguments.map((type) =>
+        resolveTypeParameter(
           type,
           declaration,
           filter,
-          false,
           defaultValues,
           keepReferences,
           dependencies
-        ) as Kind.TypeParameter
-      }) as Kind.TypeParameter[],
+        )
+      ),
     } satisfies Kind.TypeAlias
   } else {
     if (type.isClass() || tsMorph.Node.isClassDeclaration(symbolDeclaration)) {
