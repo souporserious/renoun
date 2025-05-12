@@ -25,260 +25,268 @@ import {
 } from './get-property-default-value.js'
 import { getSymbolDescription } from './get-symbol-description.js'
 
-export interface BaseType {
-  /** Distinguishs between different kinds of types, such as primitives, objects, classes, functions, etc. */
-  kind?: unknown
+export namespace Kind {
+  /** Metadata present in all types. */
+  export interface Shared {
+    /** Distinguishes between different kinds of types, such as classes, functions, objects, primitives etc. */
+    kind?: unknown
 
-  /** Whether the type is a function/method parameter or a class/object/interface property. */
-  context?: 'parameter' | 'property'
+    /** Whether the type is a parameter or property. */
+    context?: unknown
 
-  /** The name of the symbol or declaration if it exists. */
-  name?: string
+    /** The name of the symbol or declaration if it exists. */
+    name?: string
 
-  /** The description of the symbol or declaration if it exists. */
-  description?: string
+    /** The description of the symbol or declaration if it exists. */
+    description?: string
 
-  /** JSDoc tags for the declaration if present. */
-  tags?: { tagName: string; text?: string }[]
+    /** JSDoc tags for the declaration if present. */
+    tags?: { tagName: string; text?: string }[]
 
-  /** A stringified representation of the type. */
-  text: string
+    /** A stringified representation of the type. */
+    text: string
 
-  /** The path to the file where the symbol declaration is located. */
-  path?: string
+    /** The path to the file where the symbol declaration is located. */
+    path?: string
 
-  /** The line and column number of the symbol declaration. */
-  position?: {
-    start: { line: number; column: number }
-    end: { line: number; column: number }
+    /** The line and column number of the symbol declaration. */
+    position?: {
+      start: { line: number; column: number }
+      end: { line: number; column: number }
+    }
   }
-}
 
-export interface ParameterType extends BaseType {
-  /** Whether the type is a function/method parameter. */
-  context: 'parameter'
+  export interface String extends Shared {
+    kind: 'String'
+    value?: string
+  }
 
-  /** The default value assigned to the property parsed as a literal value if possible. */
-  defaultValue?: unknown
+  export interface Number extends Shared {
+    kind: 'Number'
+    value?: number
+  }
 
-  /** Whether or not the property has an optional modifier or default value. */
-  isOptional?: boolean
-}
+  export interface Boolean extends Shared {
+    kind: 'Boolean'
+  }
 
-export type CreateParameterType<Type> = Type extends any
-  ? Type & ParameterType
-  : never
+  export interface Symbol extends Shared {
+    kind: 'Symbol'
+  }
 
-export interface PropertyType extends BaseType {
-  /** Whether the type is a object/class/interface property. */
-  context: 'property'
+  export interface Array extends Shared {
+    kind: 'Array'
+    element: ResolvedType
+  }
 
-  /** The default value assigned to the property parsed as a literal value if possible. */
-  defaultValue?: unknown
+  export interface Tuple extends Shared {
+    kind: 'Tuple'
+    elements: ResolvedType[]
+  }
 
-  /** Whether or not the property has an optional modifier or default value. */
-  isOptional?: boolean
+  export interface Object extends Shared {
+    kind: 'Object'
+    properties: Property[]
+    indexSignatures?: IndexSignature[]
+    methodSignatures?: MethodSignature[]
+  }
 
-  /** Whether or not the property has a readonly modifier. */
-  isReadonly?: boolean
-}
+  export interface Intersection extends Shared {
+    kind: 'Intersection'
+    properties: ResolvedType[]
+  }
 
-export type CreatePropertyType<Type> = Type extends any
-  ? Type & PropertyType
-  : never
+  export interface Enum extends Shared {
+    kind: 'Enum'
+    members: Record<string, string | number | undefined>
+  }
 
-export interface StringType extends BaseType {
-  kind: 'String'
-  value?: string
-}
+  export interface Union extends Shared {
+    kind: 'Union'
+    members: ResolvedType[]
+  }
 
-export interface NumberType extends BaseType {
-  kind: 'Number'
-  value?: number
-}
+  export interface Class extends Shared {
+    kind: 'Class'
+    constructors?: FunctionSignature[]
+    accessors?: ClassAccessor[]
+    methods?: ClassMethod[]
+    properties?: ClassProperty[]
+    extends?: TypeReference
+    implements?: TypeReference[]
+  }
 
-export interface BooleanType extends BaseType {
-  kind: 'Boolean'
-}
+  export interface SharedClassMember extends Shared {
+    scope?: 'abstract' | 'static'
+    visibility?: 'private' | 'protected' | 'public'
+    decorators: ResolvedType[]
+  }
 
-export interface SymbolType extends BaseType {
-  kind: 'Symbol'
-}
+  export interface ClassGetAccessor extends SharedClassMember {
+    kind: 'ClassGetAccessor'
+  }
 
-export interface ArrayType extends BaseType {
-  kind: 'Array'
-  element: ResolvedType
-}
+  export interface ClassSetAccessor
+    extends SharedClassMember,
+      Omit<FunctionSignature, 'kind'> {
+    kind: 'ClassSetAccessor'
+  }
 
-export interface TupleType extends BaseType {
-  kind: 'Tuple'
-  elements: ResolvedType[]
-}
+  export type ClassAccessor = ClassGetAccessor | ClassSetAccessor
 
-export interface ObjectType extends BaseType {
-  kind: 'Object'
-  properties: (IndexType | PropertyTypes)[]
-}
+  export interface ClassMethod extends SharedClassMember {
+    kind: 'ClassMethod'
+    signatures: FunctionSignature[]
+  }
 
-export interface IntersectionType extends BaseType {
-  kind: 'Intersection'
-  properties: ResolvedType[]
-}
+  export type ClassProperty = Base &
+    SharedClassMember & {
+      defaultValue?: unknown
+      isReadonly: boolean
+    }
 
-export interface IndexType extends BaseType {
-  kind: 'Index'
-  key: ResolvedType
-  value: ResolvedType
-}
+  export interface IndexSignature extends Shared {
+    kind: 'IndexSignature'
+    key: ResolvedType
+    value: ResolvedType
+  }
 
-export interface EnumType extends BaseType {
-  kind: 'Enum'
-  members: Record<string, string | number | undefined>
-}
+  export interface SharedFunctionLikeSignature extends Shared {
+    typeParameters?: Kind.TypeParameter[]
+    returnType: string
+  }
 
-export interface UnionType extends BaseType {
-  kind: 'Union'
-  members: ResolvedType[]
-}
+  export interface MethodSignature extends SharedFunctionLikeSignature {
+    kind: 'MethodSignature'
+    parameters: Kind.Parameter[]
+  }
 
-export interface ClassType extends BaseType {
-  kind: 'Class'
-  constructors?: ReturnType<typeof resolveCallSignatures>
-  accessors?: ClassAccessorType[]
-  methods?: ClassMethodType[]
-  properties?: ClassPropertyType[]
-}
+  export interface FunctionSignature extends SharedFunctionLikeSignature {
+    kind: 'FunctionSignature'
+    modifier?: 'async' | 'generator'
+    parameters: Parameter[]
+  }
 
-export interface SharedClassMemberType extends BaseType {
-  scope?: 'abstract' | 'static'
-  visibility?: 'private' | 'protected' | 'public'
-  decorators: ResolvedType[]
-}
+  export interface Function extends Shared {
+    kind: 'Function'
+    signatures: FunctionSignature[]
+  }
 
-export interface ClassGetAccessorType extends SharedClassMemberType {
-  kind: 'ClassGetAccessor'
-}
+  export interface ComponentSignature extends SharedFunctionLikeSignature {
+    kind: 'ComponentSignature'
+    modifier?: 'async'
+    parameter?: Object | TypeReference
+  }
 
-export type ClassSetAccessorType = SharedClassMemberType & {
-  kind: 'ClassSetAccessor'
-} & Omit<FunctionSignatureType, 'kind'>
+  export interface Component extends Shared {
+    kind: 'Component'
+    signatures: ComponentSignature[]
+  }
 
-export type ClassAccessorType = ClassGetAccessorType | ClassSetAccessorType
+  export interface Primitive extends Shared {
+    kind: 'Primitive'
+  }
 
-export interface ClassMethodType extends SharedClassMemberType {
-  kind: 'ClassMethod'
-  signatures: FunctionSignatureType[]
-}
+  export interface TypeParameter extends Shared {
+    kind: 'TypeParameter'
 
-export type ClassPropertyType = BaseTypes &
-  SharedClassMemberType & {
+    /** The constraint type of the type parameter. */
+    constraint?: Base
+
+    /** The default type of the type parameter. */
+    defaultType?: Base
+  }
+
+  /** Represents a type alias declaration e.g. `type Partial<Type> = { [Key in keyof Type]?: Type[Key] }`. */
+  export interface TypeAlias extends Shared {
+    kind: 'TypeAlias'
+
+    /** The resolved type of the type alias. */
+    type: ResolvedType | undefined
+
+    /** The type parameters that can be provided as arguments to `Kind.TypeReference`. */
+    parameters: TypeParameter[]
+  }
+
+  /** Represents when a type alias is used as a reference e.g. `Partial<Type>`. */
+  export interface TypeReference extends Shared {
+    kind: 'TypeReference'
+
+    /** The type arguments passed in during usage, e.g. `Type` in `Partial<Type>`. */
+    arguments?: ResolvedType[]
+  }
+
+  export interface Unknown extends Shared {
+    kind: 'Unknown'
+  }
+
+  export type Base =
+    | String
+    | Number
+    | Boolean
+    | Symbol
+    | Array
+    | Tuple
+    | Object
+    | Intersection
+    | Enum
+    | Union
+    | Class
+    | Function
+    | Component
+    | Primitive
+    | TypeAlias
+    | TypeReference
+    | Unknown
+
+  export type All =
+    | Base
+    | FunctionSignature
+    | ComponentSignature
+    | IndexSignature
+    | MethodSignature
+    | ClassAccessor
+    | ClassProperty
+    | ClassMethod
+    | TypeParameter
+
+  export interface SharedParameter extends Shared {
+    /** Whether the type is a function or method parameter. */
+    context: 'parameter'
+
+    /** The default value assigned to the property parsed as a literal value if possible. */
     defaultValue?: unknown
-    isReadonly: boolean
+
+    /** Whether or not the property has an optional modifier or default value. */
+    isOptional?: boolean
   }
 
-export interface FunctionSignatureType extends BaseType {
-  kind: 'FunctionSignature'
-  modifier?: 'async' | 'generator'
-  generics?: GenericParameterType[]
-  parameters: ParameterTypes[]
-  returnType: string
+  /** A function or method parameter. */
+  export type Parameter = Base & SharedParameter
+
+  export interface SharedProperty extends Shared {
+    /** Whether the type is a class, interface, or type alias property. */
+    context: 'property'
+
+    /** The default value assigned to the property parsed as a literal value if possible. */
+    defaultValue?: unknown
+
+    /** Whether or not the property has an optional modifier or default value. */
+    isOptional?: boolean
+
+    /** Whether or not the property has a readonly modifier. */
+    isReadonly?: boolean
+  }
+
+  /** A class, interface, or type alias property. */
+  export type Property = Base & SharedProperty
 }
-
-export interface FunctionType extends BaseType {
-  kind: 'Function'
-  signatures: FunctionSignatureType[]
-}
-
-export interface ComponentSignatureType extends BaseType {
-  kind: 'ComponentSignature'
-  modifier?: 'async' | 'generator'
-  parameter?: ObjectType | ReferenceType | UtilityReferenceType
-  returnType: string
-}
-
-export interface ComponentType extends BaseType {
-  kind: 'Component'
-  signatures: ComponentSignatureType[]
-}
-
-export interface PrimitiveType extends BaseType {
-  kind: 'Primitive'
-}
-
-export interface ReferenceType extends BaseType {
-  kind: 'Reference'
-}
-
-export interface GenericParameterType extends BaseType {
-  kind: 'GenericParameter'
-  constraint?: BaseTypes
-  defaultType?: BaseTypes
-}
-
-/** Represents a utility type definition e.g. `type Partial<Type> = { [Key in keyof Type]?: Type[Key] }`. */
-export interface UtilityType extends BaseType {
-  kind: 'Utility'
-
-  /** The resolved type of the utility type. */
-  type: ResolvedType | undefined
-
-  /** The type parameters used in the definition of this utility type itself. */
-  parameters: GenericParameterType[]
-}
-
-/** Represents when a utility type is used as a type reference e.g. `{ options: Partial<Type> }`. */
-export interface UtilityReferenceType extends BaseType {
-  kind: 'UtilityReference'
-
-  /** The name of the utility type (e.g. "Partial", "Readonly", etc.). */
-  typeName: string
-
-  /** The type arguments passed in during usage, e.g. `Type` in `Partial<Type>`. */
-  arguments: ResolvedType[]
-}
-
-export interface UnknownType extends BaseType {
-  kind: 'Unknown'
-}
-
-export type BaseTypes =
-  | StringType
-  | NumberType
-  | BooleanType
-  | SymbolType
-  | ArrayType
-  | TupleType
-  | ObjectType
-  | IntersectionType
-  | IndexType
-  | EnumType
-  | UnionType
-  | ClassType
-  | FunctionType
-  | ComponentType
-  | PrimitiveType
-  | ReferenceType
-  | UtilityType
-  | UtilityReferenceType
-  | GenericParameterType
-  | UnknownType
-
-export type AllTypes =
-  | BaseTypes
-  | ClassAccessorType
-  | ClassMethodType
-  | FunctionSignatureType
-  | ComponentSignatureType
 
 export type TypeByKind<Type, Key> = Type extends { kind: Key } ? Type : never
 
-export type TypeOfKind<Key extends AllTypes['kind']> = TypeByKind<AllTypes, Key>
+export type TypeOfKind<Key extends Kind.All['kind']> = TypeByKind<Kind.All, Key>
 
-export type ParameterTypes = CreateParameterType<BaseTypes>
-
-export type PropertyTypes = CreatePropertyType<BaseTypes>
-
-export type ResolvedType = BaseTypes | ParameterTypes | PropertyTypes
+export type ResolvedType = Kind.Base | Kind.Parameter | Kind.Property
 
 export type SymbolMetadata = ReturnType<typeof getSymbolMetadata>
 
@@ -301,21 +309,14 @@ const TYPE_FORMAT_FLAGS =
 
 /** Determines if the type is a parameter type. */
 export function isParameterType(
-  property: AllTypes
-): property is ParameterTypes {
+  property: Kind.All
+): property is Kind.Parameter {
   return property.context === 'parameter'
 }
 
 /** Determines if the type is a property type. */
-export function isPropertyType(property: AllTypes): property is PropertyTypes {
+export function isPropertyType(property: Kind.All): property is Kind.Property {
   return property.context === 'property'
-}
-
-/** Determines if the type is a parameter or property type. */
-export function isMemberType(
-  property: AllTypes
-): property is ParameterTypes | PropertyTypes {
-  return isParameterType(property) || isPropertyType(property)
 }
 
 /** Process type metadata. */
@@ -386,11 +387,11 @@ export function resolveType(
     symbolDeclaration.isExported()
   ) {
     return {
-      kind: 'Reference',
-      name: symbolMetadata.name,
+      kind: 'TypeReference',
+      name: typeName ?? symbolMetadata.name,
       text: typeText,
       ...declarationLocation,
-    } satisfies ReferenceType
+    } satisfies Kind.TypeReference
   }
 
   /* Use the generic name and type text if the type is a type alias or property signature. */
@@ -445,12 +446,12 @@ export function resolveType(
           }
 
           return {
-            kind: 'UtilityReference',
+            kind: 'TypeReference',
             text: typeText,
-            typeName: typeName!,
+            name: typeName ?? symbolMetadata.name,
             arguments: resolvedTypeArguments,
             ...declarationLocation,
-          } satisfies UtilityReferenceType
+          } satisfies Kind.TypeReference
         } else {
           if (!declarationLocation.filePath) {
             throw new Error(
@@ -458,11 +459,11 @@ export function resolveType(
             )
           }
           return {
-            kind: 'Reference',
-            name: symbolMetadata.name,
+            kind: 'TypeReference',
+            name: typeName ?? symbolMetadata.name,
             text: typeText,
             ...declarationLocation,
-          } satisfies ReferenceType
+          } satisfies Kind.TypeReference
         }
       }
     }
@@ -502,11 +503,11 @@ export function resolveType(
       /* Allow node_module references to be filtered in. */
       if (filter === defaultFilter ? true : !filter(symbolMetadata)) {
         return {
-          kind: 'Reference',
-          name: symbolMetadata.name,
+          kind: 'TypeReference',
+          name: typeName ?? symbolMetadata.name,
           text: typeText,
           ...declarationLocation,
-        } satisfies ReferenceType
+        } satisfies Kind.TypeReference
       }
     }
   }
@@ -526,34 +527,34 @@ export function resolveType(
   let resolvedType: ResolvedType = {
     kind: 'Unknown',
     text: typeText,
-  } satisfies UnknownType
+  } satisfies Kind.Unknown
 
   if (type.isBoolean() || type.isBooleanLiteral()) {
     resolvedType = {
       kind: 'Boolean',
       name: symbolMetadata.name,
       text: typeText,
-    } satisfies BooleanType
+    } satisfies Kind.Boolean
   } else if (type.isNumber() || type.isNumberLiteral()) {
     resolvedType = {
       kind: 'Number',
       name: symbolMetadata.name,
       text: typeText,
       value: type.getLiteralValue() as number,
-    } satisfies NumberType
+    } satisfies Kind.Number
   } else if (type.isString() || type.isStringLiteral()) {
     resolvedType = {
       kind: 'String',
       name: symbolMetadata.name,
       text: typeText,
       value: type.getLiteralValue() as string,
-    } satisfies StringType
+    } satisfies Kind.String
   } else if (isSymbol(type)) {
     resolvedType = {
       kind: 'Symbol',
       name: symbolMetadata.name,
       text: typeText,
-    } satisfies SymbolType
+    } satisfies Kind.Symbol
   } else if (type.isArray()) {
     const elementType = type.getArrayElementTypeOrThrow()
     const resolvedElementType = resolveType(
@@ -571,7 +572,7 @@ export function resolveType(
         name: symbolMetadata.name,
         text: typeText,
         element: resolvedElementType,
-      } satisfies ArrayType
+      } satisfies Kind.Array
     } else {
       if (!keepReferences) {
         rootReferences.delete(type)
@@ -606,7 +607,7 @@ export function resolveType(
     }
 
     resolvedType = {
-      kind: 'Utility',
+      kind: 'TypeAlias',
       name: symbolMetadata.name,
       text: typeText,
       type: resolvedUtilityType,
@@ -619,45 +620,11 @@ export function resolveType(
           defaultValues,
           keepReferences,
           dependencies
-        ) as GenericParameterType
-      }) as GenericParameterType[],
-    } satisfies UtilityType
+        ) as Kind.TypeParameter
+      }) as Kind.TypeParameter[],
+    } satisfies Kind.TypeAlias
   } else {
-    if (type.isTypeParameter()) {
-      const constraintType = type.getConstraint()
-      const defaultType = type.getDefault()
-
-      resolvedType = {
-        kind: 'GenericParameter',
-        name: symbolMetadata.name,
-        text: typeText,
-        constraint: constraintType
-          ? resolveType(
-              constraintType,
-              enclosingNode,
-              filter,
-              false,
-              defaultValues,
-              keepReferences,
-              dependencies
-            )
-          : undefined,
-        defaultType: defaultType
-          ? resolveType(
-              defaultType,
-              enclosingNode,
-              filter,
-              false,
-              defaultValues,
-              keepReferences,
-              dependencies
-            )
-          : undefined,
-      } satisfies GenericParameterType
-    } else if (
-      type.isClass() ||
-      tsMorph.Node.isClassDeclaration(symbolDeclaration)
-    ) {
+    if (type.isClass() || tsMorph.Node.isClassDeclaration(symbolDeclaration)) {
       if (tsMorph.Node.isClassDeclaration(symbolDeclaration)) {
         resolvedType = resolveClass(symbolDeclaration, filter, dependencies)
         if (symbolMetadata.name) {
@@ -679,7 +646,7 @@ export function resolveType(
               .getMembers()
               .map((member) => [member.getName(), member.getValue()])
           ) as Record<string, string | number | undefined>,
-        } satisfies EnumType
+        } satisfies Kind.Enum
       } else {
         throw new Error(
           `[renoun:resolveType]: No enum declaration found for "${symbolMetadata.name}". Please file an issue if you encounter this error.`
@@ -728,7 +695,7 @@ export function resolveType(
           name: symbolMetadata.name,
           text: typeText,
           properties: resolvedIntersectionTypes,
-        } satisfies IntersectionType
+        } satisfies Kind.Intersection
       } else {
         const unionMembers: ResolvedType[] = []
         const unionTypeNodes = tsMorph.Node.isUnionTypeNode(typeNode)
@@ -788,7 +755,7 @@ export function resolveType(
           name: symbolMetadata.name,
           text: typeText,
           members: uniqueUnionTypes,
-        } satisfies UnionType
+        } satisfies Kind.Union
       }
     } else if (type.isIntersection()) {
       const resolvedIntersectionTypes = type
@@ -835,14 +802,14 @@ export function resolveType(
             ...property,
             context: 'property',
           })),
-        } satisfies ObjectType
+        } satisfies Kind.Object
       } else {
         resolvedType = {
           kind: 'Intersection',
           name: symbolMetadata.name,
           text: typeText,
           properties,
-        } satisfies IntersectionType
+        } satisfies Kind.Intersection
       }
     } else if (type.isTuple()) {
       const elements = resolveTypeTupleElements(
@@ -864,7 +831,7 @@ export function resolveType(
         name: symbolMetadata.name,
         text: typeText,
         elements,
-      } satisfies TupleType
+      } satisfies Kind.Tuple
     } else {
       const callSignatures = type.getCallSignatures()
 
@@ -885,31 +852,38 @@ export function resolveType(
             name: symbolMetadata.name,
             text: typeText,
             signatures: resolvedCallSignatures.map(
-              ({ parameters, ...resolvedCallSignature }) => {
+              ({ kind, modifier, parameters, ...resolvedCallSignature }) => {
+                if (modifier === 'generator') {
+                  throw new Error(
+                    '[renoun] Components cannot be generator functions.'
+                  )
+                }
+
                 return {
                   ...resolvedCallSignature,
                   kind: 'ComponentSignature',
+                  modifier,
                   parameter: parameters.at(0) as
-                    | ObjectType
-                    | ReferenceType
+                    | Kind.Object
+                    | Kind.TypeReference
                     | undefined,
-                } satisfies ComponentSignatureType
+                } satisfies Kind.ComponentSignature
               }
             ),
-          } satisfies ComponentType
+          } satisfies Kind.Component
         } else {
           resolvedType = {
             kind: 'Function',
             name: symbolMetadata.name,
             text: typeText,
             signatures: resolvedCallSignatures,
-          } satisfies FunctionType
+          } satisfies Kind.Function
         }
       } else if (isPrimitive) {
         resolvedType = {
           kind: 'Primitive',
           text: typeText,
-        } satisfies PrimitiveType
+        } satisfies Kind.Primitive
       } else if (type.isObject()) {
         const indexSignatures = resolveIndexSignatures(
           symbolDeclaration,
@@ -953,53 +927,42 @@ export function resolveType(
           }
 
           resolvedType = {
-            kind: 'UtilityReference',
-            name: symbolMetadata.name,
+            kind: 'TypeReference',
+            name: typeName ?? symbolMetadata.name,
             text: typeText,
-            typeName: typeName!,
             arguments: resolvedTypeArguments,
-          } satisfies UtilityReferenceType
+          } satisfies Kind.TypeReference
         } else if (properties.length === 0 && indexSignatures.length > 0) {
           resolvedType = {
             kind: 'Object',
             name: symbolMetadata.name,
             text: typeText,
-            properties: indexSignatures,
-          } satisfies ObjectType
+            properties: [],
+            indexSignatures,
+          } satisfies Kind.Object
         } else if (properties.length === 0) {
           if (!keepReferences) {
             rootReferences.delete(type)
           }
 
-          const resolvedTypeArguments = typeArguments
-            .map((type) =>
-              resolveType(
-                type,
-                declaration,
-                filter,
-                false,
-                defaultValues,
-                keepReferences,
-                dependencies
+          resolvedType = {
+            kind: 'TypeReference',
+            name: typeName ?? symbolMetadata.name,
+            text: typeText,
+            arguments: typeArguments
+              .map((type) =>
+                resolveType(
+                  type,
+                  declaration,
+                  filter,
+                  false,
+                  defaultValues,
+                  keepReferences,
+                  dependencies
+                )
               )
-            )
-            .filter(Boolean) as ResolvedType[]
-
-          if (resolvedTypeArguments.length > 0) {
-            resolvedType = {
-              kind: 'UtilityReference',
-              name: symbolMetadata.name,
-              text: typeText,
-              typeName: typeName!,
-              arguments: resolvedTypeArguments,
-            } satisfies UtilityReferenceType
-          } else {
-            resolvedType = {
-              kind: 'Reference',
-              name: symbolMetadata.name,
-              text: typeText,
-            } satisfies ReferenceType
-          }
+              .filter(Boolean) as ResolvedType[],
+          } satisfies Kind.TypeReference
         } else {
           resolvedType = {
             kind: 'Object',
@@ -1011,8 +974,8 @@ export function resolveType(
                 ...property,
                 context: 'property',
               })),
-            ] as PropertyTypes[],
-          } satisfies ObjectType
+            ] as Kind.Property[],
+          } satisfies Kind.Object
         }
       } else {
         /** Finally, try to resolve the apparent type if it is different from the current type. */
@@ -1055,18 +1018,69 @@ export function resolveType(
   }
 }
 
+/** Process type parameters. */
+function resolveTypeParameter(
+  type: Type,
+  enclosingNode?: Node,
+  filter: SymbolFilter = defaultFilter,
+  defaultValues?: Record<string, unknown> | unknown,
+  keepReferences: boolean = false,
+  dependencies?: Set<string>
+): Kind.TypeParameter {
+  const symbol = type.getSymbol()
+  const declaration = getPrimaryDeclaration(symbol)
+  const constraintType = type.getConstraint()
+  const defaultType = type.getDefault()
+  const typeText = type.getText(enclosingNode, TYPE_FORMAT_FLAGS)
+
+  if (!tsMorph.Node.isTypeParameterDeclaration(declaration)) {
+    throw new Error(
+      `[renoun:resolveTypeParameter]: No type parameter declaration found for "${typeText}". Please file an issue if you encounter this error.`
+    )
+  }
+
+  return {
+    kind: 'TypeParameter',
+    name: declaration.getName(),
+    text: typeText,
+    constraint: constraintType
+      ? resolveType(
+          constraintType,
+          enclosingNode,
+          filter,
+          false,
+          defaultValues,
+          keepReferences,
+          dependencies
+        )
+      : undefined,
+    defaultType: defaultType
+      ? resolveType(
+          defaultType,
+          enclosingNode,
+          filter,
+          false,
+          defaultValues,
+          keepReferences,
+          dependencies
+        )
+      : undefined,
+    ...getDeclarationLocation(declaration),
+  } satisfies Kind.TypeParameter
+}
+
 /** Process all function signatures of a given type including their parameters and return types. */
 function resolveCallSignatures(
   signatures: Signature[],
   enclosingNode?: Node,
   filter: SymbolFilter = defaultFilter,
   dependencies?: Set<string>
-): FunctionSignatureType[] {
+): Kind.FunctionSignature[] {
   return signatures
     .map((signature) =>
       resolveSignature(signature, enclosingNode, filter, dependencies)
     )
-    .filter(Boolean) as FunctionSignatureType[]
+    .filter(Boolean) as Kind.FunctionSignature[]
 }
 
 /** Process a single function signature including its parameters and return type. */
@@ -1075,28 +1089,27 @@ function resolveSignature(
   enclosingNode?: Node,
   filter: SymbolFilter = defaultFilter,
   dependencies?: Set<string>
-): FunctionSignatureType | undefined {
+): Kind.FunctionSignature | undefined {
   const signatureDeclaration = signature.getDeclaration()
   const signatureParameters = signature.getParameters()
   const parameterDeclarations = signatureParameters.map((parameter) =>
     parameter.getDeclarations().at(0)
   ) as (ParameterDeclaration | undefined)[]
-  const genericParameters = signature.getTypeParameters()
-  const resolvedGenericParameters = genericParameters
+  const resolvedTypeParameters = signature
+    .getTypeParameters()
     .map((parameter) =>
-      resolveType(
+      resolveTypeParameter(
         parameter,
         enclosingNode,
         filter,
-        false,
         undefined,
         true,
         dependencies
       )
     )
-    .filter(Boolean) as GenericParameterType[]
-  const genericsText = resolvedGenericParameters.length
-    ? `<${resolvedGenericParameters
+    .filter(Boolean) as Kind.TypeParameter[]
+  const typeParametersText = resolvedTypeParameters.length
+    ? `<${resolvedTypeParameters
         .map((generic) => {
           const constraintText = generic.constraint
             ? ` extends ${generic.constraint.text}`
@@ -1105,6 +1118,38 @@ function resolveSignature(
         })
         .join(', ')}>`
     : ''
+
+  // const constraintType = type.getConstraint()
+  // const defaultType = type.getDefault()
+
+  // resolvedType = {
+  //   kind: 'TypeParameter',
+  //   name: symbolMetadata.name,
+  //   text: typeText,
+  //   constraint: constraintType
+  //     ? resolveType(
+  //         constraintType,
+  //         enclosingNode,
+  //         filter,
+  //         false,
+  //         defaultValues,
+  //         keepReferences,
+  //         dependencies
+  //       )
+  //     : undefined,
+  //   defaultType: defaultType
+  //     ? resolveType(
+  //         defaultType,
+  //         enclosingNode,
+  //         filter,
+  //         false,
+  //         defaultValues,
+  //         keepReferences,
+  //         dependencies
+  //       )
+  //     : undefined,
+  // } satisfies Kind.TypeParameter
+
   const resolvedParameters = signatureParameters
     .map((parameter, index) => {
       const parameterDeclaration = parameterDeclarations[index]
@@ -1150,7 +1195,7 @@ function resolveSignature(
             defaultValue,
             isOptional: isOptional ?? Boolean(defaultValue),
             description: getSymbolDescription(parameter),
-          } satisfies ParameterTypes
+          } satisfies Kind.Parameter
         }
       } else {
         throw new Error(
@@ -1158,7 +1203,7 @@ function resolveSignature(
         )
       }
     })
-    .filter(Boolean) as ParameterTypes[]
+    .filter(Boolean) as Kind.Parameter[]
 
   /** Skip signatures with filtered parameters if they are in node_modules. */
   if (
@@ -1186,9 +1231,9 @@ function resolveSignature(
   let simplifiedTypeText: string
 
   if (tsMorph.Node.isFunctionDeclaration(signatureDeclaration)) {
-    simplifiedTypeText = `function ${signatureDeclaration.getName()}${genericsText}(${parametersText}): ${returnType}`
+    simplifiedTypeText = `function ${signatureDeclaration.getName()}${typeParametersText}(${parametersText}): ${returnType}`
   } else {
-    simplifiedTypeText = `${genericsText}(${parametersText}) => ${returnType}`
+    simplifiedTypeText = `${typeParametersText}(${parametersText}) => ${returnType}`
   }
 
   const modifier: ReturnType<typeof getModifier> =
@@ -1197,16 +1242,21 @@ function resolveSignature(
       ? getModifier(signatureDeclaration)
       : undefined
 
-  return {
+  const resolvedType: Kind.FunctionSignature = {
     kind: 'FunctionSignature',
     text: simplifiedTypeText,
-    generics: resolvedGenericParameters,
     parameters: resolvedParameters,
     modifier,
     returnType,
     ...getJsDocMetadata(signatureDeclaration),
     ...getDeclarationLocation(signatureDeclaration),
   }
+
+  if (resolvedTypeParameters.length) {
+    resolvedType.typeParameters = resolvedTypeParameters
+  }
+
+  return resolvedType
 }
 
 /** Process index signatures of an interface or type alias. */
@@ -1244,12 +1294,12 @@ function resolveIndexSignatures(
     }
 
     return {
-      kind: 'Index',
+      kind: 'IndexSignature',
       key: keyType,
       value: valueType,
       text,
-    } satisfies IndexType
-  }) as IndexType[]
+    } satisfies Kind.IndexSignature
+  }) as Kind.IndexSignature[]
 }
 
 /** Get the index signature of an interface or type alias. */
@@ -1343,7 +1393,7 @@ export function resolveTypeProperties(
             defaultValue,
             isOptional,
             isReadonly: isReadonly || isPropertyReadonly,
-          } satisfies PropertyTypes
+          } satisfies Kind.Property
         }
       } else {
         throw new Error(
@@ -1351,7 +1401,7 @@ export function resolveTypeProperties(
         )
       }
     })
-    .filter(Boolean) as PropertyTypes[]
+    .filter(Boolean) as Kind.Property[]
 }
 
 /** Process all elements of a tuple type. */
@@ -1686,8 +1736,8 @@ function resolveClass(
   classDeclaration: ClassDeclaration,
   filter: SymbolFilter,
   dependencies?: Set<string>
-): ClassType {
-  const classMetadata: ClassType = {
+): Kind.Class {
+  const classMetadata: Kind.Class = {
     kind: 'Class',
     name: classDeclaration.getName(),
     text: classDeclaration
@@ -1754,6 +1804,44 @@ function resolveClass(
     }
   })
 
+  const baseClass = classDeclaration.getExtends()
+
+  if (baseClass) {
+    const resolvedBaseClass = resolveType(
+      baseClass.getType(),
+      classDeclaration,
+      filter,
+      false,
+      undefined,
+      true
+    ) as Kind.TypeReference
+
+    if (resolvedBaseClass) {
+      classMetadata.extends = resolvedBaseClass
+    }
+  }
+
+  const implementClauses = classDeclaration.getImplements()
+
+  if (implementClauses.length) {
+    const resolvedImplementClauses = implementClauses
+      .map((implementClause) =>
+        resolveType(
+          implementClause.getExpression().getType(),
+          classDeclaration,
+          filter,
+          false,
+          undefined,
+          true
+        )
+      )
+      .filter(Boolean) as Kind.TypeReference[]
+
+    if (resolvedImplementClauses.length) {
+      classMetadata.implements = resolvedImplementClauses
+    }
+  }
+
   return classMetadata
 }
 
@@ -1762,7 +1850,7 @@ function resolveClassAccessor(
   accessor: GetAccessorDeclaration | SetAccessorDeclaration,
   filter: SymbolFilter,
   dependencies?: Set<string>
-): ClassAccessorType | undefined {
+): Kind.ClassAccessor | undefined {
   const symbolMetadata = getSymbolMetadata(accessor.getSymbol(), accessor)
   const filterResult = filter(symbolMetadata)
 
@@ -1770,7 +1858,7 @@ function resolveClassAccessor(
     return
   }
 
-  const sharedMetadata: SharedClassMemberType = {
+  const sharedMetadata: Kind.SharedClassMember = {
     name: accessor.getName(),
     scope: getScope(accessor),
     visibility: getVisibility(accessor),
@@ -1797,7 +1885,7 @@ function resolveClassAccessor(
         ...sharedMetadata,
         kind: 'ClassSetAccessor',
         text: accessor.getType().getText(accessor, TYPE_FORMAT_FLAGS),
-      } satisfies ClassSetAccessorType
+      } satisfies Kind.ClassSetAccessor
     }
 
     throw new Error(
@@ -1808,7 +1896,7 @@ function resolveClassAccessor(
   return {
     ...sharedMetadata,
     kind: 'ClassGetAccessor',
-  } satisfies ClassGetAccessorType
+  } satisfies Kind.ClassGetAccessor
 }
 
 /** Processes a method declaration into a metadata object. */
@@ -1816,7 +1904,7 @@ function resolveClassMethod(
   method: MethodDeclaration,
   filter: SymbolFilter,
   dependencies?: Set<string>
-): ClassMethodType | undefined {
+): Kind.ClassMethod | undefined {
   const callSignatures = method.getType().getCallSignatures()
   const symbolMetadata = getSymbolMetadata(method.getSymbol(), method)
   const filterResult = filter(symbolMetadata)
@@ -1839,7 +1927,7 @@ function resolveClassMethod(
     text: method.getType().getText(method, TYPE_FORMAT_FLAGS),
     decorators: resolveDecorators(method.getDecorators(), filter, dependencies),
     ...getJsDocMetadata(method),
-  } satisfies ClassMethodType
+  } satisfies Kind.ClassMethod
 }
 
 /** Processes a class property declaration into a metadata object. */
@@ -1847,7 +1935,7 @@ function resolveClassProperty(
   property: PropertyDeclaration,
   filter: SymbolFilter,
   dependencies?: Set<string>
-): ClassPropertyType | undefined {
+): Kind.ClassProperty | undefined {
   const symbolMetadata = getSymbolMetadata(property.getSymbol(), property)
   const filterResult = filter(symbolMetadata)
 
@@ -1879,7 +1967,7 @@ function resolveClassProperty(
         filter,
         dependencies
       ),
-    } satisfies ClassPropertyType
+    } satisfies Kind.ClassProperty
   }
 
   throw new Error(
@@ -1983,7 +2071,7 @@ function isTypeReadonly(type: Type, enclosingNode: Node | undefined) {
 /** Determines if a function is a component based on its name and call signature shape. */
 function isComponent(
   name: string | undefined,
-  callSignatures: FunctionSignatureType[]
+  callSignatures: Kind.FunctionSignature[]
 ) {
   if (!name) {
     return false

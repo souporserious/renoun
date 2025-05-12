@@ -11,7 +11,7 @@ import {
 import { rehypePlugins, remarkPlugins } from '../mdx/index.js'
 import { createSlug } from '../utils/create-slug.js'
 import type {
-  AllTypes,
+  Kind,
   ResolvedType,
   SymbolFilter,
   TypeOfKind,
@@ -234,8 +234,7 @@ function TypeChildren({
   if (
     type.kind === 'Enum' ||
     type.kind === 'Symbol' ||
-    type.kind === 'UtilityReference' ||
-    type.kind === 'Reference'
+    type.kind === 'TypeReference'
   ) {
     return (
       <CodeInline
@@ -341,7 +340,7 @@ function TypeChildren({
                   <h5 css={{ margin: '0' }}>Parameters</h5>
                   {signature.parameter.kind === 'Object' ? (
                     <TypeProperties type={signature.parameter} />
-                  ) : signature.parameter.kind === 'Reference' ? (
+                  ) : signature.parameter.kind === 'TypeReference' ? (
                     <CodeInline
                       children={signature.parameter.text}
                       language="typescript"
@@ -434,7 +433,7 @@ function TypeChildren({
     )
   }
 
-  if (type.kind === 'Utility') {
+  if (type.kind === 'TypeAlias') {
     if (type.type) {
       return <TypeChildren type={type.type} css={{ marginTop: '2rem' }} />
     } else {
@@ -479,7 +478,7 @@ function TypeProperties({
           member.kind === 'Intersection' ||
           member.kind === 'Union' ? (
             <TypeProperties key={index} type={member} />
-          ) : member.kind === 'Reference' ? (
+          ) : member.kind === 'TypeReference' ? (
             member.text
           ) : (
             <TypeValue key={index} type={member} />
@@ -521,7 +520,7 @@ function TypeValue({
   type,
   css: cssProp,
 }: {
-  type: AllTypes
+  type: Kind.All
   css?: CSSObject
 }) {
   const isNameSameAsType = type.name === type.text
