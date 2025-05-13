@@ -9586,62 +9586,21 @@ describe('resolveType', () => {
                 "context": "parameter",
                 "defaultValue": undefined,
                 "description": undefined,
-                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                "indexSignatures": [
-                  {
-                    "key": {
-                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                      "kind": "Number",
-                      "name": undefined,
-                      "position": {
-                        "end": {
-                          "column": 4943,
-                          "line": 4,
-                        },
-                        "start": {
-                          "column": 4755,
-                          "line": 4,
-                        },
-                      },
-                      "text": "number",
-                      "value": undefined,
-                    },
-                    "kind": "IndexSignature",
-                    "text": "[n:number]:T;",
-                    "value": {
-                      "arguments": [],
-                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                      "kind": "TypeReference",
-                      "name": undefined,
-                      "position": {
-                        "end": {
-                          "column": 12460,
-                          "line": 4,
-                        },
-                        "start": {
-                          "column": 12459,
-                          "line": 4,
-                        },
-                      },
-                      "text": "{}",
-                    },
-                  },
-                ],
+                "filePath": "test.ts",
                 "isOptional": false,
-                "kind": "Object",
+                "kind": "TypeReference",
                 "name": "args",
                 "position": {
                   "end": {
-                    "column": 14214,
-                    "line": 4,
+                    "column": 67,
+                    "line": 1,
                   },
                   "start": {
-                    "column": 12443,
-                    "line": 4,
+                    "column": 54,
+                    "line": 1,
                   },
                 },
-                "properties": [],
-                "text": "Array<string>",
+                "text": "Args",
               },
             ],
             "position": {
@@ -9655,7 +9614,7 @@ describe('resolveType', () => {
               },
             },
             "returnType": "void",
-            "text": "function loggedMethod<Args extends Array<string>>(args: Array<string>): void",
+            "text": "function loggedMethod<Args extends Array<string>>(args: Args): void",
             "typeParameters": [
               {
                 "constraint": {
@@ -9797,62 +9756,21 @@ describe('resolveType', () => {
                                 "context": "parameter",
                                 "defaultValue": undefined,
                                 "description": undefined,
-                                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                                "indexSignatures": [
-                                  {
-                                    "key": {
-                                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                                      "kind": "Number",
-                                      "name": undefined,
-                                      "position": {
-                                        "end": {
-                                          "column": 4943,
-                                          "line": 4,
-                                        },
-                                        "start": {
-                                          "column": 4755,
-                                          "line": 4,
-                                        },
-                                      },
-                                      "text": "number",
-                                      "value": undefined,
-                                    },
-                                    "kind": "IndexSignature",
-                                    "text": "[n:number]:T;",
-                                    "value": {
-                                      "arguments": [],
-                                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                                      "kind": "TypeReference",
-                                      "name": undefined,
-                                      "position": {
-                                        "end": {
-                                          "column": 12460,
-                                          "line": 4,
-                                        },
-                                        "start": {
-                                          "column": 12459,
-                                          "line": 4,
-                                        },
-                                      },
-                                      "text": "{}",
-                                    },
-                                  },
-                                ],
+                                "filePath": "test.ts",
                                 "isOptional": false,
-                                "kind": "Object",
+                                "kind": "TypeReference",
                                 "name": "args",
                                 "position": {
                                   "end": {
-                                    "column": 14214,
-                                    "line": 4,
+                                    "column": 37,
+                                    "line": 2,
                                   },
                                   "start": {
-                                    "column": 12443,
-                                    "line": 4,
+                                    "column": 24,
+                                    "line": 2,
                                   },
                                 },
-                                "properties": [],
-                                "text": "Array<any>",
+                                "text": "Args",
                               },
                             ],
                             "position": {
@@ -9866,7 +9784,7 @@ describe('resolveType', () => {
                               },
                             },
                             "returnType": "Return",
-                            "text": "(args: Array<any>) => Return",
+                            "text": "(args: Args) => Return",
                           },
                         ],
                         "text": "(this: This, ...args: Args) => Return",
@@ -9874,10 +9792,9 @@ describe('resolveType', () => {
                       {
                         "arguments": [
                           {
-                            "arguments": [],
                             "filePath": "test.ts",
                             "kind": "TypeReference",
-                            "name": undefined,
+                            "name": "This",
                             "position": {
                               "end": {
                                 "column": 27,
@@ -9888,7 +9805,7 @@ describe('resolveType', () => {
                                 "line": 1,
                               },
                             },
-                            "text": "{}",
+                            "text": "This",
                           },
                           {
                             "filePath": "test.ts",
@@ -9914,62 +9831,21 @@ describe('resolveType', () => {
                                     "context": "parameter",
                                     "defaultValue": undefined,
                                     "description": undefined,
-                                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                                    "indexSignatures": [
-                                      {
-                                        "key": {
-                                          "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                                          "kind": "Number",
-                                          "name": undefined,
-                                          "position": {
-                                            "end": {
-                                              "column": 4943,
-                                              "line": 4,
-                                            },
-                                            "start": {
-                                              "column": 4755,
-                                              "line": 4,
-                                            },
-                                          },
-                                          "text": "number",
-                                          "value": undefined,
-                                        },
-                                        "kind": "IndexSignature",
-                                        "text": "[n:number]:T;",
-                                        "value": {
-                                          "arguments": [],
-                                          "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                                          "kind": "TypeReference",
-                                          "name": undefined,
-                                          "position": {
-                                            "end": {
-                                              "column": 12460,
-                                              "line": 4,
-                                            },
-                                            "start": {
-                                              "column": 12459,
-                                              "line": 4,
-                                            },
-                                          },
-                                          "text": "{}",
-                                        },
-                                      },
-                                    ],
+                                    "filePath": "test.ts",
                                     "isOptional": false,
-                                    "kind": "Object",
+                                    "kind": "TypeReference",
                                     "name": "args",
                                     "position": {
                                       "end": {
-                                        "column": 14214,
-                                        "line": 4,
+                                        "column": 72,
+                                        "line": 3,
                                       },
                                       "start": {
-                                        "column": 12443,
-                                        "line": 4,
+                                        "column": 59,
+                                        "line": 3,
                                       },
                                     },
-                                    "properties": [],
-                                    "text": "Array<any>",
+                                    "text": "Args",
                                   },
                                 ],
                                 "position": {
@@ -9983,7 +9859,7 @@ describe('resolveType', () => {
                                   },
                                 },
                                 "returnType": "Return",
-                                "text": "(args: Array<any>) => Return",
+                                "text": "(args: Args) => Return",
                               },
                             ],
                             "text": "(this: This, ...args: Args) => Return",

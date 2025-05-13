@@ -236,6 +236,7 @@ export namespace Kind {
     | Component
     | Primitive
     | TypeAlias
+    | TypeParameter
     | TypeReference
     | Unknown
 
@@ -248,7 +249,6 @@ export namespace Kind {
     | ClassAccessor
     | ClassProperty
     | ClassMethod
-    | TypeParameter
 
   export interface SharedParameter extends Shared {
     /** Whether the type is a function or method parameter. */
@@ -611,19 +611,55 @@ export function resolveType(
       name: symbolMetadata.name,
       text: typeText,
       type: resolvedUtilityType,
-      parameters: aliasTypeArguments.map((type) =>
-        resolveTypeParameter(
-          type,
-          declaration,
-          filter,
-          defaultValues,
-          keepReferences,
-          dependencies
-        )
+      parameters: aliasTypeArguments.map(
+        (type) =>
+          resolveType(
+            type,
+            declaration,
+            filter,
+            false,
+            defaultValues,
+            keepReferences,
+            dependencies
+          ) as Kind.TypeParameter
       ),
     } satisfies Kind.TypeAlias
   } else {
-    if (type.isClass() || tsMorph.Node.isClassDeclaration(symbolDeclaration)) {
+    if (type.isTypeParameter()) {
+      const constraintType = type.getConstraint()
+      const defaultType = type.getDefault()
+
+      resolvedType = {
+        kind: 'TypeParameter',
+        name: symbolMetadata.name,
+        text: typeText,
+        constraint: constraintType
+          ? resolveType(
+              constraintType,
+              enclosingNode,
+              filter,
+              false,
+              defaultValues,
+              keepReferences,
+              dependencies
+            )
+          : undefined,
+        defaultType: defaultType
+          ? resolveType(
+              defaultType,
+              enclosingNode,
+              filter,
+              false,
+              defaultValues,
+              keepReferences,
+              dependencies
+            )
+          : undefined,
+      } satisfies Kind.TypeParameter
+    } else if (
+      type.isClass() ||
+      tsMorph.Node.isClassDeclaration(symbolDeclaration)
+    ) {
       if (tsMorph.Node.isClassDeclaration(symbolDeclaration)) {
         resolvedType = resolveClass(symbolDeclaration, filter, dependencies)
         if (symbolMetadata.name) {
@@ -1017,57 +1053,6 @@ export function resolveType(
   }
 }
 
-/** Process type parameters. */
-function resolveTypeParameter(
-  type: Type,
-  enclosingNode?: Node,
-  filter: SymbolFilter = defaultFilter,
-  defaultValues?: Record<string, unknown> | unknown,
-  keepReferences: boolean = false,
-  dependencies?: Set<string>
-): Kind.TypeParameter {
-  const symbol = type.getSymbol()
-  const declaration = getPrimaryDeclaration(symbol)
-  const constraintType = type.getConstraint()
-  const defaultType = type.getDefault()
-  const typeText = type.getText(enclosingNode, TYPE_FORMAT_FLAGS)
-
-  if (!tsMorph.Node.isTypeParameterDeclaration(declaration)) {
-    throw new Error(
-      `[renoun:resolveTypeParameter]: No type parameter declaration found for "${typeText}". Please file an issue if you encounter this error.`
-    )
-  }
-
-  return {
-    kind: 'TypeParameter',
-    name: declaration.getName(),
-    text: typeText,
-    constraint: constraintType
-      ? resolveType(
-          constraintType,
-          enclosingNode,
-          filter,
-          false,
-          defaultValues,
-          keepReferences,
-          dependencies
-        )
-      : undefined,
-    defaultType: defaultType
-      ? resolveType(
-          defaultType,
-          enclosingNode,
-          filter,
-          false,
-          defaultValues,
-          keepReferences,
-          dependencies
-        )
-      : undefined,
-    ...getDeclarationLocation(declaration),
-  } satisfies Kind.TypeParameter
-}
-
 /** Process all function signatures of a given type including their parameters and return types. */
 function resolveCallSignatures(
   signatures: Signature[],
@@ -1097,10 +1082,11 @@ function resolveSignature(
   const resolvedTypeParameters = signature
     .getTypeParameters()
     .map((parameter) =>
-      resolveTypeParameter(
+      resolveType(
         parameter,
         enclosingNode,
         filter,
+        false,
         undefined,
         true,
         dependencies
@@ -1117,38 +1103,6 @@ function resolveSignature(
         })
         .join(', ')}>`
     : ''
-
-  // const constraintType = type.getConstraint()
-  // const defaultType = type.getDefault()
-
-  // resolvedType = {
-  //   kind: 'TypeParameter',
-  //   name: symbolMetadata.name,
-  //   text: typeText,
-  //   constraint: constraintType
-  //     ? resolveType(
-  //         constraintType,
-  //         enclosingNode,
-  //         filter,
-  //         false,
-  //         defaultValues,
-  //         keepReferences,
-  //         dependencies
-  //       )
-  //     : undefined,
-  //   defaultType: defaultType
-  //     ? resolveType(
-  //         defaultType,
-  //         enclosingNode,
-  //         filter,
-  //         false,
-  //         defaultValues,
-  //         keepReferences,
-  //         dependencies
-  //       )
-  //     : undefined,
-  // } satisfies Kind.TypeParameter
-
   const resolvedParameters = signatureParameters
     .map((parameter, index) => {
       const parameterDeclaration = parameterDeclarations[index]
