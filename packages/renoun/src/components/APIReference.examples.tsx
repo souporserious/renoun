@@ -10,7 +10,7 @@ import {
   parsePreProps,
 } from 'renoun/components'
 import { rehypePlugins, remarkPlugins } from 'renoun/mdx'
-import { isMemberType } from 'renoun/utils'
+import { isParameterType, isPropertyType } from 'renoun/utils'
 
 export function Table() {
   return (
@@ -61,10 +61,8 @@ function Kind() {
       return <ObjectKind />
     case 'Union':
       return <UnionKind />
-    case 'Reference':
-      return <ReferenceKind />
-    case 'UtilityReference':
-      return <UtilityReferenceKind />
+    case 'TypeReference':
+      return <TypeReferenceKind />
     default:
       return null
   }
@@ -313,12 +311,14 @@ function ObjectKind() {
           }}
         >
           {prop.properties.map((property) => {
-            const isOptional = isMemberType(property)
-              ? property.isOptional
-              : false
-            const defaultValue = isMemberType(property)
-              ? property.defaultValue
-              : undefined
+            const isOptional =
+              isParameterType(property) || isPropertyType(property)
+                ? property.isOptional
+                : false
+            const defaultValue =
+              isParameterType(property) || isPropertyType(property)
+                ? property.defaultValue
+                : undefined
 
             return (
               <tr
@@ -386,25 +386,10 @@ function ObjectKind() {
   )
 }
 
-/** Renders a link to a reference type e.g. `Languages` in `{ language: Languages }` */
-function ReferenceKind() {
+function TypeReferenceKind() {
   const prop = getAPIReferenceType()
 
-  if (prop?.kind !== 'Reference') {
-    throw new Error(
-      '[renoun] PropsTable only supports object types. Use TypeProperties for other types.'
-    )
-  }
-
-  return null
-}
-
-/** Renders a utility type reference e.g. React.SVGProps<SVGSVGElement> */
-function UtilityReferenceKind() {
-  const prop = getAPIReferenceType()
-  const { CodeInline } = getAPIReferenceConfig()
-
-  if (prop?.kind !== 'UtilityReference') {
+  if (prop?.kind !== 'TypeReference') {
     throw new Error(
       '[renoun] PropsTable only supports object types. Use TypeProperties for other types.'
     )

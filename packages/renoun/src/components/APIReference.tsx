@@ -6,10 +6,9 @@ import {
   type JavaScriptFileExport,
 } from '../file-system/index.js'
 import {
-  isMemberType,
-  type ClassAccessorType,
-  type ClassMethodType,
-  type FunctionSignatureType,
+  isParameterType,
+  isPropertyType,
+  type Kind,
   type ResolvedType,
   type SymbolFilter,
 } from '../utils/resolve-type.js'
@@ -179,9 +178,9 @@ async function resolveSourceType({
 
 export const TypeContext = createContext<
   | ResolvedType
-  | ClassAccessorType
-  | ClassMethodType
-  | FunctionSignatureType
+  | Kind.ClassAccessor
+  | Kind.ClassMethod
+  | Kind.FunctionSignature
   | null
 >(null)
 
@@ -216,8 +215,12 @@ function TypeValueBase() {
   if (!type) return null
 
   const isNameSameAsType = type.name === type.text
-  const isRequired = isMemberType(type) ? !type.isOptional : false
-  const defaultValue = isMemberType(type) ? type.defaultValue : undefined
+  const isRequired =
+    isParameterType(type) || isPropertyType(type) ? !type.isOptional : false
+  const defaultValue =
+    isParameterType(type) || isPropertyType(type)
+      ? type.defaultValue
+      : undefined
 
   return (
     <div>
@@ -280,7 +283,8 @@ export function TypeProperties({
         m.kind === 'Union'
       )
         return recurse(m, i)
-      if (m.kind === 'Reference') return <Fragment key={i}>{m.text}</Fragment>
+      if (m.kind === 'TypeReference')
+        return <Fragment key={i}>{m.text}</Fragment>
       return (
         <TypeContext key={i} value={m}>
           <Leaf />
@@ -401,7 +405,7 @@ function ComponentKindBase() {
                 <TypeContext value={sig.parameter}>
                   <TypeProperties />
                 </TypeContext>
-              ) : sig.parameter.kind === 'Reference' ? (
+              ) : sig.parameter.kind === 'TypeReference' ? (
                 <CodeInline
                   children={sig.parameter.text}
                   language="typescript"
@@ -518,8 +522,7 @@ export function TypeChildren() {
   if (
     type.kind === 'Enum' ||
     type.kind === 'Symbol' ||
-    type.kind === 'UtilityReference' ||
-    type.kind === 'Reference'
+    type.kind === 'TypeReference'
   ) {
     return <CodeInline children={type.text} language="typescript" />
   }
@@ -536,7 +539,7 @@ export function TypeChildren() {
   if (type.kind === 'Component') return <ComponentKind />
   if (type.kind === 'Function') return <FunctionKind />
 
-  if (type.kind === 'Utility') {
+  if (type.kind === 'TypeAlias') {
     return type.type ? (
       <TypeContext value={type.type}>
         <TypeChildren />
