@@ -1,5 +1,1 @@
-export {
-  isMemberType,
-  isParameterType,
-  isPropertyType,
-} from './resolve-type.js'
+export { isParameterType, isPropertyType } from './resolve-type.js'
