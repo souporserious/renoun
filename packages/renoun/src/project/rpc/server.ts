@@ -1,5 +1,6 @@
 import type { AddressInfo, Server } from 'ws'
 import WebSocket from 'ws'
+import { randomBytes } from 'node:crypto'
 
 export interface WebSocketRequest {
   method: string
@@ -17,6 +18,9 @@ export interface WebSocketNotification {
   type: string
   data?: any
 }
+
+const SECRET = randomBytes(16).toString('hex')
+process.env.RENOUN_SERVER_SECRET = SECRET
 
 export class WebSocketServer {
   #server!: Server
@@ -39,7 +43,29 @@ export class WebSocketServer {
 
     import('ws')
       .then((ws) => {
-        this.#server = new ws.WebSocketServer({ port: options?.port ?? 0 })
+        this.#server = new ws.WebSocketServer({
+          port: options?.port ?? 0,
+          host: '127.0.0.1',
+          verifyClient: (info, callback) => {
+            if (info.req.headers['sec-websocket-protocol'] !== SECRET) {
+              return callback(false, 401, 'Unauthorized')
+            }
+
+            if (info.origin) {
+              let hostname: string
+              try {
+                hostname = new URL(info.origin).hostname
+              } catch {
+                return callback(false, 403, 'Bad Origin')
+              }
+              if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+                return callback(false, 403, 'Forbidden')
+              }
+            }
+
+            callback(true, 200, 'OK')
+          },
+        })
         this.#init()
       })
       .catch((error) => {
