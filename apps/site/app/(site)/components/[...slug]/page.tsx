@@ -11,7 +11,7 @@ import type { MDXHeadings } from 'renoun/mdx'
 import { GeistMono } from 'geist/font/mono'
 
 import { CollectionGroup, ComponentsCollection } from '@/collections'
-import { MDXRenderer } from '@/components/MDXRenderer'
+import { MDX } from '@/components/MDX'
 import { SiblingLink } from '@/components/SiblingLink'
 import { TableOfContents } from '@/components/TableOfContents'
 
@@ -152,7 +152,7 @@ export default async function Component({
               <h1 css={{ fontSize: '3rem', margin: 0 }}>
                 {title} {isExamplesPage ? 'Examples' : ''}
               </h1>
-              {description ? <MDXRenderer>{description}</MDXRenderer> : null}
+              {description ? <MDX>{description}</MDX> : null}
               {Content ? <Content /> : null}
             </div>
           ) : (

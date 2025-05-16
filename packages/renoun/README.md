@@ -55,7 +55,7 @@ Built from the ground up for React, renoun gives you the full power of compositi
 
 #### Drop‑In Components
 
-Quickly get started with powerful components like [`APIReference`](https://www.renoun.dev/components/api-reference), [`CodeBlock`](https://www.renoun.dev/components/code-block), [`MDXRenderer`](https://www.renoun.dev/components/mdx-renderer), and more — no extra setup required.
+Quickly get started with powerful components like [`APIReference`](https://www.renoun.dev/components/api-reference), [`CodeBlock`](https://www.renoun.dev/components/code-block), [`MDX`](https://www.renoun.dev/components/mdx), and more — no extra setup required.
 
 [Explore components →](https://www.renoun.dev/components)
 
