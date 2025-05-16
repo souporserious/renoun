@@ -1,3 +1,4 @@
+import type { Processor } from 'unified'
 import type { Root } from 'mdast'
 import type { VFile } from 'vfile'
 import remarkGfm from 'remark-gfm'
@@ -18,13 +19,13 @@ export type { MDXHeadings } from './add-headings.js'
  * - `remarkTransformRelativeLinks` reformat all relative links that use ordered numbers and extensions.
  * - `remarkAddHeadings` adds an `id` to all headings and exports a `headings` variable.
  */
-export default function remarkRenoun() {
+export default function remarkRenoun(this: Processor) {
   const gfm = remarkGfm()
   // @ts-expect-error: `this` type is wrong
   const smartyPants = remarkSmartyPants({ dashes: 'oldschool' })
   const removeImmediateParagraphs = remarkRemoveImmediateParagraphs()
   const transformRelativeLinks = remarkTransformRelativeLinks()
-  const addHeadings = remarkAddHeadings()
+  const addHeadings = remarkAddHeadings.call(this)
 
   return async function transformer(tree: Root, file: VFile) {
     if (gfm) {

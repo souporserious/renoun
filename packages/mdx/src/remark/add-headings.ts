@@ -1,9 +1,16 @@
+import type { Processor } from 'unified'
 import type { Root, Heading } from 'mdast'
 import type { VFile } from 'vfile'
 import { define } from 'unist-util-mdx-define'
 import { visit } from 'unist-util-visit'
 import { toString } from 'mdast-util-to-string'
 import 'mdast-util-mdx'
+
+declare module 'unified' {
+  interface Data {
+    isMarkdown?: boolean
+  }
+}
 
 declare module 'mdast' {
   interface Data {
@@ -27,7 +34,9 @@ export type MDXHeadings = {
 }[]
 
 /** Exports a `headings` variable containing an array of headings metadata. */
-export default function addHeadings() {
+export default function addHeadings(this: Processor) {
+  const isMarkdown = this.data('isMarkdown') === true
+
   return function (tree: Root, file: VFile) {
     const headingsArray: any[] = []
     const headingCounts = new Map<string, number>()
@@ -81,12 +90,14 @@ export default function addHeadings() {
       node.data.hProperties.id = slug
     })
 
-    define(tree, file, {
-      headings: {
-        type: 'ArrayExpression',
-        elements: headingsArray,
-      },
-    })
+    if (!isMarkdown) {
+      define(tree, file, {
+        headings: {
+          type: 'ArrayExpression',
+          elements: headingsArray,
+        },
+      })
+    }
   }
 }
 
