@@ -1,412 +1,684 @@
 /** @jsxImportSource restyle */
+import React from 'react'
 import {
   APIReference,
   CodeBlock,
   CodeInline,
-  MDXRenderer,
-  getAPIReferenceConfig,
-  getAPIReferenceType,
+  Markdown,
+  getTypeReference,
+  getTypeReferenceComponents,
   parseCodeProps,
   parsePreProps,
 } from 'renoun/components'
 import { rehypePlugins, remarkPlugins } from 'renoun/mdx'
-import { isParameterType, isPropertyType } from 'renoun/utils'
+import type { TypeOfKind } from 'renoun/utils'
 
 export function Table() {
   return (
-    <div
-      css={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(4, auto)',
-        columnGap: '2rem',
-        rowGap: '3rem',
-      }}
-    >
+    <div css={{ width: '100%' }}>
       <APIReference
         source="./examples/Button.tsx"
         workingDirectory={import.meta.url}
         components={{
-          MDXRenderer: (props) => (
-            <MDXRenderer
+          Markdown: (props) => (
+            <Markdown
               components={{
-                pre: (props) => <CodeBlock {...parsePreProps(props)} />,
+                // pre: (props) => <CodeBlock {...parsePreProps(props)} />,
                 code: (props) => <CodeInline {...parseCodeProps(props)} />,
               }}
-              rehypePlugins={rehypePlugins}
-              remarkPlugins={remarkPlugins}
+              // TODO: we can't use MDX nodes in Markdown renderer so we need to handle somehow
+              // rehypePlugins={rehypePlugins}
+              // remarkPlugins={remarkPlugins}
               {...props}
             />
           ),
         }}
       >
-        <Kind />
+        <DocumentationNodeRouter />
       </APIReference>
     </div>
   )
 }
 
-function Kind() {
-  const prop = getAPIReferenceType()
+const theme = {
+  color: {
+    text: '#000',
+    textMuted: '#737373',
+    border: '#e5e5e5',
+    borderDark: '#2a2a2a',
+    hover: 'rgba(0,0,0,0.04)',
+    hoverDark: 'rgba(255,255,255,0.05)',
+  },
+  font: {
+    body: { fontSize: 14 },
+    heading: { fontSize: 20, fontWeight: 600 },
+  },
+  spacing: {
+    xs: 4,
+    sm: 8,
+    md: 12,
+    lg: 24,
+    xl: 32,
+    sectionGap: 96,
+  },
+} as const
 
-  console.log(prop)
+export function DocumentationNodeRouter() {
+  const node = getTypeReference()
 
-  switch (prop?.kind) {
-    case 'Class':
-      return <ClassKind />
+  if (node === null) {
+    return null
+  }
+
+  const components = getTypeReferenceComponents()
+
+  switch (node.kind) {
     case 'Component':
-      return <ComponentKind />
-    case 'Function':
-      return <FunctionKind />
+      return <ComponentSection node={node} components={components} />
     case 'Object':
-      return <ObjectKind />
+      return <ObjectSection node={node} components={components} />
     case 'Union':
-      return <UnionKind />
-    case 'TypeReference':
-      return <TypeReferenceKind />
+      return <UnionSection node={node} />
+    case 'Function':
+      return <FunctionSection node={node} components={components} />
+    case 'Class':
+      return <ClassSection node={node} components={components} />
     default:
       return null
   }
 }
 
-function ClassKind() {
-  const prop = getAPIReferenceType()
-  const { CodeInline, MDXRenderer } = getAPIReferenceConfig()
-
-  if (prop?.kind !== 'Class') {
-    throw new Error(
-      '[renoun] PropsTable only supports function types. Use TypeProperties for other types.'
-    )
-  }
-
+function ArrowIcon({
+  open: isOpen,
+  hovered: isHovered,
+  ...svgProperties
+}: {
+  open: boolean
+  hovered?: boolean
+} & React.SVGProps<SVGSVGElement>) {
   return (
-    <div
+    <svg
+      viewBox="0 0 10 10"
       css={{
-        gridColumn: '1 / -1',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '0.5rem',
+        width: 10,
+        height: 10,
+        transition: 'transform 150ms, opacity 150ms',
+        transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
+        opacity: isHovered || isOpen ? 1 : 0,
+        flexShrink: 0,
       }}
+      {...svgProperties}
     >
-      <h2 css={{ fontSize: '1.25rem' }}>{prop.name}</h2>
-      {prop.description ? <MDXRenderer children={prop.description} /> : null}
-      <CodeInline
-        children={prop.text}
-        language="typescript"
-        css={{
-          display: 'inline-block',
-          maxWidth: '100%',
-          whiteSpace: 'nowrap',
-        }}
-      />
-    </div>
+      <path d="M2 1 L8 5 L2 9 Z" fill="currentColor" />
+    </svg>
   )
 }
 
-function UnionKind() {
-  const prop = getAPIReferenceType()
-  const { CodeInline, MDXRenderer } = getAPIReferenceConfig()
-
-  if (prop?.kind !== 'Union') {
-    throw new Error(
-      '[renoun] PropsTable only supports function types. Use TypeProperties for other types.'
-    )
-  }
-
-  return (
-    <div
-      css={{
-        gridColumn: '1 / -1',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '0.5rem',
-      }}
-    >
-      <h2 css={{ fontSize: '1.25rem' }}>{prop.name}</h2>
-      {prop.description ? <MDXRenderer children={prop.description} /> : null}
-      <CodeInline
-        children={prop.text}
-        language="typescript"
-        css={{
-          display: 'inline-block',
-          maxWidth: '100%',
-          whiteSpace: 'nowrap',
-        }}
-      />
-    </div>
-  )
-}
-
-function FunctionKind() {
-  const prop = getAPIReferenceType()
-  const { CodeInline, MDXRenderer } = getAPIReferenceConfig()
-
-  if (prop?.kind !== 'Function') {
-    throw new Error(
-      '[renoun] PropsTable only supports function types. Use TypeProperties for other types.'
-    )
-  }
-
-  return (
-    <div
-      css={{
-        gridColumn: '1 / -1',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '0.5rem',
-      }}
-    >
-      <h2 css={{ fontSize: '1.25rem' }}>{prop.name}</h2>
-      {prop.description ? <MDXRenderer children={prop.description} /> : null}
-      <CodeInline
-        children={prop.text}
-        language="typescript"
-        css={{
-          display: 'inline-block',
-          maxWidth: '100%',
-          whiteSpace: 'nowrap',
-        }}
-      />
-    </div>
-  )
-}
-
-/** Renders a component reference type. */
-function ComponentKind() {
-  const prop = getAPIReferenceType()
-  const { MDXRenderer } = getAPIReferenceConfig()
-
-  if (prop?.kind !== 'Component') {
-    throw new Error(
-      '[renoun] PropsTable only supports components. Use TypeProperties for other types.'
-    )
-  }
-
+function Section({
+  label,
+  id,
+  children,
+}: {
+  label: string
+  id?: string
+  children: React.ReactNode
+}) {
   return (
     <section
+      id={id}
       css={{
-        gridColumn: '1 / -1',
-        display: 'grid',
-        gridTemplateColumns: 'subgrid',
-        rowGap: '2rem',
+        containerType: 'inline-size',
+        marginTop: theme.spacing.sectionGap,
+        paddingBottom: theme.spacing.xl,
+        borderBottom: `1px solid ${theme.color.border}`,
+        ':first-of-type': {
+          marginTop: 0,
+        },
+        '@media (prefers-color-scheme: dark)': {
+          borderBottom: `1px solid ${theme.color.borderDark}`,
+        },
       }}
     >
-      <div
+      <p
         css={{
-          gridColumn: '1 / -1',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '0.5rem',
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em',
+          fontSize: 12,
+          color: theme.color.textMuted,
+          marginBottom: theme.spacing.sm,
         }}
       >
-        <h2 css={{ fontSize: '1.25rem' }}>{prop.name}</h2>
-        {prop.description ? <MDXRenderer children={prop.description} /> : null}
-      </div>
-
-      {/* {prop.signatures.map((signature) => {
-        if (!signature.parameter) return null
-
-        let childrenToRender: React.ReactNode = null
-
-        switch (signature.parameter.kind) {
-          case 'Object':
-            childrenToRender = <ObjectKind />
-            break
-          case 'Reference':
-            childrenToRender = <ReferenceKind />
-            break
-          case 'UtilityReference':
-            childrenToRender = <UtilityReferenceKind />
-            break
-          default:
-            return null
-        }
-
-        return (
-          <TypeContext key={signature.name} value={signature.parameter}>
-            {childrenToRender}
-          </TypeContext>
-        )
-      })} */}
+        {label}
+      </p>
+      {children}
     </section>
   )
 }
 
-/** Renders an object type e.g. `{ language: 'ts' | 'tsx' }` */
-function ObjectKind() {
-  const prop = getAPIReferenceType()
-  const { CodeInline } = getAPIReferenceConfig()
-
-  if (prop?.kind !== 'Object') {
-    throw new Error(
-      '[renoun] PropsTable only supports object types. Use TypeProperties for other types.'
-    )
-  }
-
+function DefinitionGrid({
+  label,
+  children,
+}: {
+  label: React.ReactNode
+  children: React.ReactNode
+}) {
   return (
-    <section
+    <div
       css={{
-        gridColumn: '1 / -1',
         display: 'grid',
-        gridTemplateColumns: 'subgrid',
-        rowGap: '2rem',
+        gridTemplateColumns: '12rem minmax(0, 1fr)',
+        columnGap: theme.spacing.lg,
+        rowGap: theme.spacing.xs,
+        fontSize: theme.font.body.fontSize,
+        marginBottom: theme.spacing.md,
+        '@container (max-width: 600px)': {
+          gridTemplateColumns: '1fr',
+          rowGap: theme.spacing.sm,
+        },
       }}
     >
-      <h2 css={{ fontSize: '1.25rem' }}>{prop.name}</h2>
-      {prop.description ? <MDXRenderer children={prop.description} /> : null}
-      <CodeInline
-        children={prop.text}
-        language="typescript"
-        css={{
-          display: 'inline-block',
-          maxWidth: '100%',
-          whiteSpace: 'nowrap',
-        }}
-      />
-      <table
-        css={{
-          gridColumn: '1 / -1',
-          display: 'grid',
-          gridTemplateColumns: 'subgrid',
-          fontSize: '1rem',
-          lineHeight: 1.5,
-          backgroundColor: 'var(--color-background)',
-          color: 'var(--color-foreground)',
-        }}
-      >
-        <thead
-          css={{
-            gridColumn: '1 / -1',
-            display: 'grid',
-            gridTemplateColumns: 'subgrid',
-          }}
-        >
+      <h3>{label}</h3>
+      <div>{children}</div>
+    </div>
+  )
+}
+
+function DataTable<RowType>({
+  rows,
+  headers,
+  renderRow,
+}: {
+  rows: readonly RowType[]
+  headers?: readonly React.ReactNode[]
+  renderRow: (row: RowType, index: number) => React.ReactNode
+}) {
+  return (
+    <table
+      css={{
+        width: '100%',
+        fontSize: theme.font.body.fontSize,
+        borderBottom: `1px solid ${theme.color.border}`,
+        '@media (prefers-color-scheme: dark)': {
+          borderBottom: `1px solid ${theme.color.borderDark}`,
+        },
+      }}
+    >
+      {headers && (
+        <thead>
           <tr
             css={{
-              gridColumn: '1 / -1',
-              display: 'grid',
-              gridTemplateColumns: 'subgrid',
-              borderBottom: '1px solid var(--color-separator)',
+              borderBottom: `1px solid ${theme.color.border}`,
+              '@media (prefers-color-scheme: dark)': {
+                borderBottom: `1px solid ${theme.color.borderDark}`,
+              },
             }}
           >
-            {['Prop', 'Type', 'Default'].map((heading, index) => (
-              <th
-                key={heading}
-                css={{
-                  gridColumn: index + 1,
-                  textAlign: 'left',
-                  padding: '12px',
-                  fontWeight: 700,
-                }}
-              >
-                {heading}
-              </th>
-            ))}
+            {headers.map(function renderHeader(header, index) {
+              return (
+                <th
+                  key={index}
+                  css={{
+                    textAlign: index === headers.length - 1 ? 'right' : 'left',
+                    fontWeight: 500,
+                    padding: `${theme.spacing.sm}px 0`,
+                    color: theme.color.textMuted,
+                  }}
+                >
+                  {header}
+                </th>
+              )
+            })}
           </tr>
         </thead>
-        <tbody
-          css={{
-            gridColumn: '1 / -1',
-            display: 'grid',
-            gridTemplateColumns: 'subgrid',
-          }}
-        >
-          {prop.properties.map((property) => {
-            const isOptional =
-              isParameterType(property) || isPropertyType(property)
-                ? property.isOptional
-                : false
-            const defaultValue =
-              isParameterType(property) || isPropertyType(property)
-                ? property.defaultValue
-                : undefined
+      )}
 
-            return (
-              <tr
-                key={property.name}
-                css={{
-                  gridColumn: '1 / -1',
-                  display: 'grid',
-                  gridTemplateColumns: 'subgrid',
-                  borderBottom: '1px solid var(--color-separator)',
-                }}
-              >
-                <td
-                  css={{
-                    gridColumn: 1,
-                    padding: '12px',
-                  }}
-                >
-                  {property.name || <span>&mdash;</span>}
-                  {isOptional ? null : (
-                    <span css={{ color: 'oklch(0.8 0.15 36.71)' }}>*</span>
-                  )}
-                </td>
-
-                <td
-                  css={{
-                    gridColumn: 2,
-                    padding: '12px',
-                  }}
-                >
-                  <CodeInline
-                    children={property.text}
-                    language="typescript"
-                    css={{
-                      display: 'inline-block',
-                      maxWidth: '100%',
-                      whiteSpace: 'nowrap',
-                    }}
-                  />
-                </td>
-
-                <td
-                  css={{
-                    gridColumn: 3,
-                    padding: '12px',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {defaultValue ? (
-                    <CodeInline
-                      children={JSON.stringify(defaultValue)}
-                      language="typescript"
-                    />
-                  ) : (
-                    <span css={{ color: 'var(--color-foreground-secondary)' }}>
-                      &mdash;
-                    </span>
-                  )}
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </section>
+      <tbody>
+        {rows.map(function renderBodyRow(row, index) {
+          return (
+            <tr
+              key={index}
+              css={{
+                borderBottom:
+                  index === rows.length - 1
+                    ? 'none'
+                    : `1px solid ${theme.color.border}`,
+                '@media (prefers-color-scheme: dark)': {
+                  borderBottom:
+                    index === rows.length - 1
+                      ? 'none'
+                      : `1px solid ${theme.color.borderDark}`,
+                },
+              }}
+            >
+              {renderRow(row, index)}
+            </tr>
+          )
+        })}
+      </tbody>
+    </table>
   )
 }
 
-function TypeReferenceKind() {
-  const prop = getAPIReferenceType()
-
-  if (prop?.kind !== 'TypeReference') {
-    throw new Error(
-      '[renoun] PropsTable only supports object types. Use TypeProperties for other types.'
-    )
-  }
+function Disclosure({
+  summary,
+  children,
+}: {
+  summary: React.ReactNode
+  children: React.ReactNode
+}) {
+  const [isOpen, setIsOpen] = React.useState(false)
+  const [isHovered, setIsHovered] = React.useState(false)
 
   return (
     <div
-      css={{
-        gridColumn: '1 / -1',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'start',
-        gap: '1rem',
+      onMouseEnter={function handleMouseEnter() {
+        setIsHovered(true)
+      }}
+      onMouseLeave={function handleMouseLeave() {
+        setIsHovered(false)
       }}
     >
-      <h3 css={{ fontSize: '1rem' }}>Inherited Props</h3>
-      <CodeInline children={prop.text} language="typescript" />
+      <button
+        aria-expanded={isOpen}
+        onClick={function handleToggle() {
+          setIsOpen((previousValue) => !previousValue)
+        }}
+        css={{
+          width: '100%',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          background: 'none',
+          border: 'none',
+          padding: `${theme.spacing.sm}px ${theme.spacing.sm}px`,
+          fontSize: theme.font.body.fontSize,
+          textAlign: 'left',
+          cursor: 'pointer',
+          ':hover': { background: theme.color.hover },
+          '@media (prefers-color-scheme: dark)': {
+            ':hover': { background: theme.color.hoverDark },
+          },
+        }}
+      >
+        <span>{summary}</span>
+        <ArrowIcon open={isOpen} hovered={isHovered} />
+      </button>
+      {isOpen && <div css={{ paddingLeft: theme.spacing.lg }}>{children}</div>}
     </div>
   )
+}
+
+type ComponentsType = ReturnType<typeof getTypeReferenceComponents>
+
+function ComponentSection({
+  node,
+  components,
+}: {
+  node: TypeOfKind<'Component'>
+  components: ComponentsType
+}) {
+  return (
+    <Section label="component" id={node.name}>
+      <h2 css={{ ...theme.font.heading, marginBottom: theme.spacing.xl }}>
+        {node.name}
+      </h2>
+      <DefinitionGrid label="Properties">
+        <components.CodeInline>
+          {node.signatures[0]?.parameter?.text ?? '—'}
+        </components.CodeInline>
+      </DefinitionGrid>
+    </Section>
+  )
+}
+
+function ObjectSection({
+  node,
+  components,
+}: {
+  node: TypeOfKind<'Object'>
+  components: ComponentsType
+}) {
+  return (
+    <Section label="object" id={node.name}>
+      <h2 css={{ ...theme.font.heading, marginBottom: theme.spacing.xl }}>
+        {node.name}
+      </h2>
+
+      <DefinitionGrid label="Properties">
+        <DataTable
+          rows={node.properties}
+          headers={['Property', 'Type', 'Default Value']}
+          renderRow={function renderRow(property) {
+            return (
+              <>
+                <td
+                  css={{
+                    padding: `${theme.spacing.sm}px ${theme.spacing.lg}px`,
+                    whiteSpace: 'nowrap',
+                    verticalAlign: 'top',
+                  }}
+                >
+                  {property.name}
+                  {property.isOptional ? '?' : ''}
+                </td>
+                <td css={{ padding: theme.spacing.sm }}>
+                  <components.CodeInline>{property.text}</components.CodeInline>
+                </td>
+                <td
+                  css={{
+                    padding: theme.spacing.sm,
+                    textAlign: 'right',
+                    color: theme.color.textMuted,
+                  }}
+                >
+                  <DefaultValue
+                    value={property.defaultValue}
+                    components={components}
+                  />
+                </td>
+              </>
+            )
+          }}
+        />
+
+        {node.indexSignatures?.length && (
+          <>
+            <h4
+              css={{
+                fontWeight: 500,
+                marginTop: theme.spacing.lg,
+                marginBottom: theme.spacing.xs,
+              }}
+            >
+              Additional properties
+            </h4>
+            {node.indexSignatures.map(
+              function renderIndexSignature(signature, index) {
+                return (
+                  <components.CodeInline key={index}>
+                    {[signature.key.text, signature.value.text].join(': ')}
+                  </components.CodeInline>
+                )
+              }
+            )}
+          </>
+        )}
+      </DefinitionGrid>
+    </Section>
+  )
+}
+
+function UnionSection({ node }: { node: TypeOfKind<'Union'> }) {
+  return (
+    <Section label="union" id={node.name}>
+      <h2 css={{ ...theme.font.heading, marginBottom: theme.spacing.xl }}>
+        {node.name}
+      </h2>
+      <DefinitionGrid label="Members">
+        {node.members.map(function renderMember(member, index) {
+          return (
+            <React.Fragment key={index}>
+              {index > 0 && ' | '}
+              <code>{member.text}</code>
+            </React.Fragment>
+          )
+        })}
+      </DefinitionGrid>
+    </Section>
+  )
+}
+
+function renderParameterRow(
+  parameter: TypeOfKind<'Function'>['signatures'][0]['parameters'][number],
+  index: number,
+  components: ComponentsType
+) {
+  return (
+    <>
+      <td
+        css={{
+          padding: `${theme.spacing.sm}px ${theme.spacing.lg}px`,
+          whiteSpace: 'nowrap',
+          verticalAlign: 'top',
+        }}
+      >
+        {parameter.name}
+        {parameter.isOptional ? '?' : ''}
+      </td>
+      <td css={{ padding: theme.spacing.sm }}>
+        <components.CodeInline>{parameter.text}</components.CodeInline>
+      </td>
+      <td
+        css={{
+          padding: theme.spacing.sm,
+          textAlign: 'right',
+          color: theme.color.textMuted,
+        }}
+      >
+        <DefaultValue value={parameter.defaultValue} components={components} />
+      </td>
+    </>
+  )
+}
+
+function FunctionSection({
+  node,
+  components,
+}: {
+  node: TypeOfKind<'Function'>
+  components: ComponentsType
+}) {
+  const signature = node.signatures[0]
+
+  return (
+    <Section label="function" id={node.name}>
+      <h2 css={{ ...theme.font.heading, marginBottom: theme.spacing.xl }}>
+        {node.name}
+      </h2>
+
+      {signature.parameters.length > 0 && (
+        <DefinitionGrid label="Parameters">
+          <DataTable
+            rows={signature.parameters}
+            headers={['Parameter', 'Type', 'Default Value']}
+            renderRow={function renderRow(parameter, index) {
+              return renderParameterRow(parameter, index, components)
+            }}
+          />
+        </DefinitionGrid>
+      )}
+
+      <DefinitionGrid label="Returns">
+        <components.CodeInline>{signature.returnType}</components.CodeInline>
+      </DefinitionGrid>
+    </Section>
+  )
+}
+
+function renderClassPropertyRow(
+  property: NonNullable<TypeOfKind<'Class'>['properties']>[number],
+  index: number,
+  components: ComponentsType
+) {
+  return (
+    <>
+      <td
+        css={{
+          padding: `${theme.spacing.sm}px ${theme.spacing.lg}px`,
+          whiteSpace: 'nowrap',
+          verticalAlign: 'top',
+        }}
+      >
+        {property.name}
+        {property.isOptional ? '?' : ''}
+      </td>
+      <td css={{ padding: theme.spacing.sm }}>
+        <components.CodeInline>{property.text}</components.CodeInline>
+      </td>
+      <td
+        css={{
+          padding: theme.spacing.sm,
+          textAlign: 'right',
+          color: theme.color.textMuted,
+        }}
+      >
+        <DefaultValue value={property.defaultValue} components={components} />
+      </td>
+    </>
+  )
+}
+
+function renderMethod(
+  method: NonNullable<TypeOfKind<'Class'>['methods']>[number],
+  components: ComponentsType
+) {
+  const signature = method.signatures[0]
+
+  function renderMethodParameterRow(
+    parameter: (typeof signature.parameters)[number],
+    index: number
+  ) {
+    return renderParameterRow(parameter, index, components)
+  }
+
+  return (
+    <Disclosure
+      key={method.name}
+      summary={<components.CodeInline>{signature.text}</components.CodeInline>}
+    >
+      {signature.parameters.length > 0 && (
+        <DefinitionGrid label="Parameters">
+          <DataTable
+            rows={signature.parameters}
+            headers={['Parameter', 'Type', 'Default Value']}
+            renderRow={renderMethodParameterRow}
+          />
+        </DefinitionGrid>
+      )}
+
+      <DefinitionGrid label="Returns">
+        <components.CodeInline>{signature.returnType}</components.CodeInline>
+      </DefinitionGrid>
+    </Disclosure>
+  )
+}
+
+function ClassSection({
+  node,
+  components,
+}: {
+  node: TypeOfKind<'Class'>
+  components: ComponentsType
+}) {
+  return (
+    <Section label="class" id={node.name}>
+      <h2 css={{ ...theme.font.heading, marginBottom: theme.spacing.xl }}>
+        {node.name}
+      </h2>
+
+      {node.properties?.length && (
+        <DefinitionGrid label="Properties">
+          <DataTable
+            rows={node.properties}
+            headers={['Property', 'Type', 'Default Value']}
+            renderRow={function renderRow(property, index) {
+              return renderClassPropertyRow(property, index, components)
+            }}
+          />
+        </DefinitionGrid>
+      )}
+
+      {node.methods?.length && (
+        <DefinitionGrid label="Methods">
+          {node.methods.map(function renderClassMethod(method) {
+            return renderMethod(method, components)
+          })}
+        </DefinitionGrid>
+      )}
+
+      {(node.extends || node.implements?.length) && (
+        <DefinitionGrid label="Heritage">
+          {node.extends && (
+            <div
+              css={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: theme.spacing.sm,
+              }}
+            >
+              <h3
+                css={{
+                  fontWeight: 500,
+                  marginBottom: theme.spacing.sm,
+                  marginTop: theme.spacing.xl,
+                }}
+              >
+                Extends
+              </h3>
+              <components.CodeInline>{node.extends.text}</components.CodeInline>
+            </div>
+          )}
+
+          {node.implements?.length && (
+            <div
+              css={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: theme.spacing.sm,
+              }}
+            >
+              <h3
+                css={{
+                  fontWeight: 500,
+                  marginBottom: theme.spacing.sm,
+                  marginTop: theme.spacing.xl,
+                }}
+              >
+                Implements
+              </h3>
+              {node.implements.map(
+                function renderImplements(implemented, index) {
+                  return (
+                    <React.Fragment key={index}>
+                      {index > 0 && ', '}
+                      <components.CodeInline>
+                        {implemented.text}
+                      </components.CodeInline>
+                    </React.Fragment>
+                  )
+                }
+              )}
+            </div>
+          )}
+        </DefinitionGrid>
+      )}
+    </Section>
+  )
+}
+
+function DefaultValue({
+  value,
+  components,
+}: {
+  value: unknown
+  components: ReturnType<typeof getTypeReferenceComponents>
+}) {
+  if (value === undefined) return <>—</>
+
+  const valueType = typeof value
+  if (
+    valueType === 'string' ||
+    valueType === 'number' ||
+    valueType === 'boolean'
+  ) {
+    return <>{String(value)}</>
+  }
+
+  try {
+    return (
+      <components.CodeInline>{JSON.stringify(value)}</components.CodeInline>
+    )
+  } catch {
+    return <components.CodeInline>{String(value)}</components.CodeInline>
+  }
 }

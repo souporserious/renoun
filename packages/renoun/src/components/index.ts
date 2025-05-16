@@ -1,15 +1,9 @@
 export {
   APIReference,
-  ClassKind,
-  ComponentKind,
-  FunctionKind,
-  TypeChildren,
-  TypeDisplay,
-  TypeProperties,
-  TypeValue,
-  getAPIReferenceConfig,
-  getAPIReferenceType,
+  getTypeReference,
+  getTypeReferenceComponents,
   type APIReferenceProps,
+  type APIReferenceComponents,
 } from './APIReference.js'
 export {
   CodeBlock,
