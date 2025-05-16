@@ -29,7 +29,7 @@ const Table = styled('table', {
   },
 })
 
-const mdxRendererProps = {
+const mdxProps = {
   components: {
     pre: (props) => {
       return <CodeBlock {...parsePreProps(props)} shouldAnalyze={false} />
@@ -140,7 +140,7 @@ export async function QuickInfo({
               >
                 <Markdown
                   children={quickInfo.documentationText}
-                  {...mdxRendererProps}
+                  {...mdxProps}
                 />
               </MarkdownContainer>
             </>

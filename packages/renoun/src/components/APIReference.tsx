@@ -19,14 +19,14 @@ import type {
 import { isParameterType, isPropertyType } from '../utils/resolve-type.js'
 import { CodeBlock, parsePreProps } from './CodeBlock/index.js'
 import { CodeInline } from './CodeInline.js'
-import { MDXRenderer } from './MDXRenderer.js'
-import type { MDXRendererProps } from './MDXRenderer.js'
+import { MDX } from './MDX.js'
+import type { MDXProps } from './MDX.js'
 
 const codeInlineStyles = {
   display: 'inline-block',
   whiteSpace: 'nowrap',
 } satisfies CSSObject
-const mdxRendererProps = {
+const mdxProps = {
   components: {
     pre: (props) => {
       return <CodeBlock {...parsePreProps(props)} shouldAnalyze={false} />
@@ -45,7 +45,7 @@ const mdxRendererProps = {
   },
   rehypePlugins,
   remarkPlugins,
-} satisfies Omit<MDXRendererProps, 'children'>
+} satisfies Omit<MDXProps, 'children'>
 
 interface SourceString {
   /** The file path to the source code. */
@@ -151,7 +151,7 @@ async function APIReferenceAsync({
             </div>
 
             {type.description ? (
-              <MDXRenderer children={type.description} {...mdxRendererProps} />
+              <MDX children={type.description} {...mdxProps} />
             ) : null}
           </div>
 
@@ -212,7 +212,7 @@ async function APIReferenceAsync({
         {type.description &&
         type.kind !== 'Function' &&
         type.kind !== 'Component' ? (
-          <MDXRenderer children={type.description} {...mdxRendererProps} />
+          <MDX children={type.description} {...mdxProps} />
         ) : null}
       </div>
 
@@ -330,10 +330,7 @@ function TypeChildren({
                 }}
               />
               {signature.description ? (
-                <MDXRenderer
-                  children={signature.description}
-                  {...mdxRendererProps}
-                />
+                <MDX children={signature.description} {...mdxProps} />
               ) : null}
               {signature.parameter ? (
                 <div>
@@ -393,10 +390,7 @@ function TypeChildren({
                 }}
               />
               {signature.description ? (
-                <MDXRenderer
-                  children={signature.description}
-                  {...mdxRendererProps}
-                />
+                <MDX children={signature.description} {...mdxProps} />
               ) : null}
               {signature.parameters.length > 0 ? (
                 <div>
@@ -611,9 +605,7 @@ function TypeValue({
         </div>
       </div>
 
-      {type.description && (
-        <MDXRenderer children={type.description} {...mdxRendererProps} />
-      )}
+      {type.description && <MDX children={type.description} {...mdxProps} />}
 
       {type.kind === 'Object' && type.properties
         ? type.properties.map((propertyType, index) => (
