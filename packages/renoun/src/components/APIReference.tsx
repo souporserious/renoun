@@ -1,78 +1,87 @@
-/** @jsxImportSource restyle */
-/** @jsxRuntime automatic */
-import { Fragment, Suspense } from 'react'
-import type { CSSObject } from 'restyle'
-import { resolve } from 'node:path'
+import React, { Suspense } from 'react'
+import { dirname, resolve } from 'node:path'
 
 import {
   JavaScriptFile,
   type JavaScriptFileExport,
 } from '../file-system/index.js'
-import { rehypePlugins, remarkPlugins } from '../mdx/index.js'
-import { createSlug } from '../utils/create-slug.js'
-import type {
-  Kind,
-  ResolvedType,
-  SymbolFilter,
-  TypeOfKind,
-} from '../utils/resolve-type.js'
-import { isParameterType, isPropertyType } from '../utils/resolve-type.js'
-import { CodeBlock, parsePreProps } from './CodeBlock/index.js'
-import { CodeInline } from './CodeInline.js'
-import { MDX } from './MDX.js'
-import type { MDXProps } from './MDX.js'
+import { type ResolvedType, type SymbolFilter } from '../utils/resolve-type.js'
+import { createContext, getContext } from '../utils/context.js'
+import {
+  CodeInline as CodeInlineDefault,
+  type CodeInlineProps,
+} from './CodeInline.js'
+import { Markdown as MarkdownDefault, type MarkdownProps } from './Markdown.js'
+import { WorkingDirectoryContext } from './Context.js'
 
-const codeInlineStyles = {
-  display: 'inline-block',
-  whiteSpace: 'nowrap',
-} satisfies CSSObject
-const mdxProps = {
-  components: {
-    pre: (props) => {
-      return <CodeBlock {...parsePreProps(props)} shouldAnalyze={false} />
-    },
-    code: (props) => {
-      return (
-        <CodeInline
-          children={props.children}
-          language="typescript"
-          shouldAnalyze={false}
-          css={codeInlineStyles}
-        />
-      )
-    },
-    p: (props) => <p {...props} css={{ margin: 0 }} />,
-  },
-  rehypePlugins,
-  remarkPlugins,
-} satisfies Omit<MDXProps, 'children'>
-
-interface SourceString {
-  /** The file path to the source code. */
-  source: string
-
-  /** The working directory to resolve the file path from. Will use the base URL if a URL is provided. */
-  workingDirectory?: string
+export interface APIReferenceComponents {
+  CodeInline: React.ComponentType<CodeInlineProps>
+  Markdown: React.ComponentType<MarkdownProps>
 }
 
-interface SourceExport {
-  /** The export source from a collection export source to get types from. */
-  source: JavaScriptFile<any> | JavaScriptFileExport<any>
+const defaultComponents: APIReferenceComponents = {
+  CodeInline: CodeInlineDefault,
+  Markdown: MarkdownDefault,
 }
 
-interface Filter {
-  /** A filter to apply to the exported types. */
+const TypeReferenceComponentsContext =
+  createContext<APIReferenceComponents>(defaultComponents)
+
+export function getTypeReferenceComponents() {
+  return getContext(TypeReferenceComponentsContext)
+}
+
+export const TypeReferenceContext = createContext<ResolvedType | null>(null)
+
+export function getTypeReference(): ResolvedType
+export function getTypeReference<Kind extends ResolvedType['kind']>(
+  kind: Kind
+): Extract<ResolvedType, { kind: Kind }>
+export function getTypeReference<Kind extends ResolvedType['kind']>(
+  kind?: Kind
+): ResolvedType | null {
+  const type = getContext(TypeReferenceContext)
+  if (type === null) {
+    return null
+  }
+  if (kind && type.kind !== kind) {
+    throw new Error(
+      `[renoun] Expected type kind "${kind}", but got "${type.kind}".`
+    )
+  }
+
+  return kind ? (type as Extract<ResolvedType, { kind: Kind }>) : type
+}
+
+export interface APIReferenceProps {
+  /** The file path, source file, or export type reference to resolve. */
+  source: string | JavaScriptFile<any> | JavaScriptFileExport<any>
+
+  /** Optional filter for exported symbols. */
   filter?: SymbolFilter
+
+  /** Base directory for relative `source` values. */
+  workingDirectory?: string
+
+  /**
+   * Override default component renderers.
+   *
+   * ```tsx
+   * <APIReference
+   *   source="./Button.tsx"
+   *   components={{ CodeInline: CustomCodeInline, TypeValue: CustomTypeValue }}
+   * />
+   * ```
+   */
+  components?: Partial<APIReferenceComponents>
+
+  /** Optional children to override the default rendering. */
+  children?: React.ReactNode
 }
 
-export type APIReferenceProps =
-  | (SourceString & Filter)
-  | (SourceExport & Filter)
-
-/** Displays type documentation for all types exported from a file path, `JavaScriptFile`, or `JavaScriptFileExport`. */
 export function APIReference(props: APIReferenceProps) {
   return (
-    <Suspense fallback="Loading API references...">
+    <Suspense>
       <APIReferenceAsync {...props} />
     </Suspense>
   )
@@ -81,553 +90,62 @@ export function APIReference(props: APIReferenceProps) {
 async function APIReferenceAsync({
   source,
   filter,
-  ...props
+  workingDirectory,
+  components,
+  children,
 }: APIReferenceProps) {
+  let filePath: string | undefined = undefined
+
   if (typeof source === 'string') {
-    let workingDirectory: string | undefined
-
-    if ('workingDirectory' in props && props.workingDirectory) {
-      if (URL.canParse(props.workingDirectory)) {
-        const { pathname } = new URL(props.workingDirectory)
+    if (workingDirectory) {
+      if (URL.canParse(workingDirectory)) {
+        const { pathname } = new URL(workingDirectory)
         workingDirectory = pathname.slice(0, pathname.lastIndexOf('/'))
-      } else {
-        workingDirectory = props.workingDirectory
       }
+      filePath = resolve(workingDirectory, source)
+    } else {
+      filePath = source
     }
-
-    source = new JavaScriptFile({
-      path: workingDirectory ? resolve(workingDirectory, source) : source,
-    })
+    source = new JavaScriptFile({ path: filePath })
   }
+
+  let resolvedType: ResolvedType | ResolvedType[] | undefined
 
   if (source instanceof JavaScriptFile) {
-    const exportedTypes = await Promise.all(
-      (await source.getExports()).map((exportSource) =>
-        exportSource.getType(filter)
+    const exported = await Promise.all(
+      (await source.getExports()).map((fileExport) =>
+        fileExport.getType(filter)
       )
     )
-
-    return exportedTypes
-      .filter((type): type is ResolvedType => Boolean(type))
-      .map((type) => (
-        <div
-          key={type.name}
-          css={{
-            display: 'flex',
-            flexDirection: 'column',
-            padding: '1.6rem 0',
-            borderBottom: '1px solid var(--color-separator-secondary)',
-          }}
-        >
-          <div
-            css={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.8rem',
-            }}
-          >
-            <div
-              css={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '1rem',
-              }}
-            >
-              <h3
-                id={type.name ? createSlug(type.name, 'kebab') : undefined}
-                css={{ flexShrink: 0, margin: '0 !important' }}
-              >
-                {type.name}
-              </h3>
-
-              <CodeInline
-                children={type.text}
-                language="typescript"
-                shouldAnalyze={false}
-                css={codeInlineStyles}
-              />
-
-              {/* {type.path && <ViewSource href={type.path} />} */}
-            </div>
-
-            {type.description ? (
-              <MDX children={type.description} {...mdxProps} />
-            ) : null}
-          </div>
-
-          <div css={{ display: 'flex' }}>
-            <TypeChildren type={type} css={{ marginTop: '2rem' }} />
-          </div>
-        </div>
-      ))
+    resolvedType = exported.filter(Boolean) as ResolvedType[]
+  } else {
+    resolvedType = await source.getType(filter)
   }
 
-  const type = await source.getType(filter)
-
-  if (type === undefined) {
+  if (!resolvedType) {
     return null
   }
 
-  return (
-    <div
-      key={type.name}
-      css={{
-        display: 'flex',
-        flexDirection: 'column',
-        padding: '1.6rem 0',
-        borderBottom: '1px solid var(--color-separator-secondary)',
-      }}
-    >
-      <div
-        css={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '0.8rem',
-        }}
-      >
-        <div
-          css={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '1rem',
-          }}
-        >
-          <h3
-            id={type.name ? createSlug(type.name, 'kebab') : undefined}
-            css={{ flexShrink: 0, margin: 0 }}
-          >
-            {type.name}
-          </h3>
-
-          <CodeInline
-            children={type.text}
-            language="typescript"
-            shouldAnalyze={false}
-            css={codeInlineStyles}
-          />
-
-          {/* {type.path && <ViewSource href={type.path} />} */}
-        </div>
-
-        {type.description &&
-        type.kind !== 'Function' &&
-        type.kind !== 'Component' ? (
-          <MDX children={type.description} {...mdxProps} />
-        ) : null}
-      </div>
-
-      <div css={{ display: 'flex' }}>
-        <TypeChildren type={type} css={{ marginTop: '2rem' }} />
-      </div>
-    </div>
-  )
-}
-
-/** Determines how to render the immediate type children based on its kind. */
-function TypeChildren({
-  type,
-  css: cssProp,
-}: {
-  type: ResolvedType
-  css: CSSObject
-}) {
-  if (
-    type.kind === 'Enum' ||
-    type.kind === 'Symbol' ||
-    type.kind === 'TypeReference'
-  ) {
-    return (
-      <CodeInline
-        children={type.text}
-        language="typescript"
-        shouldAnalyze={false}
-        css={codeInlineStyles}
-      />
-    )
-  }
-
-  if (
-    type.kind === 'Object' ||
-    type.kind === 'Intersection' ||
-    type.kind === 'Union'
-  ) {
-    return <TypeProperties type={type} css={cssProp} />
-  }
-
-  if (type.kind === 'Class') {
-    return (
-      <div
-        css={{
-          display: 'flex',
-          flexDirection: 'column',
-          marginTop: '1.5rem',
-          gap: '1.2rem',
-          minWidth: 0,
-          ...cssProp,
-        }}
-      >
-        {type.accessors && type.accessors.length > 0 ? (
-          <div>
-            <h4 css={{ margin: 0 }}>Accessors</h4>
-            {type.accessors.map((accessor, index) => (
-              <TypeValue key={index} type={accessor} />
-            ))}
-          </div>
-        ) : null}
-
-        {type.constructors && type.constructors.length > 0 ? (
-          <div>
-            <h4 css={{ margin: 0 }}>Constructors</h4>
-            {type.constructors.map((constructor, index) => (
-              <TypeValue key={index} type={constructor} />
-            ))}
-          </div>
-        ) : null}
-
-        {type.methods && type.methods.length > 0 ? (
-          <div>
-            <h4 css={{ margin: 0 }}>Methods</h4>
-            {type.methods.map((method, index) => (
-              <TypeValue key={index} type={method} />
-            ))}
-          </div>
-        ) : null}
-
-        {type.properties && type.properties.length > 0 ? (
-          <div>
-            <h5 css={{ margin: 0 }}>Properties</h5>
-            {type.properties.map((property, index) => (
-              <TypeValue key={index} type={property} />
-            ))}
-          </div>
-        ) : null}
-      </div>
-    )
-  }
-
-  if (type.kind === 'Component') {
-    return (
-      <div
-        css={{
-          display: 'flex',
-          flexDirection: 'column',
-          marginTop: '1.5rem',
-          gap: '1.2rem',
-          minWidth: 0,
-          ...cssProp,
-        }}
-      >
-        {type.signatures.length > 1 ? (
-          <h4 css={{ margin: 0, marginBottom: '1rem' }}>Overloads</h4>
-        ) : null}
-        {type.signatures.map((signature, index) => {
-          return (
-            <Fragment key={index}>
-              <hr
-                css={{
-                  border: 'none',
-                  borderTop: '1px solid var(--color-separator-secondary)',
-                }}
-              />
-              {signature.description ? (
-                <MDX children={signature.description} {...mdxProps} />
-              ) : null}
-              {signature.parameter ? (
-                <div>
-                  <h5 css={{ margin: '0' }}>Parameters</h5>
-                  {signature.parameter.kind === 'Object' ? (
-                    <TypeProperties type={signature.parameter} />
-                  ) : signature.parameter.kind === 'TypeReference' ? (
-                    <CodeInline
-                      children={signature.parameter.text}
-                      language="typescript"
-                      shouldAnalyze={false}
-                      css={{
-                        ...codeInlineStyles,
-                        marginTop: '1.5rem',
-                      }}
-                    />
-                  ) : (
-                    <TypeValue type={signature.parameter} />
-                  )}
-                </div>
-              ) : null}
-              {signature.returnType ? (
-                <div>
-                  <h5 css={{ margin: 0, marginBottom: '1.5rem' }}>Returns</h5>
-                  {signature.returnType}
-                </div>
-              ) : null}
-            </Fragment>
-          )
-        })}
-      </div>
-    )
-  }
-
-  if (type.kind === 'Function') {
-    return (
-      <div
-        css={{
-          display: 'flex',
-          flexDirection: 'column',
-          marginTop: '1.5rem',
-          gap: '1.2rem',
-          minWidth: 0,
-          ...cssProp,
-        }}
-      >
-        {type.signatures.length > 1 ? (
-          <h4 css={{ margin: 0, marginBottom: '1rem' }}>Overloads</h4>
-        ) : null}
-        {type.signatures.map((signature, index) => {
-          return (
-            <Fragment key={index}>
-              <hr
-                css={{
-                  border: 'none',
-                  borderTop: '1px solid var(--color-separator-secondary)',
-                }}
-              />
-              {signature.description ? (
-                <MDX children={signature.description} {...mdxProps} />
-              ) : null}
-              {signature.parameters.length > 0 ? (
-                <div>
-                  <h5 css={{ margin: 0 }}>Parameters</h5>
-                  {signature.parameters.map((parameter, index) => (
-                    <TypeValue key={index} type={parameter} />
-                  ))}
-                </div>
-              ) : null}
-              {signature.returnType ? (
-                <div
-                  css={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'start',
-                  }}
-                >
-                  <h5 css={{ margin: 0, marginBottom: '1.5rem' }}>Returns</h5>
-                  <CodeInline
-                    children={signature.returnType}
-                    language="typescript"
-                    shouldAnalyze={false}
-                    css={{
-                      ...codeInlineStyles,
-                      maxWidth: '-webkit-fill-available',
-                    }}
-                  />
-                </div>
-              ) : null}
-            </Fragment>
-          )
-        })}
-      </div>
-    )
-  }
-
-  if (type.kind === 'TypeAlias') {
-    if (type.type) {
-      return <TypeChildren type={type.type} css={{ marginTop: '2rem' }} />
-    } else {
-      return (
-        <CodeInline
-          children={type.text}
-          language="typescript"
-          shouldAnalyze={false}
-          css={codeInlineStyles}
-        />
-      )
-    }
-  }
-
-  console.log('[APIReference:TypeChildren] Did not render: ', type)
-
-  return null
-}
-
-/** Determines how to render the immediate type properties accounting for unions. */
-function TypeProperties({
-  type,
-  css: cssProp,
-}: {
-  type: TypeOfKind<'Object' | 'Intersection' | 'Union'>
-  css?: CSSObject
-}) {
-  if (type.kind === 'Union') {
-    return (
-      <div
-        css={{
-          display: 'flex',
-          flexDirection: 'column',
-          marginTop: '1.5rem',
-          gap: '1.2rem',
-          minWidth: 0,
-          ...cssProp,
-        }}
-      >
-        {type.members.map((member, index) =>
-          member.kind === 'Object' ||
-          member.kind === 'Intersection' ||
-          member.kind === 'Union' ? (
-            <TypeProperties key={index} type={member} />
-          ) : member.kind === 'TypeReference' ? (
-            member.text
-          ) : (
-            <TypeValue key={index} type={member} />
-          )
-        )}
-      </div>
-    )
-  }
-
-  if (type.properties.length) {
-    return (
-      <div
-        css={{
-          display: 'flex',
-          flexDirection: 'column',
-          marginTop: '1.5rem',
-          gap: '1.2rem',
-          minWidth: 0,
-          ...cssProp,
-        }}
-      >
-        <h5 css={{ margin: 0, color: 'var(--color-foreground-secondary)' }}>
-          Properties
-        </h5>
-        {type.properties.map((propertyType, index) => (
-          <TypeValue key={index} type={propertyType} />
-        ))}
-      </div>
-    )
-  }
-
-  console.log('[APIReference:TypeProperties] Did not render: ', type)
-
-  return null
-}
-
-/** Renders a type value with its name, type, and description. */
-function TypeValue({
-  type,
-  css: cssProp,
-}: {
-  type: Kind.All
-  css?: CSSObject
-}) {
-  const isNameSameAsType = type.name === type.text
-  let isRequired = false
-  let defaultValue
-
-  if (isParameterType(type) || isPropertyType(type)) {
-    isRequired = !type.isOptional
-    defaultValue = type.defaultValue
+  const mergedComponents: APIReferenceComponents = {
+    ...defaultComponents,
+    ...components,
   }
 
   return (
-    <div
-      key={type.name + type.text}
-      css={{
-        display: 'flex',
-        flexDirection: 'column',
-        padding: '1.5rem 0',
-        gap: '0.8rem',
-        minWidth: 0,
-        ...cssProp,
-      }}
-    >
-      <div
-        css={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-        }}
-      >
-        <h4
-          css={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            flexShrink: 0,
-            margin: 0,
-            fontWeight: 400,
-            color: 'var(--color-foreground-secondary)',
-          }}
-        >
-          {type.name}{' '}
-          {isRequired && (
-            <span css={{ color: 'oklch(0.8 0.15 36.71)' }} title="required">
-              *
-            </span>
-          )}
-        </h4>
-        <div
-          css={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.25rem',
-            minWidth: 0,
-          }}
-        >
-          {isNameSameAsType ? null : (
-            <CodeInline
-              children={type.text}
-              language="typescript"
-              shouldAnalyze={false}
-              paddingX="0.5rem"
-              paddingY="0.2rem"
-              css={{
-                ...codeInlineStyles,
-                fontSize: 'var(--font-size-body-2)',
-              }}
-            />
-          )}
-          {defaultValue ? (
-            <span
-              css={{
-                flexShrink: 0,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.25rem',
-                minWidth: 0,
-              }}
-            >
-              ={' '}
-              <CodeInline
-                children={JSON.stringify(defaultValue)}
-                language="typescript"
-                shouldAnalyze={false}
-                css={codeInlineStyles}
-              />
-            </span>
-          ) : null}
-        </div>
-      </div>
-
-      {type.description && <MDX children={type.description} {...mdxProps} />}
-
-      {type.kind === 'Object' && type.properties
-        ? type.properties.map((propertyType, index) => (
-            <TypeValue
-              key={index}
-              type={propertyType}
-              css={{ paddingLeft: '1.5rem' }}
-            />
+    <WorkingDirectoryContext value={filePath ? dirname(filePath) : undefined}>
+      <TypeReferenceComponentsContext value={mergedComponents}>
+        {Array.isArray(resolvedType) ? (
+          resolvedType.map((type, index) => (
+            <TypeReferenceContext key={index} value={type}>
+              {children}
+            </TypeReferenceContext>
           ))
-        : null}
-
-      {type.kind === 'Function' && type.signatures && type.signatures.length
-        ? type.signatures.map((signature) =>
-            signature.parameters.map((parameter, index) => (
-              <TypeValue
-                key={index}
-                type={parameter}
-                css={{ paddingLeft: '1.5rem' }}
-              />
-            ))
-          )
-        : null}
-    </div>
+        ) : (
+          <TypeReferenceContext value={resolvedType}>
+            {children}
+          </TypeReferenceContext>
+        )}
+      </TypeReferenceComponentsContext>
+    </WorkingDirectoryContext>
   )
 }
