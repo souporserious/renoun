@@ -8,7 +8,7 @@ import {
   getThemeTokenVariables,
 } from '../../utils/get-theme.js'
 import type { Token, TokenDiagnostic } from '../../utils/get-tokens.js'
-import { MDXRenderer, type MDXRendererProps } from '../MDXRenderer.js'
+import { Markdown, type MarkdownProps } from '../Markdown.js'
 import { QuickInfoPopover } from './QuickInfoPopover.js'
 import { CodeInline } from '../CodeInline.js'
 import { CodeBlock, parsePreProps } from './CodeBlock.js'
@@ -29,7 +29,7 @@ const Table = styled('table', {
   },
 })
 
-const mdxRendererProps = {
+const mdxProps = {
   components: {
     pre: (props) => {
       return <CodeBlock {...parsePreProps(props)} shouldAnalyze={false} />
@@ -37,7 +37,7 @@ const mdxRendererProps = {
     code: (props) => {
       return (
         <CodeInline
-          children={props.children}
+          children={props.children as string}
           shouldAnalyze={false}
           css={{
             display: 'inline',
@@ -53,7 +53,7 @@ const mdxRendererProps = {
   },
   rehypePlugins,
   remarkPlugins,
-} satisfies Omit<MDXRendererProps, 'children'>
+} satisfies Omit<MarkdownProps, 'children'>
 
 /**
  * A quick info popover that displays diagnostics and documentation.
@@ -138,9 +138,9 @@ export async function QuickInfo({
                   color: theme.foreground,
                 }}
               >
-                <MDXRenderer
+                <Markdown
                   children={quickInfo.documentationText}
-                  {...mdxRendererProps}
+                  {...mdxProps}
                 />
               </MarkdownContainer>
             </>

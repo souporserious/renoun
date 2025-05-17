@@ -4,6 +4,7 @@ import rehypeUnwrapImages from 'rehype-unwrap-images'
 
 import rehypeAddPreMetaProps from './add-pre-meta-props.js'
 import rehypeAddReadingTime from './add-reading-time.js'
+import type { Processor } from 'unified'
 
 /**
  * Apply a series of rehype plugins to the tree:
@@ -12,9 +13,9 @@ import rehypeAddReadingTime from './add-reading-time.js'
  * - `rehypeAddReadingTime` exports the reading time as a `readingTime` variable.
  * - `rehypeUnwrapImages` unwraps images from their parent paragraphs.
  */
-export default function rehypeRenoun() {
+export default function rehypeRenoun(this: Processor) {
   const addPreMetaProps = rehypeAddPreMetaProps()
-  const addReadingTime = rehypeAddReadingTime()
+  const addReadingTime = rehypeAddReadingTime.call(this)
   const unwrapImages = rehypeUnwrapImages()
 
   return async function transformer(tree: Root, file: VFile) {

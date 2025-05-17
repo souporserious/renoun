@@ -422,14 +422,15 @@ function printFilteredImportStatement(
 
   const namedSpecs = declaration
     .getNamedImports()
-    .map((ni) => ({
-      name: ni.getNameNode().getText(),
-      alias: ni.getAliasNode()?.getText(),
+    .map((namedImport) => ({
+      name: namedImport.getNameNode().getText(),
+      alias: namedImport.getAliasNode()?.getText(),
+      isTypeOnly: namedImport.isTypeOnly(),
     }))
     .filter(({ name, alias }) => usedAliases.has(alias ?? name))
-    .map(({ name, alias }) =>
+    .map(({ name, alias, isTypeOnly }) =>
       factory.createImportSpecifier(
-        false,
+        isTypeOnly,
         alias ? factory.createIdentifier(name) : undefined,
         factory.createIdentifier(alias ?? name)
       )
@@ -440,7 +441,7 @@ function printFilteredImportStatement(
   }
 
   const importClause = factory.createImportClause(
-    false,
+    declaration.isTypeOnly(),
     keepDefault ? factory.createIdentifier(defaultId!) : undefined,
     keepNamespace
       ? factory.createNamespaceImport(factory.createIdentifier(namespaceId!))

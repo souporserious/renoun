@@ -141,8 +141,14 @@ export namespace Kind {
 
   export type ClassProperty = Base &
     SharedClassMember & {
+      /** The default value assigned to the property parsed as a literal value if possible. */
       defaultValue?: unknown
-      isReadonly: boolean
+
+      /** Whether or not the property has an optional modifier or default value. */
+      isOptional?: boolean
+
+      /** Whether or not the property has a readonly modifier. */
+      isReadonly?: boolean
     }
 
   export interface IndexSignature extends Shared {
@@ -1907,13 +1913,16 @@ function resolveClassProperty(
   )
 
   if (resolvedType) {
+    const defaultValue = getPropertyDefaultValue(property)
+
     return {
       ...resolvedType,
       ...getJsDocMetadata(property),
       name: property.getName(),
-      defaultValue: getPropertyDefaultValue(property),
+      defaultValue,
       scope: getScope(property),
       visibility: getVisibility(property),
+      isOptional: property.hasQuestionToken() || defaultValue !== undefined,
       isReadonly: property.isReadonly(),
       decorators: resolveDecorators(
         property.getDecorators(),

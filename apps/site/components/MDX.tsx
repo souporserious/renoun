@@ -1,11 +1,11 @@
-import { MDXRenderer as BaseMDXRenderer } from 'renoun/components'
+import { MDX as DefaultMDX } from 'renoun/components'
 import { remarkPlugins, rehypePlugins } from 'renoun/mdx'
 
 import { MDXComponents } from '@/components/MDXComponents'
 
-export function MDXRenderer({ children }: { children: string }) {
+export function MDX({ children }: { children: string }) {
   return (
-    <BaseMDXRenderer
+    <DefaultMDX
       components={MDXComponents}
       remarkPlugins={remarkPlugins}
       rehypePlugins={rehypePlugins}
