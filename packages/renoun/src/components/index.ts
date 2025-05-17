@@ -17,7 +17,11 @@ export {
 } from './CodeInline.js'
 export { Copyright } from './Copyright.js'
 export { GitProviderLogo, GitProviderLink } from './GitProvider.js'
-export { Markdown } from './Markdown.js'
+export {
+  Markdown,
+  type MarkdownProps,
+  type MarkdownComponents,
+} from './Markdown.js'
 export { MDX as MDX } from './MDX.js'
 export { PackageInstall, PackageInstallScript } from './PackageInstall/index.js'
 export { Refresh } from './Refresh/index.js'

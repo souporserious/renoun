@@ -75,7 +75,7 @@ interface RehypeSafeOptions {
 const safeProtocol = /^(https?|ircs?|mailto|xmpp)$/i
 
 /** Rehype plugin to sanitize URLs in HTML attributes and stringify raw HTML. */
-export function rehypeSafe({ urlTransform }: RehypeSafeOptions = {}) {
+function rehypeSafe({ urlTransform }: RehypeSafeOptions = {}) {
   return (tree: Root) => {
     visit(tree, (node, index, parent) => {
       if (node.type === 'element') {
