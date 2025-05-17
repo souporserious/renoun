@@ -23,12 +23,11 @@ export function Table() {
           Markdown: (props) => (
             <Markdown
               components={{
-                // pre: (props) => <CodeBlock {...parsePreProps(props)} />,
+                pre: (props) => <CodeBlock {...parsePreProps(props)} />,
                 code: (props) => <CodeInline {...parseCodeProps(props)} />,
               }}
-              // TODO: we can't use MDX nodes in Markdown renderer so we need to handle somehow
-              // rehypePlugins={rehypePlugins}
-              // remarkPlugins={remarkPlugins}
+              rehypePlugins={rehypePlugins}
+              remarkPlugins={remarkPlugins}
               {...props}
             />
           ),

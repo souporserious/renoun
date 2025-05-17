@@ -14,12 +14,10 @@ import {
 import { Markdown as MarkdownDefault, type MarkdownProps } from './Markdown.js'
 import { WorkingDirectoryContext } from './Context.js'
 
-export type APIReferenceComponents = any
-// TODO: this is causing error in type resolver
-// export interface APIReferenceComponents {
-//   CodeInline: React.ComponentType<CodeInlineProps>
-//   Markdown: React.ComponentType<MarkdownProps>
-// }
+export interface APIReferenceComponents {
+  CodeInline: React.ComponentType<CodeInlineProps>
+  Markdown: React.ComponentType<MarkdownProps>
+}
 
 const defaultComponents: APIReferenceComponents = {
   CodeInline: CodeInlineDefault,
