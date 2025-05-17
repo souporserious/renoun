@@ -62,7 +62,7 @@ const theme = {
   },
 } as const
 
-export function DocumentationNodeRouter() {
+function DocumentationNodeRouter() {
   const node = getTypeReference()
 
   if (node === null) {
