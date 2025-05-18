@@ -61,7 +61,7 @@ export interface APIReferenceProps {
   filter?: SymbolFilter
 
   /** Base directory for relative `source` values. */
-  workingDirectory?: string
+  baseDirectory?: string
 
   /**
    * Override default component renderers.
@@ -90,19 +90,19 @@ export function APIReference(props: APIReferenceProps) {
 async function APIReferenceAsync({
   source,
   filter,
-  workingDirectory,
+  baseDirectory,
   components,
   children,
 }: APIReferenceProps) {
   let filePath: string | undefined = undefined
 
   if (typeof source === 'string') {
-    if (workingDirectory) {
-      if (URL.canParse(workingDirectory)) {
-        const { pathname } = new URL(workingDirectory)
-        workingDirectory = pathname.slice(0, pathname.lastIndexOf('/'))
+    if (baseDirectory) {
+      if (URL.canParse(baseDirectory)) {
+        const { pathname } = new URL(baseDirectory)
+        baseDirectory = pathname.slice(0, pathname.lastIndexOf('/'))
       }
-      filePath = resolve(workingDirectory, source)
+      filePath = resolve(baseDirectory, source)
     } else {
       filePath = source
     }
