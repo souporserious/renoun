@@ -1,9 +1,8 @@
 export {
   APIReference,
-  getTypeReference,
-  getTypeReferenceComponents,
-  type APIReferenceProps,
-  type APIReferenceComponents,
+  TypeReference,
+  type TypeReferenceProps,
+  type TypeReferenceComponents,
 } from './APIReference.js'
 export {
   CodeBlock,
