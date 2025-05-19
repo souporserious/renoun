@@ -221,19 +221,23 @@ function TypeTable<RowType>({
   components: TypeReferenceComponents
 }) {
   return (
-    <components.table>
+    <components.table role="table">
       {headers ? (
-        <components.thead>
-          <components.tr>
+        <components.thead role="rowgroup">
+          <components.tr role="row">
             {headers.map((header, index) => (
-              <components.th key={index}>{header}</components.th>
+              <components.th key={index} role="columnheader">
+                {header}
+              </components.th>
             ))}
           </components.tr>
         </components.thead>
       ) : null}
-      <components.tbody>
+      <components.tbody role="rowgroup">
         {rows.map((row, index) => (
-          <components.tr key={index}>{renderRow(row, index)}</components.tr>
+          <components.tr key={index} role="row">
+            {renderRow(row, index)}
+          </components.tr>
         ))}
       </components.tbody>
     </components.table>
@@ -287,14 +291,14 @@ function ComponentSection({
                   headers={['Property', 'Type', 'Default Value']}
                   renderRow={(property) => (
                     <>
-                      <components.td>
+                      <components.td role="cell">
                         {property.name}
                         {property.isOptional ? '?' : ''}
                       </components.td>
-                      <components.td>
+                      <components.td role="cell">
                         <components.code>{property.text}</components.code>
                       </components.td>
-                      <components.td>
+                      <components.td role="cell">
                         <DefaultValue
                           value={property.defaultValue}
                           components={components}
@@ -337,14 +341,14 @@ function ObjectSection({
           headers={['Property', 'Type', 'Default Value']}
           renderRow={(property) => (
             <>
-              <components.td>
+              <components.td role="cell">
                 {property.name}
                 {property.isOptional ? '?' : ''}
               </components.td>
-              <components.td>
+              <components.td role="cell">
                 <components.code>{property.text}</components.code>
               </components.td>
-              <components.td>
+              <components.td role="cell">
                 <DefaultValue
                   value={property.defaultValue}
                   components={components}
@@ -397,14 +401,14 @@ function renderParameterRow(
 ) {
   return (
     <>
-      <components.td>
+      <components.td role="cell">
         {parameter.name}
         {parameter.isOptional ? '?' : ''}
       </components.td>
-      <components.td>
+      <components.td role="cell">
         <components.code>{parameter.text}</components.code>
       </components.td>
-      <components.td>
+      <components.td role="cell">
         <DefaultValue value={parameter.defaultValue} components={components} />
       </components.td>
     </>
@@ -457,14 +461,14 @@ function renderClassPropertyRow(
 ) {
   return (
     <>
-      <components.td>
+      <components.td role="cell">
         {property.name}
         {property.isOptional ? '?' : ''}
       </components.td>
-      <components.td>
+      <components.td role="cell">
         <components.code>{property.text}</components.code>
       </components.td>
-      <components.td>
+      <components.td role="cell">
         <DefaultValue value={property.defaultValue} components={components} />
       </components.td>
     </>
