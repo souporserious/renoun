@@ -9,65 +9,28 @@ import {
   parseCodeProps,
 } from 'renoun/components'
 import { rehypePlugins, remarkPlugins } from 'renoun/mdx'
-
-const theme = {
-  color: {
-    text: '#000',
-    textMuted: '#737373',
-    border: '#e5e5e5',
-    borderDark: '#2a2a2a',
-    hover: 'rgba(0,0,0,0.04)',
-    hoverDark: 'rgba(255,255,255,0.05)',
-  },
-  font: {
-    body: { fontSize: 14 },
-    heading: { fontSize: 20, fontWeight: 600 },
-  },
-  spacing: {
-    xs: 4,
-    sm: 8,
-    md: 12,
-    lg: 24,
-    xl: 32,
-    sectionGap: 96,
-  },
-} as const
+import { GeistMono } from 'geist/font/mono'
 
 const components = {
-  section: (props) => (
-    <section
-      {...props}
-      css={{
-        containerType: 'inline-size',
-        marginTop: theme.spacing.sectionGap,
-        paddingBottom: theme.spacing.xl,
-        borderBottom: `1px solid ${theme.color.border}`,
-        ':first-of-type': { marginTop: 0 },
-        '@media (prefers-color-scheme: dark)': {
-          borderBottom: `1px solid ${theme.color.borderDark}`,
-        },
-      }}
-    />
-  ),
-  p: (props) => (
-    <p
-      {...props}
-      css={{
-        textTransform: 'uppercase',
-        letterSpacing: '0.05em',
-        fontSize: 12,
-        color: theme.color.textMuted,
-        marginBottom: theme.spacing.sm,
-      }}
-    />
-  ),
   h2: (props) => (
     <h2
       {...props}
       css={{
-        fontSize: theme.font.heading.fontSize,
-        fontWeight: theme.font.heading.fontWeight,
-        marginBottom: theme.spacing.xl,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '0.5rem',
+        fontSize: 'var(--font-size-heading-2)',
+        lineHeight: 'var(--line-height-heading-2)',
+        fontWeight: 'var(--font-weight-heading)',
+        marginBottom: '1.6rem',
+
+        '& span': {
+          textTransform: 'uppercase',
+          letterSpacing: '0.1rem',
+          fontSize: 'var(--font-size-title)',
+          lineHeight: 1,
+          color: 'var(--color-foreground-secondary)',
+        },
       }}
     />
   ),
@@ -75,9 +38,10 @@ const components = {
     <h4
       {...props}
       css={{
-        fontWeight: 500,
-        marginTop: theme.spacing.lg,
-        marginBottom: theme.spacing.xs,
+        fontSize: 'var(--font-size-heading-3)',
+        lineHeight: 'var(--line-height-heading-3)',
+        fontWeight: 'var(--font-weight-heading)',
+        marginBottom: '1.6rem',
       }}
     />
   ),
@@ -86,11 +50,10 @@ const components = {
       {...props}
       css={{
         width: '100%',
-        fontSize: theme.font.body.fontSize,
-        borderBottom: `1px solid ${theme.color.border}`,
-        '@media (prefers-color-scheme: dark)': {
-          borderBottom: `1px solid ${theme.color.borderDark}`,
-        },
+        fontSize: 'var(--font-size-body-2)',
+        lineHeight: 'var(--line-height-body-2)',
+        borderBottom: '1px solid var(--color-separator)',
+        borderCollapse: 'collapse',
       }}
     />
   ),
@@ -98,11 +61,16 @@ const components = {
     <tr
       {...props}
       css={{
-        borderBottom: `1px solid ${theme.color.border}`,
-        '@media (prefers-color-scheme: dark)': {
-          borderBottom: `1px solid ${theme.color.borderDark}`,
-        },
+        borderBottom: '1px solid var(--color-separator)',
         ':last-child': { borderBottom: 'none' },
+      }}
+    />
+  ),
+  thead: (props) => (
+    <thead
+      {...props}
+      css={{
+        borderBottom: '1px solid var(--color-separator)',
       }}
     />
   ),
@@ -110,31 +78,53 @@ const components = {
     <th
       {...props}
       css={{
-        fontWeight: 500,
-        padding: `${theme.spacing.sm}px 0`,
-        color: theme.color.textMuted,
+        fontWeight: 'var(--font-weight-heading)',
+        padding: '0.5rem 0',
+        color: 'var(--color-foreground)',
       }}
     />
   ),
-  td: (props) => <td {...props} css={{ padding: theme.spacing.sm }} />,
-  summary: (props) => <summary {...props} css={{ cursor: 'pointer' }} />,
-  code: (props) => <code {...props} css={{ fontFamily: 'monospace' }} />,
+  td: (props) => <td {...props} css={{ padding: '0.5rem 0' }} />,
+  code: (props) => (
+    <code
+      {...props}
+      css={{
+        fontFamily: GeistMono.style.fontFamily,
+        color: 'var(--color-foreground-interactive)',
+      }}
+    />
+  ),
   Markdown: (props) => (
     <Markdown
+      {...props}
       components={{
         pre: (preProps) => <CodeBlock {...parsePreProps(preProps)} />,
-        code: (codeProps) => <CodeInline {...parseCodeProps(codeProps)} />,
+        code: (codeProps) => (
+          <CodeInline
+            {...parseCodeProps(codeProps)}
+            css={{
+              lineHeight: 'var(--line-height-code-2)',
+              color: 'var(--color-foreground-interactive)',
+            }}
+            className={GeistMono.className}
+          />
+        ),
       }}
       rehypePlugins={rehypePlugins}
       remarkPlugins={remarkPlugins}
-      {...props}
     />
   ),
 } satisfies Partial<TypeReferenceComponents>
 
 export function Table() {
   return (
-    <div css={{ width: '100%' }}>
+    <div
+      css={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '3rem',
+      }}
+    >
       <TypeReference
         source="./examples/Button.tsx"
         baseDirectory={import.meta.url}

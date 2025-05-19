@@ -6,7 +6,12 @@ import {
   type JavaScriptFile,
   type JavaScriptFileExport,
 } from 'renoun/file-system'
-import { APIReference, CodeBlock, Tokens } from 'renoun/components'
+import {
+  APIReference,
+  CodeBlock,
+  Tokens,
+  TypeReference,
+} from 'renoun/components'
 import type { MDXHeadings } from 'renoun/mdx'
 import { GeistMono } from 'geist/font/mono'
 
@@ -191,7 +196,7 @@ export default async function Component({
               API Reference
             </h2>
             {componentExports.map((exportSource) => (
-              <APIReference
+              <TypeReference
                 key={exportSource.getSlug()}
                 source={exportSource}
               />

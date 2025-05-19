@@ -171,18 +171,22 @@ function TypeNodeRouter({
 
 function TypeSection({
   label,
+  title,
   id,
   children,
   components,
 }: {
   label: string
+  title?: string
   id?: string
   children: React.ReactNode
   components: TypeReferenceComponents
 }) {
   return (
     <components.section id={id}>
-      <components.p>{label}</components.p>
+      <components.h2 aria-label={`${title} ${label}`}>
+        <span>{label}</span> {title}
+      </components.h2>
       {children}
     </components.section>
   )
@@ -263,9 +267,12 @@ function ComponentSection({
   components: ComponentsType
 }) {
   return (
-    <TypeSection label="Component" id={node.name} components={components}>
-      <components.h2>{node.name}</components.h2>
-
+    <TypeSection
+      label="Component"
+      title={node.name}
+      id={node.name}
+      components={components}
+    >
       {node.signatures.map((signature, index) => {
         return (
           <React.Fragment key={index}>
@@ -318,9 +325,12 @@ function ObjectSection({
   components: ComponentsType
 }) {
   return (
-    <TypeSection label="Object" id={node.name} components={components}>
-      <components.h2>{node.name}</components.h2>
-
+    <TypeSection
+      label="Object"
+      title={node.name}
+      id={node.name}
+      components={components}
+    >
       <TypeDetail label="Properties" components={components}>
         <TypeTable
           rows={node.properties}
@@ -368,15 +378,14 @@ function UnionSection({
   components: ComponentsType
 }) {
   return (
-    <TypeSection label="Union" id={node.name} components={components}>
-      <components.h2>{node.name}</components.h2>
+    <TypeSection
+      label="Union"
+      title={node.name}
+      id={node.name}
+      components={components}
+    >
       <TypeDetail label="Members" components={components}>
-        {node.members.map((member, index) => (
-          <React.Fragment key={index}>
-            {index > 0 ? ' | ' : null}
-            <components.code>{member.text}</components.code>
-          </React.Fragment>
-        ))}
+        <components.code>{node.text}</components.code>
       </TypeDetail>
     </TypeSection>
   )
@@ -410,9 +419,12 @@ function FunctionSection({
   components: ComponentsType
 }) {
   return (
-    <TypeSection label="Function" id={node.name} components={components}>
-      <components.h2>{node.name}</components.h2>
-
+    <TypeSection
+      label="Function"
+      title={node.name}
+      id={node.name}
+      components={components}
+    >
       {node.signatures.map((signature, index) => (
         <React.Fragment key={index}>
           {node.signatures.length > 1 ? (
@@ -496,9 +508,12 @@ function ClassSection({
   components: ComponentsType
 }) {
   return (
-    <TypeSection label="Class" id={node.name} components={components}>
-      <components.h2>{node.name}</components.h2>
-
+    <TypeSection
+      label="Class"
+      title={node.name}
+      id={node.name}
+      components={components}
+    >
       {node.properties?.length ? (
         <TypeDetail label="Properties" components={components}>
           <TypeTable
