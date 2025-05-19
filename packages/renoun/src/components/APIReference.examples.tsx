@@ -10,7 +10,7 @@ import {
 import { rehypePlugins, remarkPlugins } from 'renoun/mdx'
 import { GeistMono } from 'geist/font/mono'
 
-export function Table() {
+export function BasicUsage() {
   return (
     <div
       css={{
@@ -80,6 +80,7 @@ export function Table() {
             <th
               {...props}
               css={{
+                textAlign: 'left',
                 fontWeight: 'var(--font-weight-heading)',
                 padding: '0.5rem 0',
                 color: 'var(--color-foreground)',

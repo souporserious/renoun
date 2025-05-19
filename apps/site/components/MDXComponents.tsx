@@ -1,5 +1,4 @@
 import {
-  CodeBlock as RenounCodeBlock,
   CodeInline,
   PackageInstall,
   parseCodeProps,

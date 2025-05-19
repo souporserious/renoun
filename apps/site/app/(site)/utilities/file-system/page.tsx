@@ -1,7 +1,6 @@
-import { TypeReference } from 'renoun/components'
-
 import { FileSystemCollection } from '@/collections'
 import { TableOfContents } from '@/components/TableOfContents'
+import { TypeReference } from '@/components/TypeReference'
 
 export default async function Page() {
   const sourceFile = await FileSystemCollection.getFile('index', 'tsx')
@@ -52,9 +51,17 @@ export default async function Page() {
           >
             API Reference
           </h2>
-          {fileExports.map((fileExport) => (
-            <TypeReference key={fileExport.getName()} source={fileExport} />
-          ))}
+          <div
+            css={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '3rem',
+            }}
+          >
+            {fileExports.map((fileExport) => (
+              <TypeReference key={fileExport.getName()} source={fileExport} />
+            ))}
+          </div>
         </div>
       </div>
 
