@@ -1,4 +1,4 @@
-import { APIReference } from 'renoun/components'
+import { TypeReference } from 'renoun/components'
 
 import { FileSystemCollection } from '@/collections'
 import { TableOfContents } from '@/components/TableOfContents'
@@ -53,7 +53,7 @@ export default async function Page() {
             API Reference
           </h2>
           {fileExports.map((fileExport) => (
-            <APIReference key={fileExport.getName()} source={fileExport} />
+            <TypeReference key={fileExport.getName()} source={fileExport} />
           ))}
         </div>
       </div>

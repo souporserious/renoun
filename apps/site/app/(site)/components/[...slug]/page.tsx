@@ -6,12 +6,7 @@ import {
   type JavaScriptFile,
   type JavaScriptFileExport,
 } from 'renoun/file-system'
-import {
-  APIReference,
-  CodeBlock,
-  Tokens,
-  TypeReference,
-} from 'renoun/components'
+import { CodeBlock, Tokens, TypeReference } from 'renoun/components'
 import type { MDXHeadings } from 'renoun/mdx'
 import { GeistMono } from 'geist/font/mono'
 
