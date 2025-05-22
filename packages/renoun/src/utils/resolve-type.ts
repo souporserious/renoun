@@ -2185,7 +2185,49 @@ function isComponent(
 
   return callSignatures.every((signature) => {
     const parameterCount = signature.parameters.length
-    return parameterCount === 0 || parameterCount === 1
+
+    if (parameterCount === 0) {
+      return true
+    }
+
+    if (parameterCount !== 1) {
+      return false
+    }
+
+    const parameter = signature.parameters[0]
+
+    // Check if the parameter type is a primitive type
+    if (
+      parameter.kind === 'String' ||
+      parameter.kind === 'Number' ||
+      parameter.kind === 'Boolean' ||
+      parameter.kind === 'Symbol' ||
+      parameter.kind === 'Primitive'
+    ) {
+      return false
+    }
+
+    // Check if the parameter type is a union containing primitive types
+    if (parameter.kind === 'Union') {
+      for (
+        let index = 0, length = parameter.members.length;
+        index < length;
+        ++index
+      ) {
+        const member = parameter.members[index]
+        if (
+          member.kind === 'String' ||
+          member.kind === 'Number' ||
+          member.kind === 'Boolean' ||
+          member.kind === 'Symbol' ||
+          member.kind === 'Primitive'
+        ) {
+          return false
+        }
+      }
+    }
+
+    return true
   })
 }
 

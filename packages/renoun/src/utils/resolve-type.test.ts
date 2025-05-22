@@ -2839,8 +2839,7 @@ describe('resolveType', () => {
     `)
   })
 
-  // TODO: fix isComponent handling
-  test.skip('function arguments that reference exported types', () => {
+  test('function arguments that reference exported types', () => {
     const project = new Project()
 
     project.createSourceFile(
@@ -2879,6 +2878,7 @@ describe('resolveType', () => {
         },
         "signatures": [
           {
+            "filePath": "test.ts",
             "kind": "FunctionSignature",
             "modifier": undefined,
             "parameters": [
@@ -2888,7 +2888,7 @@ describe('resolveType', () => {
                 "description": undefined,
                 "filePath": "test.ts",
                 "isOptional": false,
-                "kind": "Reference",
+                "kind": "TypeReference",
                 "name": "color",
                 "position": {
                   "end": {
@@ -2903,6 +2903,16 @@ describe('resolveType', () => {
                 "text": "Color",
               },
             ],
+            "position": {
+              "end": {
+                "column": 42,
+                "line": 3,
+              },
+              "start": {
+                "column": 20,
+                "line": 3,
+              },
+            },
             "returnType": "void",
             "text": "(color: Color) => void",
           },
@@ -5634,8 +5644,7 @@ describe('resolveType', () => {
     `)
   })
 
-  // TODO: fix isComponent handling
-  test.skip('union types with primitive types', () => {
+  test('union types with primitive types', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       dedent`
@@ -5667,6 +5676,7 @@ describe('resolveType', () => {
         },
         "signatures": [
           {
+            "filePath": "test.ts",
             "kind": "FunctionSignature",
             "modifier": undefined,
             "parameters": [
@@ -5678,23 +5688,6 @@ describe('resolveType', () => {
                 "isOptional": false,
                 "kind": "Union",
                 "members": [
-                  {
-                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                    "kind": "String",
-                    "name": undefined,
-                    "position": {
-                      "end": {
-                        "column": 4402,
-                        "line": 4,
-                      },
-                      "start": {
-                        "column": 3482,
-                        "line": 4,
-                      },
-                    },
-                    "text": "string",
-                    "value": undefined,
-                  },
                   {
                     "filePath": "test.ts",
                     "kind": "Object",
@@ -5734,6 +5727,23 @@ describe('resolveType', () => {
                     ],
                     "text": "{ color: string; }",
                   },
+                  {
+                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                    "kind": "String",
+                    "name": undefined,
+                    "position": {
+                      "end": {
+                        "column": 4402,
+                        "line": 4,
+                      },
+                      "start": {
+                        "column": 3482,
+                        "line": 4,
+                      },
+                    },
+                    "text": "string",
+                    "value": undefined,
+                  },
                 ],
                 "name": "props",
                 "position": {
@@ -5746,11 +5756,21 @@ describe('resolveType', () => {
                     "line": 3,
                   },
                 },
-                "text": "Props",
+                "text": "{ color: string; } | string",
               },
             ],
+            "position": {
+              "end": {
+                "column": 36,
+                "line": 3,
+              },
+              "start": {
+                "column": 1,
+                "line": 3,
+              },
+            },
             "returnType": "void",
-            "text": "function Component(props: Props): void",
+            "text": "function Component(props: { color: string; } | string): void",
           },
         ],
         "text": "(props: Props) => void",
