@@ -4263,82 +4263,8 @@ describe('resolveType', () => {
     expect(processedProperties).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "isOptional": false,
-        "isReadonly": true,
-        "kind": "Mapped",
-        "parameter": {
-          "constraint": {
-            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-            "kind": "Union",
-            "members": [
-              {
-                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                "kind": "String",
-                "name": undefined,
-                "position": {
-                  "end": {
-                    "column": 4402,
-                    "line": 4,
-                  },
-                  "start": {
-                    "column": 3482,
-                    "line": 4,
-                  },
-                },
-                "text": "string",
-                "value": undefined,
-              },
-              {
-                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                "kind": "Number",
-                "name": undefined,
-                "position": {
-                  "end": {
-                    "column": 4943,
-                    "line": 4,
-                  },
-                  "start": {
-                    "column": 4755,
-                    "line": 4,
-                  },
-                },
-                "text": "number",
-                "value": undefined,
-              },
-              {
-                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                "kind": "Symbol",
-                "name": undefined,
-                "position": {
-                  "end": {
-                    "column": 691,
-                    "line": 4,
-                  },
-                  "start": {
-                    "column": 638,
-                    "line": 4,
-                  },
-                },
-                "text": "Symbol",
-              },
-            ],
-            "name": undefined,
-            "position": {
-              "end": {
-                "column": 209,
-                "line": 6,
-              },
-              "start": {
-                "column": 202,
-                "line": 6,
-              },
-            },
-            "text": "string | number | symbol",
-          },
-          "kind": "TypeParameter",
-          "name": "P",
-          "text": "P",
-        },
+        "kind": "Object",
+        "name": "color",
         "position": {
           "end": {
             "column": 74,
@@ -4349,24 +4275,72 @@ describe('resolveType', () => {
             "line": 1,
           },
         },
-        "text": "Readonly<{ red: "red"; blue: "blue"; green: "green"; }>",
-        "type": {
-          "arguments": [],
-          "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-          "kind": "TypeReference",
-          "name": undefined,
-          "position": {
-            "end": {
-              "column": 215,
-              "line": 6,
+        "properties": [
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": true,
+            "kind": "String",
+            "name": "red",
+            "position": {
+              "end": {
+                "column": 41,
+                "line": 1,
+              },
+              "start": {
+                "column": 31,
+                "line": 1,
+              },
             },
-            "start": {
-              "column": 211,
-              "line": 6,
-            },
+            "text": ""red"",
+            "value": "red",
           },
-          "text": "{}",
-        },
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": true,
+            "kind": "String",
+            "name": "blue",
+            "position": {
+              "end": {
+                "column": 55,
+                "line": 1,
+              },
+              "start": {
+                "column": 43,
+                "line": 1,
+              },
+            },
+            "text": ""blue"",
+            "value": "blue",
+          },
+          {
+            "context": "property",
+            "defaultValue": undefined,
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": true,
+            "kind": "String",
+            "name": "green",
+            "position": {
+              "end": {
+                "column": 71,
+                "line": 1,
+              },
+              "start": {
+                "column": 57,
+                "line": 1,
+              },
+            },
+            "text": ""green"",
+            "value": "green",
+          },
+        ],
+        "text": "Readonly<{ red: "red"; blue: "blue"; green: "green"; }>",
       }
     `)
   })

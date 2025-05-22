@@ -998,7 +998,12 @@ export function resolveType(
           }
 
           const hasFreeTypeParameter = containsFreeTypeParameter(type)
-          const shouldExpandMapped = !isRootType && !hasFreeTypeParameter
+          const isValueLike =
+            tsMorph.Node.isVariableDeclaration(enclosingNode) ||
+            tsMorph.Node.isPropertyDeclaration(enclosingNode) ||
+            tsMorph.Node.isPropertySignature(enclosingNode)
+          const shouldExpandMapped =
+            (!isRootType && !hasFreeTypeParameter) || isValueLike
 
           // Handle mapped types e.g. `{ [Key in keyof Type]: Type[Key] }`
           if (!shouldExpandMapped && mappedDeclaration) {
