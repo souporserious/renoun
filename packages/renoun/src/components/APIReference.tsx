@@ -33,12 +33,8 @@ type SemanticTags =
   | 'summary'
   | 'code'
 
-type SemanticComponent<Tag extends SemanticTags> =
-  | Tag
-  | React.JSXElementConstructor<React.JSX.IntrinsicElements[Tag]>
-
 export type TypeReferenceComponents = {
-  [Tag in SemanticTags]: SemanticComponent<Tag>
+  [Tag in SemanticTags]: Tag | React.ComponentType<React.ComponentProps<Tag>>
 } & {
   Markdown: React.ComponentType<MarkdownProps>
 }
