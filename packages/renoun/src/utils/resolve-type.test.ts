@@ -2570,7 +2570,7 @@ describe('resolveType', () => {
         }
         
         type StyledTextProps = {
-          $color?: Color // TODO: need to capture optional property here
+          $color?: Color
         }
         
         export type TextProps = {
@@ -2658,7 +2658,7 @@ describe('resolveType', () => {
             "context": "property",
             "defaultValue": undefined,
             "filePath": "node_modules/@types/library/index.d.ts",
-            "isOptional": false,
+            "isOptional": true,
             "isReadonly": false,
             "kind": "TypeReference",
             "name": "color",
@@ -5083,7 +5083,7 @@ describe('resolveType', () => {
                         "context": "property",
                         "defaultValue": 0,
                         "filePath": "test.ts",
-                        "isOptional": false,
+                        "isOptional": true,
                         "isReadonly": false,
                         "kind": "Number",
                         "name": "count",
@@ -7446,7 +7446,7 @@ describe('resolveType', () => {
                     "context": "property",
                     "defaultValue": 0,
                     "filePath": "test.ts",
-                    "isOptional": false,
+                    "isOptional": true,
                     "isReadonly": false,
                     "kind": "Number",
                     "name": "initialCount",

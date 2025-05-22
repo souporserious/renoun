@@ -1468,7 +1468,9 @@ export function resolveTypeProperties(
 
         if (resolvedPropertyType) {
           const isOptional = Boolean(
-            propertyDeclaration?.hasQuestionToken() || defaultValue
+            propertyDeclaration?.hasQuestionToken() ||
+              (property.getFlags() & tsMorph.SymbolFlags.Optional) !== 0 ||
+              defaultValue !== undefined
           )
           const isPropertyReadonly = propertyDeclaration
             ? 'isReadonly' in propertyDeclaration
