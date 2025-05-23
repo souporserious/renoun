@@ -142,6 +142,7 @@
     "@types/react-dom": "catalog:",
     "@types/ws": "^8.18.1",
     "dedent": "^1.5.3",
+    "geist": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "tm-grammars": "^1.23.14",

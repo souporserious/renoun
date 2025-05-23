@@ -1,1 +1,6 @@
-export { isParameterType, isPropertyType } from './resolve-type.js'
+export { createSlug } from './create-slug.js'
+export {
+  isParameterType,
+  isPropertyType,
+  type TypeOfKind,
+} from './resolve-type.js'

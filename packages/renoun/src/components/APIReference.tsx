@@ -1,633 +1,598 @@
 /** @jsxImportSource restyle */
-/** @jsxRuntime automatic */
-import { Fragment, Suspense } from 'react'
-import type { CSSObject } from 'restyle'
-import { resolve } from 'node:path'
+import React, { Suspense } from 'react'
+import { dirname, resolve } from 'node:path'
 
 import {
   JavaScriptFile,
   type JavaScriptFileExport,
 } from '../file-system/index.js'
-import { rehypePlugins, remarkPlugins } from '../mdx/index.js'
-import { createSlug } from '../utils/create-slug.js'
-import type {
-  Kind,
-  ResolvedType,
-  SymbolFilter,
-  TypeOfKind,
+import {
+  type ResolvedType,
+  type SymbolFilter,
+  type TypeOfKind,
 } from '../utils/resolve-type.js'
-import { isParameterType, isPropertyType } from '../utils/resolve-type.js'
-import { CodeBlock, parsePreProps } from './CodeBlock/index.js'
-import { CodeInline } from './CodeInline.js'
-import { MDX } from './MDX.js'
-import type { MDXProps } from './MDX.js'
+import { Markdown as MarkdownDefault, type MarkdownProps } from './Markdown.js'
+import { WorkingDirectoryContext } from './Context.js'
 
-const codeInlineStyles = {
-  display: 'inline-block',
-  whiteSpace: 'nowrap',
-} satisfies CSSObject
-const mdxProps = {
-  components: {
-    pre: (props) => {
-      return <CodeBlock {...parsePreProps(props)} shouldAnalyze={false} />
-    },
-    code: (props) => {
-      return (
-        <CodeInline
-          children={props.children}
-          language="typescript"
-          shouldAnalyze={false}
-          css={codeInlineStyles}
-        />
-      )
-    },
-    p: (props) => <p {...props} css={{ margin: 0 }} />,
-  },
-  rehypePlugins,
-  remarkPlugins,
-} satisfies Omit<MDXProps, 'children'>
+type SemanticTags =
+  | 'section'
+  | 'h2'
+  | 'h3'
+  | 'h4'
+  | 'p'
+  | 'dl'
+  | 'dt'
+  | 'dd'
+  | 'table'
+  | 'thead'
+  | 'tbody'
+  | 'tr'
+  | 'th'
+  | 'td'
+  | 'details'
+  | 'summary'
+  | 'code'
 
-interface SourceString {
-  /** The file path to the source code. */
-  source: string
-
-  /** The working directory to resolve the file path from. Will use the base URL if a URL is provided. */
-  workingDirectory?: string
+export type TypeReferenceComponents = {
+  [Tag in SemanticTags]: Tag | React.ComponentType<React.ComponentProps<Tag>>
+} & {
+  Markdown: React.ComponentType<MarkdownProps>
 }
 
-interface SourceExport {
-  /** The export source from a collection export source to get types from. */
-  source: JavaScriptFile<any> | JavaScriptFileExport<any>
+const defaultComponents: TypeReferenceComponents = {
+  section: 'section',
+  h2: 'h2',
+  h3: 'h3',
+  h4: 'h4',
+  p: 'p',
+  dl: 'dl',
+  dt: 'dt',
+  dd: 'dd',
+  table: 'table',
+  thead: 'thead',
+  tbody: 'tbody',
+  tr: 'tr',
+  th: 'th',
+  td: 'td',
+  details: 'details',
+  summary: 'summary',
+  code: 'code',
+  Markdown: MarkdownDefault,
 }
 
-interface Filter {
-  /** A filter to apply to the exported types. */
+export interface TypeReferenceProps {
+  /** The file path, `JavaScriptFile`, or `JavaScriptFileExport` type reference to resolve. */
+  source: string | JavaScriptFile<any> | JavaScriptFileExport<any>
+
+  /** Optional filter for exported symbols. */
   filter?: SymbolFilter
+
+  /** Base directory for relative `source` values. */
+  baseDirectory?: string
+
+  /** Override default component renderers. */
+  components?: Partial<TypeReferenceComponents>
 }
 
-export type APIReferenceProps =
-  | (SourceString & Filter)
-  | (SourceExport & Filter)
-
-/** Displays type documentation for all types exported from a file path, `JavaScriptFile`, or `JavaScriptFileExport`. */
-export function APIReference(props: APIReferenceProps) {
+export function TypeReference(props: TypeReferenceProps) {
   return (
-    <Suspense fallback="Loading API references...">
-      <APIReferenceAsync {...props} />
+    <Suspense>
+      <TypeReferenceAsync {...props} />
     </Suspense>
   )
 }
 
-async function APIReferenceAsync({
+async function TypeReferenceAsync({
   source,
   filter,
-  ...props
-}: APIReferenceProps) {
+  baseDirectory,
+  components = {},
+}: TypeReferenceProps) {
+  let filePath: string | undefined = undefined
+
   if (typeof source === 'string') {
-    let workingDirectory: string | undefined
-
-    if ('workingDirectory' in props && props.workingDirectory) {
-      if (URL.canParse(props.workingDirectory)) {
-        const { pathname } = new URL(props.workingDirectory)
-        workingDirectory = pathname.slice(0, pathname.lastIndexOf('/'))
-      } else {
-        workingDirectory = props.workingDirectory
+    if (baseDirectory) {
+      if (URL.canParse(baseDirectory)) {
+        const { pathname } = new URL(baseDirectory)
+        baseDirectory = pathname.slice(0, pathname.lastIndexOf('/'))
       }
+      filePath = resolve(baseDirectory, source)
+    } else {
+      filePath = source
     }
-
-    source = new JavaScriptFile({
-      path: workingDirectory ? resolve(workingDirectory, source) : source,
-    })
+    source = new JavaScriptFile({ path: filePath })
   }
+
+  let resolvedType: ResolvedType | ResolvedType[] | undefined
 
   if (source instanceof JavaScriptFile) {
-    const exportedTypes = await Promise.all(
-      (await source.getExports()).map((exportSource) =>
-        exportSource.getType(filter)
+    const exported = await Promise.all(
+      (await source.getExports()).map((fileExport) =>
+        fileExport.getType(filter)
       )
     )
-
-    return exportedTypes
-      .filter((type): type is ResolvedType => Boolean(type))
-      .map((type) => (
-        <div
-          key={type.name}
-          css={{
-            display: 'flex',
-            flexDirection: 'column',
-            padding: '1.6rem 0',
-            borderBottom: '1px solid var(--color-separator-secondary)',
-          }}
-        >
-          <div
-            css={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.8rem',
-            }}
-          >
-            <div
-              css={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '1rem',
-              }}
-            >
-              <h3
-                id={type.name ? createSlug(type.name, 'kebab') : undefined}
-                css={{ flexShrink: 0, margin: '0 !important' }}
-              >
-                {type.name}
-              </h3>
-
-              <CodeInline
-                children={type.text}
-                language="typescript"
-                shouldAnalyze={false}
-                css={codeInlineStyles}
-              />
-
-              {/* {type.path && <ViewSource href={type.path} />} */}
-            </div>
-
-            {type.description ? (
-              <MDX children={type.description} {...mdxProps} />
-            ) : null}
-          </div>
-
-          <div css={{ display: 'flex' }}>
-            <TypeChildren type={type} css={{ marginTop: '2rem' }} />
-          </div>
-        </div>
-      ))
+    resolvedType = exported.filter(Boolean) as ResolvedType[]
+  } else {
+    resolvedType = await source.getType(filter)
   }
 
-  const type = await source.getType(filter)
-
-  if (type === undefined) {
+  if (!resolvedType) {
     return null
   }
 
+  const mergedComponents: TypeReferenceComponents = {
+    ...defaultComponents,
+    ...components,
+  }
+
   return (
-    <div
-      key={type.name}
-      css={{
-        display: 'flex',
-        flexDirection: 'column',
-        padding: '1.6rem 0',
-        borderBottom: '1px solid var(--color-separator-secondary)',
-      }}
-    >
-      <div
-        css={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '0.8rem',
-        }}
-      >
-        <div
-          css={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '1rem',
-          }}
-        >
-          <h3
-            id={type.name ? createSlug(type.name, 'kebab') : undefined}
-            css={{ flexShrink: 0, margin: 0 }}
-          >
-            {type.name}
-          </h3>
-
-          <CodeInline
-            children={type.text}
-            language="typescript"
-            shouldAnalyze={false}
-            css={codeInlineStyles}
+    <WorkingDirectoryContext value={filePath ? dirname(filePath) : undefined}>
+      {Array.isArray(resolvedType) ? (
+        resolvedType.map((type, index) => (
+          <TypeNodeRouter
+            key={index}
+            type={type}
+            components={mergedComponents}
           />
-
-          {/* {type.path && <ViewSource href={type.path} />} */}
-        </div>
-
-        {type.description &&
-        type.kind !== 'Function' &&
-        type.kind !== 'Component' ? (
-          <MDX children={type.description} {...mdxProps} />
-        ) : null}
-      </div>
-
-      <div css={{ display: 'flex' }}>
-        <TypeChildren type={type} css={{ marginTop: '2rem' }} />
-      </div>
-    </div>
+        ))
+      ) : (
+        <TypeNodeRouter type={resolvedType} components={mergedComponents} />
+      )}
+    </WorkingDirectoryContext>
   )
 }
 
-/** Determines how to render the immediate type children based on its kind. */
-function TypeChildren({
+function TypeNodeRouter({
   type,
-  css: cssProp,
+  components,
 }: {
   type: ResolvedType
-  css: CSSObject
+  components: TypeReferenceComponents
 }) {
-  if (
-    type.kind === 'Enum' ||
-    type.kind === 'Symbol' ||
-    type.kind === 'TypeReference'
-  ) {
-    return (
-      <CodeInline
-        children={type.text}
-        language="typescript"
-        shouldAnalyze={false}
-        css={codeInlineStyles}
-      />
-    )
+  switch (type.kind) {
+    case 'Component':
+      return <ComponentSection node={type} components={components} />
+    case 'Object':
+      return <ObjectSection node={type} components={components} />
+    case 'Union':
+      return <UnionSection node={type} components={components} />
+    case 'Function':
+      return <FunctionSection node={type} components={components} />
+    case 'Class':
+      return <ClassSection node={type} components={components} />
+    default:
+      return null
   }
-
-  if (
-    type.kind === 'Object' ||
-    type.kind === 'Intersection' ||
-    type.kind === 'Union'
-  ) {
-    return <TypeProperties type={type} css={cssProp} />
-  }
-
-  if (type.kind === 'Class') {
-    return (
-      <div
-        css={{
-          display: 'flex',
-          flexDirection: 'column',
-          marginTop: '1.5rem',
-          gap: '1.2rem',
-          minWidth: 0,
-          ...cssProp,
-        }}
-      >
-        {type.accessors && type.accessors.length > 0 ? (
-          <div>
-            <h4 css={{ margin: 0 }}>Accessors</h4>
-            {type.accessors.map((accessor, index) => (
-              <TypeValue key={index} type={accessor} />
-            ))}
-          </div>
-        ) : null}
-
-        {type.constructors && type.constructors.length > 0 ? (
-          <div>
-            <h4 css={{ margin: 0 }}>Constructors</h4>
-            {type.constructors.map((constructor, index) => (
-              <TypeValue key={index} type={constructor} />
-            ))}
-          </div>
-        ) : null}
-
-        {type.methods && type.methods.length > 0 ? (
-          <div>
-            <h4 css={{ margin: 0 }}>Methods</h4>
-            {type.methods.map((method, index) => (
-              <TypeValue key={index} type={method} />
-            ))}
-          </div>
-        ) : null}
-
-        {type.properties && type.properties.length > 0 ? (
-          <div>
-            <h5 css={{ margin: 0 }}>Properties</h5>
-            {type.properties.map((property, index) => (
-              <TypeValue key={index} type={property} />
-            ))}
-          </div>
-        ) : null}
-      </div>
-    )
-  }
-
-  if (type.kind === 'Component') {
-    return (
-      <div
-        css={{
-          display: 'flex',
-          flexDirection: 'column',
-          marginTop: '1.5rem',
-          gap: '1.2rem',
-          minWidth: 0,
-          ...cssProp,
-        }}
-      >
-        {type.signatures.length > 1 ? (
-          <h4 css={{ margin: 0, marginBottom: '1rem' }}>Overloads</h4>
-        ) : null}
-        {type.signatures.map((signature, index) => {
-          return (
-            <Fragment key={index}>
-              <hr
-                css={{
-                  border: 'none',
-                  borderTop: '1px solid var(--color-separator-secondary)',
-                }}
-              />
-              {signature.description ? (
-                <MDX children={signature.description} {...mdxProps} />
-              ) : null}
-              {signature.parameter ? (
-                <div>
-                  <h5 css={{ margin: '0' }}>Parameters</h5>
-                  {signature.parameter.kind === 'Object' ? (
-                    <TypeProperties type={signature.parameter} />
-                  ) : signature.parameter.kind === 'TypeReference' ? (
-                    <CodeInline
-                      children={signature.parameter.text}
-                      language="typescript"
-                      shouldAnalyze={false}
-                      css={{
-                        ...codeInlineStyles,
-                        marginTop: '1.5rem',
-                      }}
-                    />
-                  ) : (
-                    <TypeValue type={signature.parameter} />
-                  )}
-                </div>
-              ) : null}
-              {signature.returnType ? (
-                <div>
-                  <h5 css={{ margin: 0, marginBottom: '1.5rem' }}>Returns</h5>
-                  {signature.returnType}
-                </div>
-              ) : null}
-            </Fragment>
-          )
-        })}
-      </div>
-    )
-  }
-
-  if (type.kind === 'Function') {
-    return (
-      <div
-        css={{
-          display: 'flex',
-          flexDirection: 'column',
-          marginTop: '1.5rem',
-          gap: '1.2rem',
-          minWidth: 0,
-          ...cssProp,
-        }}
-      >
-        {type.signatures.length > 1 ? (
-          <h4 css={{ margin: 0, marginBottom: '1rem' }}>Overloads</h4>
-        ) : null}
-        {type.signatures.map((signature, index) => {
-          return (
-            <Fragment key={index}>
-              <hr
-                css={{
-                  border: 'none',
-                  borderTop: '1px solid var(--color-separator-secondary)',
-                }}
-              />
-              {signature.description ? (
-                <MDX children={signature.description} {...mdxProps} />
-              ) : null}
-              {signature.parameters.length > 0 ? (
-                <div>
-                  <h5 css={{ margin: 0 }}>Parameters</h5>
-                  {signature.parameters.map((parameter, index) => (
-                    <TypeValue key={index} type={parameter} />
-                  ))}
-                </div>
-              ) : null}
-              {signature.returnType ? (
-                <div
-                  css={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'start',
-                  }}
-                >
-                  <h5 css={{ margin: 0, marginBottom: '1.5rem' }}>Returns</h5>
-                  <CodeInline
-                    children={signature.returnType}
-                    language="typescript"
-                    shouldAnalyze={false}
-                    css={{
-                      ...codeInlineStyles,
-                      maxWidth: '-webkit-fill-available',
-                    }}
-                  />
-                </div>
-              ) : null}
-            </Fragment>
-          )
-        })}
-      </div>
-    )
-  }
-
-  if (type.kind === 'TypeAlias') {
-    if (type.type) {
-      return <TypeChildren type={type.type} css={{ marginTop: '2rem' }} />
-    } else {
-      return (
-        <CodeInline
-          children={type.text}
-          language="typescript"
-          shouldAnalyze={false}
-          css={codeInlineStyles}
-        />
-      )
-    }
-  }
-
-  console.log('[APIReference:TypeChildren] Did not render: ', type)
-
-  return null
 }
 
-/** Determines how to render the immediate type properties accounting for unions. */
-function TypeProperties({
-  type,
-  css: cssProp,
+function TypeSection({
+  label,
+  title,
+  id,
+  children,
+  components,
 }: {
-  type: TypeOfKind<'Object' | 'Intersection' | 'Union'>
-  css?: CSSObject
+  label: string
+  title?: string
+  id?: string
+  children: React.ReactNode
+  components: TypeReferenceComponents
 }) {
-  if (type.kind === 'Union') {
-    return (
-      <div
-        css={{
-          display: 'flex',
-          flexDirection: 'column',
-          marginTop: '1.5rem',
-          gap: '1.2rem',
-          minWidth: 0,
-          ...cssProp,
-        }}
-      >
-        {type.members.map((member, index) =>
-          member.kind === 'Object' ||
-          member.kind === 'Intersection' ||
-          member.kind === 'Union' ? (
-            <TypeProperties key={index} type={member} />
-          ) : member.kind === 'TypeReference' ? (
-            member.text
-          ) : (
-            <TypeValue key={index} type={member} />
-          )
-        )}
-      </div>
-    )
-  }
-
-  if (type.properties.length) {
-    return (
-      <div
-        css={{
-          display: 'flex',
-          flexDirection: 'column',
-          marginTop: '1.5rem',
-          gap: '1.2rem',
-          minWidth: 0,
-          ...cssProp,
-        }}
-      >
-        <h5 css={{ margin: 0, color: 'var(--color-foreground-secondary)' }}>
-          Properties
-        </h5>
-        {type.properties.map((propertyType, index) => (
-          <TypeValue key={index} type={propertyType} />
-        ))}
-      </div>
-    )
-  }
-
-  console.log('[APIReference:TypeProperties] Did not render: ', type)
-
-  return null
-}
-
-/** Renders a type value with its name, type, and description. */
-function TypeValue({
-  type,
-  css: cssProp,
-}: {
-  type: Kind.All
-  css?: CSSObject
-}) {
-  const isNameSameAsType = type.name === type.text
-  let isRequired = false
-  let defaultValue
-
-  if (isParameterType(type) || isPropertyType(type)) {
-    isRequired = !type.isOptional
-    defaultValue = type.defaultValue
-  }
-
   return (
-    <div
-      key={type.name + type.text}
-      css={{
-        display: 'flex',
-        flexDirection: 'column',
-        padding: '1.5rem 0',
-        gap: '0.8rem',
-        minWidth: 0,
-        ...cssProp,
-      }}
-    >
-      <div
-        css={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-        }}
-      >
-        <h4
-          css={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            flexShrink: 0,
-            margin: 0,
-            fontWeight: 400,
-            color: 'var(--color-foreground-secondary)',
-          }}
-        >
-          {type.name}{' '}
-          {isRequired && (
-            <span css={{ color: 'oklch(0.8 0.15 36.71)' }} title="required">
-              *
-            </span>
-          )}
-        </h4>
-        <div
-          css={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.25rem',
-            minWidth: 0,
-          }}
-        >
-          {isNameSameAsType ? null : (
-            <CodeInline
-              children={type.text}
-              language="typescript"
-              shouldAnalyze={false}
-              paddingX="0.5rem"
-              paddingY="0.2rem"
-              css={{
-                ...codeInlineStyles,
-                fontSize: 'var(--font-size-body-2)',
-              }}
-            />
-          )}
-          {defaultValue ? (
-            <span
-              css={{
-                flexShrink: 0,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.25rem',
-                minWidth: 0,
-              }}
-            >
-              ={' '}
-              <CodeInline
-                children={JSON.stringify(defaultValue)}
-                language="typescript"
-                shouldAnalyze={false}
-                css={codeInlineStyles}
-              />
-            </span>
-          ) : null}
-        </div>
-      </div>
+    <components.section id={id}>
+      <components.h2 aria-label={`${title} ${label}`}>
+        <span>{label}</span> {title}
+      </components.h2>
+      {children}
+    </components.section>
+  )
+}
 
-      {type.description && <MDX children={type.description} {...mdxProps} />}
-
-      {type.kind === 'Object' && type.properties
-        ? type.properties.map((propertyType, index) => (
-            <TypeValue
-              key={index}
-              type={propertyType}
-              css={{ paddingLeft: '1.5rem' }}
-            />
-          ))
-        : null}
-
-      {type.kind === 'Function' && type.signatures && type.signatures.length
-        ? type.signatures.map((signature) =>
-            signature.parameters.map((parameter, index) => (
-              <TypeValue
-                key={index}
-                type={parameter}
-                css={{ paddingLeft: '1.5rem' }}
-              />
-            ))
-          )
-        : null}
+function TypeDetail({
+  label,
+  children,
+  components,
+}: {
+  label: React.ReactNode
+  children: React.ReactNode
+  components: TypeReferenceComponents
+}) {
+  return (
+    <div>
+      <components.h3>{label}</components.h3>
+      {children}
     </div>
   )
+}
+
+function TypeTable<RowType>({
+  rows,
+  headers,
+  renderRow,
+  components,
+}: {
+  rows: readonly RowType[]
+  headers?: readonly React.ReactNode[]
+  renderRow: (row: RowType, index: number) => React.ReactNode
+  components: TypeReferenceComponents
+}) {
+  return (
+    <components.table role="table">
+      {headers ? (
+        <components.thead role="rowgroup">
+          <components.tr role="row">
+            {headers.map((header, index) => (
+              <components.th key={index} role="columnheader">
+                {header}
+              </components.th>
+            ))}
+          </components.tr>
+        </components.thead>
+      ) : null}
+      <components.tbody role="rowgroup">
+        {rows.map((row, index) => (
+          <components.tr key={index} role="row">
+            {renderRow(row, index)}
+          </components.tr>
+        ))}
+      </components.tbody>
+    </components.table>
+  )
+}
+
+function Disclosure({
+  summary,
+  children,
+  components,
+}: {
+  summary: React.ReactNode
+  children: React.ReactNode
+  components: TypeReferenceComponents
+}) {
+  return (
+    <components.details>
+      <components.summary>{summary}</components.summary>
+      {children}
+    </components.details>
+  )
+}
+
+type ComponentsType = TypeReferenceComponents
+
+function ComponentSection({
+  node,
+  components,
+}: {
+  node: TypeOfKind<'Component'>
+  components: ComponentsType
+}) {
+  return (
+    <TypeSection
+      label="Component"
+      title={node.name}
+      id={node.name}
+      components={components}
+    >
+      {node.signatures.map((signature, index) => {
+        return (
+          <React.Fragment key={index}>
+            {node.signatures.length > 1 ? (
+              <components.h4>Overload {index + 1}</components.h4>
+            ) : null}
+
+            <TypeDetail label="Properties" components={components}>
+              {signature.parameter?.kind === 'Object' ? (
+                <TypeTable
+                  rows={signature.parameter.properties}
+                  headers={['Property', 'Type', 'Default Value']}
+                  renderRow={(property) => (
+                    <>
+                      <components.td role="cell">
+                        {property.name}
+                        {property.isOptional ? '?' : ''}
+                      </components.td>
+                      <components.td role="cell">
+                        <components.code>{property.text}</components.code>
+                      </components.td>
+                      <components.td role="cell">
+                        <DefaultValue
+                          value={property.defaultValue}
+                          components={components}
+                        />
+                      </components.td>
+                    </>
+                  )}
+                  components={components}
+                />
+              ) : (
+                <components.code>
+                  {signature.parameter?.text ?? '—'}
+                </components.code>
+              )}
+            </TypeDetail>
+          </React.Fragment>
+        )
+      })}
+    </TypeSection>
+  )
+}
+
+function ObjectSection({
+  node,
+  components,
+}: {
+  node: TypeOfKind<'Object'>
+  components: ComponentsType
+}) {
+  return (
+    <TypeSection
+      label="Object"
+      title={node.name}
+      id={node.name}
+      components={components}
+    >
+      <TypeDetail label="Properties" components={components}>
+        <TypeTable
+          rows={node.properties}
+          headers={['Property', 'Type', 'Default Value']}
+          renderRow={(property) => (
+            <>
+              <components.td role="cell">
+                {property.name}
+                {property.isOptional ? '?' : ''}
+              </components.td>
+              <components.td role="cell">
+                <components.code>{property.text}</components.code>
+              </components.td>
+              <components.td role="cell">
+                <DefaultValue
+                  value={property.defaultValue}
+                  components={components}
+                />
+              </components.td>
+            </>
+          )}
+          components={components}
+        />
+
+        {node.indexSignatures?.length ? (
+          <>
+            <components.h4>Additional Properties</components.h4>
+            {node.indexSignatures.map((signature, index) => (
+              <components.code key={index}>
+                {[signature.key.text, signature.value.text].join(': ')}
+              </components.code>
+            ))}
+          </>
+        ) : null}
+      </TypeDetail>
+    </TypeSection>
+  )
+}
+
+function UnionSection({
+  node,
+  components,
+}: {
+  node: TypeOfKind<'Union'>
+  components: ComponentsType
+}) {
+  return (
+    <TypeSection
+      label="Union"
+      title={node.name}
+      id={node.name}
+      components={components}
+    >
+      <TypeDetail label="Members" components={components}>
+        <components.code>{node.text}</components.code>
+      </TypeDetail>
+    </TypeSection>
+  )
+}
+
+function renderParameterRow(
+  parameter: TypeOfKind<'Function'>['signatures'][0]['parameters'][number],
+  components: ComponentsType
+) {
+  return (
+    <>
+      <components.td role="cell">
+        {parameter.name}
+        {parameter.isOptional ? '?' : ''}
+      </components.td>
+      <components.td role="cell">
+        <components.code>{parameter.text}</components.code>
+      </components.td>
+      <components.td role="cell">
+        <DefaultValue value={parameter.defaultValue} components={components} />
+      </components.td>
+    </>
+  )
+}
+
+function FunctionSection({
+  node,
+  components,
+}: {
+  node: TypeOfKind<'Function'>
+  components: ComponentsType
+}) {
+  return (
+    <TypeSection
+      label="Function"
+      title={node.name}
+      id={node.name}
+      components={components}
+    >
+      {node.signatures.map((signature, index) => (
+        <React.Fragment key={index}>
+          {node.signatures.length > 1 ? (
+            <components.h4>Overload {index + 1}</components.h4>
+          ) : null}
+
+          {signature.parameters.length > 0 ? (
+            <TypeDetail label="Parameters" components={components}>
+              <TypeTable
+                rows={signature.parameters}
+                headers={['Parameter', 'Type', 'Default Value']}
+                renderRow={(param) => renderParameterRow(param, components)}
+                components={components}
+              />
+            </TypeDetail>
+          ) : null}
+
+          <TypeDetail label="Returns" components={components}>
+            <components.code>{signature.returnType}</components.code>
+          </TypeDetail>
+        </React.Fragment>
+      ))}
+    </TypeSection>
+  )
+}
+
+function renderClassPropertyRow(
+  property: NonNullable<TypeOfKind<'Class'>['properties']>[number],
+  components: ComponentsType
+) {
+  return (
+    <>
+      <components.td role="cell">
+        {property.name}
+        {property.isOptional ? '?' : ''}
+      </components.td>
+      <components.td role="cell">
+        <components.code>{property.text}</components.code>
+      </components.td>
+      <components.td role="cell">
+        <DefaultValue value={property.defaultValue} components={components} />
+      </components.td>
+    </>
+  )
+}
+
+function renderMethod(
+  method: NonNullable<TypeOfKind<'Class'>['methods']>[number],
+  components: ComponentsType
+) {
+  const signature = method.signatures[0]
+
+  return (
+    <Disclosure
+      key={method.name}
+      summary={<components.code>{signature.text}</components.code>}
+      components={components}
+    >
+      {signature.parameters.length > 0 ? (
+        <TypeDetail label="Parameters" components={components}>
+          <TypeTable
+            rows={signature.parameters}
+            headers={['Parameter', 'Type', 'Default Value']}
+            renderRow={(param) => renderParameterRow(param, components)}
+            components={components}
+          />
+        </TypeDetail>
+      ) : null}
+      <TypeDetail label="Returns" components={components}>
+        <components.code>{signature.returnType}</components.code>
+      </TypeDetail>
+    </Disclosure>
+  )
+}
+
+function ClassSection({
+  node,
+  components,
+}: {
+  node: TypeOfKind<'Class'>
+  components: ComponentsType
+}) {
+  return (
+    <TypeSection
+      label="Class"
+      title={node.name}
+      id={node.name}
+      components={components}
+    >
+      {node.properties?.length ? (
+        <TypeDetail label="Properties" components={components}>
+          <TypeTable
+            rows={node.properties}
+            headers={['Property', 'Type', 'Default Value']}
+            renderRow={(prop) => renderClassPropertyRow(prop, components)}
+            components={components}
+          />
+        </TypeDetail>
+      ) : null}
+
+      {node.methods?.length ? (
+        <TypeDetail label="Methods" components={components}>
+          {node.methods.map((m) => renderMethod(m, components))}
+        </TypeDetail>
+      ) : null}
+
+      {node.extends || node.implements?.length ? (
+        <TypeDetail label="Heritage" components={components}>
+          {node.extends ? (
+            <div
+              css={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
+            >
+              <components.h3>Extends</components.h3>
+              <components.code>{node.extends.text}</components.code>
+            </div>
+          ) : null}
+
+          {node.implements?.length ? (
+            <div
+              css={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
+            >
+              <components.h3>Implements</components.h3>
+              {node.implements.map((implementor, index) => (
+                <React.Fragment key={index}>
+                  {index > 0 ? ', ' : null}
+                  <components.code>{implementor.text}</components.code>
+                </React.Fragment>
+              ))}
+            </div>
+          ) : null}
+        </TypeDetail>
+      ) : null}
+    </TypeSection>
+  )
+}
+
+function DefaultValue({
+  value,
+  components,
+}: {
+  value: unknown
+  components: TypeReferenceComponents
+}) {
+  if (value === undefined) {
+    return '—'
+  }
+
+  const valueType = typeof value
+  let valueString: string | undefined = undefined
+
+  if (
+    valueType === 'string' ||
+    valueType === 'number' ||
+    valueType === 'boolean'
+  ) {
+    valueString = String(value)
+  }
+
+  try {
+    valueString = JSON.stringify(value)
+  } catch {
+    valueString = String(value)
+  }
+
+  return <components.code>{valueString}</components.code>
+}
+
+/** Stub for docs generator TODO: fix this from erroring the page */
+export function APIReference() {
+  return null
 }
