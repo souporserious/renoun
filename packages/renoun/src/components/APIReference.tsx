@@ -313,7 +313,7 @@ function ComponentSection({
             <TypeDetail label="Properties" components={components}>
               {signature.parameter?.kind === 'Object' ? (
                 <TypeTable
-                  rows={signature.parameter.properties}
+                  rows={signature.parameter.propertySignatures}
                   headers={['Property', 'Type', 'Default Value']}
                   renderRow={(property) => (
                     <>
@@ -363,7 +363,7 @@ function ObjectSection({
     >
       <TypeDetail label="Properties" components={components}>
         <TypeTable
-          rows={node.properties}
+          rows={node.propertySignatures}
           headers={['Property', 'Type', 'Default Value']}
           renderRow={(property) => (
             <>

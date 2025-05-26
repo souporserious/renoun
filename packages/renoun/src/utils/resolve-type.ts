@@ -30,9 +30,6 @@ export namespace Kind {
     /** Distinguishes between different kinds of types, such as classes, functions, objects, primitives etc. */
     kind?: unknown
 
-    /** Whether the type is a parameter or property. */
-    context?: unknown // TODO: remove this in favor of explicit kinds
-
     /** The name of the symbol or declaration if it exists. */
     name?: string
 
@@ -88,7 +85,7 @@ export namespace Kind {
 
   export interface Object extends Shared {
     kind: 'Object'
-    properties: Property[]
+    propertySignatures: PropertySignature[]
     indexSignatures?: IndexSignature[]
     methodSignatures?: MethodSignature[]
   }
@@ -272,6 +269,37 @@ export namespace Kind {
     kind: 'Unknown'
   }
 
+  /** A function or method parameter. */
+  export interface Parameter extends Shared {
+    kind: 'Parameter'
+
+    /** The type of the parameter. */
+    type: ResolvedType
+
+    /** The default value assigned to the property parsed as a literal value if possible. */
+    defaultValue?: unknown
+
+    /** Whether or not the property has an optional modifier or default value. */
+    isOptional?: boolean
+  }
+
+  /** An interface or type alias property signature. */
+  export interface PropertySignature extends Shared {
+    kind: 'PropertySignature'
+
+    /** The type of the property signature. */
+    type: ResolvedType
+
+    /** The default value assigned to the property parsed as a literal value if possible. */
+    defaultValue?: unknown
+
+    /** Whether or not the property has an optional modifier or default value. */
+    isOptional?: boolean
+
+    /** Whether or not the property has a readonly modifier. */
+    isReadonly?: boolean
+  }
+
   // TODO: rename Base -> TypeValue
   export type Base =
     | String
@@ -303,46 +331,15 @@ export namespace Kind {
     | ClassAccessor
     | ClassProperty
     | ClassMethod
-
-  export interface SharedParameter extends Shared {
-    /** Whether the type is a function or method parameter. */
-    context: 'parameter'
-
-    /** The default value assigned to the property parsed as a literal value if possible. */
-    defaultValue?: unknown
-
-    /** Whether or not the property has an optional modifier or default value. */
-    isOptional?: boolean
-  }
-
-  /** A function or method parameter. */
-  // TODO: should be its own kind { kind: 'Parameter', type: Base } removes need for context
-  export type Parameter = Base & SharedParameter
-
-  export interface SharedProperty extends Shared {
-    /** Whether the type is a class, interface, or type alias property. */
-    context: 'property'
-
-    /** The default value assigned to the property parsed as a literal value if possible. */
-    defaultValue?: unknown
-
-    /** Whether or not the property has an optional modifier or default value. */
-    isOptional?: boolean
-
-    /** Whether or not the property has a readonly modifier. */
-    isReadonly?: boolean
-  }
-
-  /** A class, interface, or type alias property. */
-  // TODO: should be its own kind { kind: 'Property', type: Base } removes need for context
-  export type Property = Base & SharedProperty
+    | Parameter
+    | PropertySignature
 }
 
 export type TypeByKind<Type, Key> = Type extends { kind: Key } ? Type : never
 
 export type TypeOfKind<Key extends Kind.All['kind']> = TypeByKind<Kind.All, Key>
 
-export type ResolvedType = Kind.Base | Kind.Parameter | Kind.Property
+export type ResolvedType = Kind.Base
 
 export type SymbolMetadata = ReturnType<typeof getSymbolMetadata>
 
@@ -362,18 +359,6 @@ const TYPE_FORMAT_FLAGS =
   tsMorph.TypeFormatFlags.NoTruncation |
   tsMorph.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope |
   tsMorph.TypeFormatFlags.WriteArrayAsGenericType
-
-/** Determines if the type is a parameter type. */
-export function isParameterType(
-  property: Kind.All
-): property is Kind.Parameter {
-  return property.context === 'parameter'
-}
-
-/** Determines if the type is a property type. */
-export function isPropertyType(property: Kind.All): property is Kind.Property {
-  return property.context === 'property'
-}
 
 /** Process type metadata. */
 export function resolveType(
@@ -917,42 +902,48 @@ export function resolveType(
         })
         .filter(Boolean) as ResolvedType[]
 
-      // Intersection types can safely merge the immediate object properties to reduce nesting
-      const properties: ResolvedType[] = []
-      let isObject = true
+      // Intersection types can safely merge the immediate property signatures to reduce nesting
+      const propertySignatures: Kind.PropertySignature[] = []
+      let allTypesArePropertySignatures = true
 
-      for (const resolvedType of resolvedIntersectionTypes) {
-        if (resolvedType.kind === 'Object') {
-          properties.push(...resolvedType.properties)
+      for (const resolveType of resolvedIntersectionTypes) {
+        if (resolveType.kind === 'Object') {
+          propertySignatures.push(
+            ...(resolveType as Kind.Object).propertySignatures
+          )
         } else {
-          properties.push(resolvedType)
-          isObject = false
+          allTypesArePropertySignatures = false
+          break
         }
       }
 
-      if (properties.length === 0) {
-        if (!keepReferences) {
-          rootReferences.delete(type)
+      if (allTypesArePropertySignatures) {
+        if (propertySignatures.length === 0) {
+          if (!keepReferences) {
+            rootReferences.delete(type)
+          }
+          return
         }
-        return
-      }
 
-      if (isObject) {
         resolvedType = {
           kind: 'Object',
           name: symbolMetadata.name,
           text: typeText,
-          properties: properties.map((property) => ({
-            ...property,
-            context: 'property',
-          })),
+          propertySignatures: propertySignatures,
         } satisfies Kind.Object
       } else {
+        if (resolvedIntersectionTypes.length === 0) {
+          if (!keepReferences) {
+            rootReferences.delete(type)
+          }
+          return
+        }
+
         resolvedType = {
           kind: 'Intersection',
           name: symbolMetadata.name,
           text: typeText,
-          types: properties,
+          types: resolvedIntersectionTypes,
         } satisfies Kind.Intersection
       }
     } else if (type.isTuple()) {
@@ -1120,7 +1111,7 @@ export function resolveType(
           filter,
           false
         )
-        const properties = resolveTypeProperties(
+        const propertySignatures = resolvePropertySignatures(
           type,
           enclosingNode,
           filter,
@@ -1132,7 +1123,7 @@ export function resolveType(
 
         if (
           indexSignatures.length === 0 &&
-          properties.length === 0 &&
+          propertySignatures.length === 0 &&
           typeArguments.length > 0
         ) {
           const resolvedTypeArguments = typeArguments
@@ -1162,15 +1153,18 @@ export function resolveType(
             text: typeText,
             arguments: resolvedTypeArguments,
           } satisfies Kind.TypeReference
-        } else if (properties.length === 0 && indexSignatures.length > 0) {
+        } else if (
+          propertySignatures.length === 0 &&
+          indexSignatures.length > 0
+        ) {
           resolvedType = {
             kind: 'Object',
             name: symbolMetadata.name,
             text: typeText,
-            properties: [],
+            propertySignatures: [],
             indexSignatures,
           } satisfies Kind.Object
-        } else if (properties.length === 0) {
+        } else if (propertySignatures.length === 0) {
           if (!keepReferences) {
             rootReferences.delete(type)
           }
@@ -1198,13 +1192,8 @@ export function resolveType(
             kind: 'Object',
             name: symbolMetadata.name,
             text: typeText,
-            properties: [
-              ...indexSignatures,
-              ...properties.map((property) => ({
-                ...property,
-                context: 'property',
-              })),
-            ] as Kind.Property[],
+            propertySignatures: propertySignatures,
+            indexSignatures,
           } satisfies Kind.Object
         }
       } else {
@@ -1337,12 +1326,18 @@ function resolveCallSignature(
           }
 
           return {
-            ...resolvedType,
-            context: 'parameter',
+            kind: 'Parameter',
             name,
+            type: resolvedType,
             defaultValue,
             isOptional: isOptional ?? Boolean(defaultValue),
             description: getSymbolDescription(parameter),
+            text: parameterType.getText(
+              undefined,
+              tsMorph.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope
+            ),
+            ...getJsDocMetadata(declaration),
+            ...getDeclarationLocation(declaration),
           } satisfies Kind.Parameter
         }
       } else {
@@ -1468,7 +1463,7 @@ function getIndexSignatures(node?: Node) {
 }
 
 /** Process all apparent properties of a given type. */
-export function resolveTypeProperties(
+export function resolvePropertySignatures(
   type: Type,
   enclosingNode?: Node,
   filter: SymbolFilter = defaultFilter,
@@ -1476,7 +1471,7 @@ export function resolveTypeProperties(
   defaultValues?: Record<string, unknown> | unknown,
   keepReferences: boolean = false,
   dependencies?: Set<string>
-): ResolvedType[] {
+): Kind.PropertySignature[] {
   const isReadonly = isTypeReadonly(type, enclosingNode)
 
   return type
@@ -1535,14 +1530,19 @@ export function resolveTypeProperties(
               : resolvedPropertyType
 
           return {
-            ...resolvedType,
-            ...getJsDocMetadata(declaration),
-            context: 'property',
+            kind: 'PropertySignature',
             name,
+            type: resolvedType,
             defaultValue,
             isOptional,
             isReadonly: isReadonly || isPropertyReadonly,
-          } satisfies Kind.Property
+            text: propertyType.getText(
+              undefined,
+              tsMorph.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope
+            ),
+            ...getJsDocMetadata(declaration),
+            ...getDeclarationLocation(declaration),
+          } satisfies Kind.PropertySignature
         }
       } else {
         throw new Error(
@@ -1550,7 +1550,7 @@ export function resolveTypeProperties(
         )
       }
     })
-    .filter(Boolean) as Kind.Property[]
+    .filter(Boolean) as Kind.PropertySignature[]
 }
 
 /** Process all elements of a tuple type. */
@@ -2279,23 +2279,23 @@ function isComponent(
 
     // Check if the parameter type is a primitive type
     if (
-      parameter.kind === 'String' ||
-      parameter.kind === 'Number' ||
-      parameter.kind === 'Boolean' ||
-      parameter.kind === 'Symbol' ||
-      parameter.kind === 'Primitive'
+      parameter.type.kind === 'String' ||
+      parameter.type.kind === 'Number' ||
+      parameter.type.kind === 'Boolean' ||
+      parameter.type.kind === 'Symbol' ||
+      parameter.type.kind === 'Primitive'
     ) {
       return false
     }
 
     // Check if the parameter type is a union containing primitive types
-    if (parameter.kind === 'Union') {
+    if (parameter.type.kind === 'Union') {
       for (
-        let index = 0, length = parameter.types.length;
+        let index = 0, length = parameter.type.types.length;
         index < length;
         ++index
       ) {
-        const member = parameter.types[index]
+        const member = parameter.type.types[index]
         if (
           member.kind === 'String' ||
           member.kind === 'Number' ||
