@@ -436,12 +436,12 @@ function IntersectionSection({
       components={components}
     >
       <div css={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-        {node.properties.map((member, index) => (
+        {node.types.map((type, index) => (
           <div
             key={index}
             css={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}
           >
-            <TypeNodeRouter type={member} components={components} />
+            <TypeNodeRouter type={type} components={components} />
           </div>
         ))}
       </div>

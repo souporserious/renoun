@@ -1,7 +1,6 @@
 import type {
   ClassDeclaration,
   Decorator,
-  FunctionDeclaration,
   GetAccessorDeclaration,
   MethodDeclaration,
   ParameterDeclaration,
@@ -32,7 +31,7 @@ export namespace Kind {
     kind?: unknown
 
     /** Whether the type is a parameter or property. */
-    context?: unknown
+    context?: unknown // TODO: remove this in favor of explicit kinds
 
     /** The name of the symbol or declaration if it exists. */
     name?: string
@@ -54,6 +53,9 @@ export namespace Kind {
       start: { line: number; column: number }
       end: { line: number; column: number }
     }
+
+    // TODO: implement this
+    // isDeprecated?: boolean
   }
 
   export interface String extends Shared {
@@ -93,7 +95,7 @@ export namespace Kind {
 
   export interface Intersection extends Shared {
     kind: 'Intersection'
-    properties: ResolvedType[]
+    types: ResolvedType[]
   }
 
   export interface Enum extends Shared {
@@ -103,12 +105,13 @@ export namespace Kind {
 
   export interface Union extends Shared {
     kind: 'Union'
-    members: ResolvedType[]
+    types: ResolvedType[]
   }
 
   export interface Class extends Shared {
     kind: 'Class'
-    constructors?: FunctionSignature[]
+    // decorators?: ResolvedType[]
+    constructors?: ClassConstructor
     accessors?: ClassAccessor[]
     methods?: ClassMethod[]
     properties?: ClassProperty[]
@@ -116,20 +119,38 @@ export namespace Kind {
     implements?: TypeReference[]
   }
 
+  export interface ClassConstructor extends Shared {
+    kind: 'ClassConstructor'
+    signatures: FunctionSignature[]
+    // decorators?: ResolvedType[]
+  }
+
   export interface SharedClassMember extends Shared {
+    /** The scope of the class member. */
     scope?: 'abstract' | 'static'
+
+    /** The visibility of the class member. */
     visibility?: 'private' | 'protected' | 'public'
+
+    /** The decorators applied to the class member. */
     decorators: ResolvedType[]
+
+    /** Whether or not the property is an override of a base class property. */
+    isOverride?: boolean
   }
 
   export interface ClassGetAccessor extends SharedClassMember {
     kind: 'ClassGetAccessor'
+
+    /** The return type of the getter. */
+    returnType: ResolvedType
   }
 
-  export interface ClassSetAccessor
-    extends SharedClassMember,
-      Omit<FunctionSignature, 'kind'> {
+  export interface ClassSetAccessor extends SharedClassMember {
     kind: 'ClassSetAccessor'
+
+    /** The parameter of the setter. */
+    parameter: Parameter
   }
 
   export type ClassAccessor = ClassGetAccessor | ClassSetAccessor
@@ -137,8 +158,11 @@ export namespace Kind {
   export interface ClassMethod extends SharedClassMember {
     kind: 'ClassMethod'
     signatures: FunctionSignature[]
+    isAsync?: boolean
+    isGenerator?: boolean
   }
 
+  // TODO: add kind: 'ClassProperty' and don't intersect with Base
   export type ClassProperty = Base &
     SharedClassMember & {
       /** The default value assigned to the property parsed as a literal value if possible. */
@@ -169,12 +193,14 @@ export namespace Kind {
 
   export interface IndexSignature extends Shared {
     kind: 'IndexSignature'
+    // TODO: this can only be a string, number, or symbol
     key: ResolvedType
     value: ResolvedType
   }
 
   export interface SharedFunctionLikeSignature extends Shared {
     typeParameters?: Kind.TypeParameter[]
+    // TODO: implement as returnType?: ResolvedType
     returnType: string
   }
 
@@ -185,8 +211,9 @@ export namespace Kind {
 
   export interface FunctionSignature extends SharedFunctionLikeSignature {
     kind: 'FunctionSignature'
-    modifier?: 'async' | 'generator'
     parameters: Parameter[]
+    isAsync?: boolean
+    isGenerator?: boolean
   }
 
   export interface Function extends Shared {
@@ -196,8 +223,8 @@ export namespace Kind {
 
   export interface ComponentSignature extends SharedFunctionLikeSignature {
     kind: 'ComponentSignature'
-    modifier?: 'async'
     parameter?: Object | TypeReference
+    isAsync?: boolean
   }
 
   export interface Component extends Shared {
@@ -242,6 +269,7 @@ export namespace Kind {
     kind: 'Unknown'
   }
 
+  // TODO: rename Base -> TypeValue
   export type Base =
     | String
     | Number
@@ -285,6 +313,7 @@ export namespace Kind {
   }
 
   /** A function or method parameter. */
+  // TODO: should be its own kind { kind: 'Parameter', type: Base } removes need for context
   export type Parameter = Base & SharedParameter
 
   export interface SharedProperty extends Shared {
@@ -302,6 +331,7 @@ export namespace Kind {
   }
 
   /** A class, interface, or type alias property. */
+  // TODO: should be its own kind { kind: 'Property', type: Base } removes need for context
   export type Property = Base & SharedProperty
 }
 
@@ -780,7 +810,7 @@ export function resolveType(
           kind: 'Intersection',
           name: symbolMetadata.name,
           text: typeText,
-          properties: resolvedIntersectionTypes,
+          types: resolvedIntersectionTypes,
         } satisfies Kind.Intersection
       } else {
         const unionMembers: ResolvedType[] = []
@@ -848,23 +878,40 @@ export function resolveType(
             symbolMetadata.name === typeText
               ? uniqueUnionTypes.map((type) => type.text).join(' | ')
               : typeText,
-          members: uniqueUnionTypes,
+          types: uniqueUnionTypes,
         } satisfies Kind.Union
       }
     } else if (type.isIntersection()) {
-      const resolvedIntersectionTypes = type
-        .getIntersectionTypes()
-        .map((intersectionType) =>
-          resolveType(
+      let intersectionNode: tsMorph.IntersectionTypeNode | undefined
+
+      if (tsMorph.Node.isIntersectionTypeNode(enclosingNode)) {
+        intersectionNode = enclosingNode
+      } else if (tsMorph.Node.isTypeAliasDeclaration(symbolDeclaration)) {
+        const typeNode = symbolDeclaration.getTypeNode()
+        if (tsMorph.Node.isIntersectionTypeNode(typeNode)) {
+          intersectionNode = typeNode
+        }
+      }
+
+      const intersectionTypes = type.getIntersectionTypes()
+      const intersectionNodes = intersectionNode
+        ? intersectionNode.getTypeNodes()
+        : []
+      const resolvedIntersectionTypes = intersectionTypes
+        .map((intersectionType, index) => {
+          const intersectionNode = intersectionNodes[index]
+          const isRootMapped = tsMorph.Node.isMappedTypeNode(intersectionNode)
+
+          return resolveType(
             intersectionType,
-            declaration,
+            isRootMapped ? intersectionNode : declaration,
             filter,
             false,
             defaultValues,
             keepReferences,
             dependencies
           )
-        )
+        })
         .filter(Boolean) as ResolvedType[]
 
       // Intersection types can safely merge the immediate object properties to reduce nesting
@@ -902,7 +949,7 @@ export function resolveType(
           kind: 'Intersection',
           name: symbolMetadata.name,
           text: typeText,
-          properties,
+          types: properties,
         } satisfies Kind.Intersection
       }
     } else if (type.isTuple()) {
@@ -946,8 +993,8 @@ export function resolveType(
             name: symbolMetadata.name,
             text: typeText,
             signatures: resolvedCallSignatures.map(
-              ({ kind, modifier, parameters, ...resolvedCallSignature }) => {
-                if (modifier === 'generator') {
+              ({ kind, parameters, isGenerator, ...resolvedCallSignature }) => {
+                if (isGenerator) {
                   throw new Error(
                     '[renoun] Components cannot be generator functions.'
                   )
@@ -956,7 +1003,6 @@ export function resolveType(
                 return {
                   ...resolvedCallSignature,
                   kind: 'ComponentSignature',
-                  modifier,
                   parameter: parameters.at(0) as
                     | Kind.Object
                     | Kind.TypeReference
@@ -998,12 +1044,16 @@ export function resolveType(
           }
 
           const hasFreeTypeParameter = containsFreeTypeParameter(type)
+
           const isValueLike =
             tsMorph.Node.isVariableDeclaration(enclosingNode) ||
             tsMorph.Node.isPropertyDeclaration(enclosingNode) ||
             tsMorph.Node.isPropertySignature(enclosingNode)
+          const isLocalMapped =
+            symbolDeclaration === undefined ||
+            symbolDeclaration === enclosingNode
           const shouldExpandMapped =
-            (!isRootType && !hasFreeTypeParameter) || isValueLike
+            isValueLike || (!isLocalMapped && !hasFreeTypeParameter)
 
           // Handle mapped types e.g. `{ [Key in keyof Type]: Type[Key] }`
           if (!shouldExpandMapped && mappedDeclaration) {
@@ -1204,13 +1254,13 @@ function resolveCallSignatures(
 ): Kind.FunctionSignature[] {
   return signatures
     .map((signature) =>
-      resolveSignature(signature, enclosingNode, filter, dependencies)
+      resolveCallSignature(signature, enclosingNode, filter, dependencies)
     )
     .filter(Boolean) as Kind.FunctionSignature[]
 }
 
 /** Process a single function signature including its parameters and return type. */
-function resolveSignature(
+function resolveCallSignature(
   signature: Signature,
   enclosingNode?: Node,
   filter: SymbolFilter = defaultFilter,
@@ -1219,7 +1269,7 @@ function resolveSignature(
   const signatureDeclaration = signature.getDeclaration()
   const signatureParameters = signature.getParameters()
   const parameterDeclarations = signatureParameters.map((parameter) =>
-    parameter.getDeclarations().at(0)
+    getPrimaryDeclaration(parameter)
   ) as (ParameterDeclaration | undefined)[]
   const resolvedTypeParameters = signature
     .getTypeParameters()
@@ -1331,20 +1381,21 @@ function resolveSignature(
     simplifiedTypeText = `${typeParametersText}(${parametersText}) => ${returnType}`
   }
 
-  const modifier: ReturnType<typeof getModifier> =
-    tsMorph.Node.isFunctionDeclaration(signatureDeclaration) ||
-    tsMorph.Node.isMethodDeclaration(signatureDeclaration)
-      ? getModifier(signatureDeclaration)
-      : undefined
-
   const resolvedType: Kind.FunctionSignature = {
     kind: 'FunctionSignature',
     text: simplifiedTypeText,
     parameters: resolvedParameters,
-    modifier,
     returnType,
     ...getJsDocMetadata(signatureDeclaration),
     ...getDeclarationLocation(signatureDeclaration),
+  }
+
+  if (
+    tsMorph.Node.isFunctionDeclaration(signatureDeclaration) ||
+    tsMorph.Node.isMethodDeclaration(signatureDeclaration)
+  ) {
+    resolvedType.isAsync = signatureDeclaration.isAsync()
+    resolvedType.isGenerator = signatureDeclaration.isGenerator()
   }
 
   if (resolvedTypeParameters.length) {
@@ -1751,17 +1802,6 @@ function getRootFilePath(project: Project) {
   return rootFilePath
 }
 
-/** Get the modifier of a function or method declaration. */
-function getModifier(node: FunctionDeclaration | MethodDeclaration) {
-  if (node.isAsync()) {
-    return 'async'
-  }
-
-  if (node.isGenerator()) {
-    return 'generator'
-  }
-}
-
 /** Get the visibility of a class member. */
 function getVisibility(
   node:
@@ -1801,10 +1841,10 @@ function getScope(
 }
 
 /** Filters out undefined from a union type. */
-function filterUndefinedFromUnion<Type extends ResolvedType>(type: Type): Type {
+function filterUndefinedFromUnion(type: ResolvedType): ResolvedType {
   if (type.kind !== 'Union') return type
 
-  const filteredMembers = type.members.filter(
+  const filteredMembers = type.types.filter(
     (member) => !(member.kind === 'Primitive' && member.text === 'undefined')
   )
 
@@ -1815,15 +1855,15 @@ function filterUndefinedFromUnion<Type extends ResolvedType>(type: Type): Type {
 
   // If exactly one member remains, collapse the union
   if (filteredMembers.length === 1) {
-    return filteredMembers[0] as unknown as Type
+    return filteredMembers[0]
   }
 
   // Otherwise return a narrowed union
   return {
     ...type,
-    members: filteredMembers,
+    types: filteredMembers,
     text: filteredMembers.map((member) => member.text).join(' | '),
-  } as Type
+  } satisfies Kind.Union
 }
 
 /** Processes a class declaration into a metadata object. */
@@ -1839,19 +1879,33 @@ function resolveClass(
       .getType()
       .getText(classDeclaration, TYPE_FORMAT_FLAGS),
     ...getJsDocMetadata(classDeclaration),
+    ...getDeclarationLocation(classDeclaration),
   }
 
-  const constructorSignatures = classDeclaration
-    .getConstructors()
-    .map((constructor) => constructor.getSignature())
+  const constructorDeclarations = classDeclaration.getConstructors()
 
-  if (constructorSignatures.length) {
-    classMetadata.constructors = resolveCallSignatures(
-      constructorSignatures,
+  if (constructorDeclarations.length > 0) {
+    const constructorSignaturesToResolve = constructorDeclarations.map(
+      (constructor) => constructor.getSignature()
+    )
+    const resolvedFunctionSignatures = resolveCallSignatures(
+      constructorSignaturesToResolve,
       classDeclaration,
       filter,
       dependencies
     )
+
+    if (resolvedFunctionSignatures.length > 0) {
+      const primaryConstructorDeclaration = constructorDeclarations[0]
+
+      classMetadata.constructors = {
+        kind: 'ClassConstructor',
+        signatures: resolvedFunctionSignatures,
+        text: primaryConstructorDeclaration.getText(),
+        ...getJsDocMetadata(primaryConstructorDeclaration),
+        ...getDeclarationLocation(primaryConstructorDeclaration),
+      } satisfies Kind.ClassConstructor
+    }
   }
 
   classDeclaration.getMembers().forEach((member) => {
@@ -1967,7 +2021,7 @@ function resolveClassAccessor(
   }
 
   if (tsMorph.Node.isSetAccessorDeclaration(accessor)) {
-    const resolvedSignature = resolveSignature(
+    const resolvedSignature = resolveCallSignature(
       accessor.getSignature(),
       accessor,
       filter,
@@ -1975,11 +2029,18 @@ function resolveClassAccessor(
     )
 
     if (resolvedSignature) {
+      const parameter = resolvedSignature.parameters[0]
+
+      if (!parameter) {
+        throw new Error(
+          `[renoun:resolveClassAccessor] Class setter parameter could not be resolved. This declaration was either filtered, should be marked as internal, or filed as an issue for support.\n\n${printNode(accessor)}`
+        )
+      }
+
       return {
-        ...resolvedSignature,
         ...sharedMetadata,
         kind: 'ClassSetAccessor',
-        text: accessor.getType().getText(accessor, TYPE_FORMAT_FLAGS),
+        parameter,
       } satisfies Kind.ClassSetAccessor
     }
 
@@ -1988,9 +2049,26 @@ function resolveClassAccessor(
     )
   }
 
+  const returnType = resolveType(
+    accessor.getReturnType(),
+    accessor,
+    filter,
+    false,
+    undefined,
+    false,
+    dependencies
+  )
+
+  if (!returnType) {
+    throw new Error(
+      `[renoun:resolveClassAccessor] Class getter return type could not be resolved. This declaration was either filtered, should be marked as internal, or filed as an issue for support.\n\n${printNode(accessor)}`
+    )
+  }
+
   return {
     ...sharedMetadata,
     kind: 'ClassGetAccessor',
+    returnType,
   } satisfies Kind.ClassGetAccessor
 }
 
@@ -2208,11 +2286,11 @@ function isComponent(
     // Check if the parameter type is a union containing primitive types
     if (parameter.kind === 'Union') {
       for (
-        let index = 0, length = parameter.members.length;
+        let index = 0, length = parameter.types.length;
         index < length;
         ++index
       ) {
-        const member = parameter.members[index]
+        const member = parameter.types[index]
         if (
           member.kind === 'String' ||
           member.kind === 'Number' ||
