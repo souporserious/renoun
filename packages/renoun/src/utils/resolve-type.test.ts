@@ -2028,85 +2028,95 @@ describe('resolveType', () => {
                 {
                   "decorators": [],
                   "defaultValue": "undefined",
-                  "element": {
-                    "filePath": "test.ts",
-                    "kind": "Object",
-                    "name": "FileSystemSource",
-                    "position": {
-                      "end": {
-                        "column": 2,
-                        "line": 3,
-                      },
-                      "start": {
-                        "column": 1,
-                        "line": 1,
-                      },
-                    },
-                    "properties": [
-                      {
-                        "context": "property",
-                        "defaultValue": undefined,
-                        "filePath": "test.ts",
-                        "isOptional": true,
-                        "isReadonly": false,
-                        "kind": "Class",
-                        "name": "collection",
-                        "position": {
-                          "end": {
-                            "column": 35,
-                            "line": 2,
-                          },
-                          "start": {
-                            "column": 3,
-                            "line": 2,
-                          },
-                        },
-                        "properties": [
-                          {
-                            "decorators": [],
-                            "defaultValue": "undefined",
-                            "filePath": "test.ts",
-                            "isOptional": true,
-                            "isReadonly": false,
-                            "kind": "TypeReference",
-                            "name": "sources",
-                            "position": {
-                              "end": {
-                                "column": 52,
-                                "line": 6,
-                              },
-                              "start": {
-                                "column": 3,
-                                "line": 6,
-                              },
-                            },
-                            "scope": undefined,
-                            "text": "Array<FileSystemSource<Exports>>",
-                            "visibility": undefined,
-                          },
-                        ],
-                        "text": "Collection<Exports>",
-                      },
-                    ],
-                    "text": "FileSystemSource<Exports>",
-                  },
-                  "filePath": "test.ts",
                   "isOptional": true,
                   "isReadonly": false,
-                  "kind": "Array",
+                  "kind": "ClassProperty",
                   "name": "sources",
-                  "position": {
-                    "end": {
-                      "column": 52,
-                      "line": 6,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 6,
-                    },
-                  },
                   "scope": undefined,
                   "text": "Array<FileSystemSource<Exports>>",
+                  "type": {
+                    "element": {
+                      "filePath": "test.ts",
+                      "kind": "Object",
+                      "name": "FileSystemSource",
+                      "position": {
+                        "end": {
+                          "column": 2,
+                          "line": 3,
+                        },
+                        "start": {
+                          "column": 1,
+                          "line": 1,
+                        },
+                      },
+                      "properties": [
+                        {
+                          "context": "property",
+                          "defaultValue": undefined,
+                          "filePath": "test.ts",
+                          "isOptional": true,
+                          "isReadonly": false,
+                          "kind": "Class",
+                          "name": "collection",
+                          "position": {
+                            "end": {
+                              "column": 35,
+                              "line": 2,
+                            },
+                            "start": {
+                              "column": 3,
+                              "line": 2,
+                            },
+                          },
+                          "properties": [
+                            {
+                              "decorators": [],
+                              "defaultValue": "undefined",
+                              "isOptional": true,
+                              "isReadonly": false,
+                              "kind": "ClassProperty",
+                              "name": "sources",
+                              "scope": undefined,
+                              "text": "Array<FileSystemSource<Exports>>",
+                              "type": {
+                                "filePath": "test.ts",
+                                "kind": "TypeReference",
+                                "name": "Array",
+                                "position": {
+                                  "end": {
+                                    "column": 52,
+                                    "line": 6,
+                                  },
+                                  "start": {
+                                    "column": 3,
+                                    "line": 6,
+                                  },
+                                },
+                                "text": "Array<FileSystemSource<Exports>>",
+                              },
+                              "visibility": undefined,
+                            },
+                          ],
+                          "text": "Collection<Exports>",
+                        },
+                      ],
+                      "text": "FileSystemSource<Exports>",
+                    },
+                    "filePath": "test.ts",
+                    "kind": "Array",
+                    "name": undefined,
+                    "position": {
+                      "end": {
+                        "column": 52,
+                        "line": 6,
+                      },
+                      "start": {
+                        "column": 3,
+                        "line": 6,
+                      },
+                    },
+                    "text": "Array<FileSystemSource<Exports>>",
+                  },
                   "visibility": undefined,
                 },
               ],
@@ -4103,24 +4113,29 @@ describe('resolveType', () => {
           {
             "decorators": [],
             "defaultValue": undefined,
-            "filePath": "test.ts",
             "isOptional": false,
             "isReadonly": false,
-            "kind": "String",
+            "kind": "ClassProperty",
             "name": "color",
-            "position": {
-              "end": {
-                "column": 17,
-                "line": 2,
-              },
-              "start": {
-                "column": 3,
-                "line": 2,
-              },
-            },
             "scope": undefined,
             "text": "string",
-            "value": undefined,
+            "type": {
+              "filePath": "test.ts",
+              "kind": "String",
+              "name": undefined,
+              "position": {
+                "end": {
+                  "column": 17,
+                  "line": 2,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 2,
+                },
+              },
+              "text": "string",
+              "value": undefined,
+            },
             "visibility": undefined,
           },
         ],
@@ -4184,24 +4199,29 @@ describe('resolveType', () => {
               {
                 "decorators": [],
                 "defaultValue": "#666",
-                "filePath": "test.ts",
                 "isOptional": true,
                 "isReadonly": false,
-                "kind": "String",
+                "kind": "ClassProperty",
                 "name": "color",
-                "position": {
-                  "end": {
-                    "column": 25,
-                    "line": 2,
-                  },
-                  "start": {
-                    "column": 3,
-                    "line": 2,
-                  },
-                },
                 "scope": undefined,
                 "text": "string",
-                "value": undefined,
+                "type": {
+                  "filePath": "test.ts",
+                  "kind": "String",
+                  "name": undefined,
+                  "position": {
+                    "end": {
+                      "column": 25,
+                      "line": 2,
+                    },
+                    "start": {
+                      "column": 3,
+                      "line": 2,
+                    },
+                  },
+                  "text": "string",
+                  "value": undefined,
+                },
                 "visibility": undefined,
               },
             ],
@@ -7382,47 +7402,57 @@ describe('resolveType', () => {
           {
             "decorators": [],
             "defaultValue": 0,
-            "filePath": "test.ts",
             "isOptional": true,
             "isReadonly": false,
-            "kind": "Number",
+            "kind": "ClassProperty",
             "name": "initialCount",
-            "position": {
-              "end": {
-                "column": 28,
-                "line": 2,
-              },
-              "start": {
-                "column": 3,
-                "line": 2,
-              },
-            },
             "scope": undefined,
             "text": "number",
-            "value": undefined,
+            "type": {
+              "filePath": "test.ts",
+              "kind": "Number",
+              "name": undefined,
+              "position": {
+                "end": {
+                  "column": 28,
+                  "line": 2,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 2,
+                },
+              },
+              "text": "number",
+              "value": undefined,
+            },
             "visibility": undefined,
           },
           {
             "decorators": [],
             "defaultValue": 0,
-            "filePath": "test.ts",
             "isOptional": true,
             "isReadonly": false,
-            "kind": "Number",
+            "kind": "ClassProperty",
             "name": "staticCount",
-            "position": {
-              "end": {
-                "column": 34,
-                "line": 6,
-              },
-              "start": {
-                "column": 3,
-                "line": 6,
-              },
-            },
             "scope": "static",
             "text": "number",
-            "value": undefined,
+            "type": {
+              "filePath": "test.ts",
+              "kind": "Number",
+              "name": undefined,
+              "position": {
+                "end": {
+                  "column": 34,
+                  "line": 6,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 6,
+                },
+              },
+              "text": "number",
+              "value": undefined,
+            },
             "visibility": undefined,
           },
         ],
@@ -9367,24 +9397,29 @@ describe('resolveType', () => {
             {
               "decorators": [],
               "defaultValue": 0,
-              "filePath": "test.ts",
               "isOptional": true,
               "isReadonly": false,
-              "kind": "Number",
+              "kind": "ClassProperty",
               "name": "count",
-              "position": {
-                "end": {
-                  "column": 21,
-                  "line": 2,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 2,
-                },
-              },
               "scope": undefined,
               "text": "number",
-              "value": undefined,
+              "type": {
+                "filePath": "test.ts",
+                "kind": "Number",
+                "name": undefined,
+                "position": {
+                  "end": {
+                    "column": 21,
+                    "line": 2,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 2,
+                  },
+                },
+                "text": "number",
+                "value": undefined,
+              },
               "visibility": undefined,
             },
           ],

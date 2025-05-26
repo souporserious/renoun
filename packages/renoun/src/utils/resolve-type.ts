@@ -162,18 +162,21 @@ export namespace Kind {
     isGenerator?: boolean
   }
 
-  // TODO: add kind: 'ClassProperty' and don't intersect with Base
-  export type ClassProperty = Base &
-    SharedClassMember & {
-      /** The default value assigned to the property parsed as a literal value if possible. */
-      defaultValue?: unknown
+  export interface ClassProperty extends SharedClassMember {
+    kind: 'ClassProperty'
 
-      /** Whether or not the property has an optional modifier or default value. */
-      isOptional?: boolean
+    /** The type of the class property. */
+    type: ResolvedType
 
-      /** Whether or not the property has a readonly modifier. */
-      isReadonly?: boolean
-    }
+    /** The default value assigned to the property parsed as a literal value if possible. */
+    defaultValue?: unknown
+
+    /** Whether or not the property has an optional modifier or default value. */
+    isOptional?: boolean
+
+    /** Whether or not the property has a readonly modifier. */
+    isReadonly?: boolean
+  }
 
   export interface Mapped extends Shared {
     kind: 'Mapped'
@@ -2130,9 +2133,10 @@ function resolveClassProperty(
     const defaultValue = getPropertyDefaultValue(property)
 
     return {
-      ...resolvedType,
       ...getJsDocMetadata(property),
+      kind: 'ClassProperty',
       name: property.getName(),
+      type: resolvedType,
       defaultValue,
       scope: getScope(property),
       visibility: getVisibility(property),
@@ -2143,6 +2147,7 @@ function resolveClassProperty(
         filter,
         dependencies
       ),
+      text: property.getType().getText(property, TYPE_FORMAT_FLAGS),
     } satisfies Kind.ClassProperty
   }
 
