@@ -1,7 +1,5 @@
 import {
-  CodeInline,
   TypeReference as DefaultTypeReference,
-  parseCodeProps,
   type TypeReferenceProps,
 } from 'renoun/components'
 
@@ -13,6 +11,16 @@ export function TypeReference(props: TypeReferenceProps) {
     <DefaultTypeReference
       {...props}
       components={{
+        section: (props) => (
+          <section
+            {...props}
+            css={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1.6rem',
+            }}
+          />
+        ),
         h2: (props) => (
           <h2
             {...props}
@@ -23,7 +31,6 @@ export function TypeReference(props: TypeReferenceProps) {
               fontSize: 'var(--font-size-heading-2)',
               lineHeight: 'var(--line-height-heading-2)',
               fontWeight: 'var(--font-weight-heading)',
-              marginBottom: '1.6rem',
 
               '& span': {
                 textTransform: 'uppercase',
@@ -51,7 +58,7 @@ export function TypeReference(props: TypeReferenceProps) {
             {...props}
             css={{
               display: 'grid',
-              gridTemplateColumns: '8rem 1fr 8rem',
+              gridTemplateColumns: '0.8fr 1fr auto',
               gridColumnGap: '2rem',
               fontSize: 'var(--font-size-body-2)',
               lineHeight: 'var(--line-height-body-2)',
@@ -110,23 +117,16 @@ export function TypeReference(props: TypeReferenceProps) {
             }}
           />
         ),
-        code: (props) => {
-          return (
-            <CodeInline
-              {...parseCodeProps(props)}
-              language="typescript"
-              paddingY="0"
-              css={{
-                display: 'inline-block',
-                maxWidth: '-webkit-fill-available',
-                whiteSpace: 'nowrap',
-                lineHeight: 1.15,
-                overflowX: 'auto',
-              }}
-              className={GeistMono.className}
-            />
-          )
-        },
+        code: (props) => (
+          <code
+            {...props}
+            css={{
+              color: 'var(--color-foreground-interactive)',
+              wordWrap: 'break-word',
+            }}
+            className={GeistMono.className}
+          />
+        ),
         Markdown,
         ...props.components,
       }}

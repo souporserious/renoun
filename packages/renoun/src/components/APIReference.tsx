@@ -156,12 +156,42 @@ function TypeNodeRouter({
       return <ObjectSection node={type} components={components} />
     case 'Union':
       return <UnionSection node={type} components={components} />
+    case 'Intersection':
+      return <IntersectionSection node={type} components={components} />
     case 'Function':
       return <FunctionSection node={type} components={components} />
     case 'Class':
       return <ClassSection node={type} components={components} />
+    case 'Mapped':
+      return <MappedSection node={type} components={components} />
+    case 'Array':
+    case 'Tuple':
+    case 'Enum':
+    case 'TypeAlias':
+    case 'TypeReference':
+    case 'Primitive':
+    case 'String':
+    case 'Number':
+    case 'Boolean':
+    case 'Symbol':
+    case 'Unknown':
+      // Convert PascalCase kind name to space separated label
+      const label = type.kind.replace(/([a-z])([A-Z])/g, '$1 $2')
+
+      return (
+        <TypeSection
+          label={label}
+          title={type.name ?? type.text}
+          id={type.name}
+          components={components}
+        >
+          <components.code>{type.text}</components.code>
+        </TypeSection>
+      )
     default:
-      return null
+      throw new Error(
+        `[renoun]: Unknown type kind "${type.kind}" for type "${type.name}"`
+      )
   }
 }
 
@@ -391,6 +421,34 @@ function UnionSection({
   )
 }
 
+function IntersectionSection({
+  node,
+  components,
+}: {
+  node: TypeOfKind<'Intersection'>
+  components: TypeReferenceComponents
+}) {
+  return (
+    <TypeSection
+      label="Intersection"
+      title={node.name}
+      id={node.name}
+      components={components}
+    >
+      <div css={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+        {node.properties.map((member, index) => (
+          <div
+            key={index}
+            css={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+          >
+            <TypeNodeRouter type={member} components={components} />
+          </div>
+        ))}
+      </div>
+    </TypeSection>
+  )
+}
+
 function renderParameterRow(
   parameter: TypeOfKind<'Function'>['signatures'][0]['parameters'][number],
   components: ComponentsType
@@ -557,6 +615,40 @@ function ClassSection({
           ) : null}
         </TypeDetail>
       ) : null}
+    </TypeSection>
+  )
+}
+
+function MappedSection({
+  node,
+  components,
+}: {
+  node: TypeOfKind<'Mapped'>
+  components: ComponentsType
+}) {
+  const parameterText = `${node.parameter.name} in ${node.parameter.constraint?.text ?? '?'}`
+  const valueText = node.type.text
+
+  return (
+    <TypeSection
+      label="Mapped"
+      title={node.name}
+      id={node.name}
+      components={components}
+    >
+      <TypeDetail label="Parameter" components={components}>
+        <components.code>{parameterText}</components.code>
+      </TypeDetail>
+      <TypeDetail label="Type" components={components}>
+        <components.code>{valueText}</components.code>
+      </TypeDetail>
+      <TypeDetail label="Modifiers" components={components}>
+        <components.code>
+          {node.isReadonly ? 'readonly ' : ''}
+          {node.isOptional ? 'optional' : ''}
+          {!node.isReadonly && !node.isOptional ? '—' : ''}
+        </components.code>
+      </TypeDetail>
     </TypeSection>
   )
 }
