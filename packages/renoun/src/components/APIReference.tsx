@@ -175,7 +175,7 @@ function TypeNodeRouter({
     case 'Boolean':
     case 'Symbol':
     case 'Unknown':
-      // Convert PascalCase kind name to space separated label
+      // Convert kind name from PascalCase to space separated label
       const label = type.kind.replace(/([a-z])([A-Z])/g, '$1 $2')
 
       return (
@@ -428,6 +428,83 @@ function IntersectionSection({
   node: TypeOfKind<'Intersection'>
   components: TypeReferenceComponents
 }) {
+  // Flatten into one table if every member is either an Object or a Mapped kind
+  if (
+    node.types.length > 1 &&
+    node.types.every((type) => type.kind === 'Object' || type.kind === 'Mapped')
+  ) {
+    const rows: {
+      name: string
+      text: string
+      defaultValue?: unknown
+      isOptional?: boolean
+      isReadonly?: boolean
+    }[] = []
+
+    node.types.forEach((type) => {
+      if (type.kind === 'Object') {
+        type.propertySignatures.forEach((signature) =>
+          rows.push({
+            name: signature.name ?? '-',
+            text: signature.text,
+            defaultValue: signature.defaultValue,
+            isOptional: signature.isOptional,
+          })
+        )
+        type.indexSignatures?.forEach((signature) =>
+          rows.push({
+            name: signature.key.text,
+            text: signature.value.text,
+          })
+        )
+      } else if (type.kind === 'Mapped') {
+        rows.push({
+          name: type.parameter.text,
+          text: type.type.text,
+          isOptional: type.isOptional,
+          isReadonly: type.isReadonly,
+        })
+      }
+    })
+
+    return (
+      <TypeSection
+        label="Object"
+        title={node.name}
+        id={node.name}
+        components={components}
+      >
+        <TypeDetail label="Properties" components={components}>
+          <TypeTable
+            rows={rows}
+            headers={['Property', 'Type', 'Default Value']}
+            renderRow={(r) => (
+              <>
+                <components.td>
+                  {r.name}
+                  {r.isOptional ? '?' : ''}
+                </components.td>
+                <components.td>
+                  <components.code>{r.text}</components.code>
+                </components.td>
+                <components.td>
+                  {r.defaultValue == null ? (
+                    '—'
+                  ) : (
+                    <components.code>
+                      {JSON.stringify(r.defaultValue)}
+                    </components.code>
+                  )}
+                </components.td>
+              </>
+            )}
+            components={components}
+          />
+        </TypeDetail>
+      </TypeSection>
+    )
+  }
+
   return (
     <TypeSection
       label="Intersection"
@@ -436,9 +513,9 @@ function IntersectionSection({
       components={components}
     >
       <div css={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-        {node.types.map((type, index) => (
+        {node.types.map((type, i) => (
           <div
-            key={index}
+            key={i}
             css={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}
           >
             <TypeNodeRouter type={type} components={components} />
