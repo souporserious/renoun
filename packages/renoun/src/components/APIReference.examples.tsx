@@ -87,7 +87,16 @@ export function BasicUsage() {
               }}
             />
           ),
-          td: (props) => <td {...props} css={{ padding: '0.5rem 0' }} />,
+          td: (props) => (
+            <td
+              {...props}
+              css={{
+                padding: '0.5rem 0',
+                whiteSpace: 'nowrap',
+                overflow: 'auto',
+              }}
+            />
+          ),
           code: (props) => (
             <code
               {...props}

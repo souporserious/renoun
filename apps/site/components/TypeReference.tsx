@@ -113,9 +113,48 @@ export function TypeReference(props: TypeReferenceProps) {
           <td
             {...props}
             css={{
+              display: 'grid',
               padding: '0.5rem 0',
+              whiteSpace: 'nowrap',
+              overflowX: 'auto',
+              mask: 'linear-gradient(to right, #0000, #ffff var(--start-fade) calc(100% - var(--end-fade)), #0000)',
+              animationName: 'scroll-mask',
+              animationTimeline: '--scroll-mask',
+              scrollTimeline: '--scroll-mask x',
             }}
-          />
+          >
+            {props.children}
+            <style href="scroll-mask" precedence="scroll-mask">
+              {`
+                @property --start-fade {
+                  syntax: '<length>';
+                  inherits: false;
+                  initial-value: 0;
+                }
+
+                @property --end-fade {
+                  syntax: '<length>';
+                  inherits: false;
+                  initial-value: 0;
+                }
+
+                @keyframes scroll-mask {
+                  0% {
+                    --start-fade: 0rem;
+                    --end-fade: 2rem;
+                  }
+                  8%, 92% {
+                    --start-fade: 2rem;
+                    --end-fade: 2rem;
+                  }
+                  100% {
+                    --start-fade: 2rem;
+                    --end-fade: 0rem;
+                  }
+                }
+              `}
+            </style>
+          </td>
         ),
         code: (props) => (
           <code
