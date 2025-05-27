@@ -13183,7 +13183,7 @@ describe('resolveType', () => {
                     },
                     "kind": "TypeParameter",
                     "name": "Key",
-                    "text": "Key",
+                    "text": "Key in string | number | symbol",
                   },
                   "position": {
                     "end": {
@@ -13770,7 +13770,7 @@ describe('resolveType', () => {
               },
               "kind": "TypeParameter",
               "name": "Tag",
-              "text": "Tag",
+              "text": "Tag in SemanticTags",
             },
             "position": {
               "end": {

@@ -1068,6 +1068,21 @@ export function resolveType(
               const typeParameter = mappedDeclaration.getTypeParameter()
               const typeParameterName = typeParameter.getName()
               const constraint = typeParameter.getConstraintOrThrow()
+              const constraintType = resolveType(
+                constraint.getType(),
+                constraint,
+                filter,
+                false,
+                undefined,
+                true,
+                dependencies
+              )
+
+              if (!constraintType) {
+                throw new Error(
+                  `[renoun:resolveType]: No constraint type found for Mapped type "${typeText}". Please file an issue if you encounter this error.`
+                )
+              }
 
               resolvedType = {
                 kind: 'Mapped',
@@ -1075,16 +1090,8 @@ export function resolveType(
                 parameter: {
                   kind: 'TypeParameter',
                   name: typeParameterName,
-                  text: typeParameterName,
-                  constraint: resolveType(
-                    constraint.getType(),
-                    constraint,
-                    filter,
-                    false,
-                    undefined,
-                    true,
-                    dependencies
-                  ),
+                  text: `${typeParameterName} in ${constraintType.text}`,
+                  constraint: constraintType,
                 } satisfies Kind.TypeParameter,
                 type: valueType,
                 isReadonly: Boolean(mappedDeclaration.getReadonlyToken()),
