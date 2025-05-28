@@ -208,12 +208,26 @@ function TypeSection({
   components: TypeReferenceComponents
 }) {
   return (
-    <components.section id={id}>
-      <components.h2 aria-label={`${title} ${label}`}>
-        <span>{label}</span> {title}
-      </components.h2>
-      {children}
-    </components.section>
+    <Collapse.Provider>
+      <components.section id={id} style={{ position: 'relative' }}>
+        <Collapse.Trigger
+          as="svg"
+          viewBox="0 0 12 12"
+          style={{
+            position: 'absolute',
+            width: 16,
+            top: '1.8rem',
+            left: '-2rem',
+          }}
+        >
+          <path d="M3 2l4 4-4 4" fill="none" stroke="currentColor" />
+        </Collapse.Trigger>
+        <components.h2 aria-label={`${title} ${label}`}>
+          <span>{label}</span> {title}
+        </components.h2>
+        <Collapse.Content>{children}</Collapse.Content>
+      </components.section>
+    </Collapse.Provider>
   )
 }
 

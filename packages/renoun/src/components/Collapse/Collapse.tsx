@@ -85,7 +85,7 @@ export function Content<As extends React.ElementType = 'div'>({
       style={
         {
           width: '100%',
-          display: 'block',
+          display: isOpen ? 'block' : 'none', // TODO: use CSS and starting style here
           height: isOpen ? 'auto' : 0,
           opacity: isOpen ? 1 : 0,
           overflow: 'hidden',
