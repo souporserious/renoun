@@ -11,8 +11,9 @@ import {
   type SymbolFilter,
   type TypeOfKind,
 } from '../utils/resolve-type.js'
-import { Markdown as MarkdownDefault, type MarkdownProps } from './Markdown.js'
+import { Collapse } from './Collapse/index.js'
 import { WorkingDirectoryContext } from './Context.js'
+import { Markdown as MarkdownDefault, type MarkdownProps } from './Markdown.js'
 
 type SemanticTags =
   | 'section'
@@ -29,14 +30,13 @@ type SemanticTags =
   | 'tr'
   | 'th'
   | 'td'
-  | 'details'
-  | 'summary'
   | 'code'
 
 export type TypeReferenceComponents = {
   [Tag in SemanticTags]: Tag | React.ComponentType<React.ComponentProps<Tag>>
 } & {
   Markdown: React.ComponentType<MarkdownProps>
+  SubRow: React.ComponentType<React.ComponentProps<'tr'>>
 }
 
 const defaultComponents: TypeReferenceComponents = {
@@ -54,10 +54,9 @@ const defaultComponents: TypeReferenceComponents = {
   tr: 'tr',
   th: 'th',
   td: 'td',
-  details: 'details',
-  summary: 'summary',
   code: 'code',
   Markdown: MarkdownDefault,
+  SubRow: (props) => <Collapse.Content as="tr" {...props} />,
 }
 
 export interface TypeReferenceProps {
@@ -239,11 +238,13 @@ function TypeTable<RowType>({
   rows,
   headers,
   renderRow,
+  renderSubRow,
   components,
 }: {
   rows: readonly RowType[]
   headers?: readonly React.ReactNode[]
   renderRow: (row: RowType, index: number) => React.ReactNode
+  renderSubRow?: (row: RowType, index: number) => React.ReactNode
   components: TypeReferenceComponents
 }) {
   return (
@@ -260,30 +261,24 @@ function TypeTable<RowType>({
         </components.thead>
       ) : null}
       <components.tbody role="rowgroup">
-        {rows.map((row, index) => (
-          <components.tr key={index} role="row">
-            {renderRow(row, index)}
-          </components.tr>
-        ))}
+        {rows.map((row, index) => {
+          const subRow = renderSubRow?.(row, index)
+
+          return (
+            <Collapse.Provider key={index}>
+              <components.tr role="row">{renderRow(row, index)}</components.tr>
+              {subRow ? (
+                <components.SubRow role="row">
+                  <components.td colSpan={3} role="cell">
+                    {subRow}
+                  </components.td>
+                </components.SubRow>
+              ) : null}
+            </Collapse.Provider>
+          )
+        })}
       </components.tbody>
     </components.table>
-  )
-}
-
-function Disclosure({
-  summary,
-  children,
-  components,
-}: {
-  summary: React.ReactNode
-  children: React.ReactNode
-  components: TypeReferenceComponents
-}) {
-  return (
-    <components.details>
-      <components.summary>{summary}</components.summary>
-      {children}
-    </components.details>
   )
 }
 
@@ -441,7 +436,7 @@ function IntersectionSection({
       isReadonly?: boolean
     }[] = []
 
-    node.types.forEach((type) => {
+    for (const type of node.types) {
       if (type.kind === 'Object') {
         type.propertySignatures.forEach((signature) =>
           rows.push({
@@ -465,7 +460,7 @@ function IntersectionSection({
           isReadonly: type.isReadonly,
         })
       }
-    })
+    }
 
     return (
       <TypeSection
@@ -513,9 +508,9 @@ function IntersectionSection({
       components={components}
     >
       <div css={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-        {node.types.map((type, i) => (
+        {node.types.map((type, index) => (
           <div
-            key={i}
+            key={index}
             css={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}
           >
             <TypeNodeRouter type={type} components={components} />
@@ -606,32 +601,51 @@ function renderClassPropertyRow(
   )
 }
 
-function renderMethod(
+function renderMethodRow(
   method: NonNullable<TypeOfKind<'Class'>['methods']>[number],
   components: ComponentsType
 ) {
   const signature = method.signatures[0]
 
   return (
-    <Disclosure
-      key={method.name}
-      summary={<components.code>{signature.text}</components.code>}
-      components={components}
-    >
-      {signature.parameters.length > 0 ? (
+    <>
+      <components.th scope="row">
+        <Collapse.Trigger>{method.name}</Collapse.Trigger>
+      </components.th>
+      <components.td>
+        <components.code>{signature.text}</components.code>
+      </components.td>
+    </>
+  )
+}
+
+function renderMethodSubRow(
+  method: NonNullable<TypeOfKind<'Class'>['methods']>[number],
+  components: ComponentsType
+) {
+  const signature = method.signatures[0]
+
+  return (
+    <>
+      {/* <components.h3 className="visually-hidden">
+        Details for {method.name}
+      </components.h3> */}
+
+      {signature.parameters.length ? (
         <TypeDetail label="Parameters" components={components}>
           <TypeTable
             rows={signature.parameters}
             headers={['Parameter', 'Type', 'Default Value']}
-            renderRow={(param) => renderParameterRow(param, components)}
+            renderRow={(p) => renderParameterRow(p, components)}
             components={components}
           />
         </TypeDetail>
       ) : null}
+
       <TypeDetail label="Returns" components={components}>
         <components.code>{signature.returnType}</components.code>
       </TypeDetail>
-    </Disclosure>
+    </>
   )
 }
 
@@ -654,7 +668,9 @@ function ClassSection({
           <TypeTable
             rows={node.properties}
             headers={['Property', 'Type', 'Default Value']}
-            renderRow={(prop) => renderClassPropertyRow(prop, components)}
+            renderRow={(property) =>
+              renderClassPropertyRow(property, components)
+            }
             components={components}
           />
         </TypeDetail>
@@ -662,7 +678,13 @@ function ClassSection({
 
       {node.methods?.length ? (
         <TypeDetail label="Methods" components={components}>
-          {node.methods.map((m) => renderMethod(m, components))}
+          <TypeTable
+            rows={node.methods}
+            headers={['Method', 'Type']}
+            renderRow={(method) => renderMethodRow(method, components)}
+            renderSubRow={(method) => renderMethodSubRow(method, components)}
+            components={components}
+          />
         </TypeDetail>
       ) : null}
 
@@ -672,7 +694,7 @@ function ClassSection({
             <div
               css={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
             >
-              <components.h3>Extends</components.h3>
+              <components.h4>Extends</components.h4>
               <components.code>{node.extends.text}</components.code>
             </div>
           ) : null}
@@ -681,11 +703,11 @@ function ClassSection({
             <div
               css={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
             >
-              <components.h3>Implements</components.h3>
-              {node.implements.map((implementor, index) => (
+              <components.h4>Implements</components.h4>
+              {node.implements.map((implementation, index) => (
                 <React.Fragment key={index}>
                   {index > 0 ? ', ' : null}
-                  <components.code>{implementor.text}</components.code>
+                  <components.code>{implementation.text}</components.code>
                 </React.Fragment>
               ))}
             </div>
@@ -721,9 +743,9 @@ function MappedSection({
       </TypeDetail>
       <TypeDetail label="Modifiers" components={components}>
         <components.code>
-          {node.isReadonly ? 'readonly ' : ''}
-          {node.isOptional ? 'optional' : ''}
-          {!node.isReadonly && !node.isOptional ? '—' : ''}
+          {node.isReadonly ? 'readonly ' : null}
+          {node.isOptional ? 'optional' : null}
+          {!node.isReadonly && !node.isOptional ? '—' : null}
         </components.code>
       </TypeDetail>
     </TypeSection>

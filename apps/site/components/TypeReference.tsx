@@ -2,6 +2,8 @@ import {
   TypeReference as DefaultTypeReference,
   type TypeReferenceProps,
 } from 'renoun/components'
+import { Collapse } from 'renoun/components/Collapse/index'
+import { styled } from 'restyle'
 
 import { Markdown } from './Markdown'
 import { GeistMono } from 'geist/font/mono'
@@ -46,10 +48,9 @@ export function TypeReference(props: TypeReferenceProps) {
           <h4
             {...props}
             css={{
-              fontSize: 'var(--font-size-heading-3)',
-              lineHeight: 'var(--line-height-heading-3)',
-              fontWeight: 'var(--font-weight-heading)',
-              marginBottom: '1.6rem',
+              fontSize: 'var(--font-size-body-1)',
+              lineHeight: 'var(--line-height-body-1)',
+              fontWeight: 'var(--font-weight-body)',
             }}
           />
         ),
@@ -121,6 +122,10 @@ export function TypeReference(props: TypeReferenceProps) {
               animationName: 'scroll-mask',
               animationTimeline: '--scroll-mask',
               scrollTimeline: '--scroll-mask x',
+
+              '&[colspan="3"]': {
+                gridColumn: '1 / -1',
+              },
             }}
           >
             {props.children}
@@ -167,8 +172,16 @@ export function TypeReference(props: TypeReferenceProps) {
           />
         ),
         Markdown,
+        SubRow: (props) => <StyledCollapse as="tr" {...props} />,
         ...props.components,
       }}
     />
   )
 }
+
+const StyledCollapse = styled(Collapse.Content, {
+  display: 'grid',
+  gridTemplateColumns: 'subgrid',
+  gridColumn: '1 / -1',
+  borderBottom: '1px solid var(--color-separator)',
+})
