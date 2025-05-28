@@ -81,12 +81,12 @@ export default async function Page() {
             {
               id: 'api-reference',
               text: 'API Reference',
-              depth: 2,
+              level: 2,
             },
             ...fileExports.map((fileExport) => ({
-              id: fileExport.getSlug(),
+              id: fileExport.getName(),
               text: fileExport.getName(),
-              depth: 3,
+              level: 3,
             })),
           ]}
         />

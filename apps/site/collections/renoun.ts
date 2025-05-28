@@ -5,6 +5,7 @@ import {
   withSchema,
   type FileSystemEntry,
 } from 'renoun/file-system'
+import type { MDXHeadings } from 'renoun/mdx'
 import { z } from 'zod'
 
 async function filterInternalExports(entry: FileSystemEntry<any>) {
@@ -33,7 +34,9 @@ export const FileSystemCollection = new Directory({
   tsConfigPath: '../../packages/renoun/tsconfig.json',
   basePath: 'utilities',
   loaders: {
-    mdx: withSchema(
+    mdx: withSchema<{
+      headings: MDXHeadings
+    }>(
       (path) => import(`../../../packages/renoun/src/file-system/${path}.mdx`)
     ),
   },
