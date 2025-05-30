@@ -1,3 +1,4 @@
+/** @jsxImportSource restyle */
 'use client'
 import React, { createContext, use, useId, useMemo, useState } from 'react'
 
@@ -53,6 +54,26 @@ export function Trigger<As extends React.ElementType = 'button'>({
 } & React.ComponentPropsWithoutRef<As>) {
   const Component = as || 'button'
   const { triggerId, contentId, isOpen, toggle } = useCollapse()
+  let childrenToRender = children
+
+  if (childrenToRender === undefined) {
+    childrenToRender = (
+      <svg
+        viewBox="0 0 12 12"
+        css={{
+          width: '100%',
+          height: '100%',
+          transition: 'transform 200ms ease',
+
+          '[aria-expanded="true"] &': {
+            transform: 'rotate(90deg)',
+          },
+        }}
+      >
+        <path d="M3 2l4 4-4 4" fill="none" stroke="currentColor" />
+      </svg>
+    )
+  }
 
   return (
     <Component
@@ -60,9 +81,16 @@ export function Trigger<As extends React.ElementType = 'button'>({
       aria-expanded={isOpen}
       aria-controls={contentId}
       onClick={toggle}
+      css={{
+        width: childrenToRender === undefined ? 16 : undefined,
+        height: childrenToRender === undefined ? 16 : undefined,
+        padding: 0,
+        border: 0,
+        background: 'none',
+      }}
       {...props}
     >
-      {children}
+      {childrenToRender}
     </Component>
   )
 }
@@ -85,7 +113,7 @@ export function Content<As extends React.ElementType = 'div'>({
       style={
         {
           width: '100%',
-          display: isOpen ? 'block' : 'none', // TODO: use CSS and starting style here
+          display: isOpen ? undefined : 'none', // TODO: use CSS and starting style here
           height: isOpen ? 'auto' : 0,
           opacity: isOpen ? 1 : 0,
           overflow: 'hidden',

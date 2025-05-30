@@ -14,7 +14,7 @@ import { CollectionGroup, ComponentsCollection } from '@/collections'
 import { MDX } from '@/components/MDX'
 import { SiblingLink } from '@/components/SiblingLink'
 import { TableOfContents } from '@/components/TableOfContents'
-import { TypeReference } from '@/components/TypeReference'
+import { TypeReferences } from '@/components/TypeReference'
 
 export async function generateStaticParams() {
   const entries = await ComponentsCollection.getEntries({ recursive: true })
@@ -191,20 +191,7 @@ export default async function Component({
             <h2 id="api-reference" css={{ margin: '0 0 2rem' }}>
               API Reference
             </h2>
-            <div
-              css={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '3rem',
-              }}
-            >
-              {componentExports.map((exportSource) => (
-                <TypeReference
-                  key={exportSource.getSlug()}
-                  source={exportSource}
-                />
-              ))}
-            </div>
+            <TypeReferences fileExports={componentExports} />
           </div>
         ) : null}
 

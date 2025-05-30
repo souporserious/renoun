@@ -1,6 +1,6 @@
 import { FileSystemCollection } from '@/collections'
 import { TableOfContents } from '@/components/TableOfContents'
-import { TypeReference } from '@/components/TypeReference'
+import { TypeReferences } from '@/components/TypeReference'
 
 export default async function Page() {
   const sourceFile = await FileSystemCollection.getFile('index', 'tsx')
@@ -47,21 +47,12 @@ export default async function Page() {
               lineHeight: 'var(--line-height-heading-2)',
               fontWeight: 'var(--font-weight-heading)',
               marginBlockStart: '1.6rem',
+              marginBlockEnd: '2rem',
             }}
           >
             API Reference
           </h2>
-          <div
-            css={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '3rem',
-            }}
-          >
-            {fileExports.map((fileExport) => (
-              <TypeReference key={fileExport.getName()} source={fileExport} />
-            ))}
-          </div>
+          <TypeReferences fileExports={fileExports} />
         </div>
       </div>
 

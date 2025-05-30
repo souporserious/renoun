@@ -1,12 +1,36 @@
+import type { JavaScriptFileExport } from 'renoun/file-system'
 import {
   TypeReference as DefaultTypeReference,
   type TypeReferenceProps,
 } from 'renoun/components'
 import { Collapse } from 'renoun/components/Collapse/index'
 import { styled } from 'restyle'
+import { GeistMono } from 'geist/font/mono'
 
 import { Markdown } from './Markdown'
-import { GeistMono } from 'geist/font/mono'
+
+export function TypeReferences({
+  fileExports,
+}: {
+  fileExports: JavaScriptFileExport<any>[]
+}) {
+  return (
+    <div
+      css={{
+        display: 'flex',
+        flexDirection: 'column',
+
+        '& > *:not(:last-child)': {
+          borderBottom: '1px solid var(--color-separator)',
+        },
+      }}
+    >
+      {fileExports.map((fileExport) => (
+        <TypeReference key={fileExport.getName()} source={fileExport} />
+      ))}
+    </div>
+  )
+}
 
 export function TypeReference(props: TypeReferenceProps) {
   return (
@@ -19,19 +43,18 @@ export function TypeReference(props: TypeReferenceProps) {
             css={{
               display: 'flex',
               flexDirection: 'column',
-              gap: '1.6rem',
             }}
           />
         ),
-        h2: (props) => (
-          <h2
+        h3: (props) => (
+          <h3
             {...props}
             css={{
               display: 'flex',
               flexDirection: 'column',
               gap: '0.5rem',
-              fontSize: 'var(--font-size-heading-2)',
-              lineHeight: 'var(--line-height-heading-2)',
+              fontSize: 'var(--font-size-heading-3)',
+              lineHeight: 'var(--line-height-heading-3)',
               fontWeight: 'var(--font-weight-heading)',
 
               '& span': {
@@ -42,7 +65,28 @@ export function TypeReference(props: TypeReferenceProps) {
                 color: 'var(--color-foreground-secondary)',
               },
             }}
-          />
+          >
+            <StyledTrigger>
+              <svg
+                viewBox="0 0 12 12"
+                css={{
+                  position: 'absolute',
+                  width: 16,
+                  height: 16,
+                  top: '3.2rem',
+                  left: '-2rem',
+                  transition: 'transform 0.2s ease',
+
+                  '[aria-expanded="true"] &': {
+                    transform: 'rotate(90deg)',
+                  },
+                }}
+              >
+                <path d="M3 2l4 4-4 4" fill="none" stroke="currentColor" />
+              </svg>
+              {props.children}
+            </StyledTrigger>
+          </h3>
         ),
         h4: (props) => (
           <h4
@@ -58,33 +102,19 @@ export function TypeReference(props: TypeReferenceProps) {
           <table
             {...props}
             css={{
-              display: 'grid',
-              gridTemplateColumns: '0.8fr 1fr auto',
-              gridColumnGap: '2rem',
+              width: '100%',
+              tableLayout: 'fixed',
               fontSize: 'var(--font-size-body-2)',
               lineHeight: 'var(--line-height-body-2)',
               borderBottom: '1px solid var(--color-separator)',
               borderCollapse: 'collapse',
-            }}
-          />
-        ),
-        thead: (props) => (
-          <thead
-            {...props}
-            css={{
-              display: 'grid',
-              gridTemplateColumns: 'subgrid',
-              gridColumn: '1 / -1',
-            }}
-          />
-        ),
-        tbody: (props) => (
-          <tbody
-            {...props}
-            css={{
-              display: 'grid',
-              gridTemplateColumns: 'subgrid',
-              gridColumn: '1 / -1',
+
+              'th, td': {
+                padding: '0.5rem 0',
+              },
+              'th + th, td + td': {
+                paddingLeft: '1rem',
+              },
             }}
           />
         ),
@@ -92,9 +122,6 @@ export function TypeReference(props: TypeReferenceProps) {
           <tr
             {...props}
             css={{
-              display: 'grid',
-              gridTemplateColumns: 'subgrid',
-              gridColumn: '1 / -1',
               borderBottom: '1px solid var(--color-separator)',
             }}
           />
@@ -105,7 +132,6 @@ export function TypeReference(props: TypeReferenceProps) {
             css={{
               textAlign: 'left',
               fontWeight: 'var(--font-weight-heading)',
-              padding: '0.5rem 0',
               color: 'var(--color-foreground)',
             }}
           />
@@ -114,8 +140,6 @@ export function TypeReference(props: TypeReferenceProps) {
           <td
             {...props}
             css={{
-              display: 'grid',
-              padding: '0.5rem 0',
               whiteSpace: 'nowrap',
               overflowX: 'auto',
               mask: 'linear-gradient(to right, #0000, #ffff var(--start-fade) calc(100% - var(--end-fade)), #0000)',
@@ -123,8 +147,14 @@ export function TypeReference(props: TypeReferenceProps) {
               animationTimeline: '--scroll-mask',
               scrollTimeline: '--scroll-mask x',
 
-              '&[colspan="3"]': {
-                gridColumn: '1 / -1',
+              ':nth-child(1)': {
+                width: '30.77%',
+              },
+              ':nth-child(2)': {
+                width: '38.46%',
+              },
+              ':nth-child(3)': {
+                width: '30.77%',
               },
             }}
           >
@@ -179,9 +209,31 @@ export function TypeReference(props: TypeReferenceProps) {
   )
 }
 
+const StyledTrigger = styled(Collapse.Trigger, {
+  display: 'flex',
+  flexDirection: 'column',
+  padding: '1.5rem 0',
+  gap: '0.5rem',
+  border: 'none',
+  background: 'none',
+  fontSize: 'inherit',
+  lineHeight: 'inherit',
+  fontWeight: 'inherit',
+  textAlign: 'left',
+
+  svg: {
+    opacity: 0,
+  },
+
+  '&:hover svg': {
+    opacity: 1,
+  },
+})
+
 const StyledCollapse = styled(Collapse.Content, {
   display: 'grid',
   gridTemplateColumns: 'subgrid',
   gridColumn: '1 / -1',
+  backgroundColor: 'var(--color-surface-secondary)',
   borderBottom: '1px solid var(--color-separator)',
 })

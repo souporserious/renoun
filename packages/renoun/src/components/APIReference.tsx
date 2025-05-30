@@ -17,7 +17,6 @@ import { Markdown as MarkdownDefault, type MarkdownProps } from './Markdown.js'
 
 type SemanticTags =
   | 'section'
-  | 'h2'
   | 'h3'
   | 'h4'
   | 'p'
@@ -41,7 +40,6 @@ export type TypeReferenceComponents = {
 
 const defaultComponents: TypeReferenceComponents = {
   section: 'section',
-  h2: 'h2',
   h3: 'h3',
   h4: 'h4',
   p: 'p',
@@ -210,21 +208,9 @@ function TypeSection({
   return (
     <Collapse.Provider>
       <components.section id={id} style={{ position: 'relative' }}>
-        <Collapse.Trigger
-          as="svg"
-          viewBox="0 0 12 12"
-          style={{
-            position: 'absolute',
-            width: 16,
-            top: '1.8rem',
-            left: '-2rem',
-          }}
-        >
-          <path d="M3 2l4 4-4 4" fill="none" stroke="currentColor" />
-        </Collapse.Trigger>
-        <components.h2 aria-label={`${title} ${label}`}>
+        <components.h3 aria-label={`${title} ${label}`}>
           <span>{label}</span> {title}
-        </components.h2>
+        </components.h3>
         <Collapse.Content>{children}</Collapse.Content>
       </components.section>
     </Collapse.Provider>
@@ -241,8 +227,8 @@ function TypeDetail({
   components: TypeReferenceComponents
 }) {
   return (
-    <div>
-      <components.h3>{label}</components.h3>
+    <div css={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+      {label ? <components.h4>{label}</components.h4> : null}
       {children}
     </div>
   )
@@ -262,30 +248,27 @@ function TypeTable<RowType>({
   components: TypeReferenceComponents
 }) {
   return (
-    <components.table role="table">
+    <components.table>
       {headers ? (
-        <components.thead role="rowgroup">
-          <components.tr role="row">
+        <components.thead>
+          <components.tr>
             {headers.map((header, index) => (
-              <components.th key={index} role="columnheader">
-                {header}
-              </components.th>
+              <components.th key={index}>{header}</components.th>
             ))}
           </components.tr>
         </components.thead>
       ) : null}
-      <components.tbody role="rowgroup">
+
+      <components.tbody>
         {rows.map((row, index) => {
           const subRow = renderSubRow?.(row, index)
 
           return (
             <Collapse.Provider key={index}>
-              <components.tr role="row">{renderRow(row, index)}</components.tr>
+              <components.tr>{renderRow(row, index)}</components.tr>
               {subRow ? (
-                <components.SubRow role="row">
-                  <components.td colSpan={3} role="cell">
-                    {subRow}
-                  </components.td>
+                <components.SubRow>
+                  <components.td colSpan={3}>{subRow}</components.td>
                 </components.SubRow>
               ) : null}
             </Collapse.Provider>
@@ -326,14 +309,14 @@ function ComponentSection({
                   headers={['Property', 'Type', 'Default Value']}
                   renderRow={(property) => (
                     <>
-                      <components.td role="cell">
+                      <components.td>
                         {property.name}
                         {property.isOptional ? '?' : ''}
                       </components.td>
-                      <components.td role="cell">
+                      <components.td>
                         <components.code>{property.text}</components.code>
                       </components.td>
-                      <components.td role="cell">
+                      <components.td>
                         <DefaultValue
                           value={property.defaultValue}
                           components={components}
@@ -376,14 +359,14 @@ function ObjectSection({
           headers={['Property', 'Type', 'Default Value']}
           renderRow={(property) => (
             <>
-              <components.td role="cell">
+              <components.td>
                 {property.name}
                 {property.isOptional ? '?' : ''}
               </components.td>
-              <components.td role="cell">
+              <components.td>
                 <components.code>{property.text}</components.code>
               </components.td>
-              <components.td role="cell">
+              <components.td>
                 <DefaultValue
                   value={property.defaultValue}
                   components={components}
@@ -541,14 +524,14 @@ function renderParameterRow(
 ) {
   return (
     <>
-      <components.td role="cell">
+      <components.td>
         {parameter.name}
         {parameter.isOptional ? '?' : ''}
       </components.td>
-      <components.td role="cell">
+      <components.td>
         <components.code>{parameter.text}</components.code>
       </components.td>
-      <components.td role="cell">
+      <components.td>
         <DefaultValue value={parameter.defaultValue} components={components} />
       </components.td>
     </>
@@ -601,14 +584,14 @@ function renderClassPropertyRow(
 ) {
   return (
     <>
-      <components.td role="cell">
+      <components.td>
         {property.name}
         {property.isOptional ? '?' : ''}
       </components.td>
-      <components.td role="cell">
+      <components.td>
         <components.code>{property.text}</components.code>
       </components.td>
-      <components.td role="cell">
+      <components.td>
         <DefaultValue value={property.defaultValue} components={components} />
       </components.td>
     </>
@@ -623,10 +606,8 @@ function renderMethodRow(
 
   return (
     <>
-      <components.th scope="row">
-        <Collapse.Trigger>{method.name}</Collapse.Trigger>
-      </components.th>
-      <components.td>
+      <components.td>{method.name}</components.td>
+      <components.td colSpan={2}>
         <components.code>{signature.text}</components.code>
       </components.td>
     </>
@@ -641,12 +622,8 @@ function renderMethodSubRow(
 
   return (
     <>
-      {/* <components.h3 className="visually-hidden">
-        Details for {method.name}
-      </components.h3> */}
-
       {signature.parameters.length ? (
-        <TypeDetail label="Parameters" components={components}>
+        <TypeDetail components={components}>
           <TypeTable
             rows={signature.parameters}
             headers={['Parameter', 'Type', 'Default Value']}
@@ -656,7 +633,7 @@ function renderMethodSubRow(
         </TypeDetail>
       ) : null}
 
-      <TypeDetail label="Returns" components={components}>
+      <TypeDetail components={components}>
         <components.code>{signature.returnType}</components.code>
       </TypeDetail>
     </>
