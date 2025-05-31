@@ -23,8 +23,8 @@ export function BasicUsage() {
         source="./examples/Button.tsx"
         baseDirectory={import.meta.url}
         components={{
-          h2: (props) => (
-            <h2
+          h3: (props) => (
+            <h3
               {...props}
               css={{
                 display: 'flex',

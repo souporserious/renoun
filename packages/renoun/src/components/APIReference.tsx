@@ -222,7 +222,7 @@ function TypeDetail({
   children,
   components,
 }: {
-  label: React.ReactNode
+  label?: React.ReactNode
   children: React.ReactNode
   components: TypeReferenceComponents
 }) {
