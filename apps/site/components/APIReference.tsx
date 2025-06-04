@@ -1,7 +1,7 @@
 import type { JavaScriptFileExport } from 'renoun/file-system'
 import {
-  TypeReference as DefaultTypeReference,
-  type TypeReferenceProps,
+  APIReference as DefaultAPIReference,
+  type APIReferenceProps,
 } from 'renoun/components'
 import { Collapse } from 'renoun/components/Collapse/index'
 import { styled } from 'restyle'
@@ -9,7 +9,7 @@ import { GeistMono } from 'geist/font/mono'
 
 import { Markdown } from './Markdown'
 
-export function TypeReferences({
+export function APIReferences({
   fileExports,
 }: {
   fileExports: JavaScriptFileExport<any>[]
@@ -26,15 +26,15 @@ export function TypeReferences({
       }}
     >
       {fileExports.map((fileExport) => (
-        <TypeReference key={fileExport.getName()} source={fileExport} />
+        <APIReference key={fileExport.getName()} source={fileExport} />
       ))}
     </div>
   )
 }
 
-export function TypeReference(props: TypeReferenceProps) {
+export function APIReference(props: APIReferenceProps) {
   return (
-    <DefaultTypeReference
+    <DefaultAPIReference
       {...props}
       components={{
         section: (props) => (

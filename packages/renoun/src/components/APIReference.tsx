@@ -31,14 +31,14 @@ type SemanticTags =
   | 'td'
   | 'code'
 
-export type TypeReferenceComponents = {
+export type APIReferenceComponents = {
   [Tag in SemanticTags]: Tag | React.ComponentType<React.ComponentProps<Tag>>
 } & {
   Markdown: React.ComponentType<MarkdownProps>
   SubRow: React.ComponentType<React.ComponentProps<'tr'>>
 }
 
-const defaultComponents: TypeReferenceComponents = {
+const defaultComponents: APIReferenceComponents = {
   section: 'section',
   h3: 'h3',
   h4: 'h4',
@@ -57,7 +57,7 @@ const defaultComponents: TypeReferenceComponents = {
   SubRow: (props) => <Collapse.Content as="tr" {...props} />,
 }
 
-export interface TypeReferenceProps {
+export interface APIReferenceProps {
   /** The file path, `JavaScriptFile`, or `JavaScriptFileExport` type reference to resolve. */
   source: string | JavaScriptFile<any> | JavaScriptFileExport<any>
 
@@ -68,23 +68,23 @@ export interface TypeReferenceProps {
   baseDirectory?: string
 
   /** Override default component renderers. */
-  components?: Partial<TypeReferenceComponents>
+  components?: Partial<APIReferenceComponents>
 }
 
-export function TypeReference(props: TypeReferenceProps) {
+export function APIReference(props: APIReferenceProps) {
   return (
     <Suspense>
-      <TypeReferenceAsync {...props} />
+      <APIReferenceAsync {...props} />
     </Suspense>
   )
 }
 
-async function TypeReferenceAsync({
+async function APIReferenceAsync({
   source,
   filter,
   baseDirectory,
   components = {},
-}: TypeReferenceProps) {
+}: APIReferenceProps) {
   let filePath: string | undefined = undefined
 
   if (typeof source === 'string') {
@@ -117,7 +117,7 @@ async function TypeReferenceAsync({
     return null
   }
 
-  const mergedComponents: TypeReferenceComponents = {
+  const mergedComponents: APIReferenceComponents = {
     ...defaultComponents,
     ...components,
   }
@@ -144,7 +144,7 @@ function TypeNodeRouter({
   components,
 }: {
   node: Kind.All
-  components: TypeReferenceComponents
+  components: APIReferenceComponents
 }) {
   switch (node.kind) {
     case 'Class':
@@ -211,7 +211,7 @@ function TypeSection({
   title?: string
   id?: string
   children: React.ReactNode
-  components: TypeReferenceComponents
+  components: APIReferenceComponents
 }) {
   return (
     <Collapse.Provider>
@@ -232,7 +232,7 @@ function TypeDetail({
 }: {
   label?: React.ReactNode
   children: React.ReactNode
-  components: TypeReferenceComponents
+  components: APIReferenceComponents
 }) {
   return (
     <div
@@ -260,7 +260,7 @@ function TypeTable<RowType>({
   headers?: readonly React.ReactNode[]
   renderRow: (row: RowType, index: number) => React.ReactNode
   renderSubRow?: (row: RowType, index: number) => React.ReactNode
-  components: TypeReferenceComponents
+  components: APIReferenceComponents
 }) {
   return (
     <components.table>
@@ -294,7 +294,7 @@ function TypeTable<RowType>({
   )
 }
 
-type ComponentsType = TypeReferenceComponents
+type ComponentsType = APIReferenceComponents
 
 function ComponentSection({
   node,
@@ -505,7 +505,7 @@ function IntersectionSection({
   components,
 }: {
   node: TypeOfKind<'IntersectionType'>
-  components: TypeReferenceComponents
+  components: APIReferenceComponents
 }) {
   // Flatten into one table if every member is either an Object or a Mapped kind
   // if (
@@ -850,7 +850,7 @@ function InitializerValue({
   components,
 }: {
   initializer: Kind.Initializer | undefined
-  components: TypeReferenceComponents
+  components: APIReferenceComponents
 }) {
   if (initializer === undefined) {
     return '—'
@@ -879,9 +879,4 @@ function InitializerValue({
 /** Convert kind name from PascalCase to space separated label. */
 function kindToLabel(kind: string): string {
   return kind.replace(/([a-z])([A-Z])/g, '$1 $2')
-}
-
-/** Stub for docs generator TODO: fix this from erroring the page */
-export function APIReference() {
-  return null
 }

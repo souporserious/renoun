@@ -1,6 +1,6 @@
 /** @jsxImportSource restyle */
 import {
-  TypeReference,
+  APIReference,
   Markdown,
   CodeBlock,
   CodeInline,
@@ -19,7 +19,7 @@ export function BasicUsage() {
         gap: '3rem',
       }}
     >
-      <TypeReference
+      <APIReference
         source="./examples/Button.tsx"
         baseDirectory={import.meta.url}
         components={{
