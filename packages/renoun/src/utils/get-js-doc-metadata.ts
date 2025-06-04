@@ -5,10 +5,7 @@ import tsMorph from 'ts-morph'
 export function getJsDocMetadata(node: Node):
   | {
       description?: string
-      tags?: {
-        tagName: string
-        text?: string
-      }[]
+      tags?: { name: string; text?: string }[]
     }
   | undefined {
   if (tsMorph.Node.isVariableDeclaration(node)) {
@@ -31,7 +28,7 @@ export function getJsDocMetadata(node: Node):
 
   if (tsMorph.Node.isJSDocable(node)) {
     const jsDocs = node.getJsDocs()
-    const tags: { tagName: string; text?: string }[] = []
+    const tags: { name: string; text?: string }[] = []
     let description = ''
 
     for (const doc of jsDocs) {
@@ -43,7 +40,7 @@ export function getJsDocMetadata(node: Node):
 
       for (const tag of doc.getTags()) {
         tags.push({
-          tagName: tag.getTagName(),
+          name: tag.getTagName(),
           text: tag.getCommentText(),
         })
       }

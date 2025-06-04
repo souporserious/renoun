@@ -13,7 +13,7 @@ import type {
   GetSourceTextMetadataOptions,
   GetSourceTextMetadataResult,
 } from '../utils/get-source-text-metadata.js'
-import type { ResolvedType, SymbolFilter } from '../utils/resolve-type.js'
+import type { Kind, SymbolFilter } from '../utils/resolve-type.js'
 import type { resolveTypeAtLocation as baseResolveTypeAtLocation } from '../utils/resolve-type-at-location.js'
 import type { DistributiveOmit } from '../types.js'
 import { WebSocketClient } from './rpc/client.js'
@@ -119,7 +119,7 @@ export async function resolveTypeAtLocation(
   kind: SyntaxKind,
   filter?: SymbolFilter,
   projectOptions?: ProjectOptions
-): Promise<ResolvedType | undefined> {
+): Promise<Kind.All | undefined> {
   if (client) {
     return client.callMethod<
       {

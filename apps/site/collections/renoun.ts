@@ -16,7 +16,7 @@ async function filterInternalExports(entry: FileSystemEntry<any>) {
     )
     const allInternal = fileExports.every((_, index) => {
       const tags = allTags[index]
-      return tags?.every((tag) => tag.tagName === 'internal')
+      return tags?.every((tag) => tag.name === 'internal')
     })
 
     if (allInternal) {

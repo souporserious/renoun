@@ -1,16 +1,12 @@
 import type { Project } from 'ts-morph'
 import { SyntaxKind } from 'ts-morph'
 
-import {
-  resolveType,
-  type ResolvedType,
-  type SymbolFilter,
-} from './resolve-type.js'
+import { resolveType, type Kind, type SymbolFilter } from './resolve-type.js'
 
 export const resolvedTypeCache = new Map<
   string,
   {
-    resolvedType?: ResolvedType
+    resolvedType?: Kind.All
     dependencies: Map<string, number>
   }
 >()
