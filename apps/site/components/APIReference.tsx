@@ -7,8 +7,6 @@ import { Collapse } from 'renoun/components/Collapse/index'
 import { styled } from 'restyle'
 import { GeistMono } from 'geist/font/mono'
 
-import { Markdown } from './Markdown'
-
 export function APIReferences({
   fileExports,
 }: {
@@ -118,14 +116,17 @@ export function APIReference(props: APIReferenceProps) {
             }}
           />
         ),
-        tr: (props) => (
-          <tr
-            {...props}
-            css={{
-              borderBottom: '1px solid var(--color-separator)',
-            }}
-          />
-        ),
+        tr: (props) =>
+          props['data-subrow'] ? (
+            <StyledCollapse as="tr" {...props} />
+          ) : (
+            <tr
+              {...props}
+              css={{
+                borderBottom: '1px solid var(--color-separator)',
+              }}
+            />
+          ),
         th: (props) => (
           <th
             {...props}
@@ -201,8 +202,6 @@ export function APIReference(props: APIReferenceProps) {
             className={GeistMono.className}
           />
         ),
-        Markdown,
-        SubRow: (props) => <StyledCollapse as="tr" {...props} />,
         ...props.components,
       }}
     />

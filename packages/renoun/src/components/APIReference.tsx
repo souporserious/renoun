@@ -13,29 +13,33 @@ import {
 } from '../utils/resolve-type.js'
 import { Collapse } from './Collapse/index.js'
 import { WorkingDirectoryContext } from './Context.js'
-import { Markdown as MarkdownDefault, type MarkdownProps } from './Markdown.js'
 
-type SemanticTags =
+type ElementTags =
   | 'section'
   | 'h3'
   | 'h4'
   | 'p'
-  | 'dl'
-  | 'dt'
-  | 'dd'
+  | 'code'
   | 'table'
   | 'thead'
   | 'tbody'
   | 'tr'
   | 'th'
   | 'td'
-  | 'code'
+
+type ElementPropOverrides = {
+  tr: {
+    'data-subrow'?: boolean
+  }
+}
+
+type ElementProps<Tag extends ElementTags> =
+  Tag extends keyof ElementPropOverrides
+    ? React.ComponentProps<Tag> & ElementPropOverrides[Tag]
+    : React.ComponentProps<Tag>
 
 export type APIReferenceComponents = {
-  [Tag in SemanticTags]: Tag | React.ComponentType<React.ComponentProps<Tag>>
-} & {
-  Markdown: React.ComponentType<MarkdownProps>
-  SubRow: React.ComponentType<React.ComponentProps<'tr'>>
+  [Tag in ElementTags]: Tag | React.ComponentType<ElementProps<Tag>>
 }
 
 const defaultComponents: APIReferenceComponents = {
@@ -43,18 +47,18 @@ const defaultComponents: APIReferenceComponents = {
   h3: 'h3',
   h4: 'h4',
   p: 'p',
-  dl: 'dl',
-  dt: 'dt',
-  dd: 'dd',
+  code: 'code',
   table: 'table',
   thead: 'thead',
   tbody: 'tbody',
-  tr: 'tr',
+  tr: (props) =>
+    props['data-subrow'] ? (
+      <Collapse.Content as="tr" {...props} />
+    ) : (
+      <tr {...props} />
+    ),
   th: 'th',
   td: 'td',
-  code: 'code',
-  Markdown: MarkdownDefault,
-  SubRow: (props) => <Collapse.Content as="tr" {...props} />,
 }
 
 export interface APIReferenceProps {
@@ -71,6 +75,7 @@ export interface APIReferenceProps {
   components?: Partial<APIReferenceComponents>
 }
 
+// TODO: need to render JS Doc descriptions if available
 export function APIReference(props: APIReferenceProps) {
   return (
     <Suspense>
@@ -270,9 +275,9 @@ function TypeTable<RowType>({
             <Collapse.Provider key={index}>
               <components.tr>{renderRow(row, index)}</components.tr>
               {subRow ? (
-                <components.SubRow>
+                <components.tr data-subrow>
                   <components.td colSpan={3}>{subRow}</components.td>
-                </components.SubRow>
+                </components.tr>
               ) : null}
             </Collapse.Provider>
           )
@@ -454,9 +459,9 @@ function ComponentSection({
                           <components.code>{property.text}</components.code>
                         </components.td>
                         <components.td>
-                          TODO: handle separate table for default values
-                          {/* <DefaultValue
-                          value={property.defaultValue}
+                          {/* TODO: immediate type literals should have an initializer e.g. function Button({ variant = 'outline' }: { variant: 'fill' | 'outline' }) {}, this could be a special ImmediateTypeLiteral/Object kind that provides it. */}
+                          {/* <InitializerValue
+                          value={property.initializer}
                           components={components}
                         /> */}
                         </components.td>
@@ -669,6 +674,7 @@ function MappedSection({
   const parameterText = `${node.parameter.name} in ${node.parameter.constraint?.text ?? '?'}`
   const valueText = node.type.text
 
+  // TODO: this needs an incoming name prop that will be provided by the enclosing declaration
   return (
     <TypeSection
       label="Mapped Type"
@@ -747,6 +753,7 @@ function IntersectionSection({
       }
     }
 
+    // TODO: this needs an incoming name prop that will be provided by the enclosing declaration
     return (
       <TypeSection
         label="Type Literal"
@@ -776,6 +783,7 @@ function IntersectionSection({
     )
   }
 
+  // TODO: this needs an incoming name prop that will be provided by the enclosing declaration
   return (
     <TypeSection
       label="Intersection"

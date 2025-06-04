@@ -1,13 +1,5 @@
 /** @jsxImportSource restyle */
-import {
-  APIReference,
-  Markdown,
-  CodeBlock,
-  CodeInline,
-  parsePreProps,
-  parseCodeProps,
-} from 'renoun/components'
-import { rehypePlugins, remarkPlugins } from 'renoun/mdx'
+import { APIReference } from 'renoun/components'
 import { GeistMono } from 'geist/font/mono'
 
 export function BasicUsage() {
@@ -56,6 +48,15 @@ export function BasicUsage() {
               }}
             />
           ),
+          code: (props) => (
+            <code
+              {...props}
+              css={{
+                fontFamily: GeistMono.style.fontFamily,
+                color: 'var(--color-foreground-interactive)',
+              }}
+            />
+          ),
           table: (props) => (
             <table
               {...props}
@@ -95,35 +96,6 @@ export function BasicUsage() {
                 whiteSpace: 'nowrap',
                 overflow: 'auto',
               }}
-            />
-          ),
-          code: (props) => (
-            <code
-              {...props}
-              css={{
-                fontFamily: GeistMono.style.fontFamily,
-                color: 'var(--color-foreground-interactive)',
-              }}
-            />
-          ),
-          Markdown: (props) => (
-            <Markdown
-              {...props}
-              components={{
-                pre: (preProps) => <CodeBlock {...parsePreProps(preProps)} />,
-                code: (codeProps) => (
-                  <CodeInline
-                    {...parseCodeProps(codeProps)}
-                    css={{
-                      lineHeight: 'var(--line-height-code-2)',
-                      color: 'var(--color-foreground-interactive)',
-                    }}
-                    className={GeistMono.className}
-                  />
-                ),
-              }}
-              rehypePlugins={rehypePlugins}
-              remarkPlugins={remarkPlugins}
             />
           ),
         }}
