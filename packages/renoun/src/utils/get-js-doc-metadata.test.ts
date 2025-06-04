@@ -23,7 +23,7 @@ describe('getJsDocMetadata', () => {
         "description": "Returns a div element.",
         "tags": [
           {
-            "tagName": "deprecated",
+            "name": "deprecated",
             "text": "use another component instead.",
           },
         ],

@@ -1063,7 +1063,7 @@ describe('file system', () => {
     expect(fileExport.getName()).toBe('hello')
     expect(fileExport.getDescription()).toBe('Say hello.')
     expect(fileExport.getTags()).toMatchObject([
-      { tagName: 'category', text: 'greetings' },
+      { name: 'category', text: 'greetings' },
     ])
     expect(await fileExport.getText()).toBe(statementText)
     expect(fileExport.getPosition()).toMatchInlineSnapshot(`
@@ -1100,12 +1100,11 @@ describe('file system', () => {
     const directory = new Directory({ fileSystem })
     const file = await directory.getFile('index', 'ts')
     const fileExport = await file.getExport('Metadata')
-    const type = (await fileExport.getType()) as Kind.TypeAlias
+    const type = (await fileExport.getType()) as Kind.TypeLiteral
 
     expect(type).toBeDefined()
 
-    expect(type!.kind).toBe('TypeAlias')
-    expect(type!.name).toBe('Metadata')
+    expect(type!.kind).toBe('TypeLiteral')
   })
 
   test('getRuntimeValue resolves export runtime value from extension module', async () => {

@@ -4076,6 +4076,7 @@ describe('resolveType', () => {
                     },
                   },
                 ],
+                "name": "TextProps",
                 "position": {
                   "end": {
                     "column": 39,
@@ -8408,6 +8409,7 @@ describe('resolveType', () => {
             },
           },
         ],
+        "name": "CodeBlockProps",
         "position": {
           "end": {
             "column": 2,
@@ -8649,6 +8651,7 @@ describe('resolveType', () => {
             },
           },
         ],
+        "name": "FileExports",
         "position": {
           "end": {
             "column": 2,
@@ -9405,6 +9408,7 @@ describe('resolveType', () => {
             },
           },
         ],
+        "name": "Props",
         "position": {
           "end": {
             "column": 2,
@@ -14846,6 +14850,7 @@ describe('resolveType', () => {
                   },
                 },
               ],
+              "name": "ButtonProps",
               "position": {
                 "end": {
                   "column": 2,
@@ -15350,6 +15355,7 @@ describe('resolveType', () => {
                           },
                         },
                       ],
+                      "name": "MarkdownProps",
                       "position": {
                         "end": {
                           "column": 2,
@@ -15522,6 +15528,7 @@ describe('resolveType', () => {
             "text": "() => string",
           },
         ],
+        "name": "User",
         "position": {
           "end": {
             "column": 2,
