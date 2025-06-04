@@ -22,8 +22,6 @@ import {
   getPropertyDefaultValue,
 } from './get-property-default-value.js'
 import { getSymbolDescription } from './get-symbol-description.js'
-import { get } from 'http'
-import type { Init } from 'v8'
 
 export namespace Kind {
   /** Metadata present in all types. */
@@ -120,32 +118,34 @@ export namespace Kind {
     kind: 'Unknown'
   }
 
-  export interface TypeLiteral extends Shared {
+  export type MemberUnion =
+    | CallSignature
+    | ConstructSignature
+    | GetAccessorSignature
+    | SetAccessorSignature
+    | IndexSignature
+    | MethodSignature
+    | PropertySignature
+
+  export interface TypeLiteral<Member extends MemberUnion = MemberUnion>
+    extends Shared {
     kind: 'TypeLiteral'
 
     /** The member types of the type literal. */
-    members: (
-      | CallSignature
-      | ConstructSignature
-      | GetAccessorSignature
-      | SetAccessorSignature
-      | IndexSignature
-      | MethodSignature
-      | PropertySignature
-    )[]
+    members: Member[]
   }
 
   export interface IntersectionType<
-    Types extends TypeExpression[] = TypeExpression[],
+    Type extends TypeExpression = TypeExpression,
   > extends Shared {
     kind: 'IntersectionType'
-    types: Types
+    types: Type[]
   }
 
-  export interface UnionType<Types extends TypeExpression[] = TypeExpression[]>
+  export interface UnionType<Type extends TypeExpression = TypeExpression>
     extends Shared {
     kind: 'UnionType'
-    types: Types
+    types: Type[]
   }
 
   export interface MappedType extends Shared {
@@ -169,6 +169,7 @@ export namespace Kind {
     kind: 'IndexSignature'
     key: 'string' | 'number' | 'symbol'
     type: Type
+    isReadonly?: boolean
   }
 
   export interface EnumMember extends SharedDocumentable {
@@ -317,10 +318,10 @@ export namespace Kind {
   }
 
   export type ComponentParameter =
-    | TypeLiteral
+    | TypeLiteral<MethodSignature | PropertySignature>
     | TypeReference
-    | IntersectionType<ComponentParameter[]>
-    | UnionType<ComponentParameter[]>
+    | IntersectionType<ComponentParameter>
+    | UnionType<ComponentParameter>
 
   export interface ComponentSignature
     extends SharedDocumentable,
@@ -339,19 +340,12 @@ export namespace Kind {
     parameter?: ComponentParameter
   }
 
-  export interface Interface extends SharedDocumentable {
+  export interface Interface<Member extends MemberUnion = MemberUnion>
+    extends SharedDocumentable {
     kind: 'Interface'
 
     /** The member types of the interface. */
-    members: (
-      | CallSignature
-      | ConstructSignature
-      | GetAccessorSignature
-      | SetAccessorSignature
-      | IndexSignature
-      | MethodSignature
-      | PropertySignature
-    )[]
+    members: Member[]
   }
 
   export interface TypeParameter extends SharedDocumentable {
@@ -1309,8 +1303,7 @@ export function resolveType(
                   ...resolvedCallSignature,
                   kind: 'ComponentSignature',
                   parameter: parameters.at(0) as
-                    | Kind.TypeLiteral
-                    | Kind.TypeReference
+                    | Kind.ComponentParameter
                     | undefined,
                 } satisfies Kind.ComponentSignature
               }
