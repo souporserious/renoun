@@ -128,49 +128,49 @@ async function TypeReferenceAsync({
         resolvedType.map((type, index) => (
           <TypeNodeRouter
             key={index}
-            type={type}
+            node={type}
             components={mergedComponents}
           />
         ))
       ) : (
-        <TypeNodeRouter type={resolvedType} components={mergedComponents} />
+        <TypeNodeRouter node={resolvedType} components={mergedComponents} />
       )}
     </WorkingDirectoryContext>
   )
 }
 
 function TypeNodeRouter({
-  type,
+  node,
   components,
 }: {
-  type: Kind.All
+  node: Kind.All
   components: TypeReferenceComponents
 }) {
-  switch (type.kind) {
+  switch (node.kind) {
     case 'Class':
-      return <ClassSection node={type} components={components} />
+      return <ClassSection node={node} components={components} />
     case 'Component':
-      return <ComponentSection node={type} components={components} />
+      return <ComponentSection node={node} components={components} />
     case 'Function':
-      return <FunctionSection node={type} components={components} />
+      return <FunctionSection node={node} components={components} />
     case 'Interface':
-      return <MembersSection node={type} components={components} />
+      return <MembersSection node={node} components={components} />
     case 'TypeAlias':
-      if (type.type.kind === 'TypeLiteral') {
+      if (node.type.kind === 'TypeLiteral') {
         return (
           <MembersSection
-            node={type as Kind.TypeAlias<Kind.TypeLiteral>}
+            node={node as Kind.TypeAlias<Kind.TypeLiteral>}
             components={components}
           />
         )
       }
-      return <TypeAliasSection node={type} components={components} />
+      return <TypeAliasSection node={node} components={components} />
     case 'UnionType':
-      return <UnionSection node={type} components={components} />
+      return <UnionSection node={node} components={components} />
     case 'IntersectionType':
-      return <IntersectionSection node={type} components={components} />
+      return <IntersectionSection node={node} components={components} />
     case 'MappedType':
-      return <MappedSection node={type} components={components} />
+      return <MappedSection node={node} components={components} />
     case 'Array':
     case 'Tuple':
     case 'Enum':
@@ -182,8 +182,7 @@ function TypeNodeRouter({
     case 'Symbol':
     case 'Any':
     case 'Unknown':
-      // Convert kind name from PascalCase to space separated label
-      const label = type.kind.replace(/([a-z])([A-Z])/g, '$1 $2')
+      const label = kindToLabel(node.kind)
 
       // return (
       //   <TypeSection
@@ -195,9 +194,9 @@ function TypeNodeRouter({
       //     <components.code>{type.text}</components.code>
       //   </TypeSection>
       // )
-      return 'TODO: TypeNodeRouter not implemented for kind: ' + type.kind
+      return 'TODO: TypeNodeRouter not implemented for kind: ' + node.kind
     default:
-      throw new Error(`[renoun]: Unknown type kind "${type.kind}"`)
+      throw new Error(`[renoun]: Unknown type kind "${node.kind}"`)
   }
 }
 
@@ -236,7 +235,14 @@ function TypeDetail({
   components: TypeReferenceComponents
 }) {
   return (
-    <div css={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+    <div
+      css={{
+        display: 'flex',
+        flexDirection: 'column',
+        marginBottom: '1rem',
+        gap: '0.5rem',
+      }}
+    >
       {label ? <components.h4>{label}</components.h4> : null}
       {children}
     </div>
@@ -365,7 +371,7 @@ function TypeAliasSection({
 }) {
   return (
     <TypeSection
-      label="Type Alias"
+      label={kindToLabel(node.type.kind)}
       title={node.name}
       id={node.name}
       components={components}
@@ -385,6 +391,23 @@ function MembersSection({
   components: ComponentsType
 }) {
   const members = node.kind === 'Interface' ? node.members : node.type.members
+  let propertySignatures: Kind.PropertySignature[] = []
+  let methodSignatures: Kind.MethodSignature[] = []
+  let indexSignatures: Kind.IndexSignature[] = []
+
+  for (const member of members) {
+    if (member.kind === 'PropertySignature') {
+      propertySignatures.push(member)
+    } else if (member.kind === 'MethodSignature') {
+      methodSignatures.push(member)
+    } else if (member.kind === 'IndexSignature') {
+      indexSignatures.push(member)
+    } else {
+      console.warn(
+        `[renoun] Unsupported member kind "${member.kind}" in ${node.kind} "${node.name}"`
+      )
+    }
+  }
 
   return (
     <TypeSection
@@ -393,12 +416,12 @@ function MembersSection({
       id={node.name}
       components={components}
     >
-      <TypeDetail label="Members" components={components}>
-        <TypeTable
-          rows={members}
-          headers={['Property', 'Type']}
-          renderRow={(property) =>
-            property.kind === 'PropertySignature' ? (
+      {propertySignatures.length > 0 ? (
+        <TypeDetail label="Properties" components={components}>
+          <TypeTable
+            rows={propertySignatures}
+            headers={['Property', 'Type']}
+            renderRow={(property) => (
               <>
                 <components.td>
                   {property.name}
@@ -408,13 +431,49 @@ function MembersSection({
                   <components.code>{property.text}</components.code>
                 </components.td>
               </>
-            ) : (
-              'TODO: add support for ' + property.kind
-            )
-          }
-          components={components}
-        />
-      </TypeDetail>
+            )}
+            components={components}
+          />
+        </TypeDetail>
+      ) : null}
+
+      {methodSignatures.length > 0 ? (
+        <TypeDetail label="Methods" components={components}>
+          <TypeTable
+            rows={methodSignatures}
+            headers={['Method', 'Type']}
+            renderRow={(method) => (
+              <>
+                <components.td>{method.name}</components.td>
+                <components.td>
+                  <components.code>{method.text}</components.code>
+                </components.td>
+              </>
+            )}
+            components={components}
+          />
+        </TypeDetail>
+      ) : null}
+
+      {indexSignatures.length > 0 ? (
+        <TypeDetail label="Index Signatures" components={components}>
+          <TypeTable
+            rows={indexSignatures}
+            headers={['Key', 'Type']}
+            renderRow={(indexSignature) => (
+              <>
+                <components.td>
+                  <components.code>{indexSignature.key}</components.code>
+                </components.td>
+                <components.td>
+                  <components.code>{indexSignature.type.text}</components.code>
+                </components.td>
+              </>
+            )}
+            components={components}
+          />
+        </TypeDetail>
+      ) : null}
     </TypeSection>
   )
 }
@@ -815,6 +874,11 @@ function InitializerValue({
   }
 
   return <components.code>{valueString}</components.code>
+}
+
+/** Convert kind name from PascalCase to space separated label. */
+function kindToLabel(kind: string): string {
+  return kind.replace(/([a-z])([A-Z])/g, '$1 $2')
 }
 
 /** Stub for docs generator TODO: fix this from erroring the page */
