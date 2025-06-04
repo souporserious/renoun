@@ -41,6 +41,35 @@ export function APIReference(props: APIReferenceProps) {
             css={{
               display: 'flex',
               flexDirection: 'column',
+              position: 'relative',
+            }}
+          />
+        ),
+        div: (props) => (
+          <div
+            {...props}
+            css={{
+              '&[data-layout="column"]': {
+                display: 'flex',
+                flexDirection: 'column',
+              },
+
+              '&[data-layout="row"]': {
+                display: 'flex',
+                flexDirection: 'row',
+              },
+
+              '&[data-gap="small"]': {
+                gap: '0.25rem',
+              },
+
+              '&[data-gap="medium"]': {
+                gap: '0.5rem',
+              },
+
+              '&[data-detail]': {
+                marginBottom: '1rem',
+              },
             }}
           />
         ),

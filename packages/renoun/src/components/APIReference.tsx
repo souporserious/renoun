@@ -1,4 +1,3 @@
-/** @jsxImportSource restyle */
 import React, { Suspense } from 'react'
 import { dirname, resolve } from 'node:path'
 
@@ -16,6 +15,7 @@ import { WorkingDirectoryContext } from './Context.js'
 
 type ElementTags =
   | 'section'
+  | 'div'
   | 'h3'
   | 'h4'
   | 'p'
@@ -28,6 +28,11 @@ type ElementTags =
   | 'td'
 
 type ElementPropOverrides = {
+  div: {
+    'data-detail'?: boolean
+    'data-layout'?: 'column' | 'row'
+    'data-gap'?: 'small' | 'medium'
+  }
   tr: {
     'data-subrow'?: boolean
   }
@@ -44,6 +49,7 @@ export type APIReferenceComponents = {
 
 const defaultComponents: APIReferenceComponents = {
   section: 'section',
+  div: 'div',
   h3: 'h3',
   h4: 'h4',
   p: 'p',
@@ -208,7 +214,7 @@ function TypeSection({
 }) {
   return (
     <Collapse.Provider>
-      <components.section id={id} style={{ position: 'relative' }}>
+      <components.section id={id}>
         <components.h3 aria-label={`${title} ${label}`}>
           <span>{label}</span> {title}
         </components.h3>
@@ -228,17 +234,10 @@ function TypeDetail({
   components: APIReferenceComponents
 }) {
   return (
-    <div
-      css={{
-        display: 'flex',
-        flexDirection: 'column',
-        marginBottom: '1rem',
-        gap: '0.5rem',
-      }}
-    >
+    <components.div data-detail data-layout="column" data-gap="medium">
       {label ? <components.h4>{label}</components.h4> : null}
       {children}
-    </div>
+    </components.div>
   )
 }
 
@@ -340,7 +339,7 @@ function renderMethodSubRow(
           <TypeTable
             rows={signature.parameters}
             headers={['Parameter', 'Type', 'Default Value']}
-            renderRow={(p) => renderParameterRow(p, components)}
+            renderRow={(parameter) => renderParameterRow(parameter, components)}
             components={components}
           />
         </TypeDetail>
@@ -395,18 +394,14 @@ function ClassSection({
       {node.extends || node.implements?.length ? (
         <TypeDetail components={components}>
           {node.extends ? (
-            <div
-              css={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
-            >
+            <components.div data-layout="column" data-gap="medium">
               <components.h4>Extends</components.h4>
               <components.code>{node.extends.text}</components.code>
-            </div>
+            </components.div>
           ) : null}
 
           {node.implements?.length ? (
-            <div
-              css={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
-            >
+            <components.div data-layout="column" data-gap="medium">
               <components.h4>Implements</components.h4>
               {node.implements.map((implementation, index) => (
                 <React.Fragment key={index}>
@@ -414,7 +409,7 @@ function ClassSection({
                   <components.code>{implementation.text}</components.code>
                 </React.Fragment>
               ))}
-            </div>
+            </components.div>
           ) : null}
         </TypeDetail>
       ) : null}
@@ -524,9 +519,9 @@ function FunctionSection({
       id={node.name}
       components={components}
     >
-      <div css={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      <components.div data-layout="column" data-gap="medium">
         {node.signatures.map((signature, index) => (
-          <div key={index}>
+          <components.div key={index} data-layout="column" data-gap="small">
             {signature.parameters.length > 0 ? (
               <TypeDetail label="Parameters" components={components}>
                 <TypeTable
@@ -541,9 +536,9 @@ function FunctionSection({
             <TypeDetail label="Returns" components={components}>
               <components.code>{signature.returnType.text}</components.code>
             </TypeDetail>
-          </div>
+          </components.div>
         ))}
-      </div>
+      </components.div>
     </TypeSection>
   )
 }
@@ -791,12 +786,9 @@ function IntersectionSection({
       id="Intersection"
       components={components}
     >
-      <div css={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+      <div data-layout="column" data-gap="medium">
         {node.types.map((type, index) => (
-          <div
-            key={index}
-            css={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}
-          >
+          <div key={index} data-layout="row" data-gap="small">
             <TypeNodeRouter node={type} components={components} />
           </div>
         ))}

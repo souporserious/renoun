@@ -15,6 +15,34 @@ export function BasicUsage() {
         source="./examples/Button.tsx"
         baseDirectory={import.meta.url}
         components={{
+          div: (props) => (
+            <div
+              {...props}
+              css={{
+                '&[data-layout="column"]': {
+                  display: 'flex',
+                  flexDirection: 'column',
+                },
+
+                '&[data-layout="row"]': {
+                  display: 'flex',
+                  flexDirection: 'row',
+                },
+
+                '&[data-gap="small"]': {
+                  gap: '0.25rem',
+                },
+
+                '&[data-gap="medium"]': {
+                  gap: '0.5rem',
+                },
+
+                '&[data-detail]': {
+                  marginBottom: '1rem',
+                },
+              }}
+            />
+          ),
           h3: (props) => (
             <h3
               {...props}
