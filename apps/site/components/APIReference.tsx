@@ -275,13 +275,16 @@ const StyledTrigger = styled(Collapse.Trigger, {
   lineHeight: 'inherit',
   fontWeight: 'inherit',
   textAlign: 'left',
+  cursor: 'pointer',
 
   svg: {
     opacity: 0,
   },
 
-  '&:hover svg': {
-    opacity: 1,
+  '&:hover': {
+    svg: {
+      opacity: 1,
+    },
   },
 })
 
