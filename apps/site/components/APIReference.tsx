@@ -49,14 +49,33 @@ export function APIReference(props: APIReferenceProps) {
           <div
             {...props}
             css={{
-              '&[data-layout="column"]': {
+              '&[data-type="column"]': {
                 display: 'flex',
                 flexDirection: 'column',
               },
 
-              '&[data-layout="row"]': {
+              '&[data-type="row"]': {
                 display: 'flex',
                 flexDirection: 'row',
+              },
+
+              '&[data-type="detail"]': {
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.5rem',
+                marginBottom: '1rem',
+              },
+
+              '&[data-type="signatures"]': {
+                display: 'flex',
+                flexDirection: 'column',
+
+                '& > *': {
+                  padding: '2rem 0',
+                },
+                '& > *:not(:last-child)': {
+                  borderBottom: '1px solid var(--color-separator-secondary)',
+                },
               },
 
               '&[data-gap="small"]': {
@@ -67,8 +86,8 @@ export function APIReference(props: APIReferenceProps) {
                 gap: '0.5rem',
               },
 
-              '&[data-detail]': {
-                marginBottom: '1rem',
+              '&[data-gap="large"]': {
+                gap: '2rem',
               },
             }}
           />
@@ -146,7 +165,7 @@ export function APIReference(props: APIReferenceProps) {
           />
         ),
         tr: (props) =>
-          props['data-subrow'] ? (
+          props['data-type'] === 'sub-row' ? (
             <StyledCollapse as="tr" {...props} />
           ) : (
             <tr

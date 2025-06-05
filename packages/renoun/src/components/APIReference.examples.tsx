@@ -19,14 +19,21 @@ export function BasicUsage() {
             <div
               {...props}
               css={{
-                '&[data-layout="column"]': {
+                '&[data-type="column"]': {
                   display: 'flex',
                   flexDirection: 'column',
                 },
 
-                '&[data-layout="row"]': {
+                '&[data-type="row"]': {
                   display: 'flex',
                   flexDirection: 'row',
+                },
+
+                '&[data-type="detail"]': {
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.5rem',
+                  marginBottom: '1rem',
                 },
 
                 '&[data-gap="small"]': {
@@ -37,8 +44,8 @@ export function BasicUsage() {
                   gap: '0.5rem',
                 },
 
-                '&[data-detail]': {
-                  marginBottom: '1rem',
+                '&[data-gap="large"]': {
+                  gap: '2rem',
                 },
               }}
             />

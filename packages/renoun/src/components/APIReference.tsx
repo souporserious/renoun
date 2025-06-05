@@ -29,12 +29,11 @@ type ElementTags =
 
 type ElementPropOverrides = {
   div: {
-    'data-detail'?: boolean
-    'data-layout'?: 'column' | 'row'
-    'data-gap'?: 'small' | 'medium'
+    'data-type'?: 'column' | 'row' | 'detail' | 'signatures'
+    'data-gap'?: 'small' | 'medium' | 'large'
   }
   tr: {
-    'data-subrow'?: boolean
+    'data-type'?: 'sub-row'
   }
 }
 
@@ -58,7 +57,7 @@ const defaultComponents: APIReferenceComponents = {
   thead: 'thead',
   tbody: 'tbody',
   tr: (props) =>
-    props['data-subrow'] ? (
+    props['data-type'] === 'sub-row' ? (
       <Collapse.Content as="tr" {...props} />
     ) : (
       <tr {...props} />
@@ -82,6 +81,8 @@ export interface APIReferenceProps {
 }
 
 // TODO: need to render JS Doc descriptions if available
+// TODO: add badges like rendering environment, deprecation, unstable, overloaded etc.
+// TODO: remove Collapse component and move to implementation
 export function APIReference(props: APIReferenceProps) {
   return (
     <Suspense>
@@ -234,7 +235,7 @@ function TypeDetail({
   components: APIReferenceComponents
 }) {
   return (
-    <components.div data-detail data-layout="column" data-gap="medium">
+    <components.div data-type="detail">
       {label ? <components.h4>{label}</components.h4> : null}
       {children}
     </components.div>
@@ -274,7 +275,7 @@ function TypeTable<RowType>({
             <Collapse.Provider key={index}>
               <components.tr>{renderRow(row, index)}</components.tr>
               {subRow ? (
-                <components.tr data-subrow>
+                <components.tr data-type="sub-row">
                   <components.td colSpan={3}>{subRow}</components.td>
                 </components.tr>
               ) : null}
@@ -394,14 +395,14 @@ function ClassSection({
       {node.extends || node.implements?.length ? (
         <TypeDetail components={components}>
           {node.extends ? (
-            <components.div data-layout="column" data-gap="medium">
+            <components.div data-type="column" data-gap="medium">
               <components.h4>Extends</components.h4>
               <components.code>{node.extends.text}</components.code>
             </components.div>
           ) : null}
 
           {node.implements?.length ? (
-            <components.div data-layout="column" data-gap="medium">
+            <components.div data-type="column" data-gap="medium">
               <components.h4>Implements</components.h4>
               {node.implements.map((implementation, index) => (
                 <React.Fragment key={index}>
@@ -431,53 +432,51 @@ function ComponentSection({
       id={node.name}
       components={components}
     >
-      {node.signatures.map((signature, index) => {
-        return (
-          <React.Fragment key={index}>
-            {node.signatures.length > 1 ? (
-              <components.h4>Overload {index + 1}</components.h4>
-            ) : null}
-
-            <TypeDetail label="Properties" components={components}>
-              {signature.parameter?.kind === 'TypeLiteral' ? (
-                <TypeTable
-                  rows={signature.parameter.members}
-                  headers={['Property', 'Type', 'Default Value']}
-                  renderRow={(property) =>
-                    property.kind === 'PropertySignature' ? (
-                      <>
-                        <components.td>
-                          {property.name}
-                          {property.isOptional ? '?' : ''}
-                        </components.td>
-                        <components.td>
-                          <components.code>{property.text}</components.code>
-                        </components.td>
-                        <components.td>
-                          {/* TODO: immediate type literals should have an initializer e.g. function Button({ variant = 'outline' }: { variant: 'fill' | 'outline' }) {}, this could be a special ImmediateTypeLiteral/Object kind that provides it. */}
-                          {/* <InitializerValue
+      <components.div data-type="signatures">
+        {node.signatures.map((signature, index) => {
+          return (
+            <components.div data-type="column" data-gap="large" key={index}>
+              <TypeDetail label="Properties" components={components}>
+                {signature.parameter?.kind === 'TypeLiteral' ? (
+                  <TypeTable
+                    rows={signature.parameter.members}
+                    headers={['Property', 'Type', 'Default Value']}
+                    renderRow={(property) =>
+                      property.kind === 'PropertySignature' ? (
+                        <>
+                          <components.td>
+                            {property.name}
+                            {property.isOptional ? '?' : ''}
+                          </components.td>
+                          <components.td>
+                            <components.code>{property.text}</components.code>
+                          </components.td>
+                          <components.td>
+                            {/* TODO: immediate type literals should have an initializer e.g. function Button({ variant = 'outline' }: { variant: 'fill' | 'outline' }) {}, this could be a special ImmediateTypeLiteral/Object kind that provides it. */}
+                            {/* <InitializerValue
                           value={property.initializer}
                           components={components}
                         /> */}
+                          </components.td>
+                        </>
+                      ) : (
+                        <components.td colSpan={3}>
+                          <components.code>{property.text}</components.code>
                         </components.td>
-                      </>
-                    ) : (
-                      <components.td colSpan={3}>
-                        <components.code>{property.text}</components.code>
-                      </components.td>
-                    )
-                  }
-                  components={components}
-                />
-              ) : (
-                <components.code>
-                  {signature.parameter?.text ?? '—'}
-                </components.code>
-              )}
-            </TypeDetail>
-          </React.Fragment>
-        )
-      })}
+                      )
+                    }
+                    components={components}
+                  />
+                ) : (
+                  <components.code>
+                    {signature.parameter?.text ?? '—'}
+                  </components.code>
+                )}
+              </TypeDetail>
+            </components.div>
+          )
+        })}
+      </components.div>
     </TypeSection>
   )
 }
@@ -519,9 +518,9 @@ function FunctionSection({
       id={node.name}
       components={components}
     >
-      <components.div data-layout="column" data-gap="medium">
+      <components.div data-type="signatures">
         {node.signatures.map((signature, index) => (
-          <components.div key={index} data-layout="column" data-gap="small">
+          <components.div key={index} data-type="column" data-gap="large">
             {signature.parameters.length > 0 ? (
               <TypeDetail label="Parameters" components={components}>
                 <TypeTable
@@ -786,9 +785,9 @@ function IntersectionSection({
       id="Intersection"
       components={components}
     >
-      <div data-layout="column" data-gap="medium">
+      <div data-type="column" data-gap="medium">
         {node.types.map((type, index) => (
-          <div key={index} data-layout="row" data-gap="small">
+          <div key={index} data-type="row" data-gap="small">
             <TypeNodeRouter node={type} components={components} />
           </div>
         ))}
@@ -807,7 +806,11 @@ function TypeExpressionSection({
   const label = kindToLabel(node.kind)
 
   return (
-    <TypeSection label={label} title={label} components={components}>
+    <TypeSection
+      label={label}
+      title={node.kind === 'TypeReference' ? (node.name ?? '-') : '-'}
+      components={components}
+    >
       <TypeDetail label="Type" components={components}>
         <components.code>{node.text}</components.code>
       </TypeDetail>
