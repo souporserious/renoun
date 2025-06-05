@@ -32,6 +32,9 @@ type ElementPropOverrides = {
     'data-type'?: 'column' | 'row' | 'detail' | 'signatures'
     'data-gap'?: 'small' | 'medium' | 'large'
   }
+  p: {
+    'data-type'?: 'description'
+  }
   tr: {
     'data-type'?: 'sub-row'
   }
@@ -80,9 +83,7 @@ export interface APIReferenceProps {
   components?: Partial<APIReferenceComponents>
 }
 
-// TODO: need to render JS Doc descriptions if available
 // TODO: add badges like rendering environment, deprecation, unstable, overloaded etc.
-// TODO: remove Collapse component and move to implementation
 export function APIReference(props: APIReferenceProps) {
   return (
     <Suspense>
@@ -203,12 +204,14 @@ function TypeNodeRouter({
 function TypeSection({
   label,
   title,
+  description,
   id,
   children,
   components,
 }: {
   label: string
   title?: string
+  description?: string
   id?: string
   children: React.ReactNode
   components: APIReferenceComponents
@@ -219,7 +222,16 @@ function TypeSection({
         <components.h3 aria-label={`${title} ${label}`}>
           <span>{label}</span> {title}
         </components.h3>
-        <Collapse.Content>{children}</Collapse.Content>
+        <Collapse.Content>
+          {description ? (
+            <components.div data-type="column" data-gap="large">
+              <components.p data-type="description">{description}</components.p>
+              {children}
+            </components.div>
+          ) : (
+            children
+          )}
+        </Collapse.Content>
       </components.section>
     </Collapse.Provider>
   )
@@ -364,6 +376,7 @@ function ClassSection({
     <TypeSection
       label="Class"
       title={node.name}
+      description={node.description}
       id={node.name}
       components={components}
     >
@@ -429,6 +442,7 @@ function ComponentSection({
     <TypeSection
       label="Component"
       title={node.name}
+      description={node.description}
       id={node.name}
       components={components}
     >
@@ -515,6 +529,7 @@ function FunctionSection({
     <TypeSection
       label="Function"
       title={node.name}
+      description={node.description}
       id={node.name}
       components={components}
     >
@@ -553,6 +568,7 @@ function TypeAliasSection({
     <TypeSection
       label={kindToLabel(node.type.kind)}
       title={node.name}
+      description={node.description}
       id={node.name}
       components={components}
     >
@@ -593,6 +609,7 @@ function MembersSection({
     <TypeSection
       label={node.kind === 'Interface' ? 'Interface' : 'Type Literal'}
       title={node.name}
+      description={node.description}
       id={node.name}
       components={components}
     >
@@ -672,7 +689,7 @@ function MappedSection({
   return (
     <TypeSection
       label="Mapped Type"
-      title="Mapped Type"
+      title="-"
       id="mapped-type"
       components={components}
     >
@@ -751,7 +768,7 @@ function IntersectionSection({
     return (
       <TypeSection
         label="Type Literal"
-        title="Type Literal"
+        title="-"
         id="Type Literal"
         components={components}
       >
@@ -781,7 +798,7 @@ function IntersectionSection({
   return (
     <TypeSection
       label="Intersection"
-      title="Intersection"
+      title="-"
       id="Intersection"
       components={components}
     >

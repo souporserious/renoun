@@ -7,6 +7,8 @@ import { Collapse } from 'renoun/components/Collapse/index'
 import { styled } from 'restyle'
 import { GeistMono } from 'geist/font/mono'
 
+import { Markdown } from './Markdown'
+
 export function APIReferences({
   fileExports,
 }: {
@@ -250,6 +252,12 @@ export function APIReference(props: APIReferenceProps) {
             className={GeistMono.className}
           />
         ),
+        p: (props) =>
+          props['data-type'] === 'description' ? (
+            <Markdown children={props.children as string} />
+          ) : (
+            <p {...props} />
+          ),
         ...props.components,
       }}
     />
