@@ -16,9 +16,11 @@
     "@types/react-dom": "catalog:",
     "next": "catalog:",
     "react": "catalog:",
+    "react-aria-components": "^1.10.0",
     "react-dom": "catalog:",
     "renoun": "workspace:*",
     "tailwindcss": "^4.1.8",
+    "tailwindcss-react-aria-components": "^2.0.0",
     "ts-morph": "catalog:",
     "zod": "catalog:"
   }

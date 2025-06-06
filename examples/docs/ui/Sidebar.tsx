@@ -1,7 +1,8 @@
 import { docs } from '@/collections'
 
-import { Search } from './Search'
+import { CommandMenu } from './CommandMenu'
 import { SidebarOverlay } from './SidebarOverlay'
+import { SidebarLink } from './SidebarLink'
 
 export async function Sidebar() {
   const docEntries = await docs.getEntries()
@@ -18,7 +19,19 @@ export async function Sidebar() {
 
   return (
     <SidebarOverlay>
-      <Search entries={entries} />
+      <div className="flex flex-col gap-8">
+        <CommandMenu entries={entries} />
+        <nav className="flex flex-col">
+          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">
+            Documentation
+          </span>
+          {entries.map((entry) => (
+            <SidebarLink key={entry.path} href={entry.path}>
+              {entry.title}
+            </SidebarLink>
+          ))}
+        </nav>
+      </div>
     </SidebarOverlay>
   )
 }
