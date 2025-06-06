@@ -9,7 +9,7 @@ export const docs = new Directory({
       {
         metadata: z.object({
           title: z.string(),
-          date: z.coerce.date(),
+          order: z.number(),
           summary: z.string().optional(),
           tags: z.array(z.string()).optional(),
         }),
@@ -21,7 +21,7 @@ export const docs = new Directory({
     const aMetadata = await a.getExportValue('metadata')
     const bMetadata = await b.getExportValue('metadata')
 
-    return aMetadata.date.getTime() - bMetadata.date.getTime()
+    return aMetadata.order - bMetadata.order
   },
 })
 
