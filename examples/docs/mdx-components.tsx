@@ -12,7 +12,6 @@ export function useMDXComponents() {
       return <Card {...props} />
     },
     pre: (props) => {
-      console.log(props)
       return <CodeBlock {...parsePreProps(props)} />
     },
   } satisfies MDXComponents
