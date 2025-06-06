@@ -62,7 +62,7 @@ export function Accordion({
           }
         }
       `}</style>
-      <summary className="text-heading-4 cursor-pointer select-none flex items-center p-6 focus:outline-none">
+      <summary className="text-heading-4 font-bold cursor-pointer select-none flex items-center p-6 focus:outline-none">
         {title}
       </summary>
       <div className="px-16 pb-6">{children}</div>

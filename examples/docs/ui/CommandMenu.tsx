@@ -66,14 +66,14 @@ export function CommandMenu({ entries }: CommandMenuProps) {
 
   return (
     <DialogTrigger isOpen={isOpen} onOpenChange={setOpen}>
-      <Button className="group flex items-center rounded-xl bg-black/20 bg-clip-padding border border-white/20 px-3 py-2 font-medium font-[inherit] text-sm sm:text-base text-white/80 hover:bg-white/1 pressed:bg-black/40 transition-colors cursor-default outline-hidden focus-visible:ring-2 focus-visible:ring-white/75 w-full gap-2">
-        <SearchIcon className="w-6 h-6 text-white/40 group-hover:text-white transition-colors" />
+      <Button className="group flex items-center rounded-xl bg-gray-100 border border-gray-300 text-gray-700 dark:bg-black/20 dark:border-white/20 dark:text-white/80 bg-clip-padding px-3 py-2 font-medium font-[inherit] text-sm sm:text-base hover:bg-gray-200 dark:hover:bg-white/1 pressed:bg-black/40 transition-colors cursor-default outline-hidden focus-visible:ring-2 focus-visible:ring-violet-500 dark:focus-visible:ring-white/75 w-full gap-2">
+        <SearchIcon className="w-6 h-6 text-gray-400 dark:text-white/40 group-hover:text-gray-700 dark:group-hover:text-white transition-colors" />
         <span className="flex-1 text-left">Search</span>
-        <span className="hidden sm:flex items-center text-xs text-white/60 group-hover:text-white gap-0.5 transition-colors">
-          <kbd className="h-6 aspect-square font-semibold rounded-lg text-xs text-white/60 group-hover:text-white bg-gray-800 outline-none flex items-center justify-center transition-colors">
+        <span className="hidden sm:flex items-center text-xs text-gray-500 dark:text-white/60 group-hover:text-gray-700 dark:group-hover:text-white gap-0.5 transition-colors">
+          <kbd className="h-6 aspect-square font-semibold rounded-lg text-xs bg-gray-200 text-gray-700 dark:bg-gray-800 dark:text-white/60 group-hover:text-gray-700 dark:group-hover:text-white outline-none flex items-center justify-center transition-colors">
             {isMac ? '⌘' : 'Ctrl'}
           </kbd>
-          <kbd className="h-6 aspect-square font-semibold rounded-lg text-xs text-white/60 group-hover:text-white bg-gray-800 outline-none flex items-center justify-center transition-colors">
+          <kbd className="h-6 aspect-square font-semibold rounded-lg text-xs bg-gray-200 text-gray-700 dark:bg-gray-800 dark:text-white/60 group-hover:text-gray-700 dark:group-hover:text-white outline-none flex items-center justify-center transition-colors">
             K
           </kbd>
         </span>

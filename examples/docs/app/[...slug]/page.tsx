@@ -24,7 +24,7 @@ export default async function Page({
   return (
     <div className="prose md:prose-md lg:prose-lg dark:prose-invert">
       <h1>{metadata.title}</h1>
-      <div className="mb-32 [&>p:first-of-type]:-mt-2 [&>p:first-of-type]:text-2xl [&>p:first-of-type]:text-blue-200 [&>p:first-of-type]:mb-8">
+      <div className="mb-32 [&>p:first-of-type]:-mt-6 [&>p:first-of-type]:text-2xl [&>p:first-of-type]:text-blue-400 dark:[&>p:first-of-type]:text-blue-200 [&>p:first-of-type]:mb-8">
         <Content />
       </div>
       {updatedAt ? (
