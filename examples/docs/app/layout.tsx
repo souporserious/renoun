@@ -33,7 +33,7 @@ export default async function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased bg-white text-gray-900`}
+        className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100`}
       >
         <Sidebar />
         <main className="md:pl-64 min-h-screen">

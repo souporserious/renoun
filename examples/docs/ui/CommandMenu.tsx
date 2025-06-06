@@ -68,7 +68,7 @@ export function CommandMenu({ entries }: CommandMenuProps) {
     <DialogTrigger isOpen={isOpen} onOpenChange={setOpen}>
       <Button className="group flex items-center rounded-xl bg-black/20 bg-clip-padding border border-white/20 px-3 py-2 font-medium font-[inherit] text-sm sm:text-base text-white/80 hover:bg-white/1 pressed:bg-black/40 transition-colors cursor-default outline-hidden focus-visible:ring-2 focus-visible:ring-white/75 w-full gap-2">
         <SearchIcon className="w-6 h-6 text-white/40 group-hover:text-white transition-colors" />
-        <span className="flex-1">Search</span>
+        <span className="flex-1 text-left">Search</span>
         <span className="hidden sm:flex items-center text-xs text-white/60 group-hover:text-white gap-0.5 transition-colors">
           <kbd className="h-6 aspect-square font-semibold rounded-lg text-xs text-white/60 group-hover:text-white bg-gray-800 outline-none flex items-center justify-center transition-colors">
             {isMac ? '⌘' : 'Ctrl'}
@@ -81,7 +81,8 @@ export function CommandMenu({ entries }: CommandMenuProps) {
       <ModalOverlay
         isDismissable
         className={({ isEntering, isExiting }) => `
-          fixed inset-0 z-100 overflow-y-auto bg-black/25 flex min-h-full items-start sm:items-center justify-center p-4 text-center
+          fixed inset-0 z-100 overflow-y-auto bg-black/25 backdrop-blur
+          flex min-h-full justify-center p-4 pt-20 text-center
           ${isEntering ? 'animate-fade-in' : ''}
           ${isExiting ? 'animate-fade-out' : ''}
         `}
@@ -103,15 +104,17 @@ export function CommandMenu({ entries }: CommandMenuProps) {
                     autoFocus
                     placeholder="Search documentation..."
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="border-none py-2 px-3 leading-5 text-gray-900 dark:text-gray-100 bg-transparent outline-hidden text-base focus-visible:ring-2 focus-visible:ring-violet-500 dark:focus-visible:ring-blue-400 rounded-lg"
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    className="border border-white/20 py-2 px-3 leading-5 text-gray-900 dark:text-gray-100 bg-black/20 dark:bg-black/20 outline-hidden text-base focus-visible:ring-2 focus-visible:ring-violet-500 dark:focus-visible:ring-blue-400 rounded-lg"
                   />
                 </TextField>
                 <Menu
                   items={filteredEntries}
                   className="mt-2 p-1 max-h-44 overflow-auto"
                   onAction={(key) => {
-                    const entry = filteredEntries.find((e) => e.path === key)
+                    const entry = filteredEntries.find(
+                      (entry) => entry.path === key
+                    )
                     if (entry) {
                       router.push(entry.path)
                       setOpen(false)
