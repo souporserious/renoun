@@ -1,0 +1,26 @@
+{
+  "private": true,
+  "name": "@examples/docs",
+  "scripts": {
+    "dev": "renoun next --turbopack",
+    "build": "renoun next build --turbopack",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@mdx-js/loader": "catalog:",
+    "@mdx-js/react": "catalog:",
+    "@next/mdx": "catalog:",
+    "@tailwindcss/postcss": "^4.1.8",
+    "@tailwindcss/typography": "^0.5.16",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "next": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "renoun": "workspace:*",
+    "restyle": "catalog:",
+    "tailwindcss": "^4.1.8",
+    "ts-morph": "catalog:",
+    "zod": "catalog:"
+  }
+}
