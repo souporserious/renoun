@@ -24,7 +24,9 @@ export default async function Page({
   return (
     <div className="prose md:prose-md lg:prose-lg dark:prose-invert">
       <h1>{metadata.title}</h1>
-      <Content />
+      <div className="mb-8">
+        <Content />
+      </div>
       {updatedAt ? (
         <div className="text-sm text-gray-600 dark:text-gray-300">
           Last updated{' '}
