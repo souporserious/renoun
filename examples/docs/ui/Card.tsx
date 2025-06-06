@@ -10,7 +10,7 @@ export function Card({
   children: React.ReactNode
 }) {
   return (
-    <div className="flex flex-col rounded-2xl p-6 bg-white dark:bg-gray-900 h-full">
+    <div className="flex flex-col rounded-2xl p-6 bg-white dark:bg-gray-800 h-full">
       <div className="flex items-center justify-center w-12 h-12 mb-4 bg-gray-700 text-white rounded-full p-2 text-xl">
         {icon}
       </div>

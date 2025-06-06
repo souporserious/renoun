@@ -31,9 +31,12 @@ export default async function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html
+      lang="en"
+      className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+    >
       <body
-        className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100`}
+        className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased`}
       >
         <Sidebar />
         <main className="md:pl-64 min-h-screen">
