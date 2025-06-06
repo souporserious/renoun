@@ -17,8 +17,8 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'Blog',
-  description: 'A blog built with renoun and Next.js.',
+  title: 'Docs',
+  description: 'A documentation site built with renoun and Next.js.',
   robots: {
     index: false,
     follow: false,
