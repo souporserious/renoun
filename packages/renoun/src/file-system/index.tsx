@@ -144,7 +144,7 @@ export function withSchema(schemaOrRuntime?: any, maybeRuntime?: any) {
 }
 
 /**
- * Type signature for the “withSchema” helper function.
+ * Type signature for the "withSchema" helper function.
  *
  * This prevents TypeScript from unifying `(path: string) => Promise<...>` with `withSchema(...)`,
  * we define a distinct "helper function" shape that only matches the uninvoked `withSchema<...>`.
@@ -1395,6 +1395,7 @@ export class Directory<
   #directory?: Directory<any, any, any>
   #fileSystem: FileSystem | undefined
   #repository: Repository | undefined
+  #includePattern?: string
   #include?:
     | ((
         entry: FileSystemEntry<LoaderTypes>
@@ -1415,10 +1416,12 @@ export class Directory<
     } else {
       this.#path = ensureRelativePath(options.path)
       this.#loaders = options.loaders
-      this.#include =
-        typeof options.include === 'string'
-          ? new Minimatch(options.include, { dot: true })
-          : options.include
+      if (typeof options.include === 'string') {
+        this.#includePattern = options.include
+        this.#include = new Minimatch(options.include, { dot: true })
+      } else {
+        this.#include = options.include
+      }
       this.#sort = options.sort as any
       this.#basePath = options.basePath
       this.#slugCasing = options.slugCasing ?? 'kebab'
@@ -1617,7 +1620,7 @@ export class Directory<
             (currentEntry instanceof File && currentEntry.getModifierName()) ===
             lastSegment
 
-          // If allExtensions are specified, we check if the file’s extension is in that array.
+          // If allExtensions are specified, we check if the file's extension is in that array.
           if (allExtensions && currentEntry instanceof File) {
             if (allExtensions.includes(currentEntry.getExtension())) {
               if (matchesModifier) {
@@ -1764,7 +1767,11 @@ export class Directory<
    * Additionally, `index` and `readme` files are excluded by default.
    */
   async getEntries(options?: {
-    recursive?: boolean
+    recursive?: Include extends string
+      ? Include extends `**${string}`
+        ? boolean
+        : undefined
+      : boolean
     includeIndexAndReadme?: boolean
     includeDuplicates?: boolean
     includeGitIgnoredFiles?: boolean
@@ -1776,6 +1783,16 @@ export class Directory<
         ? FilteredEntry[]
         : FileSystemEntry<LoaderTypes>[]
   > {
+    if (options?.recursive && this.#includePattern) {
+      // Only error on single-level glob patterns (e.g. "*.mdx")
+      // Multi-level patterns (e.g. "**/*.mdx") are valid with `recursive` option
+      if (!this.#includePattern.includes('**')) {
+        throw new Error(
+          '[renoun] Cannot use recursive option with a single-level include filter. Use a multi-level pattern (e.g. "**/*.mdx") instead.'
+        )
+      }
+    }
+
     let cacheKey = ''
 
     if (process.env.NODE_ENV === 'production') {

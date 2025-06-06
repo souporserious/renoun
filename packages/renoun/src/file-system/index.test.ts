@@ -16,7 +16,6 @@ import {
   JavaScriptFile,
   JavaScriptFileExport,
   MDXFile,
-  MDXFileExport,
   EntryGroup,
   isDirectory,
   isFile,
@@ -1702,5 +1701,34 @@ describe('file system', () => {
         Expect<IsNotAny<typeof Content>>,
       ]
     }
+  })
+
+  test('errors when trying recursively get entries with a single-level include filter', async () => {
+    const directory = new Directory({
+      path: 'fixtures',
+      include: '*.mdx',
+    })
+
+    await expect(
+      directory.getEntries({
+        // @ts-expect-error
+        recursive: true,
+      })
+    ).rejects.toThrow(
+      '[renoun] Cannot use recursive option with a single-level include filter. Use a multi-level pattern (e.g. "**/*.mdx") instead.'
+    )
+  })
+
+  test('allows recursive option with multi-level include filter', async () => {
+    const directory = new Directory({
+      path: 'fixtures',
+      include: '**/*.mdx',
+    })
+
+    await expect(
+      directory.getEntries({
+        recursive: true,
+      })
+    ).resolves.toBeDefined()
   })
 })
