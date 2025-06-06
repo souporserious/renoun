@@ -13,7 +13,6 @@
     "isolatedModules": true,
     "forceConsistentCasingInFileNames": true,
     "jsx": "preserve",
-    "jsxImportSource": "restyle",
     "plugins": [
       {
         "name": "next"

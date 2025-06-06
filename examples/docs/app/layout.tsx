@@ -31,13 +31,13 @@ export default async function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en">
       <body
         className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased bg-white text-gray-900`}
       >
         <Sidebar />
         <main className="md:pl-64 min-h-screen">
-          <div className="p-10 max-w-4xl mx-auto">
+          <div className="px-10 py-20 max-w-4xl mx-auto">
             <SiblingLinks routes={await routes} />
             {children}
           </div>

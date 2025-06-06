@@ -26,17 +26,12 @@ export default async function Page({
       <h1>{metadata.title}</h1>
       <Content />
       {updatedAt ? (
-        <div
-          css={{
-            fontSize: 'var(--font-size-body-3)',
-            color: 'var(--color-foreground-secondary)',
-          }}
-        >
+        <div className="text-sm text-gray-600 dark:text-gray-300">
           Last updated{' '}
           <time
             dateTime={updatedAt.toString()}
             itemProp="dateModified"
-            css={{ fontWeight: 600 }}
+            className="font-semibold"
           >
             {updatedAt.toLocaleString('en', {
               year: '2-digit',
