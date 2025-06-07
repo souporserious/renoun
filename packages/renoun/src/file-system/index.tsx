@@ -1455,6 +1455,7 @@ export class Directory<
       ...options,
     })
 
+    directory.#pathLookup = this.#pathLookup
     directory.#depth = this.#depth
     directory.#tsConfigPath = this.#tsConfigPath
     directory.#slugCasing = this.#slugCasing
@@ -1508,6 +1509,78 @@ export class Directory<
   }
 
   /**
+   * Walk `segments` starting at `directory`, returning the first entry whose
+   * slugified path exactly matches the requested path segments.
+   */
+  async #findEntry(
+    directory: Directory<LoaderTypes>,
+    segments: string[],
+    allExtensions?: string[]
+  ): Promise<FileSystemEntry<LoaderTypes>> {
+    // Always hydrate this directory once and populate its lookup map.
+    const entries = await directory.getEntries({
+      includeDuplicates: true,
+      includeIndexAndReadme: true,
+      includeTsConfigIgnoredFiles: true,
+    })
+    const [current, ...rest] = segments
+
+    // If the current segment is empty, we are at the root of the directory.
+    if (!current) {
+      return directory
+    }
+
+    let fallback: FileSystemEntry<LoaderTypes> | undefined
+
+    for (const entry of entries) {
+      const baseSlug = createSlug(entry.getBaseName(), this.#slugCasing)
+
+      if (entry instanceof Directory && baseSlug === current) {
+        return rest.length === 0
+          ? entry
+          : this.#findEntry(entry, rest, allExtensions)
+      }
+
+      if (!(entry instanceof File) || baseSlug !== current) {
+        continue
+      }
+
+      const modifier = entry.getModifierName()
+      const matchesExtension = allExtensions
+        ? allExtensions.includes(entry.getExtension())
+        : true
+
+      // e.g. "Button/examples" → modifier must match the tail segment
+      if (rest.length === 1 && modifier) {
+        if (
+          createSlug(modifier, this.#slugCasing) === rest[0] &&
+          matchesExtension
+        ) {
+          return entry
+        }
+        continue
+      }
+
+      // plain "Button" (no modifier segment)
+      if (rest.length === 0 && matchesExtension) {
+        // Prefer the base file, fall back to file‑with‑modifier if nothing else
+        if (
+          !fallback ||
+          (fallback instanceof File && fallback.getModifierName())
+        ) {
+          fallback = entry
+        }
+      }
+    }
+
+    if (fallback) {
+      return fallback
+    }
+
+    throw new FileNotFoundError(segments.join('/'), allExtensions)
+  }
+
+  /**
    * Get a file at the specified `path` in the file system. The `path` does not
    * need to include the order prefix or extension. Additionally, an `extension`
    * can be provided for the second argument to find the first matching file path
@@ -1548,163 +1621,122 @@ export class Directory<
   >
 
   async getFile(path: string | string[], extension?: string | string[]) {
-    // Trim leading './' from relative paths
-    if (typeof path === 'string' && path.startsWith('./')) {
+    const rawPath = Array.isArray(path) ? path.join('/') : path
+    const cachedFile = this.#pathLookup.get(
+      rawPath.startsWith('/') ? rawPath : `/${rawPath}`
+    )
+
+    if (
+      cachedFile instanceof File &&
+      (!extension ||
+        (Array.isArray(extension)
+          ? extension.includes(cachedFile.getExtension())
+          : extension === cachedFile.getExtension()))
+    ) {
+      return cachedFile as any
+    }
+
+    // normalize the incoming path
+    if (
+      typeof path === 'string' &&
+      (path.startsWith('./') || path.startsWith('.\\'))
+    ) {
       path = path.slice(2)
     }
 
-    const segments = Array.isArray(path)
-      ? path.slice(0)
+    const rawSegments = Array.isArray(path)
+      ? [...path]
       : path.split('/').filter(Boolean)
-    const lastSegment = segments.at(-1)
-    const parsedExtension = lastSegment
-      ? extensionName(lastSegment).slice(1)
-      : undefined
+    const lastSegment = rawSegments.at(-1)
+    let parsedExtension: string | undefined
 
-    if (lastSegment && parsedExtension) {
-      segments[segments.length - 1] = removeExtension(lastSegment)
+    if (lastSegment) {
+      const segmentIndex = lastSegment.lastIndexOf('.')
+
+      if (segmentIndex > 0) {
+        parsedExtension = lastSegment.slice(segmentIndex + 1)
+        rawSegments[rawSegments.length - 1] = lastSegment.slice(0, segmentIndex)
+      }
     }
 
     if (parsedExtension && extension) {
       throw new Error(
-        `[renoun] The path "${Array.isArray(path) ? path.join('/') : path}" already includes a file extension (` +
-          `.${parsedExtension}), the \`extension\` argument can only be used when the path does not include an extension.`
+        `[renoun] The path "${rawPath}" already includes a file extension (.${parsedExtension}). The \`extension\` argument can only be used when the path omits an extension.`
       )
     }
 
-    let allExtensions: string[] | undefined
+    const allExtensions: string[] | undefined = Array.isArray(extension)
+      ? extension
+      : extension
+        ? [extension]
+        : parsedExtension
+          ? [parsedExtension]
+          : undefined
+    const segments = rawSegments.map((s) => createSlug(s, this.#slugCasing))
 
-    if (parsedExtension) {
-      allExtensions = [parsedExtension]
-    } else if (extension) {
-      allExtensions = (
-        Array.isArray(extension) ? extension : [extension]
-      ) as any
+    if (segments.length === 0) {
+      throw new FileNotFoundError(rawPath, allExtensions)
     }
 
-    let currentDirectory = this as Directory<LoaderTypes>
+    let entry = await this.#findEntry(this, segments, allExtensions)
 
-    while (segments.length > 0) {
-      let entry: FileSystemEntry<LoaderTypes> | undefined
-      const currentSegment = createSlug(segments.shift()!, this.#slugCasing)
-      const lastSegment = segments.at(-1)
-      const allEntries = await currentDirectory.getEntries({
+    // If we ended on a directory, try to find a matching within it
+    if (entry instanceof Directory) {
+      const directoryEntries = await entry.getEntries({
         includeDuplicates: true,
         includeIndexAndReadme: true,
-        includeTsConfigIgnoredFiles: true,
       })
 
-      // Find an entry whose base name matches the slug of `currentSegment`
-      for (const currentEntry of allEntries) {
-        let name = currentEntry.getBaseName()
+      // Find a representative file in the directory
+      let sameName: File<LoaderTypes> | undefined
+      let fallback: File<LoaderTypes> | undefined
 
-        if (currentEntry instanceof File) {
-          const modifier = currentEntry.getModifierName()
-
-          if (modifier) {
-            name += `.${modifier}`
-          }
+      for (const directoryEntry of directoryEntries) {
+        if (!(directoryEntry instanceof File)) {
+          continue
         }
 
-        const baseSegment = createSlug(name, this.#slugCasing)
-        const baseSegmentWithoutModifier = createSlug(
-          currentEntry.getBaseName(),
-          this.#slugCasing
-        )
+        const baseName = directoryEntry.getBaseName()
+        const extension = directoryEntry.getExtension()
+        const hasValidExtension = allExtensions
+          ? allExtensions.includes(extension)
+          : true
 
+        // Check for file that shares the directory name
         if (
-          baseSegment === currentSegment ||
-          baseSegmentWithoutModifier === currentSegment
+          !sameName &&
+          baseName === entry.getBaseName() &&
+          hasValidExtension
         ) {
-          const matchesModifier =
-            (currentEntry instanceof File && currentEntry.getModifierName()) ===
-            lastSegment
+          sameName = directoryEntry
+          break // Found the best match, no need to continue
+        }
 
-          // If allExtensions are specified, we check if the file's extension is in that array.
-          if (allExtensions && currentEntry instanceof File) {
-            if (allExtensions.includes(currentEntry.getExtension())) {
-              if (matchesModifier) {
-                return currentEntry as any
-              } else if (
-                !entry ||
-                (entry instanceof File && entry.getModifierName())
-              ) {
-                entry = currentEntry
-              }
-            }
-          } else if (matchesModifier) {
-            return currentEntry as any
-          } else if (
-            !entry ||
-            (entry instanceof File && entry.getModifierName())
-          ) {
-            entry = currentEntry
-          }
+        // Check for index/readme as fallback
+        if (
+          !fallback &&
+          ['index', 'readme'].includes(baseName.toLowerCase()) &&
+          hasValidExtension
+        ) {
+          fallback = directoryEntry
+          // Don't break here as we might find a better match later
         }
       }
 
-      if (!entry) {
-        throw new FileNotFoundError(path, allExtensions)
-      }
-
-      // If this is the last segment, check for file or extension match
-      if (segments.length === 0) {
-        if (entry instanceof File) {
-          if (allExtensions) {
-            if (allExtensions.includes(entry.getExtension())) {
-              return entry as any
-            }
-          } else {
-            return entry as any
-          }
-        } else if (entry instanceof Directory) {
-          // First, check if there's a file with the provided extension in the directory
-          if (allExtensions) {
-            const entries = await entry.getEntries({
-              includeDuplicates: true,
-              includeIndexAndReadme: true,
-            })
-            for (const subEntry of entries) {
-              if (
-                subEntry instanceof File &&
-                subEntry.getBaseName() === entry.getBaseName() &&
-                allExtensions.includes(subEntry.getExtension())
-              ) {
-                return subEntry as any
-              }
-            }
-          } else {
-            // Otherwise, check for a file with the same name as the directory or an index/readme file
-            const entries = await entry.getEntries({
-              includeDuplicates: true,
-              includeIndexAndReadme: true,
-            })
-            const directoryName = entry.getBaseName()
-
-            for (const subEntry of entries) {
-              const name = subEntry.getBaseName()
-              if (
-                name === directoryName ||
-                ['index', 'readme'].includes(name.toLowerCase())
-              ) {
-                return subEntry as any
-              }
-            }
-          }
-        }
-
-        throw new FileNotFoundError(path, allExtensions)
-      }
-
-      // If the entry is a directory, continue with the next segment
-      if (entry instanceof Directory) {
-        currentDirectory = entry
+      if (sameName) {
+        entry = sameName
+      } else if (fallback) {
+        entry = fallback
       } else {
-        throw new FileNotFoundError(path, allExtensions)
+        throw new FileNotFoundError(rawPath, allExtensions)
       }
     }
 
-    throw new FileNotFoundError(path, allExtensions)
+    if (entry instanceof File) {
+      return entry as any
+    }
+
+    throw new FileNotFoundError(rawPath, allExtensions)
   }
 
   /** Get a directory at the specified `path`. */
@@ -1760,6 +1792,21 @@ export class Directory<
   }
 
   #entriesCache = new Map<string, FileSystemEntry<LoaderTypes>[]>()
+  #pathLookup = new Map<string, FileSystemEntry<LoaderTypes>>()
+
+  /**
+   * Add an entry to the path lookup table. This avoids the need to traverse the
+   * entire directory tree to find a file or directory that has already been created.
+   */
+  #addPathLookup(entry: FileSystemEntry<LoaderTypes>) {
+    const canonicalPath = entry.getPath()
+    this.#pathLookup.set(canonicalPath, entry)
+
+    const normalizedPath = canonicalPath
+      .replace(/^\.\/?/, '')
+      .replace(/\/$/, '')
+    this.#pathLookup.set(normalizedPath, entry)
+  }
 
   /**
    * Retrieves all entries (files and directories) within the current directory
@@ -1859,15 +1906,18 @@ export class Directory<
         if (this.#include) {
           if (await this.#shouldInclude(directory)) {
             entriesMap.set(entryKey, directory)
+            this.#addPathLookup(directory)
           }
         } else {
           entriesMap.set(entryKey, directory)
+          this.#addPathLookup(directory)
         }
 
         if (options?.recursive) {
           const nestedEntries = await directory.getEntries(options)
           for (const nestedEntry of nestedEntries) {
             entriesMap.set(nestedEntry.getPath(), nestedEntry)
+            this.#addPathLookup(nestedEntry)
           }
         }
       } else if (entry.isFile) {
@@ -1913,6 +1963,7 @@ export class Directory<
         }
 
         entriesMap.set(entryKey, file)
+        this.#addPathLookup(file)
       }
     }
 

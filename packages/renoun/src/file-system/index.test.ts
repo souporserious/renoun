@@ -1731,4 +1731,19 @@ describe('file system', () => {
       })
     ).resolves.toBeDefined()
   })
+
+  test('gets recursive files from paths', async () => {
+    const directory = new Directory({
+      path: 'fixtures/components',
+      include: '**/*.mdx',
+    })
+    const paths = await directory
+      .getEntries({ recursive: true })
+      .then((entries) => entries.map((entry) => entry.getPath()))
+    const files = await Promise.all(
+      paths.map((path) => directory.getFile(path, 'mdx'))
+    )
+
+    expect(files).toBeDefined()
+  })
 })
