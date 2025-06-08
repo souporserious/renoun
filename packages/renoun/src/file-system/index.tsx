@@ -366,7 +366,7 @@ export class File<
     )
 
     if (!includeDuplicateSegments || this.#slugCasing !== 'none') {
-      const parsedPath = path.split('/')
+      let parsedPath = path.split('/')
       const parsedSegments: string[] = []
 
       for (let index = 0; index < parsedPath.length; index++) {
@@ -381,7 +381,17 @@ export class File<
         }
       }
 
+      // Remove trailing 'index' or 'readme' if present
+      if (['index', 'readme'].includes(this.getBaseName().toLowerCase())) {
+        parsedSegments.pop()
+      }
+
       path = parsedSegments.join('/')
+
+      // Ensure the path always starts with a slash
+      if (!path.startsWith('/')) {
+        path = `/${path}`
+      }
     }
 
     return path
@@ -1916,7 +1926,7 @@ export class Directory<
         if (options?.recursive) {
           const nestedEntries = await directory.getEntries(options)
           for (const nestedEntry of nestedEntries) {
-            entriesMap.set(nestedEntry.getPath(), nestedEntry)
+            entriesMap.set(nestedEntry.getAbsolutePath(), nestedEntry)
             this.#addPathLookup(nestedEntry)
           }
         }

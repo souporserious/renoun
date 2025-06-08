@@ -161,16 +161,16 @@ describe('file system', () => {
       includeIndexAndReadme: true,
     })
 
-    expect(entries).toHaveLength(5)
-    expect(entries.map((entry) => entry.getPath())).toMatchInlineSnapshot(`
-      [
-        "/index",
-        "/components",
-        "/components/button",
-        "/components/button/index",
-        "/components/link",
-      ]
-    `)
+    expect(entries.map((entry) => entry.getAbsolutePath()))
+      .toMatchInlineSnapshot(`
+        [
+          "/index.ts",
+          "/components",
+          "/components/Button",
+          "/components/Button/index.tsx",
+          "/components/Link.tsx",
+        ]
+      `)
   })
 
   test('filters out index and readme from entries by default', async () => {
@@ -1745,5 +1745,18 @@ describe('file system', () => {
     )
 
     expect(files).toBeDefined()
+  })
+
+  test('getPath trims index and readme paths', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'components/index.ts': 'export const metadata = { title: "Components" }',
+      'components/README.mdx': '# Components',
+    })
+    const directory = new Directory({ fileSystem })
+    const tsFile = await directory.getFile('components', 'ts')
+    expect(tsFile.getPath()).toBe('/components')
+
+    const mdxFile = await directory.getFile('components', 'mdx')
+    expect(mdxFile.getPath()).toBe('/components')
   })
 })
