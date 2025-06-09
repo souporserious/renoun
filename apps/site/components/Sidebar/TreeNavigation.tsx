@@ -17,7 +17,7 @@ async function ListNavigation({
   entry: FileSystemEntry<any>
   variant?: 'name' | 'title'
 }) {
-  const path = entry.getPath()
+  const path = entry.getRoutePath()
   const depth = entry.getDepth()
   const metadata =
     variant === 'title' && (isJavaScriptFile(entry) || isMDXFile(entry))
@@ -104,7 +104,7 @@ async function ListNavigation({
       <ul style={listStyles}>
         {entries.map((childEntry) => (
           <ListNavigation
-            key={childEntry.getPath()}
+            key={childEntry.getRoutePath()}
             entry={childEntry}
             variant={variant}
           />
@@ -136,7 +136,7 @@ export async function TreeNavigation({
       {entries.map((entry) => {
         return (
           <ListNavigation
-            key={entry.getPath()}
+            key={entry.getRoutePath()}
             entry={entry}
             variant={variant}
           />

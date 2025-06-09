@@ -5,7 +5,7 @@ export async function generateStaticParams() {
   const entries = await DocsCollection.getEntries()
 
   return entries.map((entry) => ({
-    slug: entry.getPathSegments({ includeBasePath: false }),
+    slug: entry.getRouteSegments({ includeBasePath: false }),
   }))
 }
 

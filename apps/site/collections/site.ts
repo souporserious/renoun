@@ -20,7 +20,6 @@ const mdxSchema = {
 
 export const DocsCollection = new Directory({
   path: 'docs',
-  basePath: 'docs',
   loaders: {
     mdx: withSchema(mdxSchema, (path) => import(`@/docs/${path}.mdx`)),
   },
@@ -29,7 +28,6 @@ export const DocsCollection = new Directory({
 
 export const GuidesCollection = new Directory({
   path: 'guides',
-  basePath: 'guides',
   loaders: {
     mdx: withSchema(mdxSchema, (path) => import(`@/guides/${path}.mdx`)),
   },
