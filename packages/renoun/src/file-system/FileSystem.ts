@@ -53,7 +53,7 @@ export abstract class FileSystem {
     return relativePath(rootDirectory, this.getAbsolutePath(path))
   }
 
-  getPath(path: string, options: { basePath?: string } = {}) {
+  getRoutePath(path: string, options: { basePath?: string } = {}) {
     const relativePath = this.getRelativePath(
       removeAllExtensions(removeOrderPrefixes(path))
     )

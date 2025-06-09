@@ -19,7 +19,7 @@ export async function generateStaticParams() {
   const entries = await ComponentsCollection.getEntries({ recursive: true })
 
   return entries.map((entry) => ({
-    slug: entry.getPathSegments({ includeBasePath: false }),
+    slug: entry.getRouteSegments({ includeBasePath: false }),
   }))
 }
 

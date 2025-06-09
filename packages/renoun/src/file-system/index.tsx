@@ -261,6 +261,7 @@ export interface FileOptions<
   Path extends string = string,
 > {
   path: Path
+  baseRoutePath?: string
   slugCasing?: SlugCasings
   depth?: number
   directory?: Directory<
@@ -283,6 +284,7 @@ export class File<
   #order?: string
   #extension?: Extension
   #path: string
+  #baseRoutePath?: string
   #slugCasing: SlugCasings
   #depth: number
   #directory: Directory<DirectoryTypes>
@@ -290,6 +292,7 @@ export class File<
   constructor(options: FileOptions<DirectoryTypes, Path>) {
     this.#name = baseName(options.path)
     this.#path = options.path
+    this.#baseRoutePath = options.baseRoutePath
     this.#slugCasing = options.slugCasing ?? 'kebab'
     this.#depth = options.depth ?? 0
     this.#directory = options.directory ?? new Directory()
@@ -349,20 +352,20 @@ export class File<
   }
 
   /**
-   * Get the path of the file excluding the file extension and order prefix.
-   * The configured `slugCasing` option will be used to format the path segments.
+   * Get the path of this file formatted for routes. The configured `slugCasing`
+   * option will be used to format each segment.
    */
-  getPath(options?: {
-    includeBasePath?: boolean
+  getRoutePath(options?: {
+    includeBasePath?: string
     includeDuplicateSegments?: boolean
   }) {
     const includeBasePath = options?.includeBasePath ?? true
     const includeDuplicateSegments = options?.includeDuplicateSegments ?? false
     const fileSystem = this.#directory.getFileSystem()
-    const basePath = this.#directory.getBasePath()
-    let path = fileSystem.getPath(
+
+    let path = fileSystem.getRoutePath(
       this.#path,
-      includeBasePath ? { basePath } : undefined
+      includeBasePath ? { basePath: this.#baseRoutePath } : undefined
     )
 
     if (!includeDuplicateSegments || this.#slugCasing !== 'none') {
@@ -397,15 +400,15 @@ export class File<
     return path
   }
 
-  /** Get the path segments of the file. */
-  getPathSegments(options?: {
-    includeBasePath?: boolean
+  /** Get the route path segments for this file. */
+  getRouteSegments(options?: {
+    includeBasePath?: string
     includeDuplicateSegments?: boolean
   }) {
-    const includeBasePath = options?.includeBasePath ?? true
-    const includeDuplicateSegments = options?.includeDuplicateSegments ?? false
-
-    return this.getPath({ includeBasePath, includeDuplicateSegments })
+    return this.getRoutePath({
+      includeBasePath: options?.includeBasePath,
+      includeDuplicateSegments: options?.includeDuplicateSegments ?? false,
+    })
       .split('/')
       .filter(Boolean)
   }
@@ -504,7 +507,7 @@ export class File<
     return gitMetadata.authors
   }
 
-  /** Get the directory containing this file. */
+  /** Get the parent directory containing this file. */
   getParent() {
     return this.#directory
   }
@@ -534,17 +537,17 @@ export class File<
     const entries = await (options?.entryGroup
       ? options.entryGroup.getEntries({ recursive: true })
       : this.#directory.getEntries())
-    const path = this.getPath({
+    const path = this.getRoutePath({
       includeDuplicateSegments: options?.includeDuplicateSegments,
     })
-    const index = entries.findIndex((entry) => entry.getPath() === path)
+    const index = entries.findIndex((entry) => entry.getRoutePath() === path)
     const previous = index > 0 ? entries[index - 1] : undefined
     const next = index < entries.length - 1 ? entries[index + 1] : undefined
 
     return [previous, next]
   }
 
-  /** Get the source text of the file. */
+  /** Get the source text of this file. */
   async getText(): Promise<string> {
     const fileSystem = this.#directory.getFileSystem()
     return fileSystem.readFile(this.#path)
@@ -1361,19 +1364,19 @@ export interface DirectoryOptions<
   /** The path to the directory in the file system. */
   path?: string
 
-  /** A filter function or [minimatch](https://github.com/isaacs/minimatch?tab=readme-ov-file#minimatch) pattern used to include specific entries. When using a string, file paths are resolved relative to the working directory. */
+  /** A filter function or [minimatch](https://github.com/isaacs/minimatch?tab=readme-ov-file#minimatch) pattern used to include specific entries. When using a minimatch pattern, file paths are resolved relative to the working directory. */
   include?: Include
 
   /** The extension definitions to use for loading and validating file exports. */
   loaders?: Loaders
 
-  /** The base path to apply to all descendant entry `getPath` and `getPathSegments` methods. */
-  basePath?: string
+  /** The base route path to prepend to all descendant entry `getRoutePath` and `getRouteSegments` methods. Defaults entries to their root directory slug. */
+  baseRoutePath?: string
 
   /** The tsconfig.json file path to use for type checking and analyzing JavaScript and TypeScript files. */
   tsConfigPath?: string
 
-  /** The slug casing to apply to all descendant entry `getPath`, `getPathSegments`, and `getSlug` methods. */
+  /** The casing to apply to all descendant entry `getRoutePath`, `getRouteSegments`, and `getSlug` methods. */
   slugCasing?: SlugCasings
 
   /** The file system to use for reading directory entries. */
@@ -1398,9 +1401,9 @@ export class Directory<
 > {
   #path: string
   #depth: number = -1
-  #slugCasing: SlugCasings
-  #basePath?: string
+  #baseRoutePath?: string
   #tsConfigPath?: string
+  #slugCasing: SlugCasings
   #loaders?: Loaders
   #directory?: Directory<any, any, any>
   #fileSystem: FileSystem | undefined
@@ -1426,6 +1429,15 @@ export class Directory<
     } else {
       this.#path = ensureRelativePath(options.path)
       this.#loaders = options.loaders
+      this.#baseRoutePath = this.#baseRoutePath =
+        options.baseRoutePath === undefined
+          ? this.#directory
+            ? this.#directory.getSlug()
+            : undefined
+          : options.baseRoutePath
+      this.#tsConfigPath = options.tsConfigPath
+      this.#slugCasing = options.slugCasing ?? 'kebab'
+      this.#fileSystem = options.fileSystem
       if (typeof options.include === 'string') {
         this.#includePattern = options.include
         this.#include = new Minimatch(options.include, { dot: true })
@@ -1433,10 +1445,6 @@ export class Directory<
         this.#include = options.include
       }
       this.#sort = options.sort as any
-      this.#basePath = options.basePath
-      this.#slugCasing = options.slugCasing ?? 'kebab'
-      this.#tsConfigPath = options.tsConfigPath
-      this.#fileSystem = options.fileSystem
     }
   }
 
@@ -1462,17 +1470,17 @@ export class Directory<
     >({
       path: this.#path,
       fileSystem: this.#fileSystem,
+      baseRoutePath: this.#baseRoutePath,
+      tsConfigPath: this.#tsConfigPath,
+      slugCasing: this.#slugCasing,
+      loaders: this.#loaders,
+      include: this.#include as any,
+      sort: this.#sort,
       ...options,
     })
 
     directory.#pathLookup = this.#pathLookup
     directory.#depth = this.#depth
-    directory.#tsConfigPath = this.#tsConfigPath
-    directory.#slugCasing = this.#slugCasing
-    directory.#basePath = this.#basePath
-    directory.#loaders = this.#loaders
-    directory.#sort = this.#sort
-    directory.#include = this.#include
 
     return directory
   }
@@ -1533,10 +1541,10 @@ export class Directory<
       includeIndexAndReadme: true,
       includeTsConfigIgnoredFiles: true,
     })
-    const [current, ...rest] = segments
+    const [currentSegment, ...remainingSegments] = segments
 
-    // If the current segment is empty, we are at the root of the directory.
-    if (!current) {
+    // If the current segment is empty, we are at the root of this directory.
+    if (!currentSegment) {
       return directory
     }
 
@@ -1545,13 +1553,13 @@ export class Directory<
     for (const entry of entries) {
       const baseSlug = createSlug(entry.getBaseName(), this.#slugCasing)
 
-      if (entry instanceof Directory && baseSlug === current) {
-        return rest.length === 0
+      if (entry instanceof Directory && baseSlug === currentSegment) {
+        return remainingSegments.length === 0
           ? entry
-          : this.#findEntry(entry, rest, allExtensions)
+          : this.#findEntry(entry, remainingSegments, allExtensions)
       }
 
-      if (!(entry instanceof File) || baseSlug !== current) {
+      if (!(entry instanceof File) || baseSlug !== currentSegment) {
         continue
       }
 
@@ -1561,9 +1569,9 @@ export class Directory<
         : true
 
       // e.g. "Button/examples" → modifier must match the tail segment
-      if (rest.length === 1 && modifier) {
+      if (remainingSegments.length === 1 && modifier) {
         if (
-          createSlug(modifier, this.#slugCasing) === rest[0] &&
+          createSlug(modifier, this.#slugCasing) === remainingSegments[0] &&
           matchesExtension
         ) {
           return entry
@@ -1572,7 +1580,7 @@ export class Directory<
       }
 
       // plain "Button" (no modifier segment)
-      if (rest.length === 0 && matchesExtension) {
+      if (remainingSegments.length === 0 && matchesExtension) {
         // Prefer the base file, fall back to file‑with‑modifier if nothing else
         if (
           !fallback ||
@@ -1809,12 +1817,11 @@ export class Directory<
    * entire directory tree to find a file or directory that has already been created.
    */
   #addPathLookup(entry: FileSystemEntry<LoaderTypes>) {
-    const canonicalPath = entry.getPath()
-    this.#pathLookup.set(canonicalPath, entry)
+    const routePath = entry.getRoutePath()
+    this.#pathLookup.set(routePath, entry)
 
-    const normalizedPath = canonicalPath
-      .replace(/^\.\/?/, '')
-      .replace(/\/$/, '')
+    // Remove leading and trailing slashes
+    const normalizedPath = routePath.replace(/^\.\/?/, '').replace(/\/$/, '')
     this.#pathLookup.set(normalizedPath, entry)
   }
 
@@ -1940,6 +1947,7 @@ export class Directory<
               path: entry.path,
               depth: nextDepth,
               directory: thisDirectory,
+              baseRoutePath: this.#baseRoutePath,
               slugCasing: this.#slugCasing,
               loader,
             })
@@ -1948,6 +1956,7 @@ export class Directory<
                 path: entry.path,
                 depth: nextDepth,
                 directory: thisDirectory,
+                baseRoutePath: this.#baseRoutePath,
                 slugCasing: this.#slugCasing,
                 loader,
               })
@@ -1955,6 +1964,7 @@ export class Directory<
                 path: entry.path,
                 depth: nextDepth,
                 directory: thisDirectory,
+                baseRoutePath: this.#baseRoutePath,
                 slugCasing: this.#slugCasing,
               })
 
@@ -2021,7 +2031,7 @@ export class Directory<
     return entries as any
   }
 
-  /** Get the directory containing this directory. */
+  /** Get the parent directory containing this directory. */
   getParent() {
     if (this.#directory) {
       return this.#directory
@@ -2053,9 +2063,9 @@ export class Directory<
       return [undefined, undefined]
     }
 
-    const path = this.getPath()
+    const path = this.getRoutePath()
     const index = entries.findIndex(
-      (entryToCompare) => entryToCompare.getPath() === path
+      (entryToCompare) => entryToCompare.getRoutePath() === path
     )
     const previous = index > 0 ? entries[index - 1] : undefined
     const next = index < entries.length - 1 ? entries[index + 1] : undefined
@@ -2063,17 +2073,17 @@ export class Directory<
     return [previous, next]
   }
 
-  /** Get the slug of the directory. */
+  /** Get the slug of this directory. */
   getSlug() {
     return createSlug(this.getBaseName(), this.#slugCasing)
   }
 
-  /** Get the base name of the directory. */
+  /** Get the base name of this directory. */
   getName() {
     return this.getBaseName()
   }
 
-  /** Get the base name of the directory. */
+  /** Get the base name of this directory. */
   getBaseName() {
     return removeOrderPrefixes(baseName(this.#path))
   }
@@ -2083,13 +2093,16 @@ export class Directory<
     return formatNameAsTitle(this.getName())
   }
 
-  /** Get a URL-friendly path to the directory. */
-  getPath(options?: { includeBasePath?: boolean }) {
+  /** Get a URL-friendly path to this directory. */
+  getRoutePath(options?: {
+    /** Include a base path in the route path. */
+    includeBasePath?: string
+  }) {
     const includeBasePath = options?.includeBasePath ?? true
     const fileSystem = this.getFileSystem()
-    const path = fileSystem.getPath(
+    const path = fileSystem.getRoutePath(
       this.#path,
-      includeBasePath ? { basePath: this.#basePath } : undefined
+      includeBasePath ? { basePath: this.#baseRoutePath } : undefined
     )
 
     if (this.#slugCasing === 'none') {
@@ -2105,19 +2118,12 @@ export class Directory<
     return segments.join('/')
   }
 
-  /** Get the path segments to the directory. */
-  getPathSegments(options?: { includeBasePath?: boolean }) {
-    const includeBasePath = options?.includeBasePath ?? true
-
-    return this.getPath({ includeBasePath }).split('/').filter(Boolean)
+  /** Get the route path segments to this directory. */
+  getRouteSegments(options?: { includeBasePath?: string }) {
+    return this.getRoutePath(options).split('/').filter(Boolean)
   }
 
-  /** Get the configured base path of the directory. */
-  getBasePath() {
-    return this.#basePath
-  }
-
-  /** Get the relative path of the directory. */
+  /** Get the relative path of this directory. */
   getRelativePath() {
     return this.getFileSystem().getRelativePath(this.#path)
   }
@@ -2127,7 +2133,7 @@ export class Directory<
     return this.getFileSystem().getRelativePathToWorkspace(this.#path)
   }
 
-  /** Get the absolute path of the directory. */
+  /** Get the absolute path of this directory. */
   getAbsolutePath() {
     return this.getFileSystem().getAbsolutePath(this.#path)
   }
@@ -2164,19 +2170,19 @@ export class Directory<
     return getEditorUri({ path: this.getAbsolutePath() })
   }
 
-  /** Get the first local git commit date of the directory. */
+  /** Get the first local git commit date of this directory. */
   async getFirstCommitDate() {
     const gitMetadata = await getLocalGitFileMetadata(this.#path)
     return gitMetadata.firstCommitDate
   }
 
-  /** Get the last local git commit date of the directory. */
+  /** Get the last local git commit date of this directory. */
   async getLastCommitDate() {
     const gitMetadata = await getLocalGitFileMetadata(this.#path)
     return gitMetadata.lastCommitDate
   }
 
-  /** Get the local git authors of the directory. */
+  /** Get the local git authors of this directory. */
   async getAuthors() {
     const gitMetadata = await getLocalGitFileMetadata(this.#path)
     return gitMetadata.authors
