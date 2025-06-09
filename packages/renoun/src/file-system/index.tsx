@@ -356,7 +356,7 @@ export class File<
    * option will be used to format each segment.
    */
   getRoutePath(options?: {
-    includeBasePath?: string
+    includeBasePath?: boolean
     includeDuplicateSegments?: boolean
   }) {
     const includeBasePath = options?.includeBasePath ?? true
@@ -402,15 +402,10 @@ export class File<
 
   /** Get the route path segments for this file. */
   getRouteSegments(options?: {
-    includeBasePath?: string
+    includeBasePath?: boolean
     includeDuplicateSegments?: boolean
   }) {
-    return this.getRoutePath({
-      includeBasePath: options?.includeBasePath,
-      includeDuplicateSegments: options?.includeDuplicateSegments ?? false,
-    })
-      .split('/')
-      .filter(Boolean)
+    return this.getRoutePath(options).split('/').filter(Boolean)
   }
 
   /** Get the file path relative to the root directory. */
@@ -2094,10 +2089,7 @@ export class Directory<
   }
 
   /** Get a URL-friendly path to this directory. */
-  getRoutePath(options?: {
-    /** Include a base path in the route path. */
-    includeBasePath?: string
-  }) {
+  getRoutePath(options?: { includeBasePath?: boolean }) {
     const includeBasePath = options?.includeBasePath ?? true
     const fileSystem = this.getFileSystem()
     const path = fileSystem.getRoutePath(
@@ -2119,7 +2111,7 @@ export class Directory<
   }
 
   /** Get the route path segments to this directory. */
-  getRouteSegments(options?: { includeBasePath?: string }) {
+  getRouteSegments(options?: { includeBasePath?: boolean }) {
     return this.getRoutePath(options).split('/').filter(Boolean)
   }
 
