@@ -70,7 +70,7 @@ export default async function Component({
   if (isDirectory(examplesEntry)) {
     exampleFiles = await examplesEntry
       .getEntries({
-        includeIndexAndReadme: true,
+        includeIndexAndReadmeFiles: true,
         includeTsConfigIgnoredFiles: true,
       })
       .then((entries) => entries.filter((entry) => isFile(entry, 'tsx')))

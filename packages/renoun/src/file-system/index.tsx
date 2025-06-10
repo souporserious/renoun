@@ -1533,7 +1533,7 @@ export class Directory<
     // Always hydrate this directory once and populate its lookup map.
     const entries = await directory.getEntries({
       includeDuplicates: true,
-      includeIndexAndReadme: true,
+      includeIndexAndReadmeFiles: true,
       includeTsConfigIgnoredFiles: true,
     })
     const [currentSegment, ...remainingSegments] = segments
@@ -1697,7 +1697,7 @@ export class Directory<
     if (entry instanceof Directory) {
       const directoryEntries = await entry.getEntries({
         includeDuplicates: true,
-        includeIndexAndReadme: true,
+        includeIndexAndReadmeFiles: true,
       })
 
       // Find a representative file in the directory
@@ -1831,7 +1831,7 @@ export class Directory<
         ? boolean
         : undefined
       : boolean
-    includeIndexAndReadme?: boolean
+    includeIndexAndReadmeFiles?: boolean
     includeDuplicates?: boolean
     includeGitIgnoredFiles?: boolean
     includeTsConfigIgnoredFiles?: boolean
@@ -1857,8 +1857,8 @@ export class Directory<
     if (process.env.NODE_ENV === 'production') {
       if (options) {
         cacheKey += options.recursive ? 'r' : ''
-        cacheKey += options.includeIndexAndReadme ? 'i' : ''
         cacheKey += options.includeDuplicates ? 'd' : ''
+        cacheKey += options.includeIndexAndReadmeFiles ? 'i' : ''
         cacheKey += options.includeGitIgnoredFiles ? 'g' : ''
         cacheKey += options.includeTsConfigIgnoredFiles ? 't' : ''
       }
@@ -1877,7 +1877,7 @@ export class Directory<
     const nextDepth = this.#depth + 1
 
     for (const entry of directoryEntries) {
-      const shouldSkipIndexOrReadme = options?.includeIndexAndReadme
+      const shouldSkipIndexOrReadme = options?.includeIndexAndReadmeFiles
         ? false
         : ['index', 'readme'].some((name) =>
             entry.name.toLowerCase().startsWith(name)
@@ -2268,14 +2268,14 @@ export class EntryGroup<
     recursive?: boolean
 
     /** Include index and readme files in the group. */
-    includeIndexAndReadme?: boolean
+    includeIndexAndReadmeFiles?: boolean
   }): Promise<Entries> {
     const allEntries: FileSystemEntry<any>[] = []
 
     async function findEntries(entries: FileSystemEntry<any>[]) {
       for (const entry of entries) {
         const lowerCaseBaseName = entry.getBaseName().toLowerCase()
-        const shouldSkipIndexOrReadme = options?.includeIndexAndReadme
+        const shouldSkipIndexOrReadme = options?.includeIndexAndReadmeFiles
           ? false
           : ['index', 'readme'].some((name) =>
               lowerCaseBaseName.startsWith(name)

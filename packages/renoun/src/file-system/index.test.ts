@@ -127,7 +127,7 @@ describe('file system', () => {
     const directory = new Directory({ path: 'fixtures/project' })
     const entries = await directory.getEntries({
       recursive: true,
-      includeIndexAndReadme: true,
+      includeIndexAndReadmeFiles: true,
     })
 
     expect(entries.map((entry) => entry.getPathname())).toMatchInlineSnapshot(`
@@ -158,7 +158,7 @@ describe('file system', () => {
     const directory = new Directory({ fileSystem })
     const entries = await directory.getEntries({
       recursive: true,
-      includeIndexAndReadme: true,
+      includeIndexAndReadmeFiles: true,
     })
 
     expect(entries.map((entry) => entry.getAbsolutePath()))
