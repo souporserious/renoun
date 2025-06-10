@@ -25,6 +25,7 @@ import {
   FileExportNotFoundError,
 } from './index'
 import type { Expect, Is, IsNotAny } from './types'
+import type { Kind } from '../utils/resolve-type'
 
 describe('file system', () => {
   describe('File', () => {
@@ -448,7 +449,7 @@ describe('file system', () => {
           for (const fileExport of fileExports) {
             const tags = fileExport.getTags()
 
-            if (tags?.some((tag) => tag.tagName === 'internal')) {
+            if (tags?.some((tag) => tag.name === 'internal')) {
               return false
             }
           }
@@ -1068,7 +1069,7 @@ describe('file system', () => {
     expect(fileExport.getName()).toBe('hello')
     expect(fileExport.getDescription()).toBe('Say hello.')
     expect(fileExport.getTags()).toMatchObject([
-      { tagName: 'category', text: 'greetings' },
+      { name: 'category', text: 'greetings' },
     ])
     expect(await fileExport.getText()).toBe(statementText)
     expect(fileExport.getPosition()).toMatchInlineSnapshot(`
@@ -1105,11 +1106,11 @@ describe('file system', () => {
     const directory = new Directory({ fileSystem })
     const file = await directory.getFile('index', 'ts')
     const fileExport = await file.getExport('Metadata')
-    const type = await fileExport.getType()
+    const type = (await fileExport.getType()) as Kind.TypeLiteral
 
     expect(type).toBeDefined()
-    expect(type!.kind).toBe('Object')
-    expect(type!.name).toBe('Metadata')
+
+    expect(type!.kind).toBe('TypeLiteral')
   })
 
   test('getRuntimeValue resolves export runtime value from extension module', async () => {
