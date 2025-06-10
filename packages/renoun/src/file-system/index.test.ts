@@ -546,7 +546,7 @@ describe('file system', () => {
     const entries = await docs.getEntries({ recursive: true })
 
     expect(entries.every((entry) => entry.getExtension() === 'mdx')).toBe(true)
-    expect(entries).toHaveLength(2)
+    expect(entries).toHaveLength(4)
   })
 
   test('deduplicates entries', async () => {
@@ -583,13 +583,15 @@ describe('file system', () => {
     const directory = new Directory({ fileSystem })
     const entries = await directory.getEntries({ recursive: true })
 
-    expect(entries.map((entry) => entry.getRoutePath())).toMatchInlineSnapshot(`
+    expect(entries.map((entry) => entry.getRoutePath())).toMatchInlineSnapshot(
+      `
       [
         "/button",
         "/code-block",
         "/tsconfig",
       ]
-    `)
+    `
+    )
   })
 
   test('entry', async () => {
