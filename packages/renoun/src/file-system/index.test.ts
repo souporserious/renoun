@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react'
-import { describe, test, expect, expectTypeOf } from 'vitest'
+import { beforeAll, describe, test, expect, expectTypeOf } from 'vitest'
 import { runInNewContext } from 'node:vm'
 import * as v from 'valibot'
 import { z } from 'zod'
@@ -132,11 +132,11 @@ describe('file system', () => {
 
     expect(entries.map((entry) => entry.getRoutePath())).toMatchInlineSnapshot(`
       [
-        "/rpc",
-        "/rpc/client",
-        "/rpc/server",
-        "/server",
-        "/types",
+        "/project/rpc",
+        "/project/rpc/client",
+        "/project/rpc/server",
+        "/project/server",
+        "/project/types",
       ]
     `)
   })
@@ -738,11 +738,16 @@ describe('file system', () => {
   })
 
   describe('file name with modifier', async () => {
-    const fileSystem = new MemoryFileSystem({
-      'components/APIReference.examples.tsx': '',
-      'components/APIReference.tsx': '',
+    let fileSystem: MemoryFileSystem
+    let directory: Directory<any>
+
+    beforeAll(() => {
+      fileSystem = new MemoryFileSystem({
+        'components/APIReference.examples.tsx': '',
+        'components/APIReference.tsx': '',
+      })
+      directory = new Directory({ fileSystem })
     })
-    const directory = new Directory({ fileSystem })
 
     test('string path', async () => {
       const entry = await directory.getEntry('components/APIReference/examples')
@@ -1427,28 +1432,49 @@ describe('file system', () => {
   })
 
   test('directory getRoutePath prepends baseRoutePath', async () => {
-    const docs = new Directory({
-      path: 'docs',
-      fileSystem: new MemoryFileSystem({
-        'docs/intro.mdx': '',
-      }),
-    })
+    const docs = new Directory({ path: 'fixtures/docs' })
 
     expect(docs.getRoutePath()).toBe('/docs')
-    expect((await docs.getFile('intro')).getRoutePath()).toBe('/docs/intro')
+
+    expect((await docs.getFile('index', 'mdx')).getRoutePath()).toBe('/docs')
+
+    expect((await docs.getFile('getting-started', 'mdx')).getRoutePath()).toBe(
+      '/docs/getting-started'
+    )
+
+    const components = new Directory({ path: 'fixtures/components' })
+
+    expect(components.getRoutePath()).toBe('/components')
+
+    const file = await components.getFile('CodeBlock', 'tsx')
+
+    expect(file.getRoutePath()).toBe('/components/code-block')
+
+    const example = await components.getFile(
+      'CodeBlock/examples/BasicUsage',
+      'tsx'
+    )
+
+    expect(example.getRoutePath()).toBe(
+      '/components/code-block/examples/basic-usage'
+    )
+
+    const fileSystem = new MemoryFileSystem({
+      'guides/intro.mdx': '',
+    })
+
+    expect(new Directory({ path: 'guides', fileSystem }).getRoutePath()).toBe(
+      '/guides'
+    )
 
     const guides = new Directory({
       path: 'guides',
       baseRoutePath: 'docs',
-      fileSystem: new MemoryFileSystem({
-        'guides/intro.mdx': '',
-      }),
+      fileSystem,
     })
 
-    expect(guides.getRoutePath()).toBe('/docs/guides')
-    expect((await guides.getFile('intro')).getRoutePath()).toBe(
-      '/docs/guides/intro'
-    )
+    expect(guides.getRoutePath()).toBe('/docs')
+    expect((await guides.getFile('intro')).getRoutePath()).toBe('/docs/intro')
   })
 
   test('entry group', async () => {

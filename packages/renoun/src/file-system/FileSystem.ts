@@ -13,7 +13,6 @@ import {
   directoryName,
   joinPaths,
   relativePath,
-  ensureRelativePath,
   removeAllExtensions,
   removeOrderPrefixes,
 } from '../utils/path.js'
@@ -21,21 +20,16 @@ import type { SymbolFilter } from '../utils/resolve-type.js'
 import type { DirectoryEntry } from './types.js'
 
 export interface FileSystemOptions {
-  /** Root path to use when reading files. */
-  rootPath?: string
-
   /** Path to the tsconfig.json file to use when analyzing types and determining if a file is excluded. */
   tsConfigPath?: string
 }
 
 export abstract class FileSystem {
-  #rootPath: string
   #tsConfigPath: string
   #tsConfig?: Record<string, unknown>
   #exclude?: Minimatch[]
 
   constructor(options: FileSystemOptions = {}) {
-    this.#rootPath = options.rootPath || '/'
     this.#tsConfigPath = options.tsConfigPath || 'tsconfig.json'
   }
 
@@ -43,26 +37,32 @@ export abstract class FileSystem {
 
   abstract getAbsolutePath(path: string): string
 
-  getRelativePath(path: string) {
-    const rootPath = ensureRelativePath(this.#rootPath)
-    return relativePath(rootPath, path)
-  }
-
   getRelativePathToWorkspace(path: string) {
     const rootDirectory = getRootDirectory()
     return relativePath(rootDirectory, this.getAbsolutePath(path))
   }
 
-  getRoutePath(path: string, options: { basePath?: string } = {}) {
-    const relativePath = this.getRelativePath(
-      removeAllExtensions(removeOrderPrefixes(path))
+  getRoutePath(
+    path: string,
+    options: { basePath?: string; rootPath?: string } = {}
+  ) {
+    const rootRelativePath = options.rootPath
+      ? relativePath(options.rootPath, path)
+      : path
+
+    if (rootRelativePath === '') {
+      return joinPaths('/', options.basePath)
+    }
+
+    const resolvedPath = removeAllExtensions(
+      removeOrderPrefixes(rootRelativePath)
     )
       // remove leading dot
       .replace(/^\.\//, '')
       // remove trailing slash
       .replace(/\/$/, '')
 
-    return joinPaths('/', options.basePath, relativePath)
+    return joinPaths('/', options.basePath, resolvedPath)
   }
 
   abstract readDirectorySync(

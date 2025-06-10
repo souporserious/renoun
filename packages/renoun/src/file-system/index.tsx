@@ -27,6 +27,7 @@ import {
   removeExtension,
   removeAllExtensions,
   removeOrderPrefixes,
+  relativePath,
 } from '../utils/path.js'
 import type { SymbolFilter } from '../utils/resolve-type.js'
 import type { FileSystem } from './FileSystem.js'
@@ -362,11 +363,10 @@ export class File<
     const includeBasePath = options?.includeBasePath ?? true
     const includeDuplicateSegments = options?.includeDuplicateSegments ?? false
     const fileSystem = this.#directory.getFileSystem()
-
-    let path = fileSystem.getRoutePath(
-      this.#path,
-      includeBasePath ? { basePath: this.#baseRoutePath } : undefined
-    )
+    let path = fileSystem.getRoutePath(this.#path, {
+      basePath: includeBasePath ? this.#baseRoutePath : undefined,
+      rootPath: this.#directory.getRootPath(),
+    })
 
     if (!includeDuplicateSegments || this.#slugCasing !== 'none') {
       let parsedPath = path.split('/')
@@ -410,8 +410,8 @@ export class File<
 
   /** Get the file path relative to the root directory. */
   getRelativePath() {
-    const fileSystem = this.#directory.getFileSystem()
-    return fileSystem.getRelativePath(this.#path)
+    const rootPath = this.#directory.getRootPath()
+    return rootPath ? relativePath(rootPath, this.#path) : this.#path
   }
 
   /** Get the file path relative to the workspace root. */
@@ -1395,6 +1395,7 @@ export class Directory<
   > = EntryInclude<FileSystemEntry<LoaderTypes>, LoaderTypes>,
 > {
   #path: string
+  #rootPath?: string
   #depth: number = -1
   #baseRoutePath?: string
   #tsConfigPath?: string
@@ -1422,13 +1423,13 @@ export class Directory<
       this.#path = '.'
       this.#slugCasing = 'kebab'
     } else {
-      this.#path = ensureRelativePath(options.path)
+      this.#path = options.path ? ensureRelativePath(options.path) : '.'
       this.#loaders = options.loaders
       this.#baseRoutePath = this.#baseRoutePath =
         options.baseRoutePath === undefined
           ? this.#directory
             ? this.#directory.getSlug()
-            : undefined
+            : this.getSlug()
           : options.baseRoutePath
       this.#tsConfigPath = options.tsConfigPath
       this.#slugCasing = options.slugCasing ?? 'kebab'
@@ -1476,6 +1477,8 @@ export class Directory<
 
     directory.#pathLookup = this.#pathLookup
     directory.#depth = this.#depth
+    directory.#repository = this.#repository
+    directory.#rootPath = this.getRootPath()
 
     return directory
   }
@@ -1486,10 +1489,7 @@ export class Directory<
       return this.#fileSystem
     }
 
-    this.#fileSystem = new NodeFileSystem({
-      rootPath: this.#path,
-      tsConfigPath: this.#tsConfigPath,
-    })
+    this.#fileSystem = new NodeFileSystem({ tsConfigPath: this.#tsConfigPath })
 
     return this.#fileSystem
   }
@@ -1911,7 +1911,6 @@ export class Directory<
           path: entry.path,
         })
 
-        directory.#repository = this.#repository
         directory.#directory = thisDirectory
         directory.#depth = nextDepth
 
@@ -2026,6 +2025,11 @@ export class Directory<
     return entries as any
   }
 
+  /** Get the root directory path. */
+  getRootPath() {
+    return this.#rootPath ?? this.#path
+  }
+
   /** Get the parent directory containing this directory. */
   getParent() {
     if (this.#directory) {
@@ -2092,10 +2096,10 @@ export class Directory<
   getRoutePath(options?: { includeBasePath?: boolean }) {
     const includeBasePath = options?.includeBasePath ?? true
     const fileSystem = this.getFileSystem()
-    const path = fileSystem.getRoutePath(
-      this.#path,
-      includeBasePath ? { basePath: this.#baseRoutePath } : undefined
-    )
+    const path = fileSystem.getRoutePath(this.#path, {
+      basePath: includeBasePath ? this.#baseRoutePath : undefined,
+      rootPath: this.getRootPath(),
+    })
 
     if (this.#slugCasing === 'none') {
       return path
@@ -2117,7 +2121,8 @@ export class Directory<
 
   /** Get the relative path of this directory. */
   getRelativePath() {
-    return this.getFileSystem().getRelativePath(this.#path)
+    const rootPath = this.getRootPath()
+    return rootPath ? relativePath(rootPath, this.#path) : this.#path
   }
 
   /** Get the relative path of the directory to the workspace. */
