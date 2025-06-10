@@ -8,7 +8,6 @@ import {
   resolveTypeAtLocation,
 } from '../project/client.js'
 import type { ProjectOptions } from '../project/types.js'
-import { getRootDirectory } from '../utils/get-root-directory.js'
 import {
   directoryName,
   joinPaths,
@@ -37,12 +36,9 @@ export abstract class FileSystem {
 
   abstract getAbsolutePath(path: string): string
 
-  getRelativePathToWorkspace(path: string) {
-    const rootDirectory = getRootDirectory()
-    return relativePath(rootDirectory, this.getAbsolutePath(path))
-  }
+  abstract getRelativePathToWorkspace(path: string): string
 
-  getRoutePath(
+  getPathname(
     path: string,
     options: { basePath?: string; rootPath?: string } = {}
   ) {

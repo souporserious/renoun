@@ -33,7 +33,7 @@ export async function SiblingLink({
 
   return (
     <StyledLink
-      href={entry.getRoutePath()}
+      href={entry.getPathname()}
       css={{
         gridTemplateColumns:
           direction === 'previous' ? 'min-content auto' : 'auto min-content',

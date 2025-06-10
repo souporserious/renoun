@@ -186,11 +186,11 @@ export default async function Page() {
       <h1>Blog</h1>
       <ul>
         {allPosts.map((post) => {
-          const path = post.getRoutePath()
+          const pathname = post.getPathname()
 
           return (
-            <li key={path}>
-              <Link href={path}>{post.getTitle()}</Link>
+            <li key={pathname}>
+              <Link href={pathname}>{post.getTitle()}</Link>
             </li>
           )
         })}

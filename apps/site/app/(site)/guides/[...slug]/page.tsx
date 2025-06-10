@@ -5,7 +5,7 @@ export async function generateStaticParams() {
   const entries = await GuidesCollection.getEntries()
 
   return entries.map((entry) => ({
-    slug: entry.getRouteSegments({ includeBasePath: false }),
+    slug: entry.getPathnameSegments({ includeBasePathname: false }),
   }))
 }
 

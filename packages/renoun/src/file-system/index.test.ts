@@ -130,7 +130,7 @@ describe('file system', () => {
       includeIndexAndReadme: true,
     })
 
-    expect(entries.map((entry) => entry.getRoutePath())).toMatchInlineSnapshot(`
+    expect(entries.map((entry) => entry.getPathname())).toMatchInlineSnapshot(`
       [
         "/project/rpc",
         "/project/rpc/client",
@@ -238,7 +238,7 @@ describe('file system', () => {
     const directory = new Directory({ fileSystem, slugCasing: 'none' })
     const entries = await directory.getEntries({ recursive: true })
 
-    expect(entries.map((entry) => entry.getRoutePath())).toEqual([
+    expect(entries.map((entry) => entry.getPathname())).toEqual([
       '/Button',
       '/Button/IconButton',
     ])
@@ -583,7 +583,7 @@ describe('file system', () => {
     const directory = new Directory({ fileSystem })
     const entries = await directory.getEntries({ recursive: true })
 
-    expect(entries.map((entry) => entry.getRoutePath())).toMatchInlineSnapshot(
+    expect(entries.map((entry) => entry.getPathname())).toMatchInlineSnapshot(
       `
       [
         "/button",
@@ -818,11 +818,11 @@ describe('file system', () => {
   test('chooses entry with same name as directory when bare file path', async () => {
     const directory = new Directory({
       path: 'fixtures/components',
-      baseRoutePath: 'components',
+      basePathname: 'components',
     })
     const file = await directory.getFile('Box')
 
-    expect(file.getRelativePath()).toBe('Box/Box.tsx')
+    expect(file.getRelativePathToRoot()).toBe('Box/Box.tsx')
   })
 
   test('finds file with specific extension starting at directory', async () => {
@@ -848,8 +848,8 @@ describe('file system', () => {
     expect(file).toBeInstanceOf(File)
     expect(file.getName()).toBe('01.server.ts')
     expect(file.getBaseName()).toBe('server')
-    expect(file.getRoutePath()).toBe('/server')
-    expect(file.getRouteSegments()).toStrictEqual(['server'])
+    expect(file.getPathname()).toBe('/server')
+    expect(file.getPathnameSegments()).toStrictEqual(['server'])
   })
 
   test('nested ordered files', async () => {
@@ -860,7 +860,7 @@ describe('file system', () => {
     const directory = new Directory({ fileSystem })
     const entries = await directory.getEntries({ recursive: true })
 
-    expect(entries.map((entry) => entry.getRoutePath())).toMatchObject([
+    expect(entries.map((entry) => entry.getPathname())).toMatchObject([
       '/docs',
       '/docs/getting-started',
       '/getting-started',
@@ -878,11 +878,11 @@ describe('file system', () => {
     })
     const file = await rootDirectory.getFile('button')
 
-    expect(file.getRoutePath()).toBe('/button')
+    expect(file.getPathname()).toBe('/button')
 
     const directory = await rootDirectory.getDirectory('card')
 
-    expect(directory.getRoutePath()).toBe('/card')
+    expect(directory.getPathname()).toBe('/card')
   })
 
   test('deduplicate file path segments', async () => {
@@ -892,14 +892,14 @@ describe('file system', () => {
     const directory = new Directory({ fileSystem })
     const file = await directory.getFile('Button/Button', 'tsx')
 
-    expect(file.getRoutePath()).toEqual('/button')
-    expect(file.getRouteSegments()).toStrictEqual(['button'])
+    expect(file.getPathname()).toEqual('/button')
+    expect(file.getPathnameSegments()).toStrictEqual(['button'])
 
-    expect(file.getRoutePath({ includeDuplicateSegments: true })).toEqual(
+    expect(file.getPathname({ includeDuplicateSegments: true })).toEqual(
       '/button/button'
     )
     expect(
-      file.getRouteSegments({ includeDuplicateSegments: true })
+      file.getPathnameSegments({ includeDuplicateSegments: true })
     ).toStrictEqual(['button', 'button'])
   })
 
@@ -1238,7 +1238,7 @@ describe('file system', () => {
   test('generates tree navigation', async () => {
     const projectDirectory = new Directory({
       path: 'fixtures/project',
-      baseRoutePath: 'project',
+      basePathname: 'project',
     })
 
     type TreeEntry = {
@@ -1252,7 +1252,7 @@ describe('file system', () => {
       entry: Entry
     ): Promise<TreeEntry> {
       const name = entry.getName()
-      const path = entry.getRoutePath()
+      const path = entry.getPathname()
       const depth = entry.getDepth()
 
       if (isFile(entry)) {
@@ -1314,15 +1314,15 @@ describe('file system', () => {
     expect(readmeFile.getParent().getBaseName()).toBe('components')
   })
 
-  test('adds route base path to entry getRoutePath and getRouteSegments', async () => {
+  test('adds route base path to entry getPathname and getPathnameSegments', async () => {
     const projectDirectory = new Directory({
       path: 'fixtures/project',
-      baseRoutePath: 'renoun',
+      basePathname: 'renoun',
     })
     const file = await projectDirectory.getFile('server', 'ts')
 
-    expect(file.getRoutePath()).toBe('/renoun/server')
-    expect(file.getRouteSegments()).toEqual(['renoun', 'server'])
+    expect(file.getPathname()).toBe('/renoun/server')
+    expect(file.getPathnameSegments()).toEqual(['renoun', 'server'])
   })
 
   test('uses file name for anonymous default export metadata', async () => {
@@ -1431,31 +1431,31 @@ describe('file system', () => {
     }
   })
 
-  test('directory getRoutePath prepends baseRoutePath', async () => {
+  test('directory getPathname prepends basePathname', async () => {
     const docs = new Directory({ path: 'fixtures/docs' })
 
-    expect(docs.getRoutePath()).toBe('/docs')
+    expect(docs.getPathname()).toBe('/docs')
 
-    expect((await docs.getFile('index', 'mdx')).getRoutePath()).toBe('/docs')
+    expect((await docs.getFile('index', 'mdx')).getPathname()).toBe('/docs')
 
-    expect((await docs.getFile('getting-started', 'mdx')).getRoutePath()).toBe(
+    expect((await docs.getFile('getting-started', 'mdx')).getPathname()).toBe(
       '/docs/getting-started'
     )
 
     const components = new Directory({ path: 'fixtures/components' })
 
-    expect(components.getRoutePath()).toBe('/components')
+    expect(components.getPathname()).toBe('/components')
 
     const file = await components.getFile('CodeBlock', 'tsx')
 
-    expect(file.getRoutePath()).toBe('/components/code-block')
+    expect(file.getPathname()).toBe('/components/code-block')
 
     const example = await components.getFile(
       'CodeBlock/examples/BasicUsage',
       'tsx'
     )
 
-    expect(example.getRoutePath()).toBe(
+    expect(example.getPathname()).toBe(
       '/components/code-block/examples/basic-usage'
     )
 
@@ -1463,18 +1463,18 @@ describe('file system', () => {
       'guides/intro.mdx': '',
     })
 
-    expect(new Directory({ path: 'guides', fileSystem }).getRoutePath()).toBe(
+    expect(new Directory({ path: 'guides', fileSystem }).getPathname()).toBe(
       '/guides'
     )
 
     const guides = new Directory({
       path: 'guides',
-      baseRoutePath: 'docs',
+      basePathname: 'docs',
       fileSystem,
     })
 
-    expect(guides.getRoutePath()).toBe('/docs')
-    expect((await guides.getFile('intro')).getRoutePath()).toBe('/docs/intro')
+    expect(guides.getPathname()).toBe('/docs')
+    expect((await guides.getFile('intro')).getPathname()).toBe('/docs/intro')
   })
 
   test('entry group', async () => {
@@ -1553,10 +1553,10 @@ describe('file system', () => {
       await directory.getSiblings({ entryGroup: group })
 
     expect(previousDirectoryEntry).toBeDefined()
-    expect(previousDirectoryEntry!.getRoutePath()).toBe('/docs/next-steps')
+    expect(previousDirectoryEntry!.getPathname()).toBe('/docs/next-steps')
 
     expect(nextDirectoryEntry).toBeDefined()
-    expect(nextDirectoryEntry!.getRoutePath()).toBe('/guides/intro')
+    expect(nextDirectoryEntry!.getPathname()).toBe('/guides/intro')
 
     const file = await group.getFile('guides/intro')
     const [previousFileEntry, nextFileEntry] = await file.getSiblings({
@@ -1564,10 +1564,10 @@ describe('file system', () => {
     })
 
     expect(previousFileEntry).toBeDefined()
-    expect(previousFileEntry!.getRoutePath()).toBe('/guides')
+    expect(previousFileEntry!.getPathname()).toBe('/guides')
 
     expect(nextFileEntry).toBeDefined()
-    expect(nextFileEntry!.getRoutePath()).toBe('/guides/next-steps')
+    expect(nextFileEntry!.getPathname()).toBe('/guides/next-steps')
   })
 
   test('multiple extensions in entry group', async () => {
@@ -1611,12 +1611,12 @@ describe('file system', () => {
     const componentEntry = await entryGroup.getEntry(['docs', 'Button'])
 
     expect(componentEntry).toBeDefined()
-    expect(componentEntry.getRoutePath()).toBe('/docs/button')
+    expect(componentEntry.getPathname()).toBe('/docs/button')
 
     const componentFile = await entryGroup.getFile(['docs', 'Button'], 'mdx')
 
     expect(componentFile).toBeDefined()
-    expect(componentFile.getRoutePath()).toBe('/docs/button')
+    expect(componentFile.getPathname()).toBe('/docs/button')
   })
 
   test('has entry', async () => {
@@ -1782,7 +1782,7 @@ describe('file system', () => {
     })
     const paths = await directory
       .getEntries({ recursive: true })
-      .then((entries) => entries.map((entry) => entry.getRoutePath()))
+      .then((entries) => entries.map((entry) => entry.getPathname()))
     const files = await Promise.all(
       paths.map((path) => directory.getFile(path, 'mdx'))
     )
@@ -1790,16 +1790,16 @@ describe('file system', () => {
     expect(files).toBeDefined()
   })
 
-  test('getRoutePath trims index and readme paths', async () => {
+  test('getPathname trims index and readme paths', async () => {
     const fileSystem = new MemoryFileSystem({
       'components/index.ts': 'export const metadata = { title: "Components" }',
       'components/README.mdx': '# Components',
     })
     const directory = new Directory({ fileSystem })
     const tsFile = await directory.getFile('components', 'ts')
-    expect(tsFile.getRoutePath()).toBe('/components')
+    expect(tsFile.getPathname()).toBe('/components')
 
     const mdxFile = await directory.getFile('components', 'mdx')
-    expect(mdxFile.getRoutePath()).toBe('/components')
+    expect(mdxFile.getPathname()).toBe('/components')
   })
 })

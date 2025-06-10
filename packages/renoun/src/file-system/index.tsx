@@ -262,7 +262,7 @@ export interface FileOptions<
   Path extends string = string,
 > {
   path: Path
-  baseRoutePath?: string
+  basePathname?: string
   slugCasing?: SlugCasings
   depth?: number
   directory?: Directory<
@@ -285,7 +285,7 @@ export class File<
   #order?: string
   #extension?: Extension
   #path: string
-  #baseRoutePath?: string
+  #basePathname?: string
   #slugCasing: SlugCasings
   #depth: number
   #directory: Directory<DirectoryTypes>
@@ -293,7 +293,7 @@ export class File<
   constructor(options: FileOptions<DirectoryTypes, Path>) {
     this.#name = baseName(options.path)
     this.#path = options.path
-    this.#baseRoutePath = options.baseRoutePath
+    this.#basePathname = options.basePathname
     this.#slugCasing = options.slugCasing ?? 'kebab'
     this.#depth = options.depth ?? 0
     this.#directory = options.directory ?? new Directory()
@@ -356,15 +356,15 @@ export class File<
    * Get the path of this file formatted for routes. The configured `slugCasing`
    * option will be used to format each segment.
    */
-  getRoutePath(options?: {
-    includeBasePath?: boolean
+  getPathname(options?: {
+    includeBasePathname?: boolean
     includeDuplicateSegments?: boolean
   }) {
-    const includeBasePath = options?.includeBasePath ?? true
+    const includeBasePathname = options?.includeBasePathname ?? true
     const includeDuplicateSegments = options?.includeDuplicateSegments ?? false
     const fileSystem = this.#directory.getFileSystem()
-    let path = fileSystem.getRoutePath(this.#path, {
-      basePath: includeBasePath ? this.#baseRoutePath : undefined,
+    let path = fileSystem.getPathname(this.#path, {
+      basePath: includeBasePathname ? this.#basePathname : undefined,
       rootPath: this.#directory.getRootPath(),
     })
 
@@ -401,15 +401,15 @@ export class File<
   }
 
   /** Get the route path segments for this file. */
-  getRouteSegments(options?: {
-    includeBasePath?: boolean
+  getPathnameSegments(options?: {
+    includeBasePathname?: boolean
     includeDuplicateSegments?: boolean
   }) {
-    return this.getRoutePath(options).split('/').filter(Boolean)
+    return this.getPathname(options).split('/').filter(Boolean)
   }
 
   /** Get the file path relative to the root directory. */
-  getRelativePath() {
+  getRelativePathToRoot() {
     const rootPath = this.#directory.getRootPath()
     return rootPath ? relativePath(rootPath, this.#path) : this.#path
   }
@@ -532,10 +532,10 @@ export class File<
     const entries = await (options?.entryGroup
       ? options.entryGroup.getEntries({ recursive: true })
       : this.#directory.getEntries())
-    const path = this.getRoutePath({
+    const path = this.getPathname({
       includeDuplicateSegments: options?.includeDuplicateSegments,
     })
-    const index = entries.findIndex((entry) => entry.getRoutePath() === path)
+    const index = entries.findIndex((entry) => entry.getPathname() === path)
     const previous = index > 0 ? entries[index - 1] : undefined
     const next = index < entries.length - 1 ? entries[index + 1] : undefined
 
@@ -682,7 +682,7 @@ export class JavaScriptFileExport<Value> {
 
     if (location === undefined) {
       throw new Error(
-        `[renoun] Export cannot be statically analyzed at file path "${this.#file.getRelativePath()}".`
+        `[renoun] Export cannot be statically analyzed at file path "${this.#file.getRelativePathToRoot()}".`
       )
     }
 
@@ -740,7 +740,7 @@ export class JavaScriptFileExport<Value> {
 
     if (location === undefined) {
       throw new Error(
-        `[renoun] Export cannot not be statically analyzed at file path "${this.#file.getRelativePath()}".`
+        `[renoun] Export cannot not be statically analyzed at file path "${this.#file.getRelativePathToRoot()}".`
       )
     }
 
@@ -763,7 +763,7 @@ export class JavaScriptFileExport<Value> {
       )
     }
 
-    const path = removeExtension(this.#file.getRelativePath())
+    const path = removeExtension(this.#file.getRelativePathToRoot())
 
     if (isLoader(this.#loader)) {
       return this.#loader(path, this.#file)
@@ -846,14 +846,14 @@ export class JavaScriptFile<
 
   #getModule() {
     if (this.#loader === undefined) {
-      const parentPath = this.getParent().getRelativePath()
+      const parentPath = this.getParent().getRelativePathToRoot()
 
       throw new Error(
         `[renoun] A loader for the parent Directory at ${parentPath} is not defined.`
       )
     }
 
-    const path = removeExtension(this.getRelativePath())
+    const path = removeExtension(this.getRelativePathToRoot())
 
     if (isLoader(this.#loader)) {
       return this.#loader(path, this as any)
@@ -1171,7 +1171,7 @@ export class MDXFileExport<Value> {
       )
     }
 
-    const path = removeExtension(this.#file.getRelativePath())
+    const path = removeExtension(this.#file.getRelativePathToRoot())
 
     if (isLoader(this.#loader)) {
       return this.#loader(path, this.#file)
@@ -1298,14 +1298,14 @@ export class MDXFile<
 
   #getModule() {
     if (this.#loader === undefined) {
-      const parentPath = this.getParent().getRelativePath()
+      const parentPath = this.getParent().getRelativePathToRoot()
 
       throw new Error(
         `[renoun] An mdx loader for the parent Directory at ${parentPath} is not defined.`
       )
     }
 
-    const path = removeExtension(this.getRelativePath())
+    const path = removeExtension(this.getRelativePathToRoot())
 
     if (isLoader(this.#loader)) {
       return this.#loader(path, this as any)
@@ -1365,13 +1365,13 @@ export interface DirectoryOptions<
   /** The extension definitions to use for loading and validating file exports. */
   loaders?: Loaders
 
-  /** The base route path to prepend to all descendant entry `getRoutePath` and `getRouteSegments` methods. Defaults entries to their root directory slug. */
-  baseRoutePath?: string
+  /** The base route path to prepend to all descendant entry `getPathname` and `getPathnameSegments` methods. Defaults entries to their root directory slug. */
+  basePathname?: string
 
   /** The tsconfig.json file path to use for type checking and analyzing JavaScript and TypeScript files. */
   tsConfigPath?: string
 
-  /** The casing to apply to all descendant entry `getRoutePath`, `getRouteSegments`, and `getSlug` methods. */
+  /** The casing to apply to all descendant entry `getPathname`, `getPathnameSegments`, and `getSlug` methods. */
   slugCasing?: SlugCasings
 
   /** The file system to use for reading directory entries. */
@@ -1397,7 +1397,7 @@ export class Directory<
   #path: string
   #rootPath?: string
   #depth: number = -1
-  #baseRoutePath?: string
+  #basePathname?: string
   #tsConfigPath?: string
   #slugCasing: SlugCasings
   #loaders?: Loaders
@@ -1425,12 +1425,12 @@ export class Directory<
     } else {
       this.#path = options.path ? ensureRelativePath(options.path) : '.'
       this.#loaders = options.loaders
-      this.#baseRoutePath = this.#baseRoutePath =
-        options.baseRoutePath === undefined
+      this.#basePathname = this.#basePathname =
+        options.basePathname === undefined
           ? this.#directory
             ? this.#directory.getSlug()
             : this.getSlug()
-          : options.baseRoutePath
+          : options.basePathname
       this.#tsConfigPath = options.tsConfigPath
       this.#slugCasing = options.slugCasing ?? 'kebab'
       this.#fileSystem = options.fileSystem
@@ -1450,7 +1450,7 @@ export class Directory<
     }
 
     if (this.#include instanceof Minimatch) {
-      return this.#include.match(entry.getRelativePath())
+      return this.#include.match(entry.getRelativePathToRoot())
     }
 
     return this.#include(entry)
@@ -1466,7 +1466,7 @@ export class Directory<
     >({
       path: this.#path,
       fileSystem: this.#fileSystem,
-      baseRoutePath: this.#baseRoutePath,
+      basePathname: this.#basePathname,
       tsConfigPath: this.#tsConfigPath,
       slugCasing: this.#slugCasing,
       loaders: this.#loaders,
@@ -1812,7 +1812,7 @@ export class Directory<
    * entire directory tree to find a file or directory that has already been created.
    */
   #addPathLookup(entry: FileSystemEntry<LoaderTypes>) {
-    const routePath = entry.getRoutePath()
+    const routePath = entry.getPathname()
     this.#pathLookup.set(routePath, entry)
 
     // Remove leading and trailing slashes
@@ -1941,7 +1941,7 @@ export class Directory<
               path: entry.path,
               depth: nextDepth,
               directory: thisDirectory,
-              baseRoutePath: this.#baseRoutePath,
+              basePathname: this.#basePathname,
               slugCasing: this.#slugCasing,
               loader,
             })
@@ -1950,7 +1950,7 @@ export class Directory<
                 path: entry.path,
                 depth: nextDepth,
                 directory: thisDirectory,
-                baseRoutePath: this.#baseRoutePath,
+                basePathname: this.#basePathname,
                 slugCasing: this.#slugCasing,
                 loader,
               })
@@ -1958,7 +1958,7 @@ export class Directory<
                 path: entry.path,
                 depth: nextDepth,
                 directory: thisDirectory,
-                baseRoutePath: this.#baseRoutePath,
+                basePathname: this.#basePathname,
                 slugCasing: this.#slugCasing,
               })
 
@@ -2062,9 +2062,9 @@ export class Directory<
       return [undefined, undefined]
     }
 
-    const path = this.getRoutePath()
+    const path = this.getPathname()
     const index = entries.findIndex(
-      (entryToCompare) => entryToCompare.getRoutePath() === path
+      (entryToCompare) => entryToCompare.getPathname() === path
     )
     const previous = index > 0 ? entries[index - 1] : undefined
     const next = index < entries.length - 1 ? entries[index + 1] : undefined
@@ -2093,11 +2093,11 @@ export class Directory<
   }
 
   /** Get a URL-friendly path to this directory. */
-  getRoutePath(options?: { includeBasePath?: boolean }) {
-    const includeBasePath = options?.includeBasePath ?? true
+  getPathname(options?: { includeBasePathname?: boolean }) {
+    const includeBasePathname = options?.includeBasePathname ?? true
     const fileSystem = this.getFileSystem()
-    const path = fileSystem.getRoutePath(this.#path, {
-      basePath: includeBasePath ? this.#baseRoutePath : undefined,
+    const path = fileSystem.getPathname(this.#path, {
+      basePath: includeBasePathname ? this.#basePathname : undefined,
       rootPath: this.getRootPath(),
     })
 
@@ -2115,12 +2115,12 @@ export class Directory<
   }
 
   /** Get the route path segments to this directory. */
-  getRouteSegments(options?: { includeBasePath?: boolean }) {
-    return this.getRoutePath(options).split('/').filter(Boolean)
+  getPathnameSegments(options?: { includeBasePathname?: boolean }) {
+    return this.getPathname(options).split('/').filter(Boolean)
   }
 
-  /** Get the relative path of this directory. */
-  getRelativePath() {
+  /** Get the relative path of this directory to the root directory. */
+  getRelativePathToRoot() {
     const rootPath = this.getRootPath()
     return rootPath ? relativePath(rootPath, this.#path) : this.#path
   }
@@ -2137,11 +2137,8 @@ export class Directory<
 
   /** Get a URL to the directory for the configured git repository. */
   #getRepositoryUrl(options?: Omit<GetDirectoryUrlOptions, 'path'>) {
-    const repository = this.getRepository()
-    const fileSystem = this.getFileSystem()
-
-    return repository.getDirectoryUrl({
-      path: fileSystem.getRelativePathToWorkspace(this.#path),
+    return this.getRepository().getDirectoryUrl({
+      path: this.getRelativePathToWorkspace(),
       ...options,
     })
   }

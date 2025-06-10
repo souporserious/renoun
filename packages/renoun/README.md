@@ -306,12 +306,12 @@ export default async function Page() {
       <h1>Blog</h1>
       <ul>
         {allPosts.map(async (post) => {
-          const path = post.getRoutePath()
+          const pathname = post.getPathname()
           const frontmatter = await post.getExportValue('frontmatter')
 
           return (
-            <li key={path}>
-              <a href={path}>{frontmatter.title}</a>
+            <li key={pathname}>
+              <a href={pathname}>{frontmatter.title}</a>
             </li>
           )
         })}
