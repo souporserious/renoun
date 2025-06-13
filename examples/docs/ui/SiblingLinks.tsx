@@ -15,7 +15,7 @@ export function SiblingLinks({
     currentIndex < routes.length - 1 ? routes[currentIndex + 1] : null
 
   return (
-    <div className="fixed top-4 right-9 flex gap-1">
+    <div className="fixed top-4 right-10 flex gap-1">
       {previousPage ? (
         <Link
           href={previousPage.pathname}

@@ -7,7 +7,7 @@ export function SidebarOverlay({ children }: { children: React.ReactNode }) {
   return (
     <>
       <button
-        className={`fixed top-4 left-4 z-50 md:hidden p-2 rounded bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow transition-transform ${open ? 'translate-x-64' : ''}`}
+        className={`fixed top-4 left-10 z-50 md:hidden p-2 rounded bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow transition-transform ${open ? 'translate-x-64' : ''}`}
         aria-label={open ? 'Close sidebar' : 'Open sidebar'}
         onClick={() => setOpen((prev) => !prev)}
       >
