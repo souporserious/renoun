@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { ArrowIcon } from './ArrowIcon'
 
 export function SiblingLinks({
   routes,
@@ -14,40 +15,18 @@ export function SiblingLinks({
     currentIndex < routes.length - 1 ? routes[currentIndex + 1] : null
 
   return (
-    <div className="fixed top-4 right-4 flex gap-2">
+    <div className="fixed top-4 right-9 flex gap-1">
       {previousPage ? (
         <Link
           href={previousPage.pathname}
           className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
           title={previousPage.title}
         >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
+          <ArrowIcon direction="left" size={20} />
         </Link>
       ) : (
         <span className="p-2 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-300 dark:text-gray-600">
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
+          <ArrowIcon direction="left" size={20} />
         </span>
       )}
       {nextPage ? (
@@ -56,33 +35,11 @@ export function SiblingLinks({
           className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
           title={nextPage.title}
         >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M9 18l6-6-6-6" />
-          </svg>
+          <ArrowIcon direction="right" size={20} />
         </Link>
       ) : (
         <span className="p-2 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-300 dark:text-gray-600">
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M9 18l6-6-6-6" />
-          </svg>
+          <ArrowIcon direction="right" size={20} />
         </span>
       )}
     </div>
