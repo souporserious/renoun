@@ -1,20 +1,17 @@
 import { docs } from '@/collections'
+import { getEntryTitle } from '@/utils'
 
 import { CommandMenu } from './CommandMenu'
 import { SidebarOverlay } from './SidebarOverlay'
-import { SidebarLink } from './SidebarLink'
+import { TreeNavigation } from './TreeNavigation'
 
 export async function Sidebar() {
   const docEntries = await docs.getEntries()
   const entries = await Promise.all(
-    docEntries.map(async (post) => {
-      const metadata = await post.getExportValue('metadata')
-      const path = post.getPath()
-      return {
-        title: metadata.title,
-        path,
-      }
-    })
+    docEntries.map(async (post) => ({
+      title: await getEntryTitle(post),
+      path: post.getPathname(),
+    }))
   )
 
   return (
@@ -25,11 +22,7 @@ export async function Sidebar() {
           <span className="px-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">
             Documentation
           </span>
-          {entries.map((entry) => (
-            <SidebarLink key={entry.path} href={entry.path}>
-              {entry.title}
-            </SidebarLink>
-          ))}
+          <TreeNavigation collection={docs} variant="title" />
         </nav>
       </div>
     </SidebarOverlay>

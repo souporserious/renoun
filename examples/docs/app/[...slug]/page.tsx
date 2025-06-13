@@ -1,11 +1,7 @@
-import { docs } from '@/collections'
+import { docs, routes } from '@/collections'
 
 export async function generateStaticParams() {
-  const entries = await docs.getEntries({ recursive: true })
-
-  return entries.map((entry) => ({
-    slug: entry.getPathSegments({ includeBasePath: false }),
-  }))
+  return (await routes).map((entry) => ({ slug: entry.segments }))
 }
 
 export default async function Page({
@@ -15,9 +11,9 @@ export default async function Page({
 }) {
   const { slug } = await params
   const doc = await docs.getFile(slug, 'mdx')
-  const [metadata, Content, updatedAt] = await Promise.all([
-    doc.getExportValue('metadata'),
+  const [Content, metadata, updatedAt] = await Promise.all([
     doc.getExportValue('default'),
+    doc.getExportValue('metadata'),
     doc.getLastCommitDate(),
   ])
 

@@ -5,10 +5,10 @@ import { usePathname } from 'next/navigation'
 export function SiblingLinks({
   routes,
 }: {
-  routes: { path: string; title: string }[]
+  routes: { pathname: string; title: string }[]
 }) {
   const pathname = usePathname()
-  const currentIndex = routes.findIndex((page) => page.path === pathname)
+  const currentIndex = routes.findIndex((page) => page.pathname === pathname)
   const previousPage = currentIndex > 0 ? routes[currentIndex - 1] : null
   const nextPage =
     currentIndex < routes.length - 1 ? routes[currentIndex + 1] : null
@@ -17,9 +17,9 @@ export function SiblingLinks({
     <div className="fixed top-4 right-4 flex gap-2">
       {previousPage ? (
         <Link
-          href={previousPage.path}
+          href={previousPage.pathname}
           className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-          aria-label={`Previous: ${previousPage.title}`}
+          title={previousPage.title}
         >
           <svg
             width="20"
@@ -52,9 +52,9 @@ export function SiblingLinks({
       )}
       {nextPage ? (
         <Link
-          href={nextPage.path}
+          href={nextPage.pathname}
           className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-          aria-label={`Next: ${nextPage.title}`}
+          title={nextPage.title}
         >
           <svg
             width="20"

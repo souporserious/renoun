@@ -1,9 +1,16 @@
-import { Directory, withSchema } from 'renoun/file-system'
+import { Directory, isFile, isDirectory, withSchema } from 'renoun/file-system'
 import { z } from 'zod'
+import { getEntryTitle } from '@/utils'
 
 export const docs = new Directory({
   path: 'docs',
-  include: '*.mdx',
+  basePathname: '',
+  include: (entry) => {
+    if (isDirectory(entry) || isFile(entry, 'mdx')) {
+      return true
+    }
+    return false
+  },
   loaders: {
     mdx: withSchema(
       {
@@ -17,19 +24,14 @@ export const docs = new Directory({
       (path) => import(`./docs/${path}.mdx`)
     ),
   },
-  sort: async (a, b) => {
-    const aMetadata = await a.getExportValue('metadata')
-    const bMetadata = await b.getExportValue('metadata')
-
-    return aMetadata.order - bMetadata.order
-  },
 })
 
-export const routes = docs.getEntries().then((entries) =>
+export const routes = docs.getEntries({ recursive: true }).then((entries) =>
   Promise.all(
     entries.map(async (doc) => ({
-      path: doc.getPath(),
-      title: (await doc.getExportValue('metadata')).title,
+      pathname: doc.getPathname(),
+      segments: doc.getPathnameSegments({ includeBasePathname: false }),
+      title: await getEntryTitle(doc),
     }))
   )
 )

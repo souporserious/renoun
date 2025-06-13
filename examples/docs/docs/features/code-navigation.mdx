@@ -1,40 +1,66 @@
 export const metadata = {
   title: 'Code Navigation',
-  description: 'Advanced code navigation and search capabilities',
-  date: '2025-01-28',
+  summary:
+    'Advanced code navigation and search capabilities for efficient development.',
+  order: 2,
 }
 
 Navigate through your codebase with ease using our powerful code navigation features. Find definitions, references, and implementations quickly with semantic search and intelligent indexing.
 
-## Features
+## Overview
 
-### Semantic Search
+Our code navigation system combines traditional IDE features with modern semantic understanding to help you move through your codebase efficiently. Whether you're exploring a new project or working on familiar code, these tools will help you find what you need quickly.
 
-- Search across your entire codebase using natural language
-- Find relevant code based on functionality rather than just text
-- Filter results by file type, directory, or code context
+## Key Features
 
-### Go to Definition
-
-- Jump directly to function and variable definitions
-- View implementation details with a single click
-- Navigate through complex inheritance chains
-
-### Find References
-
-- Locate all usages of a function, variable, or type
-- Track down where specific code patterns are used
-- Understand the impact of changes before making them
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+  <Card
+    icon="🔍"
+    title="Semantic Search"
+    className="bg-gray-800"
+    children="Search across your entire codebase using natural language and find relevant code based on functionality."
+  />
+  <Card
+    icon="🎯"
+    title="Go to Definition"
+    className="bg-gray-800"
+    children="Jump directly to function and variable definitions with a single click, including complex inheritance chains."
+  />
+  <Card
+    icon="📌"
+    title="Find References"
+    className="bg-gray-800"
+    children="Locate all usages of functions, variables, or types to understand code impact and dependencies."
+  />
+  <Card
+    icon="⚡"
+    title="Quick Navigation"
+    className="bg-gray-800"
+    children="Access files, symbols, and search results instantly with powerful keyboard shortcuts."
+  />
+</div>
 
 ## Keyboard Shortcuts
 
-- `Cmd/Ctrl + Click`: Go to definition
-- `Cmd/Ctrl + Shift + F`: Search in files
-- `Cmd/Ctrl + P`: Quick file navigation
-- `Cmd/Ctrl + Shift + O`: Symbol search
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+  <Card
+    icon="⌨️"
+    title="Navigation"
+    className="bg-gray-800"
+    children="Cmd/Ctrl + Click: Go to definition\nCmd/Ctrl + P: Quick file navigation"
+  />
+  <Card
+    icon="🔎"
+    title="Search"
+    className="bg-gray-800"
+    children="Cmd/Ctrl + Shift + F: Search in files\nCmd/Ctrl + Shift + O: Symbol search"
+  />
+</div>
 
-## Tips
+## Best Practices
 
-- Use semantic search for complex queries
-- Leverage the reference finder for impact analysis
+- Use semantic search for complex queries that go beyond simple text matching
+- Leverage the reference finder to understand the impact of changes
 - Combine navigation features for efficient code exploration
+- Take advantage of keyboard shortcuts to speed up your workflow
+- Use the quick file navigation to jump between frequently accessed files

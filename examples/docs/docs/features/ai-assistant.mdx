@@ -1,30 +1,55 @@
 export const metadata = {
   title: 'AI Assistant',
-  description: 'Powerful AI-powered coding assistance at your fingertips',
-  date: '2025-02-15',
+  summary: 'Powerful AI-powered coding assistance at your fingertips.',
+  order: 1,
 }
 
 Our AI Assistant is designed to help you write, understand, and debug code more efficiently. It combines the power of large language models with deep code understanding to provide context-aware assistance.
 
+## Overview
+
+The AI Assistant is your intelligent coding companion, available through the command palette (`Cmd/Ctrl + K`) or by typing `/` in the editor. It helps you write better code, understand complex logic, and solve problems faster.
+
 ## Key Features
 
-- **Code Generation**: Generate code snippets and complete functions based on natural language descriptions
-- **Code Explanation**: Get detailed explanations of complex code blocks
-- **Bug Detection**: Identify potential issues and suggest fixes
-- **Refactoring**: Get suggestions for improving code quality and maintainability
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+  <Card
+    icon="✨"
+    title="Code Generation"
+    className="bg-gray-800"
+    children="Generate code snippets and complete functions based on natural language descriptions."
+  />
+  <Card
+    icon="📝"
+    title="Code Explanation"
+    className="bg-gray-800"
+    children="Get detailed explanations of complex code blocks and understand their purpose."
+  />
+  <Card
+    icon="🔍"
+    title="Bug Detection"
+    className="bg-gray-800"
+    children="Identify potential issues and get suggestions for fixes before they become problems."
+  />
+  <Card
+    icon="🔄"
+    title="Refactoring"
+    className="bg-gray-800"
+    children="Get suggestions for improving code quality, maintainability, and performance."
+  />
+</div>
 
-## Usage
+## Getting Started
 
-The AI Assistant is available through the command palette (`Cmd/Ctrl + K`) or by typing `/` in the editor. You can:
-
-1. Ask questions about your code
-2. Request code generation
-3. Get explanations of complex logic
-4. Debug issues with detailed error analysis
+1. Open the command palette (`Cmd/Ctrl + K`)
+2. Type your question or request
+3. Review the AI's response
+4. Implement the suggested changes
 
 ## Best Practices
 
-- Be specific in your requests
+- Be specific in your requests to get better results
 - Provide context when asking about code
 - Use the assistant for learning and understanding, not just code generation
-- Review generated code before implementing it
+- Always review generated code before implementing it
+- Combine AI assistance with your own expertise for the best results

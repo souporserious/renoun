@@ -26,11 +26,17 @@ interface CommandMenuProps {
 
 function SearchIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
-    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" {...props}>
+    <svg
+      viewBox="0 0 12 12"
+      fill="none"
+      stroke="currentColor"
+      aria-hidden="true"
+      {...props}
+    >
       <path
-        fillRule="evenodd"
-        d="M8.5 3.5a5 5 0 104.03 8.06l3.2 3.2a1 1 0 001.42-1.42l-3.2-3.2A5 5 0 008.5 3.5zm-3 5a3 3 0 116 0 3 3 0 01-6 0z"
-        clipRule="evenodd"
+        d="M5 9.5a4.5 4.5 0 100-9 4.5 4.5 0 000 9zM10.5 10.5L8 8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   )
@@ -66,15 +72,12 @@ export function CommandMenu({ entries }: CommandMenuProps) {
 
   return (
     <DialogTrigger isOpen={isOpen} onOpenChange={setOpen}>
-      <Button className="group flex items-center rounded-xl bg-gray-100 border border-gray-300 text-gray-700 dark:bg-black/20 dark:border-white/20 dark:text-white/80 bg-clip-padding px-3 py-2 font-medium font-[inherit] text-sm sm:text-base hover:bg-gray-200 dark:hover:bg-white/1 pressed:bg-black/40 transition-colors cursor-default outline-hidden focus-visible:ring-2 focus-visible:ring-violet-500 dark:focus-visible:ring-white/75 w-full gap-2">
-        <SearchIcon className="w-6 h-6 text-gray-400 dark:text-white/40 group-hover:text-gray-700 dark:group-hover:text-white transition-colors" />
+      <Button className="group flex items-center h-9 rounded-lg bg-gray-100 dark:bg-black/20 text-gray-700 dark:text-white/80 px-3 font-medium font-[inherit] text-sm hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100 pressed:bg-gray-100 dark:pressed:bg-gray-700 transition-colors cursor-default outline-none focus-visible:bg-violet-100 dark:focus-visible:bg-blue-400/20 gap-2">
+        <SearchIcon className="w-4 h-4 text-gray-400 dark:text-white/40 group-hover:text-gray-700 dark:group-hover:text-white transition-colors" />
         <span className="flex-1 text-left">Search</span>
-        <span className="hidden sm:flex items-center text-xs text-gray-500 dark:text-white/60 group-hover:text-gray-700 dark:group-hover:text-white gap-0.5 transition-colors">
-          <kbd className="h-6 aspect-square font-semibold rounded-lg text-xs bg-gray-200 text-gray-700 dark:bg-gray-800 dark:text-white/60 group-hover:text-gray-700 dark:group-hover:text-white outline-none flex items-center justify-center transition-colors">
-            {isMac ? '⌘' : 'Ctrl'}
-          </kbd>
-          <kbd className="h-6 aspect-square font-semibold rounded-lg text-xs bg-gray-200 text-gray-700 dark:bg-gray-800 dark:text-white/60 group-hover:text-gray-700 dark:group-hover:text-white outline-none flex items-center justify-center transition-colors">
-            K
+        <span className="hidden sm:flex items-center text-xs text-gray-500 dark:text-white/60 group-hover:text-gray-700 dark:group-hover:text-white transition-colors">
+          <kbd className="h-5 px-2 font-semibold rounded text-xs bg-gray-200 text-gray-700 dark:bg-gray-800 dark:text-white/60 group-hover:text-gray-700 dark:group-hover:text-white outline-none flex items-center justify-center transition-colors">
+            {isMac ? '⌘ K' : 'Ctrl K'}
           </kbd>
         </span>
       </Button>
@@ -93,19 +96,20 @@ export function CommandMenu({ entries }: CommandMenuProps) {
             ${isExiting ? 'animate-zoom-out' : ''}
           `}
         >
-          <Dialog className="outline-hidden relative">
+          <Dialog className="outline-none relative">
             <div className="flex flex-col gap-1 w-[95vw] sm:w-[500px] max-w-full rounded-xl bg-white dark:bg-gray-900 shadow-lg p-2">
               <Autocomplete filter={contains}>
                 <TextField
                   aria-label="Search documentation"
-                  className="flex flex-col px-3 py-2 rounded-md outline-none placeholder-gray-500 dark:placeholder-gray-400"
+                  className="flex flex-col px-1 py-2 rounded-md outline-none placeholder-gray-500 dark:placeholder-gray-400 relative"
                 >
+                  <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-white/40" />
                   <Input
                     autoFocus
                     placeholder="Search documentation..."
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
-                    className="border border-white/20 py-2 px-3 leading-5 text-gray-900 dark:text-gray-100 bg-black/20 dark:bg-black/20 outline-hidden text-base focus-visible:ring-2 focus-visible:ring-violet-500 dark:focus-visible:ring-blue-400 rounded-lg"
+                    className="w-full pl-9 pr-3 py-2 leading-5 text-gray-900 dark:text-gray-100 bg-black/20 dark:bg-black/20 outline-none text-base focus-visible:bg-violet-100 dark:focus-visible:bg-blue-400/20 rounded-lg"
                   />
                 </TextField>
                 <Menu
@@ -138,7 +142,12 @@ function CommandItem(props: React.ComponentProps<typeof MenuItem>) {
   return (
     <MenuItem
       {...props}
-      className="group flex w-full items-center rounded-md px-3 py-2 box-border outline-none cursor-default text-gray-900 dark:text-gray-100 hover:bg-violet-100 dark:hover:bg-gray-800 pressed:bg-violet-200 dark:pressed:bg-gray-700 focus:bg-violet-500 dark:focus:bg-blue-400 focus:text-white dark:focus:text-gray-900 focus-visible:ring-2 focus-visible:ring-violet-500 dark:focus-visible:ring-blue-400"
+      className={({ isFocused, isSelected }) => `
+        group flex w-full items-center rounded-md px-3 py-2 box-border outline-none cursor-default text-gray-900 dark:text-gray-100
+        ${isFocused ? 'bg-violet-100 dark:bg-blue-400/20' : ''}
+        ${isSelected ? 'bg-violet-200 dark:bg-blue-400/40' : ''}
+        hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100
+      `}
     />
   )
 }
