@@ -20,7 +20,7 @@ export function SidebarOverlay({ children }: { children: React.ReactNode }) {
         aria-hidden={!open}
       />
       <aside
-        className={`fixed top-0 left-0 h-screen w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 p-4 flex flex-col gap-8 overflow-y-auto z-50 transition-transform md:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'} md:block`}
+        className={`fixed top-0 left-0 h-screen w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 p-4 flex flex-col gap-8 overflow-y-auto overscroll-contain z-50 transition-transform md:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'} md:block`}
         style={{ transitionProperty: 'transform' }}
         aria-hidden={!open}
       >

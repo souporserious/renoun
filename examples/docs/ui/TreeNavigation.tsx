@@ -69,7 +69,7 @@ async function ListNavigation({
             : entry.getBaseName()}
         </SidebarLink>
         <SidebarCollapse.Content>
-          <ul className="flex flex-col list-none text-sm">
+          <ul className="flex flex-col list-none text-sm relative before:absolute before:left-[1.25rem] before:-translate-x-1/2 before:top-0 before:bottom-0 before:w-px before:bg-gray-200 dark:before:bg-gray-800">
             {entries.map((childEntry) => (
               <ListNavigation
                 key={childEntry.getPathname()}

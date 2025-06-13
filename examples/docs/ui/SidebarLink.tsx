@@ -17,7 +17,7 @@ export function SidebarLink({
 }) {
   const pathname = usePathname()
   const isActive = pathname === href || pathname.startsWith(href + '/')
-  const baseLinkStyles = `flex items-center gap-2 rounded px-2 py-2 font-medium transition-colors outline-none focus-visible:bg-violet-100 dark:focus-visible:bg-blue-400/20${
+  const baseLinkStyles = `flex items-center gap-2 rounded h-9 px-3 font-medium transition-colors outline-none focus-visible:bg-violet-100 dark:focus-visible:bg-blue-400/20${
     className ? ` ${className}` : ''
   }`
   const activeStyles = isActive
@@ -27,9 +27,12 @@ export function SidebarLink({
   if (collapsible) {
     return (
       <div
-        className={`${baseLinkStyles} ${activeStyles} focus-within:bg-violet-50 dark:focus-within:bg-blue-400/10`}
+        className={`${baseLinkStyles} ${activeStyles} focus-within:bg-violet-100 dark:focus-within:bg-blue-400/20`}
       >
-        <Link href={href} className="flex-1 min-w-0 focus:outline-none order-2">
+        <Link
+          href={href}
+          className="flex-1 min-w-0 order-2 focus-visible:outline-none"
+        >
           {children}
         </Link>
         <SidebarCollapse.Trigger />
@@ -38,7 +41,7 @@ export function SidebarLink({
   }
 
   return (
-    <Link href={href} className={`${baseLinkStyles} pl-8 ${activeStyles}`}>
+    <Link href={href} className={`${baseLinkStyles} pl-9 ${activeStyles}`}>
       {children}
     </Link>
   )

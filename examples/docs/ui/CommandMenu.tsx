@@ -76,7 +76,7 @@ export function CommandMenu({ entries }: CommandMenuProps) {
         <SearchIcon className="w-4 h-4 text-gray-400 dark:text-white/40 group-hover:text-gray-700 dark:group-hover:text-white transition-colors" />
         <span className="flex-1 text-left">Search</span>
         <span className="hidden sm:flex items-center text-xs text-gray-500 dark:text-white/60 group-hover:text-gray-700 dark:group-hover:text-white transition-colors">
-          <kbd className="h-5 px-2 font-semibold rounded text-xs bg-gray-200 text-gray-700 dark:bg-gray-800 dark:text-white/60 group-hover:text-gray-700 dark:group-hover:text-white outline-none flex items-center justify-center transition-colors">
+          <kbd className="h-5 px-2 font-semibold rounded text-xs bg-gray-200 text-gray-700 dark:bg-gray-800 dark:text-white/60 group-hover:text-gray-700 dark:group-hover:text-white outline-none focus-visible:ring-2 focus-visible:ring-violet-500 dark:focus-visible:ring-blue-400 flex items-center justify-center transition-colors">
             {isMac ? '⌘ K' : 'Ctrl K'}
           </kbd>
         </span>
@@ -147,6 +147,7 @@ function CommandItem(props: React.ComponentProps<typeof MenuItem>) {
         ${isFocused ? 'bg-violet-100 dark:bg-blue-400/20' : ''}
         ${isSelected ? 'bg-violet-200 dark:bg-blue-400/40' : ''}
         hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100
+        focus-visible:bg-violet-100 dark:focus-visible:bg-blue-400/20
       `}
     />
   )

@@ -64,14 +64,21 @@ export function Trigger() {
       aria-expanded={isOpen}
       aria-controls={contentId}
       onClick={toggle}
-      className={`order-1 group w-4 h-4 flex items-center justify-center text-black dark:text-gray-100 hover:bg-white/10 dark:hover:bg-black/20 focus-visible:bg-violet-200 dark:focus-visible:bg-blue-400/40 rounded transition-colors w-4 h-4 p-0 border-0 bg-transparent outline-none`}
+      className={`order-1 group w-6 h-6 flex items-center justify-center text-black dark:text-gray-100 hover:bg-white/20 dark:hover:bg-white/10 focus-visible:bg-violet-200 dark:focus-visible:bg-blue-400/40 rounded transition-colors border-0 bg-transparent outline-0 -m-1`}
       aria-label="Toggle children"
     >
       <svg
-        viewBox="0 0 12 12"
-        className="w-full h-full transition-transform duration-200 ease-in-out group-aria-expanded:rotate-90"
+        viewBox="0 0 16 16"
+        className="w-4 h-4 transition-transform duration-200 ease-in-out group-aria-expanded:rotate-90"
       >
-        <path d="M3 2l4 4-4 4" fill="none" stroke="currentColor" />
+        <path
+          d="M6 3l4 5-4 5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </svg>
     </button>
   )
