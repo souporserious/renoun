@@ -141,11 +141,11 @@
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@types/ws": "^8.18.1",
-    "dedent": "^1.5.3",
+    "dedent": "^1.6.0",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "tm-grammars": "^1.23.14",
-    "tm-themes": "^1.10.5",
+    "tm-grammars": "^1.23.26",
+    "tm-themes": "^1.10.6",
     "valibot": "catalog:",
     "vfile-message": "^4.0.2",
     "zod": "catalog:"
@@ -153,14 +153,14 @@
   "dependencies": {
     "@mdx-js/mdx": "^3.1.0",
     "@renoun/mdx": "workspace:*",
-    "@shikijs/langs": "^3.2.2",
-    "@shikijs/themes": "^3.2.2",
+    "@shikijs/langs": "^3.6.0",
+    "@shikijs/themes": "^3.6.0",
     "hast": "^1.0.0",
     "hast-util-to-jsx-runtime": "^2.3.6",
     "html-url-attributes": "^3.0.1",
-    "ignore": "^7.0.3",
-    "minimatch": "^10.0.1",
-    "oniguruma-to-es": "^4.2.0",
+    "ignore": "^7.0.5",
+    "minimatch": "^10.0.3",
+    "oniguruma-to-es": "^4.3.3",
     "remark-parse": "^11.0.0",
     "remark-rehype": "^11.1.2",
     "restyle": "catalog:",
@@ -168,7 +168,7 @@
     "unified": "catalog:",
     "unist-util-visit": "^5.0.0",
     "vscode-textmate": "^9.2.0",
-    "ws": "^8.18.1"
+    "ws": "^8.18.2"
   },
   "engines": {
     "node": ">=20.19.0"

@@ -8372,11 +8372,11 @@ describe('resolveType', () => {
                   "position": {
                     "end": {
                       "column": 52,
-                      "line": 2276,
+                      "line": 2281,
                     },
                     "start": {
                       "column": 9,
-                      "line": 2276,
+                      "line": 2281,
                     },
                   },
                   "signatures": [
@@ -8398,11 +8398,11 @@ describe('resolveType', () => {
                               "position": {
                                 "end": {
                                   "column": 2,
-                                  "line": 3894,
+                                  "line": 3986,
                                 },
                                 "start": {
                                   "column": 1,
-                                  "line": 3818,
+                                  "line": 3890,
                                 },
                               },
                               "tags": undefined,
@@ -8419,11 +8419,11 @@ describe('resolveType', () => {
                               "position": {
                                 "end": {
                                   "column": 2,
-                                  "line": 9876,
+                                  "line": 10154,
                                 },
                                 "start": {
                                   "column": 1,
-                                  "line": 9825,
+                                  "line": 10103,
                                 },
                               },
                               "tags": undefined,
@@ -8440,11 +8440,11 @@ describe('resolveType', () => {
                           "position": {
                             "end": {
                               "column": 81,
-                              "line": 2130,
+                              "line": 2136,
                             },
                             "start": {
                               "column": 73,
-                              "line": 2130,
+                              "line": 2136,
                             },
                           },
                           "text": "MouseEvent<HTMLButtonElement, globalThis.MouseEvent>",
@@ -8453,11 +8453,11 @@ describe('resolveType', () => {
                       "position": {
                         "end": {
                           "column": 88,
-                          "line": 2130,
+                          "line": 2136,
                         },
                         "start": {
                           "column": 58,
-                          "line": 2130,
+                          "line": 2136,
                         },
                       },
                       "returnType": "void",
