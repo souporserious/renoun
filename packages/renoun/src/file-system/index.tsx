@@ -262,7 +262,7 @@ export interface FileOptions<
   Path extends string = string,
 > {
   path: Path
-  basePathname?: string
+  basePathname?: string | null
   slugCasing?: SlugCasings
   depth?: number
   directory?: Directory<
@@ -285,7 +285,7 @@ export class File<
   #order?: string
   #extension?: Extension
   #path: string
-  #basePathname?: string
+  #basePathname?: string | null
   #slugCasing: SlugCasings
   #depth: number
   #directory: Directory<DirectoryTypes>
@@ -364,7 +364,10 @@ export class File<
     const includeDuplicateSegments = options?.includeDuplicateSegments ?? false
     const fileSystem = this.#directory.getFileSystem()
     let path = fileSystem.getPathname(this.#path, {
-      basePath: includeBasePathname ? this.#basePathname : undefined,
+      basePath:
+        includeBasePathname && this.#basePathname !== null
+          ? this.#basePathname
+          : undefined,
       rootPath: this.#directory.getRootPath(),
     })
 
@@ -1365,8 +1368,8 @@ export interface DirectoryOptions<
   /** The extension definitions to use for loading and validating file exports. */
   loaders?: Loaders
 
-  /** The base route path to prepend to all descendant entry `getPathname` and `getPathnameSegments` methods. Defaults entries to their root directory slug. */
-  basePathname?: string
+  /** The base route path to prepend to all descendant entry `getPathname` and `getPathnameSegments` methods. Defaults entries to their root directory slug. Set to `null` to disable the base pathname. */
+  basePathname?: string | null
 
   /** The tsconfig.json file path to use for type checking and analyzing JavaScript and TypeScript files. */
   tsConfigPath?: string
@@ -1397,7 +1400,7 @@ export class Directory<
   #path: string
   #rootPath?: string
   #depth: number = -1
-  #basePathname?: string
+  #basePathname?: string | null
   #tsConfigPath?: string
   #slugCasing: SlugCasings
   #loaders?: Loaders
@@ -1425,7 +1428,7 @@ export class Directory<
     } else {
       this.#path = options.path ? ensureRelativePath(options.path) : '.'
       this.#loaders = options.loaders
-      this.#basePathname = this.#basePathname =
+      this.#basePathname =
         options.basePathname === undefined
           ? this.#directory
             ? this.#directory.getSlug()
@@ -2097,7 +2100,10 @@ export class Directory<
     const includeBasePathname = options?.includeBasePathname ?? true
     const fileSystem = this.getFileSystem()
     const path = fileSystem.getPathname(this.#path, {
-      basePath: includeBasePathname ? this.#basePathname : undefined,
+      basePath:
+        includeBasePathname && this.#basePathname !== null
+          ? this.#basePathname
+          : undefined,
       rootPath: this.getRootPath(),
     })
 

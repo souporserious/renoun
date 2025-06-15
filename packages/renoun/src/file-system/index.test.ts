@@ -1802,4 +1802,24 @@ describe('file system', () => {
     const mdxFile = await directory.getFile('components', 'mdx')
     expect(mdxFile.getPathname()).toBe('/components')
   })
+
+  test('disables base pathname when set to null', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'components/Button.tsx': '',
+      'components/Card.tsx': '',
+    })
+    const directory = new Directory({
+      fileSystem,
+      basePathname: null,
+    })
+    const buttonFile = await directory.getFile('components/Button')
+    const cardFile = await directory.getFile('components/Card')
+
+    expect(buttonFile.getPathname()).toBe('/components/button')
+    expect(cardFile.getPathname()).toBe('/components/card')
+
+    // Verify that the base pathname is not included in the pathname segments
+    expect(buttonFile.getPathnameSegments()).toEqual(['components', 'button'])
+    expect(cardFile.getPathnameSegments()).toEqual(['components', 'card'])
+  })
 })
