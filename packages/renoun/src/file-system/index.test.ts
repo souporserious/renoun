@@ -1865,4 +1865,22 @@ describe('file system', () => {
       '/docs/getting-started',
     ])
   })
+
+  test('include recursive file pattern includes directory type in sort callback', () => {
+    const directory = new Directory({
+      include: '**/*.mdx',
+      sort: (a, b) => {
+        if (isDirectory(a)) {
+          void a.getEntries()
+          expectTypeOf(a).toMatchTypeOf<Directory<any>>()
+        } else {
+          void a.getExportValue('default')
+          expectTypeOf(a).toMatchTypeOf<MDXFile<{ default: MDXContent }>>()
+        }
+        return 0
+      },
+    })
+
+    expect(directory).toBeInstanceOf(Directory)
+  })
 })

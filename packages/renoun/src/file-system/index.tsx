@@ -1344,7 +1344,11 @@ export type IncludedEntry<
   Types extends Record<string, any>,
   DirectoryFilter extends EntryInclude<FileSystemEntry<Types>, Types>,
 > = DirectoryFilter extends string
-  ? FileWithExtension<Types, ExtractFileExtension<DirectoryFilter>>
+  ? DirectoryFilter extends `**${string}`
+    ?
+        | Directory<Types>
+        | FileWithExtension<Types, ExtractFileExtension<DirectoryFilter>>
+    : FileWithExtension<Types, ExtractFileExtension<DirectoryFilter>>
   : DirectoryFilter extends EntryInclude<infer Entry, Types>
     ? Entry
     : FileSystemEntry<Types>
@@ -1841,7 +1845,9 @@ export class Directory<
     includeTsConfigIgnoredFiles?: boolean
   }): Promise<
     Include extends string
-      ? FileWithExtension<LoaderTypes, ExtractFileExtension<Include>>[]
+      ? Include extends `**${string}`
+        ? FileSystemEntry<LoaderTypes>[]
+        : FileWithExtension<LoaderTypes, ExtractFileExtension<Include>>[]
       : Include extends EntryInclude<infer FilteredEntry, LoaderTypes>
         ? FilteredEntry[]
         : FileSystemEntry<LoaderTypes>[]
