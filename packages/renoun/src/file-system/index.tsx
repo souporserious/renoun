@@ -1844,13 +1844,17 @@ export class Directory<
     includeGitIgnoredFiles?: boolean
     includeTsConfigIgnoredFiles?: boolean
   }): Promise<
-    Include extends string
-      ? Include extends `**${string}`
-        ? FileSystemEntry<LoaderTypes>[]
-        : FileWithExtension<LoaderTypes, ExtractFileExtension<Include>>[]
-      : Include extends EntryInclude<infer FilteredEntry, LoaderTypes>
-        ? FilteredEntry[]
-        : FileSystemEntry<LoaderTypes>[]
+    Array<
+      Include extends string
+        ? Include extends `**${string}`
+          ?
+              | Directory<LoaderTypes>
+              | FileWithExtension<LoaderTypes, ExtractFileExtension<Include>>
+          : FileWithExtension<LoaderTypes, ExtractFileExtension<Include>>
+        : Include extends EntryInclude<infer FilteredEntry, LoaderTypes>
+          ? FilteredEntry
+          : FileSystemEntry<LoaderTypes>
+    >
   > {
     if (options?.recursive && this.#includePattern) {
       // Only error on single-level glob patterns (e.g. "*.mdx")

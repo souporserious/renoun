@@ -1866,8 +1866,9 @@ describe('file system', () => {
     ])
   })
 
-  test('include recursive file pattern includes directory type in sort callback', () => {
+  test('include recursive file pattern includes directory type in sort callback and entries', async () => {
     const directory = new Directory({
+      fileSystem: new MemoryFileSystem({}),
       include: '**/*.mdx',
       sort: (a, b) => {
         if (isDirectory(a)) {
@@ -1877,10 +1878,27 @@ describe('file system', () => {
           void a.getExportValue('default')
           expectTypeOf(a).toMatchTypeOf<MDXFile<{ default: MDXContent }>>()
         }
+        if (isDirectory(b)) {
+          void b.getEntries()
+          expectTypeOf(b).toMatchTypeOf<Directory<any>>()
+        } else {
+          void b.getExportValue('default')
+          expectTypeOf(b).toMatchTypeOf<MDXFile<{ default: MDXContent }>>()
+        }
         return 0
       },
     })
 
-    expect(directory).toBeInstanceOf(Directory)
+    const entries = await directory.getEntries()
+
+    for (const entry of entries) {
+      if (isDirectory(entry)) {
+        expect(entry).toBeInstanceOf(Directory)
+        expectTypeOf(entry).toMatchTypeOf<Directory<any>>()
+      } else {
+        expect(entry).toBeInstanceOf(MDXFile)
+        expectTypeOf(entry).toMatchTypeOf<MDXFile<{ default: MDXContent }>>()
+      }
+    }
   })
 })
