@@ -5,12 +5,7 @@ import { getEntryTitle } from '@/utils'
 export const docs = new Directory({
   path: 'docs',
   basePathname: null,
-  include: (entry) => {
-    if (isDirectory(entry) || isFile(entry, 'mdx')) {
-      return true
-    }
-    return false
-  },
+  include: '**/*.mdx',
   loaders: {
     mdx: withSchema(
       {

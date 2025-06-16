@@ -1478,10 +1478,11 @@ export class Directory<
       ...options,
     })
 
-    directory.#pathLookup = this.#pathLookup
     directory.#depth = this.#depth
+    directory.#includePattern = this.#includePattern
     directory.#repository = this.#repository
     directory.#rootPath = this.getRootPath()
+    directory.#pathLookup = this.#pathLookup
 
     return directory
   }
@@ -1875,7 +1876,7 @@ export class Directory<
     const fileSystem = this.getFileSystem()
     const directoryEntries = await fileSystem.readDirectory(this.#path)
     const entriesMap = new Map<string, FileSystemEntry<LoaderTypes>>()
-    const thisDirectory = this as Directory<any, any, any>
+    const thisDirectory = this as Directory<any>
     const directoryBaseName = this.getBaseName()
     const nextDepth = this.#depth + 1
 
@@ -1909,31 +1910,52 @@ export class Directory<
       }
 
       if (entry.isDirectory) {
-        const directory = this.#duplicate({
+        const subdirectory = this.#duplicate({
           fileSystem,
           path: entry.path,
         })
+        subdirectory.#directory = thisDirectory
+        subdirectory.#depth = nextDepth
 
-        directory.#directory = thisDirectory
-        directory.#depth = nextDepth
+        const primaryScan = await subdirectory.getEntries({
+          ...options,
+          recursive: true,
+        })
+        let hasMatches = primaryScan.length > 0
 
-        if (this.#include) {
-          if (await this.#shouldInclude(directory)) {
-            entriesMap.set(entryKey, directory)
-            this.#addPathLookup(directory)
-          }
+        if (!hasMatches && options?.includeDuplicates !== true) {
+          const duplicateScan = await subdirectory.getEntries({
+            ...options,
+            includeDuplicates: true,
+            recursive: true,
+          })
+          hasMatches = duplicateScan.length > 0
+        }
+
+        const isRecursiveGlob = this.#includePattern?.includes('**')
+        let keepDirectory: boolean
+
+        if (isRecursiveGlob) {
+          keepDirectory = hasMatches
+        } else if (this.#include) {
+          keepDirectory = await this.#shouldInclude(subdirectory)
         } else {
-          entriesMap.set(entryKey, directory)
-          this.#addPathLookup(directory)
+          keepDirectory = true
+        }
+
+        if (keepDirectory) {
+          entriesMap.set(entry.path, subdirectory)
+          this.#addPathLookup(subdirectory)
         }
 
         if (options?.recursive) {
-          const nestedEntries = await directory.getEntries(options)
-          for (const nestedEntry of nestedEntries) {
-            entriesMap.set(nestedEntry.getAbsolutePath(), nestedEntry)
-            this.#addPathLookup(nestedEntry)
+          for (const child of primaryScan) {
+            entriesMap.set(child.getAbsolutePath(), child)
+            this.#addPathLookup(child)
           }
         }
+
+        continue
       } else if (entry.isFile) {
         const extension = extensionName(entry.name).slice(1)
         const loader = this.#loaders?.[extension] as ModuleLoader<

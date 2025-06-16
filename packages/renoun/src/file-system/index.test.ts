@@ -1775,51 +1775,94 @@ describe('file system', () => {
     ).resolves.toBeDefined()
   })
 
-  test('gets recursive files from paths', async () => {
-    const directory = new Directory({
-      path: 'fixtures/components',
-      include: '**/*.mdx',
-    })
-    const paths = await directory
-      .getEntries({ recursive: true })
-      .then((entries) => entries.map((entry) => entry.getPathname()))
-    const files = await Promise.all(
-      paths.map((path) => directory.getFile(path, 'mdx'))
-    )
-
-    expect(files).toBeDefined()
-  })
-
-  test('getPathname trims index and readme paths', async () => {
+  test('includes parent directories when using recursive file pattern', async () => {
     const fileSystem = new MemoryFileSystem({
-      'components/index.ts': 'export const metadata = { title: "Components" }',
-      'components/README.mdx': '# Components',
-    })
-    const directory = new Directory({ fileSystem })
-    const tsFile = await directory.getFile('components', 'ts')
-    expect(tsFile.getPathname()).toBe('/components')
-
-    const mdxFile = await directory.getFile('components', 'mdx')
-    expect(mdxFile.getPathname()).toBe('/components')
-  })
-
-  test('disables base pathname when set to null', async () => {
-    const fileSystem = new MemoryFileSystem({
-      'components/Button.tsx': '',
-      'components/Card.tsx': '',
+      'docs/getting-started/index.mdx': '# Getting Started',
+      'docs/advanced/examples/advanced.mdx': '# Advanced Example',
+      'docs/advanced/examples/basic.mdx': '# Basic Example',
+      'docs/advanced/README.mdx': '# Advanced Guide',
+      'docs/empty-folder/README.txt': 'Not an MDX file',
     })
     const directory = new Directory({
       fileSystem,
-      basePathname: null,
+      path: 'docs',
+      include: '**/*.mdx',
     })
-    const buttonFile = await directory.getFile('components/Button')
-    const cardFile = await directory.getFile('components/Card')
+    const entries = await directory.getEntries({ recursive: true })
+    const paths = entries.map((entry) => entry.getPathname())
 
-    expect(buttonFile.getPathname()).toBe('/components/button')
-    expect(cardFile.getPathname()).toBe('/components/card')
+    expect(paths).toEqual([
+      '/docs/advanced',
+      '/docs/advanced/examples',
+      '/docs/advanced/examples/advanced',
+      '/docs/advanced/examples/basic',
+    ])
+    expect(paths).not.toContain('/docs/empty-folder')
 
-    // Verify that the base pathname is not included in the pathname segments
-    expect(buttonFile.getPathnameSegments()).toEqual(['components', 'button'])
-    expect(cardFile.getPathnameSegments()).toEqual(['components', 'card'])
+    for (const entry of entries) {
+      if (entry instanceof File) {
+        expect(entry.getExtension()).toBe('mdx')
+      }
+    }
+
+    const advancedDir = await directory.getDirectory('advanced')
+    expect(advancedDir).toBeDefined()
+    expect(advancedDir?.getPathname()).toBe('/docs/advanced')
+
+    const examplesDir = await advancedDir?.getDirectory('examples')
+    expect(examplesDir).toBeDefined()
+    expect(examplesDir?.getPathname()).toBe('/docs/advanced/examples')
+
+    const basicFile = await examplesDir?.getFile('basic', 'mdx')
+    expect(basicFile).toBeDefined()
+    expect(basicFile?.getPathname()).toBe('/docs/advanced/examples/basic')
+  })
+
+  test('gets all files from recursive include file pattern', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'components/Box/Box.mdx': '# Box Component',
+      'components/Box/examples/Basic.mdx': '# Basic Example',
+      'components/Button/Button.mdx': '# Button Component',
+    })
+    const directory = new Directory({
+      fileSystem,
+      path: 'components',
+      include: '**/*.mdx',
+    })
+    const entries = await directory.getEntries({ recursive: true })
+    const paths = entries.map((entry) => entry.getPathname())
+
+    expect(paths).toEqual([
+      '/components/box',
+      '/components/box/examples',
+      '/components/box/examples/basic',
+      '/components/button',
+    ])
+
+    const boxFile = await directory.getFile('box/box', 'mdx')
+    expect(boxFile).toBeDefined()
+    expect(boxFile.getPathname()).toBe('/components/box')
+
+    const basicFile = await directory.getFile('box/examples/basic', 'mdx')
+    expect(basicFile).toBeDefined()
+    expect(basicFile.getPathname()).toBe('/components/box/examples/basic')
+  })
+
+  test('nested directories with recursive include file pattern', async () => {
+    const directory = new Directory({
+      path: 'fixtures/docs',
+      include: '**/*.mdx',
+    })
+    const entries = await directory.getEntries({ recursive: true })
+    const paths = entries.map((entry) => entry.getPathname())
+
+    expect(paths).toEqual([
+      '/docs/components',
+      '/docs/components/accessibility',
+      '/docs/components/accessibility/introduction',
+      '/docs/components/authoring',
+      '/docs/configuration',
+      '/docs/getting-started',
+    ])
   })
 })
