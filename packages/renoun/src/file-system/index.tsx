@@ -218,6 +218,25 @@ export type InferModuleLoadersTypes<Loaders extends ModuleLoaders> = {
     : InferModuleLoaderTypes<Loaders[Extension]>
 }
 
+/** Extract keys from runtime‑capable loaders. */
+export type LoadersWithRuntimeKeys<Loaders> = Extract<
+  keyof Loaders,
+  'js' | 'jsx' | 'ts' | 'tsx' | 'mdx'
+>
+
+/** All export names made available by a set of runtime‑capable loaders. */
+export type LoaderExportNames<Loaders> = string &
+  {
+    [Extension in LoadersWithRuntimeKeys<Loaders>]: keyof Loaders[Extension]
+  }[LoadersWithRuntimeKeys<Loaders>]
+
+/** The value type for a given export name coming from any runtime‑capable loaders. */
+export type LoaderExportValue<Loaders, Name extends string> = {
+  [Extension in LoadersWithRuntimeKeys<Loaders>]: Name extends keyof Loaders[Extension]
+    ? Loaders[Extension][Name]
+    : never
+}[LoadersWithRuntimeKeys<Loaders>]
+
 /** Determines if the loader is a resolver. */
 function isLoader(
   loader: ModuleLoader<any>
@@ -2267,6 +2286,51 @@ export class Directory<
     }
 
     return false
+  }
+
+  /** Get an export value from either an readme or index file in this directory. */
+  async getExportValue<ExportName extends LoaderExportNames<LoaderTypes>>(
+    name: ExportName
+  ): Promise<LoaderExportValue<LoaderTypes, ExportName>> {
+    // Try index file first
+    try {
+      const indexFile = await this.getFile('index')
+      if (indexFile instanceof JavaScriptFile || indexFile instanceof MDXFile) {
+        try {
+          return await indexFile.getExportValue(name)
+        } catch (error) {
+          // If index file exists but doesn't have the export, try README
+          if (error instanceof FileExportNotFoundError) {
+            const readmeFile = await this.getFile('readme')
+            if (
+              readmeFile instanceof JavaScriptFile ||
+              readmeFile instanceof MDXFile
+            ) {
+              return readmeFile.getExportValue(name)
+            }
+          }
+          throw error
+        }
+      }
+    } catch {
+      // If index file doesn't exist, try README
+      try {
+        const readmeFile = await this.getFile('readme')
+        if (
+          readmeFile instanceof JavaScriptFile ||
+          readmeFile instanceof MDXFile
+        ) {
+          return readmeFile.getExportValue(name)
+        }
+      } catch {
+        throw new Error(
+          `[renoun] Could not find an index or readme file with export "${String(name)}" in directory "${this.getRelativePathToRoot()}"`
+        )
+      }
+    }
+    throw new Error(
+      `[renoun] Found index or readme file but it did not export "${String(name)}" in directory "${this.getRelativePathToRoot()}"`
+    )
   }
 }
 

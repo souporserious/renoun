@@ -1,5 +1,4 @@
 import { docs } from '@/collections'
-import { getEntryTitle } from '@/utils'
 
 import { CommandMenu } from './CommandMenu'
 import { SidebarOverlay } from './SidebarOverlay'
@@ -9,7 +8,9 @@ export async function Sidebar() {
   const docEntries = await docs.getEntries()
   const entries = await Promise.all(
     docEntries.map(async (post) => ({
-      title: await getEntryTitle(post),
+      title: await post
+        .getExportValue('metadata')
+        .then((metadata) => metadata.title),
       path: post.getPathname(),
     }))
   )

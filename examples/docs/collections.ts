@@ -26,7 +26,9 @@ export const routes = docs.getEntries({ recursive: true }).then((entries) =>
     entries.map(async (doc) => ({
       pathname: doc.getPathname(),
       segments: doc.getPathnameSegments({ includeBasePathname: false }),
-      title: await getEntryTitle(doc),
+      title: await doc
+        .getExportValue('metadata')
+        .then((metadata) => metadata.title),
     }))
   )
 )
