@@ -15,15 +15,6 @@ import {
   useFilter,
 } from 'react-aria-components'
 
-interface DocEntry {
-  path: string
-  title: string
-}
-
-interface CommandMenuProps {
-  entries: DocEntry[]
-}
-
 function SearchIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg
@@ -42,18 +33,25 @@ function SearchIcon(props: React.SVGProps<SVGSVGElement>) {
   )
 }
 
-export function CommandMenu({ entries }: CommandMenuProps) {
+export function CommandMenu({
+  routes,
+}: {
+  routes: {
+    title: string
+    pathname: string
+  }[]
+}) {
   let [isOpen, setOpen] = useState(false)
   let { contains } = useFilter({ sensitivity: 'base' })
   let isMac = useMemo(() => /Mac/.test(navigator.platform), [])
   const router = useRouter()
 
   const [searchQuery, setSearchQuery] = useState('')
-  const filteredEntries = entries
+  const filteredEntries = routes
     .filter((entry) =>
       entry.title.toLowerCase().includes(searchQuery.toLowerCase())
     )
-    .map((entry) => ({ ...entry, key: entry.path }))
+    .map((entry) => ({ ...entry, key: entry.pathname }))
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -85,7 +83,7 @@ export function CommandMenu({ entries }: CommandMenuProps) {
         isDismissable
         className={({ isEntering, isExiting }) => `
           fixed inset-0 z-100 overflow-y-auto bg-black/25 backdrop-blur
-          flex min-h-full justify-center p-4 pt-20 text-center
+          flex min-h-full items-start justify-center p-4 pt-20 text-center
           ${isEntering ? 'animate-fade-in' : ''}
           ${isExiting ? 'animate-fade-out' : ''}
         `}
@@ -117,16 +115,16 @@ export function CommandMenu({ entries }: CommandMenuProps) {
                   className="mt-2 p-1 max-h-44 overflow-auto"
                   onAction={(key) => {
                     const entry = filteredEntries.find(
-                      (entry) => entry.path === key
+                      (entry) => entry.pathname === key
                     )
                     if (entry) {
-                      router.push(entry.path)
+                      router.push(entry.pathname)
                       setOpen(false)
                     }
                   }}
                 >
                   {(item) => (
-                    <CommandItem key={item.path}>{item.title}</CommandItem>
+                    <CommandItem key={item.pathname}>{item.title}</CommandItem>
                   )}
                 </Menu>
               </Autocomplete>
