@@ -18,41 +18,7 @@ export const docs = new Directory({
       (path) => import(`./docs/${path}.mdx`)
     ),
   },
-  sort: async (a, b) => {
-    // Prioritize shallower depth first.
-    const depthDifference = a.getDepth() - b.getDepth()
-    if (depthDifference !== 0) {
-      return depthDifference
-    }
-
-    // Compare explicit `order` metadata if present.
-    const [aOrder, bOrder] = await Promise.all([
-      a.getExportValue('metadata').then((metadata) => metadata.order),
-      b.getExportValue('metadata').then((metadata) => metadata.order),
-    ])
-    if (aOrder !== null && bOrder !== null && aOrder !== bOrder) {
-      return aOrder - bOrder
-    }
-    if (aOrder !== null && bOrder === null) {
-      return -1
-    }
-    if (aOrder === null && bOrder !== null) {
-      return 1
-    }
-
-    // When order is the same or missing, prefer directories before files so directory listings appear first.
-    const aIsDirectory = a instanceof Directory
-    const bIsDirectory = b instanceof Directory
-    if (aIsDirectory && !bIsDirectory) {
-      return -1
-    }
-    if (!aIsDirectory && bIsDirectory) {
-      return 1
-    }
-
-    // Fallback to base name comparison.
-    return a.getBaseName().localeCompare(b.getBaseName())
-  },
+  sort: 'metadata.order',
 })
 
 export const routes = docs.getEntries({ recursive: true }).then((entries) =>
@@ -63,6 +29,19 @@ export const routes = docs.getEntries({ recursive: true }).then((entries) =>
       title: await doc
         .getExportValue('metadata')
         .then((metadata) => metadata.title),
+      depth: doc.getDepth(),
+      order: await doc
+        .getExportValue('metadata')
+        .then((metadata) => metadata.order),
     }))
   )
 )
+
+// sort by order
+// console.log(
+//   await routes.then((r) => {
+//     return r.toSorted((a, b) => {
+//       return a.order - b.order
+//     })
+//   })
+// )
