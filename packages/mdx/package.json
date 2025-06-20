@@ -30,7 +30,6 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc -w",
-    "prepare": "pnpm run build",
     "test": "vitest --typecheck"
   },
   "exports": {
