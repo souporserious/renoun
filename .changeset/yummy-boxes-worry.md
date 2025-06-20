@@ -2,11 +2,13 @@
 'renoun': major
 ---
 
-Updates the `Directory` constructor `sort` option to now accept a string and optionally a sort descriptor using a new `createSort` utility. This now ensures sorting is performant by calculating keys upfront and then comparing them. Additionally, a string can now be passed for simpler cases.
+Updates the `Directory` constructor `sort` option to now accept either a string or a sort descriptor using a new `createSort` utility. This new API makes it easier to sort entries while ensuring sorting stays performant by calculating asynchronous keys upfront and then comparing them synchronously.
 
 ### Breaking Changes
 
-The `Directory` constructor `sort` option now requires `createSort`, previously sorting was defined in one function:
+The `Directory` constructor `sort` option now requires either a string or a sort descriptor using the new `createSort` utility.
+
+Previously, sorting was defined in one function:
 
 ```tsx
 import { Directory } from 'renoun/file-system'
@@ -22,7 +24,7 @@ const directory = new Directory<{ mdx: { frontmatter: { date: Date } } }>({
 })
 ```
 
-Now this should be split into a sort `key` resolver and the `compare` function:
+Now, a sort descriptor requires defining a `key` resolver and `compare` function:
 
 ```tsx
 import { Directory, createSort } from 'renoun/file-system'
@@ -40,7 +42,7 @@ const directory = new Directory<{ mdx: { frontmatter: { date: Date } } }>({
 })
 ```
 
-For common use cases, this can be further simplified now by defining a valid sort key directly:
+For common use cases, this can be further simplified by defining a valid sort key directly:
 
 ```tsx
 import { Directory, createSort } from 'renoun/file-system'
@@ -51,7 +53,7 @@ const directory = new Directory<{ mdx: { frontmatter: { date: Date } } }>({
 })
 ```
 
-Note, the value being sorted is taken into consideration. Dates will be sorted descending, while other values will default to ascending. If you need further control, but do not want to fully customize using `createSort`, a `direction` can be provided as well:
+Note, the value being sorted is taken into consideration. Dates will be sorted descending, while other values will default to ascending. If you need further control, but do not want to fully customize the sort descriptor using `createSort`, a `direction` can be provided as well:
 
 ```tsx
 import { Directory, createSort } from 'renoun/file-system'
@@ -60,7 +62,7 @@ const directory = new Directory<{ mdx: { frontmatter: { date: Date } } }>({
   include: '*.mdx',
   sort: {
     key: 'frontmatter.date',
-    direction: 'acscending',
+    direction: 'ascending',
   },
 })
 ```
