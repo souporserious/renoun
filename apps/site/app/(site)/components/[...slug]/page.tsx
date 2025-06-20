@@ -71,7 +71,7 @@ export default async function Component({
     exampleFiles = await examplesEntry
       .getEntries({
         includeIndexAndReadmeFiles: true,
-        includeTsConfigIgnoredFiles: true,
+        includeTsConfigExcludedFiles: true,
       })
       .then((entries) => entries.filter((entry) => isFile(entry, 'tsx')))
   } else if (isFile(examplesEntry, 'tsx')) {
