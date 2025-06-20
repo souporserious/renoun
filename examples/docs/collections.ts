@@ -36,12 +36,3 @@ export const routes = docs.getEntries({ recursive: true }).then((entries) =>
     }))
   )
 )
-
-// sort by order
-// console.log(
-//   await routes.then((r) => {
-//     return r.toSorted((a, b) => {
-//       return a.order - b.order
-//     })
-//   })
-// )
