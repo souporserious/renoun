@@ -4,6 +4,8 @@
 
 Updates the `Directory` constructor `sort` option to now accept either a string or a sort descriptor using a new `createSort` utility. This new API makes it easier to sort entries while ensuring sorting stays performant by calculating asynchronous keys upfront and then comparing them synchronously.
 
+This also fixes a bug when using `Directory#getEntries({ recursive: true })` where the results were not being sorted at each depth.
+
 ### Breaking Changes
 
 The `Directory` constructor `sort` option now requires either a string or a sort descriptor using the new `createSort` utility.
