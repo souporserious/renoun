@@ -61,15 +61,9 @@ export abstract class FileSystem {
     return joinPaths('/', options.basePath, resolvedPath)
   }
 
-  abstract readDirectorySync(
-    path?: string,
-    options?: { recursive?: boolean }
-  ): DirectoryEntry[]
+  abstract readDirectorySync(path?: string): DirectoryEntry[]
 
-  abstract readDirectory(
-    path?: string,
-    options?: { recursive?: boolean }
-  ): Promise<DirectoryEntry[]>
+  abstract readDirectory(path?: string): Promise<DirectoryEntry[]>
 
   abstract readFileSync(path: string): string
 
