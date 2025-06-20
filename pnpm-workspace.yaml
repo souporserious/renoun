@@ -19,3 +19,9 @@ catalog:
   unified: 11.0.5
   valibot: 1.1.0
   zod: 3.25.64
+
+onlyBuiltDependencies:
+  - '@swc/core'
+  - '@tailwindcss/oxide'
+  - esbuild
+  - sharp
