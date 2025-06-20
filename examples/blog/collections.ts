@@ -17,10 +17,5 @@ export const posts = new Directory({
       (path) => import(`./posts/${path}.mdx`)
     ),
   },
-  sort: async (a, b) => {
-    const aFrontmatter = await a.getExportValue('frontmatter')
-    const bFrontmatter = await b.getExportValue('frontmatter')
-
-    return bFrontmatter.date.getTime() - aFrontmatter.date.getTime()
-  },
+  sort: 'frontmatter.date',
 })

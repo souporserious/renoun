@@ -20,6 +20,7 @@ import {
   isDirectory,
   isFile,
   isJavaScriptFile,
+  createSort,
   withSchema,
   FileNotFoundError,
   FileExportNotFoundError,
@@ -488,7 +489,7 @@ describe('file system', () => {
     })
     const directory = new Directory({
       fileSystem,
-      sort: (a, b) => a.getName().localeCompare(b.getName()),
+      sort: 'name',
     })
     const entries = await directory.getEntries()
 
@@ -502,29 +503,23 @@ describe('file system', () => {
 
   test('filter and sort entries', async () => {
     const fileSystem = new MemoryFileSystem({
-      'foo.ts': 'const sort = 2',
-      'bar.ts': 'const sort = 1',
+      'foo.ts': 'const order = 2',
+      'bar.ts': 'const order = 1',
     })
     const imports = {
-      'foo.ts': () => Promise.resolve({ sort: 2 }),
-      'bar.ts': () => Promise.resolve({ sort: 1 }),
+      'foo.ts': () => Promise.resolve({ order: 2 }),
+      'bar.ts': () => Promise.resolve({ order: 1 }),
     }
     const directory = new Directory({
       fileSystem,
       loaders: {
-        ts: withSchema<{ sort: number }>((path) => {
+        ts: withSchema<{ order: number }>((path) => {
           const importPath = `${path}.ts` as keyof typeof imports
           return imports[importPath]()
         }),
       },
-      include: (entry) => {
-        return isFile(entry, 'ts')
-      },
-      sort: async (a, b) => {
-        const aSort = await a.getExportValue('sort')
-        const bSort = await b.getExportValue('sort')
-        return aSort - bSort
-      },
+      include: '*.ts',
+      sort: 'order',
     })
     const entries = await directory.getEntries()
 
@@ -1835,9 +1830,9 @@ describe('file system', () => {
       'docs/empty-folder/README.txt': 'Not an MDX file',
     })
     const directory = new Directory({
-      fileSystem,
       path: 'docs',
       include: '**/*.mdx',
+      fileSystem,
     })
     const entries = await directory.getEntries({ recursive: true })
     const paths = entries.map((entry) => entry.getPathname())
@@ -1921,23 +1916,6 @@ describe('file system', () => {
     const directory = new Directory({
       fileSystem: new MemoryFileSystem({}),
       include: '**/*.mdx',
-      sort: (a, b) => {
-        if (isDirectory(a)) {
-          void a.getEntries()
-          expectTypeOf(a).toMatchTypeOf<Directory<any>>()
-        } else {
-          void a.getExportValue('default')
-          expectTypeOf(a).toMatchTypeOf<MDXFile<{ default: MDXContent }>>()
-        }
-        if (isDirectory(b)) {
-          void b.getEntries()
-          expectTypeOf(b).toMatchTypeOf<Directory<any>>()
-        } else {
-          void b.getExportValue('default')
-          expectTypeOf(b).toMatchTypeOf<MDXFile<{ default: MDXContent }>>()
-        }
-        return 0
-      },
     })
 
     const entries = await directory.getEntries()
@@ -1951,5 +1929,198 @@ describe('file system', () => {
         expectTypeOf(entry).toMatchTypeOf<MDXFile<{ default: MDXContent }>>()
       }
     }
+  })
+
+  test('sort descriptor', async () => {
+    new Directory({
+      loaders: {
+        mdx: withSchema<{
+          frontmatter: {
+            title: string
+          }
+        }>((path) => import(`#fixtures/posts/${path}.mdx`)),
+      },
+      include: '**/*.mdx',
+      // @ts-expect-error
+      sort: 'non-existent',
+    })
+
+    new Directory<{
+      mdx: {
+        frontmatter: {
+          date: Date
+        }
+      }
+    }>({
+      sort: 'frontmatter.date',
+    })
+  })
+
+  test('order based on exported values', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'features/ai-assistant.mdx': 'export const order = 1',
+      'features/code-navigation.mdx': 'export const order = 2',
+      'features/debugging.mdx': 'export const order = 3',
+      'features/index.mdx': 'export const order = 3',
+      'faq.mdx': 'export const order = 6',
+      'integrations.mdx': 'export const order = 4',
+      'installation.mdx': 'export const order = 2',
+      'keyboard-shortcuts.mdx': 'export const order = 5',
+      'troubleshooting.mdx': 'export const order = 7',
+      'welcome.mdx': 'export const order = 1',
+    })
+    const directory = new Directory<{ mdx: { order: number } }>({
+      include: '**/*.mdx',
+      sort: 'order',
+      fileSystem,
+    })
+    const entries = await directory.getEntries({ recursive: true })
+    const paths = entries.map((entry) => entry.getPathname())
+
+    expect(paths).toEqual([
+      '/welcome',
+      '/installation',
+      '/features',
+      '/features/ai-assistant',
+      '/features/code-navigation',
+      '/features/debugging',
+      '/integrations',
+      '/keyboard-shortcuts',
+      '/faq',
+      '/troubleshooting',
+    ])
+
+    for (const entry of entries) {
+      if (entry instanceof MDXFile) {
+        // TODO: fix type error for directory getExportValue
+        const order = await entry.getExportValue('order')
+        expect(order).toBeDefined()
+        expect(typeof order).toBe('number')
+      }
+    }
+  })
+
+  test('sort descriptor with direction', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'features/ai-assistant.mdx': 'export const order = 1',
+      'features/code-navigation.mdx': 'export const order = 2',
+      'features/debugging.mdx': 'export const order = 3',
+      'features/index.mdx': 'export const order = 3',
+      'faq.mdx': 'export const order = 6',
+      'integrations.mdx': 'export const order = 4',
+      'installation.mdx': 'export const order = 2',
+      'keyboard-shortcuts.mdx': 'export const order = 5',
+      'troubleshooting.mdx': 'export const order = 7',
+      'welcome.mdx': 'export const order = 1',
+    })
+    const directory = new Directory<{
+      mdx: {
+        order: number
+      }
+    }>({
+      include: '**/*.mdx',
+      sort: { key: 'order', direction: 'descending' },
+      fileSystem,
+    })
+    const entries = await directory.getEntries()
+    const paths = entries.map((entry) => entry.getPathname())
+
+    expect(paths).toEqual([
+      '/troubleshooting',
+      '/faq',
+      '/keyboard-shortcuts',
+      '/integrations',
+      '/features',
+      '/installation',
+      '/welcome',
+    ])
+  })
+
+  test('sort descriptor without directory types', async () => {
+    new Directory({
+      sort: 'name',
+    })
+
+    new Directory({
+      // @ts-expect-error - should throw error since order is not a typed property
+      sort: 'order',
+    })
+  })
+
+  test('sort descriptor function with sync resolver', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'zebra.ts': '',
+      'alpha.ts': '',
+      'beta.ts': '',
+    })
+    const directory = new Directory<{
+      mdx: { order: number }
+      ts: { metadata: { order: number } }
+    }>({
+      fileSystem,
+      include: '**/*.ts',
+      sort: createSort({
+        key: (entry) => entry.getBaseName(),
+        compare: (a, b) => a.localeCompare(b),
+      }),
+    })
+    const entries = await directory.getEntries()
+    const names = entries.map((entry) => entry.getBaseName())
+
+    expect(names).toEqual(['alpha', 'beta', 'zebra'])
+  })
+
+  test('sort descriptor function with async resolver', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'file1.ts': 'export const priority = 3',
+      'file2.ts': 'export const priority = 1',
+      'file3.ts': 'export const priority = 2',
+    })
+    const directory = new Directory({
+      fileSystem,
+      loaders: {
+        ts: withSchema<{ priority: number }>((path) => {
+          switch (path) {
+            case 'file1':
+              return Promise.resolve({ priority: 3 })
+            case 'file2':
+              return Promise.resolve({ priority: 1 })
+            case 'file3':
+              return Promise.resolve({ priority: 2 })
+          }
+          return Promise.resolve({ priority: 0 })
+        }),
+      },
+      sort: createSort({
+        key: (entry) => {
+          if (isFile(entry, 'ts')) {
+            return entry.getExportValue('priority')
+          }
+          return 0
+        },
+        compare: (a, b) => a - b,
+      }),
+    })
+    const entries = await directory.getEntries()
+    const names = entries.map((entry) => entry.getBaseName())
+
+    expect(names).toEqual(['file2', 'file3', 'file1'])
+  })
+
+  test('defaults to descending sort when key is Date', async () => {
+    const directory = new Directory<{
+      mdx: { frontmatter: { date: Date } }
+    }>({
+      include: '*.mdx',
+      sort: 'frontmatter.date',
+      fileSystem: new MemoryFileSystem({
+        'older.mdx': `export const frontmatter = { date: new Date("2022-01-01") }`,
+        'newer.mdx': `export const frontmatter = { date: new Date("2023-01-01") }`,
+      }),
+    })
+    const entries = await directory.getEntries()
+    const names = entries.map((entry) => entry.getName())
+
+    expect(names).toEqual(['newer.mdx', 'older.mdx'])
   })
 })

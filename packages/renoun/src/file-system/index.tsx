@@ -288,7 +288,7 @@ export interface FileOptions<
     Types,
     WithDefaultTypes<Types>,
     ModuleLoaders,
-    EntryInclude<FileSystemEntry<Types>, Types>
+    DirectoryInclude<FileSystemEntry<Types>, Types>
   >
 }
 
@@ -306,7 +306,6 @@ export class File<
   #path: string
   #basePathname?: string | null
   #slugCasing: SlugCasings
-  #depth: number
   #directory: Directory<DirectoryTypes>
 
   constructor(options: FileOptions<DirectoryTypes, Path>) {
@@ -314,7 +313,6 @@ export class File<
     this.#path = options.path
     this.#basePathname = options.basePathname
     this.#slugCasing = options.slugCasing ?? 'kebab'
-    this.#depth = options.depth ?? 0
     this.#directory = options.directory ?? new Directory()
 
     const match = this.#name.match(
@@ -363,7 +361,7 @@ export class File<
 
   /** Get the depth of the file starting from the root directory. */
   getDepth() {
-    return this.#depth
+    return this.getPathnameSegments().length - 2
   }
 
   /** Get the slug of the file. */
@@ -1351,7 +1349,24 @@ export class MDXFile<
   }
 }
 
-export type EntryInclude<
+type Narrowed<Include> = Include extends (
+  entry: any
+) => entry is infer ReturnType
+  ? ReturnType
+  : never
+
+type ResolveDirectoryIncludeEntries<
+  Include,
+  Types extends Record<string, any> = Record<string, any>,
+> = Include extends string
+  ? Include extends `**${string}`
+    ? Directory<any> | FileWithExtension<Types, ExtractFileExtension<Include>>
+    : FileWithExtension<Types, ExtractFileExtension<Include>>
+  : [Narrowed<Include>] extends [never]
+    ? FileSystemEntry<Types>
+    : Narrowed<Include>
+
+export type DirectoryInclude<
   Entry extends FileSystemEntry<any>,
   Types extends Record<string, any>,
 > =
@@ -1359,55 +1374,38 @@ export type EntryInclude<
   | ((entry: FileSystemEntry<Types>) => Promise<boolean> | boolean)
   | string
 
-export type IncludedEntry<
-  Types extends Record<string, any>,
-  DirectoryFilter extends EntryInclude<FileSystemEntry<Types>, Types>,
-> = DirectoryFilter extends string
-  ? DirectoryFilter extends `**${string}`
-    ?
-        | Directory<Types>
-        | FileWithExtension<Types, ExtractFileExtension<DirectoryFilter>>
-    : FileWithExtension<Types, ExtractFileExtension<DirectoryFilter>>
-  : DirectoryFilter extends EntryInclude<infer Entry, Types>
-    ? Entry
-    : FileSystemEntry<Types>
-
-/** The options for a `Directory`. */
 export interface DirectoryOptions<
   Types extends InferModuleLoadersTypes<Loaders> = any,
   LoaderTypes extends Types = any,
   Loaders extends ModuleLoaders = ModuleLoaders,
-  Include extends EntryInclude<
+  Include extends DirectoryInclude<
     FileSystemEntry<LoaderTypes>,
     LoaderTypes
-  > = EntryInclude<FileSystemEntry<LoaderTypes>, LoaderTypes>,
+  > = DirectoryInclude<FileSystemEntry<LoaderTypes>, LoaderTypes>,
 > {
-  /** The path to the directory in the file system. */
+  /** Directory path in the workspace. */
   path?: string
 
-  /** A filter function or [minimatch](https://github.com/isaacs/minimatch?tab=readme-ov-file#minimatch) pattern used to include specific entries. When using a minimatch pattern, file paths are resolved relative to the working directory. */
+  /** Filter entries with a minimatch pattern or predicate. */
   include?: Include
 
-  /** The extension definitions to use for loading and validating file exports. */
+  /** Extension loaders with or without `withSchema`. */
   loaders?: Loaders
 
-  /** The base route path to prepend to all descendant entry `getPathname` and `getPathnameSegments` methods. Defaults entries to their root directory slug. Set to `null` to disable the base pathname. */
+  /** Base route prepended to descendant `getPathname()` results. */
   basePathname?: string | null
 
-  /** The tsconfig.json file path to use for type checking and analyzing JavaScript and TypeScript files. */
+  /** `tsconfig.json` path used for static analysis. */
   tsConfigPath?: string
 
-  /** The casing to apply to all descendant entry `getPathname`, `getPathnameSegments`, and `getSlug` methods. */
+  /** Slug casing applied to route segments. */
   slugCasing?: SlugCasings
 
-  /** The file system to use for reading directory entries. */
+  /** Custom file‑system adapter. */
   fileSystem?: FileSystem
 
-  /** A sort callback applied to all descendant entries. */
-  sort?: (
-    a: IncludedEntry<NoInfer<LoaderTypes>, Include>,
-    b: IncludedEntry<NoInfer<LoaderTypes>, Include>
-  ) => Promise<number> | number
+  /** Sort callback applied at *each* directory depth. */
+  sort?: SortDescriptor<ResolveDirectoryIncludeEntries<Include, LoaderTypes>>
 }
 
 /** A directory containing files and subdirectories in the file system. */
@@ -1415,14 +1413,13 @@ export class Directory<
   Types extends InferModuleLoadersTypes<Loaders>,
   LoaderTypes extends WithDefaultTypes<Types> = WithDefaultTypes<Types>,
   Loaders extends ModuleLoaders = ModuleLoaders,
-  Include extends EntryInclude<
+  Include extends DirectoryInclude<
     FileSystemEntry<LoaderTypes>,
     LoaderTypes
-  > = EntryInclude<FileSystemEntry<LoaderTypes>, LoaderTypes>,
+  > = DirectoryInclude<FileSystemEntry<LoaderTypes>, LoaderTypes>,
 > {
   #path: string
   #rootPath?: string
-  #depth: number = -1
   #basePathname?: string | null
   #tsConfigPath?: string
   #slugCasing: SlugCasings
@@ -1437,10 +1434,7 @@ export class Directory<
       ) => entry is FileSystemEntry<LoaderTypes>)
     | ((entry: FileSystemEntry<LoaderTypes>) => Promise<boolean> | boolean)
     | Minimatch
-  #sort?: (
-    a: FileSystemEntry<LoaderTypes>,
-    b: FileSystemEntry<LoaderTypes>
-  ) => Promise<number> | number
+  #sort?: any
 
   constructor(
     options?: DirectoryOptions<Types, LoaderTypes, Loaders, Include>
@@ -1476,6 +1470,12 @@ export class Directory<
     }
 
     if (this.#include instanceof Minimatch) {
+      const isRecursivePattern = this.#includePattern!.includes('**')
+
+      if (isRecursivePattern && entry instanceof Directory) {
+        return true
+      }
+
       return this.#include.match(entry.getRelativePathToRoot())
     }
 
@@ -1488,7 +1488,7 @@ export class Directory<
       LoaderTypes,
       LoaderTypes,
       Loaders,
-      EntryInclude<FileSystemEntry<LoaderTypes>, LoaderTypes>
+      DirectoryInclude<FileSystemEntry<LoaderTypes>, LoaderTypes>
     >({
       path: this.#path,
       fileSystem: this.#fileSystem,
@@ -1497,11 +1497,11 @@ export class Directory<
       slugCasing: this.#slugCasing,
       loaders: this.#loaders,
       include: this.#include as any,
-      sort: this.#sort,
+      sort: this.#sort as any,
       ...options,
     })
 
-    directory.#depth = this.#depth
+    directory.#directory = this
     directory.#includePattern = this.#includePattern
     directory.#repository = this.#repository
     directory.#rootPath = this.getRootPath()
@@ -1545,7 +1545,7 @@ export class Directory<
 
   /** Get the depth of the directory starting from the root directory. */
   getDepth() {
-    return this.#depth
+    return this.getPathnameSegments().length - 2
   }
 
   /**
@@ -1559,9 +1559,9 @@ export class Directory<
   ): Promise<FileSystemEntry<LoaderTypes>> {
     // Always hydrate this directory once and populate its lookup map.
     const entries = await directory.getEntries({
-      includeDuplicates: true,
+      includeDirectoryNamedFiles: true,
       includeIndexAndReadmeFiles: true,
-      includeTsConfigIgnoredFiles: true,
+      includeTsConfigExcludedFiles: true,
     })
     const [currentSegment, ...remainingSegments] = segments
 
@@ -1723,7 +1723,7 @@ export class Directory<
     // If we ended on a directory, try to find a matching within it
     if (entry instanceof Directory) {
       const directoryEntries = await entry.getEntries({
-        includeDuplicates: true,
+        includeDirectoryNamedFiles: true,
         includeIndexAndReadmeFiles: true,
       })
 
@@ -1789,8 +1789,8 @@ export class Directory<
     while (segments.length > 0) {
       const currentSegment = createSlug(segments.shift()!, this.#slugCasing)
       const allEntries = await currentDirectory.getEntries({
-        includeDuplicates: true,
-        includeTsConfigIgnoredFiles: true,
+        includeDirectoryNamedFiles: true,
+        includeTsConfigExcludedFiles: true,
       })
       let entry: FileSystemEntry<LoaderTypes> | undefined
 
@@ -1853,15 +1853,24 @@ export class Directory<
    * Additionally, `index` and `readme` files are excluded by default.
    */
   async getEntries(options?: {
+    /** Recursively walk every subdirectory. */
     recursive?: Include extends string
       ? Include extends `**${string}`
         ? boolean
         : undefined
       : boolean
+
+    /** Include files named the same as their immediate directory (e.g. `Button/Button.tsx`). */
+    includeDirectoryNamedFiles?: boolean
+
+    /** Include index and readme files. */
     includeIndexAndReadmeFiles?: boolean
-    includeDuplicates?: boolean
+
+    /** Include files that are ignored by `.gitignore`. */
     includeGitIgnoredFiles?: boolean
-    includeTsConfigIgnoredFiles?: boolean
+
+    /** Include files that are excluded by the configured `tsconfig.json` file's `exclude` patterns. */
+    includeTsConfigExcludedFiles?: boolean
   }): Promise<
     Array<
       Include extends string
@@ -1870,14 +1879,12 @@ export class Directory<
               | Directory<LoaderTypes>
               | FileWithExtension<LoaderTypes, ExtractFileExtension<Include>>
           : FileWithExtension<LoaderTypes, ExtractFileExtension<Include>>
-        : Include extends EntryInclude<infer FilteredEntry, LoaderTypes>
+        : Include extends DirectoryInclude<infer FilteredEntry, LoaderTypes>
           ? FilteredEntry
           : FileSystemEntry<LoaderTypes>
     >
   > {
     if (options?.recursive && this.#includePattern) {
-      // Only error on single-level glob patterns (e.g. "*.mdx")
-      // Multi-level patterns (e.g. "**/*.mdx") are valid with `recursive` option
       if (!this.#includePattern.includes('**')) {
         throw new Error(
           '[renoun] Cannot use recursive option with a single-level include filter. Use a multi-level pattern (e.g. "**/*.mdx") instead.'
@@ -1890,37 +1897,33 @@ export class Directory<
     if (process.env.NODE_ENV === 'production') {
       if (options) {
         cacheKey += options.recursive ? 'r' : ''
-        cacheKey += options.includeDuplicates ? 'd' : ''
+        cacheKey += options.includeDirectoryNamedFiles ? 'd' : ''
         cacheKey += options.includeIndexAndReadmeFiles ? 'i' : ''
         cacheKey += options.includeGitIgnoredFiles ? 'g' : ''
-        cacheKey += options.includeTsConfigIgnoredFiles ? 't' : ''
+        cacheKey += options.includeTsConfigExcludedFiles ? 't' : ''
       }
 
       if (this.#entriesCache.has(cacheKey)) {
-        const entries = this.#entriesCache.get(cacheKey)!
-        return entries as any
+        return this.#entriesCache.get(cacheKey)! as any
       }
     }
 
     const fileSystem = this.getFileSystem()
     const directoryEntries = await fileSystem.readDirectory(this.#path)
     const entriesMap = new Map<string, FileSystemEntry<LoaderTypes>>()
-    const thisDirectory = this as Directory<any>
-    const directoryBaseName = this.getBaseName()
-    const nextDepth = this.#depth + 1
 
     for (const entry of directoryEntries) {
       const shouldSkipIndexOrReadme = options?.includeIndexAndReadmeFiles
         ? false
-        : ['index', 'readme'].some((name) =>
-            entry.name.toLowerCase().startsWith(name)
+        : ['index', 'readme'].some((n) =>
+            entry.name.toLowerCase().startsWith(n)
           )
 
       if (
         shouldSkipIndexOrReadme ||
         (!options?.includeGitIgnoredFiles &&
           fileSystem.isFilePathGitIgnored(entry.path)) ||
-        (!options?.includeTsConfigIgnoredFiles &&
+        (!options?.includeTsConfigExcludedFiles &&
           fileSystem.isFilePathExcludedFromTsConfig(
             entry.path,
             entry.isDirectory
@@ -1930,7 +1933,7 @@ export class Directory<
       }
 
       const entryKey =
-        entry.isDirectory || options?.includeDuplicates
+        entry.isDirectory || options?.includeDirectoryNamedFiles
           ? entry.path
           : removeAllExtensions(entry.path)
 
@@ -1939,94 +1942,28 @@ export class Directory<
       }
 
       if (entry.isDirectory) {
-        const subdirectory = this.#duplicate({
-          fileSystem,
-          path: entry.path,
-        })
-        subdirectory.#directory = thisDirectory
-        subdirectory.#depth = nextDepth
-
-        const primaryScan = await subdirectory.getEntries({
-          ...options,
-          recursive: true,
-        })
-        let hasMatches = primaryScan.length > 0
-
-        if (!hasMatches && options?.includeDuplicates !== true) {
-          const duplicateScan = await subdirectory.getEntries({
-            ...options,
-            includeDuplicates: true,
-            recursive: true,
-          })
-          hasMatches = duplicateScan.length > 0
-        }
-
-        const isRecursiveGlob = this.#includePattern?.includes('**')
-        let keepDirectory: boolean
-
-        if (isRecursiveGlob) {
-          keepDirectory = hasMatches
-        } else if (this.#include) {
-          keepDirectory = await this.#shouldInclude(subdirectory)
-        } else {
-          keepDirectory = true
-        }
-
-        if (keepDirectory) {
-          entriesMap.set(entry.path, subdirectory)
-          this.#addPathLookup(subdirectory)
-        }
-
-        if (options?.recursive) {
-          for (const child of primaryScan) {
-            entriesMap.set(child.getAbsolutePath(), child)
-            this.#addPathLookup(child)
-          }
-        }
-
-        continue
+        const subdirectory = this.#duplicate({ path: entry.path })
+        entriesMap.set(entryKey, subdirectory)
+        this.#addPathLookup(subdirectory)
       } else if (entry.isFile) {
+        const sharedOptions = {
+          path: entry.path,
+          directory: this,
+          basePathname: this.#basePathname,
+          slugCasing: this.#slugCasing,
+        } as const
         const extension = extensionName(entry.name).slice(1)
-        const loader = this.#loaders?.[extension] as ModuleLoader<
-          LoaderTypes[any]
-        >
-        const file = isJavaScriptLikeExtension(extension)
-          ? new JavaScriptFile({
-              path: entry.path,
-              depth: nextDepth,
-              directory: thisDirectory,
-              basePathname: this.#basePathname,
-              slugCasing: this.#slugCasing,
-              loader,
-            })
-          : extension === 'mdx'
-            ? new MDXFile({
-                path: entry.path,
-                depth: nextDepth,
-                directory: thisDirectory,
-                basePathname: this.#basePathname,
-                slugCasing: this.#slugCasing,
-                loader,
-              })
-            : new File({
-                path: entry.path,
-                depth: nextDepth,
-                directory: thisDirectory,
-                basePathname: this.#basePathname,
-                slugCasing: this.#slugCasing,
-              })
+        const loader = this.#loaders?.[extension] as
+          | ModuleLoader<LoaderTypes[any]>
+          | undefined
+        const file =
+          extension === 'mdx'
+            ? new MDXFile({ ...sharedOptions, loader })
+            : isJavaScriptLikeExtension(extension)
+              ? new JavaScriptFile({ ...sharedOptions, loader })
+              : new File(sharedOptions)
 
-        if (
-          !options?.includeDuplicates &&
-          file.getBaseName() === directoryBaseName
-        ) {
-          continue
-        }
-
-        if (
-          this.#include &&
-          !(await this.#shouldInclude(file as FileSystemEntry<LoaderTypes>))
-        ) {
+        if (this.#include && !(await this.#shouldInclude(file))) {
           continue
         }
 
@@ -2035,48 +1972,64 @@ export class Directory<
       }
     }
 
-    const entries = Array.from(
+    const immediateEntries = Array.from(
       entriesMap.values()
     ) as FileSystemEntry<LoaderTypes>[]
 
     if (this.#sort) {
       try {
-        const entryCount = entries.length
-        for (let outerIndex = 0; outerIndex < entryCount; outerIndex++) {
-          for (
-            let currentIndex = 0;
-            currentIndex < entryCount - outerIndex - 1;
-            currentIndex++
-          ) {
-            const a = entries[currentIndex]
-            const b = entries[currentIndex + 1]
-            const comparison = await this.#sort(a, b)
-
-            if (comparison > 0) {
-              ;[entries[currentIndex], entries[currentIndex + 1]] = [b, a]
-            }
-          }
-        }
+        await sortEntries(immediateEntries, this.#sort)
       } catch (error) {
         const badge = '[renoun] '
-
         if (error instanceof Error && error.message.includes(badge)) {
           throw new Error(
-            `[renoun] Error occurred while sorting entries for directory at "${
-              this.#path
-            }". \n\n${error.message.slice(badge.length)}`
+            `[renoun] Error occurred while sorting entries for directory at "${this.#path}". \n\n${error.message.slice(
+              badge.length
+            )}`
           )
         }
-
         throw error
       }
     }
 
-    if (process.env.NODE_ENV === 'production') {
-      this.#entriesCache.set(cacheKey, entries)
+    const result: FileSystemEntry<LoaderTypes>[] = []
+
+    for (const entry of immediateEntries) {
+      if (entry instanceof Directory) {
+        const includeSelf = this.#include
+          ? await this.#shouldInclude(entry)
+          : true
+        const children = options?.recursive
+          ? await entry.getEntries(options)
+          : []
+
+        if (includeSelf && (children.length > 0 || !options?.recursive)) {
+          result.push(entry)
+        }
+
+        const directoryBaseName = entry.getBaseName()
+
+        for (const child of children) {
+          const isDirectoryNamedFile =
+            child instanceof File &&
+            child.getParent() === entry &&
+            child.getBaseName() === directoryBaseName &&
+            !options?.includeDirectoryNamedFiles
+
+          if (!isDirectoryNamedFile) {
+            result.push(child)
+          }
+        }
+      } else {
+        result.push(entry)
+      }
     }
 
-    return entries as any
+    if (process.env.NODE_ENV === 'production') {
+      this.#entriesCache.set(cacheKey, result)
+    }
+
+    return result as any
   }
 
   /** Get the root directory path. */
@@ -2613,4 +2566,198 @@ export function isMDXFile<
   entry: FileSystemEntry<DirectoryTypes> | undefined
 ): entry is MDXFile<FileTypes, DirectoryTypes> {
   return entry instanceof MDXFile
+}
+
+type ComparableValue = string | number | bigint | boolean | Date
+
+type IsPlainObject<Type> = Type extends object
+  ? Type extends (...args: any) => any
+    ? false
+    : Type extends readonly any[]
+      ? false
+      : true
+  : false
+
+type PreviousDepth = [never, 0, 1]
+
+type NestedPropertyPath<
+  Type,
+  Prefix extends string = '',
+  Depth extends number = 4,
+> = [Depth] extends [never]
+  ? never
+  : {
+      [Key in Extract<keyof Type, string>]: Type[Key] extends ComparableValue
+        ? `${Prefix}${Key}`
+        : IsPlainObject<Type[Key]> extends true
+          ? NestedPropertyPath<
+              Type[Key],
+              `${Prefix}${Key}.`,
+              PreviousDepth[Depth]
+            >
+          : never
+    }[Extract<keyof Type, string>]
+
+type ExtensionPropertyPaths<ExtensionTypes> = {
+  [Extension in keyof ExtensionTypes & string]: NestedPropertyPath<
+    ExtensionTypes[Extension]
+  >
+}[keyof ExtensionTypes & string]
+
+type BuiltinProperty = 'name' | 'directory'
+
+type ValidSortKey<ExtensionTypes> =
+  LoadersWithRuntimeKeys<ExtensionTypes> extends never
+    ? BuiltinProperty
+    : BuiltinProperty | ExtensionPropertyPaths<ExtensionTypes>
+
+type Awaitable<Type> = Promise<Type> | Type
+
+type SortKeyExtractor<Entry extends FileSystemEntry<any>> = (
+  entry: Entry
+) => Awaitable<ComparableValue>
+
+type SortDescriptorObject<
+  ExtensionTypes extends Record<string, any>,
+  Entry extends FileSystemEntry<ExtensionTypes>,
+  Key extends ValidSortKey<ExtensionTypes> | SortKeyExtractor<Entry> =
+    | ValidSortKey<ExtensionTypes>
+    | SortKeyExtractor<Entry>,
+> = {
+  readonly key: Key
+  readonly compare?: (
+    a: ExtractComparable<Key>,
+    b: ExtractComparable<Key>
+  ) => number
+  readonly direction?: 'ascending' | 'descending'
+}
+
+type EntryTypes<E> = E extends FileSystemEntry<infer T> ? T : never
+
+export type SortDescriptor<Entry extends FileSystemEntry<any>> =
+  | ValidSortKey<EntryTypes<Entry>>
+  | SortKeyExtractor<Entry>
+  | SortDescriptorObject<EntryTypes<Entry>, Entry>
+
+function keyName(entry: FileSystemEntry<any>) {
+  return entry.getBaseName().toLowerCase()
+}
+
+/** Builds a key extractor for an `export.x.y` path. */
+function exportKeyFactory(pathSegments: string[]) {
+  const [exportName, ...objectPath] = pathSegments
+
+  return async (entry: any) => {
+    let value = await entry.getExportValue(exportName)
+    if (value === null) {
+      return null
+    }
+    for (const segment of objectPath) {
+      value = value[segment]
+    }
+    return value
+  }
+}
+
+/** Compares two primitives. */
+function primitiveComparator(a: any, b: any): number {
+  if (a === null || b === null) {
+    if (a === null && b === null) {
+      return 0
+    }
+    return a === null ? -1 : 1
+  }
+  if (a < b) {
+    return -1
+  }
+  if (a > b) {
+    return 1
+  }
+  return 0
+}
+
+/** Compiles a set of sort descriptors into a sort function. */
+export async function sortEntries<ExtensionTypes extends Record<string, any>>(
+  entries: FileSystemEntry<ExtensionTypes>[],
+  descriptor: SortDescriptor<any>
+) {
+  let key: string | ((entry: any) => any) | ((entry: any) => Promise<any>)
+  let direction: 'ascending' | 'descending' = 'ascending'
+  let directionProvided = false
+
+  if (typeof descriptor === 'string') {
+    key = descriptor
+  } else if (typeof descriptor === 'function') {
+    key = descriptor
+  } else if (
+    typeof descriptor === 'object' &&
+    descriptor !== null &&
+    'key' in descriptor
+  ) {
+    key = descriptor.key
+    if (descriptor.direction) {
+      direction = descriptor.direction
+      directionProvided = true
+    }
+  } else {
+    throw new Error(`[renoun] Invalid sort descriptor: ${descriptor}`)
+  }
+
+  const cache = new WeakMap()
+  let keyExtractor: ((entry: any) => any) | ((entry: any) => Promise<any>)
+
+  if (typeof key === 'function') {
+    keyExtractor = key
+  } else if (key === 'name') {
+    keyExtractor = keyName
+  } else if (key === 'directory') {
+    keyExtractor = isDirectory
+  } else {
+    keyExtractor = exportKeyFactory(key.split('.'))
+  }
+
+  const keyResolvers: Promise<void>[] = []
+
+  for (const entry of entries) {
+    if (!cache.has(entry)) {
+      keyResolvers.push(
+        Promise.resolve(keyExtractor(entry)).then((key) => {
+          cache.set(entry, key)
+
+          // default to descending (newest first) when a Date is detected
+          if (!directionProvided && key instanceof Date) {
+            direction = 'descending'
+          }
+        })
+      )
+    }
+  }
+
+  await Promise.all(keyResolvers)
+
+  const sign = direction === 'descending' ? -1 : 1
+
+  entries.sort((a, b) => {
+    return sign * primitiveComparator(cache.get(a), cache.get(b))
+  })
+}
+
+type ExtractComparable<Key> = Key extends (
+  ...args: any
+) => Awaitable<infer Return>
+  ? Awaited<Return> extends ComparableValue
+    ? Awaited<Return>
+    : ComparableValue
+  : ComparableValue
+
+export function createSort<
+  ExtensionTypes extends Record<string, any>,
+  Entry extends FileSystemEntry<any>,
+  Key extends SortKeyExtractor<Entry> = SortKeyExtractor<Entry>,
+>(options: {
+  key: Key
+  compare?: (a: ExtractComparable<Key>, b: ExtractComparable<Key>) => number
+  direction?: 'ascending' | 'descending'
+}): SortDescriptorObject<any, Entry, Key> {
+  return options
 }
