@@ -5,7 +5,7 @@ export const docs = new Directory({
   path: 'docs',
   basePathname: null,
   include: '**/*.mdx',
-  loaders: {
+  loader: {
     mdx: withSchema(
       {
         metadata: z.object({

@@ -5,7 +5,7 @@ export const posts = new Directory({
   path: 'posts',
   include: '*.mdx',
   basePathname: null,
-  loaders: {
+  loader: {
     mdx: withSchema(
       {
         frontmatter: z.object({

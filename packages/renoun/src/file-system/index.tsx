@@ -1390,7 +1390,7 @@ export interface DirectoryOptions<
   include?: Include
 
   /** Extension loaders with or without `withSchema`. */
-  loaders?: Loaders
+  loader?: Loaders
 
   /** Base route prepended to descendant `getPathname()` results. */
   basePathname?: string | null
@@ -1423,7 +1423,7 @@ export class Directory<
   #basePathname?: string | null
   #tsConfigPath?: string
   #slugCasing: SlugCasings
-  #loaders?: Loaders
+  #loader?: Loaders
   #directory?: Directory<any, any, any>
   #fileSystem: FileSystem | undefined
   #repository: Repository | undefined
@@ -1444,7 +1444,7 @@ export class Directory<
       this.#slugCasing = 'kebab'
     } else {
       this.#path = options.path ? ensureRelativePath(options.path) : '.'
-      this.#loaders = options.loaders
+      this.#loader = options.loader
       this.#basePathname =
         options.basePathname === undefined
           ? this.#directory
@@ -1495,7 +1495,7 @@ export class Directory<
       basePathname: this.#basePathname,
       tsConfigPath: this.#tsConfigPath,
       slugCasing: this.#slugCasing,
-      loaders: this.#loaders,
+      loader: this.#loader,
       include: this.#include as any,
       sort: this.#sort as any,
       ...options,
@@ -1953,7 +1953,7 @@ export class Directory<
           slugCasing: this.#slugCasing,
         } as const
         const extension = extensionName(entry.name).slice(1)
-        const loader = this.#loaders?.[extension] as
+        const loader = this.#loader?.[extension] as
           | ModuleLoader<LoaderTypes[any]>
           | undefined
         const file =

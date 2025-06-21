@@ -14,7 +14,7 @@ import { z } from 'zod'
 export const posts = new Directory({
   path: 'posts',
   include: '*.mdx',
-  loaders: {
+  loader: {
     mdx: withSchema(
       {
         frontmatter: z.object({

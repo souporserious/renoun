@@ -189,7 +189,7 @@ describe('file system', () => {
   test('filters with schema', async () => {
     const directory = new Directory({
       path: 'fixtures/posts',
-      loaders: {
+      loader: {
         mdx: withSchema(
           {
             frontmatter: z.object({
@@ -248,7 +248,7 @@ describe('file system', () => {
   test('loaders', async () => {
     const directory = new Directory({
       path: 'fixtures/utils',
-      loaders: {
+      loader: {
         ts: withSchema<{
           basename: typeof basename
         }>((path) => import(`#fixtures/utils/${path}.ts`)),
@@ -269,7 +269,7 @@ describe('file system', () => {
     test('types only', async () => {
       const directory = new Directory({
         path: 'fixtures/docs',
-        loaders: {
+        loader: {
           ts: withSchema<{ metadata?: { title: string } }>(
             (path) => import(`#fixtures/docs/${path}.ts`)
           ),
@@ -287,7 +287,7 @@ describe('file system', () => {
     test('custom validator', async () => {
       const directory = new Directory({
         path: 'fixtures/docs',
-        loaders: {
+        loader: {
           ts: withSchema<{ metadata: { title: string } }>(
             {
               metadata: (value) => {
@@ -313,7 +313,7 @@ describe('file system', () => {
     test('inferred validator', async () => {
       const directory = new Directory({
         path: 'fixtures/docs',
-        loaders: {
+        loader: {
           ts: withSchema(
             {
               metadata: (value: { title: string }) => {
@@ -336,7 +336,7 @@ describe('file system', () => {
     test('valibot', async () => {
       const directory = new Directory({
         path: 'fixtures/docs',
-        loaders: {
+        loader: {
           ts: withSchema(
             {
               metadata: v.object({
@@ -362,7 +362,7 @@ describe('file system', () => {
     test('zod', async () => {
       const directory = new Directory({
         path: 'fixtures/docs',
-        loaders: {
+        loader: {
           ts: withSchema(
             {
               metadata: z.object({
@@ -390,7 +390,7 @@ describe('file system', () => {
     type PostType = { frontmatter: { title: string } }
     const posts = new Directory({
       path: 'fixtures/posts',
-      loaders: {
+      loader: {
         mdx: withSchema<PostType>(
           {
             frontmatter: (value) => {
@@ -422,7 +422,7 @@ describe('file system', () => {
     const posts = new Directory({
       fileSystem,
       path: 'posts',
-      loaders: {
+      loader: {
         mdx: withSchema<PostType>(),
       },
       include: (entry) => isFile(entry, 'mdx'),
@@ -512,7 +512,7 @@ describe('file system', () => {
     }
     const directory = new Directory({
       fileSystem,
-      loaders: {
+      loader: {
         ts: withSchema<{ order: number }>((path) => {
           const importPath = `${path}.ts` as keyof typeof imports
           return imports[importPath]()
@@ -706,7 +706,7 @@ describe('file system', () => {
   test('javascript file with runtime', async () => {
     const projectDirectory = new Directory({
       path: 'fixtures/project',
-      loaders: {
+      loader: {
         ts: (path) => import(`#fixtures/project/${path}.ts`),
       },
     })
@@ -719,7 +719,7 @@ describe('file system', () => {
   test('is javascript file with runtime', async () => {
     const projectDirectory = new Directory({
       path: 'fixtures/project',
-      loaders: {
+      loader: {
         ts: (path) => import(`#fixtures/project/${path}.ts`),
       },
     })
@@ -936,7 +936,7 @@ describe('file system', () => {
     })
     const rootDirectory = new Directory({
       fileSystem,
-      loaders: {
+      loader: {
         ts: withSchema<{ useHover: Function }>(() => {
           return Promise.resolve({ useHover: () => {} })
         }),
@@ -953,7 +953,7 @@ describe('file system', () => {
   test('file export value types', async () => {
     const projectDirectory = new Directory({
       path: 'fixtures/project',
-      loaders: {
+      loader: {
         ts: withSchema<{ createServer: () => void }>(
           (path) => import(`#fixtures/project/${path}.ts`)
         ),
@@ -972,7 +972,7 @@ describe('file system', () => {
     })
     const directory = new Directory({
       fileSystem,
-      loaders: {
+      loader: {
         ts: withSchema<{ metadata: { title: string } }>(
           {
             metadata: (value) => {
@@ -1017,7 +1017,7 @@ describe('file system', () => {
     })
     const directory = new Directory({
       fileSystem,
-      loaders: {
+      loader: {
         ts: {
           schema: {
             metadata: z.object({
@@ -1110,7 +1110,7 @@ describe('file system', () => {
   test('getRuntimeValue resolves export runtime value from extension module', async () => {
     const directory = new Directory({
       path: 'fixtures/utils',
-      loaders: {
+      loader: {
         ts: (path) => import(`#fixtures/utils/${path}.ts`),
       },
     })
@@ -1133,7 +1133,7 @@ describe('file system', () => {
   test('getRuntimeValue resolves export runtime value from loader', async () => {
     const directory = new Directory({
       path: 'fixtures/utils',
-      loaders: {
+      loader: {
         ts: (path) => import(`#fixtures/utils/${path}.ts`),
       },
     })
@@ -1159,7 +1159,7 @@ describe('file system', () => {
     })
     const directory = new Directory({
       fileSystem,
-      loaders: {
+      loader: {
         ts: async () => {
           return { metadata: { title: 'Hello, World!' } }
         },
@@ -1339,7 +1339,7 @@ describe('file system', () => {
     })
     const directory = new Directory({
       fileSystem,
-      loaders: {
+      loader: {
         tsx: withSchema<{
           default: ComponentType
         }>,
@@ -1384,7 +1384,7 @@ describe('file system', () => {
     const fileSystem = new MemoryFileSystem({ 'Button.tsx': '' })
     const directory = new Directory({
       fileSystem,
-      loaders: {
+      loader: {
         tsx: withSchema<Metadata>(),
       },
     })
@@ -1403,7 +1403,7 @@ describe('file system', () => {
     const fileSystem = new MemoryFileSystem({ 'Button.tsx': '' })
     const directory = new Directory({
       fileSystem,
-      loaders: {
+      loader: {
         ts: withSchema<Metadata>(),
         tsx: withSchema<Metadata>(),
       },
@@ -1478,7 +1478,7 @@ describe('file system', () => {
         'index.ts': `export const metadata = { title: "Hello, World!" }`,
         'README.mdx': `export const frontmatter = { date: new Date("6/6/2026") }`,
       }),
-      loaders: {
+      loader: {
         ts: withSchema<{ metadata: { title: string } }>(() => {
           return Promise.resolve({ metadata: { title: 'Hello, World!' } })
         }),
@@ -1532,13 +1532,13 @@ describe('file system', () => {
     const posts = new Directory({
       path: 'posts',
       fileSystem: memoryFileSystem,
-      loaders: {
+      loader: {
         mdx: withSchema<FrontMatter>(),
       },
     })
     const docs = new Directory({
       path: 'fixtures/docs',
-      loaders: {
+      loader: {
         mdx: withSchema<FrontMatter>(),
       },
     })
@@ -1671,13 +1671,13 @@ describe('file system', () => {
 
     const directoryA = new Directory({
       fileSystem: new MemoryFileSystem({ 'Button.mdx': '' }),
-      loaders: {
+      loader: {
         mdx: withSchema<MDXTypes>(),
       },
     })
     const directoryB = new Directory({
       path: 'fixtures/components',
-      loaders: {
+      loader: {
         tsx: withSchema<TSXTypes>(),
       },
     })
@@ -1722,7 +1722,7 @@ describe('file system', () => {
 
     const directory = new Directory({
       path: 'fixtures/docs',
-      loaders: {
+      loader: {
         mdx: withSchema(
           {
             headings: z.array(
@@ -1758,7 +1758,7 @@ describe('file system', () => {
       fileSystem: new MemoryFileSystem({
         'hello-world.mdx': `export const frontmatter = { title: 'Hello, World!' }\n\n# Hello, World!`,
       }),
-      loaders: {
+      loader: {
         mdx: withSchema<{ frontmatter: { title: string } }>(() => {
           return {
             default: async () => {
@@ -1933,7 +1933,7 @@ describe('file system', () => {
 
   test('sort descriptor', async () => {
     new Directory({
-      loaders: {
+      loader: {
         mdx: withSchema<{
           frontmatter: {
             title: string
@@ -2073,7 +2073,7 @@ describe('file system', () => {
   test('sort descriptor with recursive include', async () => {
     new Directory({
       include: '**/*.mdx',
-      loaders: {
+      loader: {
         mdx: withSchema(
           { metadata: z.object({ order: z.number() }) },
           (path) => import(`./docs/${path}.mdx`)
@@ -2084,7 +2084,7 @@ describe('file system', () => {
 
     new Directory({
       include: '**/*.mdx',
-      loaders: {
+      loader: {
         mdx: withSchema(
           { metadata: z.object({ order: z.number() }) },
           (path) => import(`./docs/${path}.mdx`)
@@ -2103,7 +2103,7 @@ describe('file system', () => {
     })
     const directory = new Directory({
       fileSystem,
-      loaders: {
+      loader: {
         ts: withSchema<{ priority: number }>((path) => {
           switch (path) {
             case 'file1':

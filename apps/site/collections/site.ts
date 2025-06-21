@@ -20,7 +20,7 @@ const mdxSchema = {
 
 export const DocsCollection = new Directory({
   path: 'docs',
-  loaders: {
+  loader: {
     mdx: withSchema(mdxSchema, (path) => import(`@/docs/${path}.mdx`)),
   },
   include: (entry) => isFile(entry, 'mdx'),
@@ -28,7 +28,7 @@ export const DocsCollection = new Directory({
 
 export const GuidesCollection = new Directory({
   path: 'guides',
-  loaders: {
+  loader: {
     mdx: withSchema(mdxSchema, (path) => import(`@/guides/${path}.mdx`)),
   },
   include: (entry) => isFile(entry, 'mdx'),

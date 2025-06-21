@@ -150,7 +150,7 @@ import { Directory } from 'renoun/file-system'
 const posts = new Directory({
   path: 'posts',
   include: '*.mdx',
-  loaders: {
+  loader: {
     mdx: (path) => import(`@/posts/${path}.mdx`),
   },
 })
@@ -173,7 +173,7 @@ import Link from 'next/link'
 const posts = new Directory({
   path: 'posts',
   include: '*.mdx',
-  loaders: {
+  loader: {
     mdx: (path) => import(`@/posts/${path}.mdx`),
   },
 })
@@ -219,7 +219,7 @@ import { z } from 'zod'
 export const posts = new Directory({
   path: 'posts',
   include: '*.mdx',
-  loaders: {
+  loader: {
     mdx: withSchema(
       {
         frontmatter: {

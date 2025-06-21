@@ -275,7 +275,7 @@ import { Directory } from 'renoun/file-system'
 
 const posts = new Directory({
   path: 'posts',
-  loaders: {
+  loader: {
     mdx: (path) => import(`./posts/${path}.mdx`),
   },
 })
@@ -339,7 +339,7 @@ interface PostType {
 
 const posts = new Directory({
   path: 'posts',
-  loaders: {
+  loader: {
     mdx: withSchema<PostType>((path) => import(`./posts/${path}.mdx`)),
   },
 })
@@ -367,7 +367,7 @@ import { z } from 'zod'
 
 const posts = new Directory({
   path: 'posts',
-  loaders: {
+  loader: {
     mdx: withSchema(
       {
         frontmatter: z.object({
@@ -395,7 +395,7 @@ interface PostType {
 
 const posts = new Directory({
   path: 'posts',
-  loaders: {
+  loader: {
     mdx: withSchema<PostType>(
       {
         frontmatter: (value) => {
