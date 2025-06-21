@@ -1360,7 +1360,7 @@ type ResolveDirectoryIncludeEntries<
   Types extends Record<string, any> = Record<string, any>,
 > = Include extends string
   ? Include extends `**${string}`
-    ? Directory<any> | FileWithExtension<Types, ExtractFileExtension<Include>>
+    ? Directory<Types> | FileWithExtension<Types, ExtractFileExtension<Include>>
     : FileWithExtension<Types, ExtractFileExtension<Include>>
   : [Narrowed<Include>] extends [never]
     ? FileSystemEntry<Types>

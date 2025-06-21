@@ -2070,6 +2070,31 @@ describe('file system', () => {
     expect(names).toEqual(['alpha', 'beta', 'zebra'])
   })
 
+  test('sort descriptor with recursive include', async () => {
+    new Directory({
+      include: '**/*.mdx',
+      loaders: {
+        mdx: withSchema(
+          { metadata: z.object({ order: z.number() }) },
+          (path) => import(`./docs/${path}.mdx`)
+        ),
+      },
+      sort: 'metadata.order',
+    })
+
+    new Directory({
+      include: '**/*.mdx',
+      loaders: {
+        mdx: withSchema(
+          { metadata: z.object({ order: z.number() }) },
+          (path) => import(`./docs/${path}.mdx`)
+        ),
+      },
+      // @ts-expect-error - should throw error since date is not a typed property
+      sort: 'metadata.date',
+    })
+  })
+
   test('sort descriptor function with async resolver', async () => {
     const fileSystem = new MemoryFileSystem({
       'file1.ts': 'export const priority = 3',
