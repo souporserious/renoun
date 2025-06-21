@@ -168,7 +168,7 @@ function FreePlan() {
       description="A generous non-commercial license ideal for blogs, documentation sites, and educational content."
       features={[
         'Blogs and content sites',
-        'Application documentation',
+        'Product documentation',
         'Educational and community content',
         'Non-profit initiatives',
       ]}
@@ -210,8 +210,8 @@ function CommercialPlan() {
       price="Contact Us"
       description="If you plan to integrate renoun into a commercial product or service, drop us an email."
       features={[
+        'Subscription sites',
         'SaaS products',
-        'E-commerce platforms',
         'AI Chatbots',
         'Priority support',
       ]}
