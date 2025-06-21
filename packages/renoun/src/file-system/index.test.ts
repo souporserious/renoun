@@ -890,11 +890,11 @@ describe('file system', () => {
     expect(file.getPathname()).toEqual('/button')
     expect(file.getPathnameSegments()).toStrictEqual(['button'])
 
-    expect(file.getPathname({ includeDuplicateSegments: true })).toEqual(
+    expect(file.getPathname({ includeDirectoryNamedSegment: true })).toEqual(
       '/button/button'
     )
     expect(
-      file.getPathnameSegments({ includeDuplicateSegments: true })
+      file.getPathnameSegments({ includeDirectoryNamedSegment: true })
     ).toStrictEqual(['button', 'button'])
   })
 

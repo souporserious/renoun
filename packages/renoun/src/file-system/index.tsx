@@ -276,6 +276,15 @@ export type FileSystemEntry<
   DirectoryTypes extends Record<string, any> = Record<string, any>,
 > = Directory<DirectoryTypes> | File<DirectoryTypes>
 
+/** Options for the `File#getPathname` and `File#getPathnameSegments` methods. */
+export interface FilePathnameOptions {
+  /** Whether to include the configured `Directory:options.basePathname` in the pathname. */
+  includeBasePathname?: boolean
+
+  /** Whether to include the directory named segment in the pathname segments e.g. `button/button` for `Button/Button.tsx`. */
+  includeDirectoryNamedSegment?: boolean
+}
+
 /** Options for a file in the file system. */
 export interface FileOptions<
   Types extends Record<string, any> = Record<string, any>,
@@ -374,12 +383,10 @@ export class File<
    * Get the path of this file formatted for routes. The configured `slugCasing`
    * option will be used to format each segment.
    */
-  getPathname(options?: {
-    includeBasePathname?: boolean
-    includeDuplicateSegments?: boolean
-  }) {
+  getPathname(options?: FilePathnameOptions) {
     const includeBasePathname = options?.includeBasePathname ?? true
-    const includeDuplicateSegments = options?.includeDuplicateSegments ?? false
+    const includeDirectoryNamedSegment =
+      options?.includeDirectoryNamedSegment ?? false
     const fileSystem = this.#directory.getFileSystem()
     let path = fileSystem.getPathname(this.#path, {
       basePath:
@@ -389,14 +396,14 @@ export class File<
       rootPath: this.#directory.getRootPath(),
     })
 
-    if (!includeDuplicateSegments || this.#slugCasing !== 'none') {
+    if (!includeDirectoryNamedSegment || this.#slugCasing !== 'none') {
       let parsedPath = path.split('/')
       const parsedSegments: string[] = []
 
       for (let index = 0; index < parsedPath.length; index++) {
         const segment = parsedPath[index]
 
-        if (includeDuplicateSegments || segment !== parsedPath[index - 1]) {
+        if (includeDirectoryNamedSegment || segment !== parsedPath[index - 1]) {
           parsedSegments.push(
             this.#slugCasing === 'none'
               ? segment
@@ -422,10 +429,7 @@ export class File<
   }
 
   /** Get the route path segments for this file. */
-  getPathnameSegments(options?: {
-    includeBasePathname?: boolean
-    includeDuplicateSegments?: boolean
-  }) {
+  getPathnameSegments(options?: FilePathnameOptions) {
     return this.getPathname(options).split('/').filter(Boolean)
   }
 
@@ -536,7 +540,7 @@ export class File<
     GroupTypes extends Record<string, any> = DirectoryTypes,
   >(options?: {
     entryGroup?: EntryGroup<GroupTypes, FileSystemEntry<any>[]>
-    includeDuplicateSegments?: boolean
+    includeDirectoryNamedSegment?: boolean
   }): Promise<
     [
       FileSystemEntry<DirectoryTypes> | undefined,
@@ -554,7 +558,7 @@ export class File<
       ? options.entryGroup.getEntries({ recursive: true })
       : this.#directory.getEntries())
     const path = this.getPathname({
-      includeDuplicateSegments: options?.includeDuplicateSegments,
+      includeDirectoryNamedSegment: options?.includeDirectoryNamedSegment,
     })
     const index = entries.findIndex((entry) => entry.getPathname() === path)
     const previous = index > 0 ? entries[index - 1] : undefined
