@@ -4,6 +4,7 @@ import { z } from 'zod'
 export const posts = new Directory({
   path: 'posts',
   include: '*.mdx',
+  basePathname: null,
   loaders: {
     mdx: withSchema(
       {
