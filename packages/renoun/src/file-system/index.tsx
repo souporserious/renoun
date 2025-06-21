@@ -1965,6 +1965,17 @@ export class Directory<
         const loader = this.#loader?.[extension] as
           | ModuleLoader<LoaderTypes[any]>
           | undefined
+
+        // Skip files that share the same base name as this directory unless
+        // explicitly included via `includeDirectoryNamedFiles`.
+        if (
+          !options?.recursive &&
+          !options?.includeDirectoryNamedFiles &&
+          removeAllExtensions(entry.name) === this.getBaseName()
+        ) {
+          continue
+        }
+
         const file =
           extension === 'mdx'
             ? new MDXFile({ ...sharedOptions, loader })

@@ -2148,4 +2148,41 @@ describe('file system', () => {
 
     expect(names).toEqual(['newer.mdx', 'older.mdx'])
   })
+
+  test('excludes directory-named files by default', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'components/CodeBlock/CodeBlock.tsx': '',
+      'components/CodeBlock/Tokens.tsx': '',
+    })
+    const componentsDirectory = new Directory({
+      fileSystem,
+      path: 'components',
+    })
+    const codeBlockDirectory =
+      await componentsDirectory.getDirectory('CodeBlock')
+    const entries = await codeBlockDirectory.getEntries()
+
+    expect(entries.map((entry) => entry.getName())).toEqual(['Tokens.tsx'])
+  })
+
+  test('includes directory-named files when includeDirectoryNamedFiles is true', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'components/CodeBlock/CodeBlock.tsx': '',
+      'components/CodeBlock/Tokens.tsx': '',
+    })
+    const componentsDirectory = new Directory({
+      fileSystem,
+      path: 'components',
+    })
+    const codeBlockDirectory =
+      await componentsDirectory.getDirectory('CodeBlock')
+    const entries = await codeBlockDirectory.getEntries({
+      includeDirectoryNamedFiles: true,
+    })
+
+    expect(entries.map((entry) => entry.getName())).toEqual([
+      'CodeBlock.tsx',
+      'Tokens.tsx',
+    ])
+  })
 })
