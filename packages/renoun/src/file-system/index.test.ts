@@ -2059,10 +2059,10 @@ describe('file system', () => {
     }>({
       fileSystem,
       include: '**/*.ts',
-      sort: createSort({
-        key: (entry) => entry.getBaseName(),
-        compare: (a, b) => a.localeCompare(b),
-      }),
+      sort: createSort(
+        (entry) => entry.getBaseName(),
+        (a, b) => a.localeCompare(b)
+      ),
     })
     const entries = await directory.getEntries()
     const names = entries.map((entry) => entry.getBaseName())
@@ -2116,15 +2116,15 @@ describe('file system', () => {
           return Promise.resolve({ priority: 0 })
         }),
       },
-      sort: createSort({
-        key: (entry) => {
+      sort: createSort(
+        (entry) => {
           if (isFile(entry, 'ts')) {
             return entry.getExportValue('priority')
           }
           return 0
         },
-        compare: (a, b) => a - b,
-      }),
+        (a, b) => a - b
+      ),
     })
     const entries = await directory.getEntries()
     const names = entries.map((entry) => entry.getBaseName())

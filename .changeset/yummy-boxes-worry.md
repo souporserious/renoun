@@ -33,21 +33,21 @@ import { Directory, createSort } from 'renoun/file-system'
 
 const directory = new Directory<{ mdx: { frontmatter: { date: Date } } }>({
   include: '*.mdx',
-  sort: createSort({
-    key: (entry) => {
+  sort: createSort(
+    (entry) => {
       return entry
         .getExportValue('frontmatter')
         .then((frontmatter) => frontmatter.date)
     },
-    compare: (a, b) => a - b,
-  }),
+    (a, b) => a - b
+  ),
 })
 ```
 
 For common use cases, this can be further simplified by defining a valid sort key directly:
 
 ```tsx
-import { Directory, createSort } from 'renoun/file-system'
+import { Directory } from 'renoun/file-system'
 
 const directory = new Directory<{ mdx: { frontmatter: { date: Date } } }>({
   include: '*.mdx',
@@ -58,7 +58,7 @@ const directory = new Directory<{ mdx: { frontmatter: { date: Date } } }>({
 Note, the value being sorted is taken into consideration. Dates will be sorted descending, while other values will default to ascending. If you need further control, but do not want to fully customize the sort descriptor using `createSort`, a `direction` can be provided as well:
 
 ```tsx
-import { Directory, createSort } from 'renoun/file-system'
+import { Directory } from 'renoun/file-system'
 
 const directory = new Directory<{ mdx: { frontmatter: { date: Date } } }>({
   include: '*.mdx',

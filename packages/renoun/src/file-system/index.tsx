@@ -2751,13 +2751,11 @@ type ExtractComparable<Key> = Key extends (
   : ComparableValue
 
 export function createSort<
-  ExtensionTypes extends Record<string, any>,
   Entry extends FileSystemEntry<any>,
   Key extends SortKeyExtractor<Entry> = SortKeyExtractor<Entry>,
->(options: {
-  key: Key
+>(
+  key: Key,
   compare?: (a: ExtractComparable<Key>, b: ExtractComparable<Key>) => number
-  direction?: 'ascending' | 'descending'
-}): SortDescriptorObject<any, Entry, Key> {
-  return options
+): SortDescriptorObject<any, Entry, Key> {
+  return { key, compare }
 }
