@@ -9,6 +9,7 @@ import type { MDXComponents } from '../mdx/index.js'
 import { getFileExportMetadata } from '../project/client.js'
 import { createSlug, type SlugCasings } from '../utils/create-slug.js'
 import { formatNameAsTitle } from '../utils/format-name-as-title.js'
+import { getClosestFile } from '../utils/get-closest-file.js'
 import { getEditorUri } from '../utils/get-editor-uri.js'
 import type { FileExport } from '../utils/get-file-exports.js'
 import { getLocalGitFileMetadata } from '../utils/get-local-git-file-metadata.js'
@@ -1395,7 +1396,7 @@ export interface DirectoryOptions<
   /** Base route prepended to descendant `getPathname()` results. */
   basePathname?: string | null
 
-  /** `tsconfig.json` path used for static analysis. */
+  /** Uses the closest `tsconfig.json` path for static analysis and type-checking. */
   tsConfigPath?: string
 
   /** Slug casing applied to route segments. */
@@ -1442,6 +1443,7 @@ export class Directory<
     if (options === undefined) {
       this.#path = '.'
       this.#slugCasing = 'kebab'
+      this.#tsConfigPath = 'tsconfig.json'
     } else {
       this.#path = options.path ? ensureRelativePath(options.path) : '.'
       this.#loader = options.loader
@@ -1451,7 +1453,10 @@ export class Directory<
             ? this.#directory.getSlug()
             : this.getSlug()
           : options.basePathname
-      this.#tsConfigPath = options.tsConfigPath
+      this.#tsConfigPath =
+        options.tsConfigPath ??
+        getClosestFile('tsconfig.json', this.#path) ??
+        'tsconfig.json'
       this.#slugCasing = options.slugCasing ?? 'kebab'
       this.#fileSystem = options.fileSystem
       if (typeof options.include === 'string') {
