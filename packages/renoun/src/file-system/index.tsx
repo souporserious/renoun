@@ -273,8 +273,9 @@ export class FileNotFoundError extends Error {
 
 /** A directory or file entry. */
 export type FileSystemEntry<
-  DirectoryTypes extends Record<string, any> = Record<string, any>,
-> = Directory<DirectoryTypes> | File<DirectoryTypes>
+  DirectoryTypes extends Record<string, any> = any,
+  Extension = undefined,
+> = Directory<DirectoryTypes> | FileWithExtension<DirectoryTypes, Extension>
 
 /** Options for the `File#getPathname` and `File#getPathnameSegments` methods. */
 export interface FilePathnameOptions {
@@ -2260,51 +2261,6 @@ export class Directory<
 
     return false
   }
-
-  /** Get an export value from either an readme or index file in this directory. */
-  async getExportValue<ExportName extends LoaderExportNames<LoaderTypes>>(
-    name: ExportName
-  ): Promise<LoaderExportValue<LoaderTypes, ExportName>> {
-    // Try index file first
-    try {
-      const indexFile = await this.getFile('index')
-      if (indexFile instanceof JavaScriptFile || indexFile instanceof MDXFile) {
-        try {
-          return await indexFile.getExportValue(name)
-        } catch (error) {
-          // If index file exists but doesn't have the export, try README
-          if (error instanceof FileExportNotFoundError) {
-            const readmeFile = await this.getFile('readme')
-            if (
-              readmeFile instanceof JavaScriptFile ||
-              readmeFile instanceof MDXFile
-            ) {
-              return readmeFile.getExportValue(name)
-            }
-          }
-          throw error
-        }
-      }
-    } catch {
-      // If index file doesn't exist, try README
-      try {
-        const readmeFile = await this.getFile('readme')
-        if (
-          readmeFile instanceof JavaScriptFile ||
-          readmeFile instanceof MDXFile
-        ) {
-          return readmeFile.getExportValue(name)
-        }
-      } catch {
-        throw new Error(
-          `[renoun] Could not find an index or readme file with export "${String(name)}" in directory "${this.getRelativePathToRoot()}"`
-        )
-      }
-    }
-    throw new Error(
-      `[renoun] Found index or readme file but it did not export "${String(name)}" in directory "${this.getRelativePathToRoot()}"`
-    )
-  }
 }
 
 /** Converts a union type to an intersection type. */
@@ -2588,6 +2544,35 @@ export function isMDXFile<
   return entry instanceof MDXFile
 }
 
+/**
+ * Attempts to resolve a file from a `FileSystemEntry`, preferring `index` and
+ * `readme` for directories. The result can be optionally narrowed by extension.
+ */
+export async function resolveFileFromEntry<
+  Types extends Record<string, any>,
+  const Extension extends keyof Types & string = string,
+>(
+  entry: FileSystemEntry<Types>,
+  extension?: Extension | readonly Extension[]
+): Promise<FileWithExtension<Types, Extension> | undefined> {
+  if (isDirectory(entry)) {
+    try {
+      return (await entry.getFile('index', extension as any)) as any
+    } catch (error) {
+      if (error instanceof FileNotFoundError || error instanceof Error) {
+        try {
+          return (await entry.getFile('readme', extension as any)) as any
+        } catch {
+          return undefined
+        }
+      }
+      throw error
+    }
+  }
+
+  return isFile(entry, extension as any) ? (entry as any) : undefined
+}
+
 type ComparableValue = string | number | bigint | boolean | Date
 
 type IsPlainObject<Type> = Type extends object
@@ -2667,8 +2652,14 @@ function keyName(entry: FileSystemEntry<any>) {
 function exportKeyFactory(pathSegments: string[]) {
   const [exportName, ...objectPath] = pathSegments
 
-  return async (entry: any) => {
-    let value = await entry.getExportValue(exportName)
+  return async (entry: FileSystemEntry) => {
+    const file = await resolveFileFromEntry(entry)
+    let value = null
+
+    if (isJavaScriptFile(file) || isMDXFile(file)) {
+      value = await file.getExportValue(exportName)
+    }
+
     if (value === null) {
       return null
     }

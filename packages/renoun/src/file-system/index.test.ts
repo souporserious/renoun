@@ -20,6 +20,7 @@ import {
   isDirectory,
   isFile,
   isJavaScriptFile,
+  resolveFileFromEntry,
   createSort,
   withSchema,
   FileNotFoundError,
@@ -1472,57 +1473,6 @@ describe('file system', () => {
     expect((await guides.getFile('intro')).getPathname()).toBe('/docs/intro')
   })
 
-  test('directory getExportValue', async () => {
-    const directory = new Directory({
-      fileSystem: new MemoryFileSystem({
-        'index.ts': `export const metadata = { title: "Hello, World!" }`,
-        'README.mdx': `export const frontmatter = { date: new Date("6/6/2026") }`,
-      }),
-      loader: {
-        ts: withSchema<{ metadata: { title: string } }>(() => {
-          return Promise.resolve({ metadata: { title: 'Hello, World!' } })
-        }),
-        mdx: withSchema<{ frontmatter: { date: Date } }>(() => {
-          return Promise.resolve({
-            frontmatter: { date: new Date('6/6/2026') },
-          })
-        }),
-      },
-    })
-
-    // Test getting export from index file
-    const metadata = await directory.getExportValue('metadata')
-    expectTypeOf(metadata).toMatchTypeOf<{ title: string }>()
-    expect(metadata).toEqual({ title: 'Hello, World!' })
-
-    // Test getting export from README file when index doesn't have it
-    const frontmatter = await directory.getExportValue('frontmatter')
-    expectTypeOf(frontmatter).toMatchTypeOf<{ date: Date }>()
-    expect(frontmatter).toEqual({ date: new Date('6/6/2026') })
-
-    // Test error when export doesn't exist
-    await expect(
-      // @ts-expect-error
-      directory.getExportValue('nonexistent')
-    ).rejects.toThrow(
-      '[renoun] MDXFile export "nonexistent" not found in path "/README.mdx"'
-    )
-
-    // Test error when file exists but doesn't support exports
-    await expect(
-      new Directory({
-        fileSystem: new MemoryFileSystem({
-          'index.txt': 'Not a JS file',
-          'README.txt': 'Not a JS file',
-        }),
-      })
-        // @ts-expect-error
-        .getExportValue('metadata')
-    ).rejects.toThrow(
-      '[renoun] Found index or readme file but it did not export "metadata" in directory'
-    )
-  })
-
   test('entry group', async () => {
     const memoryFileSystem = new MemoryFileSystem({
       'posts/building-a-button-component.mdx': '# Building a Button Component',
@@ -2184,5 +2134,52 @@ describe('file system', () => {
       'CodeBlock.tsx',
       'Tokens.tsx',
     ])
+  })
+
+  test('getExportValue from FileSystemEntry with resolveFileFromEntry', () => {
+    async function _0({
+      entry,
+    }: {
+      entry: FileSystemEntry<{
+        mdx: {
+          metadata: {
+            label?: string
+            title?: string
+          }
+        }
+      }>
+    }) {
+      const resolvedFile = await resolveFileFromEntry(entry, 'mdx')
+      const metadata = resolvedFile
+        ? await resolvedFile.getExportValue('metadata')
+        : undefined
+
+      metadata?.label
+
+      // @ts-expect-error
+      resolvedFile?.getExportValue('nonexistent')
+    }
+
+    async function _1({ entry }: { entry: FileSystemEntry }) {
+      const resolvedFile = await resolveFileFromEntry<
+        {
+          mdx: {
+            metadata: {
+              label?: string
+              title?: string
+            }
+          }
+        },
+        'mdx'
+      >(entry, 'mdx')
+      const metadata = resolvedFile
+        ? await resolvedFile.getExportValue('metadata')
+        : undefined
+
+      metadata?.label
+
+      // @ts-expect-error
+      resolvedFile?.getExportValue('nonexistent')
+    }
   })
 })

@@ -1,13 +1,8 @@
 import Link from 'next/link'
 import {
-  FileExportNotFoundError,
-  FileNotFoundError,
-  isDirectory,
+  resolveFileFromEntry,
   isJavaScriptFile,
-  isMDXFile,
   type FileSystemEntry,
-  type JavaScriptFile,
-  type MDXFile,
 } from 'renoun/file-system'
 import { styled } from 'restyle'
 
@@ -16,14 +11,27 @@ export async function SiblingLink({
   direction,
   variant,
 }: {
-  entry: FileSystemEntry<any>
+  entry: FileSystemEntry
   direction: 'previous' | 'next'
   variant?: 'name' | 'title'
 }) {
-  const metadata = await resolveEntryMetadata(entry)
+  const file = await resolveFileFromEntry<
+    {
+      mdx: {
+        metadata: {
+          label?: string
+          title?: string
+        }
+      }
+    },
+    'mdx'
+  >(entry, 'mdx')
+  const metadata = file
+    ? await file.getExportValue('metadata').catch(() => undefined)
+    : undefined
   let baseName = entry.getBaseName()
 
-  if (baseName.includes('-') && isJavaScriptFile(entry)) {
+  if (isJavaScriptFile(entry)) {
     const firstExport = await entry
       .getExports()
       .then((fileExports) => fileExports[0])
@@ -125,62 +133,3 @@ const StyledLink = styled(Link, {
     stroke: 'var(--color-foreground-interactive-highlighted)',
   },
 })
-
-interface Metadata {
-  metadata: {
-    title: string
-    label?: string
-  }
-}
-
-/** Resolves metadata from a file system entry. */
-async function resolveEntryMetadata(entry: FileSystemEntry) {
-  let file: JavaScriptFile<Metadata> | MDXFile<Metadata>
-
-  if (isDirectory(entry)) {
-    const indexFile = await entry
-      .getFile('index', ['ts', 'tsx'])
-      .catch((error) => {
-        if (error instanceof FileNotFoundError) {
-          return undefined
-        }
-        throw error
-      })
-
-    if (indexFile) {
-      file = indexFile
-    } else {
-      const readmeFile = await entry.getFile('readme', 'mdx').catch((error) => {
-        if (error instanceof FileNotFoundError) {
-          return undefined
-        }
-        throw error
-      })
-
-      if (readmeFile) {
-        file = readmeFile as unknown as JavaScriptFile<Metadata>
-      } else {
-        return
-      }
-    }
-  } else if (isJavaScriptFile<Metadata>(entry) || isMDXFile<Metadata>(entry)) {
-    file = entry
-  } else {
-    return
-  }
-
-  const metadataExport = await file
-    .getNamedExport('metadata')
-    .catch((error) => {
-      if (error instanceof FileExportNotFoundError) {
-        return undefined
-      }
-      throw error
-    })
-
-  if (metadataExport) {
-    return metadataExport.getRuntimeValue()
-  }
-
-  return
-}
