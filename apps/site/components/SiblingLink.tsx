@@ -2,6 +2,7 @@ import Link from 'next/link'
 import {
   resolveFileFromEntry,
   isJavaScriptFile,
+  FileExportNotFoundError,
   type FileSystemEntry,
 } from 'renoun/file-system'
 import { styled } from 'restyle'
@@ -27,12 +28,17 @@ export async function SiblingLink({
     'mdx'
   >(entry, 'mdx')
   const metadata = file
-    ? await file.getExportValue('metadata').catch(() => undefined)
+    ? await file.getExportValue('metadata').catch((error) => {
+        if (error instanceof FileExportNotFoundError) {
+          return undefined
+        }
+        throw error
+      })
     : undefined
   let baseName = entry.getBaseName()
 
-  if (isJavaScriptFile(entry)) {
-    const firstExport = await entry
+  if (isJavaScriptFile(file)) {
+    const firstExport = await file
       .getExports()
       .then((fileExports) => fileExports[0])
 
