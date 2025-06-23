@@ -21,14 +21,20 @@ export async function DocumentEntry({
   shouldRenderTableOfContents?: boolean
   shouldRenderUpdatedAt?: boolean
 }) {
-  const Content = await file.getExportValue('default')
-  const metadata = await file.getExportValue('metadata')
-  const headings = await file.getExportValue('headings')
+  const [Content, metadata, headings] = await Promise.all([
+    file.getExportValue('default'),
+    file.getExportValue('metadata'),
+    file.getExportValue('headings'),
+  ])
   const updatedAt = shouldRenderUpdatedAt
     ? await file.getLastCommitDate()
     : null
   const editPath = file.getEditUrl()
-  const [previousFile, nextFile] = await file.getSiblings({ entryGroup })
+  let [previousEntry, nextEntry] = await file.getSiblings({ entryGroup })
+
+  if (previousEntry?.getBaseName() === 'docs') {
+    previousEntry = undefined
+  }
 
   return (
     <>
@@ -75,15 +81,15 @@ export async function DocumentEntry({
               gap: '2rem',
             }}
           >
-            {previousFile ? (
+            {previousEntry ? (
               <SiblingLink
-                entry={previousFile}
+                entry={previousEntry}
                 direction="previous"
                 variant="title"
               />
             ) : null}
-            {nextFile ? (
-              <SiblingLink entry={nextFile} direction="next" variant="title" />
+            {nextEntry ? (
+              <SiblingLink entry={nextEntry} direction="next" variant="title" />
             ) : null}
           </nav>
         </div>
