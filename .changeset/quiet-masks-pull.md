@@ -1,3 +1,8 @@
+---
+'renoun': minor
+'@renoun/mdx': minor
+---
+
 Updates how to use the `CodeBlock` component in MDX. When using `renoun/mdx`, a new `addCodeBlock` rehype plugin rewrites the `pre` element to a `CodeBlock` element. This is more explicit and requires defining a `CodeBlock` component now.
 
 ### Breaking Changes
