@@ -1,5 +1,286 @@
 # renoun
 
+## 9.0.0
+
+### Major Changes
+
+- 7e38b82: Updates the `renoun` license from `AGPLv3` to the `renoun Non-Commercial License 1.0` license. The renoun source code is now provided under the non-commercial [renoun license](/LICENSE.md) ideal for blogs, documentation sites, and educational content. If you plan to integrate renoun into a commercial product or service, reach out to sales@souporserious.com to discuss options.
+- d13c7e0: Removes `RenderedHTML` component as it was not used anywhere and is simple enough to implement if needed for a specific use case.
+- f54b73b: Renames the `MDXRenderer` component to `MDX`. This is to better align with the new `Markdown` component.
+
+  ### Breaking Changes
+
+  - Rename any `MDXRenderer` component references imported from `renoun/components` to `MDX`.
+
+- 485809e: Updates the `Directory` constructor `sort` option to now accept either a string or a sort descriptor using a new `createSort` utility. This new API makes it easier to sort entries while ensuring sorting stays performant by calculating asynchronous keys upfront and then comparing them synchronously.
+
+  This also fixes a bug when using `Directory#getEntries({ recursive: true })` where the results were not being sorted at each depth.
+
+  ### Breaking Changes
+
+  The `Directory` constructor `sort` option now requires either a string or a sort descriptor using the new `createSort` utility.
+
+  Previously, sorting was defined in one function:
+
+  ```tsx
+  import { Directory } from 'renoun/file-system'
+
+  const directory = new Directory<{ mdx: { frontmatter: { date: Date } } }>({
+    include: '*.mdx',
+    sort: async (a, b) => {
+      const aFrontmatter = await a.getExportValue('frontmatter')
+      const bFrontmatter = await b.getExportValue('frontmatter')
+
+      return bFrontmatter.date.getTime() - aFrontmatter.date.getTime()
+    },
+  })
+  ```
+
+  Now, a sort descriptor requires defining a `key` resolver and `compare` function:
+
+  ```tsx
+  import { Directory, createSort } from 'renoun/file-system'
+
+  const directory = new Directory<{ mdx: { frontmatter: { date: Date } } }>({
+    include: '*.mdx',
+    sort: createSort(
+      (entry) => {
+        return entry
+          .getExportValue('frontmatter')
+          .then((frontmatter) => frontmatter.date)
+      },
+      (a, b) => a - b
+    ),
+  })
+  ```
+
+  For common use cases, this can be further simplified by defining a valid sort key directly:
+
+  ```tsx
+  import { Directory } from 'renoun/file-system'
+
+  const directory = new Directory<{ mdx: { frontmatter: { date: Date } } }>({
+    include: '*.mdx',
+    sort: 'frontmatter.date',
+  })
+  ```
+
+  Note, the value being sorted is taken into consideration. Dates will be sorted descending, while other values will default to ascending. If you need further control, but do not want to fully customize the sort descriptor using `createSort`, a `direction` can be provided as well:
+
+  ```tsx
+  import { Directory } from 'renoun/file-system'
+
+  const directory = new Directory<{ mdx: { frontmatter: { date: Date } } }>({
+    include: '*.mdx',
+    sort: {
+      key: 'frontmatter.date',
+      direction: 'ascending',
+    },
+  })
+  ```
+
+### Minor Changes
+
+- 23f3501: Adds `renoun/utils` package export. To start, this will include utilities for working with the `APIReference` component.
+- a487bcd: Adds `useSectionObserver` hook for tracking the active section currently in view:
+
+  ```tsx
+  import React from 'react'
+  import { useSectionObserver } from 'renoun/hooks'
+
+  export function TableOfContents() {
+    const observer = useSectionObserver()
+
+    return (
+      <div style={{ display: 'flex', gap: '2rem' }}>
+        <aside style={{ position: 'sticky', top: '1rem' }}>
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {[
+              { id: 'intro', label: 'Introduction' },
+              { id: 'usage', label: 'Usage' },
+              { id: 'api', label: 'API Reference' },
+            ].map(({ id, label }) => (
+              <SectionLink key={id} id={id} label={label} observer={observer} />
+            ))}
+          </ul>
+        </aside>
+
+        <main>
+          <section id="intro">
+            <h2>Introduction</h2>
+            <p>…</p>
+          </section>
+
+          <section id="usage">
+            <h2>Usage</h2>
+            <p>…</p>
+          </section>
+
+          <section id="api">
+            <h2>API Reference</h2>
+            <p>…</p>
+          </section>
+        </main>
+      </div>
+    )
+  }
+
+  function SectionLink({
+    id,
+    label,
+    observer,
+  }: {
+    id: string
+    label: string
+    observer: ReturnType<typeof useSectionObserver>
+  }) {
+    const [isActive, linkProps] = observer.useLink(id)
+
+    return (
+      <li style={{ marginBottom: '0.5rem' }}>
+        <a
+          href={`#${id}`}
+          {...linkProps}
+          style={{
+            color: isActive ? 'crimson' : 'black',
+            fontWeight: isActive ? 'bold' : 'normal',
+            textDecoration: 'none',
+          }}
+        >
+          {label}
+        </a>
+      </li>
+    )
+  }
+  ```
+
+- 6b99a18: Updates `Directory` to now load the closest `tsconfig.json` relative to the provided `path` when instantiated.
+- 2395c7f: Renames the `Directory` constructor option from `loaders` to `loader`. This prepares for upcoming support for specifying a single loader.
+
+  ### Breaking Changes
+
+  Update all `Directory` constructor `loaders` option call sites to use the singular `loader`.
+
+- 49a913c: Renames `Directory#getEntries` option `includeIndexAndReadme` to `includeIndexAndReadmeFiles` to better align with the other options.
+
+  ### Breaking Changes
+
+  Rename any `Directory#getEntries` call sites that use the `includeIndexAndReadme` and update the option name to `includeIndexAndReadmeFiles`.
+
+- 4a12c50: Renames the `Directory` and `File` path methods to better align with their intended use. The `basePath` constructor option has also been renamed to `basePathname` to match the new naming convention. Additionally, the `basePathname` option now defaults to the root directory's slug since this is the most common use case.
+
+  ### Breaking Changes
+
+  Rename any call sites that use the following `Directory` and `File` methods:
+
+  - `getPath` to `getPathname`
+  - `getPathSegments` to `getPathnameSegments`
+
+  In most cases, you can remove the `basePathname` option from your code if you were using it to set the base path for a directory. It now defaults to the root directory's slug:
+
+  ```diff
+  import { Directory } from 'renoun/file-system';
+
+  const directory = new Directory({
+      path: 'components',
+  --  basePath: 'components'
+  });
+  const file = await directory.getFile('button')
+  file.getPathname() // '/components/button'
+  ```
+
+- 3f2b8fa: `JavaScriptFile#getExports` now sorts exports by their position. Previously, the order was determined by the TypeScript compiler which will hoist function declarations to the top of the file. This change ensures that the order of exports is consistent with the source file.
+- 0dfbfc5: Allow passing relative `workingDirectory` to `CodeBlock` component, this allows more easily creating virtual files in a specific directory relative to the current working directory:
+
+  ```tsx
+  import { CodeBlock } from 'renoun/components'
+
+  export default function Example() {
+    return (
+      <CodeBlock
+        workingDirectory="src/components"
+        children={`
+          import { Button } from './Button';
+  
+          export default function Example() {
+            return <Button>Click me</Button>;
+          }
+        `}
+      />
+    )
+  }
+  ```
+
+- 24cb8ce: Adds analysis for mapped types to `JavaScriptFileExport#getType` by introducing a new `Mapped` kind. This will now capture mapped types instead of always expanding them fully which would result in large and repetitive types.
+- 65a3911: Trims index and readme from `File#getPath` method.
+- d3c6019: Updates how to use the `CodeBlock` component in MDX. When using `renoun/mdx`, a new `addCodeBlock` rehype plugin rewrites the `pre` element to a `CodeBlock` element. This is more explicit and requires defining a `CodeBlock` component now.
+
+  ### Breaking Changes
+
+  If you are using the `renoun/mdx` plugins, wherever you pass additional MDX components needs to be updated to provide a `CodeBlock` component now:
+
+  ```diff
+  import {
+      CodeBlock,
+  --    parsePreProps
+  } from 'renoun/components'
+
+  function useMDXComponents() {
+    return {
+  --    pre: (props) => <CodeBlock {...parsePreProps(props)} />,
+  ++    CodeBlock,
+    }
+  }
+  ```
+
+  If you are not using `renoun/mdx` plugins `parsePreProps` is still required.
+
+- d9c0939: Adds a `resolveFileFromEntry` file system utility that will attempt to load the entry from either the `index` or `readme` when the entry is a directory. This makes it simpler to parse exports from entries since they include files and directories.
+
+  ```tsx
+  await new Directory<{ mdx: { metadata: { title: string } } }>({
+    path: 'docs',
+  })
+    .getEntries({ recursive: true })
+    .then((entries) =>
+      Promise.all(
+        entries.map(async (doc) => {
+          const file = await resolveFileFromEntry(doc, 'mdx')
+          const { title } = await file.getExportValue('metadata')
+          // ...
+        })
+      )
+    )
+  ```
+
+- 2324815: Filters `undefined` union members from optional properties in `JavaScriptFileExport#getType`. When using `strictNullChecks`, optional properties would previously add an `undefined` member to the union type. However, this is not necessary for the generated metadata and adds noise to the type text.
+- 4b15a54: Directory entries are now included in the `Directory#getEntries` result when a recursive `include` file pattern is configured e.g. `new Directory({ include: '**/*.mdx' })`. This allows easier access to directories when building navigations.
+- d537e64: Adds a `Markdown` component. This should be used when rendering markdown content and is now used to render JS Doc quick info content in the `CodeBlock` component to ensure that the intended markdown is rendered correctly. This is also safer since we do not need to evaluate anything and return JSX elements directly.
+
+### Patch Changes
+
+- ca8c010: Updates source files without a file path to use a FNV‑1a hashing algorithm based on the file contents to generate a smaller hash.
+- 68a52eb: Fixes `isOptional` for properties in `JavaScriptFileExport#getType` not considering symbol optionality as well as checking if the default value is explicitly `undefined`.
+- b0f69a7: Fixes `CodeBlock` throwing type errors about missing imports for JSX-only source code. It now attempts to auto-fix the missing imports.
+- 06349d6: Adds both runtime and type-level safety to prevent using the `recursive` option with single-level `include` filters (`*.mdx`) in the `Directory#getEntries` method, while still allowing it with multi-level patterns (`**/*.mdx`). This ensures that `include` filters targeting a single directory level cannot be used recursively, which could lead to unexpected behavior.
+- d9d5057: Adds `isOptional` for class properties in `JavaScriptFileExport#getType`.
+- 846d4c1: Fixes `JavaScriptFileExport#getType` references being collapsed when `strictNullChecks` is configured in the project's compiler options. The presence of generic type arguments are now considered before further resolving parameter and property types.
+- 8ec38b0: Fixes `JavaScriptFileExport#getType` union member references that point to external unions from resolving to their intrinsic type. References are now preserved correctly for all union members even when the member itself a union. An example of where this was previously broken could be seen in the `CodeBlock` `language` prop that used an external `Languages` type. This would previously resolve to flat union members `jsx | tsx | mdx` instead of `Languages | 'mdx'`. This is now fixed and the type will resolve to `Languages | 'mdx'` as expected.
+- ebb8faf: Fixes `Directory#getFile` not finding nested files when providing a path created with `getPath`.
+- 8846cde: Fixes the internal server context not propagating the value correctly when used in a loop.
+- 9b90ead: Improves the error message for `getFileExportText` to provide more information about where the error occurred and what the kind name was expected to be.
+- 7e4857f: Fixes source text not preserving `type` in import declarations when using `includeDependencies` option in `JavaScriptFileExport#getText`.
+- c05b896: Adds security improvements to the RPC server to prevent unauthorized access by checking the origin of the request and verifying a valid token is present.
+- 333d36d: Fixes component handling in `JavaScriptFileExport#getType` by considering all union members.
+- 7dfd791: Improves `MDX` component compiler error message to show line and column of each error.
+- 1f95459: Fixes `CodeInline` not wrapping correctly when used in paragraph.
+- bf0e5e1: Fixes `JavaScriptFileExport#getType` not capturing all signature parameters.
+- a7f9509: Fixes `getFileExportsText` to use the correct node position across subsequent calls by removing AST node mutations which avoids the position from being changed.
+- Updated dependencies [7e38b82]
+- Updated dependencies [d3c6019]
+- Updated dependencies [d537e64]
+  - @renoun/mdx@3.0.0
+
 ## 8.14.0
 
 ### Minor Changes
