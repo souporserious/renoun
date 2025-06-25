@@ -7,10 +7,9 @@ export default function Page() {
       <Changelog
         components={{
           ...MDXComponents,
-          pre: (props) => (
-            <MDXComponents.pre
+          CodeBlock: (props) => (
+            <MDXComponents.CodeBlock
               allowErrors
-              shouldFormat={false}
               {...props}
               style={{
                 container: {

@@ -1,26 +1,11 @@
-import type { Root } from 'hast'
-import type { VFile } from 'vfile'
+import type { PluggableList } from 'unified'
 import rehypeUnwrapImages from 'rehype-unwrap-images'
 
-import rehypeAddPreMetaProps from './add-pre-meta-props.js'
+import rehypeAddCodeBlock from './add-code-block.js'
 import rehypeAddReadingTime from './add-reading-time.js'
-import type { Processor } from 'unified'
 
-/**
- * Apply a series of rehype plugins to the tree:
- *
- * - `rehypeAddPreMetaProps` adds code fence meta properties to the `pre` element.
- * - `rehypeAddReadingTime` exports the reading time as a `readingTime` variable.
- * - `rehypeUnwrapImages` unwraps images from their parent paragraphs.
- */
-export default function rehypeRenoun(this: Processor) {
-  const addPreMetaProps = rehypeAddPreMetaProps()
-  const addReadingTime = rehypeAddReadingTime.call(this)
-  const unwrapImages = rehypeUnwrapImages()
-
-  return async function transformer(tree: Root, file: VFile) {
-    addPreMetaProps(tree)
-    addReadingTime(tree, file)
-    unwrapImages(tree)
-  }
-}
+export const rehypePlugins: PluggableList = [
+  rehypeAddCodeBlock,
+  rehypeAddReadingTime,
+  rehypeUnwrapImages,
+]

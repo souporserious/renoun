@@ -1,12 +1,12 @@
 import {
-  CodeBlock as BaseCodeBlock,
+  CodeBlock as DefaultCodeBlock,
   type CodeBlockProps,
 } from 'renoun/components'
 import { GeistMono } from 'geist/font/mono'
 
 export function CodeBlock(props: CodeBlockProps) {
   return (
-    <BaseCodeBlock
+    <DefaultCodeBlock
       {...props}
       css={{
         ...props.css,
