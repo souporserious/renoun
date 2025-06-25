@@ -254,7 +254,9 @@ export function APIReference(props: APIReferenceProps) {
         ),
         p: (props) =>
           props['data-type'] === 'description' ? (
-            <Markdown children={props.children as string} />
+            <div css={{ padding: '0.5rem 0' }}>
+              <Markdown children={props.children as string} />
+            </div>
           ) : (
             <p {...props} />
           ),
