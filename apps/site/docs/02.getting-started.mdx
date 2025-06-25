@@ -142,7 +142,7 @@ This will create a collection of every MDX file in the `posts` directory and ren
 
 By default, the `Directory` class will load files using the MDX compiler. However, if you are using a bundler like Webpack, Turbopack, or Vite, it is recommended to define a loader that resolves the module. This is especially useful for MDX files, which are often processed by the bundler's loader.
 
-Use the `loaders` option in the `Directory` constructor to assign a specific loader for each file type. In the `posts` directory, for instance, you can use a dynamic import as the loader to ensure that the MDX files are processed by the bundler:
+Use the `loader` option in the `Directory` constructor to assign a specific loader for each file type. In the `posts` directory, for instance, you can use a dynamic import as the loader to ensure that the MDX files are processed by the bundler:
 
 ```tsx highlightedLines="6-8"
 import { Directory } from 'renoun/file-system'
