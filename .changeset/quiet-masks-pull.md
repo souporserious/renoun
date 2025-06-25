@@ -1,13 +1,8 @@
----
-'renoun': minor
-'@renoun/mdx': minor
----
-
-Updates how to use the `CodeBlock` component in MDX. Instead of overriding the `pre` element. Now when using `renoun/mdx`, a new `addCodeBlock` rehype plugin will rewrite the `pre` element to `CodeBlock`.
+Updates how to use the `CodeBlock` component in MDX. When using `renoun/mdx`, a new `addCodeBlock` rehype plugin rewrites the `pre` element to a `CodeBlock` element. This is more explicit and requires defining a `CodeBlock` component now.
 
 ### Breaking Changes
 
-If you are using the `renoun/mdx` plugins, wherever you pass components needs to be updated to provide a `CodeBlock` component now:
+If you are using the `renoun/mdx` plugins, wherever you pass additional MDX components needs to be updated to provide a `CodeBlock` component now:
 
 ```diff
 import {
@@ -23,4 +18,4 @@ function useMDXComponents() {
 }
 ```
 
-If you _are not_ using `renoun/mdx` then `parsePreProps` is still required.
+If you are not using `renoun/mdx` plugins `parsePreProps` is still required.
