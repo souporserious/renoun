@@ -117,30 +117,34 @@ export default withMDX({
 
 ## MDX Code Blocks
 
-Use the `CodeBlock` and `CodeInline` components to override the `pre` and `code` components respectively in your project's `mdx-components.tsx` file:
+Use the `CodeBlock` component to override the code fences in your project's `mdx-components.tsx` file:
 
 ```tsx path="02.mdx-components.tsx"
-import {
-  CodeBlock,
-  CodeInline,
-  parsePreProps,
-  parseCodeProps,
-} from 'renoun/components'
-import type { MDXComponents } from 'renoun/mdx'
+import { CodeBlock } from 'renoun/components'
 
 export function useMDXComponents() {
-  return {
-    pre: (props) => {
-      return <CodeBlock {...parsePreProps(props)} />
-    },
-    code: (props) => {
-      return <CodeInline {...parseCodeProps(props)} />
-    },
-  } satisfies MDXComponents
+  return { CodeBlock }
 }
 ```
 
-This forwards the meta information added from the `@renoun/mdx` rehype plugin to the `CodeBlock` component.
+The `addCodeBlock` rehype plugin from `@renoun/mdx` replaces the code fence `pre` element with a `CodeBlock` component that will receive the code fence meta as props.
+
+For example, the following code fence with meta props defined:
+
+````mdx
+```tsx allowErrors shouldFormat={false}
+const a = 1
+const b = a + '2'
+```
+````
+
+Roughly yields the following:
+
+```tsx
+<CodeBlock allowErrors shouldFormat={false}>
+  {`const a = 1\nconst b = a + '2'`}
+</CodeBlock>
+```
 
 ## Querying the File System
 

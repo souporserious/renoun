@@ -166,37 +166,6 @@ function mdastNodeToJsxChild(node: any) {
         children: [],
       }
 
-    case 'link': {
-      const attributes = [
-        {
-          type: 'JSXAttribute',
-          name: { type: 'JSXIdentifier', name: 'href' },
-          value: { type: 'Literal', value: node.url },
-        },
-      ]
-      if (node.title) {
-        attributes.push({
-          type: 'JSXAttribute',
-          name: { type: 'JSXIdentifier', name: 'title' },
-          value: { type: 'Literal', value: node.title },
-        })
-      }
-      return {
-        type: 'JSXElement',
-        openingElement: {
-          type: 'JSXOpeningElement',
-          name: { type: 'JSXIdentifier', name: 'a' },
-          attributes,
-          selfClosing: false,
-        },
-        closingElement: {
-          type: 'JSXClosingElement',
-          name: { type: 'JSXIdentifier', name: 'a' },
-        },
-        children: node.children.map(mdastNodeToJsxChild),
-      }
-    }
-
     case 'image': {
       const attributes = [
         {

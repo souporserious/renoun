@@ -73,6 +73,11 @@
       "import": "./dist/mdx/index.js",
       "default": "./dist/mdx/index.js"
     },
+    "./mdx/*": {
+      "types": "./dist/mdx/*.d.ts",
+      "import": "./dist/mdx/*.js",
+      "default": "./dist/mdx/*.js"
+    },
     "./project": {
       "types": "./dist/project/client.d.ts",
       "import": "./dist/project/client.js",
@@ -110,6 +115,9 @@
       ],
       "mdx": [
         "./dist/mdx/index.d.ts"
+      ],
+      "mdx/*": [
+        "./dist/mdx/*.d.ts"
       ],
       "project": [
         "./dist/project/client.d.ts"
