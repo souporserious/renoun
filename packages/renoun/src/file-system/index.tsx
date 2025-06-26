@@ -225,19 +225,6 @@ export type LoadersWithRuntimeKeys<Loaders> = Extract<
   'js' | 'jsx' | 'ts' | 'tsx' | 'mdx'
 >
 
-/** All export names made available by a set of runtime‑capable loaders. */
-export type LoaderExportNames<Loaders> = string &
-  {
-    [Extension in LoadersWithRuntimeKeys<Loaders>]: keyof Loaders[Extension]
-  }[LoadersWithRuntimeKeys<Loaders>]
-
-/** The value type for a given export name coming from any runtime‑capable loaders. */
-export type LoaderExportValue<Loaders, Name extends string> = {
-  [Extension in LoadersWithRuntimeKeys<Loaders>]: Name extends keyof Loaders[Extension]
-    ? Loaders[Extension][Name]
-    : never
-}[LoadersWithRuntimeKeys<Loaders>]
-
 /** Determines if the loader is a resolver. */
 function isLoader(
   loader: ModuleLoader<any>
