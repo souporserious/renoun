@@ -3326,7 +3326,61 @@ describe('resolveType', () => {
     expect(processedProperties).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "Unknown",
+        "kind": "Enum",
+        "members": [
+          {
+            "filePath": "test.ts",
+            "kind": "EnumMember",
+            "name": "Red",
+            "position": {
+              "end": {
+                "column": 14,
+                "line": 2,
+              },
+              "start": {
+                "column": 3,
+                "line": 2,
+              },
+            },
+            "text": "Red = 'red'",
+            "value": "red",
+          },
+          {
+            "filePath": "test.ts",
+            "kind": "EnumMember",
+            "name": "Blue",
+            "position": {
+              "end": {
+                "column": 16,
+                "line": 3,
+              },
+              "start": {
+                "column": 3,
+                "line": 3,
+              },
+            },
+            "text": "Blue = 'blue'",
+            "value": "blue",
+          },
+          {
+            "filePath": "test.ts",
+            "kind": "EnumMember",
+            "name": "Green",
+            "position": {
+              "end": {
+                "column": 18,
+                "line": 4,
+              },
+              "start": {
+                "column": 3,
+                "line": 4,
+              },
+            },
+            "text": "Green = 'green'",
+            "value": "green",
+          },
+        ],
+        "name": "Color",
         "position": {
           "end": {
             "column": 2,
@@ -3449,86 +3503,68 @@ describe('resolveType', () => {
 
     expect(processedProperties).toMatchInlineSnapshot(`
       {
+        "constructor": undefined,
         "filePath": "test.ts",
-        "kind": "TypeLiteral",
-        "members": [
+        "kind": "Class",
+        "methods": [
           {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "color",
-            "position": {
-              "end": {
-                "column": 17,
-                "line": 2,
-              },
-              "start": {
-                "column": 3,
-                "line": 2,
-              },
-            },
-            "text": "string",
-            "type": {
-              "kind": "String",
-              "text": "string",
-              "value": undefined,
-            },
-          },
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
+            "kind": "ClassMethod",
             "name": "setValue",
-            "position": {
-              "end": {
-                "column": 4,
-                "line": 6,
-              },
-              "start": {
-                "column": 3,
-                "line": 4,
-              },
-            },
-            "text": "(value: string) => void",
-            "type": {
-              "isAsync": false,
-              "kind": "FunctionType",
-              "parameters": [
-                {
-                  "description": undefined,
-                  "filePath": "test.ts",
-                  "initializer": undefined,
-                  "isOptional": false,
-                  "kind": "Parameter",
-                  "name": "value",
-                  "position": {
-                    "end": {
-                      "column": 25,
-                      "line": 4,
+            "scope": undefined,
+            "signatures": [
+              {
+                "filePath": "test.ts",
+                "isAsync": false,
+                "isGenerator": false,
+                "kind": "FunctionSignature",
+                "parameters": [
+                  {
+                    "description": undefined,
+                    "filePath": "test.ts",
+                    "initializer": undefined,
+                    "isOptional": false,
+                    "kind": "Parameter",
+                    "name": "value",
+                    "position": {
+                      "end": {
+                        "column": 25,
+                        "line": 4,
+                      },
+                      "start": {
+                        "column": 12,
+                        "line": 4,
+                      },
                     },
-                    "start": {
-                      "column": 12,
-                      "line": 4,
+                    "text": "string",
+                    "type": {
+                      "kind": "String",
+                      "text": "string",
+                      "value": undefined,
                     },
                   },
-                  "text": "string",
-                  "type": {
-                    "kind": "String",
-                    "text": "string",
-                    "value": undefined,
+                ],
+                "position": {
+                  "end": {
+                    "column": 4,
+                    "line": 6,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 4,
                   },
                 },
-              ],
-              "returnType": {
-                "kind": "Void",
-                "text": "void",
+                "returnType": {
+                  "kind": "Void",
+                  "text": "void",
+                },
+                "text": "(value: string) => void",
               },
-              "text": "(value: string) => void",
-            },
+            ],
+            "text": "(value: string) => void",
+            "visibility": undefined,
           },
         ],
+        "name": "Text",
         "position": {
           "end": {
             "column": 2,
@@ -3539,6 +3575,33 @@ describe('resolveType', () => {
             "line": 1,
           },
         },
+        "properties": [
+          {
+            "initializer": undefined,
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "ClassProperty",
+            "name": "color",
+            "scope": undefined,
+            "text": "string",
+            "type": {
+              "filePath": "test.ts",
+              "kind": "TypeReference",
+              "position": {
+                "end": {
+                  "column": 17,
+                  "line": 2,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 2,
+                },
+              },
+              "text": "string",
+            },
+            "visibility": undefined,
+          },
+        ],
         "text": "Text",
       }
     `)
@@ -6000,7 +6063,61 @@ describe('resolveType', () => {
     expect(types).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "Unknown",
+        "kind": "Enum",
+        "members": [
+          {
+            "filePath": "test.ts",
+            "kind": "EnumMember",
+            "name": "Red",
+            "position": {
+              "end": {
+                "column": 22,
+                "line": 2,
+              },
+              "start": {
+                "column": 11,
+                "line": 2,
+              },
+            },
+            "text": "Red = 'RED'",
+            "value": "RED",
+          },
+          {
+            "filePath": "test.ts",
+            "kind": "EnumMember",
+            "name": "Green",
+            "position": {
+              "end": {
+                "column": 26,
+                "line": 3,
+              },
+              "start": {
+                "column": 11,
+                "line": 3,
+              },
+            },
+            "text": "Green = 'GREEN'",
+            "value": "GREEN",
+          },
+          {
+            "filePath": "test.ts",
+            "kind": "EnumMember",
+            "name": "Blue",
+            "position": {
+              "end": {
+                "column": 24,
+                "line": 4,
+              },
+              "start": {
+                "column": 11,
+                "line": 4,
+              },
+            },
+            "text": "Blue = 'BLUE'",
+            "value": "BLUE",
+          },
+        ],
+        "name": "Colors",
         "position": {
           "end": {
             "column": 10,
@@ -6071,199 +6188,295 @@ describe('resolveType', () => {
 
     expect(types).toMatchInlineSnapshot(`
       {
-        "filePath": "test.ts",
-        "kind": "TypeLiteral",
-        "members": [
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "initialCount",
-            "position": {
-              "end": {
-                "column": 28,
-                "line": 2,
-              },
-              "start": {
-                "column": 3,
-                "line": 2,
-              },
-            },
-            "text": "number",
-            "type": {
-              "kind": "Number",
-              "text": "number",
-              "value": undefined,
-            },
-          },
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "count",
-            "position": {
-              "end": {
-                "column": 29,
-                "line": 4,
-              },
-              "start": {
-                "column": 3,
-                "line": 4,
-              },
-            },
-            "text": "number",
-            "type": {
-              "kind": "Number",
-              "text": "number",
-              "value": undefined,
-            },
-          },
-          {
-            "description": "Increments the count.",
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "increment",
-            "position": {
-              "end": {
-                "column": 4,
-                "line": 18,
-              },
-              "start": {
-                "column": 3,
-                "line": 16,
-              },
-            },
-            "tags": undefined,
-            "text": "() => void",
-            "type": {
-              "isAsync": false,
-              "kind": "FunctionType",
-              "parameters": [],
-              "returnType": {
-                "kind": "Void",
-                "text": "void",
-              },
-              "text": "() => void",
-            },
-          },
-          {
-            "description": "Decrements the count.",
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "decrement",
-            "position": {
-              "end": {
-                "column": 4,
-                "line": 23,
-              },
-              "start": {
-                "column": 3,
-                "line": 21,
-              },
-            },
-            "tags": undefined,
-            "text": "() => void",
-            "type": {
-              "isAsync": false,
-              "kind": "FunctionType",
-              "parameters": [],
-              "returnType": {
-                "kind": "Void",
-                "text": "void",
-              },
-              "text": "() => void",
-            },
-          },
+        "accessors": [
           {
             "description": "Sets the count.",
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
+            "kind": "ClassSetAccessor",
             "name": "accessorCount",
-            "position": {
-              "end": {
-                "column": 4,
-                "line": 28,
-              },
-              "start": {
-                "column": 3,
-                "line": 26,
-              },
-            },
-            "tags": undefined,
-            "text": "number",
-            "type": {
-              "kind": "Number",
-              "text": "number",
-              "value": undefined,
-            },
-          },
-          {
-            "description": "Returns the current count.",
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "getCount",
-            "position": {
-              "end": {
-                "column": 4,
-                "line": 38,
-              },
-              "start": {
-                "column": 3,
-                "line": 36,
-              },
-            },
-            "tags": undefined,
-            "text": "(isFloored?: boolean) => number",
-            "type": {
-              "isAsync": false,
-              "kind": "FunctionType",
-              "parameters": [
-                {
-                  "description": undefined,
-                  "filePath": "test.ts",
-                  "initializer": {
-                    "text": "true",
-                    "value": true,
-                  },
-                  "isOptional": true,
-                  "kind": "Parameter",
-                  "name": "isFloored",
-                  "position": {
-                    "end": {
-                      "column": 45,
-                      "line": 36,
-                    },
-                    "start": {
-                      "column": 19,
-                      "line": 36,
-                    },
-                  },
-                  "text": "boolean",
-                  "type": {
-                    "kind": "Boolean",
-                    "text": "boolean",
-                  },
+            "parameter": {
+              "description": undefined,
+              "filePath": "test.ts",
+              "initializer": undefined,
+              "isOptional": false,
+              "kind": "Parameter",
+              "name": "value",
+              "position": {
+                "end": {
+                  "column": 34,
+                  "line": 26,
                 },
-              ],
-              "returnType": {
+                "start": {
+                  "column": 21,
+                  "line": 26,
+                },
+              },
+              "text": "number",
+              "type": {
                 "kind": "Number",
                 "text": "number",
                 "value": undefined,
               },
-              "text": "(isFloored?: boolean) => number",
             },
+            "scope": undefined,
+            "tags": undefined,
+            "text": "number",
+            "visibility": undefined,
+          },
+          {
+            "description": "Returns the current count.",
+            "kind": "ClassGetAccessor",
+            "name": "accessorCount",
+            "returnType": {
+              "kind": "Number",
+              "text": "number",
+              "value": undefined,
+            },
+            "scope": undefined,
+            "tags": undefined,
+            "text": "number",
+            "visibility": undefined,
           },
         ],
+        "constructor": {
+          "description": "Constructs a new counter.",
+          "filePath": "test.ts",
+          "kind": "ClassConstructor",
+          "position": {
+            "end": {
+              "column": 4,
+              "line": 13,
+            },
+            "start": {
+              "column": 3,
+              "line": 9,
+            },
+          },
+          "signatures": [
+            {
+              "description": "Constructs a new counter.",
+              "filePath": "test.ts",
+              "kind": "FunctionSignature",
+              "parameters": [
+                {
+                  "description": undefined,
+                  "filePath": "test.ts",
+                  "initializer": undefined,
+                  "isOptional": false,
+                  "kind": "Parameter",
+                  "name": "initialCount",
+                  "position": {
+                    "end": {
+                      "column": 39,
+                      "line": 9,
+                    },
+                    "start": {
+                      "column": 15,
+                      "line": 9,
+                    },
+                  },
+                  "text": "number",
+                  "type": {
+                    "kind": "Number",
+                    "text": "number",
+                    "value": undefined,
+                  },
+                },
+              ],
+              "position": {
+                "end": {
+                  "column": 4,
+                  "line": 13,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 9,
+                },
+              },
+              "returnType": {
+                "kind": "TypeReference",
+                "text": "Counter",
+              },
+              "tags": undefined,
+              "text": "(initialCount: number) => Counter",
+            },
+          ],
+          "tags": undefined,
+          "text": "constructor(initialCount: number = 0) {
+          this.count = count;
+          this.initialCount = initialCount;
+          Counter.staticCount++;
+        }",
+        },
+        "filePath": "test.ts",
+        "kind": "Class",
+        "methods": [
+          {
+            "description": "Increments the count.",
+            "kind": "ClassMethod",
+            "name": "increment",
+            "scope": undefined,
+            "signatures": [
+              {
+                "description": "Increments the count.",
+                "filePath": "test.ts",
+                "isAsync": false,
+                "isGenerator": false,
+                "kind": "FunctionSignature",
+                "parameters": [],
+                "position": {
+                  "end": {
+                    "column": 4,
+                    "line": 18,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 16,
+                  },
+                },
+                "returnType": {
+                  "kind": "Void",
+                  "text": "void",
+                },
+                "tags": undefined,
+                "text": "() => void",
+              },
+            ],
+            "tags": undefined,
+            "text": "() => void",
+            "visibility": undefined,
+          },
+          {
+            "description": "Decrements the count.",
+            "kind": "ClassMethod",
+            "name": "decrement",
+            "scope": undefined,
+            "signatures": [
+              {
+                "description": "Decrements the count.",
+                "filePath": "test.ts",
+                "isAsync": false,
+                "isGenerator": false,
+                "kind": "FunctionSignature",
+                "parameters": [],
+                "position": {
+                  "end": {
+                    "column": 4,
+                    "line": 23,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 21,
+                  },
+                },
+                "returnType": {
+                  "kind": "Void",
+                  "text": "void",
+                },
+                "tags": undefined,
+                "text": "() => void",
+              },
+            ],
+            "tags": undefined,
+            "text": "() => void",
+            "visibility": undefined,
+          },
+          {
+            "description": "Returns the current count.",
+            "kind": "ClassMethod",
+            "name": "getCount",
+            "scope": undefined,
+            "signatures": [
+              {
+                "description": "Returns the current count.",
+                "filePath": "test.ts",
+                "isAsync": false,
+                "isGenerator": false,
+                "kind": "FunctionSignature",
+                "parameters": [
+                  {
+                    "description": undefined,
+                    "filePath": "test.ts",
+                    "initializer": {
+                      "text": "true",
+                      "value": true,
+                    },
+                    "isOptional": true,
+                    "kind": "Parameter",
+                    "name": "isFloored",
+                    "position": {
+                      "end": {
+                        "column": 45,
+                        "line": 36,
+                      },
+                      "start": {
+                        "column": 19,
+                        "line": 36,
+                      },
+                    },
+                    "text": "boolean",
+                    "type": {
+                      "kind": "Boolean",
+                      "text": "boolean",
+                    },
+                  },
+                ],
+                "position": {
+                  "end": {
+                    "column": 4,
+                    "line": 38,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 36,
+                  },
+                },
+                "returnType": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+                "tags": undefined,
+                "text": "(isFloored?: boolean) => number",
+              },
+            ],
+            "tags": undefined,
+            "text": "(isFloored?: boolean) => number",
+            "visibility": "public",
+          },
+          {
+            "kind": "ClassMethod",
+            "name": "getStaticCount",
+            "scope": "static",
+            "signatures": [
+              {
+                "filePath": "test.ts",
+                "isAsync": false,
+                "isGenerator": false,
+                "kind": "FunctionSignature",
+                "parameters": [],
+                "position": {
+                  "end": {
+                    "column": 4,
+                    "line": 42,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 40,
+                  },
+                },
+                "returnType": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+                "text": "() => number",
+              },
+            ],
+            "text": "() => number",
+            "visibility": undefined,
+          },
+        ],
+        "name": "Counter",
         "position": {
           "end": {
             "column": 2,
@@ -6274,6 +6487,58 @@ describe('resolveType', () => {
             "line": 1,
           },
         },
+        "properties": [
+          {
+            "initializer": undefined,
+            "isOptional": true,
+            "isReadonly": false,
+            "kind": "ClassProperty",
+            "name": "initialCount",
+            "scope": undefined,
+            "text": "number",
+            "type": {
+              "filePath": "test.ts",
+              "kind": "TypeReference",
+              "position": {
+                "end": {
+                  "column": 28,
+                  "line": 2,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 2,
+                },
+              },
+              "text": "number",
+            },
+            "visibility": undefined,
+          },
+          {
+            "initializer": undefined,
+            "isOptional": true,
+            "isReadonly": false,
+            "kind": "ClassProperty",
+            "name": "staticCount",
+            "scope": "static",
+            "text": "number",
+            "type": {
+              "filePath": "test.ts",
+              "kind": "TypeReference",
+              "position": {
+                "end": {
+                  "column": 34,
+                  "line": 6,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 6,
+                },
+              },
+              "text": "number",
+            },
+            "visibility": undefined,
+          },
+        ],
         "text": "Counter",
       }
     `)
@@ -8080,64 +8345,69 @@ describe('resolveType', () => {
 
     expect(types).toMatchInlineSnapshot(`
       {
+        "constructor": undefined,
         "filePath": "test.ts",
-        "kind": "TypeLiteral",
-        "members": [
+        "kind": "Class",
+        "methods": [
           {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
+            "kind": "ClassMethod",
             "name": "greet",
-            "position": {
-              "end": {
-                "column": 4,
-                "line": 17,
-              },
-              "start": {
-                "column": 3,
-                "line": 14,
-              },
-            },
-            "text": "(name: string) => string",
-            "type": {
-              "isAsync": false,
-              "kind": "FunctionType",
-              "parameters": [
-                {
-                  "description": undefined,
-                  "filePath": "test.ts",
-                  "initializer": undefined,
-                  "isOptional": false,
-                  "kind": "Parameter",
-                  "name": "name",
-                  "position": {
-                    "end": {
-                      "column": 21,
-                      "line": 15,
+            "scope": undefined,
+            "signatures": [
+              {
+                "filePath": "test.ts",
+                "isAsync": false,
+                "isGenerator": false,
+                "kind": "FunctionSignature",
+                "parameters": [
+                  {
+                    "description": undefined,
+                    "filePath": "test.ts",
+                    "initializer": undefined,
+                    "isOptional": false,
+                    "kind": "Parameter",
+                    "name": "name",
+                    "position": {
+                      "end": {
+                        "column": 21,
+                        "line": 15,
+                      },
+                      "start": {
+                        "column": 9,
+                        "line": 15,
+                      },
                     },
-                    "start": {
-                      "column": 9,
-                      "line": 15,
+                    "text": "string",
+                    "type": {
+                      "kind": "String",
+                      "text": "string",
+                      "value": undefined,
                     },
                   },
-                  "text": "string",
-                  "type": {
-                    "kind": "String",
-                    "text": "string",
-                    "value": undefined,
+                ],
+                "position": {
+                  "end": {
+                    "column": 4,
+                    "line": 17,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 14,
                   },
                 },
-              ],
-              "returnType": {
-                "kind": "String",
-                "text": "string",
-                "value": undefined,
+                "returnType": {
+                  "kind": "String",
+                  "text": "string",
+                  "value": undefined,
+                },
+                "text": "(name: string) => string",
               },
-              "text": "(name: string) => string",
-            },
+            ],
+            "text": "(name: string) => string",
+            "visibility": undefined,
           },
         ],
+        "name": "Person",
         "position": {
           "end": {
             "column": 2,
@@ -9998,5 +10268,28 @@ describe('resolveType', () => {
         "text": "string",
       }
     `)
+  })
+
+  test.skip('resolves complex conditional and indexed access type', () => {
+    const sourceFile = project.createSourceFile(
+      'index.ts',
+      dedent`
+        export type LoadersWithRuntimeKeys<Loaders> = Extract<
+          keyof Loaders,
+          'js' | 'jsx' | 'ts' | 'tsx' | 'mdx'
+        >
+
+        export type LoaderExportValue<Loaders, Name extends string> = {
+          [Extension in LoadersWithRuntimeKeys<Loaders>]: Name extends keyof Loaders[Extension]
+            ? Loaders[Extension][Name]
+            : never
+        }[LoadersWithRuntimeKeys<Loaders>]
+      `,
+      { overwrite: true }
+    )
+    const declaration = sourceFile.getTypeAliasOrThrow('LoaderExportValue')
+    const type = resolveTypeExpression(declaration.getType(), declaration)
+
+    console.log(type)
   })
 })

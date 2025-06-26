@@ -820,6 +820,40 @@ export function resolveType(
 
   if (resolvedTypeExpression) {
     resolvedType = resolvedTypeExpression
+  } else if (
+    type.isClass() ||
+    tsMorph.Node.isClassDeclaration(symbolDeclaration)
+  ) {
+    if (tsMorph.Node.isClassDeclaration(symbolDeclaration)) {
+      resolvedType = resolveClass(symbolDeclaration, filter, dependencies)
+      if (symbolMetadata.name) {
+        resolvedType.name = symbolMetadata.name
+      }
+    } else {
+      throw new Error(
+        `[renoun:resolveType]: No class declaration found for "${symbolMetadata.name}". Please file an issue if you encounter this error.`
+      )
+    }
+  } else if (type.isEnum()) {
+    if (tsMorph.Node.isEnumDeclaration(symbolDeclaration)) {
+      resolvedType = {
+        kind: 'Enum',
+        name: symbolMetadata.name,
+        text: typeText,
+        members: symbolDeclaration.getMembers().map((member) => ({
+          kind: 'EnumMember',
+          name: member.getName(),
+          text: member.getText(),
+          value: member.getValue(),
+          ...getJsDocMetadata(member),
+          ...getDeclarationLocation(member),
+        })),
+      } satisfies Kind.Enum
+    } else {
+      throw new Error(
+        `[renoun:resolveType]: No enum declaration found for "${symbolMetadata.name}". Please file an issue if you encounter this error.`
+      )
+    }
   } else if (tsMorph.Node.isTypeAliasDeclaration(symbolDeclaration)) {
     const typeNode = symbolDeclaration.getTypeNodeOrThrow()
     const typeAliasType = typeNode.getType()
@@ -1303,7 +1337,6 @@ export function resolveTypeExpression(
 
     let resolvedType: Kind.TypeExpression | undefined
 
-    // First, check the type alias type node if it is an indexed access type node.
     if (tsMorph.Node.isTypeAliasDeclaration(enclosingNode)) {
       const typeNode = enclosingNode.getTypeNode()
 
