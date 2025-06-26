@@ -9030,671 +9030,174 @@ describe('resolveType', () => {
         },
         "text": "TypeReferenceComponents",
         "type": {
-          "kind": "TypeLiteral",
-          "members": [
+          "kind": "IntersectionType",
+          "text": "TypeReferenceComponents",
+          "types": [
             {
-              "filePath": "test.ts",
               "isOptional": false,
               "isReadonly": false,
-              "kind": "PropertySignature",
-              "name": "section",
-              "position": {
-                "end": {
-                  "column": 2,
-                  "line": 26,
+              "kind": "MappedType",
+              "parameter": {
+                "constraint": {
+                  "kind": "UnionType",
+                  "text": ""section" | "h2" | "h3" | "h4" | "p" | "dl" | "dt" | "dd" | "table" | "thead" | "tbody" | "tr" | "th" | "td" | "details" | "summary" | "code"",
+                  "types": [
+                    {
+                      "kind": "String",
+                      "text": ""section"",
+                      "value": "section",
+                    },
+                    {
+                      "kind": "String",
+                      "text": ""h2"",
+                      "value": "h2",
+                    },
+                    {
+                      "kind": "String",
+                      "text": ""h3"",
+                      "value": "h3",
+                    },
+                    {
+                      "kind": "String",
+                      "text": ""h4"",
+                      "value": "h4",
+                    },
+                    {
+                      "kind": "String",
+                      "text": ""p"",
+                      "value": "p",
+                    },
+                    {
+                      "kind": "String",
+                      "text": ""dl"",
+                      "value": "dl",
+                    },
+                    {
+                      "kind": "String",
+                      "text": ""dt"",
+                      "value": "dt",
+                    },
+                    {
+                      "kind": "String",
+                      "text": ""dd"",
+                      "value": "dd",
+                    },
+                    {
+                      "kind": "String",
+                      "text": ""table"",
+                      "value": "table",
+                    },
+                    {
+                      "kind": "String",
+                      "text": ""thead"",
+                      "value": "thead",
+                    },
+                    {
+                      "kind": "String",
+                      "text": ""tbody"",
+                      "value": "tbody",
+                    },
+                    {
+                      "kind": "String",
+                      "text": ""tr"",
+                      "value": "tr",
+                    },
+                    {
+                      "kind": "String",
+                      "text": ""th"",
+                      "value": "th",
+                    },
+                    {
+                      "kind": "String",
+                      "text": ""td"",
+                      "value": "td",
+                    },
+                    {
+                      "kind": "String",
+                      "text": ""details"",
+                      "value": "details",
+                    },
+                    {
+                      "kind": "String",
+                      "text": ""summary"",
+                      "value": "summary",
+                    },
+                    {
+                      "kind": "String",
+                      "text": ""code"",
+                      "value": "code",
+                    },
+                  ],
                 },
-                "start": {
-                  "column": 39,
-                  "line": 24,
-                },
+                "kind": "TypeParameter",
+                "name": "Tag",
+                "text": "Tag in "section" | "h2" | "h3" | "h4" | "p" | "dl" | "dt" | "dd" | "table" | "thead" | "tbody" | "tr" | "th" | "td" | "details" | "summary" | "code"",
               },
-              "text": ""section" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
+              "text": "{ section: "section" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>; ... 15 more ...; code: "code" | ComponentType<...>; }",
               "type": {
                 "kind": "UnionType",
-                "text": ""section" | ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>, any> | FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
+                "text": "Tag | ComponentClass<ComponentProps<Tag>, any> | FunctionComponent<ComponentProps<Tag>>",
                 "types": [
                   {
-                    "kind": "String",
-                    "text": ""section"",
-                    "value": "section",
+                    "kind": "TypeReference",
+                    "text": "Tag",
                   },
                   {
-                    "kind": "TypeReference",
-                    "text": "ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>, any>",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
+                    "kind": "UnionType",
+                    "text": "ComponentClass<ComponentProps<Tag>, any> | FunctionComponent<ComponentProps<Tag>>",
+                    "types": [
+                      {
+                        "kind": "TypeReference",
+                        "text": "ComponentClass<ComponentProps<Tag>, any>",
+                      },
+                      {
+                        "kind": "TypeReference",
+                        "text": "FunctionComponent<ComponentProps<Tag>>",
+                      },
+                    ],
                   },
                 ],
               },
             },
             {
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "PropertySignature",
-              "name": "h2",
-              "position": {
-                "end": {
-                  "column": 2,
-                  "line": 26,
+              "kind": "TypeLiteral",
+              "members": [
+                {
+                  "filePath": "test.ts",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "PropertySignature",
+                  "name": "Markdown",
+                  "position": {
+                    "end": {
+                      "column": 47,
+                      "line": 27,
+                    },
+                    "start": {
+                      "column": 3,
+                      "line": 27,
+                    },
+                  },
+                  "text": "ComponentType<MarkdownProps>",
+                  "type": {
+                    "kind": "UnionType",
+                    "text": "ComponentClass<MarkdownProps, any> | FunctionComponent<MarkdownProps>",
+                    "types": [
+                      {
+                        "kind": "TypeReference",
+                        "text": "ComponentClass<MarkdownProps, any>",
+                      },
+                      {
+                        "kind": "TypeReference",
+                        "text": "FunctionComponent<MarkdownProps>",
+                      },
+                    ],
+                  },
                 },
-                "start": {
-                  "column": 39,
-                  "line": 24,
-                },
-              },
-              "text": ""h2" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>>",
-              "type": {
-                "kind": "UnionType",
-                "text": ""h2" | ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>, any> | FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>>",
-                "types": [
-                  {
-                    "kind": "String",
-                    "text": ""h2"",
-                    "value": "h2",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>, any>",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>>",
-                  },
-                ],
-              },
-            },
-            {
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "PropertySignature",
-              "name": "h3",
-              "position": {
-                "end": {
-                  "column": 2,
-                  "line": 26,
-                },
-                "start": {
-                  "column": 39,
-                  "line": 24,
-                },
-              },
-              "text": ""h3" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>>",
-              "type": {
-                "kind": "UnionType",
-                "text": ""h3" | ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>, any> | FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>>",
-                "types": [
-                  {
-                    "kind": "String",
-                    "text": ""h3"",
-                    "value": "h3",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>, any>",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>>",
-                  },
-                ],
-              },
-            },
-            {
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "PropertySignature",
-              "name": "h4",
-              "position": {
-                "end": {
-                  "column": 2,
-                  "line": 26,
-                },
-                "start": {
-                  "column": 39,
-                  "line": 24,
-                },
-              },
-              "text": ""h4" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>>",
-              "type": {
-                "kind": "UnionType",
-                "text": ""h4" | ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>, any> | FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>>",
-                "types": [
-                  {
-                    "kind": "String",
-                    "text": ""h4"",
-                    "value": "h4",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>, any>",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>>",
-                  },
-                ],
-              },
-            },
-            {
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "PropertySignature",
-              "name": "p",
-              "position": {
-                "end": {
-                  "column": 2,
-                  "line": 26,
-                },
-                "start": {
-                  "column": 39,
-                  "line": 24,
-                },
-              },
-              "text": ""p" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLParagraphElement>, HTMLParagraphElement>>",
-              "type": {
-                "kind": "UnionType",
-                "text": ""p" | ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLParagraphElement>, HTMLParagraphElement>, any> | FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLParagraphElement>, HTMLParagraphElement>>",
-                "types": [
-                  {
-                    "kind": "String",
-                    "text": ""p"",
-                    "value": "p",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLParagraphElement>, HTMLParagraphElement>, any>",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLParagraphElement>, HTMLParagraphElement>>",
-                  },
-                ],
-              },
-            },
-            {
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "PropertySignature",
-              "name": "dl",
-              "position": {
-                "end": {
-                  "column": 2,
-                  "line": 26,
-                },
-                "start": {
-                  "column": 39,
-                  "line": 24,
-                },
-              },
-              "text": ""dl" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLDListElement>, HTMLDListElement>>",
-              "type": {
-                "kind": "UnionType",
-                "text": ""dl" | ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLDListElement>, HTMLDListElement>, any> | FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLDListElement>, HTMLDListElement>>",
-                "types": [
-                  {
-                    "kind": "String",
-                    "text": ""dl"",
-                    "value": "dl",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLDListElement>, HTMLDListElement>, any>",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLDListElement>, HTMLDListElement>>",
-                  },
-                ],
-              },
-            },
-            {
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "PropertySignature",
-              "name": "dt",
-              "position": {
-                "end": {
-                  "column": 2,
-                  "line": 26,
-                },
-                "start": {
-                  "column": 39,
-                  "line": 24,
-                },
-              },
-              "text": ""dt" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
-              "type": {
-                "kind": "UnionType",
-                "text": ""dt" | ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>, any> | FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
-                "types": [
-                  {
-                    "kind": "String",
-                    "text": ""dt"",
-                    "value": "dt",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>, any>",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
-                  },
-                ],
-              },
-            },
-            {
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "PropertySignature",
-              "name": "dd",
-              "position": {
-                "end": {
-                  "column": 2,
-                  "line": 26,
-                },
-                "start": {
-                  "column": 39,
-                  "line": 24,
-                },
-              },
-              "text": ""dd" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
-              "type": {
-                "kind": "UnionType",
-                "text": ""dd" | ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>, any> | FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
-                "types": [
-                  {
-                    "kind": "String",
-                    "text": ""dd"",
-                    "value": "dd",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>, any>",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
-                  },
-                ],
-              },
-            },
-            {
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "PropertySignature",
-              "name": "table",
-              "position": {
-                "end": {
-                  "column": 2,
-                  "line": 26,
-                },
-                "start": {
-                  "column": 39,
-                  "line": 24,
-                },
-              },
-              "text": ""table" | ComponentType<DetailedHTMLProps<TableHTMLAttributes<HTMLTableElement>, HTMLTableElement>>",
-              "type": {
-                "kind": "UnionType",
-                "text": ""table" | ComponentClass<DetailedHTMLProps<TableHTMLAttributes<HTMLTableElement>, HTMLTableElement>, any> | FunctionComponent<DetailedHTMLProps<TableHTMLAttributes<HTMLTableElement>, HTMLTableElement>>",
-                "types": [
-                  {
-                    "kind": "String",
-                    "text": ""table"",
-                    "value": "table",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "ComponentClass<DetailedHTMLProps<TableHTMLAttributes<HTMLTableElement>, HTMLTableElement>, any>",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "FunctionComponent<DetailedHTMLProps<TableHTMLAttributes<HTMLTableElement>, HTMLTableElement>>",
-                  },
-                ],
-              },
-            },
-            {
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "PropertySignature",
-              "name": "thead",
-              "position": {
-                "end": {
-                  "column": 2,
-                  "line": 26,
-                },
-                "start": {
-                  "column": 39,
-                  "line": 24,
-                },
-              },
-              "text": ""thead" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLTableSectionElement>, HTMLTableSectionElement>>",
-              "type": {
-                "kind": "UnionType",
-                "text": ""thead" | ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLTableSectionElement>, HTMLTableSectionElement>, any> | FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLTableSectionElement>, HTMLTableSectionElement>>",
-                "types": [
-                  {
-                    "kind": "String",
-                    "text": ""thead"",
-                    "value": "thead",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLTableSectionElement>, HTMLTableSectionElement>, any>",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLTableSectionElement>, HTMLTableSectionElement>>",
-                  },
-                ],
-              },
-            },
-            {
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "PropertySignature",
-              "name": "tbody",
-              "position": {
-                "end": {
-                  "column": 2,
-                  "line": 26,
-                },
-                "start": {
-                  "column": 39,
-                  "line": 24,
-                },
-              },
-              "text": ""tbody" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLTableSectionElement>, HTMLTableSectionElement>>",
-              "type": {
-                "kind": "UnionType",
-                "text": ""tbody" | ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLTableSectionElement>, HTMLTableSectionElement>, any> | FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLTableSectionElement>, HTMLTableSectionElement>>",
-                "types": [
-                  {
-                    "kind": "String",
-                    "text": ""tbody"",
-                    "value": "tbody",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLTableSectionElement>, HTMLTableSectionElement>, any>",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLTableSectionElement>, HTMLTableSectionElement>>",
-                  },
-                ],
-              },
-            },
-            {
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "PropertySignature",
-              "name": "tr",
-              "position": {
-                "end": {
-                  "column": 2,
-                  "line": 26,
-                },
-                "start": {
-                  "column": 39,
-                  "line": 24,
-                },
-              },
-              "text": ""tr" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLTableRowElement>, HTMLTableRowElement>>",
-              "type": {
-                "kind": "UnionType",
-                "text": ""tr" | ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLTableRowElement>, HTMLTableRowElement>, any> | FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLTableRowElement>, HTMLTableRowElement>>",
-                "types": [
-                  {
-                    "kind": "String",
-                    "text": ""tr"",
-                    "value": "tr",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLTableRowElement>, HTMLTableRowElement>, any>",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLTableRowElement>, HTMLTableRowElement>>",
-                  },
-                ],
-              },
-            },
-            {
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "PropertySignature",
-              "name": "th",
-              "position": {
-                "end": {
-                  "column": 2,
-                  "line": 26,
-                },
-                "start": {
-                  "column": 39,
-                  "line": 24,
-                },
-              },
-              "text": ""th" | ComponentType<DetailedHTMLProps<ThHTMLAttributes<HTMLTableHeaderCellElement>, HTMLTableHeaderCellElement>>",
-              "type": {
-                "kind": "UnionType",
-                "text": ""th" | ComponentClass<DetailedHTMLProps<ThHTMLAttributes<HTMLTableHeaderCellElement>, HTMLTableHeaderCellElement>, any> | FunctionComponent<DetailedHTMLProps<ThHTMLAttributes<HTMLTableHeaderCellElement>, HTMLTableHeaderCellElement>>",
-                "types": [
-                  {
-                    "kind": "String",
-                    "text": ""th"",
-                    "value": "th",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "ComponentClass<DetailedHTMLProps<ThHTMLAttributes<HTMLTableHeaderCellElement>, HTMLTableHeaderCellElement>, any>",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "FunctionComponent<DetailedHTMLProps<ThHTMLAttributes<HTMLTableHeaderCellElement>, HTMLTableHeaderCellElement>>",
-                  },
-                ],
-              },
-            },
-            {
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "PropertySignature",
-              "name": "td",
-              "position": {
-                "end": {
-                  "column": 2,
-                  "line": 26,
-                },
-                "start": {
-                  "column": 39,
-                  "line": 24,
-                },
-              },
-              "text": ""td" | ComponentType<DetailedHTMLProps<TdHTMLAttributes<HTMLTableDataCellElement>, HTMLTableDataCellElement>>",
-              "type": {
-                "kind": "UnionType",
-                "text": ""td" | ComponentClass<DetailedHTMLProps<TdHTMLAttributes<HTMLTableDataCellElement>, HTMLTableDataCellElement>, any> | FunctionComponent<DetailedHTMLProps<TdHTMLAttributes<HTMLTableDataCellElement>, HTMLTableDataCellElement>>",
-                "types": [
-                  {
-                    "kind": "String",
-                    "text": ""td"",
-                    "value": "td",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "ComponentClass<DetailedHTMLProps<TdHTMLAttributes<HTMLTableDataCellElement>, HTMLTableDataCellElement>, any>",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "FunctionComponent<DetailedHTMLProps<TdHTMLAttributes<HTMLTableDataCellElement>, HTMLTableDataCellElement>>",
-                  },
-                ],
-              },
-            },
-            {
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "PropertySignature",
-              "name": "details",
-              "position": {
-                "end": {
-                  "column": 2,
-                  "line": 26,
-                },
-                "start": {
-                  "column": 39,
-                  "line": 24,
-                },
-              },
-              "text": ""details" | ComponentType<DetailedHTMLProps<DetailsHTMLAttributes<HTMLDetailsElement>, HTMLDetailsElement>>",
-              "type": {
-                "kind": "UnionType",
-                "text": ""details" | ComponentClass<DetailedHTMLProps<DetailsHTMLAttributes<HTMLDetailsElement>, HTMLDetailsElement>, any> | FunctionComponent<DetailedHTMLProps<DetailsHTMLAttributes<HTMLDetailsElement>, HTMLDetailsElement>>",
-                "types": [
-                  {
-                    "kind": "String",
-                    "text": ""details"",
-                    "value": "details",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "ComponentClass<DetailedHTMLProps<DetailsHTMLAttributes<HTMLDetailsElement>, HTMLDetailsElement>, any>",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "FunctionComponent<DetailedHTMLProps<DetailsHTMLAttributes<HTMLDetailsElement>, HTMLDetailsElement>>",
-                  },
-                ],
-              },
-            },
-            {
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "PropertySignature",
-              "name": "summary",
-              "position": {
-                "end": {
-                  "column": 2,
-                  "line": 26,
-                },
-                "start": {
-                  "column": 39,
-                  "line": 24,
-                },
-              },
-              "text": ""summary" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
-              "type": {
-                "kind": "UnionType",
-                "text": ""summary" | ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>, any> | FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
-                "types": [
-                  {
-                    "kind": "String",
-                    "text": ""summary"",
-                    "value": "summary",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>, any>",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
-                  },
-                ],
-              },
-            },
-            {
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "PropertySignature",
-              "name": "code",
-              "position": {
-                "end": {
-                  "column": 2,
-                  "line": 26,
-                },
-                "start": {
-                  "column": 39,
-                  "line": 24,
-                },
-              },
-              "text": ""code" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
-              "type": {
-                "kind": "UnionType",
-                "text": ""code" | ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>, any> | FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
-                "types": [
-                  {
-                    "kind": "String",
-                    "text": ""code"",
-                    "value": "code",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>, any>",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
-                  },
-                ],
-              },
-            },
-            {
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "PropertySignature",
-              "name": "Markdown",
-              "position": {
-                "end": {
-                  "column": 47,
-                  "line": 27,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 27,
-                },
-              },
-              "text": "ComponentType<MarkdownProps>",
-              "type": {
-                "kind": "UnionType",
-                "text": "ComponentClass<MarkdownProps, any> | FunctionComponent<MarkdownProps>",
-                "types": [
-                  {
-                    "kind": "TypeReference",
-                    "text": "ComponentClass<MarkdownProps, any>",
-                  },
-                  {
-                    "kind": "TypeReference",
-                    "text": "FunctionComponent<MarkdownProps>",
-                  },
-                ],
-              },
+              ],
+              "text": "{ Markdown: ComponentType<MarkdownProps>; }",
             },
           ],
-          "text": "TypeReferenceComponents",
         },
       }
     `)
@@ -10270,7 +9773,7 @@ describe('resolveType', () => {
     `)
   })
 
-  test.skip('resolves complex conditional and indexed access type', () => {
+  test('resolves complex conditional and indexed access type', () => {
     const sourceFile = project.createSourceFile(
       'index.ts',
       dedent`
@@ -10290,6 +9793,72 @@ describe('resolveType', () => {
     const declaration = sourceFile.getTypeAliasOrThrow('LoaderExportValue')
     const type = resolveTypeExpression(declaration.getType(), declaration)
 
-    console.log(type)
+    expect(type).toMatchInlineSnapshot(`
+      {
+        "indexType": {
+          "kind": "TypeReference",
+          "text": "Extract<keyof Loaders, "js" | "jsx" | "ts" | "tsx" | "mdx">",
+        },
+        "kind": "IndexedAccessType",
+        "objectType": {
+          "isOptional": false,
+          "isReadonly": false,
+          "kind": "MappedType",
+          "parameter": {
+            "constraint": {
+              "kind": "TypeReference",
+              "text": "Extract<keyof Loaders, "js" | "jsx" | "ts" | "tsx" | "mdx">",
+            },
+            "kind": "TypeParameter",
+            "name": "Extension",
+            "text": "Extension in Extract<keyof Loaders, "js" | "jsx" | "ts" | "tsx" | "mdx">",
+          },
+          "text": "{ [Extension in Extract<keyof Loaders, "js" | "jsx" | "ts" | "tsx" | "mdx">]: Name extends keyof Loaders[Extension] ? Loaders[Extension][Name] : never; }",
+          "type": {
+            "checkType": {
+              "kind": "TypeReference",
+              "text": "Name",
+            },
+            "extendsType": {
+              "kind": "TypeOperator",
+              "operator": "143",
+              "text": "keyof Loaders[Extension]",
+              "type": {
+                "kind": "TypeReference",
+                "text": "keyof Loaders[Extension]",
+              },
+            },
+            "falseType": {
+              "kind": "Never",
+              "text": "never",
+            },
+            "isDistributive": true,
+            "kind": "ConditionalType",
+            "text": "Name extends keyof Loaders[Extension] ? Loaders[Extension][Name] : never",
+            "trueType": {
+              "indexType": {
+                "kind": "TypeReference",
+                "text": "Name",
+              },
+              "kind": "IndexedAccessType",
+              "objectType": {
+                "indexType": {
+                  "kind": "TypeReference",
+                  "text": "Extension",
+                },
+                "kind": "IndexedAccessType",
+                "objectType": {
+                  "kind": "TypeReference",
+                  "text": "Loaders",
+                },
+                "text": "Loaders[Extension]",
+              },
+              "text": "Loaders[Extension][Name]",
+            },
+          },
+        },
+        "text": "LoaderExportValue<Loaders, Name>",
+      }
+    `)
   })
 })

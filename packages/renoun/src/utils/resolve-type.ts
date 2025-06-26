@@ -1336,9 +1336,10 @@ export function resolveTypeExpression(
     }
 
     let resolvedType: Kind.TypeExpression | undefined
+    const isTypeAlias = tsMorph.Node.isTypeAliasDeclaration(enclosingNode)
 
-    if (tsMorph.Node.isTypeAliasDeclaration(enclosingNode)) {
-      const typeNode = enclosingNode.getTypeNode()
+    if (isTypeAlias || isIndexedAccessType(type)) {
+      const typeNode = isTypeAlias ? enclosingNode.getTypeNode() : enclosingNode
 
       if (tsMorph.Node.isIndexedAccessTypeNode(typeNode)) {
         const objectType = typeNode.getObjectTypeNode()
@@ -1891,6 +1892,58 @@ export function resolveTypeExpression(
             isAsync: returnType ? isPromiseLike(returnType) : false,
           } satisfies Kind.FunctionType
         } else if (type.isObject()) {
+          const isMapped = Boolean(
+            type.compilerType.objectFlags & tsMorph.ObjectFlags.Mapped
+          )
+
+          if (isMapped) {
+            const mappedNode = tsMorph.Node.isMappedTypeNode(enclosingNode)
+              ? enclosingNode
+              : undefined
+
+            if (mappedNode) {
+              const typeParameter = mappedNode.getTypeParameter()
+              const constraintNode = typeParameter.getConstraintOrThrow()
+              const constraintType = resolveTypeExpression(
+                constraintNode.getType(),
+                constraintNode,
+                filter,
+                defaultValues,
+                keepReferences,
+                dependencies
+              )
+              const valueNode = mappedNode.getTypeNode()
+              const valueType = valueNode
+                ? resolveTypeExpression(
+                    valueNode.getType(),
+                    valueNode,
+                    filter,
+                    defaultValues,
+                    keepReferences,
+                    dependencies
+                  )
+                : undefined
+
+              if (constraintType && valueType) {
+                resolvedType = {
+                  kind: 'MappedType',
+                  text: typeText,
+                  parameter: {
+                    kind: 'TypeParameter',
+                    name: typeParameter.getName(),
+                    text: `${typeParameter.getName()} in ${constraintType.text}`,
+                    constraint: constraintType,
+                  },
+                  type: valueType,
+                  isReadonly: Boolean(mappedNode.getReadonlyToken()),
+                  isOptional: Boolean(mappedNode.getQuestionToken()),
+                } satisfies Kind.MappedType
+
+                return resolvedType
+              }
+            }
+          }
+
           const indexSignatures = resolveIndexSignatures(
             symbolDeclaration,
             filter
@@ -1937,12 +1990,12 @@ export function resolveTypeExpression(
             arguments: resolvedTypeArguments,
             text: type.getText(),
           } satisfies Kind.TypeReference
+        } else if (tsMorph.Node.isTypeReference(enclosingNode)) {
+          return {
+            kind: 'TypeReference',
+            text: type.getText(),
+          } satisfies Kind.TypeReference
         } else {
-          console.log({
-            primaryDeclaration: primaryDeclaration?.getKindName(),
-            enclosingNode: enclosingNode?.getKindName(),
-            type: type.getText(),
-          })
           throw new UnresolvedTypeExpressionError(
             type.getText(),
             primaryDeclaration ?? enclosingNode
