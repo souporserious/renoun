@@ -8092,99 +8092,24 @@ describe('resolveType', () => {
           "text": "StringType & { value: string | boolean; getValue(): string | boolean; } | BooleanType & { value: string | boolean; getValue(): string | boolean; }",
           "types": [
             {
-              "kind": "TypeLiteral",
-              "members": [
-                {
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "isReadonly": false,
-                  "kind": "PropertySignature",
-                  "name": "kind",
-                  "position": {
-                    "end": {
-                      "column": 17,
-                      "line": 2,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 2,
-                    },
-                  },
-                  "text": ""String"",
-                  "type": {
-                    "kind": "String",
-                    "text": ""String"",
-                    "value": "String",
-                  },
-                },
-                {
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "isReadonly": false,
-                  "kind": "PropertySignature",
-                  "name": "value",
-                  "position": {
-                    "end": {
-                      "column": 49,
-                      "line": 11,
-                    },
-                    "start": {
-                      "column": 25,
-                      "line": 11,
-                    },
-                  },
-                  "text": "string | boolean",
-                  "type": {
-                    "kind": "UnionType",
-                    "text": "string | boolean",
-                    "types": [
-                      {
-                        "kind": "String",
-                        "text": "string",
-                        "value": undefined,
-                      },
-                      {
-                        "kind": "Boolean",
-                        "text": "boolean",
-                      },
-                    ],
-                  },
-                },
-                {
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "isReadonly": false,
-                  "kind": "PropertySignature",
-                  "name": "getValue",
-                  "position": {
-                    "end": {
-                      "column": 78,
-                      "line": 11,
-                    },
-                    "start": {
-                      "column": 50,
-                      "line": 11,
-                    },
-                  },
-                  "text": "() => string | boolean",
-                  "type": {
-                    "isAsync": false,
-                    "kind": "FunctionType",
-                    "parameters": [],
-                    "returnType": {
-                      "kind": "TypeReference",
-                      "text": "string | boolean",
-                    },
-                    "text": "() => string | boolean",
-                  },
-                },
-              ],
-              "text": "StringType & { value: string | boolean; getValue(): string | boolean; }",
-            },
-            {
               "kind": "IntersectionType",
-              "text": "BooleanType & { value: string | boolean; getValue(): string | boolean; }",
+              "text": "StringType & { value: string | boolean; getValue(): string | boolean; }",
               "types": [
+                {
+                  "filePath": "test.ts",
+                  "kind": "TypeReference",
+                  "position": {
+                    "end": {
+                      "column": 2,
+                      "line": 3,
+                    },
+                    "start": {
+                      "column": 1,
+                      "line": 1,
+                    },
+                  },
+                  "text": "StringType",
+                },
                 {
                   "kind": "TypeLiteral",
                   "members": [
@@ -8193,25 +8118,84 @@ describe('resolveType', () => {
                       "isOptional": false,
                       "isReadonly": false,
                       "kind": "PropertySignature",
-                      "name": "kind",
+                      "name": "value",
                       "position": {
                         "end": {
-                          "column": 18,
-                          "line": 6,
+                          "column": 49,
+                          "line": 11,
                         },
                         "start": {
-                          "column": 3,
-                          "line": 6,
+                          "column": 25,
+                          "line": 11,
                         },
                       },
-                      "text": ""Boolean"",
+                      "text": "string | boolean",
                       "type": {
-                        "kind": "String",
-                        "text": ""Boolean"",
-                        "value": "Boolean",
+                        "kind": "UnionType",
+                        "text": "string | boolean",
+                        "types": [
+                          {
+                            "kind": "String",
+                            "text": "string",
+                            "value": undefined,
+                          },
+                          {
+                            "kind": "Boolean",
+                            "text": "boolean",
+                          },
+                        ],
+                      },
+                    },
+                    {
+                      "filePath": "test.ts",
+                      "isOptional": false,
+                      "isReadonly": false,
+                      "kind": "PropertySignature",
+                      "name": "getValue",
+                      "position": {
+                        "end": {
+                          "column": 78,
+                          "line": 11,
+                        },
+                        "start": {
+                          "column": 50,
+                          "line": 11,
+                        },
+                      },
+                      "text": "() => string | boolean",
+                      "type": {
+                        "isAsync": false,
+                        "kind": "FunctionType",
+                        "parameters": [],
+                        "returnType": {
+                          "kind": "TypeReference",
+                          "text": "string | boolean",
+                        },
+                        "text": "() => string | boolean",
                       },
                     },
                   ],
+                  "text": "{ value: string | boolean; getValue(): string | boolean; }",
+                },
+              ],
+            },
+            {
+              "kind": "IntersectionType",
+              "text": "BooleanType & { value: string | boolean; getValue(): string | boolean; }",
+              "types": [
+                {
+                  "filePath": "test.ts",
+                  "kind": "TypeReference",
+                  "position": {
+                    "end": {
+                      "column": 2,
+                      "line": 7,
+                    },
+                    "start": {
+                      "column": 1,
+                      "line": 5,
+                    },
+                  },
                   "text": "BooleanType",
                 },
                 {
@@ -9858,6 +9842,103 @@ describe('resolveType', () => {
           },
         },
         "text": "LoaderExportValue<Loaders, Name>",
+      }
+    `)
+  })
+
+  test('resolves indexed access type with intersection', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      export interface DefaultModuleTypes {
+        mdx: { default: any }
+      }
+
+      export type InferDefaultModuleTypes<Extension extends string> =
+        Extension extends keyof DefaultModuleTypes
+          ? DefaultModuleTypes[Extension] & { metadata: Record<string, any> }
+          : any
+      `,
+      { overwrite: true }
+    )
+    const typeAlias = sourceFile.getTypeAliasOrThrow('InferDefaultModuleTypes')
+    const type = resolveTypeExpression(typeAlias.getType(), typeAlias)
+
+    expect(type).toMatchInlineSnapshot(`
+      {
+        "checkType": {
+          "kind": "TypeReference",
+          "text": "Extension",
+        },
+        "extendsType": {
+          "kind": "String",
+          "text": ""mdx"",
+          "value": "mdx",
+        },
+        "falseType": {
+          "kind": "Any",
+          "text": "any",
+        },
+        "isDistributive": true,
+        "kind": "ConditionalType",
+        "text": "InferDefaultModuleTypes<Extension>",
+        "trueType": {
+          "kind": "IntersectionType",
+          "text": "DefaultModuleTypes[Extension] & { metadata: Record<string, any>; }",
+          "types": [
+            {
+              "indexType": {
+                "kind": "TypeReference",
+                "text": "Extension",
+              },
+              "kind": "IndexedAccessType",
+              "objectType": {
+                "filePath": "test.ts",
+                "kind": "TypeReference",
+                "position": {
+                  "end": {
+                    "column": 2,
+                    "line": 3,
+                  },
+                  "start": {
+                    "column": 1,
+                    "line": 1,
+                  },
+                },
+                "text": "DefaultModuleTypes",
+              },
+              "text": "DefaultModuleTypes[Extension]",
+            },
+            {
+              "kind": "TypeLiteral",
+              "members": [
+                {
+                  "filePath": "test.ts",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "PropertySignature",
+                  "name": "metadata",
+                  "position": {
+                    "end": {
+                      "column": 70,
+                      "line": 7,
+                    },
+                    "start": {
+                      "column": 41,
+                      "line": 7,
+                    },
+                  },
+                  "text": "Record<string, any>",
+                  "type": {
+                    "kind": "TypeReference",
+                    "text": "Record<string, any>",
+                  },
+                },
+              ],
+              "text": "{ metadata: Record<string, any>; }",
+            },
+          ],
+        },
       }
     `)
   })

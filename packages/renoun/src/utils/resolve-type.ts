@@ -1677,12 +1677,9 @@ export function resolveTypeExpression(
           : []
         const resolvedIntersectionTypes = intersectionTypes
           .map((intersectionType, index) => {
-            const intersectionNode = intersectionNodes[index]
-            const isRootMapped = tsMorph.Node.isMappedTypeNode(intersectionNode)
-
             return resolveTypeExpression(
               intersectionType,
-              isRootMapped ? intersectionNode : symbolDeclaration,
+              intersectionNodes[index] ?? symbolDeclaration,
               filter,
               defaultValues,
               keepReferences,
