@@ -783,10 +783,16 @@ export function resolveType(
     text: typeText,
   } satisfies Kind.Unknown
 
+  const isAtDeclaringNode =
+    // Top-level entry, caller didn’t give any context
+    (!enclosingNode && symbolDeclaration) ||
+    // We do have a context and it is exactly the node that declares the symbol
+    enclosingNode === symbolDeclaration
+
   // Attempt to resolve the type expression first.
   let resolvedTypeExpression: Kind.TypeExpression | undefined
 
-  if (!isRootType) {
+  if (!isAtDeclaringNode) {
     try {
       resolvedTypeExpression = resolveTypeExpression(
         type,
