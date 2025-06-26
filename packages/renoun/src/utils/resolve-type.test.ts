@@ -7,7 +7,11 @@ import {
 } from 'ts-morph'
 import dedent from 'dedent'
 
-import { resolvePropertySignatures, resolveType } from './resolve-type.js'
+import {
+  resolvePropertySignatures,
+  resolveType,
+  resolveTypeExpression,
+} from './resolve-type.js'
 
 const project = new Project()
 
@@ -7093,7 +7097,7 @@ describe('resolveType', () => {
             "line": 9,
           },
         },
-        "text": "(props: ButtonProps) => Element",
+        "text": "(props: ButtonProps) => React.JSX.Element",
       }
     `)
   })
@@ -8548,50 +8552,18 @@ describe('resolveType', () => {
                     },
                     "text": "ButtonProps",
                     "type": {
-                      "kind": "TypeLiteral",
-                      "members": [
-                        {
-                          "description": "Visual style to apply.",
-                          "filePath": "test.ts",
-                          "isOptional": true,
-                          "isReadonly": false,
-                          "kind": "PropertySignature",
-                          "name": "variant",
-                          "position": {
-                            "end": {
-                              "column": 26,
-                              "line": 9,
-                            },
-                            "start": {
-                              "column": 3,
-                              "line": 9,
-                            },
-                          },
-                          "tags": undefined,
-                          "text": "ButtonVariant",
-                          "type": {
-                            "kind": "UnionType",
-                            "text": ""primary" | "secondary" | "danger"",
-                            "types": [
-                              {
-                                "kind": "String",
-                                "text": ""primary"",
-                                "value": "primary",
-                              },
-                              {
-                                "kind": "String",
-                                "text": ""secondary"",
-                                "value": "secondary",
-                              },
-                              {
-                                "kind": "String",
-                                "text": ""danger"",
-                                "value": "danger",
-                              },
-                            ],
-                          },
+                      "filePath": "test.ts",
+                      "kind": "TypeReference",
+                      "position": {
+                        "end": {
+                          "column": 2,
+                          "line": 10,
                         },
-                      ],
+                        "start": {
+                          "column": 1,
+                          "line": 6,
+                        },
+                      },
                       "text": "ButtonProps",
                     },
                   },
@@ -9898,6 +9870,130 @@ describe('resolveType', () => {
             "column": 3482,
             "line": 4,
           },
+        },
+        "text": "string",
+      }
+    `)
+  })
+
+  test('indexed access type', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      interface Baz {
+        foo: string
+        bar: number
+      }
+
+      export type Foo = Baz['foo']
+      `,
+      { overwrite: true }
+    )
+    const typeAlias = sourceFile.getTypeAliasOrThrow('Foo')
+    const type = resolveTypeExpression(typeAlias.getType(), typeAlias)
+
+    expect(type).toMatchInlineSnapshot(`
+      {
+        "indexType": {
+          "kind": "String",
+          "text": ""foo"",
+          "value": "foo",
+        },
+        "kind": "IndexedAccessType",
+        "objectType": {
+          "kind": "TypeLiteral",
+          "members": [
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "foo",
+              "position": {
+                "end": {
+                  "column": 14,
+                  "line": 2,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 2,
+                },
+              },
+              "text": "string",
+              "type": {
+                "kind": "TypeReference",
+                "text": "string",
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "bar",
+              "position": {
+                "end": {
+                  "column": 14,
+                  "line": 3,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 3,
+                },
+              },
+              "text": "number",
+              "type": {
+                "kind": "Number",
+                "text": "number",
+                "value": undefined,
+              },
+            },
+          ],
+          "text": "Baz",
+        },
+        "text": "string",
+      }
+    `)
+  })
+
+  test('indexed access type with export', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      export interface Baz {
+        foo: string
+        bar: number
+      }
+
+      export type Foo = Baz['foo']
+      `,
+      { overwrite: true }
+    )
+    const typeAlias = sourceFile.getTypeAliasOrThrow('Foo')
+    const type = resolveTypeExpression(typeAlias.getType(), typeAlias)
+
+    expect(type).toMatchInlineSnapshot(`
+      {
+        "indexType": {
+          "kind": "String",
+          "text": ""foo"",
+          "value": "foo",
+        },
+        "kind": "IndexedAccessType",
+        "objectType": {
+          "filePath": "test.ts",
+          "kind": "TypeReference",
+          "position": {
+            "end": {
+              "column": 2,
+              "line": 4,
+            },
+            "start": {
+              "column": 1,
+              "line": 1,
+            },
+          },
+          "text": "Baz",
         },
         "text": "string",
       }
