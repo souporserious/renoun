@@ -105,6 +105,7 @@ export async function start() {
             message: 'Choose an example below to get started:',
             options: [
               { value: 'blog', label: 'Blog' },
+              { value: 'docs', label: 'Documentation' },
               { value: 'design-system', label: 'Design System' },
             ],
           })

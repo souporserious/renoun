@@ -1,9 +1,4 @@
-import {
-  CodeInline,
-  PackageInstall,
-  parseCodeProps,
-  parsePreProps,
-} from 'renoun/components'
+import { CodeInline, PackageInstall } from 'renoun/components'
 import type { MDXComponents as MDXComponentsType } from 'renoun/mdx'
 import { GeistMono } from 'geist/font/mono'
 
@@ -13,6 +8,7 @@ import { Row } from './Row'
 
 export const MDXComponents = {
   Card,
+  CodeBlock,
   Row,
   Preview: ({ children }: { children: React.ReactNode }) => {
     return (
@@ -96,7 +92,7 @@ export const MDXComponents = {
   code: (props) => {
     return (
       <CodeInline
-        {...parseCodeProps(props)}
+        {...props}
         paddingY="0"
         css={{
           lineHeight: 1.15,
@@ -106,8 +102,5 @@ export const MDXComponents = {
         className={GeistMono.className}
       />
     )
-  },
-  pre: (props) => {
-    return <CodeBlock {...parsePreProps(props)} shouldFormat={false} />
   },
 } satisfies MDXComponentsType

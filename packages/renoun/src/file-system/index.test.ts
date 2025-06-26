@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react'
-import { describe, test, expect, expectTypeOf } from 'vitest'
+import { beforeAll, describe, test, expect, expectTypeOf } from 'vitest'
 import { runInNewContext } from 'node:vm'
 import * as v from 'valibot'
 import { z } from 'zod'
@@ -16,11 +16,12 @@ import {
   JavaScriptFile,
   JavaScriptFileExport,
   MDXFile,
-  MDXFileExport,
   EntryGroup,
   isDirectory,
   isFile,
   isJavaScriptFile,
+  resolveFileFromEntry,
+  createSort,
   withSchema,
   FileNotFoundError,
   FileExportNotFoundError,
@@ -129,16 +130,16 @@ describe('file system', () => {
     const directory = new Directory({ path: 'fixtures/project' })
     const entries = await directory.getEntries({
       recursive: true,
-      includeIndexAndReadme: true,
+      includeIndexAndReadmeFiles: true,
     })
 
-    expect(entries.map((entry) => entry.getPath())).toMatchInlineSnapshot(`
+    expect(entries.map((entry) => entry.getPathname())).toMatchInlineSnapshot(`
       [
-        "/rpc",
-        "/rpc/client",
-        "/rpc/server",
-        "/server",
-        "/types",
+        "/project/rpc",
+        "/project/rpc/client",
+        "/project/rpc/server",
+        "/project/server",
+        "/project/types",
       ]
     `)
   })
@@ -160,19 +161,19 @@ describe('file system', () => {
     const directory = new Directory({ fileSystem })
     const entries = await directory.getEntries({
       recursive: true,
-      includeIndexAndReadme: true,
+      includeIndexAndReadmeFiles: true,
     })
 
-    expect(entries).toHaveLength(5)
-    expect(entries.map((entry) => entry.getPath())).toMatchInlineSnapshot(`
-      [
-        "/index",
-        "/components",
-        "/components/button",
-        "/components/button/index",
-        "/components/link",
-      ]
-    `)
+    expect(entries.map((entry) => entry.getAbsolutePath()))
+      .toMatchInlineSnapshot(`
+        [
+          "/index.ts",
+          "/components",
+          "/components/Button",
+          "/components/Button/index.tsx",
+          "/components/Link.tsx",
+        ]
+      `)
   })
 
   test('filters out index and readme from entries by default', async () => {
@@ -190,7 +191,7 @@ describe('file system', () => {
   test('filters with schema', async () => {
     const directory = new Directory({
       path: 'fixtures/posts',
-      loaders: {
+      loader: {
         mdx: withSchema(
           {
             frontmatter: z.object({
@@ -240,7 +241,7 @@ describe('file system', () => {
     const directory = new Directory({ fileSystem, slugCasing: 'none' })
     const entries = await directory.getEntries({ recursive: true })
 
-    expect(entries.map((entry) => entry.getPath())).toEqual([
+    expect(entries.map((entry) => entry.getPathname())).toEqual([
       '/Button',
       '/Button/IconButton',
     ])
@@ -249,7 +250,7 @@ describe('file system', () => {
   test('loaders', async () => {
     const directory = new Directory({
       path: 'fixtures/utils',
-      loaders: {
+      loader: {
         ts: withSchema<{
           basename: typeof basename
         }>((path) => import(`#fixtures/utils/${path}.ts`)),
@@ -270,7 +271,7 @@ describe('file system', () => {
     test('types only', async () => {
       const directory = new Directory({
         path: 'fixtures/docs',
-        loaders: {
+        loader: {
           ts: withSchema<{ metadata?: { title: string } }>(
             (path) => import(`#fixtures/docs/${path}.ts`)
           ),
@@ -288,7 +289,7 @@ describe('file system', () => {
     test('custom validator', async () => {
       const directory = new Directory({
         path: 'fixtures/docs',
-        loaders: {
+        loader: {
           ts: withSchema<{ metadata: { title: string } }>(
             {
               metadata: (value) => {
@@ -314,7 +315,7 @@ describe('file system', () => {
     test('inferred validator', async () => {
       const directory = new Directory({
         path: 'fixtures/docs',
-        loaders: {
+        loader: {
           ts: withSchema(
             {
               metadata: (value: { title: string }) => {
@@ -337,7 +338,7 @@ describe('file system', () => {
     test('valibot', async () => {
       const directory = new Directory({
         path: 'fixtures/docs',
-        loaders: {
+        loader: {
           ts: withSchema(
             {
               metadata: v.object({
@@ -363,7 +364,7 @@ describe('file system', () => {
     test('zod', async () => {
       const directory = new Directory({
         path: 'fixtures/docs',
-        loaders: {
+        loader: {
           ts: withSchema(
             {
               metadata: z.object({
@@ -391,7 +392,7 @@ describe('file system', () => {
     type PostType = { frontmatter: { title: string } }
     const posts = new Directory({
       path: 'fixtures/posts',
-      loaders: {
+      loader: {
         mdx: withSchema<PostType>(
           {
             frontmatter: (value) => {
@@ -423,7 +424,7 @@ describe('file system', () => {
     const posts = new Directory({
       fileSystem,
       path: 'posts',
-      loaders: {
+      loader: {
         mdx: withSchema<PostType>(),
       },
       include: (entry) => isFile(entry, 'mdx'),
@@ -490,7 +491,7 @@ describe('file system', () => {
     })
     const directory = new Directory({
       fileSystem,
-      sort: (a, b) => a.getName().localeCompare(b.getName()),
+      sort: 'name',
     })
     const entries = await directory.getEntries()
 
@@ -504,29 +505,23 @@ describe('file system', () => {
 
   test('filter and sort entries', async () => {
     const fileSystem = new MemoryFileSystem({
-      'foo.ts': 'const sort = 2',
-      'bar.ts': 'const sort = 1',
+      'foo.ts': 'const order = 2',
+      'bar.ts': 'const order = 1',
     })
     const imports = {
-      'foo.ts': () => Promise.resolve({ sort: 2 }),
-      'bar.ts': () => Promise.resolve({ sort: 1 }),
+      'foo.ts': () => Promise.resolve({ order: 2 }),
+      'bar.ts': () => Promise.resolve({ order: 1 }),
     }
     const directory = new Directory({
       fileSystem,
-      loaders: {
-        ts: withSchema<{ sort: number }>((path) => {
+      loader: {
+        ts: withSchema<{ order: number }>((path) => {
           const importPath = `${path}.ts` as keyof typeof imports
           return imports[importPath]()
         }),
       },
-      include: (entry) => {
-        return isFile(entry, 'ts')
-      },
-      sort: async (a, b) => {
-        const aSort = await a.getExportValue('sort')
-        const bSort = await b.getExportValue('sort')
-        return aSort - bSort
-      },
+      include: '*.ts',
+      sort: 'order',
     })
     const entries = await directory.getEntries()
 
@@ -548,7 +543,7 @@ describe('file system', () => {
     const entries = await docs.getEntries({ recursive: true })
 
     expect(entries.every((entry) => entry.getExtension() === 'mdx')).toBe(true)
-    expect(entries).toHaveLength(2)
+    expect(entries).toHaveLength(4)
   })
 
   test('deduplicates entries', async () => {
@@ -585,13 +580,15 @@ describe('file system', () => {
     const directory = new Directory({ fileSystem })
     const entries = await directory.getEntries({ recursive: true })
 
-    expect(entries.map((entry) => entry.getPath())).toMatchInlineSnapshot(`
+    expect(entries.map((entry) => entry.getPathname())).toMatchInlineSnapshot(
+      `
       [
         "/button",
         "/code-block",
         "/tsconfig",
       ]
-    `)
+    `
+    )
   })
 
   test('entry', async () => {
@@ -711,7 +708,7 @@ describe('file system', () => {
   test('javascript file with runtime', async () => {
     const projectDirectory = new Directory({
       path: 'fixtures/project',
-      loaders: {
+      loader: {
         ts: (path) => import(`#fixtures/project/${path}.ts`),
       },
     })
@@ -724,7 +721,7 @@ describe('file system', () => {
   test('is javascript file with runtime', async () => {
     const projectDirectory = new Directory({
       path: 'fixtures/project',
-      loaders: {
+      loader: {
         ts: (path) => import(`#fixtures/project/${path}.ts`),
       },
     })
@@ -738,11 +735,16 @@ describe('file system', () => {
   })
 
   describe('file name with modifier', async () => {
-    const fileSystem = new MemoryFileSystem({
-      'components/APIReference.examples.tsx': '',
-      'components/APIReference.tsx': '',
+    let fileSystem: MemoryFileSystem
+    let directory: Directory<any>
+
+    beforeAll(() => {
+      fileSystem = new MemoryFileSystem({
+        'components/APIReference.examples.tsx': '',
+        'components/APIReference.tsx': '',
+      })
+      directory = new Directory({ fileSystem })
     })
-    const directory = new Directory({ fileSystem })
 
     test('string path', async () => {
       const entry = await directory.getEntry('components/APIReference/examples')
@@ -813,11 +815,11 @@ describe('file system', () => {
   test('chooses entry with same name as directory when bare file path', async () => {
     const directory = new Directory({
       path: 'fixtures/components',
-      basePath: 'components',
+      basePathname: 'components',
     })
     const file = await directory.getFile('Box')
 
-    expect(file.getRelativePath()).toBe('Box/Box.tsx')
+    expect(file.getRelativePathToRoot()).toBe('Box/Box.tsx')
   })
 
   test('finds file with specific extension starting at directory', async () => {
@@ -843,8 +845,8 @@ describe('file system', () => {
     expect(file).toBeInstanceOf(File)
     expect(file.getName()).toBe('01.server.ts')
     expect(file.getBaseName()).toBe('server')
-    expect(file.getPath()).toBe('/server')
-    expect(file.getPathSegments()).toStrictEqual(['server'])
+    expect(file.getPathname()).toBe('/server')
+    expect(file.getPathnameSegments()).toStrictEqual(['server'])
   })
 
   test('nested ordered files', async () => {
@@ -855,7 +857,7 @@ describe('file system', () => {
     const directory = new Directory({ fileSystem })
     const entries = await directory.getEntries({ recursive: true })
 
-    expect(entries.map((entry) => entry.getPath())).toMatchObject([
+    expect(entries.map((entry) => entry.getPathname())).toMatchObject([
       '/docs',
       '/docs/getting-started',
       '/getting-started',
@@ -873,11 +875,11 @@ describe('file system', () => {
     })
     const file = await rootDirectory.getFile('button')
 
-    expect(file.getPath()).toBe('/button')
+    expect(file.getPathname()).toBe('/button')
 
     const directory = await rootDirectory.getDirectory('card')
 
-    expect(directory.getPath()).toBe('/card')
+    expect(directory.getPathname()).toBe('/card')
   })
 
   test('deduplicate file path segments', async () => {
@@ -887,14 +889,14 @@ describe('file system', () => {
     const directory = new Directory({ fileSystem })
     const file = await directory.getFile('Button/Button', 'tsx')
 
-    expect(file.getPath()).toEqual('/button')
-    expect(file.getPathSegments()).toStrictEqual(['button'])
+    expect(file.getPathname()).toEqual('/button')
+    expect(file.getPathnameSegments()).toStrictEqual(['button'])
 
-    expect(file.getPath({ includeDuplicateSegments: true })).toEqual(
+    expect(file.getPathname({ includeDirectoryNamedSegment: true })).toEqual(
       '/button/button'
     )
     expect(
-      file.getPathSegments({ includeDuplicateSegments: true })
+      file.getPathnameSegments({ includeDirectoryNamedSegment: true })
     ).toStrictEqual(['button', 'button'])
   })
 
@@ -936,7 +938,7 @@ describe('file system', () => {
     })
     const rootDirectory = new Directory({
       fileSystem,
-      loaders: {
+      loader: {
         ts: withSchema<{ useHover: Function }>(() => {
           return Promise.resolve({ useHover: () => {} })
         }),
@@ -953,7 +955,7 @@ describe('file system', () => {
   test('file export value types', async () => {
     const projectDirectory = new Directory({
       path: 'fixtures/project',
-      loaders: {
+      loader: {
         ts: withSchema<{ createServer: () => void }>(
           (path) => import(`#fixtures/project/${path}.ts`)
         ),
@@ -972,7 +974,7 @@ describe('file system', () => {
     })
     const directory = new Directory({
       fileSystem,
-      loaders: {
+      loader: {
         ts: withSchema<{ metadata: { title: string } }>(
           {
             metadata: (value) => {
@@ -1017,7 +1019,7 @@ describe('file system', () => {
     })
     const directory = new Directory({
       fileSystem,
-      loaders: {
+      loader: {
         ts: {
           schema: {
             metadata: z.object({
@@ -1110,7 +1112,7 @@ describe('file system', () => {
   test('getRuntimeValue resolves export runtime value from extension module', async () => {
     const directory = new Directory({
       path: 'fixtures/utils',
-      loaders: {
+      loader: {
         ts: (path) => import(`#fixtures/utils/${path}.ts`),
       },
     })
@@ -1133,7 +1135,7 @@ describe('file system', () => {
   test('getRuntimeValue resolves export runtime value from loader', async () => {
     const directory = new Directory({
       path: 'fixtures/utils',
-      loaders: {
+      loader: {
         ts: (path) => import(`#fixtures/utils/${path}.ts`),
       },
     })
@@ -1159,7 +1161,7 @@ describe('file system', () => {
     })
     const directory = new Directory({
       fileSystem,
-      loaders: {
+      loader: {
         ts: async () => {
           return { metadata: { title: 'Hello, World!' } }
         },
@@ -1233,7 +1235,7 @@ describe('file system', () => {
   test('generates tree navigation', async () => {
     const projectDirectory = new Directory({
       path: 'fixtures/project',
-      basePath: 'project',
+      basePathname: 'project',
     })
 
     type TreeEntry = {
@@ -1247,7 +1249,7 @@ describe('file system', () => {
       entry: Entry
     ): Promise<TreeEntry> {
       const name = entry.getName()
-      const path = entry.getPath()
+      const path = entry.getPathname()
       const depth = entry.getDepth()
 
       if (isFile(entry)) {
@@ -1309,25 +1311,15 @@ describe('file system', () => {
     expect(readmeFile.getParent().getBaseName()).toBe('components')
   })
 
-  test('adds base path to entry getPath and getPathSegments', async () => {
+  test('adds route base path to entry getPathname and getPathnameSegments', async () => {
     const projectDirectory = new Directory({
       path: 'fixtures/project',
-      basePath: 'renoun',
+      basePathname: 'renoun',
     })
-
-    expect(projectDirectory.getBasePath()).toBe('renoun')
-
     const file = await projectDirectory.getFile('server', 'ts')
 
-    expect(file.getPath()).toBe('/renoun/server')
-    expect(file.getPathSegments()).toEqual(['renoun', 'server'])
-
-    const directory = await projectDirectory.getDirectory('rpc')
-
-    expect(directory.getPath({ includeBasePath: false })).toBe('/rpc')
-    expect(directory.getPathSegments({ includeBasePath: false })).toEqual([
-      'rpc',
-    ])
+    expect(file.getPathname()).toBe('/renoun/server')
+    expect(file.getPathnameSegments()).toEqual(['renoun', 'server'])
   })
 
   test('uses file name for anonymous default export metadata', async () => {
@@ -1349,7 +1341,7 @@ describe('file system', () => {
     })
     const directory = new Directory({
       fileSystem,
-      loaders: {
+      loader: {
         tsx: withSchema<{
           default: ComponentType
         }>,
@@ -1394,7 +1386,7 @@ describe('file system', () => {
     const fileSystem = new MemoryFileSystem({ 'Button.tsx': '' })
     const directory = new Directory({
       fileSystem,
-      loaders: {
+      loader: {
         tsx: withSchema<Metadata>(),
       },
     })
@@ -1413,7 +1405,7 @@ describe('file system', () => {
     const fileSystem = new MemoryFileSystem({ 'Button.tsx': '' })
     const directory = new Directory({
       fileSystem,
-      loaders: {
+      loader: {
         ts: withSchema<Metadata>(),
         tsx: withSchema<Metadata>(),
       },
@@ -1436,6 +1428,52 @@ describe('file system', () => {
     }
   })
 
+  test('directory getPathname prepends basePathname', async () => {
+    const docs = new Directory({ path: 'fixtures/docs' })
+
+    expect(docs.getPathname()).toBe('/docs')
+
+    expect((await docs.getFile('index', 'mdx')).getPathname()).toBe('/docs')
+
+    expect((await docs.getFile('getting-started', 'mdx')).getPathname()).toBe(
+      '/docs/getting-started'
+    )
+
+    const components = new Directory({ path: 'fixtures/components' })
+
+    expect(components.getPathname()).toBe('/components')
+
+    const file = await components.getFile('CodeBlock', 'tsx')
+
+    expect(file.getPathname()).toBe('/components/code-block')
+
+    const example = await components.getFile(
+      'CodeBlock/examples/BasicUsage',
+      'tsx'
+    )
+
+    expect(example.getPathname()).toBe(
+      '/components/code-block/examples/basic-usage'
+    )
+
+    const fileSystem = new MemoryFileSystem({
+      'guides/intro.mdx': '',
+    })
+
+    expect(new Directory({ path: 'guides', fileSystem }).getPathname()).toBe(
+      '/guides'
+    )
+
+    const guides = new Directory({
+      path: 'guides',
+      basePathname: 'docs',
+      fileSystem,
+    })
+
+    expect(guides.getPathname()).toBe('/docs')
+    expect((await guides.getFile('intro')).getPathname()).toBe('/docs/intro')
+  })
+
   test('entry group', async () => {
     const memoryFileSystem = new MemoryFileSystem({
       'posts/building-a-button-component.mdx': '# Building a Button Component',
@@ -1445,13 +1483,13 @@ describe('file system', () => {
     const posts = new Directory({
       path: 'posts',
       fileSystem: memoryFileSystem,
-      loaders: {
+      loader: {
         mdx: withSchema<FrontMatter>(),
       },
     })
     const docs = new Directory({
       path: 'fixtures/docs',
-      loaders: {
+      loader: {
         mdx: withSchema<FrontMatter>(),
       },
     })
@@ -1512,10 +1550,10 @@ describe('file system', () => {
       await directory.getSiblings({ entryGroup: group })
 
     expect(previousDirectoryEntry).toBeDefined()
-    expect(previousDirectoryEntry!.getPath()).toBe('/docs/next-steps')
+    expect(previousDirectoryEntry!.getPathname()).toBe('/docs/next-steps')
 
     expect(nextDirectoryEntry).toBeDefined()
-    expect(nextDirectoryEntry!.getPath()).toBe('/guides/intro')
+    expect(nextDirectoryEntry!.getPathname()).toBe('/guides/intro')
 
     const file = await group.getFile('guides/intro')
     const [previousFileEntry, nextFileEntry] = await file.getSiblings({
@@ -1523,10 +1561,10 @@ describe('file system', () => {
     })
 
     expect(previousFileEntry).toBeDefined()
-    expect(previousFileEntry!.getPath()).toBe('/guides')
+    expect(previousFileEntry!.getPathname()).toBe('/guides')
 
     expect(nextFileEntry).toBeDefined()
-    expect(nextFileEntry!.getPath()).toBe('/guides/next-steps')
+    expect(nextFileEntry!.getPathname()).toBe('/guides/next-steps')
   })
 
   test('multiple extensions in entry group', async () => {
@@ -1570,12 +1608,12 @@ describe('file system', () => {
     const componentEntry = await entryGroup.getEntry(['docs', 'Button'])
 
     expect(componentEntry).toBeDefined()
-    expect(componentEntry.getPath()).toBe('/docs/button')
+    expect(componentEntry.getPathname()).toBe('/docs/button')
 
     const componentFile = await entryGroup.getFile(['docs', 'Button'], 'mdx')
 
     expect(componentFile).toBeDefined()
-    expect(componentFile.getPath()).toBe('/docs/button')
+    expect(componentFile.getPathname()).toBe('/docs/button')
   })
 
   test('has entry', async () => {
@@ -1584,13 +1622,13 @@ describe('file system', () => {
 
     const directoryA = new Directory({
       fileSystem: new MemoryFileSystem({ 'Button.mdx': '' }),
-      loaders: {
+      loader: {
         mdx: withSchema<MDXTypes>(),
       },
     })
     const directoryB = new Directory({
       path: 'fixtures/components',
-      loaders: {
+      loader: {
         tsx: withSchema<TSXTypes>(),
       },
     })
@@ -1635,7 +1673,7 @@ describe('file system', () => {
 
     const directory = new Directory({
       path: 'fixtures/docs',
-      loaders: {
+      loader: {
         mdx: withSchema(
           {
             headings: z.array(
@@ -1671,7 +1709,7 @@ describe('file system', () => {
       fileSystem: new MemoryFileSystem({
         'hello-world.mdx': `export const frontmatter = { title: 'Hello, World!' }\n\n# Hello, World!`,
       }),
-      loaders: {
+      loader: {
         mdx: withSchema<{ frontmatter: { title: string } }>(() => {
           return {
             default: async () => {
@@ -1702,6 +1740,447 @@ describe('file system', () => {
         Expect<IsNotAny<typeof fileExportValue>>,
         Expect<IsNotAny<typeof Content>>,
       ]
+    }
+  })
+
+  test('errors when trying recursively get entries with a single-level include filter', async () => {
+    const directory = new Directory({
+      path: 'fixtures',
+      include: '*.mdx',
+    })
+
+    await expect(
+      directory.getEntries({
+        // @ts-expect-error
+        recursive: true,
+      })
+    ).rejects.toThrow(
+      '[renoun] Cannot use recursive option with a single-level include filter. Use a multi-level pattern (e.g. "**/*.mdx") instead.'
+    )
+  })
+
+  test('allows recursive option with multi-level include filter', async () => {
+    const directory = new Directory({
+      path: 'fixtures',
+      include: '**/*.mdx',
+    })
+
+    await expect(
+      directory.getEntries({
+        recursive: true,
+      })
+    ).resolves.toBeDefined()
+  })
+
+  test('includes parent directories when using recursive file pattern', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'docs/getting-started/index.mdx': '# Getting Started',
+      'docs/advanced/examples/advanced.mdx': '# Advanced Example',
+      'docs/advanced/examples/basic.mdx': '# Basic Example',
+      'docs/advanced/README.mdx': '# Advanced Guide',
+      'docs/empty-folder/README.txt': 'Not an MDX file',
+    })
+    const directory = new Directory({
+      path: 'docs',
+      include: '**/*.mdx',
+      fileSystem,
+    })
+    const entries = await directory.getEntries({ recursive: true })
+    const paths = entries.map((entry) => entry.getPathname())
+
+    expect(paths).toEqual([
+      '/docs/advanced',
+      '/docs/advanced/examples',
+      '/docs/advanced/examples/advanced',
+      '/docs/advanced/examples/basic',
+    ])
+    expect(paths).not.toContain('/docs/empty-folder')
+
+    for (const entry of entries) {
+      if (entry instanceof File) {
+        expect(entry.getExtension()).toBe('mdx')
+      }
+    }
+
+    const advancedDir = await directory.getDirectory('advanced')
+    expect(advancedDir).toBeDefined()
+    expect(advancedDir?.getPathname()).toBe('/docs/advanced')
+
+    const examplesDir = await advancedDir?.getDirectory('examples')
+    expect(examplesDir).toBeDefined()
+    expect(examplesDir?.getPathname()).toBe('/docs/advanced/examples')
+
+    const basicFile = await examplesDir?.getFile('basic', 'mdx')
+    expect(basicFile).toBeDefined()
+    expect(basicFile?.getPathname()).toBe('/docs/advanced/examples/basic')
+  })
+
+  test('gets all files from recursive include file pattern', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'components/Box/Box.mdx': '# Box Component',
+      'components/Box/examples/Basic.mdx': '# Basic Example',
+      'components/Button/Button.mdx': '# Button Component',
+    })
+    const directory = new Directory({
+      fileSystem,
+      path: 'components',
+      include: '**/*.mdx',
+    })
+    const entries = await directory.getEntries({ recursive: true })
+    const paths = entries.map((entry) => entry.getPathname())
+
+    expect(paths).toEqual([
+      '/components/box',
+      '/components/box/examples',
+      '/components/box/examples/basic',
+      '/components/button',
+    ])
+
+    const boxFile = await directory.getFile('box/box', 'mdx')
+    expect(boxFile).toBeDefined()
+    expect(boxFile.getPathname()).toBe('/components/box')
+
+    const basicFile = await directory.getFile('box/examples/basic', 'mdx')
+    expect(basicFile).toBeDefined()
+    expect(basicFile.getPathname()).toBe('/components/box/examples/basic')
+  })
+
+  test('nested directories with recursive include file pattern', async () => {
+    const directory = new Directory({
+      path: 'fixtures/docs',
+      include: '**/*.mdx',
+    })
+    const entries = await directory.getEntries({ recursive: true })
+    const paths = entries.map((entry) => entry.getPathname())
+
+    expect(paths).toEqual([
+      '/docs/components',
+      '/docs/components/accessibility',
+      '/docs/components/accessibility/introduction',
+      '/docs/components/authoring',
+      '/docs/configuration',
+      '/docs/getting-started',
+    ])
+  })
+
+  test('include recursive file pattern includes directory type in sort callback and entries', async () => {
+    const directory = new Directory({
+      fileSystem: new MemoryFileSystem({}),
+      include: '**/*.mdx',
+    })
+
+    const entries = await directory.getEntries()
+
+    for (const entry of entries) {
+      if (isDirectory(entry)) {
+        expect(entry).toBeInstanceOf(Directory)
+        expectTypeOf(entry).toMatchTypeOf<Directory<any>>()
+      } else {
+        expect(entry).toBeInstanceOf(MDXFile)
+        expectTypeOf(entry).toMatchTypeOf<MDXFile<{ default: MDXContent }>>()
+      }
+    }
+  })
+
+  test('sort descriptor', async () => {
+    new Directory({
+      loader: {
+        mdx: withSchema<{
+          frontmatter: {
+            title: string
+          }
+        }>((path) => import(`#fixtures/posts/${path}.mdx`)),
+      },
+      include: '**/*.mdx',
+      // @ts-expect-error
+      sort: 'non-existent',
+    })
+
+    new Directory<{
+      mdx: {
+        frontmatter: {
+          date: Date
+        }
+      }
+    }>({
+      sort: 'frontmatter.date',
+    })
+  })
+
+  test('order based on exported values', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'features/ai-assistant.mdx': 'export const order = 1',
+      'features/code-navigation.mdx': 'export const order = 2',
+      'features/debugging.mdx': 'export const order = 3',
+      'features/index.mdx': 'export const order = 3',
+      'faq.mdx': 'export const order = 6',
+      'integrations.mdx': 'export const order = 4',
+      'installation.mdx': 'export const order = 2',
+      'keyboard-shortcuts.mdx': 'export const order = 5',
+      'troubleshooting.mdx': 'export const order = 7',
+      'welcome.mdx': 'export const order = 1',
+    })
+    const directory = new Directory<{ mdx: { order: number } }>({
+      include: '**/*.mdx',
+      sort: 'order',
+      fileSystem,
+    })
+    const entries = await directory.getEntries({ recursive: true })
+    const paths = entries.map((entry) => entry.getPathname())
+
+    expect(paths).toEqual([
+      '/welcome',
+      '/installation',
+      '/features',
+      '/features/ai-assistant',
+      '/features/code-navigation',
+      '/features/debugging',
+      '/integrations',
+      '/keyboard-shortcuts',
+      '/faq',
+      '/troubleshooting',
+    ])
+
+    for (const entry of entries) {
+      if (entry instanceof MDXFile) {
+        // TODO: fix type error for directory getExportValue
+        const order = await entry.getExportValue('order')
+        expect(order).toBeDefined()
+        expect(typeof order).toBe('number')
+      }
+    }
+  })
+
+  test('sort descriptor with direction', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'features/ai-assistant.mdx': 'export const order = 1',
+      'features/code-navigation.mdx': 'export const order = 2',
+      'features/debugging.mdx': 'export const order = 3',
+      'features/index.mdx': 'export const order = 3',
+      'faq.mdx': 'export const order = 6',
+      'integrations.mdx': 'export const order = 4',
+      'installation.mdx': 'export const order = 2',
+      'keyboard-shortcuts.mdx': 'export const order = 5',
+      'troubleshooting.mdx': 'export const order = 7',
+      'welcome.mdx': 'export const order = 1',
+    })
+    const directory = new Directory<{
+      mdx: {
+        order: number
+      }
+    }>({
+      include: '**/*.mdx',
+      sort: { key: 'order', direction: 'descending' },
+      fileSystem,
+    })
+    const entries = await directory.getEntries()
+    const paths = entries.map((entry) => entry.getPathname())
+
+    expect(paths).toEqual([
+      '/troubleshooting',
+      '/faq',
+      '/keyboard-shortcuts',
+      '/integrations',
+      '/features',
+      '/installation',
+      '/welcome',
+    ])
+  })
+
+  test('sort descriptor without directory types', async () => {
+    new Directory({
+      sort: 'name',
+    })
+
+    new Directory({
+      // @ts-expect-error - should throw error since order is not a typed property
+      sort: 'order',
+    })
+  })
+
+  test('sort descriptor function with sync resolver', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'zebra.ts': '',
+      'alpha.ts': '',
+      'beta.ts': '',
+    })
+    const directory = new Directory<{
+      mdx: { order: number }
+      ts: { metadata: { order: number } }
+    }>({
+      fileSystem,
+      include: '**/*.ts',
+      sort: createSort(
+        (entry) => entry.getBaseName(),
+        (a, b) => a.localeCompare(b)
+      ),
+    })
+    const entries = await directory.getEntries()
+    const names = entries.map((entry) => entry.getBaseName())
+
+    expect(names).toEqual(['alpha', 'beta', 'zebra'])
+  })
+
+  test('sort descriptor with recursive include', async () => {
+    new Directory({
+      include: '**/*.mdx',
+      loader: {
+        mdx: withSchema(
+          { metadata: z.object({ order: z.number() }) },
+          (path) => import(`./docs/${path}.mdx`)
+        ),
+      },
+      sort: 'metadata.order',
+    })
+
+    new Directory({
+      include: '**/*.mdx',
+      loader: {
+        mdx: withSchema(
+          { metadata: z.object({ order: z.number() }) },
+          (path) => import(`./docs/${path}.mdx`)
+        ),
+      },
+      // @ts-expect-error - should throw error since date is not a typed property
+      sort: 'metadata.date',
+    })
+  })
+
+  test('sort descriptor function with async resolver', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'file1.ts': 'export const priority = 3',
+      'file2.ts': 'export const priority = 1',
+      'file3.ts': 'export const priority = 2',
+    })
+    const directory = new Directory({
+      fileSystem,
+      loader: {
+        ts: withSchema<{ priority: number }>((path) => {
+          switch (path) {
+            case 'file1':
+              return Promise.resolve({ priority: 3 })
+            case 'file2':
+              return Promise.resolve({ priority: 1 })
+            case 'file3':
+              return Promise.resolve({ priority: 2 })
+          }
+          return Promise.resolve({ priority: 0 })
+        }),
+      },
+      sort: createSort(
+        (entry) => {
+          if (isFile(entry, 'ts')) {
+            return entry.getExportValue('priority')
+          }
+          return 0
+        },
+        (a, b) => a - b
+      ),
+    })
+    const entries = await directory.getEntries()
+    const names = entries.map((entry) => entry.getBaseName())
+
+    expect(names).toEqual(['file2', 'file3', 'file1'])
+  })
+
+  test('defaults to descending sort when key is Date', async () => {
+    const directory = new Directory<{
+      mdx: { frontmatter: { date: Date } }
+    }>({
+      include: '*.mdx',
+      sort: 'frontmatter.date',
+      fileSystem: new MemoryFileSystem({
+        'older.mdx': `export const frontmatter = { date: new Date("2022-01-01") }`,
+        'newer.mdx': `export const frontmatter = { date: new Date("2023-01-01") }`,
+      }),
+    })
+    const entries = await directory.getEntries()
+    const names = entries.map((entry) => entry.getName())
+
+    expect(names).toEqual(['newer.mdx', 'older.mdx'])
+  })
+
+  test('excludes directory-named files by default', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'components/CodeBlock/CodeBlock.tsx': '',
+      'components/CodeBlock/Tokens.tsx': '',
+    })
+    const componentsDirectory = new Directory({
+      fileSystem,
+      path: 'components',
+    })
+    const codeBlockDirectory =
+      await componentsDirectory.getDirectory('CodeBlock')
+    const entries = await codeBlockDirectory.getEntries()
+
+    expect(entries.map((entry) => entry.getName())).toEqual(['Tokens.tsx'])
+  })
+
+  test('includes directory-named files when includeDirectoryNamedFiles is true', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'components/CodeBlock/CodeBlock.tsx': '',
+      'components/CodeBlock/Tokens.tsx': '',
+    })
+    const componentsDirectory = new Directory({
+      fileSystem,
+      path: 'components',
+    })
+    const codeBlockDirectory =
+      await componentsDirectory.getDirectory('CodeBlock')
+    const entries = await codeBlockDirectory.getEntries({
+      includeDirectoryNamedFiles: true,
+    })
+
+    expect(entries.map((entry) => entry.getName())).toEqual([
+      'CodeBlock.tsx',
+      'Tokens.tsx',
+    ])
+  })
+
+  test('getExportValue from FileSystemEntry with resolveFileFromEntry', () => {
+    async function _0({
+      entry,
+    }: {
+      entry: FileSystemEntry<{
+        mdx: {
+          metadata: {
+            label?: string
+            title?: string
+          }
+        }
+      }>
+    }) {
+      const resolvedFile = await resolveFileFromEntry(entry, 'mdx')
+      const metadata = resolvedFile
+        ? await resolvedFile.getExportValue('metadata')
+        : undefined
+
+      metadata?.label
+
+      // @ts-expect-error
+      resolvedFile?.getExportValue('nonexistent')
+    }
+
+    async function _1({ entry }: { entry: FileSystemEntry }) {
+      const resolvedFile = await resolveFileFromEntry<
+        {
+          mdx: {
+            metadata: {
+              label?: string
+              title?: string
+            }
+          }
+        },
+        'mdx'
+      >(entry, 'mdx')
+      const metadata = resolvedFile
+        ? await resolvedFile.getExportValue('metadata')
+        : undefined
+
+      metadata?.label
+
+      // @ts-expect-error
+      resolvedFile?.getExportValue('nonexistent')
     }
   })
 })

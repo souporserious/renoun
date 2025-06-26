@@ -470,28 +470,45 @@ const languageLength = languageKey.length
 
 /** Parses the props of an MDX `pre` element for passing to `CodeBlock`. */
 export function parsePreProps(props: React.ComponentProps<'pre'>): {
+  /** The code fence content. */
   children: string
+
+  /** The language of the code block if defined e.g. `tsx`. */
   language?: Languages
+
+  /** The path of the code block if defined e.g. `posts/markdown-guide.mdx`. */
+  path?: string
 } & Omit<React.ComponentProps<'pre'>, 'children' | 'className' | 'style'> {
   const { children, className, style, ...restProps } = props
   const code = children as React.ReactElement<{
-    className: `language-${string}`
+    className?: string
     children: string
   }>
-  const fileName = code.props.className
-    ?.split(' ')
-    .find((className) => className.startsWith(languageKey))
-  const language = (
-    fileName
-      ? fileName.includes('.')
-        ? fileName.split('.').pop()
-        : fileName.slice(languageLength)
-      : 'plaintext'
-  ) as Languages
+  const languageToken =
+    code.props.className
+      ?.split(/\s+/)
+      .find((className) => className.startsWith(languageKey)) ?? ''
+
+  let language: Languages = 'plaintext'
+  let path: string | undefined
+
+  if (languageToken) {
+    const raw = languageToken.slice(languageLength)
+    const dotIndex = raw.lastIndexOf('.')
+
+    if (dotIndex !== -1) {
+      path = raw
+      language = raw.slice(dotIndex + 1) as Languages
+    } else {
+      // plain “tsx”, “js”, etc.
+      language = raw as Languages
+    }
+  }
 
   return {
     children: code.props.children.trim(),
     language,
+    path,
     ...restProps,
   }
 }

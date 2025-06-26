@@ -10,7 +10,7 @@ export async function AllGuides() {
     return (
       <Card
         key={index}
-        href={entry.getPath()}
+        href={entry.getPathname()}
         label={metadata.label ?? metadata.title}
       />
     )

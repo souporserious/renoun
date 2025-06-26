@@ -30,6 +30,11 @@ export default withMDX({
 
     return [
       {
+        source: '/docs',
+        destination: '/docs/introduction',
+        permanent: false,
+      },
+      {
         source: '/templates/checkout',
         destination: checkoutUrl,
         permanent: false,

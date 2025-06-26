@@ -19,7 +19,7 @@ const frontmatterSchema = z.object({
 const posts = new Directory({
   path: 'posts',
   include: '*.mdx',
-  loaders: {
+  loader: {
     mdx: withSchema(
       { frontmatter: frontmatterSchema },
       (path) => import(`@/posts/${path}.mdx`)
@@ -79,7 +79,7 @@ const frontmatterSchema = z.object({
 const posts = new Directory({
   path: 'posts',
   include: '*.mdx',
-  loaders: {
+  loader: {
     mdx: withSchema(
       { frontmatter: frontmatterSchema },
       (path) => import(`@/posts/${path}.mdx`)

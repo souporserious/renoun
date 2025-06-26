@@ -27,7 +27,7 @@ export default function Page() {
 }
 ```
 
-In this example, the `MDX` component renders a string of MDX content within your React components. It parses the MDX and converts it into React components that can be rendered in your application.
+In this example, the `MDX` component renders a string of MDX content. It parses the MDX and converts it into React components that can be rendered in your application.
 
 ## MDX with Next.js
 
@@ -115,9 +115,40 @@ By adding a line break before and after the content, MDX will now wrap this text
 
 Reformats all relative links that use ordered numbers and extensions. For example, `./01.introduction.mdx` will be transformed to `./introduction`.
 
-#### rehype `add-code-meta-props`
+#### rehype `add-code-block`
 
-Parses `CodeBlock` and `CodeInline` props and adds them to `pre` and `code` element properties respectively.
+Parses the meta string from code fences as props and replaces the parent `pre` element with a `CodeBlock` element.
+
+<Note>
+
+A `CodeBlock` is required to be passed as a component to the MDX renderer.
+
+</Note>
+
+To configure the `CodeBlock` component, either configure the `providerImportSource` in your MDX configuration which will configure the default `CodeBlock` component:
+
+```tsx path="next.config.ts"
+import createMDXPlugin from '@next/mdx'
+import addCodeBlock from '@renoun/mdx/rehype/add-code-block'
+
+const withMDX = createMDXPlugin({
+  options: {
+    providerImportSource: 'renoun/mdx/components',
+    rehypePlugins: [addCodeBlock],
+  },
+})
+```
+
+Or import and pass `CodeBlock` as a component to the MDX component:
+
+```tsx
+import { CodeBlock } from 'renoun/components'
+import GettingStarted from './docs/getting-started.mdx'
+
+export default function Page() {
+  return <GettingStarted components={{ CodeBlock }} />
+}
+```
 
 #### rehype `add-reading-time`
 
@@ -125,13 +156,32 @@ Exports the reading time metadata added by `rehype-infer-reading-time-meta` as a
 
 ## Applying plugins
 
-After installing the package, you can import and apply plugins to the `MDX` component or any other MDX configuration in your application.
+By default, the `MDX` component configures both the remark and rehype plugins from `renoun/mdx`. You can import and apply individual plugins to the `MDX` component or any other MDX configuration in your application.
 
-We'll use the example from before and add the `renoun/mdx` plugins to the `MDX` component:
+We'll use the example from before and add the `renoun/mdx/rehype/add-code-block` plugin to the `MDX` component:
 
 ```tsx
 import { MDX } from 'renoun/components'
-import { remarkPlugins, rehypePlugins } from 'renoun/mdx'
+import addCodeBlock from '@renoun/mdx/rehype/add-code-block'
+
+const content = `
+# Hello, world!
+
+This is an MDX file.
+`
+
+export default function Page() {
+  return <MDX rehypePlugins={[addCodeBlock]}>{content}</MDX>
+}
+```
+
+Note, by overriding the `rehypePlugins` it will remove the default `renoun/mdx` rehype plugins. If you want to keep the default plugins, you can import and apply them to the `MDX` component and add your own plugins:
+
+```tsx
+import { MDX } from 'renoun/components'
+import { rehypePlugins, remarkPlugins } from 'renoun/mdx'
+import remarkFrontmatter from 'remark-frontmatter'
+import remarkMdxFrontmatter from 'remark-mdx-frontmatter'
 
 const content = `
 ---
@@ -145,14 +195,19 @@ This is an MDX file.
 
 export default function Page() {
   return (
-    <MDX remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins}>
+    <MDX
+      remarkPlugins={[
+        ...remarkPlugins,
+        remarkFrontmatter,
+        remarkMdxFrontmatter,
+      ]}
+      rehypePlugins={rehypePlugins}
+    >
       {content}
     </MDX>
   )
 }
 ```
-
-Now we can utilize plugins like [remark-frontmatter](#remark-frontmatter) to specify front matter in our MDX content. By adding `remarkPlugins` and `rehypePlugins`, you can modify how MDX is parsed and rendered, enabling additional functionality in your components.
 
 ## Conclusion
 

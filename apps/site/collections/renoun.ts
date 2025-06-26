@@ -31,9 +31,8 @@ async function filterInternalExports(entry: FileSystemEntry<any>) {
 
 export const FileSystemCollection = new Directory({
   path: '../../packages/renoun/src/file-system',
-  tsConfigPath: '../../packages/renoun/tsconfig.json',
-  basePath: 'utilities',
-  loaders: {
+  basePathname: 'utilities',
+  loader: {
     mdx: withSchema<{
       headings: MDXHeadings
     }>(
@@ -47,9 +46,7 @@ type ComponentSchema = Record<string, React.ComponentType>
 
 export const ComponentsCollection = new Directory({
   path: '../../packages/renoun/src/components',
-  tsConfigPath: '../../packages/renoun/tsconfig.json',
-  basePath: 'components',
-  loaders: {
+  loader: {
     ts: withSchema<ComponentSchema>(
       (path) => import(`../../../packages/renoun/src/components/${path}.ts`)
     ),

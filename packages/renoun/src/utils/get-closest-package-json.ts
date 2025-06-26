@@ -1,59 +1,50 @@
 import fs from 'fs'
-import { dirname, parse, join } from 'node:path'
 
-const cache = new Map<
-  string,
-  { packageJson: Record<string, any>; path: string }
->()
+import { getClosestFile } from './get-closest-file.js'
 
-/** Gets the closest package.json file contents and path. */
-export function getClosestPackageJson(startDirectory: string = process.cwd()):
-  | {
-      packageJson: Record<string, any>
-      path: string
-    }
-  | undefined {
-  const rootDirectory = parse(startDirectory).root
-  let currentDirectory = startDirectory
-
-  if (cache.has(currentDirectory)) {
-    return cache.get(currentDirectory)
-  }
-
-  while (currentDirectory !== rootDirectory) {
-    const packageJsonPath = join(currentDirectory, 'package.json')
-
-    if (fs.existsSync(packageJsonPath)) {
-      const packageJson = JSON.parse(
-        fs.readFileSync(packageJsonPath, 'utf8')
-      ) as Record<string, any>
-      const result = {
-        packageJson,
-        path: packageJsonPath,
-      }
-
-      cache.set(currentDirectory, result)
-
-      return result
-    }
-
-    currentDirectory = dirname(currentDirectory)
-  }
-
-  return undefined
+type PackageJsonResult = {
+  packageJson: Record<string, any>
+  path: string
 }
 
-/** Gets the closest package.json file contents and path or throws an error if none is found. */
-export function getClosestPackageJsonOrThrow(
-  startDirectory: string = process.cwd()
-) {
-  const result = getClosestPackageJson(startDirectory)
+const cache = new Map<string, PackageJsonResult | undefined>()
 
-  if (!result) {
-    throw new Error(
-      `[renoun] No package.json file found in the current workspace. Please ensure you are in the correct directory.`
-    )
+/** Gets the closest package.json file contents and its absolute path. */
+export function getClosestPackageJson(
+  startDirectory: string = process.cwd()
+): PackageJsonResult | undefined {
+  if (cache.has(startDirectory)) {
+    return cache.get(startDirectory)
   }
 
+  const path = getClosestFile('package.json', startDirectory)
+
+  if (!path) {
+    cache.set(startDirectory, undefined)
+    return undefined
+  }
+
+  const result: PackageJsonResult = {
+    packageJson: JSON.parse(fs.readFileSync(path, 'utf8')) as Record<
+      string,
+      any
+    >,
+    path,
+  }
+
+  cache.set(startDirectory, result)
+  return result
+}
+
+/** Same as `getClosestPackageJson` but throws when nothing can be found. */
+export function getClosestPackageJsonOrThrow(
+  startDirectory: string = process.cwd()
+): PackageJsonResult {
+  const result = getClosestPackageJson(startDirectory)
+  if (!result) {
+    throw new Error(
+      `[renoun] No package.json file found in the current workspace starting at "${startDirectory}".`
+    )
+  }
   return result
 }

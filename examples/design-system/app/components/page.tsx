@@ -24,7 +24,7 @@ export default async function Components() {
         }}
       >
         {entries.map((entry) => (
-          <ComponentEntry key={entry.getPath()} entry={entry} />
+          <ComponentEntry key={entry.getPathname()} entry={entry} />
         ))}
       </ul>
     </main>
@@ -36,7 +36,7 @@ const StyledLink = styled(Link, { display: 'block', padding: '1rem' })
 async function ComponentEntry({ entry }: { entry: FileSystemEntry<any> }) {
   return (
     <li>
-      <StyledLink href={entry.getPath()}>
+      <StyledLink href={entry.getPathname()}>
         <h2 css={{ margin: 0 }}>{entry.getBaseName()}</h2>
       </StyledLink>
     </li>

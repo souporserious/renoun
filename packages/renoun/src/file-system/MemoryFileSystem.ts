@@ -70,6 +70,10 @@ export class MemoryFileSystem extends FileSystem {
     return joinPaths('/', path)
   }
 
+  getRelativePathToWorkspace(path: string) {
+    return path.startsWith('.') ? path : `./${path}`
+  }
+
   getFiles() {
     return this.#files
   }

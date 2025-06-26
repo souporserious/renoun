@@ -1,9 +1,9 @@
 import { readdirSync, readFileSync, type Dirent } from 'node:fs'
 import { readdir, readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
-
-import { ensureRelativePath } from '../utils/path.js'
+import { ensureRelativePath, relativePath } from '../utils/path.js'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.js'
+import { getRootDirectory } from '../utils/get-root-directory.js'
 import { FileSystem, type FileSystemOptions } from './FileSystem.js'
 import type { DirectoryEntry } from './types.js'
 
@@ -23,6 +23,11 @@ export class NodeFileSystem extends FileSystem {
 
   getAbsolutePath(path: string): string {
     return resolve(path)
+  }
+
+  getRelativePathToWorkspace(path: string) {
+    const rootDirectory = getRootDirectory()
+    return relativePath(rootDirectory, this.getAbsolutePath(path))
   }
 
   #processDirectoryEntries(

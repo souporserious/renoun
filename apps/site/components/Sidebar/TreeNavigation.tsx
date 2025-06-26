@@ -17,7 +17,7 @@ async function ListNavigation({
   entry: FileSystemEntry<any>
   variant?: 'name' | 'title'
 }) {
-  const path = entry.getPath()
+  const pathname = entry.getPathname()
   const depth = entry.getDepth()
   const metadata =
     variant === 'title' && (isJavaScriptFile(entry) || isMDXFile(entry))
@@ -41,7 +41,7 @@ async function ListNavigation({
         <li>
           <SidebarLink
             css={{ paddingLeft: `${depth * 0.8}rem` }}
-            pathname={path}
+            pathname={pathname}
             label={firstExport.getName()}
           />
         </li>
@@ -52,7 +52,7 @@ async function ListNavigation({
       <li>
         <SidebarLink
           css={{ paddingLeft: `${depth * 0.8}rem` }}
-          pathname={path}
+          pathname={pathname}
           label={
             variant === 'title'
               ? metadata?.label || metadata?.title || baseName
@@ -70,7 +70,7 @@ async function ListNavigation({
       <li>
         <SidebarLink
           css={{ paddingLeft: `${depth * 0.8}rem` }}
-          pathname={path}
+          pathname={pathname}
           label={
             variant === 'title'
               ? metadata?.label || metadata?.title || entry.getBaseName()
@@ -94,7 +94,7 @@ async function ListNavigation({
   return (
     <li>
       <SidebarLink
-        pathname={path}
+        pathname={pathname}
         label={
           variant === 'title'
             ? metadata?.label || metadata?.title || entry.getBaseName()
@@ -104,7 +104,7 @@ async function ListNavigation({
       <ul style={listStyles}>
         {entries.map((childEntry) => (
           <ListNavigation
-            key={childEntry.getPath()}
+            key={childEntry.getPathname()}
             entry={childEntry}
             variant={variant}
           />
@@ -133,15 +133,13 @@ export async function TreeNavigation({
         paddingLeft: 0,
       }}
     >
-      {entries.map((entry) => {
-        return (
-          <ListNavigation
-            key={entry.getPath()}
-            entry={entry}
-            variant={variant}
-          />
-        )
-      })}
+      {entries.map((entry) => (
+        <ListNavigation
+          key={entry.getPathname()}
+          entry={entry}
+          variant={variant}
+        />
+      ))}
     </ul>
   )
 }

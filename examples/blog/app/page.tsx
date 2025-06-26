@@ -9,12 +9,12 @@ export default async function Page() {
       <h1>Blog</h1>
       <ul>
         {allPosts.map(async (post) => {
-          const path = post.getPath()
+          const pathname = post.getPathname()
           const frontmatter = await post.getExportValue('frontmatter')
 
           return (
-            <li key={path}>
-              <Link href={path}>{frontmatter.title}</Link>
+            <li key={pathname}>
+              <Link href={pathname}>{frontmatter.title}</Link>
             </li>
           )
         })}

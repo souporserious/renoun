@@ -9,18 +9,18 @@ import {
 import { CodeBlock, Tokens } from 'renoun/components'
 import type { MDXHeadings } from 'renoun/mdx'
 import { GeistMono } from 'geist/font/mono'
+import { APIReferences } from '@/components/APIReference'
 
 import { CollectionGroup, ComponentsCollection } from '@/collections'
 import { MDX } from '@/components/MDX'
 import { SiblingLink } from '@/components/SiblingLink'
 import { TableOfContents } from '@/components/TableOfContents'
-import { APIReferences } from '@/components/APIReference'
 
 export async function generateStaticParams() {
   const entries = await ComponentsCollection.getEntries({ recursive: true })
 
   return entries.map((entry) => ({
-    slug: entry.getPathSegments({ includeBasePath: false }),
+    slug: entry.getPathnameSegments({ includeBasePathname: false }),
   }))
 }
 
@@ -71,8 +71,8 @@ export default async function Component({
   if (isDirectory(examplesEntry)) {
     exampleFiles = await examplesEntry
       .getEntries({
-        includeIndexAndReadme: true,
-        includeTsConfigIgnoredFiles: true,
+        includeIndexAndReadmeFiles: true,
+        includeTsConfigExcludedFiles: true,
       })
       .then((entries) => entries.filter((entry) => isFile(entry, 'tsx')))
   } else if (isFile(examplesEntry, 'tsx')) {

@@ -13,10 +13,18 @@ In modern web development, creating reusable UI components is a must for efficie
 
 Let's start by creating our `Button` component. This button will be customizable via props to handle different labels, `onClick` events, and styling options:
 
-```jsx path="Button.tsx"
+```tsx path="Button.tsx"
 import React from 'react'
 
-export function Button({ label, onClick, className }) {
+export function Button({
+  label,
+  className,
+  onClick,
+}: {
+  label: string
+  className: string
+  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void
+}) {
   return (
     <button className={className} onClick={onClick}>
       {label}

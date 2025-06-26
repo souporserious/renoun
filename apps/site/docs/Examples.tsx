@@ -24,6 +24,8 @@ const StyledLink = styled('a', {
     color: 'var(--color-foreground-secondary)',
   },
   '& p': {
+    fontSize: 'var(--font-size-body-3)',
+    lineHeight: 'var(--line-height-body-2)',
     textAlign: 'center',
     padding: '1.5rem 0.75rem',
     letterSpacing: '0.025em',
@@ -34,10 +36,14 @@ const StyledLink = styled('a', {
 
 export function Examples() {
   return (
-    <Row variant="large">
+    <Row variant="medium">
       <StyledLink href="https://github.com/souporserious/renoun/tree/main/examples/blog">
         <h3>Blog</h3>
         <p>A list of posts and a detail view for each post.</p>
+      </StyledLink>
+      <StyledLink href="https://github.com/souporserious/renoun/tree/main/examples/docs">
+        <h3>Docs</h3>
+        <p>A collection of documentation pages for a product.</p>
       </StyledLink>
       <StyledLink href="https://github.com/souporserious/renoun/tree/main/examples/design-system">
         <h3>Design System</h3>

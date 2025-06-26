@@ -29,8 +29,8 @@ export default async function Components() {
       <Row>
         {entries.map((entry) => (
           <Card
-            key={entry.getPath()}
-            href={entry.getPath()}
+            key={entry.getPathname()}
+            href={entry.getPathname()}
             label={entry.getBaseName()}
           />
         ))}

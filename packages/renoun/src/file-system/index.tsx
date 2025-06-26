@@ -9,6 +9,7 @@ import type { MDXComponents } from '../mdx/index.js'
 import { getFileExportMetadata } from '../project/client.js'
 import { createSlug, type SlugCasings } from '../utils/create-slug.js'
 import { formatNameAsTitle } from '../utils/format-name-as-title.js'
+import { getClosestFile } from '../utils/get-closest-file.js'
 import { getEditorUri } from '../utils/get-editor-uri.js'
 import type { FileExport } from '../utils/get-file-exports.js'
 import { getLocalGitFileMetadata } from '../utils/get-local-git-file-metadata.js'
@@ -27,6 +28,7 @@ import {
   removeExtension,
   removeAllExtensions,
   removeOrderPrefixes,
+  relativePath,
 } from '../utils/path.js'
 import type { SymbolFilter } from '../utils/resolve-type.js'
 import type { FileSystem } from './FileSystem.js'
@@ -144,7 +146,7 @@ export function withSchema(schemaOrRuntime?: any, maybeRuntime?: any) {
 }
 
 /**
- * Type signature for the “withSchema” helper function.
+ * Type signature for the "withSchema" helper function.
  *
  * This prevents TypeScript from unifying `(path: string) => Promise<...>` with `withSchema(...)`,
  * we define a distinct "helper function" shape that only matches the uninvoked `withSchema<...>`.
@@ -217,6 +219,25 @@ export type InferModuleLoadersTypes<Loaders extends ModuleLoaders> = {
     : InferModuleLoaderTypes<Loaders[Extension]>
 }
 
+/** Extract keys from runtime‑capable loaders. */
+export type LoadersWithRuntimeKeys<Loaders> = Extract<
+  keyof Loaders,
+  'js' | 'jsx' | 'ts' | 'tsx' | 'mdx'
+>
+
+/** All export names made available by a set of runtime‑capable loaders. */
+export type LoaderExportNames<Loaders> = string &
+  {
+    [Extension in LoadersWithRuntimeKeys<Loaders>]: keyof Loaders[Extension]
+  }[LoadersWithRuntimeKeys<Loaders>]
+
+/** The value type for a given export name coming from any runtime‑capable loaders. */
+export type LoaderExportValue<Loaders, Name extends string> = {
+  [Extension in LoadersWithRuntimeKeys<Loaders>]: Name extends keyof Loaders[Extension]
+    ? Loaders[Extension][Name]
+    : never
+}[LoadersWithRuntimeKeys<Loaders>]
+
 /** Determines if the loader is a resolver. */
 function isLoader(
   loader: ModuleLoader<any>
@@ -252,8 +273,18 @@ export class FileNotFoundError extends Error {
 
 /** A directory or file entry. */
 export type FileSystemEntry<
-  DirectoryTypes extends Record<string, any> = Record<string, any>,
-> = Directory<DirectoryTypes> | File<DirectoryTypes>
+  DirectoryTypes extends Record<string, any> = any,
+  Extension = undefined,
+> = Directory<DirectoryTypes> | FileWithExtension<DirectoryTypes, Extension>
+
+/** Options for the `File#getPathname` and `File#getPathnameSegments` methods. */
+export interface FilePathnameOptions {
+  /** Whether to include the configured `Directory:options.basePathname` in the pathname. */
+  includeBasePathname?: boolean
+
+  /** Whether to include the directory named segment in the pathname segments e.g. `button/button` for `Button/Button.tsx`. */
+  includeDirectoryNamedSegment?: boolean
+}
 
 /** Options for a file in the file system. */
 export interface FileOptions<
@@ -261,13 +292,14 @@ export interface FileOptions<
   Path extends string = string,
 > {
   path: Path
+  basePathname?: string | null
   slugCasing?: SlugCasings
   depth?: number
   directory?: Directory<
     Types,
     WithDefaultTypes<Types>,
     ModuleLoaders,
-    EntryInclude<FileSystemEntry<Types>, Types>
+    DirectoryInclude<FileSystemEntry<Types>, Types>
   >
 }
 
@@ -283,15 +315,15 @@ export class File<
   #order?: string
   #extension?: Extension
   #path: string
+  #basePathname?: string | null
   #slugCasing: SlugCasings
-  #depth: number
   #directory: Directory<DirectoryTypes>
 
   constructor(options: FileOptions<DirectoryTypes, Path>) {
     this.#name = baseName(options.path)
     this.#path = options.path
+    this.#basePathname = options.basePathname
     this.#slugCasing = options.slugCasing ?? 'kebab'
-    this.#depth = options.depth ?? 0
     this.#directory = options.directory ?? new Directory()
 
     const match = this.#name.match(
@@ -340,7 +372,7 @@ export class File<
 
   /** Get the depth of the file starting from the root directory. */
   getDepth() {
-    return this.#depth
+    return this.getPathnameSegments().length - 2
   }
 
   /** Get the slug of the file. */
@@ -349,30 +381,30 @@ export class File<
   }
 
   /**
-   * Get the path of the file excluding the file extension and order prefix.
-   * The configured `slugCasing` option will be used to format the path segments.
+   * Get the path of this file formatted for routes. The configured `slugCasing`
+   * option will be used to format each segment.
    */
-  getPath(options?: {
-    includeBasePath?: boolean
-    includeDuplicateSegments?: boolean
-  }) {
-    const includeBasePath = options?.includeBasePath ?? true
-    const includeDuplicateSegments = options?.includeDuplicateSegments ?? false
+  getPathname(options?: FilePathnameOptions) {
+    const includeBasePathname = options?.includeBasePathname ?? true
+    const includeDirectoryNamedSegment =
+      options?.includeDirectoryNamedSegment ?? false
     const fileSystem = this.#directory.getFileSystem()
-    const basePath = this.#directory.getBasePath()
-    let path = fileSystem.getPath(
-      this.#path,
-      includeBasePath ? { basePath } : undefined
-    )
+    let path = fileSystem.getPathname(this.#path, {
+      basePath:
+        includeBasePathname && this.#basePathname !== null
+          ? this.#basePathname
+          : undefined,
+      rootPath: this.#directory.getRootPath(),
+    })
 
-    if (!includeDuplicateSegments || this.#slugCasing !== 'none') {
-      const parsedPath = path.split('/')
+    if (!includeDirectoryNamedSegment || this.#slugCasing !== 'none') {
+      let parsedPath = path.split('/')
       const parsedSegments: string[] = []
 
       for (let index = 0; index < parsedPath.length; index++) {
         const segment = parsedPath[index]
 
-        if (includeDuplicateSegments || segment !== parsedPath[index - 1]) {
+        if (includeDirectoryNamedSegment || segment !== parsedPath[index - 1]) {
           parsedSegments.push(
             this.#slugCasing === 'none'
               ? segment
@@ -381,29 +413,31 @@ export class File<
         }
       }
 
+      // Remove trailing 'index' or 'readme' if present
+      if (['index', 'readme'].includes(this.getBaseName().toLowerCase())) {
+        parsedSegments.pop()
+      }
+
       path = parsedSegments.join('/')
+
+      // Ensure the path always starts with a slash
+      if (!path.startsWith('/')) {
+        path = `/${path}`
+      }
     }
 
     return path
   }
 
-  /** Get the path segments of the file. */
-  getPathSegments(options?: {
-    includeBasePath?: boolean
-    includeDuplicateSegments?: boolean
-  }) {
-    const includeBasePath = options?.includeBasePath ?? true
-    const includeDuplicateSegments = options?.includeDuplicateSegments ?? false
-
-    return this.getPath({ includeBasePath, includeDuplicateSegments })
-      .split('/')
-      .filter(Boolean)
+  /** Get the route path segments for this file. */
+  getPathnameSegments(options?: FilePathnameOptions) {
+    return this.getPathname(options).split('/').filter(Boolean)
   }
 
   /** Get the file path relative to the root directory. */
-  getRelativePath() {
-    const fileSystem = this.#directory.getFileSystem()
-    return fileSystem.getRelativePath(this.#path)
+  getRelativePathToRoot() {
+    const rootPath = this.#directory.getRootPath()
+    return rootPath ? relativePath(rootPath, this.#path) : this.#path
   }
 
   /** Get the file path relative to the workspace root. */
@@ -494,7 +528,7 @@ export class File<
     return gitMetadata.authors
   }
 
-  /** Get the directory containing this file. */
+  /** Get the parent directory containing this file. */
   getParent() {
     return this.#directory
   }
@@ -507,7 +541,7 @@ export class File<
     GroupTypes extends Record<string, any> = DirectoryTypes,
   >(options?: {
     entryGroup?: EntryGroup<GroupTypes, FileSystemEntry<any>[]>
-    includeDuplicateSegments?: boolean
+    includeDirectoryNamedSegment?: boolean
   }): Promise<
     [
       FileSystemEntry<DirectoryTypes> | undefined,
@@ -524,17 +558,17 @@ export class File<
     const entries = await (options?.entryGroup
       ? options.entryGroup.getEntries({ recursive: true })
       : this.#directory.getEntries())
-    const path = this.getPath({
-      includeDuplicateSegments: options?.includeDuplicateSegments,
+    const path = this.getPathname({
+      includeDirectoryNamedSegment: options?.includeDirectoryNamedSegment,
     })
-    const index = entries.findIndex((entry) => entry.getPath() === path)
+    const index = entries.findIndex((entry) => entry.getPathname() === path)
     const previous = index > 0 ? entries[index - 1] : undefined
     const next = index < entries.length - 1 ? entries[index + 1] : undefined
 
     return [previous, next]
   }
 
-  /** Get the source text of the file. */
+  /** Get the source text of this file. */
   async getText(): Promise<string> {
     const fileSystem = this.#directory.getFileSystem()
     return fileSystem.readFile(this.#path)
@@ -674,7 +708,7 @@ export class JavaScriptFileExport<Value> {
 
     if (location === undefined) {
       throw new Error(
-        `[renoun] Export cannot be statically analyzed at file path "${this.#file.getRelativePath()}".`
+        `[renoun] Export cannot be statically analyzed at file path "${this.#file.getRelativePathToRoot()}".`
       )
     }
 
@@ -732,7 +766,7 @@ export class JavaScriptFileExport<Value> {
 
     if (location === undefined) {
       throw new Error(
-        `[renoun] Export cannot not be statically analyzed at file path "${this.#file.getRelativePath()}".`
+        `[renoun] Export cannot not be statically analyzed at file path "${this.#file.getRelativePathToRoot()}".`
       )
     }
 
@@ -755,7 +789,7 @@ export class JavaScriptFileExport<Value> {
       )
     }
 
-    const path = removeExtension(this.#file.getRelativePath())
+    const path = removeExtension(this.#file.getRelativePathToRoot())
 
     if (isLoader(this.#loader)) {
       return this.#loader(path, this.#file)
@@ -838,14 +872,14 @@ export class JavaScriptFile<
 
   #getModule() {
     if (this.#loader === undefined) {
-      const parentPath = this.getParent().getRelativePath()
+      const parentPath = this.getParent().getRelativePathToRoot()
 
       throw new Error(
         `[renoun] A loader for the parent Directory at ${parentPath} is not defined.`
       )
     }
 
-    const path = removeExtension(this.getRelativePath())
+    const path = removeExtension(this.getRelativePathToRoot())
 
     if (isLoader(this.#loader)) {
       return this.#loader(path, this as any)
@@ -1163,7 +1197,7 @@ export class MDXFileExport<Value> {
       )
     }
 
-    const path = removeExtension(this.#file.getRelativePath())
+    const path = removeExtension(this.#file.getRelativePathToRoot())
 
     if (isLoader(this.#loader)) {
       return this.#loader(path, this.#file)
@@ -1290,14 +1324,14 @@ export class MDXFile<
 
   #getModule() {
     if (this.#loader === undefined) {
-      const parentPath = this.getParent().getRelativePath()
+      const parentPath = this.getParent().getRelativePathToRoot()
 
       throw new Error(
         `[renoun] An mdx loader for the parent Directory at ${parentPath} is not defined.`
       )
     }
 
-    const path = removeExtension(this.getRelativePath())
+    const path = removeExtension(this.getRelativePathToRoot())
 
     if (isLoader(this.#loader)) {
       return this.#loader(path, this as any)
@@ -1321,7 +1355,24 @@ export class MDXFile<
   }
 }
 
-export type EntryInclude<
+type Narrowed<Include> = Include extends (
+  entry: any
+) => entry is infer ReturnType
+  ? ReturnType
+  : never
+
+type ResolveDirectoryIncludeEntries<
+  Include,
+  Types extends Record<string, any> = Record<string, any>,
+> = Include extends string
+  ? Include extends `**${string}`
+    ? Directory<Types> | FileWithExtension<Types, ExtractFileExtension<Include>>
+    : FileWithExtension<Types, ExtractFileExtension<Include>>
+  : [Narrowed<Include>] extends [never]
+    ? FileSystemEntry<Types>
+    : Narrowed<Include>
+
+export type DirectoryInclude<
   Entry extends FileSystemEntry<any>,
   Types extends Record<string, any>,
 > =
@@ -1329,51 +1380,38 @@ export type EntryInclude<
   | ((entry: FileSystemEntry<Types>) => Promise<boolean> | boolean)
   | string
 
-export type IncludedEntry<
-  Types extends Record<string, any>,
-  DirectoryFilter extends EntryInclude<FileSystemEntry<Types>, Types>,
-> = DirectoryFilter extends string
-  ? FileWithExtension<Types, ExtractFileExtension<DirectoryFilter>>
-  : DirectoryFilter extends EntryInclude<infer Entry, Types>
-    ? Entry
-    : FileSystemEntry<Types>
-
-/** The options for a `Directory`. */
 export interface DirectoryOptions<
   Types extends InferModuleLoadersTypes<Loaders> = any,
   LoaderTypes extends Types = any,
   Loaders extends ModuleLoaders = ModuleLoaders,
-  Include extends EntryInclude<
+  Include extends DirectoryInclude<
     FileSystemEntry<LoaderTypes>,
     LoaderTypes
-  > = EntryInclude<FileSystemEntry<LoaderTypes>, LoaderTypes>,
+  > = DirectoryInclude<FileSystemEntry<LoaderTypes>, LoaderTypes>,
 > {
-  /** The path to the directory in the file system. */
+  /** Directory path in the workspace. */
   path?: string
 
-  /** A filter function or [minimatch](https://github.com/isaacs/minimatch?tab=readme-ov-file#minimatch) pattern used to include specific entries. When using a string, file paths are resolved relative to the working directory. */
+  /** Filter entries with a minimatch pattern or predicate. */
   include?: Include
 
-  /** The extension definitions to use for loading and validating file exports. */
-  loaders?: Loaders
+  /** Extension loaders with or without `withSchema`. */
+  loader?: Loaders
 
-  /** The base path to apply to all descendant entry `getPath` and `getPathSegments` methods. */
-  basePath?: string
+  /** Base route prepended to descendant `getPathname()` results. */
+  basePathname?: string | null
 
-  /** The tsconfig.json file path to use for type checking and analyzing JavaScript and TypeScript files. */
+  /** Uses the closest `tsconfig.json` path for static analysis and type-checking. */
   tsConfigPath?: string
 
-  /** The slug casing to apply to all descendant entry `getPath`, `getPathSegments`, and `getSlug` methods. */
+  /** Slug casing applied to route segments. */
   slugCasing?: SlugCasings
 
-  /** The file system to use for reading directory entries. */
+  /** Custom file‑system adapter. */
   fileSystem?: FileSystem
 
-  /** A sort callback applied to all descendant entries. */
-  sort?: (
-    a: IncludedEntry<NoInfer<LoaderTypes>, Include>,
-    b: IncludedEntry<NoInfer<LoaderTypes>, Include>
-  ) => Promise<number> | number
+  /** Sort callback applied at *each* directory depth. */
+  sort?: SortDescriptor<ResolveDirectoryIncludeEntries<Include, LoaderTypes>>
 }
 
 /** A directory containing files and subdirectories in the file system. */
@@ -1381,30 +1419,28 @@ export class Directory<
   Types extends InferModuleLoadersTypes<Loaders>,
   LoaderTypes extends WithDefaultTypes<Types> = WithDefaultTypes<Types>,
   Loaders extends ModuleLoaders = ModuleLoaders,
-  Include extends EntryInclude<
+  Include extends DirectoryInclude<
     FileSystemEntry<LoaderTypes>,
     LoaderTypes
-  > = EntryInclude<FileSystemEntry<LoaderTypes>, LoaderTypes>,
+  > = DirectoryInclude<FileSystemEntry<LoaderTypes>, LoaderTypes>,
 > {
   #path: string
-  #depth: number = -1
-  #slugCasing: SlugCasings
-  #basePath?: string
+  #rootPath?: string
+  #basePathname?: string | null
   #tsConfigPath?: string
-  #loaders?: Loaders
+  #slugCasing: SlugCasings
+  #loader?: Loaders
   #directory?: Directory<any, any, any>
   #fileSystem: FileSystem | undefined
   #repository: Repository | undefined
+  #includePattern?: string
   #include?:
     | ((
         entry: FileSystemEntry<LoaderTypes>
       ) => entry is FileSystemEntry<LoaderTypes>)
     | ((entry: FileSystemEntry<LoaderTypes>) => Promise<boolean> | boolean)
     | Minimatch
-  #sort?: (
-    a: FileSystemEntry<LoaderTypes>,
-    b: FileSystemEntry<LoaderTypes>
-  ) => Promise<number> | number
+  #sort?: any
 
   constructor(
     options?: DirectoryOptions<Types, LoaderTypes, Loaders, Include>
@@ -1412,18 +1448,29 @@ export class Directory<
     if (options === undefined) {
       this.#path = '.'
       this.#slugCasing = 'kebab'
+      this.#tsConfigPath = 'tsconfig.json'
     } else {
-      this.#path = ensureRelativePath(options.path)
-      this.#loaders = options.loaders
-      this.#include =
-        typeof options.include === 'string'
-          ? new Minimatch(options.include, { dot: true })
-          : options.include
-      this.#sort = options.sort as any
-      this.#basePath = options.basePath
+      this.#path = options.path ? ensureRelativePath(options.path) : '.'
+      this.#loader = options.loader
+      this.#basePathname =
+        options.basePathname === undefined
+          ? this.#directory
+            ? this.#directory.getSlug()
+            : this.getSlug()
+          : options.basePathname
+      this.#tsConfigPath =
+        options.tsConfigPath ??
+        getClosestFile('tsconfig.json', this.#path) ??
+        'tsconfig.json'
       this.#slugCasing = options.slugCasing ?? 'kebab'
-      this.#tsConfigPath = options.tsConfigPath
       this.#fileSystem = options.fileSystem
+      if (typeof options.include === 'string') {
+        this.#includePattern = options.include
+        this.#include = new Minimatch(options.include, { dot: true })
+      } else {
+        this.#include = options.include
+      }
+      this.#sort = options.sort as any
     }
   }
 
@@ -1433,7 +1480,13 @@ export class Directory<
     }
 
     if (this.#include instanceof Minimatch) {
-      return this.#include.match(entry.getRelativePath())
+      const isRecursivePattern = this.#includePattern!.includes('**')
+
+      if (isRecursivePattern && entry instanceof Directory) {
+        return true
+      }
+
+      return this.#include.match(entry.getRelativePathToRoot())
     }
 
     return this.#include(entry)
@@ -1445,20 +1498,24 @@ export class Directory<
       LoaderTypes,
       LoaderTypes,
       Loaders,
-      EntryInclude<FileSystemEntry<LoaderTypes>, LoaderTypes>
+      DirectoryInclude<FileSystemEntry<LoaderTypes>, LoaderTypes>
     >({
       path: this.#path,
       fileSystem: this.#fileSystem,
+      basePathname: this.#basePathname,
+      tsConfigPath: this.#tsConfigPath,
+      slugCasing: this.#slugCasing,
+      loader: this.#loader,
+      include: this.#include as any,
+      sort: this.#sort as any,
       ...options,
     })
 
-    directory.#depth = this.#depth
-    directory.#tsConfigPath = this.#tsConfigPath
-    directory.#slugCasing = this.#slugCasing
-    directory.#basePath = this.#basePath
-    directory.#loaders = this.#loaders
-    directory.#sort = this.#sort
-    directory.#include = this.#include
+    directory.#directory = this
+    directory.#includePattern = this.#includePattern
+    directory.#repository = this.#repository
+    directory.#rootPath = this.getRootPath()
+    directory.#pathLookup = this.#pathLookup
 
     return directory
   }
@@ -1469,10 +1526,7 @@ export class Directory<
       return this.#fileSystem
     }
 
-    this.#fileSystem = new NodeFileSystem({
-      rootPath: this.#path,
-      tsConfigPath: this.#tsConfigPath,
-    })
+    this.#fileSystem = new NodeFileSystem({ tsConfigPath: this.#tsConfigPath })
 
     return this.#fileSystem
   }
@@ -1501,7 +1555,79 @@ export class Directory<
 
   /** Get the depth of the directory starting from the root directory. */
   getDepth() {
-    return this.#depth
+    return this.getPathnameSegments().length - 2
+  }
+
+  /**
+   * Walk `segments` starting at `directory`, returning the first entry whose
+   * slugified path exactly matches the requested path segments.
+   */
+  async #findEntry(
+    directory: Directory<LoaderTypes>,
+    segments: string[],
+    allExtensions?: string[]
+  ): Promise<FileSystemEntry<LoaderTypes>> {
+    // Always hydrate this directory once and populate its lookup map.
+    const entries = await directory.getEntries({
+      includeDirectoryNamedFiles: true,
+      includeIndexAndReadmeFiles: true,
+      includeTsConfigExcludedFiles: true,
+    })
+    const [currentSegment, ...remainingSegments] = segments
+
+    // If the current segment is empty, we are at the root of this directory.
+    if (!currentSegment) {
+      return directory
+    }
+
+    let fallback: FileSystemEntry<LoaderTypes> | undefined
+
+    for (const entry of entries) {
+      const baseSlug = createSlug(entry.getBaseName(), this.#slugCasing)
+
+      if (entry instanceof Directory && baseSlug === currentSegment) {
+        return remainingSegments.length === 0
+          ? entry
+          : this.#findEntry(entry, remainingSegments, allExtensions)
+      }
+
+      if (!(entry instanceof File) || baseSlug !== currentSegment) {
+        continue
+      }
+
+      const modifier = entry.getModifierName()
+      const matchesExtension = allExtensions
+        ? allExtensions.includes(entry.getExtension())
+        : true
+
+      // e.g. "Button/examples" → modifier must match the tail segment
+      if (remainingSegments.length === 1 && modifier) {
+        if (
+          createSlug(modifier, this.#slugCasing) === remainingSegments[0] &&
+          matchesExtension
+        ) {
+          return entry
+        }
+        continue
+      }
+
+      // plain "Button" (no modifier segment)
+      if (remainingSegments.length === 0 && matchesExtension) {
+        // Prefer the base file, fall back to file‑with‑modifier if nothing else
+        if (
+          !fallback ||
+          (fallback instanceof File && fallback.getModifierName())
+        ) {
+          fallback = entry
+        }
+      }
+    }
+
+    if (fallback) {
+      return fallback
+    }
+
+    throw new FileNotFoundError(segments.join('/'), allExtensions)
   }
 
   /**
@@ -1545,163 +1671,122 @@ export class Directory<
   >
 
   async getFile(path: string | string[], extension?: string | string[]) {
-    // Trim leading './' from relative paths
-    if (typeof path === 'string' && path.startsWith('./')) {
+    const rawPath = Array.isArray(path) ? path.join('/') : path
+    const cachedFile = this.#pathLookup.get(
+      rawPath.startsWith('/') ? rawPath : `/${rawPath}`
+    )
+
+    if (
+      cachedFile instanceof File &&
+      (!extension ||
+        (Array.isArray(extension)
+          ? extension.includes(cachedFile.getExtension())
+          : extension === cachedFile.getExtension()))
+    ) {
+      return cachedFile as any
+    }
+
+    // normalize the incoming path
+    if (
+      typeof path === 'string' &&
+      (path.startsWith('./') || path.startsWith('.\\'))
+    ) {
       path = path.slice(2)
     }
 
-    const segments = Array.isArray(path)
-      ? path.slice(0)
+    const rawSegments = Array.isArray(path)
+      ? [...path]
       : path.split('/').filter(Boolean)
-    const lastSegment = segments.at(-1)
-    const parsedExtension = lastSegment
-      ? extensionName(lastSegment).slice(1)
-      : undefined
+    const lastSegment = rawSegments.at(-1)
+    let parsedExtension: string | undefined
 
-    if (lastSegment && parsedExtension) {
-      segments[segments.length - 1] = removeExtension(lastSegment)
+    if (lastSegment) {
+      const segmentIndex = lastSegment.lastIndexOf('.')
+
+      if (segmentIndex > 0) {
+        parsedExtension = lastSegment.slice(segmentIndex + 1)
+        rawSegments[rawSegments.length - 1] = lastSegment.slice(0, segmentIndex)
+      }
     }
 
     if (parsedExtension && extension) {
       throw new Error(
-        `[renoun] The path "${Array.isArray(path) ? path.join('/') : path}" already includes a file extension (` +
-          `.${parsedExtension}), the \`extension\` argument can only be used when the path does not include an extension.`
+        `[renoun] The path "${rawPath}" already includes a file extension (.${parsedExtension}). The \`extension\` argument can only be used when the path omits an extension.`
       )
     }
 
-    let allExtensions: string[] | undefined
+    const allExtensions: string[] | undefined = Array.isArray(extension)
+      ? extension
+      : extension
+        ? [extension]
+        : parsedExtension
+          ? [parsedExtension]
+          : undefined
+    const segments = rawSegments.map((s) => createSlug(s, this.#slugCasing))
 
-    if (parsedExtension) {
-      allExtensions = [parsedExtension]
-    } else if (extension) {
-      allExtensions = (
-        Array.isArray(extension) ? extension : [extension]
-      ) as any
+    if (segments.length === 0) {
+      throw new FileNotFoundError(rawPath, allExtensions)
     }
 
-    let currentDirectory = this as Directory<LoaderTypes>
+    let entry = await this.#findEntry(this, segments, allExtensions)
 
-    while (segments.length > 0) {
-      let entry: FileSystemEntry<LoaderTypes> | undefined
-      const currentSegment = createSlug(segments.shift()!, this.#slugCasing)
-      const lastSegment = segments.at(-1)
-      const allEntries = await currentDirectory.getEntries({
-        includeDuplicates: true,
-        includeIndexAndReadme: true,
-        includeTsConfigIgnoredFiles: true,
+    // If we ended on a directory, try to find a matching within it
+    if (entry instanceof Directory) {
+      const directoryEntries = await entry.getEntries({
+        includeDirectoryNamedFiles: true,
+        includeIndexAndReadmeFiles: true,
       })
 
-      // Find an entry whose base name matches the slug of `currentSegment`
-      for (const currentEntry of allEntries) {
-        let name = currentEntry.getBaseName()
+      // Find a representative file in the directory
+      let sameName: File<LoaderTypes> | undefined
+      let fallback: File<LoaderTypes> | undefined
 
-        if (currentEntry instanceof File) {
-          const modifier = currentEntry.getModifierName()
-
-          if (modifier) {
-            name += `.${modifier}`
-          }
+      for (const directoryEntry of directoryEntries) {
+        if (!(directoryEntry instanceof File)) {
+          continue
         }
 
-        const baseSegment = createSlug(name, this.#slugCasing)
-        const baseSegmentWithoutModifier = createSlug(
-          currentEntry.getBaseName(),
-          this.#slugCasing
-        )
+        const baseName = directoryEntry.getBaseName()
+        const extension = directoryEntry.getExtension()
+        const hasValidExtension = allExtensions
+          ? allExtensions.includes(extension)
+          : true
 
+        // Check for file that shares the directory name
         if (
-          baseSegment === currentSegment ||
-          baseSegmentWithoutModifier === currentSegment
+          !sameName &&
+          baseName === entry.getBaseName() &&
+          hasValidExtension
         ) {
-          const matchesModifier =
-            (currentEntry instanceof File && currentEntry.getModifierName()) ===
-            lastSegment
+          sameName = directoryEntry
+          break // Found the best match, no need to continue
+        }
 
-          // If allExtensions are specified, we check if the file’s extension is in that array.
-          if (allExtensions && currentEntry instanceof File) {
-            if (allExtensions.includes(currentEntry.getExtension())) {
-              if (matchesModifier) {
-                return currentEntry as any
-              } else if (
-                !entry ||
-                (entry instanceof File && entry.getModifierName())
-              ) {
-                entry = currentEntry
-              }
-            }
-          } else if (matchesModifier) {
-            return currentEntry as any
-          } else if (
-            !entry ||
-            (entry instanceof File && entry.getModifierName())
-          ) {
-            entry = currentEntry
-          }
+        // Check for index/readme as fallback
+        if (
+          !fallback &&
+          ['index', 'readme'].includes(baseName.toLowerCase()) &&
+          hasValidExtension
+        ) {
+          fallback = directoryEntry
+          // Don't break here as we might find a better match later
         }
       }
 
-      if (!entry) {
-        throw new FileNotFoundError(path, allExtensions)
-      }
-
-      // If this is the last segment, check for file or extension match
-      if (segments.length === 0) {
-        if (entry instanceof File) {
-          if (allExtensions) {
-            if (allExtensions.includes(entry.getExtension())) {
-              return entry as any
-            }
-          } else {
-            return entry as any
-          }
-        } else if (entry instanceof Directory) {
-          // First, check if there's a file with the provided extension in the directory
-          if (allExtensions) {
-            const entries = await entry.getEntries({
-              includeDuplicates: true,
-              includeIndexAndReadme: true,
-            })
-            for (const subEntry of entries) {
-              if (
-                subEntry instanceof File &&
-                subEntry.getBaseName() === entry.getBaseName() &&
-                allExtensions.includes(subEntry.getExtension())
-              ) {
-                return subEntry as any
-              }
-            }
-          } else {
-            // Otherwise, check for a file with the same name as the directory or an index/readme file
-            const entries = await entry.getEntries({
-              includeDuplicates: true,
-              includeIndexAndReadme: true,
-            })
-            const directoryName = entry.getBaseName()
-
-            for (const subEntry of entries) {
-              const name = subEntry.getBaseName()
-              if (
-                name === directoryName ||
-                ['index', 'readme'].includes(name.toLowerCase())
-              ) {
-                return subEntry as any
-              }
-            }
-          }
-        }
-
-        throw new FileNotFoundError(path, allExtensions)
-      }
-
-      // If the entry is a directory, continue with the next segment
-      if (entry instanceof Directory) {
-        currentDirectory = entry
+      if (sameName) {
+        entry = sameName
+      } else if (fallback) {
+        entry = fallback
       } else {
-        throw new FileNotFoundError(path, allExtensions)
+        throw new FileNotFoundError(rawPath, allExtensions)
       }
     }
 
-    throw new FileNotFoundError(path, allExtensions)
+    if (entry instanceof File) {
+      return entry as any
+    }
+
+    throw new FileNotFoundError(rawPath, allExtensions)
   }
 
   /** Get a directory at the specified `path`. */
@@ -1714,8 +1799,8 @@ export class Directory<
     while (segments.length > 0) {
       const currentSegment = createSlug(segments.shift()!, this.#slugCasing)
       const allEntries = await currentDirectory.getEntries({
-        includeDuplicates: true,
-        includeTsConfigIgnoredFiles: true,
+        includeDirectoryNamedFiles: true,
+        includeTsConfigExcludedFiles: true,
       })
       let entry: FileSystemEntry<LoaderTypes> | undefined
 
@@ -1757,6 +1842,20 @@ export class Directory<
   }
 
   #entriesCache = new Map<string, FileSystemEntry<LoaderTypes>[]>()
+  #pathLookup = new Map<string, FileSystemEntry<LoaderTypes>>()
+
+  /**
+   * Add an entry to the path lookup table. This avoids the need to traverse the
+   * entire directory tree to find a file or directory that has already been created.
+   */
+  #addPathLookup(entry: FileSystemEntry<LoaderTypes>) {
+    const routePath = entry.getPathname()
+    this.#pathLookup.set(routePath, entry)
+
+    // Remove leading and trailing slashes
+    const normalizedPath = routePath.replace(/^\.\/?/, '').replace(/\/$/, '')
+    this.#pathLookup.set(normalizedPath, entry)
+  }
 
   /**
    * Retrieves all entries (files and directories) within the current directory
@@ -1764,54 +1863,77 @@ export class Directory<
    * Additionally, `index` and `readme` files are excluded by default.
    */
   async getEntries(options?: {
-    recursive?: boolean
-    includeIndexAndReadme?: boolean
-    includeDuplicates?: boolean
+    /** Recursively walk every subdirectory. */
+    recursive?: Include extends string
+      ? Include extends `**${string}`
+        ? boolean
+        : undefined
+      : boolean
+
+    /** Include files named the same as their immediate directory (e.g. `Button/Button.tsx`). */
+    includeDirectoryNamedFiles?: boolean
+
+    /** Include index and readme files. */
+    includeIndexAndReadmeFiles?: boolean
+
+    /** Include files that are ignored by `.gitignore`. */
     includeGitIgnoredFiles?: boolean
-    includeTsConfigIgnoredFiles?: boolean
+
+    /** Include files that are excluded by the configured `tsconfig.json` file's `exclude` patterns. */
+    includeTsConfigExcludedFiles?: boolean
   }): Promise<
-    Include extends string
-      ? FileWithExtension<LoaderTypes, ExtractFileExtension<Include>>[]
-      : Include extends EntryInclude<infer FilteredEntry, LoaderTypes>
-        ? FilteredEntry[]
-        : FileSystemEntry<LoaderTypes>[]
+    Array<
+      Include extends string
+        ? Include extends `**${string}`
+          ?
+              | Directory<LoaderTypes>
+              | FileWithExtension<LoaderTypes, ExtractFileExtension<Include>>
+          : FileWithExtension<LoaderTypes, ExtractFileExtension<Include>>
+        : Include extends DirectoryInclude<infer FilteredEntry, LoaderTypes>
+          ? FilteredEntry
+          : FileSystemEntry<LoaderTypes>
+    >
   > {
+    if (options?.recursive && this.#includePattern) {
+      if (!this.#includePattern.includes('**')) {
+        throw new Error(
+          '[renoun] Cannot use recursive option with a single-level include filter. Use a multi-level pattern (e.g. "**/*.mdx") instead.'
+        )
+      }
+    }
+
     let cacheKey = ''
 
     if (process.env.NODE_ENV === 'production') {
       if (options) {
         cacheKey += options.recursive ? 'r' : ''
-        cacheKey += options.includeIndexAndReadme ? 'i' : ''
-        cacheKey += options.includeDuplicates ? 'd' : ''
+        cacheKey += options.includeDirectoryNamedFiles ? 'd' : ''
+        cacheKey += options.includeIndexAndReadmeFiles ? 'i' : ''
         cacheKey += options.includeGitIgnoredFiles ? 'g' : ''
-        cacheKey += options.includeTsConfigIgnoredFiles ? 't' : ''
+        cacheKey += options.includeTsConfigExcludedFiles ? 't' : ''
       }
 
       if (this.#entriesCache.has(cacheKey)) {
-        const entries = this.#entriesCache.get(cacheKey)!
-        return entries as any
+        return this.#entriesCache.get(cacheKey)! as any
       }
     }
 
     const fileSystem = this.getFileSystem()
     const directoryEntries = await fileSystem.readDirectory(this.#path)
     const entriesMap = new Map<string, FileSystemEntry<LoaderTypes>>()
-    const thisDirectory = this as Directory<any, any, any>
-    const directoryBaseName = this.getBaseName()
-    const nextDepth = this.#depth + 1
 
     for (const entry of directoryEntries) {
-      const shouldSkipIndexOrReadme = options?.includeIndexAndReadme
+      const shouldSkipIndexOrReadme = options?.includeIndexAndReadmeFiles
         ? false
-        : ['index', 'readme'].some((name) =>
-            entry.name.toLowerCase().startsWith(name)
+        : ['index', 'readme'].some((n) =>
+            entry.name.toLowerCase().startsWith(n)
           )
 
       if (
         shouldSkipIndexOrReadme ||
         (!options?.includeGitIgnoredFiles &&
           fileSystem.isFilePathGitIgnored(entry.path)) ||
-        (!options?.includeTsConfigIgnoredFiles &&
+        (!options?.includeTsConfigExcludedFiles &&
           fileSystem.isFilePathExcludedFromTsConfig(
             entry.path,
             entry.isDirectory
@@ -1821,7 +1943,7 @@ export class Directory<
       }
 
       const entryKey =
-        entry.isDirectory || options?.includeDuplicates
+        entry.isDirectory || options?.includeDirectoryNamedFiles
           ? entry.path
           : removeAllExtensions(entry.path)
 
@@ -1830,120 +1952,113 @@ export class Directory<
       }
 
       if (entry.isDirectory) {
-        const directory = this.#duplicate({
-          fileSystem,
-          path: entry.path,
-        })
-
-        directory.#repository = this.#repository
-        directory.#directory = thisDirectory
-        directory.#depth = nextDepth
-
-        if (this.#include) {
-          if (await this.#shouldInclude(directory)) {
-            entriesMap.set(entryKey, directory)
-          }
-        } else {
-          entriesMap.set(entryKey, directory)
-        }
-
-        if (options?.recursive) {
-          const nestedEntries = await directory.getEntries(options)
-          for (const nestedEntry of nestedEntries) {
-            entriesMap.set(nestedEntry.getPath(), nestedEntry)
-          }
-        }
+        const subdirectory = this.#duplicate({ path: entry.path })
+        entriesMap.set(entryKey, subdirectory)
+        this.#addPathLookup(subdirectory)
       } else if (entry.isFile) {
+        const sharedOptions = {
+          path: entry.path,
+          directory: this,
+          basePathname: this.#basePathname,
+          slugCasing: this.#slugCasing,
+        } as const
         const extension = extensionName(entry.name).slice(1)
-        const loader = this.#loaders?.[extension] as ModuleLoader<
-          LoaderTypes[any]
-        >
-        const file = isJavaScriptLikeExtension(extension)
-          ? new JavaScriptFile({
-              path: entry.path,
-              depth: nextDepth,
-              directory: thisDirectory,
-              slugCasing: this.#slugCasing,
-              loader,
-            })
-          : extension === 'mdx'
-            ? new MDXFile({
-                path: entry.path,
-                depth: nextDepth,
-                directory: thisDirectory,
-                slugCasing: this.#slugCasing,
-                loader,
-              })
-            : new File({
-                path: entry.path,
-                depth: nextDepth,
-                directory: thisDirectory,
-                slugCasing: this.#slugCasing,
-              })
+        const loader = this.#loader?.[extension] as
+          | ModuleLoader<LoaderTypes[any]>
+          | undefined
 
+        // Skip files that share the same base name as this directory unless
+        // explicitly included via `includeDirectoryNamedFiles`.
         if (
-          !options?.includeDuplicates &&
-          file.getBaseName() === directoryBaseName
+          !options?.recursive &&
+          !options?.includeDirectoryNamedFiles &&
+          removeAllExtensions(entry.name) === this.getBaseName()
         ) {
           continue
         }
 
-        if (
-          this.#include &&
-          !(await this.#shouldInclude(file as FileSystemEntry<LoaderTypes>))
-        ) {
+        const file =
+          extension === 'mdx'
+            ? new MDXFile({ ...sharedOptions, loader })
+            : isJavaScriptLikeExtension(extension)
+              ? new JavaScriptFile({ ...sharedOptions, loader })
+              : new File(sharedOptions)
+
+        if (this.#include && !(await this.#shouldInclude(file))) {
           continue
         }
 
         entriesMap.set(entryKey, file)
+        this.#addPathLookup(file)
       }
     }
 
-    const entries = Array.from(
+    const immediateEntries = Array.from(
       entriesMap.values()
     ) as FileSystemEntry<LoaderTypes>[]
 
     if (this.#sort) {
       try {
-        const entryCount = entries.length
-        for (let outerIndex = 0; outerIndex < entryCount; outerIndex++) {
-          for (
-            let currentIndex = 0;
-            currentIndex < entryCount - outerIndex - 1;
-            currentIndex++
-          ) {
-            const a = entries[currentIndex]
-            const b = entries[currentIndex + 1]
-            const comparison = await this.#sort(a, b)
-
-            if (comparison > 0) {
-              ;[entries[currentIndex], entries[currentIndex + 1]] = [b, a]
-            }
-          }
-        }
+        await sortEntries(immediateEntries, this.#sort)
       } catch (error) {
         const badge = '[renoun] '
-
         if (error instanceof Error && error.message.includes(badge)) {
           throw new Error(
-            `[renoun] Error occurred while sorting entries for directory at "${
-              this.#path
-            }". \n\n${error.message.slice(badge.length)}`
+            `[renoun] Error occurred while sorting entries for directory at "${this.#path}". \n\n${error.message.slice(
+              badge.length
+            )}`
           )
         }
-
         throw error
       }
     }
 
-    if (process.env.NODE_ENV === 'production') {
-      this.#entriesCache.set(cacheKey, entries)
+    const result: FileSystemEntry<LoaderTypes>[] = []
+
+    for (const entry of immediateEntries) {
+      if (entry instanceof Directory) {
+        const includeSelf = this.#include
+          ? await this.#shouldInclude(entry)
+          : true
+        const children = options?.recursive
+          ? await entry.getEntries(options)
+          : []
+
+        if (includeSelf && (children.length > 0 || !options?.recursive)) {
+          result.push(entry)
+        }
+
+        const directoryBaseName = entry.getBaseName()
+
+        for (const child of children) {
+          const isDirectoryNamedFile =
+            child instanceof File &&
+            child.getParent() === entry &&
+            child.getBaseName() === directoryBaseName &&
+            !options?.includeDirectoryNamedFiles
+
+          if (!isDirectoryNamedFile) {
+            result.push(child)
+          }
+        }
+      } else {
+        result.push(entry)
+      }
     }
 
-    return entries as any
+    if (process.env.NODE_ENV === 'production') {
+      this.#entriesCache.set(cacheKey, result)
+    }
+
+    return result as any
   }
 
-  /** Get the directory containing this directory. */
+  /** Get the root directory path. */
+  getRootPath() {
+    return this.#rootPath ?? this.#path
+  }
+
+  /** Get the parent directory containing this directory. */
   getParent() {
     if (this.#directory) {
       return this.#directory
@@ -1975,9 +2090,9 @@ export class Directory<
       return [undefined, undefined]
     }
 
-    const path = this.getPath()
+    const path = this.getPathname()
     const index = entries.findIndex(
-      (entryToCompare) => entryToCompare.getPath() === path
+      (entryToCompare) => entryToCompare.getPathname() === path
     )
     const previous = index > 0 ? entries[index - 1] : undefined
     const next = index < entries.length - 1 ? entries[index + 1] : undefined
@@ -1985,17 +2100,17 @@ export class Directory<
     return [previous, next]
   }
 
-  /** Get the slug of the directory. */
+  /** Get the slug of this directory. */
   getSlug() {
     return createSlug(this.getBaseName(), this.#slugCasing)
   }
 
-  /** Get the base name of the directory. */
+  /** Get the base name of this directory. */
   getName() {
     return this.getBaseName()
   }
 
-  /** Get the base name of the directory. */
+  /** Get the base name of this directory. */
   getBaseName() {
     return removeOrderPrefixes(baseName(this.#path))
   }
@@ -2005,14 +2120,17 @@ export class Directory<
     return formatNameAsTitle(this.getName())
   }
 
-  /** Get a URL-friendly path to the directory. */
-  getPath(options?: { includeBasePath?: boolean }) {
-    const includeBasePath = options?.includeBasePath ?? true
+  /** Get a URL-friendly path to this directory. */
+  getPathname(options?: { includeBasePathname?: boolean }) {
+    const includeBasePathname = options?.includeBasePathname ?? true
     const fileSystem = this.getFileSystem()
-    const path = fileSystem.getPath(
-      this.#path,
-      includeBasePath ? { basePath: this.#basePath } : undefined
-    )
+    const path = fileSystem.getPathname(this.#path, {
+      basePath:
+        includeBasePathname && this.#basePathname !== null
+          ? this.#basePathname
+          : undefined,
+      rootPath: this.getRootPath(),
+    })
 
     if (this.#slugCasing === 'none') {
       return path
@@ -2027,21 +2145,15 @@ export class Directory<
     return segments.join('/')
   }
 
-  /** Get the path segments to the directory. */
-  getPathSegments(options?: { includeBasePath?: boolean }) {
-    const includeBasePath = options?.includeBasePath ?? true
-
-    return this.getPath({ includeBasePath }).split('/').filter(Boolean)
+  /** Get the route path segments to this directory. */
+  getPathnameSegments(options?: { includeBasePathname?: boolean }) {
+    return this.getPathname(options).split('/').filter(Boolean)
   }
 
-  /** Get the configured base path of the directory. */
-  getBasePath() {
-    return this.#basePath
-  }
-
-  /** Get the relative path of the directory. */
-  getRelativePath() {
-    return this.getFileSystem().getRelativePath(this.#path)
+  /** Get the relative path of this directory to the root directory. */
+  getRelativePathToRoot() {
+    const rootPath = this.getRootPath()
+    return rootPath ? relativePath(rootPath, this.#path) : this.#path
   }
 
   /** Get the relative path of the directory to the workspace. */
@@ -2049,18 +2161,15 @@ export class Directory<
     return this.getFileSystem().getRelativePathToWorkspace(this.#path)
   }
 
-  /** Get the absolute path of the directory. */
+  /** Get the absolute path of this directory. */
   getAbsolutePath() {
     return this.getFileSystem().getAbsolutePath(this.#path)
   }
 
   /** Get a URL to the directory for the configured git repository. */
   #getRepositoryUrl(options?: Omit<GetDirectoryUrlOptions, 'path'>) {
-    const repository = this.getRepository()
-    const fileSystem = this.getFileSystem()
-
-    return repository.getDirectoryUrl({
-      path: fileSystem.getRelativePathToWorkspace(this.#path),
+    return this.getRepository().getDirectoryUrl({
+      path: this.getRelativePathToWorkspace(),
       ...options,
     })
   }
@@ -2086,19 +2195,19 @@ export class Directory<
     return getEditorUri({ path: this.getAbsolutePath() })
   }
 
-  /** Get the first local git commit date of the directory. */
+  /** Get the first local git commit date of this directory. */
   async getFirstCommitDate() {
     const gitMetadata = await getLocalGitFileMetadata(this.#path)
     return gitMetadata.firstCommitDate
   }
 
-  /** Get the last local git commit date of the directory. */
+  /** Get the last local git commit date of this directory. */
   async getLastCommitDate() {
     const gitMetadata = await getLocalGitFileMetadata(this.#path)
     return gitMetadata.lastCommitDate
   }
 
-  /** Get the local git authors of the directory. */
+  /** Get the local git authors of this directory. */
   async getAuthors() {
     const gitMetadata = await getLocalGitFileMetadata(this.#path)
     return gitMetadata.authors
@@ -2190,14 +2299,14 @@ export class EntryGroup<
     recursive?: boolean
 
     /** Include index and readme files in the group. */
-    includeIndexAndReadme?: boolean
+    includeIndexAndReadmeFiles?: boolean
   }): Promise<Entries> {
     const allEntries: FileSystemEntry<any>[] = []
 
     async function findEntries(entries: FileSystemEntry<any>[]) {
       for (const entry of entries) {
         const lowerCaseBaseName = entry.getBaseName().toLowerCase()
-        const shouldSkipIndexOrReadme = options?.includeIndexAndReadme
+        const shouldSkipIndexOrReadme = options?.includeIndexAndReadmeFiles
           ? false
           : ['index', 'readme'].some((name) =>
               lowerCaseBaseName.startsWith(name)
@@ -2433,4 +2542,231 @@ export function isMDXFile<
   entry: FileSystemEntry<DirectoryTypes> | undefined
 ): entry is MDXFile<FileTypes, DirectoryTypes> {
   return entry instanceof MDXFile
+}
+
+/**
+ * Attempts to resolve a file from a `FileSystemEntry`, preferring `index` and
+ * `readme` for directories. The result can be optionally narrowed by extension.
+ */
+export async function resolveFileFromEntry<
+  Types extends Record<string, any>,
+  const Extension extends keyof Types & string = string,
+>(
+  entry: FileSystemEntry<Types>,
+  extension?: Extension | readonly Extension[]
+): Promise<FileWithExtension<Types, Extension> | undefined> {
+  if (isDirectory(entry)) {
+    try {
+      return (await entry.getFile('index', extension as any)) as any
+    } catch (error) {
+      if (error instanceof FileNotFoundError || error instanceof Error) {
+        try {
+          return (await entry.getFile('readme', extension as any)) as any
+        } catch {
+          return undefined
+        }
+      }
+      throw error
+    }
+  }
+
+  return isFile(entry, extension as any) ? (entry as any) : undefined
+}
+
+type ComparableValue = string | number | bigint | boolean | Date
+
+type IsPlainObject<Type> = Type extends object
+  ? Type extends (...args: any) => any
+    ? false
+    : Type extends readonly any[]
+      ? false
+      : true
+  : false
+
+type PreviousDepth = [never, 0, 1]
+
+type NestedPropertyPath<
+  Type,
+  Prefix extends string = '',
+  Depth extends number = 4,
+> = [Depth] extends [never]
+  ? never
+  : {
+      [Key in Extract<keyof Type, string>]: Type[Key] extends ComparableValue
+        ? `${Prefix}${Key}`
+        : IsPlainObject<Type[Key]> extends true
+          ? NestedPropertyPath<
+              Type[Key],
+              `${Prefix}${Key}.`,
+              PreviousDepth[Depth]
+            >
+          : never
+    }[Extract<keyof Type, string>]
+
+type ExtensionPropertyPaths<ExtensionTypes> = {
+  [Extension in keyof ExtensionTypes & string]: NestedPropertyPath<
+    ExtensionTypes[Extension]
+  >
+}[keyof ExtensionTypes & string]
+
+type BuiltinProperty = 'name' | 'directory'
+
+type ValidSortKey<ExtensionTypes> =
+  LoadersWithRuntimeKeys<ExtensionTypes> extends never
+    ? BuiltinProperty
+    : BuiltinProperty | ExtensionPropertyPaths<ExtensionTypes>
+
+type Awaitable<Type> = Promise<Type> | Type
+
+type SortKeyExtractor<Entry extends FileSystemEntry<any>> = (
+  entry: Entry
+) => Awaitable<ComparableValue>
+
+type SortDescriptorObject<
+  ExtensionTypes extends Record<string, any>,
+  Entry extends FileSystemEntry<ExtensionTypes>,
+  Key extends ValidSortKey<ExtensionTypes> | SortKeyExtractor<Entry> =
+    | ValidSortKey<ExtensionTypes>
+    | SortKeyExtractor<Entry>,
+> = {
+  readonly key: Key
+  readonly compare?: (
+    a: ExtractComparable<Key>,
+    b: ExtractComparable<Key>
+  ) => number
+  readonly direction?: 'ascending' | 'descending'
+}
+
+type EntryTypes<E> = E extends FileSystemEntry<infer T> ? T : never
+
+export type SortDescriptor<Entry extends FileSystemEntry<any>> =
+  | ValidSortKey<EntryTypes<Entry>>
+  | SortKeyExtractor<Entry>
+  | SortDescriptorObject<EntryTypes<Entry>, Entry>
+
+function keyName(entry: FileSystemEntry<any>) {
+  return entry.getBaseName().toLowerCase()
+}
+
+/** Builds a key extractor for an `export.x.y` path. */
+function exportKeyFactory(pathSegments: string[]) {
+  const [exportName, ...objectPath] = pathSegments
+
+  return async (entry: FileSystemEntry) => {
+    const file = await resolveFileFromEntry(entry)
+    let value = null
+
+    if (isJavaScriptFile(file) || isMDXFile(file)) {
+      value = await file.getExportValue(exportName)
+    }
+
+    if (value === null) {
+      return null
+    }
+    for (const segment of objectPath) {
+      value = value[segment]
+    }
+    return value
+  }
+}
+
+/** Compares two primitives. */
+function primitiveComparator(a: any, b: any): number {
+  if (a === null || b === null) {
+    if (a === null && b === null) {
+      return 0
+    }
+    return a === null ? -1 : 1
+  }
+  if (a < b) {
+    return -1
+  }
+  if (a > b) {
+    return 1
+  }
+  return 0
+}
+
+/** Compiles a set of sort descriptors into a sort function. */
+export async function sortEntries<ExtensionTypes extends Record<string, any>>(
+  entries: FileSystemEntry<ExtensionTypes>[],
+  descriptor: SortDescriptor<any>
+) {
+  let key: string | ((entry: any) => any) | ((entry: any) => Promise<any>)
+  let direction: 'ascending' | 'descending' = 'ascending'
+  let directionProvided = false
+
+  if (typeof descriptor === 'string') {
+    key = descriptor
+  } else if (typeof descriptor === 'function') {
+    key = descriptor
+  } else if (
+    typeof descriptor === 'object' &&
+    descriptor !== null &&
+    'key' in descriptor
+  ) {
+    key = descriptor.key
+    if (descriptor.direction) {
+      direction = descriptor.direction
+      directionProvided = true
+    }
+  } else {
+    throw new Error(`[renoun] Invalid sort descriptor: ${descriptor}`)
+  }
+
+  const cache = new WeakMap()
+  let keyExtractor: ((entry: any) => any) | ((entry: any) => Promise<any>)
+
+  if (typeof key === 'function') {
+    keyExtractor = key
+  } else if (key === 'name') {
+    keyExtractor = keyName
+  } else if (key === 'directory') {
+    keyExtractor = isDirectory
+  } else {
+    keyExtractor = exportKeyFactory(key.split('.'))
+  }
+
+  const keyResolvers: Promise<void>[] = []
+
+  for (const entry of entries) {
+    if (!cache.has(entry)) {
+      keyResolvers.push(
+        Promise.resolve(keyExtractor(entry)).then((key) => {
+          cache.set(entry, key)
+
+          // default to descending (newest first) when a Date is detected
+          if (!directionProvided && key instanceof Date) {
+            direction = 'descending'
+          }
+        })
+      )
+    }
+  }
+
+  await Promise.all(keyResolvers)
+
+  const sign = direction === 'descending' ? -1 : 1
+
+  entries.sort((a, b) => {
+    return sign * primitiveComparator(cache.get(a), cache.get(b))
+  })
+}
+
+type ExtractComparable<Key> = Key extends (
+  ...args: any
+) => Awaitable<infer Return>
+  ? Awaited<Return> extends ComparableValue
+    ? Awaited<Return>
+    : ComparableValue
+  : ComparableValue
+
+export function createSort<
+  Entry extends FileSystemEntry<any>,
+  Key extends SortKeyExtractor<Entry> = SortKeyExtractor<Entry>,
+>(
+  key: Key,
+  compare?: (a: ExtractComparable<Key>, b: ExtractComparable<Key>) => number
+): SortDescriptorObject<any, Entry, Key> {
+  return { key, compare }
 }

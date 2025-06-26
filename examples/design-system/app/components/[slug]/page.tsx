@@ -242,7 +242,7 @@ async function SiblingLink({
 }) {
   return (
     <Link
-      href={entry.getPath()}
+      href={entry.getPathname()}
       style={{
         gridColumn: direction === 'previous' ? 1 : 2,
         textAlign: direction === 'previous' ? 'left' : 'right',

@@ -46,5 +46,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Build MDX package
+        run: pnpm --filter=@renoun/mdx build
+
       - name: Run tests
         run: pnpm --filter=renoun test

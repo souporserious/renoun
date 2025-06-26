@@ -5,14 +5,14 @@ The `CodeBlock` component can be styled using the, `css`, `className`, and `styl
 ```tsx
 import {
   type CodeBlockProps,
-  CodeBlock as BaseCodeBlock,
+  CodeBlock as DefaultCodeBlock,
   Tokens,
 } from 'renoun/components'
 import styles from './CodeBlock.module.css'
 
 export function CodeBlock(props: CodeBlockProps) {
   return (
-    <BaseCodeBlock
+    <DefaultCodeBlock
       {...props}
       css={{
         // Clear the default styles
@@ -46,7 +46,7 @@ If you need more customization, the `CodeBlock` component can be fully overridde
 ```tsx path="CodeBlock.tsx"
 import {
   type CodeBlockProps,
-  CodeBlock as BaseCodeBlock,
+  CodeBlock as DefaultCodeBlock,
   Tokens,
 } from 'renoun/components'
 
@@ -55,7 +55,7 @@ export function CodeBlock({
   ...props
 }: Omit<CodeBlockProps, 'children'> & { children: string }) {
   return (
-    <BaseCodeBlock {...props}>
+    <DefaultCodeBlock {...props}>
       <pre
         style={{
           whiteSpace: 'pre',
@@ -65,7 +65,7 @@ export function CodeBlock({
       >
         <Tokens>{children}</Tokens>
       </pre>
-    </BaseCodeBlock>
+    </DefaultCodeBlock>
   )
 }
 ```
