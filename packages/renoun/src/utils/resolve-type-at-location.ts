@@ -47,7 +47,6 @@ export async function resolveTypeAtLocation(
       exportDeclarationType,
       exportDeclaration,
       filter,
-      true,
       undefined,
       false
     )
@@ -87,7 +86,6 @@ export async function resolveTypeAtLocation(
     exportDeclarationType,
     exportDeclaration,
     filter,
-    true,
     undefined,
     false,
     dependencies
