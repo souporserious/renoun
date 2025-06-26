@@ -84,6 +84,7 @@ export interface APIReferenceProps {
 }
 
 // TODO: add badges like rendering environment, deprecation, unstable, overloaded etc.
+// TODO: remove data attributes and use specific components from component prop instead Block, Inline, Detail, Signatures, Collapse, etc. this way props are typed for each component
 export function APIReference(props: APIReferenceProps) {
   return (
     <Suspense>
@@ -358,9 +359,11 @@ function renderMethodSubRow(
         </TypeDetail>
       ) : null}
 
-      <TypeDetail components={components}>
-        <components.code>{signature.returnType.text}</components.code>
-      </TypeDetail>
+      {signature.returnType ? (
+        <TypeDetail components={components}>
+          <components.code>{signature.returnType.text}</components.code>
+        </TypeDetail>
+      ) : null}
     </>
   )
 }
@@ -547,9 +550,11 @@ function FunctionSection({
               </TypeDetail>
             ) : null}
 
-            <TypeDetail label="Returns" components={components}>
-              <components.code>{signature.returnType.text}</components.code>
-            </TypeDetail>
+            {signature.returnType ? (
+              <TypeDetail label="Returns" components={components}>
+                <components.code>{signature.returnType.text}</components.code>
+              </TypeDetail>
+            ) : null}
           </components.div>
         ))}
       </components.div>
@@ -660,7 +665,9 @@ function MembersSection({
             renderRow={(indexSignature) => (
               <>
                 <components.td>
-                  <components.code>{indexSignature.key}</components.code>
+                  <components.code>
+                    {indexSignature.parameter.text}
+                  </components.code>
                 </components.td>
                 <components.td colSpan={2}>
                   <components.code>{indexSignature.type.text}</components.code>
@@ -744,7 +751,7 @@ function IntersectionSection({
             })
           } else if (member.kind === 'IndexSignature') {
             rows.push({
-              name: member.key,
+              name: member.parameter.name,
               text: member.type.text,
               isReadonly: member.isReadonly,
             })
@@ -823,11 +830,7 @@ function TypeExpressionSection({
   const label = kindToLabel(node.kind)
 
   return (
-    <TypeSection
-      label={label}
-      title={node.kind === 'TypeReference' ? (node.name ?? '-') : '-'}
-      components={components}
-    >
+    <TypeSection label={label} title={'-'} components={components}>
       <TypeDetail label="Type" components={components}>
         <components.code>{node.text}</components.code>
       </TypeDetail>
