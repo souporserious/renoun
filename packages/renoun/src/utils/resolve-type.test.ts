@@ -55,215 +55,9 @@ describe('resolveType', () => {
     expect(processedProperties).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "TypeLiteral",
-        "members": [
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "method",
-            "position": {
-              "end": {
-                "column": 72,
-                "line": 8,
-              },
-              "start": {
-                "column": 7,
-                "line": 8,
-              },
-            },
-            "text": "(parameterValue: { objectValue: number; }) => Promise<number>",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "Function",
-              "name": "method",
-              "position": {
-                "end": {
-                  "column": 72,
-                  "line": 8,
-                },
-                "start": {
-                  "column": 7,
-                  "line": 8,
-                },
-              },
-              "signatures": [
-                {
-                  "filePath": "test.ts",
-                  "kind": "FunctionSignature",
-                  "parameters": [
-                    {
-                      "description": undefined,
-                      "filePath": "test.ts",
-                      "initializer": undefined,
-                      "isOptional": false,
-                      "kind": "Parameter",
-                      "name": "parameterValue",
-                      "position": {
-                        "end": {
-                          "column": 53,
-                          "line": 8,
-                        },
-                        "start": {
-                          "column": 14,
-                          "line": 8,
-                        },
-                      },
-                      "text": "{ objectValue: number; }",
-                      "type": {
-                        "filePath": "test.ts",
-                        "kind": "TypeLiteral",
-                        "members": [
-                          {
-                            "filePath": "test.ts",
-                            "isOptional": false,
-                            "isReadonly": false,
-                            "kind": "PropertySignature",
-                            "name": "objectValue",
-                            "position": {
-                              "end": {
-                                "column": 51,
-                                "line": 8,
-                              },
-                              "start": {
-                                "column": 32,
-                                "line": 8,
-                              },
-                            },
-                            "text": "number",
-                            "type": {
-                              "filePath": "test.ts",
-                              "kind": "Number",
-                              "position": {
-                                "end": {
-                                  "column": 51,
-                                  "line": 8,
-                                },
-                                "start": {
-                                  "column": 32,
-                                  "line": 8,
-                                },
-                              },
-                              "text": "number",
-                              "value": undefined,
-                            },
-                          },
-                        ],
-                        "position": {
-                          "end": {
-                            "column": 53,
-                            "line": 8,
-                          },
-                          "start": {
-                            "column": 14,
-                            "line": 8,
-                          },
-                        },
-                        "text": "{ objectValue: number; }",
-                      },
-                    },
-                  ],
-                  "position": {
-                    "end": {
-                      "column": 72,
-                      "line": 8,
-                    },
-                    "start": {
-                      "column": 7,
-                      "line": 8,
-                    },
-                  },
-                  "returnType": {
-                    "arguments": [
-                      {
-                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                        "kind": "Number",
-                        "position": {
-                          "end": {
-                            "column": 4943,
-                            "line": 4,
-                          },
-                          "start": {
-                            "column": 4755,
-                            "line": 4,
-                          },
-                        },
-                        "text": "number",
-                        "value": undefined,
-                      },
-                    ],
-                    "filePath": "test.ts",
-                    "kind": "TypeReference",
-                    "name": "Promise",
-                    "position": {
-                      "end": {
-                        "column": 72,
-                        "line": 8,
-                      },
-                      "start": {
-                        "column": 7,
-                        "line": 8,
-                      },
-                    },
-                    "text": "Promise<number>",
-                  },
-                  "text": "(parameterValue: { objectValue: number; }) => Promise<number>",
-                },
-              ],
-              "text": "(parameterValue: { objectValue: number; }) => Promise<number>",
-            },
-          },
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "exportedTypes",
-            "position": {
-              "end": {
-                "column": 42,
-                "line": 9,
-              },
-              "start": {
-                "column": 7,
-                "line": 9,
-              },
-            },
-            "text": "ExportedType[]",
-            "type": {
-              "element": {
-                "filePath": "test.ts",
-                "kind": "TypeReference",
-                "name": "ExportedType",
-                "position": {
-                  "end": {
-                    "column": 7,
-                    "line": 5,
-                  },
-                  "start": {
-                    "column": 5,
-                    "line": 2,
-                  },
-                },
-                "text": "ExportedType",
-              },
-              "filePath": "test.ts",
-              "kind": "Array",
-              "position": {
-                "end": {
-                  "column": 42,
-                  "line": 9,
-                },
-                "start": {
-                  "column": 7,
-                  "line": 9,
-                },
-              },
-              "text": "Array<ExportedType>",
-            },
-          },
-        ],
+        "kind": "TypeAlias",
+        "name": "ModuleData",
+        "parameters": [],
         "position": {
           "end": {
             "column": 7,
@@ -275,6 +69,111 @@ describe('resolveType', () => {
           },
         },
         "text": "ModuleData",
+        "type": {
+          "kind": "TypeLiteral",
+          "members": [
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "method",
+              "position": {
+                "end": {
+                  "column": 72,
+                  "line": 8,
+                },
+                "start": {
+                  "column": 7,
+                  "line": 8,
+                },
+              },
+              "text": "(parameterValue: { objectValue: number; }) => Promise<number>",
+              "type": {
+                "isAsync": true,
+                "kind": "FunctionType",
+                "parameters": [
+                  {
+                    "description": undefined,
+                    "filePath": "test.ts",
+                    "initializer": undefined,
+                    "isOptional": false,
+                    "kind": "Parameter",
+                    "name": "parameterValue",
+                    "position": {
+                      "end": {
+                        "column": 53,
+                        "line": 8,
+                      },
+                      "start": {
+                        "column": 14,
+                        "line": 8,
+                      },
+                    },
+                    "text": "{ objectValue: number; }",
+                    "type": {
+                      "kind": "TypeLiteral",
+                      "members": [
+                        {
+                          "filePath": "test.ts",
+                          "isOptional": false,
+                          "isReadonly": false,
+                          "kind": "PropertySignature",
+                          "name": "objectValue",
+                          "position": {
+                            "end": {
+                              "column": 51,
+                              "line": 8,
+                            },
+                            "start": {
+                              "column": 32,
+                              "line": 8,
+                            },
+                          },
+                          "text": "number",
+                          "type": {
+                            "kind": "Number",
+                            "text": "number",
+                            "value": undefined,
+                          },
+                        },
+                      ],
+                      "text": "{ objectValue: number; }",
+                    },
+                  },
+                ],
+                "returnType": {
+                  "kind": "TypeReference",
+                  "text": "Promise<number>",
+                },
+                "text": "(parameterValue: { objectValue: number; }) => Promise<number>",
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "exportedTypes",
+              "position": {
+                "end": {
+                  "column": 42,
+                  "line": 9,
+                },
+                "start": {
+                  "column": 7,
+                  "line": 9,
+                },
+              },
+              "text": "ExportedType[]",
+              "type": {
+                "kind": "TypeReference",
+                "text": "ExportedType[]",
+              },
+            },
+          ],
+          "text": "ModuleData",
+        },
       }
     `)
   })
@@ -304,37 +203,7 @@ describe('resolveType', () => {
           },
           "text": "Promise<ExportedType>",
           "type": {
-            "arguments": [
-              {
-                "filePath": "test.ts",
-                "kind": "TypeReference",
-                "name": "ExportedType",
-                "position": {
-                  "end": {
-                    "column": 7,
-                    "line": 5,
-                  },
-                  "start": {
-                    "column": 5,
-                    "line": 2,
-                  },
-                },
-                "text": "ExportedType",
-              },
-            ],
-            "filePath": "test.ts",
             "kind": "TypeReference",
-            "name": "Promise",
-            "position": {
-              "end": {
-                "column": 45,
-                "line": 22,
-              },
-              "start": {
-                "column": 7,
-                "line": 22,
-              },
-            },
             "text": "Promise<ExportedType>",
           },
         },
@@ -356,141 +225,7 @@ describe('resolveType', () => {
           },
           "text": "Promise<(a: number, b: string) => void>",
           "type": {
-            "arguments": [
-              {
-                "filePath": "test.ts",
-                "kind": "Function",
-                "name": undefined,
-                "position": {
-                  "end": {
-                    "column": 62,
-                    "line": 23,
-                  },
-                  "start": {
-                    "column": 32,
-                    "line": 23,
-                  },
-                },
-                "signatures": [
-                  {
-                    "filePath": "test.ts",
-                    "kind": "FunctionSignature",
-                    "parameters": [
-                      {
-                        "description": undefined,
-                        "filePath": "test.ts",
-                        "initializer": undefined,
-                        "isOptional": false,
-                        "kind": "Parameter",
-                        "name": "a",
-                        "position": {
-                          "end": {
-                            "column": 42,
-                            "line": 23,
-                          },
-                          "start": {
-                            "column": 33,
-                            "line": 23,
-                          },
-                        },
-                        "text": "number",
-                        "type": {
-                          "filePath": "test.ts",
-                          "kind": "Number",
-                          "position": {
-                            "end": {
-                              "column": 42,
-                              "line": 23,
-                            },
-                            "start": {
-                              "column": 33,
-                              "line": 23,
-                            },
-                          },
-                          "text": "number",
-                          "value": undefined,
-                        },
-                      },
-                      {
-                        "description": undefined,
-                        "filePath": "test.ts",
-                        "initializer": undefined,
-                        "isOptional": false,
-                        "kind": "Parameter",
-                        "name": "b",
-                        "position": {
-                          "end": {
-                            "column": 53,
-                            "line": 23,
-                          },
-                          "start": {
-                            "column": 44,
-                            "line": 23,
-                          },
-                        },
-                        "text": "string",
-                        "type": {
-                          "filePath": "test.ts",
-                          "kind": "String",
-                          "position": {
-                            "end": {
-                              "column": 53,
-                              "line": 23,
-                            },
-                            "start": {
-                              "column": 44,
-                              "line": 23,
-                            },
-                          },
-                          "text": "string",
-                          "value": undefined,
-                        },
-                      },
-                    ],
-                    "position": {
-                      "end": {
-                        "column": 62,
-                        "line": 23,
-                      },
-                      "start": {
-                        "column": 32,
-                        "line": 23,
-                      },
-                    },
-                    "returnType": {
-                      "filePath": "test.ts",
-                      "kind": "Unknown",
-                      "position": {
-                        "end": {
-                          "column": 62,
-                          "line": 23,
-                        },
-                        "start": {
-                          "column": 32,
-                          "line": 23,
-                        },
-                      },
-                      "text": "void",
-                    },
-                    "text": "(a: number, b: string) => void",
-                  },
-                ],
-                "text": "(a: number, b: string) => void",
-              },
-            ],
-            "filePath": "test.ts",
             "kind": "TypeReference",
-            "name": "Promise",
-            "position": {
-              "end": {
-                "column": 64,
-                "line": 23,
-              },
-              "start": {
-                "column": 7,
-                "line": 23,
-              },
-            },
             "text": "Promise<(a: number, b: string) => void>",
           },
         },
@@ -512,106 +247,7 @@ describe('resolveType', () => {
           },
           "text": "Promise<{ slug: string; filePath: string; }>",
           "type": {
-            "arguments": [
-              {
-                "filePath": "test.ts",
-                "kind": "TypeLiteral",
-                "members": [
-                  {
-                    "filePath": "test.ts",
-                    "isOptional": false,
-                    "isReadonly": false,
-                    "kind": "PropertySignature",
-                    "name": "slug",
-                    "position": {
-                      "end": {
-                        "column": 20,
-                        "line": 16,
-                      },
-                      "start": {
-                        "column": 9,
-                        "line": 16,
-                      },
-                    },
-                    "text": "string",
-                    "type": {
-                      "filePath": "test.ts",
-                      "kind": "String",
-                      "position": {
-                        "end": {
-                          "column": 20,
-                          "line": 16,
-                        },
-                        "start": {
-                          "column": 9,
-                          "line": 16,
-                        },
-                      },
-                      "text": "string",
-                      "value": undefined,
-                    },
-                  },
-                  {
-                    "filePath": "test.ts",
-                    "isOptional": false,
-                    "isReadonly": false,
-                    "kind": "PropertySignature",
-                    "name": "filePath",
-                    "position": {
-                      "end": {
-                        "column": 24,
-                        "line": 17,
-                      },
-                      "start": {
-                        "column": 9,
-                        "line": 17,
-                      },
-                    },
-                    "text": "string",
-                    "type": {
-                      "filePath": "test.ts",
-                      "kind": "String",
-                      "position": {
-                        "end": {
-                          "column": 24,
-                          "line": 17,
-                        },
-                        "start": {
-                          "column": 9,
-                          "line": 17,
-                        },
-                      },
-                      "text": "string",
-                      "value": undefined,
-                    },
-                  },
-                ],
-                "position": {
-                  "end": {
-                    "column": 8,
-                    "line": 18,
-                  },
-                  "start": {
-                    "column": 14,
-                    "line": 15,
-                  },
-                },
-                "text": "{ slug: string; filePath: string; }",
-              },
-            ],
-            "filePath": "test.ts",
             "kind": "TypeReference",
-            "name": "Promise",
-            "position": {
-              "end": {
-                "column": 47,
-                "line": 24,
-              },
-              "start": {
-                "column": 7,
-                "line": 24,
-              },
-            },
             "text": "Promise<{ slug: string; filePath: string; }>",
           },
         },
@@ -633,49 +269,16 @@ describe('resolveType', () => {
           },
           "text": "string | number",
           "type": {
-            "filePath": "test.ts",
             "kind": "UnionType",
-            "position": {
-              "end": {
-                "column": 30,
-                "line": 25,
-              },
-              "start": {
-                "column": 7,
-                "line": 25,
-              },
-            },
             "text": "string | number",
             "types": [
               {
-                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                 "kind": "String",
-                "position": {
-                  "end": {
-                    "column": 4402,
-                    "line": 4,
-                  },
-                  "start": {
-                    "column": 3482,
-                    "line": 4,
-                  },
-                },
                 "text": "string",
                 "value": undefined,
               },
               {
-                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                 "kind": "Number",
-                "position": {
-                  "end": {
-                    "column": 4943,
-                    "line": 4,
-                  },
-                  "start": {
-                    "column": 4755,
-                    "line": 4,
-                  },
-                },
                 "text": "number",
                 "value": undefined,
               },
@@ -700,141 +303,57 @@ describe('resolveType', () => {
           },
           "text": "string | ((a: string) => string | number) | { a: string; } | { b: number; c: (string | number)[]; }",
           "type": {
-            "filePath": "test.ts",
             "kind": "UnionType",
-            "position": {
-              "end": {
-                "column": 119,
-                "line": 26,
-              },
-              "start": {
-                "column": 7,
-                "line": 26,
-              },
-            },
-            "text": "string | ((a: string) => string | number) | { a: string; } | { b: number; c: (string | number)[]; }",
+            "text": "(a: string) => string | number | { a: string; } | { b: number; c: (string | number)[]; } | string",
             "types": [
               {
-                "filePath": "test.ts",
-                "kind": "Function",
-                "name": undefined,
-                "position": {
-                  "end": {
-                    "column": 52,
-                    "line": 26,
-                  },
-                  "start": {
-                    "column": 22,
-                    "line": 26,
-                  },
-                },
-                "signatures": [
+                "isAsync": false,
+                "kind": "FunctionType",
+                "parameters": [
                   {
+                    "description": undefined,
                     "filePath": "test.ts",
-                    "kind": "FunctionSignature",
-                    "parameters": [
-                      {
-                        "description": undefined,
-                        "filePath": "test.ts",
-                        "initializer": undefined,
-                        "isOptional": false,
-                        "kind": "Parameter",
-                        "name": "a",
-                        "position": {
-                          "end": {
-                            "column": 32,
-                            "line": 26,
-                          },
-                          "start": {
-                            "column": 23,
-                            "line": 26,
-                          },
-                        },
-                        "text": "string",
-                        "type": {
-                          "filePath": "test.ts",
-                          "kind": "String",
-                          "position": {
-                            "end": {
-                              "column": 32,
-                              "line": 26,
-                            },
-                            "start": {
-                              "column": 23,
-                              "line": 26,
-                            },
-                          },
-                          "text": "string",
-                          "value": undefined,
-                        },
-                      },
-                    ],
+                    "initializer": undefined,
+                    "isOptional": false,
+                    "kind": "Parameter",
+                    "name": "a",
                     "position": {
                       "end": {
-                        "column": 52,
+                        "column": 32,
                         "line": 26,
                       },
                       "start": {
-                        "column": 22,
+                        "column": 23,
                         "line": 26,
                       },
                     },
-                    "returnType": {
-                      "filePath": "test.ts",
-                      "kind": "UnionType",
-                      "position": {
-                        "end": {
-                          "column": 52,
-                          "line": 26,
-                        },
-                        "start": {
-                          "column": 22,
-                          "line": 26,
-                        },
-                      },
-                      "text": "string | number",
-                      "types": [
-                        {
-                          "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                          "kind": "String",
-                          "position": {
-                            "end": {
-                              "column": 4402,
-                              "line": 4,
-                            },
-                            "start": {
-                              "column": 3482,
-                              "line": 4,
-                            },
-                          },
-                          "text": "string",
-                          "value": undefined,
-                        },
-                        {
-                          "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                          "kind": "Number",
-                          "position": {
-                            "end": {
-                              "column": 4943,
-                              "line": 4,
-                            },
-                            "start": {
-                              "column": 4755,
-                              "line": 4,
-                            },
-                          },
-                          "text": "number",
-                          "value": undefined,
-                        },
-                      ],
+                    "text": "string",
+                    "type": {
+                      "kind": "String",
+                      "text": "string",
+                      "value": undefined,
                     },
-                    "text": "(a: string) => string | number",
                   },
                 ],
+                "returnType": {
+                  "kind": "UnionType",
+                  "text": "string | number",
+                  "types": [
+                    {
+                      "kind": "String",
+                      "text": "string",
+                      "value": undefined,
+                    },
+                    {
+                      "kind": "Number",
+                      "text": "number",
+                      "value": undefined,
+                    },
+                  ],
+                },
                 "text": "(a: string) => string | number",
               },
               {
-                "filePath": "test.ts",
                 "kind": "TypeLiteral",
                 "members": [
                   {
@@ -855,37 +374,15 @@ describe('resolveType', () => {
                     },
                     "text": "string",
                     "type": {
-                      "filePath": "test.ts",
                       "kind": "String",
-                      "position": {
-                        "end": {
-                          "column": 67,
-                          "line": 26,
-                        },
-                        "start": {
-                          "column": 58,
-                          "line": 26,
-                        },
-                      },
                       "text": "string",
                       "value": undefined,
                     },
                   },
                 ],
-                "position": {
-                  "end": {
-                    "column": 69,
-                    "line": 26,
-                  },
-                  "start": {
-                    "column": 56,
-                    "line": 26,
-                  },
-                },
                 "text": "{ a: string; }",
               },
               {
-                "filePath": "test.ts",
                 "kind": "TypeLiteral",
                 "members": [
                   {
@@ -906,18 +403,7 @@ describe('resolveType', () => {
                     },
                     "text": "number",
                     "type": {
-                      "filePath": "test.ts",
                       "kind": "Number",
-                      "position": {
-                        "end": {
-                          "column": 84,
-                          "line": 26,
-                        },
-                        "start": {
-                          "column": 74,
-                          "line": 26,
-                        },
-                      },
                       "text": "number",
                       "value": undefined,
                     },
@@ -940,96 +426,15 @@ describe('resolveType', () => {
                     },
                     "text": "(string | number)[]",
                     "type": {
-                      "element": {
-                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                        "kind": "UnionType",
-                        "position": {
-                          "end": {
-                            "column": 14214,
-                            "line": 4,
-                          },
-                          "start": {
-                            "column": 12443,
-                            "line": 4,
-                          },
-                        },
-                        "text": "string | number",
-                        "types": [
-                          {
-                            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                            "kind": "String",
-                            "position": {
-                              "end": {
-                                "column": 4402,
-                                "line": 4,
-                              },
-                              "start": {
-                                "column": 3482,
-                                "line": 4,
-                              },
-                            },
-                            "text": "string",
-                            "value": undefined,
-                          },
-                          {
-                            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                            "kind": "Number",
-                            "position": {
-                              "end": {
-                                "column": 4943,
-                                "line": 4,
-                              },
-                              "start": {
-                                "column": 4755,
-                                "line": 4,
-                              },
-                            },
-                            "text": "number",
-                            "value": undefined,
-                          },
-                        ],
-                      },
-                      "filePath": "test.ts",
-                      "kind": "Array",
-                      "position": {
-                        "end": {
-                          "column": 107,
-                          "line": 26,
-                        },
-                        "start": {
-                          "column": 85,
-                          "line": 26,
-                        },
-                      },
-                      "text": "Array<string | number>",
+                      "kind": "TypeReference",
+                      "text": "(string | number)[]",
                     },
                   },
                 ],
-                "position": {
-                  "end": {
-                    "column": 109,
-                    "line": 26,
-                  },
-                  "start": {
-                    "column": 72,
-                    "line": 26,
-                  },
-                },
                 "text": "{ b: number; c: (string | number)[]; }",
               },
               {
-                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                 "kind": "String",
-                "position": {
-                  "end": {
-                    "column": 4402,
-                    "line": 4,
-                  },
-                  "start": {
-                    "column": 3482,
-                    "line": 4,
-                  },
-                },
                 "text": "string",
                 "value": undefined,
               },
@@ -1054,7 +459,6 @@ describe('resolveType', () => {
           },
           "text": "{ a: string; } & { b: number; }",
           "type": {
-            "filePath": "test.ts",
             "kind": "TypeLiteral",
             "members": [
               {
@@ -1075,18 +479,7 @@ describe('resolveType', () => {
                 },
                 "text": "string",
                 "type": {
-                  "filePath": "test.ts",
                   "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 32,
-                      "line": 27,
-                    },
-                    "start": {
-                      "column": 23,
-                      "line": 27,
-                    },
-                  },
                   "text": "string",
                   "value": undefined,
                 },
@@ -1109,33 +502,12 @@ describe('resolveType', () => {
                 },
                 "text": "number",
                 "type": {
-                  "filePath": "test.ts",
                   "kind": "Number",
-                  "position": {
-                    "end": {
-                      "column": 48,
-                      "line": 27,
-                    },
-                    "start": {
-                      "column": 39,
-                      "line": 27,
-                    },
-                  },
                   "text": "number",
                   "value": undefined,
                 },
               },
             ],
-            "position": {
-              "end": {
-                "column": 51,
-                "line": 27,
-              },
-              "start": {
-                "column": 7,
-                "line": 27,
-              },
-            },
             "text": "{ a: string; } & { b: number; }",
           },
         },
@@ -1157,56 +529,14 @@ describe('resolveType', () => {
           },
           "text": "Promise<ExportedType> & { a: string; } & { b(): void; }",
           "type": {
-            "filePath": "test.ts",
             "kind": "IntersectionType",
-            "position": {
-              "end": {
-                "column": 85,
-                "line": 28,
-              },
-              "start": {
-                "column": 7,
-                "line": 28,
-              },
-            },
             "text": "Promise<ExportedType> & { a: string; } & { b(): void; }",
             "types": [
               {
-                "arguments": [
-                  {
-                    "filePath": "test.ts",
-                    "kind": "TypeReference",
-                    "name": "ExportedType",
-                    "position": {
-                      "end": {
-                        "column": 7,
-                        "line": 5,
-                      },
-                      "start": {
-                        "column": 5,
-                        "line": 2,
-                      },
-                    },
-                    "text": "ExportedType",
-                  },
-                ],
-                "filePath": "test.ts",
                 "kind": "TypeReference",
-                "name": "Promise",
-                "position": {
-                  "end": {
-                    "column": 85,
-                    "line": 28,
-                  },
-                  "start": {
-                    "column": 7,
-                    "line": 28,
-                  },
-                },
                 "text": "Promise<ExportedType>",
               },
               {
-                "filePath": "test.ts",
                 "kind": "TypeLiteral",
                 "members": [
                   {
@@ -1227,37 +557,15 @@ describe('resolveType', () => {
                     },
                     "text": "string",
                     "type": {
-                      "filePath": "test.ts",
                       "kind": "String",
-                      "position": {
-                        "end": {
-                          "column": 66,
-                          "line": 28,
-                        },
-                        "start": {
-                          "column": 57,
-                          "line": 28,
-                        },
-                      },
                       "text": "string",
                       "value": undefined,
                     },
                   },
                 ],
-                "position": {
-                  "end": {
-                    "column": 85,
-                    "line": 28,
-                  },
-                  "start": {
-                    "column": 7,
-                    "line": 28,
-                  },
-                },
                 "text": "{ a: string; }",
               },
               {
-                "filePath": "test.ts",
                 "kind": "TypeLiteral",
                 "members": [
                   {
@@ -1278,66 +586,17 @@ describe('resolveType', () => {
                     },
                     "text": "() => void",
                     "type": {
-                      "filePath": "test.ts",
-                      "kind": "Function",
-                      "name": "b",
-                      "position": {
-                        "end": {
-                          "column": 82,
-                          "line": 28,
-                        },
-                        "start": {
-                          "column": 73,
-                          "line": 28,
-                        },
+                      "isAsync": false,
+                      "kind": "FunctionType",
+                      "parameters": [],
+                      "returnType": {
+                        "kind": "Void",
+                        "text": "void",
                       },
-                      "signatures": [
-                        {
-                          "filePath": "test.ts",
-                          "kind": "FunctionSignature",
-                          "parameters": [],
-                          "position": {
-                            "end": {
-                              "column": 82,
-                              "line": 28,
-                            },
-                            "start": {
-                              "column": 73,
-                              "line": 28,
-                            },
-                          },
-                          "returnType": {
-                            "filePath": "test.ts",
-                            "kind": "Unknown",
-                            "position": {
-                              "end": {
-                                "column": 82,
-                                "line": 28,
-                              },
-                              "start": {
-                                "column": 73,
-                                "line": 28,
-                              },
-                            },
-                            "text": "void",
-                          },
-                          "text": "() => void",
-                        },
-                      ],
                       "text": "() => void",
                     },
                   },
                 ],
-                "position": {
-                  "end": {
-                    "column": 85,
-                    "line": 28,
-                  },
-                  "start": {
-                    "column": 7,
-                    "line": 28,
-                  },
-                },
                 "text": "{ b(): void; }",
               },
             ],
@@ -1367,18 +626,7 @@ describe('resolveType', () => {
                 "name": "a",
                 "text": "string",
                 "type": {
-                  "filePath": "test.ts",
                   "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 45,
-                      "line": 29,
-                    },
-                    "start": {
-                      "column": 7,
-                      "line": 29,
-                    },
-                  },
                   "text": "string",
                   "value": undefined,
                 },
@@ -1388,18 +636,7 @@ describe('resolveType', () => {
                 "name": "b",
                 "text": "number",
                 "type": {
-                  "filePath": "test.ts",
                   "kind": "Number",
-                  "position": {
-                    "end": {
-                      "column": 45,
-                      "line": 29,
-                    },
-                    "start": {
-                      "column": 7,
-                      "line": 29,
-                    },
-                  },
                   "text": "number",
                   "value": undefined,
                 },
@@ -1409,35 +646,13 @@ describe('resolveType', () => {
                 "name": "string",
                 "text": "string",
                 "type": {
-                  "filePath": "test.ts",
                   "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 45,
-                      "line": 29,
-                    },
-                    "start": {
-                      "column": 7,
-                      "line": 29,
-                    },
-                  },
                   "text": "string",
                   "value": undefined,
                 },
               },
             ],
-            "filePath": "test.ts",
             "kind": "Tuple",
-            "position": {
-              "end": {
-                "column": 45,
-                "line": 29,
-              },
-              "start": {
-                "column": 7,
-                "line": 29,
-              },
-            },
             "text": "[a: string, b: number, string]",
           },
         },
@@ -1459,18 +674,61 @@ describe('resolveType', () => {
           },
           "text": "FunctionType",
           "type": {
-            "filePath": "test.ts",
-            "kind": "TypeReference",
-            "name": "FunctionType",
-            "position": {
-              "end": {
-                "column": 30,
-                "line": 30,
+            "isAsync": true,
+            "kind": "FunctionType",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "test.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "param1",
+                "position": {
+                  "end": {
+                    "column": 47,
+                    "line": 12,
+                  },
+                  "start": {
+                    "column": 33,
+                    "line": 12,
+                  },
+                },
+                "text": "string",
+                "type": {
+                  "kind": "String",
+                  "text": "string",
+                  "value": undefined,
+                },
               },
-              "start": {
-                "column": 7,
-                "line": 30,
+              {
+                "description": undefined,
+                "filePath": "test.ts",
+                "initializer": undefined,
+                "isOptional": true,
+                "kind": "Parameter",
+                "name": "param2",
+                "position": {
+                  "end": {
+                    "column": 64,
+                    "line": 12,
+                  },
+                  "start": {
+                    "column": 49,
+                    "line": 12,
+                  },
+                },
+                "text": "number",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
               },
+            ],
+            "returnType": {
+              "kind": "TypeReference",
+              "text": "Promise<ExportedType>",
             },
             "text": "FunctionType",
           },
@@ -1505,7 +763,31 @@ describe('resolveType', () => {
     expect(processedProperties).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "UnionType",
+        "kind": "TypeAlias",
+        "name": "Variant",
+        "parameters": [
+          {
+            "constraint": {
+              "kind": "TypeReference",
+              "text": "Variant<T>",
+            },
+            "defaultType": undefined,
+            "filePath": "test.ts",
+            "kind": "TypeParameter",
+            "name": "T",
+            "position": {
+              "end": {
+                "column": 23,
+                "line": 14,
+              },
+              "start": {
+                "column": 22,
+                "line": 14,
+              },
+            },
+            "text": "T",
+          },
+        ],
         "position": {
           "end": {
             "column": 65,
@@ -1517,130 +799,74 @@ describe('resolveType', () => {
           },
         },
         "text": "Variant<T>",
-        "types": [
-          {
-            "filePath": "test.ts",
-            "kind": "IntersectionType",
-            "position": {
-              "end": {
-                "column": 24,
-                "line": 8,
-              },
-              "start": {
-                "column": 9,
-                "line": 6,
-              },
-            },
-            "text": "FillVariant",
-            "types": [
-              {
-                "filePath": "test.ts",
-                "kind": "TypeLiteral",
-                "members": [
-                  {
-                    "filePath": "test.ts",
-                    "isOptional": false,
-                    "isReadonly": false,
-                    "kind": "PropertySignature",
-                    "name": "backgroundColor",
-                    "position": {
-                      "end": {
-                        "column": 35,
-                        "line": 7,
-                      },
-                      "start": {
-                        "column": 11,
-                        "line": 7,
-                      },
+        "type": {
+          "kind": "UnionType",
+          "text": "FillVariant | OutlineVariant | string",
+          "types": [
+            {
+              "kind": "TypeLiteral",
+              "members": [
+                {
+                  "filePath": "test.ts",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "PropertySignature",
+                  "name": "backgroundColor",
+                  "position": {
+                    "end": {
+                      "column": 35,
+                      "line": 7,
                     },
+                    "start": {
+                      "column": 11,
+                      "line": 7,
+                    },
+                  },
+                  "text": "string",
+                  "type": {
+                    "kind": "String",
                     "text": "string",
-                    "type": {
-                      "filePath": "test.ts",
-                      "kind": "String",
-                      "position": {
-                        "end": {
-                          "column": 35,
-                          "line": 7,
-                        },
-                        "start": {
-                          "column": 11,
-                          "line": 7,
-                        },
-                      },
-                      "text": "string",
-                      "value": undefined,
-                    },
-                  },
-                ],
-                "position": {
-                  "end": {
-                    "column": 10,
-                    "line": 8,
-                  },
-                  "start": {
-                    "column": 28,
-                    "line": 6,
+                    "value": undefined,
                   },
                 },
-                "text": "{ backgroundColor: string; }",
-              },
-              {
-                "filePath": "test.ts",
-                "kind": "TypeReference",
-                "name": "BaseVariant",
-                "position": {
-                  "end": {
-                    "column": 10,
-                    "line": 4,
+                {
+                  "filePath": "test.ts",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "PropertySignature",
+                  "name": "color",
+                  "position": {
+                    "end": {
+                      "column": 25,
+                      "line": 3,
+                    },
+                    "start": {
+                      "column": 11,
+                      "line": 3,
+                    },
                   },
-                  "start": {
-                    "column": 9,
-                    "line": 2,
+                  "text": "string",
+                  "type": {
+                    "kind": "TypeReference",
+                    "text": "string",
                   },
                 },
-                "text": "BaseVariant",
-              },
-            ],
-          },
-          {
-            "filePath": "test.ts",
-            "kind": "IntersectionType",
-            "position": {
-              "end": {
-                "column": 24,
-                "line": 12,
-              },
-              "start": {
-                "column": 9,
-                "line": 10,
-              },
+              ],
+              "text": "FillVariant",
             },
-            "text": "OutlineVariant",
-            "types": [
-              {
-                "filePath": "test.ts",
-                "kind": "TypeLiteral",
-                "members": [
-                  {
-                    "filePath": "test.ts",
-                    "isOptional": false,
-                    "isReadonly": false,
-                    "kind": "PropertySignature",
-                    "name": "borderColor",
-                    "position": {
-                      "end": {
-                        "column": 31,
-                        "line": 11,
-                      },
-                      "start": {
-                        "column": 11,
-                        "line": 11,
-                      },
-                    },
-                    "text": "string",
-                    "type": {
+            {
+              "kind": "IntersectionType",
+              "text": "OutlineVariant",
+              "types": [
+                {
+                  "kind": "TypeLiteral",
+                  "members": [
+                    {
                       "filePath": "test.ts",
-                      "kind": "String",
+                      "isOptional": false,
+                      "isReadonly": false,
+                      "kind": "PropertySignature",
+                      "name": "borderColor",
                       "position": {
                         "end": {
                           "column": 31,
@@ -1652,57 +878,26 @@ describe('resolveType', () => {
                         },
                       },
                       "text": "string",
-                      "value": undefined,
+                      "type": {
+                        "kind": "TypeReference",
+                        "text": "string",
+                      },
                     },
-                  },
-                ],
-                "position": {
-                  "end": {
-                    "column": 10,
-                    "line": 12,
-                  },
-                  "start": {
-                    "column": 31,
-                    "line": 10,
-                  },
+                  ],
+                  "text": "{ borderColor: string; }",
                 },
-                "text": "{ borderColor: string; }",
-              },
-              {
-                "filePath": "test.ts",
-                "kind": "TypeReference",
-                "name": "BaseVariant",
-                "position": {
-                  "end": {
-                    "column": 10,
-                    "line": 4,
-                  },
-                  "start": {
-                    "column": 9,
-                    "line": 2,
-                  },
+                {
+                  "kind": "TypeReference",
+                  "text": "BaseVariant",
                 },
-                "text": "BaseVariant",
-              },
-            ],
-          },
-          {
-            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-            "kind": "String",
-            "position": {
-              "end": {
-                "column": 4402,
-                "line": 4,
-              },
-              "start": {
-                "column": 3482,
-                "line": 4,
-              },
+              ],
             },
-            "text": "string",
-            "value": undefined,
-          },
-        ],
+            {
+              "kind": "TypeReference",
+              "text": "string",
+            },
+          ],
+        },
       }
     `)
   })
@@ -1747,463 +942,9 @@ describe('resolveType', () => {
     expect(processedProperties).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "TypeLiteral",
-        "members": [
-          {
-            "description": "a string",
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "str",
-            "position": {
-              "end": {
-                "column": 23,
-                "line": 4,
-              },
-              "start": {
-                "column": 11,
-                "line": 4,
-              },
-            },
-            "tags": undefined,
-            "text": "string",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "String",
-              "position": {
-                "end": {
-                  "column": 23,
-                  "line": 4,
-                },
-                "start": {
-                  "column": 11,
-                  "line": 4,
-                },
-              },
-              "text": "string",
-              "value": undefined,
-            },
-          },
-          {
-            "description": "a number",
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "num",
-            "position": {
-              "end": {
-                "column": 23,
-                "line": 10,
-              },
-              "start": {
-                "column": 11,
-                "line": 10,
-              },
-            },
-            "tags": [
-              {
-                "name": "internal",
-                "text": undefined,
-              },
-            ],
-            "text": "number",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "Number",
-              "position": {
-                "end": {
-                  "column": 23,
-                  "line": 10,
-                },
-                "start": {
-                  "column": 11,
-                  "line": 10,
-                },
-              },
-              "text": "number",
-              "value": undefined,
-            },
-          },
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "bool",
-            "position": {
-              "end": {
-                "column": 25,
-                "line": 12,
-              },
-              "start": {
-                "column": 11,
-                "line": 12,
-              },
-            },
-            "text": "boolean",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "Boolean",
-              "position": {
-                "end": {
-                  "column": 25,
-                  "line": 12,
-                },
-                "start": {
-                  "column": 11,
-                  "line": 12,
-                },
-              },
-              "text": "boolean",
-            },
-          },
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "arr",
-            "position": {
-              "end": {
-                "column": 25,
-                "line": 14,
-              },
-              "start": {
-                "column": 11,
-                "line": 14,
-              },
-            },
-            "text": "string[]",
-            "type": {
-              "element": {
-                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                "kind": "String",
-                "position": {
-                  "end": {
-                    "column": 4402,
-                    "line": 4,
-                  },
-                  "start": {
-                    "column": 3482,
-                    "line": 4,
-                  },
-                },
-                "text": "string",
-                "value": undefined,
-              },
-              "filePath": "test.ts",
-              "kind": "Array",
-              "position": {
-                "end": {
-                  "column": 25,
-                  "line": 14,
-                },
-                "start": {
-                  "column": 11,
-                  "line": 14,
-                },
-              },
-              "text": "Array<string>",
-            },
-          },
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "obj",
-            "position": {
-              "end": {
-                "column": 50,
-                "line": 17,
-              },
-              "start": {
-                "column": 11,
-                "line": 17,
-              },
-            },
-            "text": "Record<string, { value: number; }>",
-            "type": {
-              "arguments": [
-                {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                  "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 4402,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 3482,
-                      "line": 4,
-                    },
-                  },
-                  "text": "string",
-                  "value": undefined,
-                },
-                {
-                  "filePath": "test.ts",
-                  "kind": "TypeLiteral",
-                  "members": [
-                    {
-                      "filePath": "test.ts",
-                      "isOptional": false,
-                      "isReadonly": false,
-                      "kind": "PropertySignature",
-                      "name": "value",
-                      "position": {
-                        "end": {
-                          "column": 46,
-                          "line": 17,
-                        },
-                        "start": {
-                          "column": 33,
-                          "line": 17,
-                        },
-                      },
-                      "text": "number",
-                      "type": {
-                        "filePath": "test.ts",
-                        "kind": "Number",
-                        "position": {
-                          "end": {
-                            "column": 46,
-                            "line": 17,
-                          },
-                          "start": {
-                            "column": 33,
-                            "line": 17,
-                          },
-                        },
-                        "text": "number",
-                        "value": undefined,
-                      },
-                    },
-                  ],
-                  "position": {
-                    "end": {
-                      "column": 48,
-                      "line": 17,
-                    },
-                    "start": {
-                      "column": 31,
-                      "line": 17,
-                    },
-                  },
-                  "text": "{ value: number; }",
-                },
-              ],
-              "filePath": "test.ts",
-              "kind": "TypeReference",
-              "name": "Record",
-              "position": {
-                "end": {
-                  "column": 50,
-                  "line": 17,
-                },
-                "start": {
-                  "column": 11,
-                  "line": 17,
-                },
-              },
-              "text": "Record<string, { value: number; }>",
-            },
-          },
-          {
-            "description": "Accepts a string",
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "func",
-            "position": {
-              "end": {
-                "column": 21,
-                "line": 23,
-              },
-              "start": {
-                "column": 11,
-                "line": 20,
-              },
-            },
-            "tags": undefined,
-            "text": "(a: string) => void",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "Function",
-              "name": undefined,
-              "position": {
-                "end": {
-                  "column": 21,
-                  "line": 23,
-                },
-                "start": {
-                  "column": 11,
-                  "line": 20,
-                },
-              },
-              "signatures": [
-                {
-                  "filePath": "test.ts",
-                  "kind": "FunctionSignature",
-                  "parameters": [
-                    {
-                      "description": "a string parameter",
-                      "filePath": "test.ts",
-                      "initializer": undefined,
-                      "isOptional": false,
-                      "kind": "Parameter",
-                      "name": "a",
-                      "position": {
-                        "end": {
-                          "column": 22,
-                          "line": 22,
-                        },
-                        "start": {
-                          "column": 13,
-                          "line": 22,
-                        },
-                      },
-                      "text": "string",
-                      "type": {
-                        "filePath": "test.ts",
-                        "kind": "String",
-                        "position": {
-                          "end": {
-                            "column": 22,
-                            "line": 22,
-                          },
-                          "start": {
-                            "column": 13,
-                            "line": 22,
-                          },
-                        },
-                        "text": "string",
-                        "value": undefined,
-                      },
-                    },
-                  ],
-                  "position": {
-                    "end": {
-                      "column": 20,
-                      "line": 23,
-                    },
-                    "start": {
-                      "column": 17,
-                      "line": 20,
-                    },
-                  },
-                  "returnType": {
-                    "filePath": "test.ts",
-                    "kind": "Unknown",
-                    "position": {
-                      "end": {
-                        "column": 20,
-                        "line": 23,
-                      },
-                      "start": {
-                        "column": 17,
-                        "line": 20,
-                      },
-                    },
-                    "text": "void",
-                  },
-                  "text": "(a: string) => void",
-                },
-              ],
-              "text": "(a: string) => void",
-            },
-          },
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "asyncFunc",
-            "position": {
-              "end": {
-                "column": 33,
-                "line": 25,
-              },
-              "start": {
-                "column": 11,
-                "line": 25,
-              },
-            },
-            "text": "() => Promise<void>",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "Function",
-              "name": "foo",
-              "position": {
-                "end": {
-                  "column": 33,
-                  "line": 25,
-                },
-                "start": {
-                  "column": 11,
-                  "line": 25,
-                },
-              },
-              "signatures": [
-                {
-                  "filePath": "test.ts",
-                  "isAsync": true,
-                  "isGenerator": false,
-                  "kind": "FunctionSignature",
-                  "parameters": [],
-                  "position": {
-                    "end": {
-                      "column": 32,
-                      "line": 28,
-                    },
-                    "start": {
-                      "column": 9,
-                      "line": 28,
-                    },
-                  },
-                  "returnType": {
-                    "arguments": [
-                      {
-                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                        "kind": "Unknown",
-                        "position": {
-                          "end": {
-                            "column": 15356,
-                            "line": 4,
-                          },
-                          "start": {
-                            "column": 15015,
-                            "line": 4,
-                          },
-                        },
-                        "text": "void",
-                      },
-                    ],
-                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                    "kind": "TypeReference",
-                    "name": "Promise",
-                    "position": {
-                      "end": {
-                        "column": 15356,
-                        "line": 4,
-                      },
-                      "start": {
-                        "column": 15015,
-                        "line": 4,
-                      },
-                    },
-                    "text": "Promise<void>",
-                  },
-                  "text": "function foo(): Promise<void>",
-                },
-              ],
-              "text": "() => Promise<void>",
-            },
-          },
-        ],
+        "kind": "TypeAlias",
+        "name": "Primitives",
+        "parameters": [],
         "position": {
           "end": {
             "column": 10,
@@ -2215,6 +956,215 @@ describe('resolveType', () => {
           },
         },
         "text": "Primitives",
+        "type": {
+          "kind": "TypeLiteral",
+          "members": [
+            {
+              "description": "a string",
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "str",
+              "position": {
+                "end": {
+                  "column": 23,
+                  "line": 4,
+                },
+                "start": {
+                  "column": 11,
+                  "line": 4,
+                },
+              },
+              "tags": undefined,
+              "text": "string",
+              "type": {
+                "kind": "String",
+                "text": "string",
+                "value": undefined,
+              },
+            },
+            {
+              "description": "a number",
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "num",
+              "position": {
+                "end": {
+                  "column": 23,
+                  "line": 10,
+                },
+                "start": {
+                  "column": 11,
+                  "line": 10,
+                },
+              },
+              "tags": [
+                {
+                  "name": "internal",
+                  "text": undefined,
+                },
+              ],
+              "text": "number",
+              "type": {
+                "kind": "Number",
+                "text": "number",
+                "value": undefined,
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "bool",
+              "position": {
+                "end": {
+                  "column": 25,
+                  "line": 12,
+                },
+                "start": {
+                  "column": 11,
+                  "line": 12,
+                },
+              },
+              "text": "boolean",
+              "type": {
+                "kind": "Boolean",
+                "text": "boolean",
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "arr",
+              "position": {
+                "end": {
+                  "column": 25,
+                  "line": 14,
+                },
+                "start": {
+                  "column": 11,
+                  "line": 14,
+                },
+              },
+              "text": "string[]",
+              "type": {
+                "kind": "TypeReference",
+                "text": "string[]",
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "obj",
+              "position": {
+                "end": {
+                  "column": 50,
+                  "line": 17,
+                },
+                "start": {
+                  "column": 11,
+                  "line": 17,
+                },
+              },
+              "text": "Record<string, { value: number; }>",
+              "type": {
+                "kind": "TypeReference",
+                "text": "Record<string, { value: number; }>",
+              },
+            },
+            {
+              "description": "Accepts a string",
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "func",
+              "position": {
+                "end": {
+                  "column": 21,
+                  "line": 23,
+                },
+                "start": {
+                  "column": 11,
+                  "line": 20,
+                },
+              },
+              "tags": undefined,
+              "text": "(a: string) => void",
+              "type": {
+                "isAsync": false,
+                "kind": "FunctionType",
+                "parameters": [
+                  {
+                    "description": "a string parameter",
+                    "filePath": "test.ts",
+                    "initializer": undefined,
+                    "isOptional": false,
+                    "kind": "Parameter",
+                    "name": "a",
+                    "position": {
+                      "end": {
+                        "column": 22,
+                        "line": 22,
+                      },
+                      "start": {
+                        "column": 13,
+                        "line": 22,
+                      },
+                    },
+                    "text": "string",
+                    "type": {
+                      "kind": "TypeReference",
+                      "text": "string",
+                    },
+                  },
+                ],
+                "returnType": {
+                  "kind": "Void",
+                  "text": "void",
+                },
+                "text": "(a: string) => void",
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "asyncFunc",
+              "position": {
+                "end": {
+                  "column": 33,
+                  "line": 25,
+                },
+                "start": {
+                  "column": 11,
+                  "line": 25,
+                },
+              },
+              "text": "() => Promise<void>",
+              "type": {
+                "isAsync": true,
+                "kind": "FunctionType",
+                "parameters": [],
+                "returnType": {
+                  "kind": "TypeReference",
+                  "text": "Promise<void>",
+                },
+                "text": "() => Promise<void>",
+              },
+            },
+          ],
+          "text": "Primitives",
+        },
       }
     `)
   })
@@ -2252,7 +1202,7 @@ describe('resolveType', () => {
           {
             "filePath": "test.ts",
             "isOptional": false,
-            "isReadonly": true,
+            "isReadonly": false,
             "kind": "PropertySignature",
             "name": "e",
             "position": {
@@ -2267,7 +1217,6 @@ describe('resolveType', () => {
             },
             "text": "{ f: number; }",
             "type": {
-              "filePath": "test.ts",
               "kind": "TypeLiteral",
               "members": [
                 {
@@ -2288,40 +1237,19 @@ describe('resolveType', () => {
                   },
                   "text": "number",
                   "type": {
-                    "filePath": "test.ts",
                     "kind": "Number",
-                    "position": {
-                      "end": {
-                        "column": 17,
-                        "line": 10,
-                      },
-                      "start": {
-                        "column": 13,
-                        "line": 10,
-                      },
-                    },
                     "text": "number",
                     "value": undefined,
                   },
                 },
               ],
-              "position": {
-                "end": {
-                  "column": 12,
-                  "line": 11,
-                },
-                "start": {
-                  "column": 11,
-                  "line": 9,
-                },
-              },
               "text": "{ f: number; }",
             },
           },
           {
             "filePath": "test.ts",
             "isOptional": false,
-            "isReadonly": true,
+            "isReadonly": false,
             "kind": "PropertySignature",
             "name": "g",
             "position": {
@@ -2336,18 +1264,7 @@ describe('resolveType', () => {
             },
             "text": "string",
             "type": {
-              "filePath": "test.ts",
               "kind": "String",
-              "position": {
-                "end": {
-                  "column": 22,
-                  "line": 12,
-                },
-                "start": {
-                  "column": 11,
-                  "line": 12,
-                },
-              },
               "text": "string",
               "value": undefined,
             },
@@ -2355,7 +1272,7 @@ describe('resolveType', () => {
           {
             "filePath": "test.ts",
             "isOptional": false,
-            "isReadonly": true,
+            "isReadonly": false,
             "kind": "PropertySignature",
             "name": "b",
             "position": {
@@ -2370,18 +1287,7 @@ describe('resolveType', () => {
             },
             "text": "1",
             "type": {
-              "filePath": "test.ts",
               "kind": "Number",
-              "position": {
-                "end": {
-                  "column": 15,
-                  "line": 3,
-                },
-                "start": {
-                  "column": 11,
-                  "line": 3,
-                },
-              },
               "text": "1",
               "value": 1,
             },
@@ -2389,7 +1295,7 @@ describe('resolveType', () => {
           {
             "filePath": "test.ts",
             "isOptional": false,
-            "isReadonly": true,
+            "isReadonly": false,
             "kind": "PropertySignature",
             "name": "c",
             "position": {
@@ -2404,18 +1310,7 @@ describe('resolveType', () => {
             },
             "text": ""string"",
             "type": {
-              "filePath": "test.ts",
               "kind": "String",
-              "position": {
-                "end": {
-                  "column": 22,
-                  "line": 4,
-                },
-                "start": {
-                  "column": 11,
-                  "line": 4,
-                },
-              },
               "text": ""string"",
               "value": "string",
             },
@@ -2453,92 +1348,9 @@ describe('resolveType', () => {
     expect(processedProperties).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "TypeLiteral",
-        "members": [
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "id",
-            "position": {
-              "end": {
-                "column": 22,
-                "line": 3,
-              },
-              "start": {
-                "column": 11,
-                "line": 3,
-              },
-            },
-            "text": "string",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "String",
-              "position": {
-                "end": {
-                  "column": 22,
-                  "line": 3,
-                },
-                "start": {
-                  "column": 11,
-                  "line": 3,
-                },
-              },
-              "text": "string",
-              "value": undefined,
-            },
-          },
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "children",
-            "position": {
-              "end": {
-                "column": 42,
-                "line": 4,
-              },
-              "start": {
-                "column": 11,
-                "line": 4,
-              },
-            },
-            "text": "SelfReferencedType[]",
-            "type": {
-              "element": {
-                "filePath": "test.ts",
-                "kind": "TypeReference",
-                "name": "SelfReferencedType",
-                "position": {
-                  "end": {
-                    "column": 10,
-                    "line": 5,
-                  },
-                  "start": {
-                    "column": 9,
-                    "line": 2,
-                  },
-                },
-                "text": "SelfReferencedType",
-              },
-              "filePath": "test.ts",
-              "kind": "Array",
-              "position": {
-                "end": {
-                  "column": 42,
-                  "line": 4,
-                },
-                "start": {
-                  "column": 11,
-                  "line": 4,
-                },
-              },
-              "text": "Array<SelfReferencedType>",
-            },
-          },
-        ],
+        "kind": "TypeAlias",
+        "name": "SelfReferencedType",
+        "parameters": [],
         "position": {
           "end": {
             "column": 10,
@@ -2550,6 +1362,57 @@ describe('resolveType', () => {
           },
         },
         "text": "SelfReferencedType",
+        "type": {
+          "kind": "TypeLiteral",
+          "members": [
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "id",
+              "position": {
+                "end": {
+                  "column": 22,
+                  "line": 3,
+                },
+                "start": {
+                  "column": 11,
+                  "line": 3,
+                },
+              },
+              "text": "string",
+              "type": {
+                "kind": "String",
+                "text": "string",
+                "value": undefined,
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "children",
+              "position": {
+                "end": {
+                  "column": 42,
+                  "line": 4,
+                },
+                "start": {
+                  "column": 11,
+                  "line": 4,
+                },
+              },
+              "text": "SelfReferencedType[]",
+              "type": {
+                "kind": "TypeReference",
+                "text": "SelfReferencedType[]",
+              },
+            },
+          ],
+          "text": "SelfReferencedType",
+        },
       }
     `)
   })
@@ -2572,92 +1435,9 @@ describe('resolveType', () => {
     expect(processedProperties).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "TypeLiteral",
-        "members": [
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "title",
-            "position": {
-              "end": {
-                "column": 17,
-                "line": 2,
-              },
-              "start": {
-                "column": 3,
-                "line": 2,
-              },
-            },
-            "text": "string",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "String",
-              "position": {
-                "end": {
-                  "column": 17,
-                  "line": 2,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 2,
-                },
-              },
-              "text": "string",
-              "value": undefined,
-            },
-          },
-          {
-            "filePath": "test.ts",
-            "isOptional": true,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "children",
-            "position": {
-              "end": {
-                "column": 26,
-                "line": 3,
-              },
-              "start": {
-                "column": 3,
-                "line": 3,
-              },
-            },
-            "text": "DocChildren",
-            "type": {
-              "element": {
-                "filePath": "test.ts",
-                "kind": "TypeReference",
-                "name": "DocNode",
-                "position": {
-                  "end": {
-                    "column": 2,
-                    "line": 4,
-                  },
-                  "start": {
-                    "column": 1,
-                    "line": 1,
-                  },
-                },
-                "text": "DocNode",
-              },
-              "filePath": "test.ts",
-              "kind": "Array",
-              "position": {
-                "end": {
-                  "column": 26,
-                  "line": 3,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 3,
-                },
-              },
-              "text": "DocChildren",
-            },
-          },
-        ],
+        "kind": "TypeAlias",
+        "name": "DocNode",
+        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -2669,6 +1449,57 @@ describe('resolveType', () => {
           },
         },
         "text": "DocNode",
+        "type": {
+          "kind": "TypeLiteral",
+          "members": [
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "title",
+              "position": {
+                "end": {
+                  "column": 17,
+                  "line": 2,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 2,
+                },
+              },
+              "text": "string",
+              "type": {
+                "kind": "String",
+                "text": "string",
+                "value": undefined,
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": true,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "children",
+              "position": {
+                "end": {
+                  "column": 26,
+                  "line": 3,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 3,
+                },
+              },
+              "text": "DocChildren",
+              "type": {
+                "kind": "TypeReference",
+                "text": "DocChildren",
+              },
+            },
+          ],
+          "text": "DocNode",
+        },
       }
     `)
   })
@@ -2691,77 +1522,9 @@ describe('resolveType', () => {
     expect(processedProperties).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "TypeLiteral",
-        "members": [
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "title",
-            "position": {
-              "end": {
-                "column": 17,
-                "line": 2,
-              },
-              "start": {
-                "column": 3,
-                "line": 2,
-              },
-            },
-            "text": "string",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "String",
-              "position": {
-                "end": {
-                  "column": 17,
-                  "line": 2,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 2,
-                },
-              },
-              "text": "string",
-              "value": undefined,
-            },
-          },
-          {
-            "filePath": "test.ts",
-            "isOptional": true,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "children",
-            "position": {
-              "end": {
-                "column": 26,
-                "line": 3,
-              },
-              "start": {
-                "column": 3,
-                "line": 3,
-              },
-            },
-            "text": "DocChildren",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "TypeReference",
-              "name": "DocChildren",
-              "position": {
-                "end": {
-                  "column": 26,
-                  "line": 3,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 3,
-                },
-              },
-              "text": "DocChildren",
-            },
-          },
-        ],
+        "kind": "TypeAlias",
+        "name": "DocNode",
+        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -2773,6 +1536,57 @@ describe('resolveType', () => {
           },
         },
         "text": "DocNode",
+        "type": {
+          "kind": "TypeLiteral",
+          "members": [
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "title",
+              "position": {
+                "end": {
+                  "column": 17,
+                  "line": 2,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 2,
+                },
+              },
+              "text": "string",
+              "type": {
+                "kind": "String",
+                "text": "string",
+                "value": undefined,
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": true,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "children",
+              "position": {
+                "end": {
+                  "column": 26,
+                  "line": 3,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 3,
+                },
+              },
+              "text": "DocChildren",
+              "type": {
+                "kind": "TypeReference",
+                "text": "DocChildren",
+              },
+            },
+          ],
+          "text": "DocNode",
+        },
       }
     `)
   })
@@ -2831,7 +1645,6 @@ describe('resolveType', () => {
         },
         "text": "FileSystemSource<Exports>",
         "type": {
-          "filePath": "test.ts",
           "kind": "TypeLiteral",
           "members": [
             {
@@ -2852,147 +1665,35 @@ describe('resolveType', () => {
               },
               "text": "Collection<Exports>",
               "type": {
-                "constructor": undefined,
-                "filePath": "test.ts",
-                "kind": "Class",
-                "name": "Collection",
-                "position": {
-                  "end": {
-                    "column": 35,
-                    "line": 2,
-                  },
-                  "start": {
-                    "column": 3,
-                    "line": 2,
-                  },
-                },
-                "properties": [
+                "kind": "TypeLiteral",
+                "members": [
                   {
-                    "initializer": {
-                      "text": "undefined",
-                      "value": "undefined",
-                    },
+                    "filePath": "test.ts",
                     "isOptional": true,
                     "isReadonly": false,
-                    "kind": "ClassProperty",
+                    "kind": "PropertySignature",
                     "name": "sources",
-                    "scope": undefined,
-                    "text": "Array<FileSystemSource<Exports>>",
-                    "type": {
-                      "element": {
-                        "filePath": "test.ts",
-                        "kind": "TypeLiteral",
-                        "members": [
-                          {
-                            "filePath": "test.ts",
-                            "isOptional": true,
-                            "isReadonly": false,
-                            "kind": "PropertySignature",
-                            "name": "collection",
-                            "position": {
-                              "end": {
-                                "column": 35,
-                                "line": 2,
-                              },
-                              "start": {
-                                "column": 3,
-                                "line": 2,
-                              },
-                            },
-                            "text": "Collection<Exports>",
-                            "type": {
-                              "constructor": undefined,
-                              "filePath": "test.ts",
-                              "kind": "Class",
-                              "name": "Collection",
-                              "position": {
-                                "end": {
-                                  "column": 35,
-                                  "line": 2,
-                                },
-                                "start": {
-                                  "column": 3,
-                                  "line": 2,
-                                },
-                              },
-                              "properties": [
-                                {
-                                  "initializer": {
-                                    "text": "undefined",
-                                    "value": "undefined",
-                                  },
-                                  "isOptional": true,
-                                  "isReadonly": false,
-                                  "kind": "ClassProperty",
-                                  "name": "sources",
-                                  "scope": undefined,
-                                  "text": "Array<FileSystemSource<Exports>>",
-                                  "type": {
-                                    "filePath": "test.ts",
-                                    "kind": "TypeReference",
-                                    "name": "Array",
-                                    "position": {
-                                      "end": {
-                                        "column": 52,
-                                        "line": 6,
-                                      },
-                                      "start": {
-                                        "column": 3,
-                                        "line": 6,
-                                      },
-                                    },
-                                    "text": "Array<FileSystemSource<Exports>>",
-                                  },
-                                  "visibility": undefined,
-                                },
-                              ],
-                              "text": "Collection<Exports>",
-                            },
-                          },
-                        ],
-                        "position": {
-                          "end": {
-                            "column": 2,
-                            "line": 3,
-                          },
-                          "start": {
-                            "column": 1,
-                            "line": 1,
-                          },
-                        },
-                        "text": "FileSystemSource<Exports>",
+                    "position": {
+                      "end": {
+                        "column": 52,
+                        "line": 6,
                       },
-                      "filePath": "test.ts",
-                      "kind": "Array",
-                      "position": {
-                        "end": {
-                          "column": 52,
-                          "line": 6,
-                        },
-                        "start": {
-                          "column": 3,
-                          "line": 6,
-                        },
+                      "start": {
+                        "column": 3,
+                        "line": 6,
                       },
-                      "text": "Array<FileSystemSource<Exports>>",
                     },
-                    "visibility": undefined,
+                    "text": "FileSystemSource<Exports>[]",
+                    "type": {
+                      "kind": "TypeReference",
+                      "text": "FileSystemSource<Exports>[]",
+                    },
                   },
                 ],
                 "text": "Collection<Exports>",
               },
             },
           ],
-          "position": {
-            "end": {
-              "column": 2,
-              "line": 3,
-            },
-            "start": {
-              "column": 1,
-              "line": 1,
-            },
-          },
           "text": "FileSystemSource<Exports>",
         },
       }
@@ -3024,43 +1725,9 @@ describe('resolveType', () => {
     expect(processedProperties).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "TypeLiteral",
-        "members": [
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "readFile",
-            "position": {
-              "end": {
-                "column": 54,
-                "line": 4,
-              },
-              "start": {
-                "column": 29,
-                "line": 4,
-              },
-            },
-            "text": "(path: string, callback: (err: Error, data: Buffer<ArrayBufferLike>) => void) => void",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "TypeReference",
-              "name": "readFile",
-              "position": {
-                "end": {
-                  "column": 54,
-                  "line": 4,
-                },
-                "start": {
-                  "column": 29,
-                  "line": 4,
-                },
-              },
-              "text": "(path: string, callback: (err: Error | null, data: Buffer) => void) => void",
-            },
-          },
-        ],
+        "kind": "TypeAlias",
+        "name": "FileSystem",
+        "parameters": [],
         "position": {
           "end": {
             "column": 57,
@@ -3072,6 +1739,34 @@ describe('resolveType', () => {
           },
         },
         "text": "FileSystem",
+        "type": {
+          "kind": "TypeLiteral",
+          "members": [
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "readFile",
+              "position": {
+                "end": {
+                  "column": 54,
+                  "line": 4,
+                },
+                "start": {
+                  "column": 29,
+                  "line": 4,
+                },
+              },
+              "text": "(path: string, callback: (err: Error, data: Buffer<ArrayBufferLike>) => void) => void",
+              "type": {
+                "kind": "TypeReference",
+                "text": "(path: string, callback: (err: Error, data: Buffer<ArrayBufferLike>) => void) => void",
+              },
+            },
+          ],
+          "text": "FileSystem",
+        },
       }
     `)
   })
@@ -3097,96 +1792,9 @@ describe('resolveType', () => {
     expect(processedProperties).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "TypeLiteral",
-        "members": [
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "value",
-            "position": {
-              "end": {
-                "column": 22,
-                "line": 6,
-              },
-              "start": {
-                "column": 3,
-                "line": 6,
-              },
-            },
-            "text": "Promise<Foo>",
-            "type": {
-              "arguments": [
-                {
-                  "filePath": "test.ts",
-                  "kind": "TypeLiteral",
-                  "members": [
-                    {
-                      "filePath": "test.ts",
-                      "isOptional": false,
-                      "isReadonly": false,
-                      "kind": "PropertySignature",
-                      "name": "bar",
-                      "position": {
-                        "end": {
-                          "column": 13,
-                          "line": 2,
-                        },
-                        "start": {
-                          "column": 3,
-                          "line": 2,
-                        },
-                      },
-                      "text": ""baz"",
-                      "type": {
-                        "filePath": "test.ts",
-                        "kind": "String",
-                        "position": {
-                          "end": {
-                            "column": 13,
-                            "line": 2,
-                          },
-                          "start": {
-                            "column": 3,
-                            "line": 2,
-                          },
-                        },
-                        "text": ""baz"",
-                        "value": "baz",
-                      },
-                    },
-                  ],
-                  "position": {
-                    "end": {
-                      "column": 2,
-                      "line": 3,
-                    },
-                    "start": {
-                      "column": 1,
-                      "line": 1,
-                    },
-                  },
-                  "text": "Foo",
-                },
-              ],
-              "filePath": "test.ts",
-              "kind": "TypeReference",
-              "name": "Promise",
-              "position": {
-                "end": {
-                  "column": 22,
-                  "line": 6,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 6,
-                },
-              },
-              "text": "Promise<Foo>",
-            },
-          },
-        ],
+        "kind": "TypeAlias",
+        "name": "AsyncString",
+        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -3198,6 +1806,34 @@ describe('resolveType', () => {
           },
         },
         "text": "AsyncString",
+        "type": {
+          "kind": "TypeLiteral",
+          "members": [
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "value",
+              "position": {
+                "end": {
+                  "column": 22,
+                  "line": 6,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 6,
+                },
+              },
+              "text": "Promise<Foo>",
+              "type": {
+                "kind": "TypeReference",
+                "text": "Promise<Foo>",
+              },
+            },
+          ],
+          "text": "AsyncString",
+        },
       }
     `)
   })
@@ -3240,7 +1876,9 @@ describe('resolveType', () => {
     expect(processedProperties).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "UnionType",
+        "kind": "TypeAlias",
+        "name": "ExportedType",
+        "parameters": [],
         "position": {
           "end": {
             "column": 78,
@@ -3251,51 +1889,20 @@ describe('resolveType', () => {
             "line": 24,
           },
         },
-        "text": "UnwrapPromisesInMap<Omit<A, "title">> | UnwrapPromisesInMap<Omit<B, "title">>",
-        "types": [
-          {
-            "filePath": "test.ts",
-            "kind": "TypeLiteral",
-            "members": [
-              {
-                "filePath": "test.ts",
-                "isOptional": false,
-                "isReadonly": false,
-                "kind": "PropertySignature",
-                "name": "a",
-                "position": {
-                  "end": {
-                    "column": 21,
-                    "line": 11,
-                  },
-                  "start": {
-                    "column": 3,
-                    "line": 11,
-                  },
-                },
-                "text": "Promise<number>",
-                "type": {
-                  "arguments": [
-                    {
-                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                      "kind": "Number",
-                      "position": {
-                        "end": {
-                          "column": 4943,
-                          "line": 4,
-                        },
-                        "start": {
-                          "column": 4755,
-                          "line": 4,
-                        },
-                      },
-                      "text": "number",
-                      "value": undefined,
-                    },
-                  ],
+        "text": "ExportedType",
+        "type": {
+          "kind": "UnionType",
+          "text": "UnwrapPromisesInMap<Omit<A, "title">> | UnwrapPromisesInMap<Omit<B, "title">>",
+          "types": [
+            {
+              "kind": "TypeLiteral",
+              "members": [
+                {
                   "filePath": "test.ts",
-                  "kind": "TypeReference",
-                  "name": "Promise",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "PropertySignature",
+                  "name": "a",
                   "position": {
                     "end": {
                       "column": 21,
@@ -3307,28 +1914,17 @@ describe('resolveType', () => {
                     },
                   },
                   "text": "Promise<number>",
-                },
-              },
-              {
-                "filePath": "test.ts",
-                "isOptional": false,
-                "isReadonly": false,
-                "kind": "PropertySignature",
-                "name": "url",
-                "position": {
-                  "end": {
-                    "column": 14,
-                    "line": 6,
-                  },
-                  "start": {
-                    "column": 3,
-                    "line": 6,
+                  "type": {
+                    "kind": "TypeReference",
+                    "text": "Promise<number>",
                   },
                 },
-                "text": "string",
-                "type": {
+                {
                   "filePath": "test.ts",
-                  "kind": "String",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "PropertySignature",
+                  "name": "url",
                   "position": {
                     "end": {
                       "column": 14,
@@ -3340,46 +1936,24 @@ describe('resolveType', () => {
                     },
                   },
                   "text": "string",
-                  "value": undefined,
+                  "type": {
+                    "kind": "String",
+                    "text": "string",
+                    "value": undefined,
+                  },
                 },
-              },
-            ],
-            "position": {
-              "end": {
-                "column": 2,
-                "line": 22,
-              },
-              "start": {
-                "column": 1,
-                "line": 20,
-              },
+              ],
+              "text": "UnwrapPromisesInMap<Omit<A, "title">>",
             },
-            "text": "UnwrapPromisesInMap<Omit<A, "title">>",
-          },
-          {
-            "filePath": "test.ts",
-            "kind": "TypeLiteral",
-            "members": [
-              {
-                "filePath": "test.ts",
-                "isOptional": false,
-                "isReadonly": false,
-                "kind": "PropertySignature",
-                "name": "url",
-                "position": {
-                  "end": {
-                    "column": 14,
-                    "line": 6,
-                  },
-                  "start": {
-                    "column": 3,
-                    "line": 6,
-                  },
-                },
-                "text": "string",
-                "type": {
+            {
+              "kind": "TypeLiteral",
+              "members": [
+                {
                   "filePath": "test.ts",
-                  "kind": "String",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "PropertySignature",
+                  "name": "url",
                   "position": {
                     "end": {
                       "column": 14,
@@ -3391,29 +1965,17 @@ describe('resolveType', () => {
                     },
                   },
                   "text": "string",
-                  "value": undefined,
-                },
-              },
-              {
-                "filePath": "test.ts",
-                "isOptional": false,
-                "isReadonly": false,
-                "kind": "PropertySignature",
-                "name": "b",
-                "position": {
-                  "end": {
-                    "column": 12,
-                    "line": 15,
-                  },
-                  "start": {
-                    "column": 3,
-                    "line": 15,
+                  "type": {
+                    "kind": "TypeReference",
+                    "text": "string",
                   },
                 },
-                "text": "number",
-                "type": {
+                {
                   "filePath": "test.ts",
-                  "kind": "Number",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "PropertySignature",
+                  "name": "b",
                   "position": {
                     "end": {
                       "column": 12,
@@ -3425,23 +1987,17 @@ describe('resolveType', () => {
                     },
                   },
                   "text": "number",
-                  "value": undefined,
+                  "type": {
+                    "kind": "Number",
+                    "text": "number",
+                    "value": undefined,
+                  },
                 },
-              },
-            ],
-            "position": {
-              "end": {
-                "column": 2,
-                "line": 22,
-              },
-              "start": {
-                "column": 1,
-                "line": 20,
-              },
+              ],
+              "text": "UnwrapPromisesInMap<Omit<B, "title">>",
             },
-            "text": "UnwrapPromisesInMap<Omit<B, "title">>",
-          },
-        ],
+          ],
+        },
       }
     `)
   })
@@ -3474,43 +2030,9 @@ describe('resolveType', () => {
     expect(types).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "TypeLiteral",
-        "members": [
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "color",
-            "position": {
-              "end": {
-                "column": 15,
-                "line": 4,
-              },
-              "start": {
-                "column": 3,
-                "line": 4,
-              },
-            },
-            "text": "Color",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "TypeReference",
-              "name": "Color",
-              "position": {
-                "end": {
-                  "column": 15,
-                  "line": 4,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 4,
-                },
-              },
-              "text": "Color",
-            },
-          },
-        ],
+        "kind": "TypeAlias",
+        "name": "TextProps",
+        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -3522,6 +2044,51 @@ describe('resolveType', () => {
           },
         },
         "text": "TextProps",
+        "type": {
+          "kind": "TypeLiteral",
+          "members": [
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "color",
+              "position": {
+                "end": {
+                  "column": 15,
+                  "line": 4,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 4,
+                },
+              },
+              "text": "Color",
+              "type": {
+                "kind": "UnionType",
+                "text": ""red" | "blue" | "green"",
+                "types": [
+                  {
+                    "kind": "String",
+                    "text": ""red"",
+                    "value": "red",
+                  },
+                  {
+                    "kind": "String",
+                    "text": ""blue"",
+                    "value": "blue",
+                  },
+                  {
+                    "kind": "String",
+                    "text": ""green"",
+                    "value": "green",
+                  },
+                ],
+              },
+            },
+          ],
+          "text": "TextProps",
+        },
       }
     `)
   })
@@ -3561,110 +2128,9 @@ describe('resolveType', () => {
     expect(types).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "TypeLiteral",
-        "members": [
-          {
-            "filePath": "test.ts",
-            "isOptional": true,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "fontWeight",
-            "position": {
-              "end": {
-                "column": 31,
-                "line": 12,
-              },
-              "start": {
-                "column": 3,
-                "line": 12,
-              },
-            },
-            "text": "string | number",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "UnionType",
-              "position": {
-                "end": {
-                  "column": 31,
-                  "line": 12,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 12,
-                },
-              },
-              "text": "string | number",
-              "types": [
-                {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                  "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 4402,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 3482,
-                      "line": 4,
-                    },
-                  },
-                  "text": "string",
-                  "value": undefined,
-                },
-                {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                  "kind": "Number",
-                  "position": {
-                    "end": {
-                      "column": 4943,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 4755,
-                      "line": 4,
-                    },
-                  },
-                  "text": "number",
-                  "value": undefined,
-                },
-              ],
-            },
-          },
-          {
-            "filePath": "test.ts",
-            "isOptional": true,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "color",
-            "position": {
-              "end": {
-                "column": 38,
-                "line": 13,
-              },
-              "start": {
-                "column": 1,
-                "line": 11,
-              },
-            },
-            "text": "Color",
-            "type": {
-              "filePath": "node_modules/@types/library/index.d.ts",
-              "kind": "TypeReference",
-              "name": "Color",
-              "position": {
-                "end": {
-                  "column": 46,
-                  "line": 1,
-                },
-                "start": {
-                  "column": 1,
-                  "line": 1,
-                },
-              },
-              "text": "Color",
-            },
-          },
-        ],
+        "kind": "TypeAlias",
+        "name": "TextProps",
+        "parameters": [],
         "position": {
           "end": {
             "column": 38,
@@ -3676,6 +2142,85 @@ describe('resolveType', () => {
           },
         },
         "text": "TextProps",
+        "type": {
+          "kind": "TypeLiteral",
+          "members": [
+            {
+              "filePath": "test.ts",
+              "isOptional": true,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "fontWeight",
+              "position": {
+                "end": {
+                  "column": 31,
+                  "line": 12,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 12,
+                },
+              },
+              "text": "string | number",
+              "type": {
+                "kind": "UnionType",
+                "text": "string | number",
+                "types": [
+                  {
+                    "kind": "String",
+                    "text": "string",
+                    "value": undefined,
+                  },
+                  {
+                    "kind": "Number",
+                    "text": "number",
+                    "value": undefined,
+                  },
+                ],
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": true,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "color",
+              "position": {
+                "end": {
+                  "column": 2,
+                  "line": 5,
+                },
+                "start": {
+                  "column": 28,
+                  "line": 3,
+                },
+              },
+              "text": "Color",
+              "type": {
+                "kind": "UnionType",
+                "text": ""red" | "blue" | "green"",
+                "types": [
+                  {
+                    "kind": "String",
+                    "text": ""red"",
+                    "value": "red",
+                  },
+                  {
+                    "kind": "String",
+                    "text": ""blue"",
+                    "value": "blue",
+                  },
+                  {
+                    "kind": "String",
+                    "text": ""green"",
+                    "value": "green",
+                  },
+                ],
+              },
+            },
+          ],
+          "text": "TextProps",
+        },
       }
     `)
   })
@@ -3726,125 +2271,26 @@ describe('resolveType', () => {
     expect(types).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "TypeLiteral",
-        "members": [
+        "kind": "TypeAlias",
+        "name": "ModuleData",
+        "parameters": [
           {
+            "constraint": undefined,
+            "defaultType": undefined,
             "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "exportedTypes",
+            "kind": "TypeParameter",
+            "name": "Type",
             "position": {
               "end": {
-                "column": 37,
-                "line": 6,
+                "column": 66,
+                "line": 5,
               },
               "start": {
-                "column": 3,
-                "line": 6,
+                "column": 17,
+                "line": 5,
               },
             },
-            "text": "ExportedType[]",
-            "type": {
-              "element": {
-                "filePath": "test.ts",
-                "kind": "IntersectionType",
-                "position": {
-                  "end": {
-                    "column": 48,
-                    "line": 3,
-                  },
-                  "start": {
-                    "column": 1,
-                    "line": 3,
-                  },
-                },
-                "text": "ExportedType",
-                "types": [
-                  {
-                    "arguments": [],
-                    "filePath": "node_modules/@types/library/index.d.ts",
-                    "kind": "TypeReference",
-                    "name": "Metadata",
-                    "position": {
-                      "end": {
-                        "column": 56,
-                        "line": 17,
-                      },
-                      "start": {
-                        "column": 1,
-                        "line": 17,
-                      },
-                    },
-                    "text": "Metadata",
-                  },
-                  {
-                    "filePath": "test.ts",
-                    "kind": "TypeLiteral",
-                    "members": [
-                      {
-                        "filePath": "test.ts",
-                        "isOptional": false,
-                        "isReadonly": false,
-                        "kind": "PropertySignature",
-                        "name": "slug",
-                        "position": {
-                          "end": {
-                            "column": 46,
-                            "line": 3,
-                          },
-                          "start": {
-                            "column": 34,
-                            "line": 3,
-                          },
-                        },
-                        "text": "string",
-                        "type": {
-                          "filePath": "test.ts",
-                          "kind": "String",
-                          "position": {
-                            "end": {
-                              "column": 46,
-                              "line": 3,
-                            },
-                            "start": {
-                              "column": 34,
-                              "line": 3,
-                            },
-                          },
-                          "text": "string",
-                          "value": undefined,
-                        },
-                      },
-                    ],
-                    "position": {
-                      "end": {
-                        "column": 48,
-                        "line": 3,
-                      },
-                      "start": {
-                        "column": 32,
-                        "line": 3,
-                      },
-                    },
-                    "text": "{ slug: string; }",
-                  },
-                ],
-              },
-              "filePath": "test.ts",
-              "kind": "Array",
-              "position": {
-                "end": {
-                  "column": 37,
-                  "line": 6,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 6,
-                },
-              },
-              "text": "Array<ExportedType>",
-            },
+            "text": "Type extends { frontMatter: Record<string, any> }",
           },
         ],
         "position": {
@@ -3858,6 +2304,34 @@ describe('resolveType', () => {
           },
         },
         "text": "ModuleData<Type>",
+        "type": {
+          "kind": "TypeLiteral",
+          "members": [
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "exportedTypes",
+              "position": {
+                "end": {
+                  "column": 37,
+                  "line": 6,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 6,
+                },
+              },
+              "text": "ExportedType[]",
+              "type": {
+                "kind": "TypeReference",
+                "text": "ExportedType[]",
+              },
+            },
+          ],
+          "text": "ModuleData<Type>",
+        },
       }
     `)
   })
@@ -3887,8 +2361,9 @@ describe('resolveType', () => {
     expect(processedProperties).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "Function",
+        "kind": "TypeAlias",
         "name": "Text",
+        "parameters": [],
         "position": {
           "end": {
             "column": 42,
@@ -3899,76 +2374,58 @@ describe('resolveType', () => {
             "line": 3,
           },
         },
-        "signatures": [
-          {
-            "filePath": "test.ts",
-            "kind": "FunctionSignature",
-            "parameters": [
-              {
-                "description": undefined,
-                "filePath": "test.ts",
-                "initializer": undefined,
-                "isOptional": false,
-                "kind": "Parameter",
-                "name": "color",
-                "position": {
-                  "end": {
-                    "column": 33,
-                    "line": 3,
-                  },
-                  "start": {
-                    "column": 21,
-                    "line": 3,
-                  },
-                },
-                "text": "Color",
-                "type": {
-                  "filePath": "test.ts",
-                  "kind": "TypeReference",
-                  "name": "Color",
-                  "position": {
-                    "end": {
-                      "column": 33,
-                      "line": 3,
-                    },
-                    "start": {
-                      "column": 21,
-                      "line": 3,
-                    },
-                  },
-                  "text": "Color",
-                },
-              },
-            ],
-            "position": {
-              "end": {
-                "column": 42,
-                "line": 3,
-              },
-              "start": {
-                "column": 20,
-                "line": 3,
-              },
-            },
-            "returnType": {
+        "text": "Text",
+        "type": {
+          "isAsync": false,
+          "kind": "FunctionType",
+          "parameters": [
+            {
+              "description": undefined,
               "filePath": "test.ts",
-              "kind": "Unknown",
+              "initializer": undefined,
+              "isOptional": false,
+              "kind": "Parameter",
+              "name": "color",
               "position": {
                 "end": {
-                  "column": 42,
+                  "column": 33,
                   "line": 3,
                 },
                 "start": {
-                  "column": 20,
+                  "column": 21,
                   "line": 3,
                 },
               },
-              "text": "void",
+              "text": "Color",
+              "type": {
+                "kind": "UnionType",
+                "text": ""red" | "blue" | "green"",
+                "types": [
+                  {
+                    "kind": "String",
+                    "text": ""red"",
+                    "value": "red",
+                  },
+                  {
+                    "kind": "String",
+                    "text": ""blue"",
+                    "value": "blue",
+                  },
+                  {
+                    "kind": "String",
+                    "text": ""green"",
+                    "value": "green",
+                  },
+                ],
+              },
             },
-            "text": "(color: Color) => void",
+          ],
+          "returnType": {
+            "kind": "Void",
+            "text": "void",
           },
-        ],
-        "text": "Text",
+          "text": "Text",
+        },
       }
     `)
   })
@@ -4038,8 +2495,7 @@ describe('resolveType', () => {
               },
               "text": "TextProps",
               "type": {
-                "filePath": "test.ts",
-                "kind": "Interface",
+                "kind": "TypeLiteral",
                 "members": [
                   {
                     "filePath": "test.ts",
@@ -4059,34 +2515,28 @@ describe('resolveType', () => {
                     },
                     "text": "Color",
                     "type": {
-                      "filePath": "node_modules/@types/library/index.d.ts",
-                      "kind": "TypeReference",
-                      "name": "Color",
-                      "position": {
-                        "end": {
-                          "column": 46,
-                          "line": 1,
+                      "kind": "UnionType",
+                      "text": ""red" | "blue" | "green"",
+                      "types": [
+                        {
+                          "kind": "String",
+                          "text": ""red"",
+                          "value": "red",
                         },
-                        "start": {
-                          "column": 1,
-                          "line": 1,
+                        {
+                          "kind": "String",
+                          "text": ""blue"",
+                          "value": "blue",
                         },
-                      },
-                      "text": "Color",
+                        {
+                          "kind": "String",
+                          "text": ""green"",
+                          "value": "green",
+                        },
+                      ],
                     },
                   },
                 ],
-                "name": "TextProps",
-                "position": {
-                  "end": {
-                    "column": 39,
-                    "line": 7,
-                  },
-                  "start": {
-                    "column": 22,
-                    "line": 7,
-                  },
-                },
                 "text": "TextProps",
               },
             },
@@ -4101,18 +2551,7 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "filePath": "test.ts",
-              "kind": "Unknown",
-              "position": {
-                "end": {
-                  "column": 43,
-                  "line": 7,
-                },
-                "start": {
-                  "column": 1,
-                  "line": 7,
-                },
-              },
+              "kind": "Void",
               "text": "void",
             },
             "text": "function Text(props?: TextProps): void",
@@ -4153,8 +2592,9 @@ describe('resolveType', () => {
     expect(processedProperties).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "Function",
+        "kind": "TypeAlias",
         "name": "Text",
+        "parameters": [],
         "position": {
           "end": {
             "column": 46,
@@ -4165,76 +2605,105 @@ describe('resolveType', () => {
             "line": 8,
           },
         },
-        "signatures": [
-          {
-            "filePath": "test.ts",
-            "kind": "FunctionSignature",
-            "parameters": [
-              {
-                "description": undefined,
-                "filePath": "test.ts",
-                "initializer": undefined,
-                "isOptional": false,
-                "kind": "Parameter",
-                "name": "props",
-                "position": {
-                  "end": {
-                    "column": 37,
-                    "line": 8,
-                  },
-                  "start": {
-                    "column": 21,
-                    "line": 8,
-                  },
-                },
-                "text": "TextProps",
-                "type": {
-                  "filePath": "test.ts",
-                  "kind": "TypeReference",
-                  "name": "TextProps",
-                  "position": {
-                    "end": {
-                      "column": 37,
-                      "line": 8,
-                    },
-                    "start": {
-                      "column": 21,
-                      "line": 8,
-                    },
-                  },
-                  "text": "TextProps",
-                },
-              },
-            ],
-            "position": {
-              "end": {
-                "column": 46,
-                "line": 8,
-              },
-              "start": {
-                "column": 20,
-                "line": 8,
-              },
-            },
-            "returnType": {
+        "text": "Text",
+        "type": {
+          "isAsync": false,
+          "kind": "FunctionType",
+          "parameters": [
+            {
+              "description": undefined,
               "filePath": "test.ts",
-              "kind": "Unknown",
+              "initializer": undefined,
+              "isOptional": false,
+              "kind": "Parameter",
+              "name": "props",
               "position": {
                 "end": {
-                  "column": 46,
+                  "column": 37,
                   "line": 8,
                 },
                 "start": {
-                  "column": 20,
+                  "column": 21,
                   "line": 8,
                 },
               },
-              "text": "void",
+              "text": "TextProps",
+              "type": {
+                "kind": "TypeLiteral",
+                "members": [
+                  {
+                    "filePath": "test.ts",
+                    "isOptional": false,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "fontWeight",
+                    "position": {
+                      "end": {
+                        "column": 22,
+                        "line": 4,
+                      },
+                      "start": {
+                        "column": 3,
+                        "line": 4,
+                      },
+                    },
+                    "text": "number",
+                    "type": {
+                      "kind": "Number",
+                      "text": "number",
+                      "value": undefined,
+                    },
+                  },
+                  {
+                    "filePath": "test.ts",
+                    "isOptional": false,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "color",
+                    "position": {
+                      "end": {
+                        "column": 16,
+                        "line": 5,
+                      },
+                      "start": {
+                        "column": 3,
+                        "line": 5,
+                      },
+                    },
+                    "text": "Color",
+                    "type": {
+                      "kind": "UnionType",
+                      "text": ""red" | "blue" | "green"",
+                      "types": [
+                        {
+                          "kind": "String",
+                          "text": ""red"",
+                          "value": "red",
+                        },
+                        {
+                          "kind": "String",
+                          "text": ""blue"",
+                          "value": "blue",
+                        },
+                        {
+                          "kind": "String",
+                          "text": ""green"",
+                          "value": "green",
+                        },
+                      ],
+                    },
+                  },
+                ],
+                "text": "TextProps",
+              },
             },
-            "text": "(props: TextProps) => void",
+          ],
+          "returnType": {
+            "kind": "Void",
+            "text": "void",
           },
-        ],
-        "text": "Text",
+          "text": "Text",
+        },
       }
     `)
   })
@@ -4299,19 +2768,55 @@ describe('resolveType', () => {
               },
               "text": "TextProps",
               "type": {
-                "filePath": "test.ts",
-                "kind": "TypeReference",
-                "name": "TextProps",
-                "position": {
-                  "end": {
-                    "column": 57,
-                    "line": 6,
+                "kind": "TypeLiteral",
+                "members": [
+                  {
+                    "filePath": "test.ts",
+                    "isOptional": true,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "color",
+                    "position": {
+                      "end": {
+                        "column": 17,
+                        "line": 2,
+                      },
+                      "start": {
+                        "column": 3,
+                        "line": 2,
+                      },
+                    },
+                    "text": "string",
+                    "type": {
+                      "kind": "String",
+                      "text": "string",
+                      "value": undefined,
+                    },
                   },
-                  "start": {
-                    "column": 22,
-                    "line": 6,
+                  {
+                    "filePath": "test.ts",
+                    "isOptional": true,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "fontSize",
+                    "position": {
+                      "end": {
+                        "column": 21,
+                        "line": 3,
+                      },
+                      "start": {
+                        "column": 3,
+                        "line": 3,
+                      },
+                    },
+                    "text": "number",
+                    "type": {
+                      "kind": "Number",
+                      "text": "number",
+                      "value": undefined,
+                    },
                   },
-                },
+                ],
                 "text": "TextProps",
               },
             },
@@ -4326,18 +2831,7 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "filePath": "test.ts",
-              "kind": "Unknown",
-              "position": {
-                "end": {
-                  "column": 61,
-                  "line": 6,
-                },
-                "start": {
-                  "column": 1,
-                  "line": 6,
-                },
-              },
+              "kind": "Void",
               "text": "void",
             },
             "text": "function Text(props: TextProps): void",
@@ -4414,7 +2908,6 @@ describe('resolveType', () => {
               },
               "text": "TextProps",
               "type": {
-                "filePath": "test.ts",
                 "kind": "TypeLiteral",
                 "members": [
                   {
@@ -4435,7 +2928,6 @@ describe('resolveType', () => {
                     },
                     "text": "{ fontSize: number; fontWeight: number; color?: string; }",
                     "type": {
-                      "filePath": "test.ts",
                       "kind": "TypeLiteral",
                       "members": [
                         {
@@ -4456,18 +2948,7 @@ describe('resolveType', () => {
                           },
                           "text": "number",
                           "type": {
-                            "filePath": "test.ts",
                             "kind": "Number",
-                            "position": {
-                              "end": {
-                                "column": 22,
-                                "line": 3,
-                              },
-                              "start": {
-                                "column": 5,
-                                "line": 3,
-                              },
-                            },
                             "text": "number",
                             "value": undefined,
                           },
@@ -4490,18 +2971,7 @@ describe('resolveType', () => {
                           },
                           "text": "number",
                           "type": {
-                            "filePath": "test.ts",
                             "kind": "Number",
-                            "position": {
-                              "end": {
-                                "column": 24,
-                                "line": 4,
-                              },
-                              "start": {
-                                "column": 5,
-                                "line": 4,
-                              },
-                            },
                             "text": "number",
                             "value": undefined,
                           },
@@ -4524,47 +2994,16 @@ describe('resolveType', () => {
                           },
                           "text": "string",
                           "type": {
-                            "filePath": "test.ts",
                             "kind": "String",
-                            "position": {
-                              "end": {
-                                "column": 20,
-                                "line": 5,
-                              },
-                              "start": {
-                                "column": 5,
-                                "line": 5,
-                              },
-                            },
                             "text": "string",
                             "value": undefined,
                           },
                         },
                       ],
-                      "position": {
-                        "end": {
-                          "column": 5,
-                          "line": 6,
-                        },
-                        "start": {
-                          "column": 3,
-                          "line": 2,
-                        },
-                      },
                       "text": "{ fontSize: number; fontWeight: number; color?: string; }",
                     },
                   },
                 ],
-                "position": {
-                  "end": {
-                    "column": 111,
-                    "line": 9,
-                  },
-                  "start": {
-                    "column": 22,
-                    "line": 9,
-                  },
-                },
                 "text": "TextProps",
               },
             },
@@ -4579,18 +3018,7 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "filePath": "test.ts",
-              "kind": "Unknown",
-              "position": {
-                "end": {
-                  "column": 115,
-                  "line": 9,
-                },
-                "start": {
-                  "column": 1,
-                  "line": 9,
-                },
-              },
+              "kind": "Void",
               "text": "void",
             },
             "text": "function Text(TextProps): void",
@@ -4622,88 +3050,42 @@ describe('resolveType', () => {
         "parameters": [
           {
             "constraint": {
-              "filePath": "test.ts",
-              "kind": "TypeLiteral",
-              "members": [
+              "kind": "UnionType",
+              "text": "{ frontMatter: Record<string, any>; } | { frontMatter: Record<string, any>; }",
+              "types": [
                 {
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "isReadonly": false,
-                  "kind": "PropertySignature",
-                  "name": "frontMatter",
-                  "position": {
-                    "end": {
-                      "column": 64,
-                      "line": 1,
-                    },
-                    "start": {
-                      "column": 32,
-                      "line": 1,
-                    },
-                  },
-                  "text": "Record<string, any>",
-                  "type": {
-                    "arguments": [
-                      {
-                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                        "kind": "String",
-                        "position": {
-                          "end": {
-                            "column": 4402,
-                            "line": 4,
-                          },
-                          "start": {
-                            "column": 3482,
-                            "line": 4,
-                          },
+                  "kind": "TypeReference",
+                  "text": "{ frontMatter: Record<string, any>; }",
+                },
+                {
+                  "kind": "TypeLiteral",
+                  "members": [
+                    {
+                      "filePath": "test.ts",
+                      "isOptional": false,
+                      "isReadonly": false,
+                      "kind": "PropertySignature",
+                      "name": "frontMatter",
+                      "position": {
+                        "end": {
+                          "column": 64,
+                          "line": 1,
                         },
-                        "text": "string",
-                        "value": undefined,
-                      },
-                      {
-                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                        "kind": "Any",
-                        "position": {
-                          "end": {
-                            "column": 315,
-                            "line": 6,
-                          },
-                          "start": {
-                            "column": 266,
-                            "line": 6,
-                          },
+                        "start": {
+                          "column": 32,
+                          "line": 1,
                         },
-                        "text": "any",
                       },
-                    ],
-                    "filePath": "test.ts",
-                    "kind": "TypeReference",
-                    "name": "Record",
-                    "position": {
-                      "end": {
-                        "column": 64,
-                        "line": 1,
-                      },
-                      "start": {
-                        "column": 32,
-                        "line": 1,
+                      "text": "Record<string, any>",
+                      "type": {
+                        "kind": "TypeReference",
+                        "text": "Record<string, any>",
                       },
                     },
-                    "text": "Record<string, any>",
-                  },
+                  ],
+                  "text": "{ frontMatter: Record<string, any>; }",
                 },
               ],
-              "position": {
-                "end": {
-                  "column": 66,
-                  "line": 1,
-                },
-                "start": {
-                  "column": 30,
-                  "line": 1,
-                },
-              },
-              "text": "{ frontMatter: Record<string, any>; }",
             },
             "defaultType": undefined,
             "filePath": "test.ts",
@@ -4719,7 +3101,7 @@ describe('resolveType', () => {
                 "line": 1,
               },
             },
-            "text": "Type",
+            "text": "Type extends { frontMatter: Record<string, any> }",
           },
         ],
         "position": {
@@ -4734,189 +3116,55 @@ describe('resolveType', () => {
         },
         "text": "ModuleData<Type>",
         "type": {
-          "filePath": "test.ts",
-          "kind": "UnionType",
-          "position": {
-            "end": {
-              "column": 43,
-              "line": 3,
-            },
-            "start": {
-              "column": 1,
-              "line": 1,
+          "checkType": {
+            "kind": "String",
+            "text": ""frontMatter"",
+            "value": "frontMatter",
+          },
+          "extendsType": {
+            "kind": "TypeOperator",
+            "operator": "143",
+            "text": "keyof Type",
+            "type": {
+              "kind": "TypeReference",
+              "text": "keyof Type",
             },
           },
-          "text": "{ frontMatter: Record<string, any>; } | { frontMatter: Record<string, any>; }",
-          "types": [
-            {
-              "filePath": "test.ts",
-              "kind": "TypeLiteral",
-              "members": [
-                {
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "isReadonly": false,
-                  "kind": "PropertySignature",
-                  "name": "frontMatter",
-                  "position": {
-                    "end": {
-                      "column": 41,
-                      "line": 3,
-                    },
-                    "start": {
-                      "column": 9,
-                      "line": 3,
-                    },
+          "falseType": {
+            "kind": "TypeLiteral",
+            "members": [
+              {
+                "filePath": "test.ts",
+                "isOptional": false,
+                "isReadonly": false,
+                "kind": "PropertySignature",
+                "name": "frontMatter",
+                "position": {
+                  "end": {
+                    "column": 41,
+                    "line": 3,
                   },
+                  "start": {
+                    "column": 9,
+                    "line": 3,
+                  },
+                },
+                "text": "Record<string, any>",
+                "type": {
+                  "kind": "TypeReference",
                   "text": "Record<string, any>",
-                  "type": {
-                    "arguments": [
-                      {
-                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                        "kind": "String",
-                        "position": {
-                          "end": {
-                            "column": 4402,
-                            "line": 4,
-                          },
-                          "start": {
-                            "column": 3482,
-                            "line": 4,
-                          },
-                        },
-                        "text": "string",
-                        "value": undefined,
-                      },
-                      {
-                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                        "kind": "Any",
-                        "position": {
-                          "end": {
-                            "column": 315,
-                            "line": 6,
-                          },
-                          "start": {
-                            "column": 266,
-                            "line": 6,
-                          },
-                        },
-                        "text": "any",
-                      },
-                    ],
-                    "filePath": "test.ts",
-                    "kind": "TypeReference",
-                    "name": "Record",
-                    "position": {
-                      "end": {
-                        "column": 41,
-                        "line": 3,
-                      },
-                      "start": {
-                        "column": 9,
-                        "line": 3,
-                      },
-                    },
-                    "text": "Record<string, any>",
-                  },
-                },
-              ],
-              "position": {
-                "end": {
-                  "column": 43,
-                  "line": 3,
-                },
-                "start": {
-                  "column": 7,
-                  "line": 3,
                 },
               },
-              "text": "{ frontMatter: Record<string, any>; }",
-            },
-            {
-              "filePath": "test.ts",
-              "kind": "TypeLiteral",
-              "members": [
-                {
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "isReadonly": false,
-                  "kind": "PropertySignature",
-                  "name": "frontMatter",
-                  "position": {
-                    "end": {
-                      "column": 64,
-                      "line": 1,
-                    },
-                    "start": {
-                      "column": 32,
-                      "line": 1,
-                    },
-                  },
-                  "text": "Record<string, any>",
-                  "type": {
-                    "arguments": [
-                      {
-                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                        "kind": "String",
-                        "position": {
-                          "end": {
-                            "column": 4402,
-                            "line": 4,
-                          },
-                          "start": {
-                            "column": 3482,
-                            "line": 4,
-                          },
-                        },
-                        "text": "string",
-                        "value": undefined,
-                      },
-                      {
-                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                        "kind": "Any",
-                        "position": {
-                          "end": {
-                            "column": 315,
-                            "line": 6,
-                          },
-                          "start": {
-                            "column": 266,
-                            "line": 6,
-                          },
-                        },
-                        "text": "any",
-                      },
-                    ],
-                    "filePath": "test.ts",
-                    "kind": "TypeReference",
-                    "name": "Record",
-                    "position": {
-                      "end": {
-                        "column": 64,
-                        "line": 1,
-                      },
-                      "start": {
-                        "column": 32,
-                        "line": 1,
-                      },
-                    },
-                    "text": "Record<string, any>",
-                  },
-                },
-              ],
-              "position": {
-                "end": {
-                  "column": 66,
-                  "line": 1,
-                },
-                "start": {
-                  "column": 30,
-                  "line": 1,
-                },
-              },
-              "text": "{ frontMatter: Record<string, any>; }",
-            },
-          ],
+            ],
+            "text": "{ frontMatter: Record<string, any>; }",
+          },
+          "isDistributive": false,
+          "kind": "ConditionalType",
+          "text": "ModuleData<Type>",
+          "trueType": {
+            "kind": "TypeReference",
+            "text": "Type",
+          },
         },
       }
     `)
@@ -4978,7 +3226,6 @@ describe('resolveType', () => {
                 },
                 "text": "GridProps",
                 "type": {
-                  "filePath": "test.ts",
                   "kind": "TypeLiteral",
                   "members": [
                     {
@@ -4999,18 +3246,7 @@ describe('resolveType', () => {
                       },
                       "text": "number",
                       "type": {
-                        "filePath": "test.ts",
                         "kind": "Number",
-                        "position": {
-                          "end": {
-                            "column": 36,
-                            "line": 5,
-                          },
-                          "start": {
-                            "column": 20,
-                            "line": 5,
-                          },
-                        },
                         "text": "number",
                         "value": undefined,
                       },
@@ -5033,33 +3269,12 @@ describe('resolveType', () => {
                       },
                       "text": "number",
                       "type": {
-                        "filePath": "test.ts",
                         "kind": "Number",
-                        "position": {
-                          "end": {
-                            "column": 49,
-                            "line": 5,
-                          },
-                          "start": {
-                            "column": 37,
-                            "line": 5,
-                          },
-                        },
                         "text": "number",
                         "value": undefined,
                       },
                     },
                   ],
-                  "position": {
-                    "end": {
-                      "column": 72,
-                      "line": 2,
-                    },
-                    "start": {
-                      "column": 60,
-                      "line": 2,
-                    },
-                  },
                   "text": "GridProps",
                 },
               },
@@ -5075,18 +3290,7 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "filePath": "test.ts",
-              "kind": "Unknown",
-              "position": {
-                "end": {
-                  "column": 79,
-                  "line": 2,
-                },
-                "start": {
-                  "column": 59,
-                  "line": 2,
-                },
-              },
+              "kind": "Void",
               "text": "void",
             },
             "text": "(props: GridProps) => void",
@@ -5118,75 +3322,9 @@ describe('resolveType', () => {
     expect(processedProperties).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "TypeLiteral",
-        "members": [
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "color",
-            "position": {
-              "end": {
-                "column": 29,
-                "line": 2,
-              },
-              "start": {
-                "column": 3,
-                "line": 2,
-              },
-            },
-            "text": "string | undefined",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "UnionType",
-              "position": {
-                "end": {
-                  "column": 29,
-                  "line": 2,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 2,
-                },
-              },
-              "text": "string | undefined",
-              "types": [
-                {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                  "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 4402,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 3482,
-                      "line": 4,
-                    },
-                  },
-                  "text": "string",
-                  "value": undefined,
-                },
-                {
-                  "filePath": "test.ts",
-                  "kind": "Unknown",
-                  "position": {
-                    "end": {
-                      "column": 28,
-                      "line": 2,
-                    },
-                    "start": {
-                      "column": 19,
-                      "line": 2,
-                    },
-                  },
-                  "text": "undefined",
-                },
-              ],
-            },
-          },
-        ],
+        "kind": "TypeAlias",
+        "name": "TextProps",
+        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -5198,6 +3336,45 @@ describe('resolveType', () => {
           },
         },
         "text": "TextProps",
+        "type": {
+          "kind": "TypeLiteral",
+          "members": [
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "color",
+              "position": {
+                "end": {
+                  "column": 29,
+                  "line": 2,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 2,
+                },
+              },
+              "text": "string | undefined",
+              "type": {
+                "kind": "UnionType",
+                "text": "string | undefined",
+                "types": [
+                  {
+                    "kind": "String",
+                    "text": "string",
+                    "value": undefined,
+                  },
+                  {
+                    "kind": "Undefined",
+                    "text": "undefined",
+                  },
+                ],
+              },
+            },
+          ],
+          "text": "TextProps",
+        },
       }
     `)
   })
@@ -5229,7 +3406,7 @@ describe('resolveType', () => {
     expect(processedType).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "Any",
+        "kind": "Unknown",
         "position": {
           "end": {
             "column": 79,
@@ -5263,61 +3440,7 @@ describe('resolveType', () => {
     expect(processedProperties).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "Enum",
-        "members": [
-          {
-            "filePath": "test.ts",
-            "kind": "EnumMember",
-            "name": "Red",
-            "position": {
-              "end": {
-                "column": 14,
-                "line": 2,
-              },
-              "start": {
-                "column": 3,
-                "line": 2,
-              },
-            },
-            "text": "Red = 'red'",
-            "value": "red",
-          },
-          {
-            "filePath": "test.ts",
-            "kind": "EnumMember",
-            "name": "Blue",
-            "position": {
-              "end": {
-                "column": 16,
-                "line": 3,
-              },
-              "start": {
-                "column": 3,
-                "line": 3,
-              },
-            },
-            "text": "Blue = 'blue'",
-            "value": "blue",
-          },
-          {
-            "filePath": "test.ts",
-            "kind": "EnumMember",
-            "name": "Green",
-            "position": {
-              "end": {
-                "column": 18,
-                "line": 4,
-              },
-              "start": {
-                "column": 3,
-                "line": 4,
-              },
-            },
-            "text": "Green = 'green'",
-            "value": "green",
-          },
-        ],
-        "name": "Color",
+        "kind": "Unknown",
         "position": {
           "end": {
             "column": 2,
@@ -5355,96 +3478,9 @@ describe('resolveType', () => {
     expect(processedProperties).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "TypeLiteral",
-        "members": [
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "color",
-            "position": {
-              "end": {
-                "column": 16,
-                "line": 8,
-              },
-              "start": {
-                "column": 3,
-                "line": 8,
-              },
-            },
-            "text": "Color",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "Enum",
-              "members": [
-                {
-                  "filePath": "test.ts",
-                  "kind": "EnumMember",
-                  "name": "Red",
-                  "position": {
-                    "end": {
-                      "column": 14,
-                      "line": 2,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 2,
-                    },
-                  },
-                  "text": "Red = 'red'",
-                  "value": "red",
-                },
-                {
-                  "filePath": "test.ts",
-                  "kind": "EnumMember",
-                  "name": "Blue",
-                  "position": {
-                    "end": {
-                      "column": 16,
-                      "line": 3,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 3,
-                    },
-                  },
-                  "text": "Blue = 'blue'",
-                  "value": "blue",
-                },
-                {
-                  "filePath": "test.ts",
-                  "kind": "EnumMember",
-                  "name": "Green",
-                  "position": {
-                    "end": {
-                      "column": 18,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 4,
-                    },
-                  },
-                  "text": "Green = 'green'",
-                  "value": "green",
-                },
-              ],
-              "name": "Color",
-              "position": {
-                "end": {
-                  "column": 16,
-                  "line": 8,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 8,
-                },
-              },
-              "text": "Color",
-            },
-          },
-        ],
+        "kind": "TypeAlias",
+        "name": "TextProps",
+        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -5456,6 +3492,51 @@ describe('resolveType', () => {
           },
         },
         "text": "TextProps",
+        "type": {
+          "kind": "TypeLiteral",
+          "members": [
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "color",
+              "position": {
+                "end": {
+                  "column": 16,
+                  "line": 8,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 8,
+                },
+              },
+              "text": "Color",
+              "type": {
+                "kind": "UnionType",
+                "text": "Color.Red | Color.Blue | Color.Green",
+                "types": [
+                  {
+                    "kind": "String",
+                    "text": "Color.Red",
+                    "value": "red",
+                  },
+                  {
+                    "kind": "String",
+                    "text": "Color.Blue",
+                    "value": "blue",
+                  },
+                  {
+                    "kind": "String",
+                    "text": "Color.Green",
+                    "value": "green",
+                  },
+                ],
+              },
+            },
+          ],
+          "text": "TextProps",
+        },
       }
     `)
   })
@@ -5482,90 +3563,86 @@ describe('resolveType', () => {
 
     expect(processedProperties).toMatchInlineSnapshot(`
       {
-        "constructor": undefined,
         "filePath": "test.ts",
-        "kind": "Class",
-        "methods": [
+        "kind": "TypeLiteral",
+        "members": [
           {
-            "kind": "ClassMethod",
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "PropertySignature",
+            "name": "color",
+            "position": {
+              "end": {
+                "column": 17,
+                "line": 2,
+              },
+              "start": {
+                "column": 3,
+                "line": 2,
+              },
+            },
+            "text": "string",
+            "type": {
+              "kind": "String",
+              "text": "string",
+              "value": undefined,
+            },
+          },
+          {
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "PropertySignature",
             "name": "setValue",
-            "scope": undefined,
-            "signatures": [
-              {
-                "filePath": "test.ts",
-                "isAsync": false,
-                "isGenerator": false,
-                "kind": "FunctionSignature",
-                "parameters": [
-                  {
-                    "description": undefined,
-                    "filePath": "test.ts",
-                    "initializer": undefined,
-                    "isOptional": false,
-                    "kind": "Parameter",
-                    "name": "value",
-                    "position": {
-                      "end": {
-                        "column": 25,
-                        "line": 4,
-                      },
-                      "start": {
-                        "column": 12,
-                        "line": 4,
-                      },
-                    },
-                    "text": "string",
-                    "type": {
-                      "filePath": "test.ts",
-                      "kind": "String",
-                      "position": {
-                        "end": {
-                          "column": 25,
-                          "line": 4,
-                        },
-                        "start": {
-                          "column": 12,
-                          "line": 4,
-                        },
-                      },
-                      "text": "string",
-                      "value": undefined,
-                    },
-                  },
-                ],
-                "position": {
-                  "end": {
-                    "column": 4,
-                    "line": 6,
-                  },
-                  "start": {
-                    "column": 3,
-                    "line": 4,
-                  },
-                },
-                "returnType": {
+            "position": {
+              "end": {
+                "column": 4,
+                "line": 6,
+              },
+              "start": {
+                "column": 3,
+                "line": 4,
+              },
+            },
+            "text": "(value: string) => void",
+            "type": {
+              "isAsync": false,
+              "kind": "FunctionType",
+              "parameters": [
+                {
+                  "description": undefined,
                   "filePath": "test.ts",
-                  "kind": "Unknown",
+                  "initializer": undefined,
+                  "isOptional": false,
+                  "kind": "Parameter",
+                  "name": "value",
                   "position": {
                     "end": {
-                      "column": 4,
-                      "line": 6,
+                      "column": 25,
+                      "line": 4,
                     },
                     "start": {
-                      "column": 3,
+                      "column": 12,
                       "line": 4,
                     },
                   },
-                  "text": "void",
+                  "text": "string",
+                  "type": {
+                    "kind": "String",
+                    "text": "string",
+                    "value": undefined,
+                  },
                 },
-                "text": "(value: string) => void",
+              ],
+              "returnType": {
+                "kind": "Void",
+                "text": "void",
               },
-            ],
-            "text": "(value: string) => void",
-            "visibility": undefined,
+              "text": "(value: string) => void",
+            },
           },
         ],
-        "name": "Text",
         "position": {
           "end": {
             "column": 2,
@@ -5576,34 +3653,6 @@ describe('resolveType', () => {
             "line": 1,
           },
         },
-        "properties": [
-          {
-            "initializer": undefined,
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "ClassProperty",
-            "name": "color",
-            "scope": undefined,
-            "text": "string",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "String",
-              "position": {
-                "end": {
-                  "column": 17,
-                  "line": 2,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 2,
-                },
-              },
-              "text": "string",
-              "value": undefined,
-            },
-            "visibility": undefined,
-          },
-        ],
         "text": "Text",
       }
     `)
@@ -5629,75 +3678,9 @@ describe('resolveType', () => {
     expect(processedProperties).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "TypeLiteral",
-        "members": [
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "text",
-            "position": {
-              "end": {
-                "column": 18,
-                "line": 6,
-              },
-              "start": {
-                "column": 3,
-                "line": 6,
-              },
-            },
-            "text": "TextView",
-            "type": {
-              "constructor": undefined,
-              "filePath": "test.ts",
-              "kind": "Class",
-              "name": "TextView",
-              "position": {
-                "end": {
-                  "column": 18,
-                  "line": 6,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 6,
-                },
-              },
-              "properties": [
-                {
-                  "initializer": {
-                    "text": "'#666'",
-                    "value": "#666",
-                  },
-                  "isOptional": true,
-                  "isReadonly": false,
-                  "kind": "ClassProperty",
-                  "name": "color",
-                  "scope": undefined,
-                  "text": "string",
-                  "type": {
-                    "filePath": "test.ts",
-                    "kind": "String",
-                    "position": {
-                      "end": {
-                        "column": 25,
-                        "line": 2,
-                      },
-                      "start": {
-                        "column": 3,
-                        "line": 2,
-                      },
-                    },
-                    "text": "string",
-                    "value": undefined,
-                  },
-                  "visibility": undefined,
-                },
-              ],
-              "text": "TextView",
-            },
-          },
-        ],
+        "kind": "TypeAlias",
+        "name": "CardViewProps",
+        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -5709,6 +3692,59 @@ describe('resolveType', () => {
           },
         },
         "text": "CardViewProps",
+        "type": {
+          "kind": "TypeLiteral",
+          "members": [
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "text",
+              "position": {
+                "end": {
+                  "column": 18,
+                  "line": 6,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 6,
+                },
+              },
+              "text": "TextView",
+              "type": {
+                "kind": "TypeLiteral",
+                "members": [
+                  {
+                    "filePath": "test.ts",
+                    "isOptional": false,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "color",
+                    "position": {
+                      "end": {
+                        "column": 25,
+                        "line": 2,
+                      },
+                      "start": {
+                        "column": 3,
+                        "line": 2,
+                      },
+                    },
+                    "text": "string",
+                    "type": {
+                      "kind": "String",
+                      "text": "string",
+                      "value": undefined,
+                    },
+                  },
+                ],
+                "text": "TextView",
+              },
+            },
+          ],
+          "text": "CardViewProps",
+        },
       }
     `)
   })
@@ -5731,7 +3767,1184 @@ describe('resolveType', () => {
     expect(processedProperties).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "String",
+        "kind": "Interface",
+        "members": [
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "toString",
+            "parameters": [],
+            "position": {
+              "end": {
+                "column": 3517,
+                "line": 4,
+              },
+              "start": {
+                "column": 3499,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "String",
+              "text": "string",
+              "value": undefined,
+            },
+            "text": "() => string",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "charAt",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "pos",
+                "position": {
+                  "end": {
+                    "column": 3534,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3524,
+                    "line": 4,
+                  },
+                },
+                "text": "number",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 3543,
+                "line": 4,
+              },
+              "start": {
+                "column": 3517,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "String",
+              "text": "string",
+              "value": undefined,
+            },
+            "text": "(pos: number) => string",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "charCodeAt",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "index",
+                "position": {
+                  "end": {
+                    "column": 3566,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3554,
+                    "line": 4,
+                  },
+                },
+                "text": "number",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 3575,
+                "line": 4,
+              },
+              "start": {
+                "column": 3543,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "Number",
+              "text": "number",
+              "value": undefined,
+            },
+            "text": "(index: number) => number",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "concat",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "strings",
+                "position": {
+                  "end": {
+                    "column": 3601,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3582,
+                    "line": 4,
+                  },
+                },
+                "text": "string[]",
+                "type": {
+                  "kind": "TypeReference",
+                  "text": "string[]",
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 3610,
+                "line": 4,
+              },
+              "start": {
+                "column": 3575,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "String",
+              "text": "string",
+              "value": undefined,
+            },
+            "text": "(...strings: string[]) => string",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "indexOf",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "searchString",
+                "position": {
+                  "end": {
+                    "column": 3637,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3618,
+                    "line": 4,
+                  },
+                },
+                "text": "string",
+                "type": {
+                  "kind": "String",
+                  "text": "string",
+                  "value": undefined,
+                },
+              },
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": true,
+                "kind": "Parameter",
+                "name": "position",
+                "position": {
+                  "end": {
+                    "column": 3654,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3638,
+                    "line": 4,
+                  },
+                },
+                "text": "number",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 3663,
+                "line": 4,
+              },
+              "start": {
+                "column": 3610,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "Number",
+              "text": "number",
+              "value": undefined,
+            },
+            "text": "(searchString: string, position?: number) => number",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "lastIndexOf",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "searchString",
+                "position": {
+                  "end": {
+                    "column": 3694,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3675,
+                    "line": 4,
+                  },
+                },
+                "text": "string",
+                "type": {
+                  "kind": "String",
+                  "text": "string",
+                  "value": undefined,
+                },
+              },
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": true,
+                "kind": "Parameter",
+                "name": "position",
+                "position": {
+                  "end": {
+                    "column": 3711,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3695,
+                    "line": 4,
+                  },
+                },
+                "text": "number",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 3720,
+                "line": 4,
+              },
+              "start": {
+                "column": 3663,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "Number",
+              "text": "number",
+              "value": undefined,
+            },
+            "text": "(searchString: string, position?: number) => number",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "localeCompare",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "that",
+                "position": {
+                  "end": {
+                    "column": 3745,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3734,
+                    "line": 4,
+                  },
+                },
+                "text": "string",
+                "type": {
+                  "kind": "String",
+                  "text": "string",
+                  "value": undefined,
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 3754,
+                "line": 4,
+              },
+              "start": {
+                "column": 3720,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "Number",
+              "text": "number",
+              "value": undefined,
+            },
+            "text": "{ (that: string): number; (that: string, locales?: string | string[], options?: CollatorOptions): number; (that: string, locales?: LocalesArgument, options?: CollatorOptions): number; }",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "match",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "regexp",
+                "position": {
+                  "end": {
+                    "column": 3780,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3760,
+                    "line": 4,
+                  },
+                },
+                "text": "string | RegExp",
+                "type": {
+                  "kind": "UnionType",
+                  "text": "string | RegExp",
+                  "types": [
+                    {
+                      "kind": "String",
+                      "text": "string",
+                      "value": undefined,
+                    },
+                    {
+                      "kind": "TypeReference",
+                      "text": "RegExp",
+                    },
+                  ],
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 3804,
+                "line": 4,
+              },
+              "start": {
+                "column": 3754,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "TypeReference",
+              "text": "RegExpMatchArray",
+            },
+            "text": "{ (regexp: string | RegExp): RegExpMatchArray; (matcher: { [Symbol.match](string: string): RegExpMatchArray; }): RegExpMatchArray; }",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "replace",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "searchValue",
+                "position": {
+                  "end": {
+                    "column": 3837,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3812,
+                    "line": 4,
+                  },
+                },
+                "text": "string | RegExp",
+                "type": {
+                  "kind": "UnionType",
+                  "text": "string | RegExp",
+                  "types": [
+                    {
+                      "kind": "String",
+                      "text": "string",
+                      "value": undefined,
+                    },
+                    {
+                      "kind": "TypeReference",
+                      "text": "RegExp",
+                    },
+                  ],
+                },
+              },
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "replaceValue",
+                "position": {
+                  "end": {
+                    "column": 3857,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3838,
+                    "line": 4,
+                  },
+                },
+                "text": "string",
+                "type": {
+                  "kind": "String",
+                  "text": "string",
+                  "value": undefined,
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 3866,
+                "line": 4,
+              },
+              "start": {
+                "column": 3804,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "String",
+              "text": "string",
+              "value": undefined,
+            },
+            "text": "{ (searchValue: string | RegExp, replaceValue: string): string; (searchValue: string | RegExp, replacer: (substring: string, ...args: any[]) => string): string; (searchValue: { ...; }, replaceValue: string): string; (searchValue: { ...; }, replacer: (substring: string, ...args: any[]) => string): string; }",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "replace",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "searchValue",
+                "position": {
+                  "end": {
+                    "column": 3837,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3812,
+                    "line": 4,
+                  },
+                },
+                "text": "string | RegExp",
+                "type": {
+                  "kind": "UnionType",
+                  "text": "string | RegExp",
+                  "types": [
+                    {
+                      "kind": "String",
+                      "text": "string",
+                      "value": undefined,
+                    },
+                    {
+                      "kind": "TypeReference",
+                      "text": "RegExp",
+                    },
+                  ],
+                },
+              },
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "replaceValue",
+                "position": {
+                  "end": {
+                    "column": 3857,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3838,
+                    "line": 4,
+                  },
+                },
+                "text": "string",
+                "type": {
+                  "kind": "String",
+                  "text": "string",
+                  "value": undefined,
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 3958,
+                "line": 4,
+              },
+              "start": {
+                "column": 3866,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "String",
+              "text": "string",
+              "value": undefined,
+            },
+            "text": "{ (searchValue: string | RegExp, replaceValue: string): string; (searchValue: string | RegExp, replacer: (substring: string, ...args: any[]) => string): string; (searchValue: { ...; }, replaceValue: string): string; (searchValue: { ...; }, replacer: (substring: string, ...args: any[]) => string): string; }",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "search",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "regexp",
+                "position": {
+                  "end": {
+                    "column": 3985,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3965,
+                    "line": 4,
+                  },
+                },
+                "text": "string | RegExp",
+                "type": {
+                  "kind": "UnionType",
+                  "text": "string | RegExp",
+                  "types": [
+                    {
+                      "kind": "String",
+                      "text": "string",
+                      "value": undefined,
+                    },
+                    {
+                      "kind": "TypeReference",
+                      "text": "RegExp",
+                    },
+                  ],
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 3994,
+                "line": 4,
+              },
+              "start": {
+                "column": 3958,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "Number",
+              "text": "number",
+              "value": undefined,
+            },
+            "text": "{ (regexp: string | RegExp): number; (searcher: { [Symbol.search](string: string): number; }): number; }",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "slice",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": true,
+                "kind": "Parameter",
+                "name": "start",
+                "position": {
+                  "end": {
+                    "column": 4013,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 4000,
+                    "line": 4,
+                  },
+                },
+                "text": "number",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+              },
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": true,
+                "kind": "Parameter",
+                "name": "end",
+                "position": {
+                  "end": {
+                    "column": 4025,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 4014,
+                    "line": 4,
+                  },
+                },
+                "text": "number",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 4034,
+                "line": 4,
+              },
+              "start": {
+                "column": 3994,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "String",
+              "text": "string",
+              "value": undefined,
+            },
+            "text": "(start?: number, end?: number) => string",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "split",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "separator",
+                "position": {
+                  "end": {
+                    "column": 4063,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 4040,
+                    "line": 4,
+                  },
+                },
+                "text": "string | RegExp",
+                "type": {
+                  "kind": "UnionType",
+                  "text": "string | RegExp",
+                  "types": [
+                    {
+                      "kind": "String",
+                      "text": "string",
+                      "value": undefined,
+                    },
+                    {
+                      "kind": "TypeReference",
+                      "text": "RegExp",
+                    },
+                  ],
+                },
+              },
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": true,
+                "kind": "Parameter",
+                "name": "limit",
+                "position": {
+                  "end": {
+                    "column": 4077,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 4064,
+                    "line": 4,
+                  },
+                },
+                "text": "number",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 4088,
+                "line": 4,
+              },
+              "start": {
+                "column": 4034,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "TypeReference",
+              "text": "string[]",
+            },
+            "text": "{ (separator: string | RegExp, limit?: number): string[]; (splitter: { [Symbol.split](string: string, limit?: number): string[]; }, limit?: number): string[]; }",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "substring",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "start",
+                "position": {
+                  "end": {
+                    "column": 4110,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 4098,
+                    "line": 4,
+                  },
+                },
+                "text": "number",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+              },
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": true,
+                "kind": "Parameter",
+                "name": "end",
+                "position": {
+                  "end": {
+                    "column": 4122,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 4111,
+                    "line": 4,
+                  },
+                },
+                "text": "number",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 4131,
+                "line": 4,
+              },
+              "start": {
+                "column": 4088,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "String",
+              "text": "string",
+              "value": undefined,
+            },
+            "text": "(start: number, end?: number) => string",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "toLowerCase",
+            "parameters": [],
+            "position": {
+              "end": {
+                "column": 4152,
+                "line": 4,
+              },
+              "start": {
+                "column": 4131,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "String",
+              "text": "string",
+              "value": undefined,
+            },
+            "text": "() => string",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "toLocaleLowerCase",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": true,
+                "kind": "Parameter",
+                "name": "locales",
+                "position": {
+                  "end": {
+                    "column": 4194,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 4170,
+                    "line": 4,
+                  },
+                },
+                "text": "string | string[]",
+                "type": {
+                  "kind": "UnionType",
+                  "text": "string | string[]",
+                  "types": [
+                    {
+                      "kind": "String",
+                      "text": "string",
+                      "value": undefined,
+                    },
+                    {
+                      "kind": "TypeReference",
+                      "text": "string[]",
+                    },
+                  ],
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 4203,
+                "line": 4,
+              },
+              "start": {
+                "column": 4152,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "String",
+              "text": "string",
+              "value": undefined,
+            },
+            "text": "{ (locales?: string | string[]): string; (locales?: LocalesArgument): string; }",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "toUpperCase",
+            "parameters": [],
+            "position": {
+              "end": {
+                "column": 4224,
+                "line": 4,
+              },
+              "start": {
+                "column": 4203,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "String",
+              "text": "string",
+              "value": undefined,
+            },
+            "text": "() => string",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "toLocaleUpperCase",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": true,
+                "kind": "Parameter",
+                "name": "locales",
+                "position": {
+                  "end": {
+                    "column": 4266,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 4242,
+                    "line": 4,
+                  },
+                },
+                "text": "string | string[]",
+                "type": {
+                  "kind": "UnionType",
+                  "text": "string | string[]",
+                  "types": [
+                    {
+                      "kind": "String",
+                      "text": "string",
+                      "value": undefined,
+                    },
+                    {
+                      "kind": "TypeReference",
+                      "text": "string[]",
+                    },
+                  ],
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 4275,
+                "line": 4,
+              },
+              "start": {
+                "column": 4224,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "String",
+              "text": "string",
+              "value": undefined,
+            },
+            "text": "{ (locales?: string | string[]): string; (locales?: LocalesArgument): string; }",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "trim",
+            "parameters": [],
+            "position": {
+              "end": {
+                "column": 4289,
+                "line": 4,
+              },
+              "start": {
+                "column": 4275,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "String",
+              "text": "string",
+              "value": undefined,
+            },
+            "text": "() => string",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "isOptional": false,
+            "isReadonly": true,
+            "kind": "PropertySignature",
+            "name": "length",
+            "position": {
+              "end": {
+                "column": 4312,
+                "line": 4,
+              },
+              "start": {
+                "column": 4289,
+                "line": 4,
+              },
+            },
+            "text": "number",
+            "type": {
+              "kind": "Number",
+              "text": "number",
+              "value": undefined,
+            },
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "substr",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "from",
+                "position": {
+                  "end": {
+                    "column": 4330,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 4319,
+                    "line": 4,
+                  },
+                },
+                "text": "number",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+              },
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": true,
+                "kind": "Parameter",
+                "name": "length",
+                "position": {
+                  "end": {
+                    "column": 4345,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 4331,
+                    "line": 4,
+                  },
+                },
+                "text": "number",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 4354,
+                "line": 4,
+              },
+              "start": {
+                "column": 4312,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "String",
+              "text": "string",
+              "value": undefined,
+            },
+            "text": "(from: number, length?: number) => string",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "valueOf",
+            "parameters": [],
+            "position": {
+              "end": {
+                "column": 4371,
+                "line": 4,
+              },
+              "start": {
+                "column": 4354,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "String",
+              "text": "string",
+              "value": undefined,
+            },
+            "text": "() => string",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "IndexSignature",
+            "parameter": {
+              "kind": "IndexSignatureParameter",
+              "name": "index",
+              "text": "index: number",
+              "type": {
+                "kind": "Number",
+                "text": "number",
+                "value": undefined,
+              },
+            },
+            "position": {
+              "end": {
+                "column": 4401,
+                "line": 4,
+              },
+              "start": {
+                "column": 4371,
+                "line": 4,
+              },
+            },
+            "text": "readonly[index:number]:string;",
+            "type": {
+              "kind": "String",
+              "text": "string",
+              "value": undefined,
+            },
+          },
+        ],
+        "name": "color",
         "position": {
           "end": {
             "column": 21,
@@ -5743,7 +4956,6 @@ describe('resolveType', () => {
           },
         },
         "text": ""blue"",
-        "value": "blue",
       }
     `)
   })
@@ -5766,109 +4978,26 @@ describe('resolveType', () => {
     expect(processedProperties).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "TypeLiteral",
-        "members": [
+        "kind": "TypeAlias",
+        "name": "color",
+        "parameters": [
           {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": true,
-            "kind": "PropertySignature",
-            "name": "red",
+            "constraint": undefined,
+            "defaultType": undefined,
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "TypeParameter",
+            "name": "T",
             "position": {
               "end": {
-                "column": 41,
-                "line": 1,
+                "column": 185,
+                "line": 6,
               },
               "start": {
-                "column": 31,
-                "line": 1,
+                "column": 184,
+                "line": 6,
               },
             },
-            "text": ""red"",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "String",
-              "position": {
-                "end": {
-                  "column": 41,
-                  "line": 1,
-                },
-                "start": {
-                  "column": 31,
-                  "line": 1,
-                },
-              },
-              "text": ""red"",
-              "value": "red",
-            },
-          },
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": true,
-            "kind": "PropertySignature",
-            "name": "blue",
-            "position": {
-              "end": {
-                "column": 55,
-                "line": 1,
-              },
-              "start": {
-                "column": 43,
-                "line": 1,
-              },
-            },
-            "text": ""blue"",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "String",
-              "position": {
-                "end": {
-                  "column": 55,
-                  "line": 1,
-                },
-                "start": {
-                  "column": 43,
-                  "line": 1,
-                },
-              },
-              "text": ""blue"",
-              "value": "blue",
-            },
-          },
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": true,
-            "kind": "PropertySignature",
-            "name": "green",
-            "position": {
-              "end": {
-                "column": 71,
-                "line": 1,
-              },
-              "start": {
-                "column": 57,
-                "line": 1,
-              },
-            },
-            "text": ""green"",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "String",
-              "position": {
-                "end": {
-                  "column": 71,
-                  "line": 1,
-                },
-                "start": {
-                  "column": 57,
-                  "line": 1,
-                },
-              },
-              "text": ""green"",
-              "value": "green",
-            },
+            "text": "T",
           },
         ],
         "position": {
@@ -5882,6 +5011,10 @@ describe('resolveType', () => {
           },
         },
         "text": "Readonly<{ red: "red"; blue: "blue"; green: "green"; }>",
+        "type": {
+          "kind": "TypeReference",
+          "text": "Readonly<T>",
+        },
       }
     `)
   })
@@ -5906,92 +5039,9 @@ describe('resolveType', () => {
     expect(processedProperties).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "TypeLiteral",
-        "members": [
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "color",
-            "position": {
-              "end": {
-                "column": 38,
-                "line": 6,
-              },
-              "start": {
-                "column": 3,
-                "line": 6,
-              },
-            },
-            "text": ""red" | "blue" | "green"",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "UnionType",
-              "position": {
-                "end": {
-                  "column": 38,
-                  "line": 6,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 6,
-                },
-              },
-              "text": ""red" | "blue" | "green"",
-              "types": [
-                {
-                  "filePath": "test.ts",
-                  "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 38,
-                      "line": 6,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 6,
-                    },
-                  },
-                  "text": ""red"",
-                  "value": "red",
-                },
-                {
-                  "filePath": "test.ts",
-                  "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 38,
-                      "line": 6,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 6,
-                    },
-                  },
-                  "text": ""blue"",
-                  "value": "blue",
-                },
-                {
-                  "filePath": "test.ts",
-                  "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 38,
-                      "line": 6,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 6,
-                    },
-                  },
-                  "text": ""green"",
-                  "value": "green",
-                },
-              ],
-            },
-          },
-        ],
+        "kind": "TypeAlias",
+        "name": "TextProps",
+        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -6003,6 +5053,51 @@ describe('resolveType', () => {
           },
         },
         "text": "TextProps",
+        "type": {
+          "kind": "TypeLiteral",
+          "members": [
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "color",
+              "position": {
+                "end": {
+                  "column": 38,
+                  "line": 6,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 6,
+                },
+              },
+              "text": ""red" | "blue" | "green"",
+              "type": {
+                "kind": "UnionType",
+                "text": ""red" | "blue" | "green"",
+                "types": [
+                  {
+                    "kind": "String",
+                    "text": ""red"",
+                    "value": "red",
+                  },
+                  {
+                    "kind": "String",
+                    "text": ""blue"",
+                    "value": "blue",
+                  },
+                  {
+                    "kind": "String",
+                    "text": ""green"",
+                    "value": "green",
+                  },
+                ],
+              },
+            },
+          ],
+          "text": "TextProps",
+        },
       }
     `)
   })
@@ -6027,92 +5122,9 @@ describe('resolveType', () => {
     expect(processedProperties).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "TypeLiteral",
-        "members": [
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "color",
-            "position": {
-              "end": {
-                "column": 38,
-                "line": 6,
-              },
-              "start": {
-                "column": 3,
-                "line": 6,
-              },
-            },
-            "text": ""red" | "blue" | "green"",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "UnionType",
-              "position": {
-                "end": {
-                  "column": 38,
-                  "line": 6,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 6,
-                },
-              },
-              "text": ""red" | "blue" | "green"",
-              "types": [
-                {
-                  "filePath": "test.ts",
-                  "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 38,
-                      "line": 6,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 6,
-                    },
-                  },
-                  "text": ""red"",
-                  "value": "red",
-                },
-                {
-                  "filePath": "test.ts",
-                  "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 38,
-                      "line": 6,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 6,
-                    },
-                  },
-                  "text": ""blue"",
-                  "value": "blue",
-                },
-                {
-                  "filePath": "test.ts",
-                  "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 38,
-                      "line": 6,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 6,
-                    },
-                  },
-                  "text": ""green"",
-                  "value": "green",
-                },
-              ],
-            },
-          },
-        ],
+        "kind": "TypeAlias",
+        "name": "TextProps",
+        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -6124,6 +5136,51 @@ describe('resolveType', () => {
           },
         },
         "text": "TextProps",
+        "type": {
+          "kind": "TypeLiteral",
+          "members": [
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "color",
+              "position": {
+                "end": {
+                  "column": 38,
+                  "line": 6,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 6,
+                },
+              },
+              "text": ""red" | "blue" | "green"",
+              "type": {
+                "kind": "UnionType",
+                "text": ""red" | "blue" | "green"",
+                "types": [
+                  {
+                    "kind": "String",
+                    "text": ""red"",
+                    "value": "red",
+                  },
+                  {
+                    "kind": "String",
+                    "text": ""blue"",
+                    "value": "blue",
+                  },
+                  {
+                    "kind": "String",
+                    "text": ""green"",
+                    "value": "green",
+                  },
+                ],
+              },
+            },
+          ],
+          "text": "TextProps",
+        },
       }
     `)
   })
@@ -6154,43 +5211,9 @@ describe('resolveType', () => {
     expect(processedProperties).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "TypeLiteral",
-        "members": [
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "color",
-            "position": {
-              "end": {
-                "column": 17,
-                "line": 4,
-              },
-              "start": {
-                "column": 3,
-                "line": 4,
-              },
-            },
-            "text": "{ readonly red: "red"; readonly blue: "blue"; readonly green: "green"; }",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "TypeReference",
-              "name": "Colors",
-              "position": {
-                "end": {
-                  "column": 17,
-                  "line": 4,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 4,
-                },
-              },
-              "text": "{ readonly red: "red"; readonly blue: "blue"; readonly green: "green"; }",
-            },
-          },
-        ],
+        "kind": "TypeAlias",
+        "name": "TextProps",
+        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -6202,6 +5225,34 @@ describe('resolveType', () => {
           },
         },
         "text": "TextProps",
+        "type": {
+          "kind": "TypeLiteral",
+          "members": [
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "color",
+              "position": {
+                "end": {
+                  "column": 17,
+                  "line": 4,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 4,
+                },
+              },
+              "text": "{ readonly red: "red"; readonly blue: "blue"; readonly green: "green"; }",
+              "type": {
+                "kind": "TypeReference",
+                "text": "{ readonly red: "red"; readonly blue: "blue"; readonly green: "green"; }",
+              },
+            },
+          ],
+          "text": "TextProps",
+        },
       }
     `)
   })
@@ -6229,130 +5280,9 @@ describe('resolveType', () => {
     expect(processedProperties).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "TypeLiteral",
-        "members": [
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "functionReturn",
-            "position": {
-              "end": {
-                "column": 42,
-                "line": 9,
-              },
-              "start": {
-                "column": 3,
-                "line": 9,
-              },
-            },
-            "text": "Promise<{ slug: string; filePath: string; }>",
-            "type": {
-              "arguments": [
-                {
-                  "filePath": "test.ts",
-                  "kind": "TypeLiteral",
-                  "members": [
-                    {
-                      "filePath": "test.ts",
-                      "isOptional": false,
-                      "isReadonly": false,
-                      "kind": "PropertySignature",
-                      "name": "slug",
-                      "position": {
-                        "end": {
-                          "column": 16,
-                          "line": 3,
-                        },
-                        "start": {
-                          "column": 5,
-                          "line": 3,
-                        },
-                      },
-                      "text": "string",
-                      "type": {
-                        "filePath": "test.ts",
-                        "kind": "String",
-                        "position": {
-                          "end": {
-                            "column": 16,
-                            "line": 3,
-                          },
-                          "start": {
-                            "column": 5,
-                            "line": 3,
-                          },
-                        },
-                        "text": "string",
-                        "value": undefined,
-                      },
-                    },
-                    {
-                      "filePath": "test.ts",
-                      "isOptional": false,
-                      "isReadonly": false,
-                      "kind": "PropertySignature",
-                      "name": "filePath",
-                      "position": {
-                        "end": {
-                          "column": 20,
-                          "line": 4,
-                        },
-                        "start": {
-                          "column": 5,
-                          "line": 4,
-                        },
-                      },
-                      "text": "string",
-                      "type": {
-                        "filePath": "test.ts",
-                        "kind": "String",
-                        "position": {
-                          "end": {
-                            "column": 20,
-                            "line": 4,
-                          },
-                          "start": {
-                            "column": 5,
-                            "line": 4,
-                          },
-                        },
-                        "text": "string",
-                        "value": undefined,
-                      },
-                    },
-                  ],
-                  "position": {
-                    "end": {
-                      "column": 4,
-                      "line": 5,
-                    },
-                    "start": {
-                      "column": 10,
-                      "line": 2,
-                    },
-                  },
-                  "text": "{ slug: string; filePath: string; }",
-                },
-              ],
-              "filePath": "test.ts",
-              "kind": "TypeReference",
-              "name": "Promise",
-              "position": {
-                "end": {
-                  "column": 42,
-                  "line": 9,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 9,
-                },
-              },
-              "text": "Promise<{ slug: string; filePath: string; }>",
-            },
-          },
-        ],
+        "kind": "TypeAlias",
+        "name": "ComplexType",
+        "parameters": [],
         "position": {
           "end": {
             "column": 3,
@@ -6364,6 +5294,34 @@ describe('resolveType', () => {
           },
         },
         "text": "ComplexType",
+        "type": {
+          "kind": "TypeLiteral",
+          "members": [
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "functionReturn",
+              "position": {
+                "end": {
+                  "column": 42,
+                  "line": 9,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 9,
+                },
+              },
+              "text": "Promise<{ slug: string; filePath: string; }>",
+              "type": {
+                "kind": "TypeReference",
+                "text": "Promise<{ slug: string; filePath: string; }>",
+              },
+            },
+          ],
+          "text": "ComplexType",
+        },
       }
     `)
   })
@@ -6414,267 +5372,47 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "description": "Represents all of the things React can render.
-
-      Where {@link ReactElement} only represents JSX, \`ReactNode\` represents everything that can be rendered.",
-              "filePath": "node_modules/@types/react/index.d.ts",
               "kind": "UnionType",
-              "position": {
-                "end": {
-                  "column": 37,
-                  "line": 439,
-                },
-                "start": {
-                  "column": 5,
-                  "line": 426,
-                },
-              },
-              "tags": [
-                {
-                  "name": "see",
-                  "text": "{@link https://react-typescript-cheatsheet.netlify.app/docs/react-types/reactnode/ React TypeScript Cheatsheet}",
-                },
-                {
-                  "name": "example",
-                  "text": "\`\`\`tsx
-      // Typing children
-      type Props = { children: ReactNode }
-
-      const Component = ({ children }: Props) => <div>{children}</div>
-
-      <Component>hello</Component>
-      \`\`\`",
-                },
-                {
-                  "name": "example",
-                  "text": "\`\`\`tsx
-      // Typing a custom element
-      type Props = { customElement: ReactNode }
-
-      const Component = ({ customElement }: Props) => <div>{customElement}</div>
-
-      <Component customElement={<div>hello</div>} />
-      \`\`\`",
-                },
-              ],
-              "text": "React.ReactNode",
+              "text": "string | number | bigint | boolean | ReactElement<unknown, string | JSXElementConstructor<any>> | Iterable<ReactNode> | ReactPortal | Promise<AwaitedReactNode>",
               "types": [
                 {
-                  "arguments": [],
-                  "filePath": "node_modules/@types/react/index.d.ts",
-                  "kind": "TypeReference",
-                  "name": "ReactElement",
-                  "position": {
-                    "end": {
-                      "column": 6,
-                      "line": 322,
-                    },
-                    "start": {
-                      "column": 5,
-                      "line": 315,
-                    },
-                  },
-                  "text": "ReactElement<unknown, string | JSXElementConstructor<any>>",
-                },
-                {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                   "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 4402,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 3482,
-                      "line": 4,
-                    },
-                  },
                   "text": "string",
                   "value": undefined,
                 },
                 {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                   "kind": "Number",
-                  "position": {
-                    "end": {
-                      "column": 4943,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 4755,
-                      "line": 4,
-                    },
-                  },
                   "text": "number",
                   "value": undefined,
                 },
                 {
-                  "arguments": [],
-                  "filePath": "node_modules/typescript/lib/lib.es2020.bigint.d.ts",
-                  "kind": "TypeReference",
-                  "name": "BigInt",
-                  "position": {
-                    "end": {
-                      "column": 817,
-                      "line": 3,
-                    },
-                    "start": {
-                      "column": 623,
-                      "line": 3,
-                    },
-                  },
-                  "text": "BigInt",
+                  "kind": "BigInt",
+                  "text": "bigint",
+                  "value": undefined,
                 },
                 {
-                  "arguments": [
-                    {
-                      "arguments": [],
-                      "filePath": "node_modules/@types/react/index.d.ts",
-                      "kind": "TypeReference",
-                      "name": "ReactNode",
-                      "position": {
-                        "end": {
-                          "column": 37,
-                          "line": 439,
-                        },
-                        "start": {
-                          "column": 5,
-                          "line": 426,
-                        },
-                      },
-                      "text": "ReactNode",
-                    },
-                  ],
-                  "filePath": "node_modules/typescript/lib/lib.es2015.iterable.d.ts",
-                  "kind": "TypeReference",
-                  "name": "Iterable",
-                  "position": {
-                    "end": {
-                      "column": 560,
-                      "line": 3,
-                    },
-                    "start": {
-                      "column": 469,
-                      "line": 3,
-                    },
-                  },
-                  "text": "Iterable<ReactNode>",
-                },
-                {
-                  "arguments": [],
-                  "filePath": "node_modules/@types/react/index.d.ts",
-                  "kind": "TypeReference",
-                  "name": "ReactPortal",
-                  "position": {
-                    "end": {
-                      "column": 6,
-                      "line": 388,
-                    },
-                    "start": {
-                      "column": 5,
-                      "line": 386,
-                    },
-                  },
-                  "text": "ReactPortal",
-                },
-                {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                   "kind": "Boolean",
-                  "position": {
-                    "end": {
-                      "column": 4613,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 4576,
-                      "line": 4,
-                    },
-                  },
                   "text": "boolean",
                 },
                 {
-                  "filePath": "node_modules/@types/react/index.d.ts",
-                  "kind": "Unknown",
-                  "position": {
-                    "end": {
-                      "column": 15,
-                      "line": 434,
-                    },
-                    "start": {
-                      "column": 11,
-                      "line": 434,
-                    },
-                  },
-                  "text": "null",
-                },
-                {
-                  "filePath": "node_modules/@types/react/index.d.ts",
-                  "kind": "Unknown",
-                  "position": {
-                    "end": {
-                      "column": 20,
-                      "line": 435,
-                    },
-                    "start": {
-                      "column": 11,
-                      "line": 435,
-                    },
-                  },
-                  "text": "undefined",
-                },
-                {
-                  "filePath": "node_modules/@types/react/index.d.ts",
-                  "kind": "Unknown",
-                  "position": {
-                    "end": {
-                      "column": 10,
-                      "line": 438,
-                    },
-                    "start": {
-                      "column": 11,
-                      "line": 436,
-                    },
-                  },
-                  "text": "never",
-                },
-                {
-                  "arguments": [
-                    {
-                      "arguments": [],
-                      "filePath": "node_modules/@types/react/index.d.ts",
-                      "kind": "TypeReference",
-                      "name": "AwaitedReactNode",
-                      "position": {
-                        "end": {
-                          "column": 7,
-                          "line": 53,
-                        },
-                        "start": {
-                          "column": 1,
-                          "line": 41,
-                        },
-                      },
-                      "text": "AwaitedReactNode",
-                    },
-                  ],
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                   "kind": "TypeReference",
-                  "name": "Promise",
-                  "position": {
-                    "end": {
-                      "column": 15356,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 15015,
-                      "line": 4,
-                    },
-                  },
+                  "text": "ReactElement<unknown, string | JSXElementConstructor<any>>",
+                },
+                {
+                  "kind": "TypeReference",
+                  "text": "Iterable<ReactNode>",
+                },
+                {
+                  "kind": "TypeReference",
+                  "text": "ReactPortal",
+                },
+                {
+                  "kind": "TypeReference",
                   "text": "Promise<AwaitedReactNode>",
                 },
               ],
             },
-            "text": "function Text(): React.ReactNode",
+            "text": "function Text(): string | number | bigint | boolean | ReactElement<unknown, string | JSXElementConstructor<any>> | Iterable<ReactNode> | ReactPortal | Promise<AwaitedReactNode>",
           },
         ],
         "text": "() => ReactNode",
@@ -6736,18 +5474,7 @@ describe('resolveType', () => {
                 },
                 "text": "number",
                 "type": {
-                  "filePath": "test.ts",
                   "kind": "Number",
-                  "position": {
-                    "end": {
-                      "column": 60,
-                      "line": 2,
-                    },
-                    "start": {
-                      "column": 36,
-                      "line": 2,
-                    },
-                  },
                   "text": "number",
                   "value": undefined,
                 },
@@ -6764,18 +5491,7 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "filePath": "test.ts",
-              "kind": "Unknown",
-              "position": {
-                "end": {
-                  "column": 64,
-                  "line": 2,
-                },
-                "start": {
-                  "column": 1,
-                  "line": 1,
-                },
-              },
+              "kind": "Void",
               "text": "void",
             },
             "text": "function useCounter(initialCount: number): void",
@@ -6847,7 +5563,6 @@ describe('resolveType', () => {
                 },
                 "text": "{ initialCount?: number; }",
                 "type": {
-                  "filePath": "test.ts",
                   "kind": "TypeLiteral",
                   "members": [
                     {
@@ -6870,33 +5585,12 @@ describe('resolveType', () => {
                       "tags": undefined,
                       "text": "number",
                       "type": {
-                        "filePath": "test.ts",
                         "kind": "Number",
-                        "position": {
-                          "end": {
-                            "column": 57,
-                            "line": 5,
-                          },
-                          "start": {
-                            "column": 36,
-                            "line": 5,
-                          },
-                        },
                         "text": "number",
                         "value": undefined,
                       },
                     },
                   ],
-                  "position": {
-                    "end": {
-                      "column": 59,
-                      "line": 5,
-                    },
-                    "start": {
-                      "column": 21,
-                      "line": 4,
-                    },
-                  },
                   "text": "{ initialCount?: number; }",
                 },
               },
@@ -6912,25 +5606,7 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "description": "Provides a counter state.",
-              "filePath": "test.ts",
-              "kind": "Unknown",
-              "position": {
-                "end": {
-                  "column": 63,
-                  "line": 5,
-                },
-                "start": {
-                  "column": 1,
-                  "line": 4,
-                },
-              },
-              "tags": [
-                {
-                  "name": "deprecated",
-                  "text": "use \`Counter\` component",
-                },
-              ],
+              "kind": "Void",
               "text": "void",
             },
             "tags": [
@@ -7013,7 +5689,6 @@ describe('resolveType', () => {
                 },
                 "text": "{ initial?: { count: number; }; }",
                 "type": {
-                  "filePath": "test.ts",
                   "kind": "TypeLiteral",
                   "members": [
                     {
@@ -7034,7 +5709,6 @@ describe('resolveType', () => {
                       },
                       "text": "{ count: number; }",
                       "type": {
-                        "filePath": "test.ts",
                         "kind": "TypeLiteral",
                         "members": [
                           {
@@ -7055,47 +5729,16 @@ describe('resolveType', () => {
                             },
                             "text": "number",
                             "type": {
-                              "filePath": "test.ts",
                               "kind": "Number",
-                              "position": {
-                                "end": {
-                                  "column": 77,
-                                  "line": 1,
-                                },
-                                "start": {
-                                  "column": 64,
-                                  "line": 1,
-                                },
-                              },
                               "text": "number",
                               "value": undefined,
                             },
                           },
                         ],
-                        "position": {
-                          "end": {
-                            "column": 79,
-                            "line": 1,
-                          },
-                          "start": {
-                            "column": 52,
-                            "line": 1,
-                          },
-                        },
                         "text": "{ count: number; }",
                       },
                     },
                   ],
-                  "position": {
-                    "end": {
-                      "column": 86,
-                      "line": 1,
-                    },
-                    "start": {
-                      "column": 21,
-                      "line": 1,
-                    },
-                  },
                   "text": "{ initial?: { count: number; }; }",
                 },
               },
@@ -7111,18 +5754,7 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "filePath": "test.ts",
-              "kind": "Unknown",
-              "position": {
-                "end": {
-                  "column": 90,
-                  "line": 1,
-                },
-                "start": {
-                  "column": 1,
-                  "line": 1,
-                },
-              },
+              "kind": "Void",
               "text": "void",
             },
             "text": "function useCounter({ initial?: { count: number; }; }): void",
@@ -7185,18 +5817,7 @@ describe('resolveType', () => {
                 },
                 "text": "number",
                 "type": {
-                  "filePath": "test.ts",
                   "kind": "Number",
-                  "position": {
-                    "end": {
-                      "column": 45,
-                      "line": 1,
-                    },
-                    "start": {
-                      "column": 21,
-                      "line": 1,
-                    },
-                  },
                   "text": "number",
                   "value": undefined,
                 },
@@ -7213,18 +5834,7 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "filePath": "test.ts",
-              "kind": "Unknown",
-              "position": {
-                "end": {
-                  "column": 52,
-                  "line": 1,
-                },
-                "start": {
-                  "column": 20,
-                  "line": 1,
-                },
-              },
+              "kind": "Void",
               "text": "void",
             },
             "text": "(initialCount: number) => void",
@@ -7287,18 +5897,7 @@ describe('resolveType', () => {
                 },
                 "text": "number",
                 "type": {
-                  "filePath": "test.ts",
                   "kind": "Number",
-                  "position": {
-                    "end": {
-                      "column": 54,
-                      "line": 1,
-                    },
-                    "start": {
-                      "column": 30,
-                      "line": 1,
-                    },
-                  },
                   "text": "number",
                   "value": undefined,
                 },
@@ -7315,18 +5914,7 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "filePath": "test.ts",
-              "kind": "Unknown",
-              "position": {
-                "end": {
-                  "column": 58,
-                  "line": 1,
-                },
-                "start": {
-                  "column": 20,
-                  "line": 1,
-                },
-              },
+              "kind": "Void",
               "text": "void",
             },
             "text": "(initialCount: number) => void",
@@ -7399,19 +5987,32 @@ describe('resolveType', () => {
                 },
                 "text": "CounterOptions",
                 "type": {
-                  "filePath": "test.ts",
-                  "kind": "TypeReference",
-                  "name": "CounterOptions",
-                  "position": {
-                    "end": {
-                      "column": 98,
-                      "line": 1,
+                  "kind": "TypeLiteral",
+                  "members": [
+                    {
+                      "filePath": "types.ts",
+                      "isOptional": true,
+                      "isReadonly": false,
+                      "kind": "PropertySignature",
+                      "name": "initialCount",
+                      "position": {
+                        "end": {
+                          "column": 53,
+                          "line": 1,
+                        },
+                        "start": {
+                          "column": 32,
+                          "line": 1,
+                        },
+                      },
+                      "text": "number",
+                      "type": {
+                        "kind": "Number",
+                        "text": "number",
+                        "value": undefined,
+                      },
                     },
-                    "start": {
-                      "column": 62,
-                      "line": 1,
-                    },
-                  },
+                  ],
                   "text": "CounterOptions",
                 },
               },
@@ -7427,18 +6028,7 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "filePath": "test.ts",
-              "kind": "Unknown",
-              "position": {
-                "end": {
-                  "column": 102,
-                  "line": 1,
-                },
-                "start": {
-                  "column": 42,
-                  "line": 1,
-                },
-              },
+              "kind": "Void",
               "text": "void",
             },
             "text": "function useCounter(CounterOptions): void",
@@ -7513,19 +6103,32 @@ describe('resolveType', () => {
                 },
                 "text": "{ initialCount: number; }",
                 "type": {
-                  "filePath": "test.ts",
-                  "kind": "TypeReference",
-                  "name": "ReturnType<typeof useCounter>",
-                  "position": {
-                    "end": {
-                      "column": 117,
-                      "line": 1,
+                  "kind": "TypeLiteral",
+                  "members": [
+                    {
+                      "filePath": "types.ts",
+                      "isOptional": true,
+                      "isReadonly": false,
+                      "kind": "PropertySignature",
+                      "name": "initialCount",
+                      "position": {
+                        "end": {
+                          "column": 56,
+                          "line": 1,
+                        },
+                        "start": {
+                          "column": 41,
+                          "line": 1,
+                        },
+                      },
+                      "text": "number",
+                      "type": {
+                        "kind": "Number",
+                        "text": "number",
+                        "value": undefined,
+                      },
                     },
-                    "start": {
-                      "column": 66,
-                      "line": 1,
-                    },
-                  },
+                  ],
                   "text": "{ initialCount: number; }",
                 },
               },
@@ -7541,18 +6144,7 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "filePath": "test.ts",
-              "kind": "Unknown",
-              "position": {
-                "end": {
-                  "column": 121,
-                  "line": 1,
-                },
-                "start": {
-                  "column": 38,
-                  "line": 1,
-                },
-              },
+              "kind": "Void",
               "text": "void",
             },
             "text": "function useCounterOverride({ initialCount: number; }): void",
@@ -7619,22 +6211,10 @@ describe('resolveType', () => {
               },
               "text": "Props",
               "type": {
-                "filePath": "test.ts",
                 "kind": "UnionType",
-                "position": {
-                  "end": {
-                    "column": 32,
-                    "line": 5,
-                  },
-                  "start": {
-                    "column": 20,
-                    "line": 5,
-                  },
-                },
                 "text": "BaseProps & { source: string; } | BaseProps & { value: string; }",
                 "types": [
                   {
-                    "filePath": "test.ts",
                     "kind": "TypeLiteral",
                     "members": [
                       {
@@ -7655,18 +6235,7 @@ describe('resolveType', () => {
                         },
                         "text": "string",
                         "type": {
-                          "filePath": "test.ts",
                           "kind": "String",
-                          "position": {
-                            "end": {
-                              "column": 33,
-                              "line": 1,
-                            },
-                            "start": {
-                              "column": 20,
-                              "line": 1,
-                            },
-                          },
                           "text": "string",
                           "value": undefined,
                         },
@@ -7689,37 +6258,15 @@ describe('resolveType', () => {
                         },
                         "text": "string",
                         "type": {
-                          "filePath": "test.ts",
                           "kind": "String",
-                          "position": {
-                            "end": {
-                              "column": 42,
-                              "line": 3,
-                            },
-                            "start": {
-                              "column": 28,
-                              "line": 3,
-                            },
-                          },
                           "text": "string",
                           "value": undefined,
                         },
                       },
                     ],
-                    "position": {
-                      "end": {
-                        "column": 44,
-                        "line": 3,
-                      },
-                      "start": {
-                        "column": 14,
-                        "line": 3,
-                      },
-                    },
                     "text": "BaseProps & { source: string; }",
                   },
                   {
-                    "filePath": "test.ts",
                     "kind": "TypeLiteral",
                     "members": [
                       {
@@ -7740,18 +6287,7 @@ describe('resolveType', () => {
                         },
                         "text": "string",
                         "type": {
-                          "filePath": "test.ts",
                           "kind": "String",
-                          "position": {
-                            "end": {
-                              "column": 33,
-                              "line": 1,
-                            },
-                            "start": {
-                              "column": 20,
-                              "line": 1,
-                            },
-                          },
                           "text": "string",
                           "value": undefined,
                         },
@@ -7774,33 +6310,12 @@ describe('resolveType', () => {
                         },
                         "text": "string",
                         "type": {
-                          "filePath": "test.ts",
                           "kind": "String",
-                          "position": {
-                            "end": {
-                              "column": 74,
-                              "line": 3,
-                            },
-                            "start": {
-                              "column": 61,
-                              "line": 3,
-                            },
-                          },
                           "text": "string",
                           "value": undefined,
                         },
                       },
                     ],
-                    "position": {
-                      "end": {
-                        "column": 76,
-                        "line": 3,
-                      },
-                      "start": {
-                        "column": 47,
-                        "line": 3,
-                      },
-                    },
                     "text": "BaseProps & { value: string; }",
                   },
                 ],
@@ -7817,18 +6332,7 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "filePath": "test.ts",
-              "kind": "Unknown",
-              "position": {
-                "end": {
-                  "column": 36,
-                  "line": 5,
-                },
-                "start": {
-                  "column": 1,
-                  "line": 5,
-                },
-              },
+              "kind": "Void",
               "text": "void",
             },
             "text": "function Component(props: Props): void",
@@ -7895,22 +6399,15 @@ describe('resolveType', () => {
                 },
                 "text": "Props",
                 "type": {
-                  "filePath": "test.ts",
                   "kind": "UnionType",
-                  "position": {
-                    "end": {
-                      "column": 32,
-                      "line": 3,
-                    },
-                    "start": {
-                      "column": 20,
-                      "line": 3,
-                    },
-                  },
-                  "text": "{ color: string; } | string",
+                  "text": "string | { color: string; }",
                   "types": [
                     {
-                      "filePath": "test.ts",
+                      "kind": "String",
+                      "text": "string",
+                      "value": undefined,
+                    },
+                    {
                       "kind": "TypeLiteral",
                       "members": [
                         {
@@ -7931,50 +6428,13 @@ describe('resolveType', () => {
                           },
                           "text": "string",
                           "type": {
-                            "filePath": "test.ts",
                             "kind": "String",
-                            "position": {
-                              "end": {
-                                "column": 29,
-                                "line": 1,
-                              },
-                              "start": {
-                                "column": 16,
-                                "line": 1,
-                              },
-                            },
                             "text": "string",
                             "value": undefined,
                           },
                         },
                       ],
-                      "position": {
-                        "end": {
-                          "column": 31,
-                          "line": 1,
-                        },
-                        "start": {
-                          "column": 14,
-                          "line": 1,
-                        },
-                      },
                       "text": "{ color: string; }",
-                    },
-                    {
-                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                      "kind": "String",
-                      "position": {
-                        "end": {
-                          "column": 4402,
-                          "line": 4,
-                        },
-                        "start": {
-                          "column": 3482,
-                          "line": 4,
-                        },
-                      },
-                      "text": "string",
-                      "value": undefined,
                     },
                   ],
                 },
@@ -7991,18 +6451,7 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "filePath": "test.ts",
-              "kind": "Unknown",
-              "position": {
-                "end": {
-                  "column": 36,
-                  "line": 3,
-                },
-                "start": {
-                  "column": 1,
-                  "line": 3,
-                },
-              },
+              "kind": "Void",
               "text": "void",
             },
             "text": "function Component(props: Props): void",
@@ -8076,187 +6525,112 @@ describe('resolveType', () => {
               },
               "text": "Props",
               "type": {
-                "filePath": "test.ts",
                 "kind": "UnionType",
-                "position": {
-                  "end": {
-                    "column": 32,
-                    "line": 5,
-                  },
-                  "start": {
-                    "column": 20,
-                    "line": 5,
-                  },
-                },
                 "text": "BaseProps & { source: string; } | BaseProps & { value: string; }",
                 "types": [
                   {
-                    "filePath": "test.ts",
-                    "kind": "IntersectionType",
-                    "position": {
-                      "end": {
-                        "column": 44,
-                        "line": 3,
-                      },
-                      "start": {
-                        "column": 14,
-                        "line": 3,
-                      },
-                    },
-                    "text": "BaseProps & { source: string; }",
-                    "types": [
+                    "kind": "TypeLiteral",
+                    "members": [
                       {
                         "filePath": "types.ts",
-                        "kind": "TypeReference",
-                        "name": "BaseProps",
+                        "isOptional": false,
+                        "isReadonly": false,
+                        "kind": "PropertySignature",
+                        "name": "color",
                         "position": {
                           "end": {
-                            "column": 42,
+                            "column": 40,
                             "line": 1,
                           },
                           "start": {
-                            "column": 1,
+                            "column": 27,
                             "line": 1,
                           },
                         },
-                        "text": "BaseProps",
+                        "text": "string",
+                        "type": {
+                          "kind": "String",
+                          "text": "string",
+                          "value": undefined,
+                        },
                       },
                       {
                         "filePath": "test.ts",
-                        "kind": "TypeLiteral",
-                        "members": [
-                          {
-                            "filePath": "test.ts",
-                            "isOptional": false,
-                            "isReadonly": false,
-                            "kind": "PropertySignature",
-                            "name": "source",
-                            "position": {
-                              "end": {
-                                "column": 42,
-                                "line": 3,
-                              },
-                              "start": {
-                                "column": 28,
-                                "line": 3,
-                              },
-                            },
-                            "text": "string",
-                            "type": {
-                              "filePath": "test.ts",
-                              "kind": "String",
-                              "position": {
-                                "end": {
-                                  "column": 42,
-                                  "line": 3,
-                                },
-                                "start": {
-                                  "column": 28,
-                                  "line": 3,
-                                },
-                              },
-                              "text": "string",
-                              "value": undefined,
-                            },
-                          },
-                        ],
+                        "isOptional": false,
+                        "isReadonly": false,
+                        "kind": "PropertySignature",
+                        "name": "source",
                         "position": {
                           "end": {
-                            "column": 44,
+                            "column": 42,
                             "line": 3,
                           },
                           "start": {
-                            "column": 26,
+                            "column": 28,
                             "line": 3,
                           },
                         },
-                        "text": "{ source: string; }",
+                        "text": "string",
+                        "type": {
+                          "kind": "String",
+                          "text": "string",
+                          "value": undefined,
+                        },
                       },
                     ],
+                    "text": "BaseProps & { source: string; }",
                   },
                   {
-                    "filePath": "test.ts",
-                    "kind": "IntersectionType",
-                    "position": {
-                      "end": {
-                        "column": 76,
-                        "line": 3,
-                      },
-                      "start": {
-                        "column": 47,
-                        "line": 3,
-                      },
-                    },
-                    "text": "BaseProps & { value: string; }",
-                    "types": [
+                    "kind": "TypeLiteral",
+                    "members": [
                       {
                         "filePath": "types.ts",
-                        "kind": "TypeReference",
-                        "name": "BaseProps",
+                        "isOptional": false,
+                        "isReadonly": false,
+                        "kind": "PropertySignature",
+                        "name": "color",
                         "position": {
                           "end": {
-                            "column": 42,
+                            "column": 40,
                             "line": 1,
                           },
                           "start": {
-                            "column": 1,
+                            "column": 27,
                             "line": 1,
                           },
                         },
-                        "text": "BaseProps",
+                        "text": "string",
+                        "type": {
+                          "kind": "String",
+                          "text": "string",
+                          "value": undefined,
+                        },
                       },
                       {
                         "filePath": "test.ts",
-                        "kind": "TypeLiteral",
-                        "members": [
-                          {
-                            "filePath": "test.ts",
-                            "isOptional": false,
-                            "isReadonly": false,
-                            "kind": "PropertySignature",
-                            "name": "value",
-                            "position": {
-                              "end": {
-                                "column": 74,
-                                "line": 3,
-                              },
-                              "start": {
-                                "column": 61,
-                                "line": 3,
-                              },
-                            },
-                            "text": "string",
-                            "type": {
-                              "filePath": "test.ts",
-                              "kind": "String",
-                              "position": {
-                                "end": {
-                                  "column": 74,
-                                  "line": 3,
-                                },
-                                "start": {
-                                  "column": 61,
-                                  "line": 3,
-                                },
-                              },
-                              "text": "string",
-                              "value": undefined,
-                            },
-                          },
-                        ],
+                        "isOptional": false,
+                        "isReadonly": false,
+                        "kind": "PropertySignature",
+                        "name": "value",
                         "position": {
                           "end": {
-                            "column": 76,
+                            "column": 74,
                             "line": 3,
                           },
                           "start": {
-                            "column": 59,
+                            "column": 61,
                             "line": 3,
                           },
                         },
-                        "text": "{ value: string; }",
+                        "text": "string",
+                        "type": {
+                          "kind": "String",
+                          "text": "string",
+                          "value": undefined,
+                        },
                       },
                     ],
+                    "text": "BaseProps & { value: string; }",
                   },
                 ],
               },
@@ -8272,18 +6646,7 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "filePath": "test.ts",
-              "kind": "Unknown",
-              "position": {
-                "end": {
-                  "column": 36,
-                  "line": 5,
-                },
-                "start": {
-                  "column": 1,
-                  "line": 5,
-                },
-              },
+              "kind": "Void",
               "text": "void",
             },
             "text": "function Component(props: Props): void",
@@ -8343,65 +6706,21 @@ describe('resolveType', () => {
             },
             "text": "Languages | "mdx"",
             "type": {
-              "filePath": "test.tsx",
               "kind": "UnionType",
-              "position": {
-                "end": {
-                  "column": 2,
-                  "line": 5,
-                },
-                "start": {
-                  "column": 1,
-                  "line": 3,
-                },
-              },
-              "text": "Languages | "mdx"",
+              "text": ""jsx" | "tsx" | "mdx"",
               "types": [
                 {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                   "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 4402,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 3482,
-                      "line": 4,
-                    },
-                  },
                   "text": ""jsx"",
                   "value": "jsx",
                 },
                 {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                   "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 4402,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 3482,
-                      "line": 4,
-                    },
-                  },
                   "text": ""tsx"",
                   "value": "tsx",
                 },
                 {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                   "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 4402,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 3482,
-                      "line": 4,
-                    },
-                  },
                   "text": ""mdx"",
                   "value": "mdx",
                 },
@@ -8482,7 +6801,6 @@ describe('resolveType', () => {
               },
               "text": "{ variant?: "primary" | "secondary" | undefined; }",
               "type": {
-                "filePath": "test.ts",
                 "kind": "TypeLiteral",
                 "members": [
                   {
@@ -8503,49 +6821,16 @@ describe('resolveType', () => {
                     },
                     "text": ""primary" | "secondary"",
                     "type": {
-                      "filePath": "test.ts",
                       "kind": "UnionType",
-                      "position": {
-                        "end": {
-                          "column": 59,
-                          "line": 1,
-                        },
-                        "start": {
-                          "column": 26,
-                          "line": 1,
-                        },
-                      },
                       "text": ""primary" | "secondary"",
                       "types": [
                         {
-                          "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                           "kind": "String",
-                          "position": {
-                            "end": {
-                              "column": 4402,
-                              "line": 4,
-                            },
-                            "start": {
-                              "column": 3482,
-                              "line": 4,
-                            },
-                          },
                           "text": ""primary"",
                           "value": "primary",
                         },
                         {
-                          "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                           "kind": "String",
-                          "position": {
-                            "end": {
-                              "column": 4402,
-                              "line": 4,
-                            },
-                            "start": {
-                              "column": 3482,
-                              "line": 4,
-                            },
-                          },
                           "text": ""secondary"",
                           "value": "secondary",
                         },
@@ -8553,17 +6838,7 @@ describe('resolveType', () => {
                     },
                   },
                 ],
-                "position": {
-                  "end": {
-                    "column": 61,
-                    "line": 1,
-                  },
-                  "start": {
-                    "column": 17,
-                    "line": 1,
-                  },
-                },
-                "text": "{ variant?: "primary" | "secondary"; }",
+                "text": "{ variant?: "primary" | "secondary" | undefined; }",
               },
             },
             "position": {
@@ -8577,18 +6852,7 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "filePath": "test.ts",
-              "kind": "Unknown",
-              "position": {
-                "end": {
-                  "column": 65,
-                  "line": 1,
-                },
-                "start": {
-                  "column": 1,
-                  "line": 1,
-                },
-              },
+              "kind": "Void",
               "text": "void",
             },
             "text": "function Button(props: { variant?: "primary" | "secondary" | undefined; }): void",
@@ -8621,8 +6885,17 @@ describe('resolveType', () => {
         "members": [
           {
             "filePath": "test.ts",
-            "key": "string",
             "kind": "IndexSignature",
+            "parameter": {
+              "kind": "IndexSignatureParameter",
+              "name": "key",
+              "text": "key: string",
+              "type": {
+                "kind": "String",
+                "text": "string",
+                "value": undefined,
+              },
+            },
             "position": {
               "end": {
                 "column": 25,
@@ -8635,18 +6908,7 @@ describe('resolveType', () => {
             },
             "text": "[key: string]: unknown",
             "type": {
-              "filePath": "test.ts",
               "kind": "Unknown",
-              "position": {
-                "end": {
-                  "column": 25,
-                  "line": 2,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 2,
-                },
-              },
               "text": "unknown",
             },
           },
@@ -8683,63 +6945,9 @@ describe('resolveType', () => {
     expect(types).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "TypeLiteral",
-        "members": [
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "foo",
-            "position": {
-              "end": {
-                "column": 14,
-                "line": 3,
-              },
-              "start": {
-                "column": 3,
-                "line": 3,
-              },
-            },
-            "text": "string",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "String",
-              "position": {
-                "end": {
-                  "column": 14,
-                  "line": 3,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 3,
-                },
-              },
-              "text": "string",
-              "value": undefined,
-            },
-          },
-          {
-            "key": "string",
-            "kind": "IndexSignature",
-            "text": "[key: string]: unknown",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "Unknown",
-              "position": {
-                "end": {
-                  "column": 25,
-                  "line": 2,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 2,
-                },
-              },
-              "text": "unknown",
-            },
-          },
-        ],
+        "kind": "TypeAlias",
+        "name": "FileExports",
+        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -8751,6 +6959,35 @@ describe('resolveType', () => {
           },
         },
         "text": "FileExports",
+        "type": {
+          "kind": "TypeLiteral",
+          "members": [
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "foo",
+              "position": {
+                "end": {
+                  "column": 14,
+                  "line": 3,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 3,
+                },
+              },
+              "text": "string",
+              "type": {
+                "kind": "String",
+                "text": "string",
+                "value": undefined,
+              },
+            },
+          ],
+          "text": "FileExports",
+        },
       }
     `)
   })
@@ -8843,19 +7080,194 @@ describe('resolveType', () => {
               },
               "text": "TextProps",
               "type": {
-                "filePath": "test.ts",
-                "kind": "TypeReference",
-                "name": "TextProps",
-                "position": {
-                  "end": {
-                    "column": 38,
-                    "line": 21,
+                "kind": "TypeLiteral",
+                "members": [
+                  {
+                    "filePath": "test.ts",
+                    "isOptional": true,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "className",
+                    "position": {
+                      "end": {
+                        "column": 21,
+                        "line": 17,
+                      },
+                      "start": {
+                        "column": 3,
+                        "line": 17,
+                      },
+                    },
+                    "text": "string",
+                    "type": {
+                      "kind": "String",
+                      "text": "string",
+                      "value": undefined,
+                    },
                   },
-                  "start": {
-                    "column": 22,
-                    "line": 21,
+                  {
+                    "filePath": "test.ts",
+                    "isOptional": false,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "children",
+                    "position": {
+                      "end": {
+                        "column": 22,
+                        "line": 18,
+                      },
+                      "start": {
+                        "column": 3,
+                        "line": 18,
+                      },
+                    },
+                    "text": "ReactNode",
+                    "type": {
+                      "kind": "Any",
+                      "text": "ReactNode",
+                    },
                   },
-                },
+                  {
+                    "filePath": "test.ts",
+                    "isOptional": true,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "variant",
+                    "position": {
+                      "end": {
+                        "column": 2,
+                        "line": 5,
+                      },
+                      "start": {
+                        "column": 35,
+                        "line": 3,
+                      },
+                    },
+                    "text": ""heading1" | "heading2" | "heading3" | "body1"",
+                    "type": {
+                      "kind": "UnionType",
+                      "text": ""heading1" | "heading2" | "heading3" | "body1"",
+                      "types": [
+                        {
+                          "kind": "String",
+                          "text": ""heading1"",
+                          "value": "heading1",
+                        },
+                        {
+                          "kind": "String",
+                          "text": ""heading2"",
+                          "value": "heading2",
+                        },
+                        {
+                          "kind": "String",
+                          "text": ""heading3"",
+                          "value": "heading3",
+                        },
+                        {
+                          "kind": "String",
+                          "text": ""body1"",
+                          "value": "body1",
+                        },
+                      ],
+                    },
+                  },
+                  {
+                    "filePath": "test.ts",
+                    "isOptional": true,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "alignment",
+                    "position": {
+                      "end": {
+                        "column": 2,
+                        "line": 5,
+                      },
+                      "start": {
+                        "column": 35,
+                        "line": 3,
+                      },
+                    },
+                    "text": ""start" | "center" | "end"",
+                    "type": {
+                      "kind": "UnionType",
+                      "text": ""start" | "center" | "end"",
+                      "types": [
+                        {
+                          "kind": "String",
+                          "text": ""start"",
+                          "value": "start",
+                        },
+                        {
+                          "kind": "String",
+                          "text": ""center"",
+                          "value": "center",
+                        },
+                        {
+                          "kind": "String",
+                          "text": ""end"",
+                          "value": "end",
+                        },
+                      ],
+                    },
+                  },
+                  {
+                    "filePath": "test.ts",
+                    "isOptional": true,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "width",
+                    "position": {
+                      "end": {
+                        "column": 2,
+                        "line": 5,
+                      },
+                      "start": {
+                        "column": 35,
+                        "line": 3,
+                      },
+                    },
+                    "text": "string | number",
+                    "type": {
+                      "kind": "UnionType",
+                      "text": "string | number",
+                      "types": [
+                        {
+                          "kind": "String",
+                          "text": "string",
+                          "value": undefined,
+                        },
+                        {
+                          "kind": "Number",
+                          "text": "number",
+                          "value": undefined,
+                        },
+                      ],
+                    },
+                  },
+                  {
+                    "filePath": "test.ts",
+                    "isOptional": true,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "lineHeight",
+                    "position": {
+                      "end": {
+                        "column": 2,
+                        "line": 5,
+                      },
+                      "start": {
+                        "column": 35,
+                        "line": 3,
+                      },
+                    },
+                    "text": "string",
+                    "type": {
+                      "kind": "String",
+                      "text": "string",
+                      "value": undefined,
+                    },
+                  },
+                ],
                 "text": "TextProps",
               },
             },
@@ -8870,18 +7282,7 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "filePath": "test.ts",
-              "kind": "Unknown",
-              "position": {
-                "end": {
-                  "column": 2,
-                  "line": 29,
-                },
-                "start": {
-                  "column": 21,
-                  "line": 21,
-                },
-              },
+              "kind": "Void",
               "text": "void",
             },
             "text": "(props: TextProps) => void",
@@ -8923,7 +7324,7 @@ describe('resolveType', () => {
     expect(types).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "Any",
+        "kind": "Unknown",
         "position": {
           "end": {
             "column": 4,
@@ -8967,7 +7368,7 @@ describe('resolveType', () => {
     expect(types).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "Any",
+        "kind": "Unknown",
         "position": {
           "end": {
             "column": 2,
@@ -9000,191 +7401,9 @@ describe('resolveType', () => {
     expect(types).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "TypeLiteral",
-        "members": [
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "variant",
-            "position": {
-              "end": {
-                "column": 68,
-                "line": 2,
-              },
-              "start": {
-                "column": 3,
-                "line": 2,
-              },
-            },
-            "text": ""heading1" | "heading2" | "heading3" | "body1" | "body2"",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "UnionType",
-              "position": {
-                "end": {
-                  "column": 68,
-                  "line": 2,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 2,
-                },
-              },
-              "text": ""heading1" | "heading2" | "heading3" | "body1" | "body2"",
-              "types": [
-                {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                  "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 4402,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 3482,
-                      "line": 4,
-                    },
-                  },
-                  "text": ""heading1"",
-                  "value": "heading1",
-                },
-                {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                  "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 4402,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 3482,
-                      "line": 4,
-                    },
-                  },
-                  "text": ""heading2"",
-                  "value": "heading2",
-                },
-                {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                  "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 4402,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 3482,
-                      "line": 4,
-                    },
-                  },
-                  "text": ""heading3"",
-                  "value": "heading3",
-                },
-                {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                  "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 4402,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 3482,
-                      "line": 4,
-                    },
-                  },
-                  "text": ""body1"",
-                  "value": "body1",
-                },
-                {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                  "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 4402,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 3482,
-                      "line": 4,
-                    },
-                  },
-                  "text": ""body2"",
-                  "value": "body2",
-                },
-              ],
-            },
-          },
-          {
-            "filePath": "test.ts",
-            "isOptional": true,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "width",
-            "position": {
-              "end": {
-                "column": 26,
-                "line": 3,
-              },
-              "start": {
-                "column": 3,
-                "line": 3,
-              },
-            },
-            "text": "string | number",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "UnionType",
-              "position": {
-                "end": {
-                  "column": 26,
-                  "line": 3,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 3,
-                },
-              },
-              "text": "string | number",
-              "types": [
-                {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                  "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 4402,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 3482,
-                      "line": 4,
-                    },
-                  },
-                  "text": "string",
-                  "value": undefined,
-                },
-                {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                  "kind": "Number",
-                  "position": {
-                    "end": {
-                      "column": 4943,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 4755,
-                      "line": 4,
-                    },
-                  },
-                  "text": "number",
-                  "value": undefined,
-                },
-              ],
-            },
-          },
-        ],
+        "kind": "TypeAlias",
+        "name": "Props",
+        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -9196,6 +7415,95 @@ describe('resolveType', () => {
           },
         },
         "text": "Props",
+        "type": {
+          "kind": "TypeLiteral",
+          "members": [
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "variant",
+              "position": {
+                "end": {
+                  "column": 68,
+                  "line": 2,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 2,
+                },
+              },
+              "text": ""heading1" | "heading2" | "heading3" | "body1" | "body2"",
+              "type": {
+                "kind": "UnionType",
+                "text": ""heading1" | "heading2" | "heading3" | "body1" | "body2"",
+                "types": [
+                  {
+                    "kind": "String",
+                    "text": ""heading1"",
+                    "value": "heading1",
+                  },
+                  {
+                    "kind": "String",
+                    "text": ""heading2"",
+                    "value": "heading2",
+                  },
+                  {
+                    "kind": "String",
+                    "text": ""heading3"",
+                    "value": "heading3",
+                  },
+                  {
+                    "kind": "String",
+                    "text": ""body1"",
+                    "value": "body1",
+                  },
+                  {
+                    "kind": "String",
+                    "text": ""body2"",
+                    "value": "body2",
+                  },
+                ],
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": true,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "width",
+              "position": {
+                "end": {
+                  "column": 26,
+                  "line": 3,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 3,
+                },
+              },
+              "text": "string | number",
+              "type": {
+                "kind": "UnionType",
+                "text": "string | number",
+                "types": [
+                  {
+                    "kind": "String",
+                    "text": "string",
+                    "value": undefined,
+                  },
+                  {
+                    "kind": "Number",
+                    "text": "number",
+                    "value": undefined,
+                  },
+                ],
+              },
+            },
+          ],
+          "text": "Props",
+        },
       }
     `)
   })
@@ -9243,97 +7551,31 @@ describe('resolveType', () => {
             },
             "text": ""heading1" | "heading2" | "heading3" | "body1" | "body2"",
             "type": {
-              "filePath": "test.ts",
               "kind": "UnionType",
-              "position": {
-                "end": {
-                  "column": 2,
-                  "line": 7,
-                },
-                "start": {
-                  "column": 1,
-                  "line": 4,
-                },
-              },
               "text": ""heading1" | "heading2" | "heading3" | "body1" | "body2"",
               "types": [
                 {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                   "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 4402,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 3482,
-                      "line": 4,
-                    },
-                  },
                   "text": ""heading1"",
                   "value": "heading1",
                 },
                 {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                   "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 4402,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 3482,
-                      "line": 4,
-                    },
-                  },
                   "text": ""heading2"",
                   "value": "heading2",
                 },
                 {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                   "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 4402,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 3482,
-                      "line": 4,
-                    },
-                  },
                   "text": ""heading3"",
                   "value": "heading3",
                 },
                 {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                   "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 4402,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 3482,
-                      "line": 4,
-                    },
-                  },
                   "text": ""body1"",
                   "value": "body1",
                 },
                 {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                   "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 4402,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 3482,
-                      "line": 4,
-                    },
-                  },
                   "text": ""body2"",
                   "value": "body2",
                 },
@@ -9358,49 +7600,16 @@ describe('resolveType', () => {
             },
             "text": "string | number",
             "type": {
-              "filePath": "test.ts",
               "kind": "UnionType",
-              "position": {
-                "end": {
-                  "column": 2,
-                  "line": 7,
-                },
-                "start": {
-                  "column": 1,
-                  "line": 4,
-                },
-              },
               "text": "string | number",
               "types": [
                 {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                   "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 4402,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 3482,
-                      "line": 4,
-                    },
-                  },
                   "text": "string",
                   "value": undefined,
                 },
                 {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                   "kind": "Number",
-                  "position": {
-                    "end": {
-                      "column": 4943,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 4755,
-                      "line": 4,
-                    },
-                  },
                   "text": "number",
                   "value": undefined,
                 },
@@ -9440,61 +7649,7 @@ describe('resolveType', () => {
     expect(types).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "Enum",
-        "members": [
-          {
-            "filePath": "test.ts",
-            "kind": "EnumMember",
-            "name": "Red",
-            "position": {
-              "end": {
-                "column": 22,
-                "line": 2,
-              },
-              "start": {
-                "column": 11,
-                "line": 2,
-              },
-            },
-            "text": "Red = 'RED'",
-            "value": "RED",
-          },
-          {
-            "filePath": "test.ts",
-            "kind": "EnumMember",
-            "name": "Green",
-            "position": {
-              "end": {
-                "column": 26,
-                "line": 3,
-              },
-              "start": {
-                "column": 11,
-                "line": 3,
-              },
-            },
-            "text": "Green = 'GREEN'",
-            "value": "GREEN",
-          },
-          {
-            "filePath": "test.ts",
-            "kind": "EnumMember",
-            "name": "Blue",
-            "position": {
-              "end": {
-                "column": 24,
-                "line": 4,
-              },
-              "start": {
-                "column": 11,
-                "line": 4,
-              },
-            },
-            "text": "Blue = 'BLUE'",
-            "value": "BLUE",
-          },
-        ],
-        "name": "Colors",
+        "kind": "Unknown",
         "position": {
           "end": {
             "column": 10,
@@ -9565,399 +7720,199 @@ describe('resolveType', () => {
 
     expect(types).toMatchInlineSnapshot(`
       {
-        "accessors": [
+        "filePath": "test.ts",
+        "kind": "TypeLiteral",
+        "members": [
           {
-            "description": "Sets the count.",
-            "kind": "ClassSetAccessor",
-            "name": "accessorCount",
-            "parameter": {
-              "description": undefined,
-              "filePath": "test.ts",
-              "initializer": undefined,
-              "isOptional": false,
-              "kind": "Parameter",
-              "name": "value",
-              "position": {
-                "end": {
-                  "column": 34,
-                  "line": 26,
-                },
-                "start": {
-                  "column": 21,
-                  "line": 26,
-                },
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "PropertySignature",
+            "name": "initialCount",
+            "position": {
+              "end": {
+                "column": 28,
+                "line": 2,
               },
-              "text": "number",
-              "type": {
-                "filePath": "test.ts",
-                "kind": "Number",
-                "position": {
-                  "end": {
-                    "column": 34,
-                    "line": 26,
-                  },
-                  "start": {
-                    "column": 21,
-                    "line": 26,
-                  },
-                },
-                "text": "number",
-                "value": undefined,
+              "start": {
+                "column": 3,
+                "line": 2,
               },
             },
-            "scope": undefined,
-            "tags": undefined,
             "text": "number",
-            "visibility": undefined,
-          },
-          {
-            "description": "Returns the current count.",
-            "kind": "ClassGetAccessor",
-            "name": "accessorCount",
-            "returnType": {
-              "filePath": "test.ts",
+            "type": {
               "kind": "Number",
-              "position": {
-                "end": {
-                  "column": 4,
-                  "line": 33,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 31,
-                },
-              },
               "text": "number",
               "value": undefined,
             },
-            "scope": undefined,
+          },
+          {
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "PropertySignature",
+            "name": "count",
+            "position": {
+              "end": {
+                "column": 29,
+                "line": 4,
+              },
+              "start": {
+                "column": 3,
+                "line": 4,
+              },
+            },
+            "text": "number",
+            "type": {
+              "kind": "Number",
+              "text": "number",
+              "value": undefined,
+            },
+          },
+          {
+            "description": "Increments the count.",
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "PropertySignature",
+            "name": "increment",
+            "position": {
+              "end": {
+                "column": 4,
+                "line": 18,
+              },
+              "start": {
+                "column": 3,
+                "line": 16,
+              },
+            },
+            "tags": undefined,
+            "text": "() => void",
+            "type": {
+              "isAsync": false,
+              "kind": "FunctionType",
+              "parameters": [],
+              "returnType": {
+                "kind": "Void",
+                "text": "void",
+              },
+              "text": "() => void",
+            },
+          },
+          {
+            "description": "Decrements the count.",
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "PropertySignature",
+            "name": "decrement",
+            "position": {
+              "end": {
+                "column": 4,
+                "line": 23,
+              },
+              "start": {
+                "column": 3,
+                "line": 21,
+              },
+            },
+            "tags": undefined,
+            "text": "() => void",
+            "type": {
+              "isAsync": false,
+              "kind": "FunctionType",
+              "parameters": [],
+              "returnType": {
+                "kind": "Void",
+                "text": "void",
+              },
+              "text": "() => void",
+            },
+          },
+          {
+            "description": "Sets the count.",
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "PropertySignature",
+            "name": "accessorCount",
+            "position": {
+              "end": {
+                "column": 4,
+                "line": 28,
+              },
+              "start": {
+                "column": 3,
+                "line": 26,
+              },
+            },
             "tags": undefined,
             "text": "number",
-            "visibility": undefined,
-          },
-        ],
-        "constructor": {
-          "description": "Constructs a new counter.",
-          "filePath": "test.ts",
-          "kind": "ClassConstructor",
-          "position": {
-            "end": {
-              "column": 4,
-              "line": 13,
-            },
-            "start": {
-              "column": 3,
-              "line": 9,
+            "type": {
+              "kind": "Number",
+              "text": "number",
+              "value": undefined,
             },
           },
-          "signatures": [
-            {
-              "description": "Constructs a new counter.",
-              "filePath": "test.ts",
-              "kind": "FunctionSignature",
+          {
+            "description": "Returns the current count.",
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "PropertySignature",
+            "name": "getCount",
+            "position": {
+              "end": {
+                "column": 4,
+                "line": 38,
+              },
+              "start": {
+                "column": 3,
+                "line": 36,
+              },
+            },
+            "tags": undefined,
+            "text": "(isFloored?: boolean) => number",
+            "type": {
+              "isAsync": false,
+              "kind": "FunctionType",
               "parameters": [
                 {
                   "description": undefined,
                   "filePath": "test.ts",
-                  "initializer": undefined,
-                  "isOptional": false,
+                  "initializer": {
+                    "text": "true",
+                    "value": true,
+                  },
+                  "isOptional": true,
                   "kind": "Parameter",
-                  "name": "initialCount",
+                  "name": "isFloored",
                   "position": {
                     "end": {
-                      "column": 39,
-                      "line": 9,
+                      "column": 45,
+                      "line": 36,
                     },
                     "start": {
-                      "column": 15,
-                      "line": 9,
-                    },
-                  },
-                  "text": "number",
-                  "type": {
-                    "filePath": "test.ts",
-                    "kind": "Number",
-                    "position": {
-                      "end": {
-                        "column": 39,
-                        "line": 9,
-                      },
-                      "start": {
-                        "column": 15,
-                        "line": 9,
-                      },
-                    },
-                    "text": "number",
-                    "value": undefined,
-                  },
-                },
-              ],
-              "position": {
-                "end": {
-                  "column": 4,
-                  "line": 13,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 9,
-                },
-              },
-              "returnType": {
-                "filePath": "test.ts",
-                "kind": "TypeReference",
-                "name": "Counter",
-                "position": {
-                  "end": {
-                    "column": 2,
-                    "line": 43,
-                  },
-                  "start": {
-                    "column": 1,
-                    "line": 1,
-                  },
-                },
-                "text": "Counter",
-              },
-              "tags": undefined,
-              "text": "(initialCount: number) => Counter",
-            },
-          ],
-          "tags": undefined,
-          "text": "constructor(initialCount: number = 0) {
-          this.count = count;
-          this.initialCount = initialCount;
-          Counter.staticCount++;
-        }",
-        },
-        "filePath": "test.ts",
-        "kind": "Class",
-        "methods": [
-          {
-            "description": "Increments the count.",
-            "kind": "ClassMethod",
-            "name": "increment",
-            "scope": undefined,
-            "signatures": [
-              {
-                "description": "Increments the count.",
-                "filePath": "test.ts",
-                "isAsync": false,
-                "isGenerator": false,
-                "kind": "FunctionSignature",
-                "parameters": [],
-                "position": {
-                  "end": {
-                    "column": 4,
-                    "line": 18,
-                  },
-                  "start": {
-                    "column": 3,
-                    "line": 16,
-                  },
-                },
-                "returnType": {
-                  "description": "Increments the count.",
-                  "filePath": "test.ts",
-                  "kind": "Unknown",
-                  "position": {
-                    "end": {
-                      "column": 4,
-                      "line": 18,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 16,
-                    },
-                  },
-                  "tags": undefined,
-                  "text": "void",
-                },
-                "tags": undefined,
-                "text": "() => void",
-              },
-            ],
-            "tags": undefined,
-            "text": "() => void",
-            "visibility": undefined,
-          },
-          {
-            "description": "Decrements the count.",
-            "kind": "ClassMethod",
-            "name": "decrement",
-            "scope": undefined,
-            "signatures": [
-              {
-                "description": "Decrements the count.",
-                "filePath": "test.ts",
-                "isAsync": false,
-                "isGenerator": false,
-                "kind": "FunctionSignature",
-                "parameters": [],
-                "position": {
-                  "end": {
-                    "column": 4,
-                    "line": 23,
-                  },
-                  "start": {
-                    "column": 3,
-                    "line": 21,
-                  },
-                },
-                "returnType": {
-                  "description": "Decrements the count.",
-                  "filePath": "test.ts",
-                  "kind": "Unknown",
-                  "position": {
-                    "end": {
-                      "column": 4,
-                      "line": 23,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 21,
-                    },
-                  },
-                  "tags": undefined,
-                  "text": "void",
-                },
-                "tags": undefined,
-                "text": "() => void",
-              },
-            ],
-            "tags": undefined,
-            "text": "() => void",
-            "visibility": undefined,
-          },
-          {
-            "description": "Returns the current count.",
-            "kind": "ClassMethod",
-            "name": "getCount",
-            "scope": undefined,
-            "signatures": [
-              {
-                "description": "Returns the current count.",
-                "filePath": "test.ts",
-                "isAsync": false,
-                "isGenerator": false,
-                "kind": "FunctionSignature",
-                "parameters": [
-                  {
-                    "description": undefined,
-                    "filePath": "test.ts",
-                    "initializer": {
-                      "text": "true",
-                      "value": true,
-                    },
-                    "isOptional": true,
-                    "kind": "Parameter",
-                    "name": "isFloored",
-                    "position": {
-                      "end": {
-                        "column": 45,
-                        "line": 36,
-                      },
-                      "start": {
-                        "column": 19,
-                        "line": 36,
-                      },
-                    },
-                    "text": "boolean",
-                    "type": {
-                      "filePath": "test.ts",
-                      "kind": "Boolean",
-                      "position": {
-                        "end": {
-                          "column": 45,
-                          "line": 36,
-                        },
-                        "start": {
-                          "column": 19,
-                          "line": 36,
-                        },
-                      },
-                      "text": "boolean",
-                    },
-                  },
-                ],
-                "position": {
-                  "end": {
-                    "column": 4,
-                    "line": 38,
-                  },
-                  "start": {
-                    "column": 3,
-                    "line": 36,
-                  },
-                },
-                "returnType": {
-                  "filePath": "test.ts",
-                  "kind": "Number",
-                  "position": {
-                    "end": {
-                      "column": 4,
-                      "line": 38,
-                    },
-                    "start": {
-                      "column": 3,
+                      "column": 19,
                       "line": 36,
                     },
                   },
-                  "text": "number",
-                  "value": undefined,
+                  "text": "boolean",
+                  "type": {
+                    "kind": "Boolean",
+                    "text": "boolean",
+                  },
                 },
-                "tags": undefined,
-                "text": "(isFloored?: boolean) => number",
+              ],
+              "returnType": {
+                "kind": "Number",
+                "text": "number",
+                "value": undefined,
               },
-            ],
-            "tags": undefined,
-            "text": "(isFloored?: boolean) => number",
-            "visibility": "public",
-          },
-          {
-            "kind": "ClassMethod",
-            "name": "getStaticCount",
-            "scope": "static",
-            "signatures": [
-              {
-                "filePath": "test.ts",
-                "isAsync": false,
-                "isGenerator": false,
-                "kind": "FunctionSignature",
-                "parameters": [],
-                "position": {
-                  "end": {
-                    "column": 4,
-                    "line": 42,
-                  },
-                  "start": {
-                    "column": 3,
-                    "line": 40,
-                  },
-                },
-                "returnType": {
-                  "filePath": "test.ts",
-                  "kind": "Number",
-                  "position": {
-                    "end": {
-                      "column": 4,
-                      "line": 42,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 40,
-                    },
-                  },
-                  "text": "number",
-                  "value": undefined,
-                },
-                "text": "() => number",
-              },
-            ],
-            "text": "() => number",
-            "visibility": undefined,
+              "text": "(isFloored?: boolean) => number",
+            },
           },
         ],
-        "name": "Counter",
         "position": {
           "end": {
             "column": 2,
@@ -9968,60 +7923,6 @@ describe('resolveType', () => {
             "line": 1,
           },
         },
-        "properties": [
-          {
-            "initializer": undefined,
-            "isOptional": true,
-            "isReadonly": false,
-            "kind": "ClassProperty",
-            "name": "initialCount",
-            "scope": undefined,
-            "text": "number",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "Number",
-              "position": {
-                "end": {
-                  "column": 28,
-                  "line": 2,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 2,
-                },
-              },
-              "text": "number",
-              "value": undefined,
-            },
-            "visibility": undefined,
-          },
-          {
-            "initializer": undefined,
-            "isOptional": true,
-            "isReadonly": false,
-            "kind": "ClassProperty",
-            "name": "staticCount",
-            "scope": "static",
-            "text": "number",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "Number",
-              "position": {
-                "end": {
-                  "column": 34,
-                  "line": 6,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 6,
-                },
-              },
-              "text": "number",
-              "value": undefined,
-            },
-            "visibility": undefined,
-          },
-        ],
         "text": "Counter",
       }
     `)
@@ -10085,7 +7986,6 @@ describe('resolveType', () => {
                 },
                 "text": "{ initialCount: number; }",
                 "type": {
-                  "filePath": "test.ts",
                   "kind": "TypeLiteral",
                   "members": [
                     {
@@ -10106,33 +8006,12 @@ describe('resolveType', () => {
                       },
                       "text": "number",
                       "type": {
-                        "filePath": "test.ts",
                         "kind": "Number",
-                        "position": {
-                          "end": {
-                            "column": 86,
-                            "line": 1,
-                          },
-                          "start": {
-                            "column": 66,
-                            "line": 1,
-                          },
-                        },
                         "text": "number",
                         "value": undefined,
                       },
                     },
                   ],
-                  "position": {
-                    "end": {
-                      "column": 93,
-                      "line": 1,
-                    },
-                    "start": {
-                      "column": 21,
-                      "line": 1,
-                    },
-                  },
                   "text": "{ initialCount: number; }",
                 },
               },
@@ -10148,18 +8027,7 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "filePath": "test.ts",
-              "kind": "Unknown",
-              "position": {
-                "end": {
-                  "column": 97,
-                  "line": 1,
-                },
-                "start": {
-                  "column": 1,
-                  "line": 1,
-                },
-              },
+              "kind": "Void",
               "text": "void",
             },
             "text": "function useCounter({ initialCount: number; }): void",
@@ -10223,18 +8091,7 @@ describe('resolveType', () => {
                 },
                 "text": "number",
                 "type": {
-                  "filePath": "test.ts",
                   "kind": "Number",
-                  "position": {
-                    "end": {
-                      "column": 23,
-                      "line": 1,
-                    },
-                    "start": {
-                      "column": 14,
-                      "line": 1,
-                    },
-                  },
                   "text": "number",
                   "value": undefined,
                 },
@@ -10258,18 +8115,7 @@ describe('resolveType', () => {
                 },
                 "text": "number",
                 "type": {
-                  "filePath": "test.ts",
                   "kind": "Number",
-                  "position": {
-                    "end": {
-                      "column": 38,
-                      "line": 1,
-                    },
-                    "start": {
-                      "column": 25,
-                      "line": 1,
-                    },
-                  },
                   "text": "number",
                   "value": undefined,
                 },
@@ -10286,18 +8132,7 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
               "kind": "Number",
-              "position": {
-                "end": {
-                  "column": 4943,
-                  "line": 4,
-                },
-                "start": {
-                  "column": 4755,
-                  "line": 4,
-                },
-              },
               "text": "number",
               "value": undefined,
             },
@@ -10323,7 +8158,9 @@ describe('resolveType', () => {
     expect(types).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "IntersectionType",
+        "kind": "TypeAlias",
+        "name": "ButtonVariants",
+        "parameters": [],
         "position": {
           "end": {
             "column": 97,
@@ -10335,31 +8172,19 @@ describe('resolveType', () => {
           },
         },
         "text": "ButtonVariants",
-        "types": [
-          {
-            "filePath": "test.ts",
-            "kind": "TypeLiteral",
-            "members": [
-              {
-                "filePath": "test.ts",
-                "isOptional": false,
-                "isReadonly": false,
-                "kind": "PropertySignature",
-                "name": "color",
-                "position": {
-                  "end": {
-                    "column": 37,
-                    "line": 1,
-                  },
-                  "start": {
-                    "column": 25,
-                    "line": 1,
-                  },
-                },
-                "text": "string",
-                "type": {
+        "type": {
+          "kind": "UnionType",
+          "text": "{ color: string; } & { backgroundColor: string; } | { color: string; } & { borderColor: string; }",
+          "types": [
+            {
+              "kind": "TypeLiteral",
+              "members": [
+                {
                   "filePath": "test.ts",
-                  "kind": "String",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "PropertySignature",
+                  "name": "color",
                   "position": {
                     "end": {
                       "column": 37,
@@ -10371,112 +8196,54 @@ describe('resolveType', () => {
                     },
                   },
                   "text": "string",
-                  "value": undefined,
-                },
-              },
-            ],
-            "position": {
-              "end": {
-                "column": 39,
-                "line": 1,
-              },
-              "start": {
-                "column": 23,
-                "line": 1,
-              },
-            },
-            "text": "{ color: string; }",
-          },
-          {
-            "filePath": "test.ts",
-            "kind": "UnionType",
-            "position": {
-              "end": {
-                "column": 97,
-                "line": 1,
-              },
-              "start": {
-                "column": 42,
-                "line": 1,
-              },
-            },
-            "text": "{ backgroundColor: string; } | { borderColor: string; }",
-            "types": [
-              {
-                "filePath": "test.ts",
-                "kind": "TypeLiteral",
-                "members": [
-                  {
-                    "filePath": "test.ts",
-                    "isOptional": false,
-                    "isReadonly": false,
-                    "kind": "PropertySignature",
-                    "name": "backgroundColor",
-                    "position": {
-                      "end": {
-                        "column": 68,
-                        "line": 1,
-                      },
-                      "start": {
-                        "column": 45,
-                        "line": 1,
-                      },
-                    },
+                  "type": {
+                    "kind": "String",
                     "text": "string",
-                    "type": {
-                      "filePath": "test.ts",
-                      "kind": "String",
-                      "position": {
-                        "end": {
-                          "column": 68,
-                          "line": 1,
-                        },
-                        "start": {
-                          "column": 45,
-                          "line": 1,
-                        },
-                      },
-                      "text": "string",
-                      "value": undefined,
-                    },
-                  },
-                ],
-                "position": {
-                  "end": {
-                    "column": 70,
-                    "line": 1,
-                  },
-                  "start": {
-                    "column": 43,
-                    "line": 1,
+                    "value": undefined,
                   },
                 },
-                "text": "{ backgroundColor: string; }",
-              },
-              {
-                "filePath": "test.ts",
-                "kind": "TypeLiteral",
-                "members": [
-                  {
-                    "filePath": "test.ts",
-                    "isOptional": false,
-                    "isReadonly": false,
-                    "kind": "PropertySignature",
-                    "name": "borderColor",
-                    "position": {
-                      "end": {
-                        "column": 94,
-                        "line": 1,
-                      },
-                      "start": {
-                        "column": 75,
-                        "line": 1,
-                      },
+                {
+                  "filePath": "test.ts",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "PropertySignature",
+                  "name": "backgroundColor",
+                  "position": {
+                    "end": {
+                      "column": 68,
+                      "line": 1,
                     },
+                    "start": {
+                      "column": 45,
+                      "line": 1,
+                    },
+                  },
+                  "text": "string",
+                  "type": {
+                    "kind": "TypeReference",
                     "text": "string",
-                    "type": {
+                  },
+                },
+              ],
+              "text": "{ color: string; } & { backgroundColor: string; }",
+            },
+            {
+              "kind": "IntersectionType",
+              "text": "{ color: string; } & { borderColor: string; }",
+              "types": [
+                {
+                  "kind": "TypeReference",
+                  "text": "{ color: string; }",
+                },
+                {
+                  "kind": "TypeLiteral",
+                  "members": [
+                    {
                       "filePath": "test.ts",
-                      "kind": "String",
+                      "isOptional": false,
+                      "isReadonly": false,
+                      "kind": "PropertySignature",
+                      "name": "borderColor",
                       "position": {
                         "end": {
                           "column": 94,
@@ -10488,25 +8255,18 @@ describe('resolveType', () => {
                         },
                       },
                       "text": "string",
-                      "value": undefined,
+                      "type": {
+                        "kind": "TypeReference",
+                        "text": "string",
+                      },
                     },
-                  },
-                ],
-                "position": {
-                  "end": {
-                    "column": 96,
-                    "line": 1,
-                  },
-                  "start": {
-                    "column": 73,
-                    "line": 1,
-                  },
+                  ],
+                  "text": "{ borderColor: string; }",
                 },
-                "text": "{ borderColor: string; }",
-              },
-            ],
-          },
-        ],
+              ],
+            },
+          ],
+        },
       }
     `)
   })
@@ -10536,282 +8296,9 @@ describe('resolveType', () => {
     expect(types).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "TypeLiteral",
-        "members": [
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "siteName",
-            "position": {
-              "end": {
-                "column": 19,
-                "line": 2,
-              },
-              "start": {
-                "column": 3,
-                "line": 2,
-              },
-            },
-            "text": "string",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "String",
-              "position": {
-                "end": {
-                  "column": 19,
-                  "line": 2,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 2,
-                },
-              },
-              "text": "string",
-              "value": undefined,
-            },
-          },
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "PropertySignature",
-            "name": "settings",
-            "position": {
-              "end": {
-                "column": 5,
-                "line": 10,
-              },
-              "start": {
-                "column": 3,
-                "line": 3,
-              },
-            },
-            "text": "{ apiEndpoint: string; apiKey: string; } | { dbHost: string; dbPort: number; dbName: string; }",
-            "type": {
-              "filePath": "test.ts",
-              "kind": "UnionType",
-              "position": {
-                "end": {
-                  "column": 5,
-                  "line": 10,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 3,
-                },
-              },
-              "text": "{ apiEndpoint: string; apiKey: string; } | { dbHost: string; dbPort: number; dbName: string; }",
-              "types": [
-                {
-                  "filePath": "test.ts",
-                  "kind": "TypeLiteral",
-                  "members": [
-                    {
-                      "filePath": "test.ts",
-                      "isOptional": false,
-                      "isReadonly": false,
-                      "kind": "PropertySignature",
-                      "name": "apiEndpoint",
-                      "position": {
-                        "end": {
-                          "column": 25,
-                          "line": 4,
-                        },
-                        "start": {
-                          "column": 5,
-                          "line": 4,
-                        },
-                      },
-                      "text": "string",
-                      "type": {
-                        "filePath": "test.ts",
-                        "kind": "String",
-                        "position": {
-                          "end": {
-                            "column": 25,
-                            "line": 4,
-                          },
-                          "start": {
-                            "column": 5,
-                            "line": 4,
-                          },
-                        },
-                        "text": "string",
-                        "value": undefined,
-                      },
-                    },
-                    {
-                      "filePath": "test.ts",
-                      "isOptional": false,
-                      "isReadonly": false,
-                      "kind": "PropertySignature",
-                      "name": "apiKey",
-                      "position": {
-                        "end": {
-                          "column": 20,
-                          "line": 5,
-                        },
-                        "start": {
-                          "column": 5,
-                          "line": 5,
-                        },
-                      },
-                      "text": "string",
-                      "type": {
-                        "filePath": "test.ts",
-                        "kind": "String",
-                        "position": {
-                          "end": {
-                            "column": 20,
-                            "line": 5,
-                          },
-                          "start": {
-                            "column": 5,
-                            "line": 5,
-                          },
-                        },
-                        "text": "string",
-                        "value": undefined,
-                      },
-                    },
-                  ],
-                  "position": {
-                    "end": {
-                      "column": 4,
-                      "line": 6,
-                    },
-                    "start": {
-                      "column": 13,
-                      "line": 3,
-                    },
-                  },
-                  "text": "{ apiEndpoint: string; apiKey: string; }",
-                },
-                {
-                  "filePath": "test.ts",
-                  "kind": "TypeLiteral",
-                  "members": [
-                    {
-                      "filePath": "test.ts",
-                      "isOptional": false,
-                      "isReadonly": false,
-                      "kind": "PropertySignature",
-                      "name": "dbHost",
-                      "position": {
-                        "end": {
-                          "column": 20,
-                          "line": 7,
-                        },
-                        "start": {
-                          "column": 5,
-                          "line": 7,
-                        },
-                      },
-                      "text": "string",
-                      "type": {
-                        "filePath": "test.ts",
-                        "kind": "String",
-                        "position": {
-                          "end": {
-                            "column": 20,
-                            "line": 7,
-                          },
-                          "start": {
-                            "column": 5,
-                            "line": 7,
-                          },
-                        },
-                        "text": "string",
-                        "value": undefined,
-                      },
-                    },
-                    {
-                      "filePath": "test.ts",
-                      "isOptional": false,
-                      "isReadonly": false,
-                      "kind": "PropertySignature",
-                      "name": "dbPort",
-                      "position": {
-                        "end": {
-                          "column": 20,
-                          "line": 8,
-                        },
-                        "start": {
-                          "column": 5,
-                          "line": 8,
-                        },
-                      },
-                      "text": "number",
-                      "type": {
-                        "filePath": "test.ts",
-                        "kind": "Number",
-                        "position": {
-                          "end": {
-                            "column": 20,
-                            "line": 8,
-                          },
-                          "start": {
-                            "column": 5,
-                            "line": 8,
-                          },
-                        },
-                        "text": "number",
-                        "value": undefined,
-                      },
-                    },
-                    {
-                      "filePath": "test.ts",
-                      "isOptional": false,
-                      "isReadonly": false,
-                      "kind": "PropertySignature",
-                      "name": "dbName",
-                      "position": {
-                        "end": {
-                          "column": 20,
-                          "line": 9,
-                        },
-                        "start": {
-                          "column": 5,
-                          "line": 9,
-                        },
-                      },
-                      "text": "string",
-                      "type": {
-                        "filePath": "test.ts",
-                        "kind": "String",
-                        "position": {
-                          "end": {
-                            "column": 20,
-                            "line": 9,
-                          },
-                          "start": {
-                            "column": 5,
-                            "line": 9,
-                          },
-                        },
-                        "text": "string",
-                        "value": undefined,
-                      },
-                    },
-                  ],
-                  "position": {
-                    "end": {
-                      "column": 4,
-                      "line": 10,
-                    },
-                    "start": {
-                      "column": 7,
-                      "line": 6,
-                    },
-                  },
-                  "text": "{ dbHost: string; dbPort: number; dbName: string; }",
-                },
-              ],
-            },
-          },
-        ],
+        "kind": "TypeAlias",
+        "name": "Config",
+        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -10823,6 +8310,182 @@ describe('resolveType', () => {
           },
         },
         "text": "Config",
+        "type": {
+          "kind": "TypeLiteral",
+          "members": [
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "siteName",
+              "position": {
+                "end": {
+                  "column": 19,
+                  "line": 2,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 2,
+                },
+              },
+              "text": "string",
+              "type": {
+                "kind": "String",
+                "text": "string",
+                "value": undefined,
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "settings",
+              "position": {
+                "end": {
+                  "column": 5,
+                  "line": 10,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 3,
+                },
+              },
+              "text": "{ apiEndpoint: string; apiKey: string; } | { dbHost: string; dbPort: number; dbName: string; }",
+              "type": {
+                "kind": "UnionType",
+                "text": "{ apiEndpoint: string; apiKey: string; } | { dbHost: string; dbPort: number; dbName: string; }",
+                "types": [
+                  {
+                    "kind": "TypeLiteral",
+                    "members": [
+                      {
+                        "filePath": "test.ts",
+                        "isOptional": false,
+                        "isReadonly": false,
+                        "kind": "PropertySignature",
+                        "name": "apiEndpoint",
+                        "position": {
+                          "end": {
+                            "column": 25,
+                            "line": 4,
+                          },
+                          "start": {
+                            "column": 5,
+                            "line": 4,
+                          },
+                        },
+                        "text": "string",
+                        "type": {
+                          "kind": "TypeReference",
+                          "text": "string",
+                        },
+                      },
+                      {
+                        "filePath": "test.ts",
+                        "isOptional": false,
+                        "isReadonly": false,
+                        "kind": "PropertySignature",
+                        "name": "apiKey",
+                        "position": {
+                          "end": {
+                            "column": 20,
+                            "line": 5,
+                          },
+                          "start": {
+                            "column": 5,
+                            "line": 5,
+                          },
+                        },
+                        "text": "string",
+                        "type": {
+                          "kind": "TypeReference",
+                          "text": "string",
+                        },
+                      },
+                    ],
+                    "text": "{ apiEndpoint: string; apiKey: string; }",
+                  },
+                  {
+                    "kind": "TypeLiteral",
+                    "members": [
+                      {
+                        "filePath": "test.ts",
+                        "isOptional": false,
+                        "isReadonly": false,
+                        "kind": "PropertySignature",
+                        "name": "dbHost",
+                        "position": {
+                          "end": {
+                            "column": 20,
+                            "line": 7,
+                          },
+                          "start": {
+                            "column": 5,
+                            "line": 7,
+                          },
+                        },
+                        "text": "string",
+                        "type": {
+                          "kind": "TypeReference",
+                          "text": "string",
+                        },
+                      },
+                      {
+                        "filePath": "test.ts",
+                        "isOptional": false,
+                        "isReadonly": false,
+                        "kind": "PropertySignature",
+                        "name": "dbPort",
+                        "position": {
+                          "end": {
+                            "column": 20,
+                            "line": 8,
+                          },
+                          "start": {
+                            "column": 5,
+                            "line": 8,
+                          },
+                        },
+                        "text": "number",
+                        "type": {
+                          "kind": "Number",
+                          "text": "number",
+                          "value": undefined,
+                        },
+                      },
+                      {
+                        "filePath": "test.ts",
+                        "isOptional": false,
+                        "isReadonly": false,
+                        "kind": "PropertySignature",
+                        "name": "dbName",
+                        "position": {
+                          "end": {
+                            "column": 20,
+                            "line": 9,
+                          },
+                          "start": {
+                            "column": 5,
+                            "line": 9,
+                          },
+                        },
+                        "text": "string",
+                        "type": {
+                          "kind": "TypeReference",
+                          "text": "string",
+                        },
+                      },
+                    ],
+                    "text": "{ dbHost: string; dbPort: number; dbName: string; }",
+                  },
+                ],
+              },
+            },
+          ],
+          "text": "Config",
+        },
       }
     `)
   })
@@ -10885,22 +8548,10 @@ describe('resolveType', () => {
                 },
                 "text": "{ apiEndpoint: string; apiKey: string; } | { dbHost: string; dbPort: number; dbName: string; }",
                 "type": {
-                  "filePath": "test.ts",
                   "kind": "UnionType",
-                  "position": {
-                    "end": {
-                      "column": 107,
-                      "line": 2,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 2,
-                    },
-                  },
                   "text": "{ apiEndpoint: string; apiKey: string; } | { dbHost: string; dbPort: number; dbName: string; }",
                   "types": [
                     {
-                      "filePath": "test.ts",
                       "kind": "TypeLiteral",
                       "members": [
                         {
@@ -10921,18 +8572,7 @@ describe('resolveType', () => {
                           },
                           "text": "string",
                           "type": {
-                            "filePath": "test.ts",
                             "kind": "String",
-                            "position": {
-                              "end": {
-                                "column": 35,
-                                "line": 2,
-                              },
-                              "start": {
-                                "column": 15,
-                                "line": 2,
-                              },
-                            },
                             "text": "string",
                             "value": undefined,
                           },
@@ -10955,37 +8595,15 @@ describe('resolveType', () => {
                           },
                           "text": "string",
                           "type": {
-                            "filePath": "test.ts",
                             "kind": "String",
-                            "position": {
-                              "end": {
-                                "column": 51,
-                                "line": 2,
-                              },
-                              "start": {
-                                "column": 36,
-                                "line": 2,
-                              },
-                            },
                             "text": "string",
                             "value": undefined,
                           },
                         },
                       ],
-                      "position": {
-                        "end": {
-                          "column": 53,
-                          "line": 2,
-                        },
-                        "start": {
-                          "column": 13,
-                          "line": 2,
-                        },
-                      },
                       "text": "{ apiEndpoint: string; apiKey: string; }",
                     },
                     {
-                      "filePath": "test.ts",
                       "kind": "TypeLiteral",
                       "members": [
                         {
@@ -11006,18 +8624,7 @@ describe('resolveType', () => {
                           },
                           "text": "string",
                           "type": {
-                            "filePath": "test.ts",
                             "kind": "String",
-                            "position": {
-                              "end": {
-                                "column": 73,
-                                "line": 2,
-                              },
-                              "start": {
-                                "column": 58,
-                                "line": 2,
-                              },
-                            },
                             "text": "string",
                             "value": undefined,
                           },
@@ -11040,18 +8647,7 @@ describe('resolveType', () => {
                           },
                           "text": "number",
                           "type": {
-                            "filePath": "test.ts",
                             "kind": "Number",
-                            "position": {
-                              "end": {
-                                "column": 89,
-                                "line": 2,
-                              },
-                              "start": {
-                                "column": 74,
-                                "line": 2,
-                              },
-                            },
                             "text": "number",
                             "value": undefined,
                           },
@@ -11074,33 +8670,12 @@ describe('resolveType', () => {
                           },
                           "text": "string",
                           "type": {
-                            "filePath": "test.ts",
                             "kind": "String",
-                            "position": {
-                              "end": {
-                                "column": 105,
-                                "line": 2,
-                              },
-                              "start": {
-                                "column": 90,
-                                "line": 2,
-                              },
-                            },
                             "text": "string",
                             "value": undefined,
                           },
                         },
                       ],
-                      "position": {
-                        "end": {
-                          "column": 107,
-                          "line": 2,
-                        },
-                        "start": {
-                          "column": 56,
-                          "line": 2,
-                        },
-                      },
                       "text": "{ dbHost: string; dbPort: number; dbName: string; }",
                     },
                   ],
@@ -11118,18 +8693,7 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "filePath": "test.ts",
-              "kind": "Unknown",
-              "position": {
-                "end": {
-                  "column": 5,
-                  "line": 3,
-                },
-                "start": {
-                  "column": 1,
-                  "line": 1,
-                },
-              },
+              "kind": "Void",
               "text": "void",
             },
             "text": "function useCounter(settings: { apiEndpoint: string; apiKey: string; } | { dbHost: string; dbPort: number; dbName: string; }): void",
@@ -11162,14 +8726,11 @@ describe('resolveType', () => {
       sourceFile.getVariableDeclarationOrThrow('Button')
     const types = resolveType(
       variableDeclaration.getType(),
-      variableDeclaration,
-      (symbolMetadata) => {
-        if (symbolMetadata.name === 'onClick') {
-          return true
-        }
-        return !symbolMetadata.isInNodeModules
-      }
+      variableDeclaration
     )
+    // TODO: we need to normalize variable declarations with an immediate function expression
+    // we might want to capture this as FunctionType kind, but most likely we want to normalize
+    // this into Function kind which is essentially a function declaration or a function expression assigned to a variable declaration
 
     expect(types).toMatchInlineSnapshot(`
       {
@@ -11209,251 +8770,59 @@ describe('resolveType', () => {
               },
               "text": "ButtonProps",
               "type": {
-                "filePath": "test.tsx",
-                "kind": "TypeLiteral",
-                "members": [
+                "kind": "IntersectionType",
+                "text": "ButtonProps",
+                "types": [
                   {
-                    "filePath": "test.tsx",
-                    "isOptional": true,
-                    "isReadonly": false,
-                    "kind": "PropertySignature",
-                    "name": "variant",
-                    "position": {
-                      "end": {
-                        "column": 27,
-                        "line": 6,
-                      },
-                      "start": {
-                        "column": 3,
-                        "line": 6,
-                      },
-                    },
-                    "text": "ButtonVariant",
-                    "type": {
-                      "filePath": "test.tsx",
-                      "kind": "UnionType",
-                      "position": {
-                        "end": {
-                          "column": 27,
-                          "line": 6,
-                        },
-                        "start": {
-                          "column": 3,
-                          "line": 6,
-                        },
-                      },
-                      "text": ""primary" | "secondary" | "danger"",
-                      "types": [
-                        {
-                          "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                          "kind": "String",
-                          "position": {
-                            "end": {
-                              "column": 4402,
-                              "line": 4,
-                            },
-                            "start": {
-                              "column": 3482,
-                              "line": 4,
-                            },
+                    "kind": "TypeLiteral",
+                    "members": [
+                      {
+                        "filePath": "test.tsx",
+                        "isOptional": true,
+                        "isReadonly": false,
+                        "kind": "PropertySignature",
+                        "name": "variant",
+                        "position": {
+                          "end": {
+                            "column": 27,
+                            "line": 6,
                           },
-                          "text": ""primary"",
-                          "value": "primary",
-                        },
-                        {
-                          "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                          "kind": "String",
-                          "position": {
-                            "end": {
-                              "column": 4402,
-                              "line": 4,
-                            },
-                            "start": {
-                              "column": 3482,
-                              "line": 4,
-                            },
+                          "start": {
+                            "column": 3,
+                            "line": 6,
                           },
-                          "text": ""secondary"",
-                          "value": "secondary",
                         },
-                        {
-                          "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                          "kind": "String",
-                          "position": {
-                            "end": {
-                              "column": 4402,
-                              "line": 4,
-                            },
-                            "start": {
-                              "column": 3482,
-                              "line": 4,
-                            },
-                          },
-                          "text": ""danger"",
-                          "value": "danger",
-                        },
-                      ],
-                    },
-                  },
-                  {
-                    "filePath": "node_modules/@types/react/index.d.ts",
-                    "isOptional": true,
-                    "isReadonly": false,
-                    "kind": "PropertySignature",
-                    "name": "onClick",
-                    "position": {
-                      "end": {
-                        "column": 52,
-                        "line": 2276,
-                      },
-                      "start": {
-                        "column": 9,
-                        "line": 2276,
-                      },
-                    },
-                    "text": "MouseEventHandler<HTMLButtonElement>",
-                    "type": {
-                      "filePath": "node_modules/@types/react/index.d.ts",
-                      "kind": "Function",
-                      "name": "MouseEventHandler",
-                      "position": {
-                        "end": {
-                          "column": 52,
-                          "line": 2276,
-                        },
-                        "start": {
-                          "column": 9,
-                          "line": 2276,
-                        },
-                      },
-                      "signatures": [
-                        {
-                          "filePath": "node_modules/@types/react/index.d.ts",
-                          "kind": "FunctionSignature",
-                          "parameters": [
+                        "text": "ButtonVariant",
+                        "type": {
+                          "kind": "UnionType",
+                          "text": ""primary" | "secondary" | "danger"",
+                          "types": [
                             {
-                              "description": undefined,
-                              "filePath": "node_modules/@types/react/index.d.ts",
-                              "initializer": undefined,
-                              "isOptional": false,
-                              "kind": "Parameter",
-                              "name": "event",
-                              "position": {
-                                "end": {
-                                  "column": 81,
-                                  "line": 2130,
-                                },
-                                "start": {
-                                  "column": 73,
-                                  "line": 2130,
-                                },
-                              },
-                              "text": "MouseEvent<HTMLButtonElement, MouseEvent>",
-                              "type": {
-                                "arguments": [
-                                  {
-                                    "arguments": [],
-                                    "description": "Provides properties and methods (beyond the regular HTMLElement interface it also has available to it by inheritance) for manipulating <button> elements.
-
-      [MDN Reference](https://developer.mozilla.org/docs/Web/API/HTMLButtonElement)",
-                                    "filePath": "node_modules/typescript/lib/lib.dom.d.ts",
-                                    "kind": "TypeReference",
-                                    "name": "HTMLButtonElement",
-                                    "position": {
-                                      "end": {
-                                        "column": 2,
-                                        "line": 3894,
-                                      },
-                                      "start": {
-                                        "column": 1,
-                                        "line": 3818,
-                                      },
-                                    },
-                                    "tags": undefined,
-                                    "text": "HTMLButtonElement",
-                                  },
-                                  {
-                                    "arguments": [],
-                                    "description": "Events that occur due to the user interacting with a pointing device (such as a mouse). Common events using this interface include click, dblclick, mouseup, mousedown.
-
-      [MDN Reference](https://developer.mozilla.org/docs/Web/API/MouseEvent)",
-                                    "filePath": "node_modules/typescript/lib/lib.dom.d.ts",
-                                    "kind": "TypeReference",
-                                    "name": "MouseEvent",
-                                    "position": {
-                                      "end": {
-                                        "column": 2,
-                                        "line": 9876,
-                                      },
-                                      "start": {
-                                        "column": 1,
-                                        "line": 9825,
-                                      },
-                                    },
-                                    "tags": undefined,
-                                    "text": "globalThis.MouseEvent",
-                                  },
-                                ],
-                                "filePath": "node_modules/@types/react/index.d.ts",
-                                "kind": "TypeReference",
-                                "name": "MouseEvent",
-                                "position": {
-                                  "end": {
-                                    "column": 81,
-                                    "line": 2130,
-                                  },
-                                  "start": {
-                                    "column": 73,
-                                    "line": 2130,
-                                  },
-                                },
-                                "text": "MouseEvent<HTMLButtonElement, globalThis.MouseEvent>",
-                              },
+                              "kind": "String",
+                              "text": ""primary"",
+                              "value": "primary",
+                            },
+                            {
+                              "kind": "String",
+                              "text": ""secondary"",
+                              "value": "secondary",
+                            },
+                            {
+                              "kind": "String",
+                              "text": ""danger"",
+                              "value": "danger",
                             },
                           ],
-                          "position": {
-                            "end": {
-                              "column": 88,
-                              "line": 2130,
-                            },
-                            "start": {
-                              "column": 58,
-                              "line": 2130,
-                            },
-                          },
-                          "returnType": {
-                            "filePath": "node_modules/@types/react/index.d.ts",
-                            "kind": "Unknown",
-                            "position": {
-                              "end": {
-                                "column": 88,
-                                "line": 2130,
-                              },
-                              "start": {
-                                "column": 58,
-                                "line": 2130,
-                              },
-                            },
-                            "text": "void",
-                          },
-                          "text": "(event: MouseEvent<HTMLButtonElement, MouseEvent>) => void",
                         },
-                      ],
-                      "text": "MouseEventHandler<HTMLButtonElement>",
-                    },
+                      },
+                    ],
+                    "text": "{ variant?: ButtonVariant; }",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "ButtonHTMLAttributes<HTMLButtonElement>",
                   },
                 ],
-                "position": {
-                  "end": {
-                    "column": 42,
-                    "line": 9,
-                  },
-                  "start": {
-                    "column": 24,
-                    "line": 9,
-                  },
-                },
-                "text": "ButtonProps",
               },
             },
             "position": {
@@ -11467,23 +8836,10 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "arguments": [],
-              "filePath": "node_modules/@types/react/index.d.ts",
               "kind": "TypeReference",
-              "name": "Element",
-              "position": {
-                "end": {
-                  "column": 66,
-                  "line": 4003,
-                },
-                "start": {
-                  "column": 9,
-                  "line": 4003,
-                },
-              },
-              "text": "React.JSX.Element",
+              "text": "Element",
             },
-            "text": "(props: ButtonProps) => React.JSX.Element",
+            "text": "(props: ButtonProps) => Element",
           },
         ],
         "text": "(props: ButtonProps) => React.JSX.Element",
@@ -11569,22 +8925,10 @@ describe('resolveType', () => {
               },
               "text": "ExportedTypesProps",
               "type": {
-                "filePath": "test.ts",
                 "kind": "UnionType",
-                "position": {
-                  "end": {
-                    "column": 56,
-                    "line": 26,
-                  },
-                  "start": {
-                    "column": 24,
-                    "line": 26,
-                  },
-                },
                 "text": "{ source: string; } & BaseExportedTypesProps | { filename: string; value: string; } & BaseExportedTypesProps",
                 "types": [
                   {
-                    "filePath": "test.ts",
                     "kind": "TypeLiteral",
                     "members": [
                       {
@@ -11605,18 +8949,7 @@ describe('resolveType', () => {
                         },
                         "text": "string",
                         "type": {
-                          "filePath": "test.ts",
                           "kind": "String",
-                          "position": {
-                            "end": {
-                              "column": 22,
-                              "line": 23,
-                            },
-                            "start": {
-                              "column": 8,
-                              "line": 23,
-                            },
-                          },
                           "text": "string",
                           "value": undefined,
                         },
@@ -11641,436 +8974,81 @@ describe('resolveType', () => {
                         "tags": undefined,
                         "text": "(exportedTypes: { name: string; description: string; }[]) => ReactNode",
                         "type": {
-                          "filePath": "test.ts",
-                          "kind": "Function",
-                          "name": undefined,
-                          "position": {
-                            "end": {
-                              "column": 23,
-                              "line": 19,
-                            },
-                            "start": {
-                              "column": 3,
-                              "line": 17,
-                            },
-                          },
-                          "signatures": [
+                          "isAsync": true,
+                          "kind": "FunctionType",
+                          "parameters": [
                             {
+                              "description": undefined,
                               "filePath": "test.ts",
-                              "kind": "FunctionSignature",
-                              "parameters": [
-                                {
-                                  "description": undefined,
-                                  "filePath": "test.ts",
-                                  "initializer": undefined,
-                                  "isOptional": false,
-                                  "kind": "Parameter",
-                                  "name": "exportedTypes",
-                                  "position": {
-                                    "end": {
-                                      "column": 55,
-                                      "line": 18,
-                                    },
-                                    "start": {
-                                      "column": 5,
-                                      "line": 18,
-                                    },
-                                  },
-                                  "text": "{ name: string; description: string; }[]",
-                                  "type": {
-                                    "element": {
-                                      "filePath": "test.ts",
-                                      "kind": "TypeLiteral",
-                                      "members": [
-                                        {
-                                          "filePath": "test.ts",
-                                          "isOptional": false,
-                                          "isReadonly": false,
-                                          "kind": "PropertySignature",
-                                          "name": "name",
-                                          "position": {
-                                            "end": {
-                                              "column": 21,
-                                              "line": 7,
-                                            },
-                                            "start": {
-                                              "column": 7,
-                                              "line": 7,
-                                            },
-                                          },
-                                          "text": "string",
-                                          "type": {
-                                            "filePath": "test.ts",
-                                            "kind": "String",
-                                            "position": {
-                                              "end": {
-                                                "column": 21,
-                                                "line": 7,
-                                              },
-                                              "start": {
-                                                "column": 7,
-                                                "line": 7,
-                                              },
-                                            },
-                                            "text": "string",
-                                            "value": undefined,
-                                          },
-                                        },
-                                        {
-                                          "filePath": "test.ts",
-                                          "isOptional": false,
-                                          "isReadonly": false,
-                                          "kind": "PropertySignature",
-                                          "name": "description",
-                                          "position": {
-                                            "end": {
-                                              "column": 40,
-                                              "line": 10,
-                                            },
-                                            "start": {
-                                              "column": 7,
-                                              "line": 10,
-                                            },
-                                          },
-                                          "text": "string",
-                                          "type": {
-                                            "filePath": "test.ts",
-                                            "kind": "String",
-                                            "position": {
-                                              "end": {
-                                                "column": 40,
-                                                "line": 10,
-                                              },
-                                              "start": {
-                                                "column": 7,
-                                                "line": 10,
-                                              },
-                                            },
-                                            "text": "string",
-                                            "value": undefined,
-                                          },
-                                        },
-                                      ],
-                                      "position": {
-                                        "end": {
-                                          "column": 6,
-                                          "line": 11,
-                                        },
-                                        "start": {
-                                          "column": 5,
-                                          "line": 5,
-                                        },
-                                      },
-                                      "text": "{ name: string; description: string; }",
-                                    },
-                                    "filePath": "test.ts",
-                                    "kind": "Array",
-                                    "position": {
-                                      "end": {
-                                        "column": 55,
-                                        "line": 18,
-                                      },
-                                      "start": {
-                                        "column": 5,
-                                        "line": 18,
-                                      },
-                                    },
-                                    "text": "Array<{ name: string; description: string; }>",
-                                  },
-                                },
-                              ],
+                              "initializer": undefined,
+                              "isOptional": false,
+                              "kind": "Parameter",
+                              "name": "exportedTypes",
                               "position": {
                                 "end": {
-                                  "column": 23,
-                                  "line": 19,
+                                  "column": 55,
+                                  "line": 18,
                                 },
                                 "start": {
-                                  "column": 14,
-                                  "line": 17,
+                                  "column": 5,
+                                  "line": 18,
                                 },
                               },
-                              "returnType": {
-                                "description": "Represents all of the things React can render.
-
-      Where {@link ReactElement} only represents JSX, \`ReactNode\` represents everything that can be rendered.",
-                                "filePath": "node_modules/@types/react/index.d.ts",
-                                "kind": "UnionType",
-                                "position": {
-                                  "end": {
-                                    "column": 37,
-                                    "line": 439,
-                                  },
-                                  "start": {
-                                    "column": 5,
-                                    "line": 426,
-                                  },
-                                },
-                                "tags": [
-                                  {
-                                    "name": "see",
-                                    "text": "{@link https://react-typescript-cheatsheet.netlify.app/docs/react-types/reactnode/ React TypeScript Cheatsheet}",
-                                  },
-                                  {
-                                    "name": "example",
-                                    "text": "\`\`\`tsx
-      // Typing children
-      type Props = { children: ReactNode }
-
-      const Component = ({ children }: Props) => <div>{children}</div>
-
-      <Component>hello</Component>
-      \`\`\`",
-                                  },
-                                  {
-                                    "name": "example",
-                                    "text": "\`\`\`tsx
-      // Typing a custom element
-      type Props = { customElement: ReactNode }
-
-      const Component = ({ customElement }: Props) => <div>{customElement}</div>
-
-      <Component customElement={<div>hello</div>} />
-      \`\`\`",
-                                  },
-                                ],
-                                "text": "React.ReactNode",
-                                "types": [
-                                  {
-                                    "arguments": [],
-                                    "filePath": "node_modules/@types/react/index.d.ts",
-                                    "kind": "TypeReference",
-                                    "name": "ReactElement",
-                                    "position": {
-                                      "end": {
-                                        "column": 6,
-                                        "line": 322,
-                                      },
-                                      "start": {
-                                        "column": 5,
-                                        "line": 315,
-                                      },
-                                    },
-                                    "text": "ReactElement<unknown, string | JSXElementConstructor<any>>",
-                                  },
-                                  {
-                                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                                    "kind": "String",
-                                    "position": {
-                                      "end": {
-                                        "column": 4402,
-                                        "line": 4,
-                                      },
-                                      "start": {
-                                        "column": 3482,
-                                        "line": 4,
-                                      },
-                                    },
-                                    "text": "string",
-                                    "value": undefined,
-                                  },
-                                  {
-                                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                                    "kind": "Number",
-                                    "position": {
-                                      "end": {
-                                        "column": 4943,
-                                        "line": 4,
-                                      },
-                                      "start": {
-                                        "column": 4755,
-                                        "line": 4,
-                                      },
-                                    },
-                                    "text": "number",
-                                    "value": undefined,
-                                  },
-                                  {
-                                    "arguments": [],
-                                    "filePath": "node_modules/typescript/lib/lib.es2020.bigint.d.ts",
-                                    "kind": "TypeReference",
-                                    "name": "BigInt",
-                                    "position": {
-                                      "end": {
-                                        "column": 817,
-                                        "line": 3,
-                                      },
-                                      "start": {
-                                        "column": 623,
-                                        "line": 3,
-                                      },
-                                    },
-                                    "text": "BigInt",
-                                  },
-                                  {
-                                    "arguments": [
-                                      {
-                                        "arguments": [],
-                                        "filePath": "node_modules/@types/react/index.d.ts",
-                                        "kind": "TypeReference",
-                                        "name": "ReactNode",
-                                        "position": {
-                                          "end": {
-                                            "column": 37,
-                                            "line": 439,
-                                          },
-                                          "start": {
-                                            "column": 5,
-                                            "line": 426,
-                                          },
-                                        },
-                                        "text": "ReactNode",
-                                      },
-                                    ],
-                                    "filePath": "node_modules/typescript/lib/lib.es2015.iterable.d.ts",
-                                    "kind": "TypeReference",
-                                    "name": "Iterable",
-                                    "position": {
-                                      "end": {
-                                        "column": 560,
-                                        "line": 3,
-                                      },
-                                      "start": {
-                                        "column": 469,
-                                        "line": 3,
-                                      },
-                                    },
-                                    "text": "Iterable<ReactNode>",
-                                  },
-                                  {
-                                    "arguments": [],
-                                    "filePath": "node_modules/@types/react/index.d.ts",
-                                    "kind": "TypeReference",
-                                    "name": "ReactPortal",
-                                    "position": {
-                                      "end": {
-                                        "column": 6,
-                                        "line": 388,
-                                      },
-                                      "start": {
-                                        "column": 5,
-                                        "line": 386,
-                                      },
-                                    },
-                                    "text": "ReactPortal",
-                                  },
-                                  {
-                                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                                    "kind": "Boolean",
-                                    "position": {
-                                      "end": {
-                                        "column": 4613,
-                                        "line": 4,
-                                      },
-                                      "start": {
-                                        "column": 4576,
-                                        "line": 4,
-                                      },
-                                    },
-                                    "text": "boolean",
-                                  },
-                                  {
-                                    "filePath": "node_modules/@types/react/index.d.ts",
-                                    "kind": "Unknown",
-                                    "position": {
-                                      "end": {
-                                        "column": 15,
-                                        "line": 434,
-                                      },
-                                      "start": {
-                                        "column": 11,
-                                        "line": 434,
-                                      },
-                                    },
-                                    "text": "null",
-                                  },
-                                  {
-                                    "filePath": "node_modules/@types/react/index.d.ts",
-                                    "kind": "Unknown",
-                                    "position": {
-                                      "end": {
-                                        "column": 20,
-                                        "line": 435,
-                                      },
-                                      "start": {
-                                        "column": 11,
-                                        "line": 435,
-                                      },
-                                    },
-                                    "text": "undefined",
-                                  },
-                                  {
-                                    "filePath": "node_modules/@types/react/index.d.ts",
-                                    "kind": "Unknown",
-                                    "position": {
-                                      "end": {
-                                        "column": 10,
-                                        "line": 438,
-                                      },
-                                      "start": {
-                                        "column": 11,
-                                        "line": 436,
-                                      },
-                                    },
-                                    "text": "never",
-                                  },
-                                  {
-                                    "arguments": [
-                                      {
-                                        "arguments": [],
-                                        "filePath": "node_modules/@types/react/index.d.ts",
-                                        "kind": "TypeReference",
-                                        "name": "AwaitedReactNode",
-                                        "position": {
-                                          "end": {
-                                            "column": 7,
-                                            "line": 53,
-                                          },
-                                          "start": {
-                                            "column": 1,
-                                            "line": 41,
-                                          },
-                                        },
-                                        "text": "AwaitedReactNode",
-                                      },
-                                    ],
-                                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                                    "kind": "TypeReference",
-                                    "name": "Promise",
-                                    "position": {
-                                      "end": {
-                                        "column": 15356,
-                                        "line": 4,
-                                      },
-                                      "start": {
-                                        "column": 15015,
-                                        "line": 4,
-                                      },
-                                    },
-                                    "text": "Promise<AwaitedReactNode>",
-                                  },
-                                ],
+                              "text": "{ name: string; description: string; }[]",
+                              "type": {
+                                "kind": "TypeReference",
+                                "text": "{ name: string; description: string; }[]",
                               },
-                              "text": "(exportedTypes: { name: string; description: string; }[]) => React.ReactNode",
                             },
                           ],
-                          "text": "(exportedTypes: ReturnType<typeof getExportedTypes>) => React.ReactNode",
+                          "returnType": {
+                            "kind": "UnionType",
+                            "text": "string | number | bigint | boolean | ReactElement<unknown, string | JSXElementConstructor<any>> | Iterable<ReactNode> | ReactPortal | Promise<AwaitedReactNode>",
+                            "types": [
+                              {
+                                "kind": "String",
+                                "text": "string",
+                                "value": undefined,
+                              },
+                              {
+                                "kind": "Number",
+                                "text": "number",
+                                "value": undefined,
+                              },
+                              {
+                                "kind": "BigInt",
+                                "text": "bigint",
+                                "value": undefined,
+                              },
+                              {
+                                "kind": "Boolean",
+                                "text": "boolean",
+                              },
+                              {
+                                "kind": "TypeReference",
+                                "text": "ReactElement<unknown, string | JSXElementConstructor<any>>",
+                              },
+                              {
+                                "kind": "TypeReference",
+                                "text": "Iterable<ReactNode>",
+                              },
+                              {
+                                "kind": "TypeReference",
+                                "text": "ReactPortal",
+                              },
+                              {
+                                "kind": "TypeReference",
+                                "text": "Promise<AwaitedReactNode>",
+                              },
+                            ],
+                          },
+                          "text": "(exportedTypes: { name: string; description: string; }[]) => ReactNode",
                         },
                       },
                     ],
-                    "position": {
-                      "end": {
-                        "column": 50,
-                        "line": 23,
-                      },
-                      "start": {
-                        "column": 5,
-                        "line": 23,
-                      },
-                    },
                     "text": "{ source: string; } & BaseExportedTypesProps",
                   },
                   {
-                    "filePath": "test.ts",
                     "kind": "TypeLiteral",
                     "members": [
                       {
@@ -12091,18 +9069,7 @@ describe('resolveType', () => {
                         },
                         "text": "string",
                         "type": {
-                          "filePath": "test.ts",
                           "kind": "String",
-                          "position": {
-                            "end": {
-                              "column": 25,
-                              "line": 24,
-                            },
-                            "start": {
-                              "column": 8,
-                              "line": 24,
-                            },
-                          },
                           "text": "string",
                           "value": undefined,
                         },
@@ -12125,18 +9092,7 @@ describe('resolveType', () => {
                         },
                         "text": "string",
                         "type": {
-                          "filePath": "test.ts",
                           "kind": "String",
-                          "position": {
-                            "end": {
-                              "column": 39,
-                              "line": 24,
-                            },
-                            "start": {
-                              "column": 26,
-                              "line": 24,
-                            },
-                          },
                           "text": "string",
                           "value": undefined,
                         },
@@ -12161,432 +9117,78 @@ describe('resolveType', () => {
                         "tags": undefined,
                         "text": "(exportedTypes: { name: string; description: string; }[]) => ReactNode",
                         "type": {
-                          "filePath": "test.ts",
-                          "kind": "Function",
-                          "name": undefined,
-                          "position": {
-                            "end": {
-                              "column": 23,
-                              "line": 19,
-                            },
-                            "start": {
-                              "column": 3,
-                              "line": 17,
-                            },
-                          },
-                          "signatures": [
+                          "isAsync": true,
+                          "kind": "FunctionType",
+                          "parameters": [
                             {
+                              "description": undefined,
                               "filePath": "test.ts",
-                              "kind": "FunctionSignature",
-                              "parameters": [
-                                {
-                                  "description": undefined,
-                                  "filePath": "test.ts",
-                                  "initializer": undefined,
-                                  "isOptional": false,
-                                  "kind": "Parameter",
-                                  "name": "exportedTypes",
-                                  "position": {
-                                    "end": {
-                                      "column": 55,
-                                      "line": 18,
-                                    },
-                                    "start": {
-                                      "column": 5,
-                                      "line": 18,
-                                    },
-                                  },
-                                  "text": "{ name: string; description: string; }[]",
-                                  "type": {
-                                    "element": {
-                                      "filePath": "test.ts",
-                                      "kind": "TypeLiteral",
-                                      "members": [
-                                        {
-                                          "filePath": "test.ts",
-                                          "isOptional": false,
-                                          "isReadonly": false,
-                                          "kind": "PropertySignature",
-                                          "name": "name",
-                                          "position": {
-                                            "end": {
-                                              "column": 21,
-                                              "line": 7,
-                                            },
-                                            "start": {
-                                              "column": 7,
-                                              "line": 7,
-                                            },
-                                          },
-                                          "text": "string",
-                                          "type": {
-                                            "filePath": "test.ts",
-                                            "kind": "String",
-                                            "position": {
-                                              "end": {
-                                                "column": 21,
-                                                "line": 7,
-                                              },
-                                              "start": {
-                                                "column": 7,
-                                                "line": 7,
-                                              },
-                                            },
-                                            "text": "string",
-                                            "value": undefined,
-                                          },
-                                        },
-                                        {
-                                          "filePath": "test.ts",
-                                          "isOptional": false,
-                                          "isReadonly": false,
-                                          "kind": "PropertySignature",
-                                          "name": "description",
-                                          "position": {
-                                            "end": {
-                                              "column": 40,
-                                              "line": 10,
-                                            },
-                                            "start": {
-                                              "column": 7,
-                                              "line": 10,
-                                            },
-                                          },
-                                          "text": "string",
-                                          "type": {
-                                            "filePath": "test.ts",
-                                            "kind": "String",
-                                            "position": {
-                                              "end": {
-                                                "column": 40,
-                                                "line": 10,
-                                              },
-                                              "start": {
-                                                "column": 7,
-                                                "line": 10,
-                                              },
-                                            },
-                                            "text": "string",
-                                            "value": undefined,
-                                          },
-                                        },
-                                      ],
-                                      "position": {
-                                        "end": {
-                                          "column": 6,
-                                          "line": 11,
-                                        },
-                                        "start": {
-                                          "column": 5,
-                                          "line": 5,
-                                        },
-                                      },
-                                      "text": "{ name: string; description: string; }",
-                                    },
-                                    "filePath": "test.ts",
-                                    "kind": "Array",
-                                    "position": {
-                                      "end": {
-                                        "column": 55,
-                                        "line": 18,
-                                      },
-                                      "start": {
-                                        "column": 5,
-                                        "line": 18,
-                                      },
-                                    },
-                                    "text": "Array<{ name: string; description: string; }>",
-                                  },
-                                },
-                              ],
+                              "initializer": undefined,
+                              "isOptional": false,
+                              "kind": "Parameter",
+                              "name": "exportedTypes",
                               "position": {
                                 "end": {
-                                  "column": 23,
-                                  "line": 19,
+                                  "column": 55,
+                                  "line": 18,
                                 },
                                 "start": {
-                                  "column": 14,
-                                  "line": 17,
+                                  "column": 5,
+                                  "line": 18,
                                 },
                               },
-                              "returnType": {
-                                "description": "Represents all of the things React can render.
-
-      Where {@link ReactElement} only represents JSX, \`ReactNode\` represents everything that can be rendered.",
-                                "filePath": "node_modules/@types/react/index.d.ts",
-                                "kind": "UnionType",
-                                "position": {
-                                  "end": {
-                                    "column": 37,
-                                    "line": 439,
-                                  },
-                                  "start": {
-                                    "column": 5,
-                                    "line": 426,
-                                  },
-                                },
-                                "tags": [
-                                  {
-                                    "name": "see",
-                                    "text": "{@link https://react-typescript-cheatsheet.netlify.app/docs/react-types/reactnode/ React TypeScript Cheatsheet}",
-                                  },
-                                  {
-                                    "name": "example",
-                                    "text": "\`\`\`tsx
-      // Typing children
-      type Props = { children: ReactNode }
-
-      const Component = ({ children }: Props) => <div>{children}</div>
-
-      <Component>hello</Component>
-      \`\`\`",
-                                  },
-                                  {
-                                    "name": "example",
-                                    "text": "\`\`\`tsx
-      // Typing a custom element
-      type Props = { customElement: ReactNode }
-
-      const Component = ({ customElement }: Props) => <div>{customElement}</div>
-
-      <Component customElement={<div>hello</div>} />
-      \`\`\`",
-                                  },
-                                ],
-                                "text": "React.ReactNode",
-                                "types": [
-                                  {
-                                    "arguments": [],
-                                    "filePath": "node_modules/@types/react/index.d.ts",
-                                    "kind": "TypeReference",
-                                    "name": "ReactElement",
-                                    "position": {
-                                      "end": {
-                                        "column": 6,
-                                        "line": 322,
-                                      },
-                                      "start": {
-                                        "column": 5,
-                                        "line": 315,
-                                      },
-                                    },
-                                    "text": "ReactElement<unknown, string | JSXElementConstructor<any>>",
-                                  },
-                                  {
-                                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                                    "kind": "String",
-                                    "position": {
-                                      "end": {
-                                        "column": 4402,
-                                        "line": 4,
-                                      },
-                                      "start": {
-                                        "column": 3482,
-                                        "line": 4,
-                                      },
-                                    },
-                                    "text": "string",
-                                    "value": undefined,
-                                  },
-                                  {
-                                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                                    "kind": "Number",
-                                    "position": {
-                                      "end": {
-                                        "column": 4943,
-                                        "line": 4,
-                                      },
-                                      "start": {
-                                        "column": 4755,
-                                        "line": 4,
-                                      },
-                                    },
-                                    "text": "number",
-                                    "value": undefined,
-                                  },
-                                  {
-                                    "arguments": [],
-                                    "filePath": "node_modules/typescript/lib/lib.es2020.bigint.d.ts",
-                                    "kind": "TypeReference",
-                                    "name": "BigInt",
-                                    "position": {
-                                      "end": {
-                                        "column": 817,
-                                        "line": 3,
-                                      },
-                                      "start": {
-                                        "column": 623,
-                                        "line": 3,
-                                      },
-                                    },
-                                    "text": "BigInt",
-                                  },
-                                  {
-                                    "arguments": [
-                                      {
-                                        "arguments": [],
-                                        "filePath": "node_modules/@types/react/index.d.ts",
-                                        "kind": "TypeReference",
-                                        "name": "ReactNode",
-                                        "position": {
-                                          "end": {
-                                            "column": 37,
-                                            "line": 439,
-                                          },
-                                          "start": {
-                                            "column": 5,
-                                            "line": 426,
-                                          },
-                                        },
-                                        "text": "ReactNode",
-                                      },
-                                    ],
-                                    "filePath": "node_modules/typescript/lib/lib.es2015.iterable.d.ts",
-                                    "kind": "TypeReference",
-                                    "name": "Iterable",
-                                    "position": {
-                                      "end": {
-                                        "column": 560,
-                                        "line": 3,
-                                      },
-                                      "start": {
-                                        "column": 469,
-                                        "line": 3,
-                                      },
-                                    },
-                                    "text": "Iterable<ReactNode>",
-                                  },
-                                  {
-                                    "arguments": [],
-                                    "filePath": "node_modules/@types/react/index.d.ts",
-                                    "kind": "TypeReference",
-                                    "name": "ReactPortal",
-                                    "position": {
-                                      "end": {
-                                        "column": 6,
-                                        "line": 388,
-                                      },
-                                      "start": {
-                                        "column": 5,
-                                        "line": 386,
-                                      },
-                                    },
-                                    "text": "ReactPortal",
-                                  },
-                                  {
-                                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                                    "kind": "Boolean",
-                                    "position": {
-                                      "end": {
-                                        "column": 4613,
-                                        "line": 4,
-                                      },
-                                      "start": {
-                                        "column": 4576,
-                                        "line": 4,
-                                      },
-                                    },
-                                    "text": "boolean",
-                                  },
-                                  {
-                                    "filePath": "node_modules/@types/react/index.d.ts",
-                                    "kind": "Unknown",
-                                    "position": {
-                                      "end": {
-                                        "column": 15,
-                                        "line": 434,
-                                      },
-                                      "start": {
-                                        "column": 11,
-                                        "line": 434,
-                                      },
-                                    },
-                                    "text": "null",
-                                  },
-                                  {
-                                    "filePath": "node_modules/@types/react/index.d.ts",
-                                    "kind": "Unknown",
-                                    "position": {
-                                      "end": {
-                                        "column": 20,
-                                        "line": 435,
-                                      },
-                                      "start": {
-                                        "column": 11,
-                                        "line": 435,
-                                      },
-                                    },
-                                    "text": "undefined",
-                                  },
-                                  {
-                                    "filePath": "node_modules/@types/react/index.d.ts",
-                                    "kind": "Unknown",
-                                    "position": {
-                                      "end": {
-                                        "column": 10,
-                                        "line": 438,
-                                      },
-                                      "start": {
-                                        "column": 11,
-                                        "line": 436,
-                                      },
-                                    },
-                                    "text": "never",
-                                  },
-                                  {
-                                    "arguments": [
-                                      {
-                                        "arguments": [],
-                                        "filePath": "node_modules/@types/react/index.d.ts",
-                                        "kind": "TypeReference",
-                                        "name": "AwaitedReactNode",
-                                        "position": {
-                                          "end": {
-                                            "column": 7,
-                                            "line": 53,
-                                          },
-                                          "start": {
-                                            "column": 1,
-                                            "line": 41,
-                                          },
-                                        },
-                                        "text": "AwaitedReactNode",
-                                      },
-                                    ],
-                                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                                    "kind": "TypeReference",
-                                    "name": "Promise",
-                                    "position": {
-                                      "end": {
-                                        "column": 15356,
-                                        "line": 4,
-                                      },
-                                      "start": {
-                                        "column": 15015,
-                                        "line": 4,
-                                      },
-                                    },
-                                    "text": "Promise<AwaitedReactNode>",
-                                  },
-                                ],
+                              "text": "{ name: string; description: string; }[]",
+                              "type": {
+                                "kind": "TypeReference",
+                                "text": "{ name: string; description: string; }[]",
                               },
-                              "text": "(exportedTypes: { name: string; description: string; }[]) => React.ReactNode",
                             },
                           ],
-                          "text": "(exportedTypes: ReturnType<typeof getExportedTypes>) => React.ReactNode",
+                          "returnType": {
+                            "kind": "UnionType",
+                            "text": "string | number | bigint | boolean | ReactElement<unknown, string | JSXElementConstructor<any>> | Iterable<ReactNode> | ReactPortal | Promise<AwaitedReactNode>",
+                            "types": [
+                              {
+                                "kind": "String",
+                                "text": "string",
+                                "value": undefined,
+                              },
+                              {
+                                "kind": "Number",
+                                "text": "number",
+                                "value": undefined,
+                              },
+                              {
+                                "kind": "BigInt",
+                                "text": "bigint",
+                                "value": undefined,
+                              },
+                              {
+                                "kind": "Boolean",
+                                "text": "boolean",
+                              },
+                              {
+                                "kind": "TypeReference",
+                                "text": "ReactElement<unknown, string | JSXElementConstructor<any>>",
+                              },
+                              {
+                                "kind": "TypeReference",
+                                "text": "Iterable<ReactNode>",
+                              },
+                              {
+                                "kind": "TypeReference",
+                                "text": "ReactPortal",
+                              },
+                              {
+                                "kind": "TypeReference",
+                                "text": "Promise<AwaitedReactNode>",
+                              },
+                            ],
+                          },
+                          "text": "(exportedTypes: { name: string; description: string; }[]) => ReactNode",
                         },
                       },
                     ],
-                    "position": {
-                      "end": {
-                        "column": 67,
-                        "line": 24,
-                      },
-                      "start": {
-                        "column": 5,
-                        "line": 24,
-                      },
-                    },
                     "text": "{ filename: string; value: string; } & BaseExportedTypesProps",
                   },
                 ],
@@ -12603,18 +9205,7 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "filePath": "test.ts",
-              "kind": "Unknown",
-              "position": {
-                "end": {
-                  "column": 60,
-                  "line": 26,
-                },
-                "start": {
-                  "column": 1,
-                  "line": 26,
-                },
-              },
+              "kind": "Void",
               "text": "void",
             },
             "text": "function ExportedTypes(ExportedTypesProps): void",
@@ -12698,7 +9289,9 @@ describe('resolveType', () => {
     expect(types).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "UnionType",
+        "kind": "TypeAlias",
+        "name": "AllMetadata",
+        "parameters": [],
         "position": {
           "end": {
             "column": 57,
@@ -12709,49 +9302,24 @@ describe('resolveType', () => {
             "line": 8,
           },
         },
-        "text": "InterfaceMetadata | TypeAliasMetadata",
-        "types": [
-          {
-            "arguments": [],
-            "filePath": "node_modules/library/index.d.ts",
-            "kind": "TypeReference",
-            "name": "InterfaceMetadata",
-            "position": {
-              "end": {
-                "column": 2,
-                "line": 4,
-              },
-              "start": {
-                "column": 1,
-                "line": 1,
-              },
+        "text": "AllMetadata",
+        "type": {
+          "kind": "UnionType",
+          "text": "InterfaceMetadata | TypeAliasMetadata",
+          "types": [
+            {
+              "kind": "TypeReference",
+              "text": "InterfaceMetadata",
             },
-            "text": "InterfaceMetadata",
-          },
-          {
-            "filePath": "test.ts",
-            "kind": "TypeLiteral",
-            "members": [
-              {
-                "filePath": "test.ts",
-                "isOptional": false,
-                "isReadonly": false,
-                "kind": "PropertySignature",
-                "name": "kind",
-                "position": {
-                  "end": {
-                    "column": 20,
-                    "line": 4,
-                  },
-                  "start": {
-                    "column": 3,
-                    "line": 4,
-                  },
-                },
-                "text": ""TypeAlias"",
-                "type": {
+            {
+              "kind": "TypeLiteral",
+              "members": [
+                {
                   "filePath": "test.ts",
-                  "kind": "String",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "PropertySignature",
+                  "name": "kind",
                   "position": {
                     "end": {
                       "column": 20,
@@ -12763,29 +9331,18 @@ describe('resolveType', () => {
                     },
                   },
                   "text": ""TypeAlias"",
-                  "value": "TypeAlias",
-                },
-              },
-              {
-                "filePath": "test.ts",
-                "isOptional": false,
-                "isReadonly": false,
-                "kind": "PropertySignature",
-                "name": "name",
-                "position": {
-                  "end": {
-                    "column": 15,
-                    "line": 5,
-                  },
-                  "start": {
-                    "column": 3,
-                    "line": 5,
+                  "type": {
+                    "kind": "String",
+                    "text": ""TypeAlias"",
+                    "value": "TypeAlias",
                   },
                 },
-                "text": "string",
-                "type": {
+                {
                   "filePath": "test.ts",
-                  "kind": "String",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "PropertySignature",
+                  "name": "name",
                   "position": {
                     "end": {
                       "column": 15,
@@ -12797,23 +9354,17 @@ describe('resolveType', () => {
                     },
                   },
                   "text": "string",
-                  "value": undefined,
+                  "type": {
+                    "kind": "String",
+                    "text": "string",
+                    "value": undefined,
+                  },
                 },
-              },
-            ],
-            "position": {
-              "end": {
-                "column": 2,
-                "line": 6,
-              },
-              "start": {
-                "column": 1,
-                "line": 3,
-              },
+              ],
+              "text": "TypeAliasMetadata",
             },
-            "text": "TypeAliasMetadata",
-          },
-        ],
+          ],
+        },
       }
     `)
   })
@@ -12841,7 +9392,220 @@ describe('resolveType', () => {
       {
         "description": "The initial count of the counter.",
         "filePath": "test.ts",
-        "kind": "Number",
+        "kind": "Interface",
+        "members": [
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "toString",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": true,
+                "kind": "Parameter",
+                "name": "radix",
+                "position": {
+                  "end": {
+                    "column": 4794,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 4781,
+                    "line": 4,
+                  },
+                },
+                "text": "number",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 4803,
+                "line": 4,
+              },
+              "start": {
+                "column": 4772,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "String",
+              "text": "string",
+              "value": undefined,
+            },
+            "text": "(radix?: number) => string",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "toFixed",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": true,
+                "kind": "Parameter",
+                "name": "fractionDigits",
+                "position": {
+                  "end": {
+                    "column": 4833,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 4811,
+                    "line": 4,
+                  },
+                },
+                "text": "number",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 4842,
+                "line": 4,
+              },
+              "start": {
+                "column": 4803,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "String",
+              "text": "string",
+              "value": undefined,
+            },
+            "text": "(fractionDigits?: number) => string",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "toExponential",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": true,
+                "kind": "Parameter",
+                "name": "fractionDigits",
+                "position": {
+                  "end": {
+                    "column": 4878,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 4856,
+                    "line": 4,
+                  },
+                },
+                "text": "number",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 4887,
+                "line": 4,
+              },
+              "start": {
+                "column": 4842,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "String",
+              "text": "string",
+              "value": undefined,
+            },
+            "text": "(fractionDigits?: number) => string",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "toPrecision",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": true,
+                "kind": "Parameter",
+                "name": "precision",
+                "position": {
+                  "end": {
+                    "column": 4916,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 4899,
+                    "line": 4,
+                  },
+                },
+                "text": "number",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 4925,
+                "line": 4,
+              },
+              "start": {
+                "column": 4887,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "String",
+              "text": "string",
+              "value": undefined,
+            },
+            "text": "(precision?: number) => string",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "valueOf",
+            "parameters": [],
+            "position": {
+              "end": {
+                "column": 4942,
+                "line": 4,
+              },
+              "start": {
+                "column": 4925,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "Number",
+              "text": "number",
+              "value": undefined,
+            },
+            "text": "() => number",
+          },
+        ],
+        "name": "initialCount",
         "position": {
           "end": {
             "column": 30,
@@ -12859,7 +9623,6 @@ describe('resolveType', () => {
           },
         ],
         "text": "0",
-        "value": 0,
       }
     `)
   })
@@ -12891,7 +9654,7 @@ describe('resolveType', () => {
           {
             "filePath": "test.ts",
             "isOptional": false,
-            "isReadonly": true,
+            "isReadonly": false,
             "kind": "PropertySignature",
             "name": "primary",
             "position": {
@@ -12906,18 +9669,7 @@ describe('resolveType', () => {
             },
             "text": ""#ff0000"",
             "type": {
-              "filePath": "test.ts",
               "kind": "String",
-              "position": {
-                "end": {
-                  "column": 21,
-                  "line": 2,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 2,
-                },
-              },
               "text": ""#ff0000"",
               "value": "#ff0000",
             },
@@ -12925,7 +9677,7 @@ describe('resolveType', () => {
           {
             "filePath": "test.ts",
             "isOptional": false,
-            "isReadonly": true,
+            "isReadonly": false,
             "kind": "PropertySignature",
             "name": "secondary",
             "position": {
@@ -12940,18 +9692,7 @@ describe('resolveType', () => {
             },
             "text": ""#00ff00"",
             "type": {
-              "filePath": "test.ts",
               "kind": "String",
-              "position": {
-                "end": {
-                  "column": 23,
-                  "line": 3,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 3,
-                },
-              },
               "text": ""#00ff00"",
               "value": "#00ff00",
             },
@@ -12959,7 +9700,7 @@ describe('resolveType', () => {
           {
             "filePath": "test.ts",
             "isOptional": false,
-            "isReadonly": true,
+            "isReadonly": false,
             "kind": "PropertySignature",
             "name": "tertiary",
             "position": {
@@ -12974,18 +9715,7 @@ describe('resolveType', () => {
             },
             "text": ""#0000ff"",
             "type": {
-              "filePath": "test.ts",
               "kind": "String",
-              "position": {
-                "end": {
-                  "column": 22,
-                  "line": 4,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 4,
-                },
-              },
               "text": ""#0000ff"",
               "value": "#0000ff",
             },
@@ -13034,7 +9764,215 @@ describe('resolveType', () => {
       {
         "awaitedTypes": {
           "filePath": "test.ts",
-          "kind": "Number",
+          "kind": "Interface",
+          "members": [
+            {
+              "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+              "kind": "MethodSignature",
+              "name": "toString",
+              "parameters": [
+                {
+                  "description": undefined,
+                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                  "initializer": undefined,
+                  "isOptional": true,
+                  "kind": "Parameter",
+                  "name": "radix",
+                  "position": {
+                    "end": {
+                      "column": 4794,
+                      "line": 4,
+                    },
+                    "start": {
+                      "column": 4781,
+                      "line": 4,
+                    },
+                  },
+                  "text": "number",
+                  "type": {
+                    "kind": "TypeReference",
+                    "text": "number",
+                  },
+                },
+              ],
+              "position": {
+                "end": {
+                  "column": 4803,
+                  "line": 4,
+                },
+                "start": {
+                  "column": 4772,
+                  "line": 4,
+                },
+              },
+              "returnType": {
+                "kind": "String",
+                "text": "string",
+                "value": undefined,
+              },
+              "text": "(radix?: number) => string",
+            },
+            {
+              "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+              "kind": "MethodSignature",
+              "name": "toFixed",
+              "parameters": [
+                {
+                  "description": undefined,
+                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                  "initializer": undefined,
+                  "isOptional": true,
+                  "kind": "Parameter",
+                  "name": "fractionDigits",
+                  "position": {
+                    "end": {
+                      "column": 4833,
+                      "line": 4,
+                    },
+                    "start": {
+                      "column": 4811,
+                      "line": 4,
+                    },
+                  },
+                  "text": "number",
+                  "type": {
+                    "kind": "TypeReference",
+                    "text": "number",
+                  },
+                },
+              ],
+              "position": {
+                "end": {
+                  "column": 4842,
+                  "line": 4,
+                },
+                "start": {
+                  "column": 4803,
+                  "line": 4,
+                },
+              },
+              "returnType": {
+                "kind": "String",
+                "text": "string",
+                "value": undefined,
+              },
+              "text": "(fractionDigits?: number) => string",
+            },
+            {
+              "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+              "kind": "MethodSignature",
+              "name": "toExponential",
+              "parameters": [
+                {
+                  "description": undefined,
+                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                  "initializer": undefined,
+                  "isOptional": true,
+                  "kind": "Parameter",
+                  "name": "fractionDigits",
+                  "position": {
+                    "end": {
+                      "column": 4878,
+                      "line": 4,
+                    },
+                    "start": {
+                      "column": 4856,
+                      "line": 4,
+                    },
+                  },
+                  "text": "number",
+                  "type": {
+                    "kind": "TypeReference",
+                    "text": "number",
+                  },
+                },
+              ],
+              "position": {
+                "end": {
+                  "column": 4887,
+                  "line": 4,
+                },
+                "start": {
+                  "column": 4842,
+                  "line": 4,
+                },
+              },
+              "returnType": {
+                "kind": "String",
+                "text": "string",
+                "value": undefined,
+              },
+              "text": "(fractionDigits?: number) => string",
+            },
+            {
+              "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+              "kind": "MethodSignature",
+              "name": "toPrecision",
+              "parameters": [
+                {
+                  "description": undefined,
+                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                  "initializer": undefined,
+                  "isOptional": true,
+                  "kind": "Parameter",
+                  "name": "precision",
+                  "position": {
+                    "end": {
+                      "column": 4916,
+                      "line": 4,
+                    },
+                    "start": {
+                      "column": 4899,
+                      "line": 4,
+                    },
+                  },
+                  "text": "number",
+                  "type": {
+                    "kind": "TypeReference",
+                    "text": "number",
+                  },
+                },
+              ],
+              "position": {
+                "end": {
+                  "column": 4925,
+                  "line": 4,
+                },
+                "start": {
+                  "column": 4887,
+                  "line": 4,
+                },
+              },
+              "returnType": {
+                "kind": "String",
+                "text": "string",
+                "value": undefined,
+              },
+              "text": "(precision?: number) => string",
+            },
+            {
+              "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+              "kind": "MethodSignature",
+              "name": "valueOf",
+              "parameters": [],
+              "position": {
+                "end": {
+                  "column": 4942,
+                  "line": 4,
+                },
+                "start": {
+                  "column": 4925,
+                  "line": 4,
+                },
+              },
+              "returnType": {
+                "kind": "TypeReference",
+                "text": "number",
+              },
+              "text": "() => number",
+            },
+          ],
+          "name": "awaited",
           "position": {
             "end": {
               "column": 30,
@@ -13046,57 +9984,63 @@ describe('resolveType', () => {
             },
           },
           "text": "number",
-          "value": undefined,
         },
         "counterTypes": {
-          "constructor": undefined,
           "filePath": "test.ts",
-          "kind": "Class",
-          "methods": [
+          "kind": "TypeLiteral",
+          "members": [
             {
-              "kind": "ClassMethod",
-              "name": "increment",
-              "scope": undefined,
-              "signatures": [
-                {
-                  "filePath": "test.ts",
-                  "isAsync": false,
-                  "isGenerator": false,
-                  "kind": "FunctionSignature",
-                  "parameters": [],
-                  "position": {
-                    "end": {
-                      "column": 4,
-                      "line": 5,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 3,
-                    },
-                  },
-                  "returnType": {
-                    "filePath": "test.ts",
-                    "kind": "Unknown",
-                    "position": {
-                      "end": {
-                        "column": 4,
-                        "line": 5,
-                      },
-                      "start": {
-                        "column": 3,
-                        "line": 3,
-                      },
-                    },
-                    "text": "void",
-                  },
-                  "text": "() => void",
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "count",
+              "position": {
+                "end": {
+                  "column": 21,
+                  "line": 2,
                 },
-              ],
+                "start": {
+                  "column": 3,
+                  "line": 2,
+                },
+              },
+              "text": "number",
+              "type": {
+                "kind": "Number",
+                "text": "number",
+                "value": undefined,
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "increment",
+              "position": {
+                "end": {
+                  "column": 4,
+                  "line": 5,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 3,
+                },
+              },
               "text": "() => void",
-              "visibility": undefined,
+              "type": {
+                "isAsync": false,
+                "kind": "FunctionType",
+                "parameters": [],
+                "returnType": {
+                  "kind": "Void",
+                  "text": "void",
+                },
+                "text": "() => void",
+              },
             },
           ],
-          "name": "counter",
           "position": {
             "end": {
               "column": 30,
@@ -13107,58 +10051,127 @@ describe('resolveType', () => {
               "line": 8,
             },
           },
-          "properties": [
-            {
-              "initializer": undefined,
-              "isOptional": true,
-              "isReadonly": false,
-              "kind": "ClassProperty",
-              "name": "count",
-              "scope": undefined,
-              "text": "number",
-              "type": {
-                "filePath": "test.ts",
-                "kind": "Number",
-                "position": {
-                  "end": {
-                    "column": 21,
-                    "line": 2,
-                  },
-                  "start": {
-                    "column": 3,
-                    "line": 2,
-                  },
-                },
-                "text": "number",
-                "value": undefined,
-              },
-              "visibility": undefined,
-            },
-          ],
           "text": "Counter",
         },
         "promiseTypes": {
-          "arguments": [
+          "filePath": "test.ts",
+          "kind": "Interface",
+          "members": [
             {
               "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-              "kind": "Number",
+              "kind": "MethodSignature",
+              "name": "then",
+              "parameters": [
+                {
+                  "description": undefined,
+                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                  "initializer": undefined,
+                  "isOptional": true,
+                  "kind": "Parameter",
+                  "name": "onfulfilled",
+                  "position": {
+                    "end": {
+                      "column": 15139,
+                      "line": 4,
+                    },
+                    "start": {
+                      "column": 15068,
+                      "line": 4,
+                    },
+                  },
+                  "text": "(value: T) => TResult1 | PromiseLike<TResult1>",
+                  "type": {
+                    "kind": "TypeReference",
+                    "text": "(value: T) => TResult1 | PromiseLike<TResult1>",
+                  },
+                },
+                {
+                  "description": undefined,
+                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                  "initializer": undefined,
+                  "isOptional": true,
+                  "kind": "Parameter",
+                  "name": "onrejected",
+                  "position": {
+                    "end": {
+                      "column": 15213,
+                      "line": 4,
+                    },
+                    "start": {
+                      "column": 15140,
+                      "line": 4,
+                    },
+                  },
+                  "text": "(reason: any) => TResult2 | PromiseLike<TResult2>",
+                  "type": {
+                    "kind": "TypeReference",
+                    "text": "(reason: any) => TResult2 | PromiseLike<TResult2>",
+                  },
+                },
+              ],
               "position": {
                 "end": {
-                  "column": 4943,
+                  "column": 15242,
                   "line": 4,
                 },
                 "start": {
-                  "column": 4755,
+                  "column": 15036,
                   "line": 4,
                 },
               },
-              "text": "number",
-              "value": undefined,
+              "returnType": {
+                "kind": "TypeReference",
+                "text": "Promise<TResult1 | TResult2>",
+              },
+              "text": "<TResult1 = T, TResult2 = never>(onfulfilled?: (value: T) => TResult1 | PromiseLike<TResult1>, onrejected?: (reason: any) => TResult2 | PromiseLike<TResult2>) => Promise<...>",
+            },
+            {
+              "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+              "kind": "MethodSignature",
+              "name": "catch",
+              "parameters": [
+                {
+                  "description": undefined,
+                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                  "initializer": undefined,
+                  "isOptional": true,
+                  "kind": "Parameter",
+                  "name": "onrejected",
+                  "position": {
+                    "end": {
+                      "column": 15334,
+                      "line": 4,
+                    },
+                    "start": {
+                      "column": 15263,
+                      "line": 4,
+                    },
+                  },
+                  "text": "(reason: any) => TResult | PromiseLike<TResult>",
+                  "type": {
+                    "kind": "TypeReference",
+                    "text": "(reason: any) => TResult | PromiseLike<TResult>",
+                  },
+                },
+              ],
+              "position": {
+                "end": {
+                  "column": 15355,
+                  "line": 4,
+                },
+                "start": {
+                  "column": 15242,
+                  "line": 4,
+                },
+              },
+              "returnType": {
+                "kind": "TypeReference",
+                "text": "Promise<T | TResult>",
+              },
+              "text": "<TResult = never>(onrejected?: (reason: any) => TResult | PromiseLike<TResult>) => Promise<T | TResult>",
             },
           ],
-          "filePath": "test.ts",
-          "kind": "TypeReference",
-          "name": "Promise",
+          "name": "promise",
           "position": {
             "end": {
               "column": 61,
@@ -13201,7 +10214,9 @@ describe('resolveType', () => {
     expect(types).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "IntersectionType",
+        "kind": "TypeAlias",
+        "name": "Foo",
+        "parameters": [],
         "position": {
           "end": {
             "column": 80,
@@ -13213,48 +10228,42 @@ describe('resolveType', () => {
           },
         },
         "text": "Foo",
-        "types": [
-          {
-            "arguments": [],
-            "filePath": "test.ts",
-            "kind": "TypeReference",
-            "name": "AllTypes",
-            "position": {
-              "end": {
-                "column": 48,
-                "line": 9,
-              },
-              "start": {
-                "column": 1,
-                "line": 9,
-              },
-            },
-            "text": "AllTypes",
-          },
-          {
-            "filePath": "test.ts",
-            "kind": "TypeLiteral",
-            "members": [
-              {
-                "filePath": "test.ts",
-                "isOptional": false,
-                "isReadonly": false,
-                "kind": "PropertySignature",
-                "name": "value",
-                "position": {
-                  "end": {
-                    "column": 49,
-                    "line": 11,
+        "type": {
+          "kind": "UnionType",
+          "text": "StringType & { value: string | boolean; getValue(): string | boolean; } | BooleanType & { value: string | boolean; getValue(): string | boolean; }",
+          "types": [
+            {
+              "kind": "TypeLiteral",
+              "members": [
+                {
+                  "filePath": "test.ts",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "PropertySignature",
+                  "name": "kind",
+                  "position": {
+                    "end": {
+                      "column": 17,
+                      "line": 2,
+                    },
+                    "start": {
+                      "column": 3,
+                      "line": 2,
+                    },
                   },
-                  "start": {
-                    "column": 25,
-                    "line": 11,
+                  "text": ""String"",
+                  "type": {
+                    "kind": "String",
+                    "text": ""String"",
+                    "value": "String",
                   },
                 },
-                "text": "string | boolean",
-                "type": {
+                {
                   "filePath": "test.ts",
-                  "kind": "UnionType",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "PropertySignature",
+                  "name": "value",
                   "position": {
                     "end": {
                       "column": 49,
@@ -13266,61 +10275,27 @@ describe('resolveType', () => {
                     },
                   },
                   "text": "string | boolean",
-                  "types": [
-                    {
-                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                      "kind": "String",
-                      "position": {
-                        "end": {
-                          "column": 4402,
-                          "line": 4,
-                        },
-                        "start": {
-                          "column": 3482,
-                          "line": 4,
-                        },
+                  "type": {
+                    "kind": "UnionType",
+                    "text": "string | boolean",
+                    "types": [
+                      {
+                        "kind": "String",
+                        "text": "string",
+                        "value": undefined,
                       },
-                      "text": "string",
-                      "value": undefined,
-                    },
-                    {
-                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                      "kind": "Boolean",
-                      "position": {
-                        "end": {
-                          "column": 4613,
-                          "line": 4,
-                        },
-                        "start": {
-                          "column": 4576,
-                          "line": 4,
-                        },
+                      {
+                        "kind": "Boolean",
+                        "text": "boolean",
                       },
-                      "text": "boolean",
-                    },
-                  ],
-                },
-              },
-              {
-                "filePath": "test.ts",
-                "isOptional": false,
-                "isReadonly": false,
-                "kind": "PropertySignature",
-                "name": "getValue",
-                "position": {
-                  "end": {
-                    "column": 78,
-                    "line": 11,
-                  },
-                  "start": {
-                    "column": 50,
-                    "line": 11,
+                    ],
                   },
                 },
-                "text": "() => string | boolean",
-                "type": {
+                {
                   "filePath": "test.ts",
-                  "kind": "Function",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "PropertySignature",
                   "name": "getValue",
                   "position": {
                     "end": {
@@ -13332,89 +10307,62 @@ describe('resolveType', () => {
                       "line": 11,
                     },
                   },
-                  "signatures": [
+                  "text": "() => string | boolean",
+                  "type": {
+                    "isAsync": false,
+                    "kind": "FunctionType",
+                    "parameters": [],
+                    "returnType": {
+                      "kind": "TypeReference",
+                      "text": "string | boolean",
+                    },
+                    "text": "() => string | boolean",
+                  },
+                },
+              ],
+              "text": "StringType & { value: string | boolean; getValue(): string | boolean; }",
+            },
+            {
+              "kind": "IntersectionType",
+              "text": "BooleanType & { value: string | boolean; getValue(): string | boolean; }",
+              "types": [
+                {
+                  "kind": "TypeLiteral",
+                  "members": [
                     {
                       "filePath": "test.ts",
-                      "kind": "FunctionSignature",
-                      "parameters": [],
+                      "isOptional": false,
+                      "isReadonly": false,
+                      "kind": "PropertySignature",
+                      "name": "kind",
                       "position": {
                         "end": {
-                          "column": 78,
-                          "line": 11,
+                          "column": 18,
+                          "line": 6,
                         },
                         "start": {
-                          "column": 50,
-                          "line": 11,
+                          "column": 3,
+                          "line": 6,
                         },
                       },
-                      "returnType": {
-                        "filePath": "test.ts",
-                        "kind": "UnionType",
-                        "position": {
-                          "end": {
-                            "column": 78,
-                            "line": 11,
-                          },
-                          "start": {
-                            "column": 50,
-                            "line": 11,
-                          },
-                        },
-                        "text": "string | boolean",
-                        "types": [
-                          {
-                            "filePath": "test.ts",
-                            "kind": "String",
-                            "position": {
-                              "end": {
-                                "column": 78,
-                                "line": 11,
-                              },
-                              "start": {
-                                "column": 50,
-                                "line": 11,
-                              },
-                            },
-                            "text": "string",
-                            "value": undefined,
-                          },
-                          {
-                            "filePath": "test.ts",
-                            "kind": "Boolean",
-                            "position": {
-                              "end": {
-                                "column": 78,
-                                "line": 11,
-                              },
-                              "start": {
-                                "column": 50,
-                                "line": 11,
-                              },
-                            },
-                            "text": "boolean",
-                          },
-                        ],
+                      "text": ""Boolean"",
+                      "type": {
+                        "kind": "String",
+                        "text": ""Boolean"",
+                        "value": "Boolean",
                       },
-                      "text": "() => string | boolean",
                     },
                   ],
-                  "text": "() => string | boolean",
+                  "text": "BooleanType",
                 },
-              },
-            ],
-            "position": {
-              "end": {
-                "column": 80,
-                "line": 11,
-              },
-              "start": {
-                "column": 23,
-                "line": 11,
-              },
+                {
+                  "kind": "TypeReference",
+                  "text": "{ value: string | boolean; getValue(): string | boolean; }",
+                },
+              ],
             },
-            "text": "{ value: string | boolean; getValue(): string | boolean; }",
-          },
-        ],
+          ],
+        },
       }
     `)
   })
@@ -13470,36 +10418,7 @@ describe('resolveType', () => {
                 },
                 "text": "Args",
                 "type": {
-                  "constraint": {
-                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                    "kind": "TypeReference",
-                    "name": "Array",
-                    "position": {
-                      "end": {
-                        "column": 14214,
-                        "line": 4,
-                      },
-                      "start": {
-                        "column": 12443,
-                        "line": 4,
-                      },
-                    },
-                    "text": "Array<string>",
-                  },
-                  "defaultType": undefined,
-                  "filePath": "test.ts",
-                  "kind": "TypeParameter",
-                  "name": "Args",
-                  "position": {
-                    "end": {
-                      "column": 67,
-                      "line": 1,
-                    },
-                    "start": {
-                      "column": 54,
-                      "line": 1,
-                    },
-                  },
+                  "kind": "TypeReference",
                   "text": "Args",
                 },
               },
@@ -13515,53 +10434,15 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "filePath": "test.ts",
-              "kind": "Unknown",
-              "position": {
-                "end": {
-                  "column": 75,
-                  "line": 1,
-                },
-                "start": {
-                  "column": 1,
-                  "line": 1,
-                },
-              },
+              "kind": "Void",
               "text": "void",
             },
-            "text": "function loggedMethod<Args extends Array<string>>(args: Args): void",
+            "text": "function loggedMethod<Args extends string[]>(args: Args): void",
             "typeParameters": [
               {
                 "constraint": {
-                  "element": {
-                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                    "kind": "String",
-                    "position": {
-                      "end": {
-                        "column": 4402,
-                        "line": 4,
-                      },
-                      "start": {
-                        "column": 3482,
-                        "line": 4,
-                      },
-                    },
-                    "text": "string",
-                    "value": undefined,
-                  },
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                  "kind": "Array",
-                  "position": {
-                    "end": {
-                      "column": 14214,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 12443,
-                      "line": 4,
-                    },
-                  },
-                  "text": "Array<string>",
+                  "kind": "TypeReference",
+                  "text": "string[]",
                 },
                 "defaultType": undefined,
                 "kind": "TypeParameter",
@@ -13605,91 +10486,64 @@ describe('resolveType', () => {
 
     expect(types).toMatchInlineSnapshot(`
       {
-        "constructor": undefined,
         "filePath": "test.ts",
-        "kind": "Class",
-        "methods": [
+        "kind": "TypeLiteral",
+        "members": [
           {
-            "kind": "ClassMethod",
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "PropertySignature",
             "name": "greet",
-            "scope": undefined,
-            "signatures": [
-              {
-                "filePath": "test.ts",
-                "isAsync": false,
-                "isGenerator": false,
-                "kind": "FunctionSignature",
-                "parameters": [
-                  {
-                    "description": undefined,
-                    "filePath": "test.ts",
-                    "initializer": undefined,
-                    "isOptional": false,
-                    "kind": "Parameter",
-                    "name": "name",
-                    "position": {
-                      "end": {
-                        "column": 21,
-                        "line": 15,
-                      },
-                      "start": {
-                        "column": 9,
-                        "line": 15,
-                      },
-                    },
-                    "text": "string",
-                    "type": {
-                      "filePath": "test.ts",
-                      "kind": "String",
-                      "position": {
-                        "end": {
-                          "column": 21,
-                          "line": 15,
-                        },
-                        "start": {
-                          "column": 9,
-                          "line": 15,
-                        },
-                      },
-                      "text": "string",
-                      "value": undefined,
-                    },
-                  },
-                ],
-                "position": {
-                  "end": {
-                    "column": 4,
-                    "line": 17,
-                  },
-                  "start": {
-                    "column": 3,
-                    "line": 14,
-                  },
-                },
-                "returnType": {
+            "position": {
+              "end": {
+                "column": 4,
+                "line": 17,
+              },
+              "start": {
+                "column": 3,
+                "line": 14,
+              },
+            },
+            "text": "(name: string) => string",
+            "type": {
+              "isAsync": false,
+              "kind": "FunctionType",
+              "parameters": [
+                {
+                  "description": undefined,
                   "filePath": "test.ts",
-                  "kind": "String",
+                  "initializer": undefined,
+                  "isOptional": false,
+                  "kind": "Parameter",
+                  "name": "name",
                   "position": {
                     "end": {
-                      "column": 4,
-                      "line": 17,
+                      "column": 21,
+                      "line": 15,
                     },
                     "start": {
-                      "column": 3,
-                      "line": 14,
+                      "column": 9,
+                      "line": 15,
                     },
                   },
                   "text": "string",
-                  "value": undefined,
+                  "type": {
+                    "kind": "String",
+                    "text": "string",
+                    "value": undefined,
+                  },
                 },
-                "text": "(name: string) => string",
+              ],
+              "returnType": {
+                "kind": "String",
+                "text": "string",
+                "value": undefined,
               },
-            ],
-            "text": "(name: string) => string",
-            "visibility": undefined,
+              "text": "(name: string) => string",
+            },
           },
         ],
-        "name": "Person",
         "position": {
           "end": {
             "column": 2,
@@ -13783,141 +10637,8 @@ describe('resolveType', () => {
                 },
                 "text": "Loader<Types>",
                 "type": {
-                  "filePath": "test.ts",
-                  "kind": "Function",
-                  "name": "Loader",
-                  "position": {
-                    "end": {
-                      "column": 49,
-                      "line": 8,
-                    },
-                    "start": {
-                      "column": 28,
-                      "line": 8,
-                    },
-                  },
-                  "signatures": [
-                    {
-                      "filePath": "test.ts",
-                      "kind": "FunctionSignature",
-                      "parameters": [
-                        {
-                          "description": undefined,
-                          "filePath": "test.ts",
-                          "initializer": undefined,
-                          "isOptional": false,
-                          "kind": "Parameter",
-                          "name": "path",
-                          "position": {
-                            "end": {
-                              "column": 35,
-                              "line": 1,
-                            },
-                            "start": {
-                              "column": 23,
-                              "line": 1,
-                            },
-                          },
-                          "text": "string",
-                          "type": {
-                            "filePath": "test.ts",
-                            "kind": "String",
-                            "position": {
-                              "end": {
-                                "column": 35,
-                                "line": 1,
-                              },
-                              "start": {
-                                "column": 23,
-                                "line": 1,
-                              },
-                            },
-                            "text": "string",
-                            "value": undefined,
-                          },
-                        },
-                      ],
-                      "position": {
-                        "end": {
-                          "column": 54,
-                          "line": 1,
-                        },
-                        "start": {
-                          "column": 22,
-                          "line": 1,
-                        },
-                      },
-                      "returnType": {
-                        "arguments": [
-                          {
-                            "constraint": undefined,
-                            "defaultType": undefined,
-                            "filePath": "test.ts",
-                            "kind": "TypeParameter",
-                            "name": "Types",
-                            "position": {
-                              "end": {
-                                "column": 26,
-                                "line": 8,
-                              },
-                              "start": {
-                                "column": 21,
-                                "line": 8,
-                              },
-                            },
-                            "text": "Types",
-                          },
-                        ],
-                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                        "kind": "TypeReference",
-                        "name": "Promise",
-                        "position": {
-                          "end": {
-                            "column": 15356,
-                            "line": 4,
-                          },
-                          "start": {
-                            "column": 15015,
-                            "line": 4,
-                          },
-                        },
-                        "text": "Promise<Types>",
-                      },
-                      "text": "(path: string) => Promise<Types>",
-                    },
-                  ],
-                  "text": "Loader<Types>",
-                },
-              },
-            ],
-            "position": {
-              "end": {
-                "column": 66,
-                "line": 8,
-              },
-              "start": {
-                "column": 1,
-                "line": 8,
-              },
-            },
-            "returnType": {
-              "filePath": "test.ts",
-              "kind": "Function",
-              "name": "Loader",
-              "position": {
-                "end": {
-                  "column": 55,
-                  "line": 1,
-                },
-                "start": {
-                  "column": 1,
-                  "line": 1,
-                },
-              },
-              "signatures": [
-                {
-                  "filePath": "test.ts",
-                  "kind": "FunctionSignature",
+                  "isAsync": true,
+                  "kind": "FunctionType",
                   "parameters": [
                     {
                       "description": undefined,
@@ -13938,72 +10659,63 @@ describe('resolveType', () => {
                       },
                       "text": "string",
                       "type": {
-                        "filePath": "test.ts",
                         "kind": "String",
-                        "position": {
-                          "end": {
-                            "column": 35,
-                            "line": 1,
-                          },
-                          "start": {
-                            "column": 23,
-                            "line": 1,
-                          },
-                        },
                         "text": "string",
                         "value": undefined,
                       },
                     },
                   ],
+                  "returnType": {
+                    "kind": "TypeReference",
+                    "text": "Promise<Types>",
+                  },
+                  "text": "Loader<Types>",
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 66,
+                "line": 8,
+              },
+              "start": {
+                "column": 1,
+                "line": 8,
+              },
+            },
+            "returnType": {
+              "isAsync": true,
+              "kind": "FunctionType",
+              "parameters": [
+                {
+                  "description": undefined,
+                  "filePath": "test.ts",
+                  "initializer": undefined,
+                  "isOptional": false,
+                  "kind": "Parameter",
+                  "name": "path",
                   "position": {
                     "end": {
-                      "column": 54,
+                      "column": 35,
                       "line": 1,
                     },
                     "start": {
-                      "column": 22,
+                      "column": 23,
                       "line": 1,
                     },
                   },
-                  "returnType": {
-                    "arguments": [
-                      {
-                        "constraint": undefined,
-                        "defaultType": undefined,
-                        "filePath": "test.ts",
-                        "kind": "TypeParameter",
-                        "name": "Types",
-                        "position": {
-                          "end": {
-                            "column": 26,
-                            "line": 8,
-                          },
-                          "start": {
-                            "column": 21,
-                            "line": 8,
-                          },
-                        },
-                        "text": "Types",
-                      },
-                    ],
-                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                    "kind": "TypeReference",
-                    "name": "Promise",
-                    "position": {
-                      "end": {
-                        "column": 15356,
-                        "line": 4,
-                      },
-                      "start": {
-                        "column": 15015,
-                        "line": 4,
-                      },
-                    },
-                    "text": "Promise<Types>",
+                  "text": "string",
+                  "type": {
+                    "kind": "String",
+                    "text": "string",
+                    "value": undefined,
                   },
-                  "text": "(path: string) => Promise<Types>",
                 },
               ],
+              "returnType": {
+                "kind": "TypeReference",
+                "text": "Promise<Types>",
+              },
               "text": "Loader<Types>",
             },
             "tags": undefined,
@@ -14031,227 +10743,6 @@ describe('resolveType', () => {
                 "initializer": undefined,
                 "isOptional": false,
                 "kind": "Parameter",
-                "name": "schema",
-                "position": {
-                  "end": {
-                    "column": 24,
-                    "line": 12,
-                  },
-                  "start": {
-                    "column": 3,
-                    "line": 12,
-                  },
-                },
-                "text": "Schema<Types>",
-                "type": {
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "isReadonly": false,
-                  "kind": "MappedType",
-                  "parameter": {
-                    "constraint": {
-                      "filePath": "test.ts",
-                      "kind": "UnionType",
-                      "position": {
-                        "end": {
-                          "column": 22,
-                          "line": 4,
-                        },
-                        "start": {
-                          "column": 11,
-                          "line": 4,
-                        },
-                      },
-                      "text": "string | number | symbol",
-                      "types": [
-                        {
-                          "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                          "kind": "String",
-                          "position": {
-                            "end": {
-                              "column": 4402,
-                              "line": 4,
-                            },
-                            "start": {
-                              "column": 3482,
-                              "line": 4,
-                            },
-                          },
-                          "text": "string",
-                          "value": undefined,
-                        },
-                        {
-                          "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                          "kind": "Number",
-                          "position": {
-                            "end": {
-                              "column": 4943,
-                              "line": 4,
-                            },
-                            "start": {
-                              "column": 4755,
-                              "line": 4,
-                            },
-                          },
-                          "text": "number",
-                          "value": undefined,
-                        },
-                        {
-                          "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                          "kind": "Symbol",
-                          "position": {
-                            "end": {
-                              "column": 691,
-                              "line": 4,
-                            },
-                            "start": {
-                              "column": 638,
-                              "line": 4,
-                            },
-                          },
-                          "text": "Symbol",
-                        },
-                      ],
-                    },
-                    "kind": "TypeParameter",
-                    "name": "Key",
-                    "text": "Key in string | number | symbol",
-                  },
-                  "position": {
-                    "end": {
-                      "column": 24,
-                      "line": 12,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 12,
-                    },
-                  },
-                  "text": "Schema<Types>",
-                  "type": {
-                    "filePath": "test.ts",
-                    "kind": "Function",
-                    "name": undefined,
-                    "position": {
-                      "end": {
-                        "column": 62,
-                        "line": 4,
-                      },
-                      "start": {
-                        "column": 25,
-                        "line": 4,
-                      },
-                    },
-                    "signatures": [
-                      {
-                        "filePath": "test.ts",
-                        "kind": "FunctionSignature",
-                        "parameters": [
-                          {
-                            "description": undefined,
-                            "filePath": "test.ts",
-                            "initializer": undefined,
-                            "isOptional": false,
-                            "kind": "Parameter",
-                            "name": "value",
-                            "position": {
-                              "end": {
-                                "column": 43,
-                                "line": 4,
-                              },
-                              "start": {
-                                "column": 26,
-                                "line": 4,
-                              },
-                            },
-                            "text": "Types[Key]",
-                            "type": {
-                              "filePath": "test.ts",
-                              "kind": "Any",
-                              "position": {
-                                "end": {
-                                  "column": 43,
-                                  "line": 4,
-                                },
-                                "start": {
-                                  "column": 26,
-                                  "line": 4,
-                                },
-                              },
-                              "text": "any",
-                            },
-                          },
-                        ],
-                        "position": {
-                          "end": {
-                            "column": 62,
-                            "line": 4,
-                          },
-                          "start": {
-                            "column": 25,
-                            "line": 4,
-                          },
-                        },
-                        "returnType": {
-                          "filePath": "test.ts",
-                          "kind": "UnionType",
-                          "position": {
-                            "end": {
-                              "column": 62,
-                              "line": 4,
-                            },
-                            "start": {
-                              "column": 25,
-                              "line": 4,
-                            },
-                          },
-                          "text": "boolean | void",
-                          "types": [
-                            {
-                              "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                              "kind": "Boolean",
-                              "position": {
-                                "end": {
-                                  "column": 4613,
-                                  "line": 4,
-                                },
-                                "start": {
-                                  "column": 4576,
-                                  "line": 4,
-                                },
-                              },
-                              "text": "boolean",
-                            },
-                            {
-                              "filePath": "test.ts",
-                              "kind": "Unknown",
-                              "position": {
-                                "end": {
-                                  "column": 62,
-                                  "line": 4,
-                                },
-                                "start": {
-                                  "column": 25,
-                                  "line": 4,
-                                },
-                              },
-                              "text": "void",
-                            },
-                          ],
-                        },
-                        "text": "(value: Types[Key]) => boolean | void",
-                      },
-                    ],
-                    "text": "(value: Types[Key]) => boolean | void",
-                  },
-                },
-              },
-              {
-                "description": undefined,
-                "filePath": "test.ts",
-                "initializer": undefined,
-                "isOptional": false,
-                "kind": "Parameter",
                 "name": "loader",
                 "position": {
                   "end": {
@@ -14265,140 +10756,8 @@ describe('resolveType', () => {
                 },
                 "text": "Loader<{ [Key in keyof Types]: Types[Key]; }>",
                 "type": {
-                  "filePath": "test.ts",
-                  "kind": "Function",
-                  "name": "Loader",
-                  "position": {
-                    "end": {
-                      "column": 55,
-                      "line": 13,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 13,
-                    },
-                  },
-                  "signatures": [
-                    {
-                      "filePath": "test.ts",
-                      "kind": "FunctionSignature",
-                      "parameters": [
-                        {
-                          "description": undefined,
-                          "filePath": "test.ts",
-                          "initializer": undefined,
-                          "isOptional": false,
-                          "kind": "Parameter",
-                          "name": "path",
-                          "position": {
-                            "end": {
-                              "column": 35,
-                              "line": 1,
-                            },
-                            "start": {
-                              "column": 23,
-                              "line": 1,
-                            },
-                          },
-                          "text": "string",
-                          "type": {
-                            "filePath": "test.ts",
-                            "kind": "String",
-                            "position": {
-                              "end": {
-                                "column": 35,
-                                "line": 1,
-                              },
-                              "start": {
-                                "column": 23,
-                                "line": 1,
-                              },
-                            },
-                            "text": "string",
-                            "value": undefined,
-                          },
-                        },
-                      ],
-                      "position": {
-                        "end": {
-                          "column": 54,
-                          "line": 1,
-                        },
-                        "start": {
-                          "column": 22,
-                          "line": 1,
-                        },
-                      },
-                      "returnType": {
-                        "arguments": [
-                          {
-                            "arguments": [],
-                            "filePath": "test.ts",
-                            "kind": "TypeReference",
-                            "name": "Key",
-                            "position": {
-                              "end": {
-                                "column": 54,
-                                "line": 13,
-                              },
-                              "start": {
-                                "column": 18,
-                                "line": 13,
-                              },
-                            },
-                            "text": "{ [Key in keyof Types]: Types[Key]; }",
-                          },
-                        ],
-                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                        "kind": "TypeReference",
-                        "name": "Promise",
-                        "position": {
-                          "end": {
-                            "column": 15356,
-                            "line": 4,
-                          },
-                          "start": {
-                            "column": 15015,
-                            "line": 4,
-                          },
-                        },
-                        "text": "Promise<{ [Key in keyof Types]: Types[Key]; }>",
-                      },
-                      "text": "(path: string) => Promise<{ [Key in keyof Types]: Types[Key]; }>",
-                    },
-                  ],
-                  "text": "Loader<{ [Key in keyof Types]: Types[Key]; }>",
-                },
-              },
-            ],
-            "position": {
-              "end": {
-                "column": 49,
-                "line": 14,
-              },
-              "start": {
-                "column": 1,
-                "line": 11,
-              },
-            },
-            "returnType": {
-              "filePath": "test.ts",
-              "kind": "Function",
-              "name": "Loader",
-              "position": {
-                "end": {
-                  "column": 55,
-                  "line": 1,
-                },
-                "start": {
-                  "column": 1,
-                  "line": 1,
-                },
-              },
-              "signatures": [
-                {
-                  "filePath": "test.ts",
-                  "kind": "FunctionSignature",
+                  "isAsync": true,
+                  "kind": "FunctionType",
                   "parameters": [
                     {
                       "description": undefined,
@@ -14419,92 +10778,71 @@ describe('resolveType', () => {
                       },
                       "text": "string",
                       "type": {
-                        "filePath": "test.ts",
                         "kind": "String",
-                        "position": {
-                          "end": {
-                            "column": 35,
-                            "line": 1,
-                          },
-                          "start": {
-                            "column": 23,
-                            "line": 1,
-                          },
-                        },
                         "text": "string",
                         "value": undefined,
                       },
                     },
                   ],
+                  "returnType": {
+                    "kind": "TypeReference",
+                    "text": "Promise<{ [Key in keyof Types]: Types[Key]; }>",
+                  },
+                  "text": "Loader<{ [Key in keyof Types]: Types[Key]; }>",
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 49,
+                "line": 14,
+              },
+              "start": {
+                "column": 1,
+                "line": 11,
+              },
+            },
+            "returnType": {
+              "isAsync": true,
+              "kind": "FunctionType",
+              "parameters": [
+                {
+                  "description": undefined,
+                  "filePath": "test.ts",
+                  "initializer": undefined,
+                  "isOptional": false,
+                  "kind": "Parameter",
+                  "name": "path",
                   "position": {
                     "end": {
-                      "column": 54,
+                      "column": 35,
                       "line": 1,
                     },
                     "start": {
-                      "column": 22,
+                      "column": 23,
                       "line": 1,
                     },
                   },
-                  "returnType": {
-                    "arguments": [
-                      {
-                        "arguments": [],
-                        "filePath": "test.ts",
-                        "kind": "TypeReference",
-                        "name": "Key",
-                        "position": {
-                          "end": {
-                            "column": 47,
-                            "line": 14,
-                          },
-                          "start": {
-                            "column": 11,
-                            "line": 14,
-                          },
-                        },
-                        "text": "{ [Key in keyof Types]: Types[Key]; }",
-                      },
-                    ],
-                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                    "kind": "TypeReference",
-                    "name": "Promise",
-                    "position": {
-                      "end": {
-                        "column": 15356,
-                        "line": 4,
-                      },
-                      "start": {
-                        "column": 15015,
-                        "line": 4,
-                      },
-                    },
-                    "text": "Promise<{ [Key in keyof Types]: Types[Key]; }>",
+                  "text": "string",
+                  "type": {
+                    "kind": "String",
+                    "text": "string",
+                    "value": undefined,
                   },
-                  "text": "(path: string) => Promise<{ [Key in keyof Types]: Types[Key]; }>",
                 },
               ],
+              "returnType": {
+                "kind": "TypeReference",
+                "text": "Promise<{ [Key in keyof Types]: Types[Key]; }>",
+              },
               "text": "Loader<{ [Key in keyof Types]: Types[Key]; }>",
             },
             "tags": undefined,
-            "text": "function withSchema<Types extends Record<string, any>>(schema: Schema<Types>, loader: Loader<{ [Key in keyof Types]: Types[Key]; }>): Loader<{ [Key in keyof Types]: Types[Key]; }>",
+            "text": "function withSchema<Types extends Record<string, any>>(loader: Loader<{ [Key in keyof Types]: Types[Key]; }>): Loader<{ [Key in keyof Types]: Types[Key]; }>",
             "typeParameters": [
               {
                 "constraint": {
-                  "arguments": [],
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                   "kind": "TypeReference",
-                  "name": "Record",
-                  "position": {
-                    "end": {
-                      "column": 315,
-                      "line": 6,
-                    },
-                    "start": {
-                      "column": 266,
-                      "line": 6,
-                    },
-                  },
                   "text": "Record<string, any>",
                 },
                 "defaultType": undefined,
@@ -14620,19 +10958,50 @@ describe('resolveType', () => {
                     },
                     "text": "ButtonProps",
                     "type": {
-                      "filePath": "test.ts",
-                      "kind": "TypeReference",
-                      "name": "ButtonProps",
-                      "position": {
-                        "end": {
-                          "column": 15,
-                          "line": 18,
+                      "kind": "TypeLiteral",
+                      "members": [
+                        {
+                          "description": "Visual style to apply.",
+                          "filePath": "test.ts",
+                          "isOptional": true,
+                          "isReadonly": false,
+                          "kind": "PropertySignature",
+                          "name": "variant",
+                          "position": {
+                            "end": {
+                              "column": 26,
+                              "line": 9,
+                            },
+                            "start": {
+                              "column": 3,
+                              "line": 9,
+                            },
+                          },
+                          "tags": undefined,
+                          "text": "ButtonVariant",
+                          "type": {
+                            "kind": "UnionType",
+                            "text": ""primary" | "secondary" | "danger"",
+                            "types": [
+                              {
+                                "kind": "String",
+                                "text": ""primary"",
+                                "value": "primary",
+                              },
+                              {
+                                "kind": "String",
+                                "text": ""secondary"",
+                                "value": "secondary",
+                              },
+                              {
+                                "kind": "String",
+                                "text": ""danger"",
+                                "value": "danger",
+                              },
+                            ],
+                          },
                         },
-                        "start": {
-                          "column": 24,
-                          "line": 13,
-                        },
-                      },
+                      ],
                       "text": "ButtonProps",
                     },
                   },
@@ -14647,18 +11016,7 @@ describe('resolveType', () => {
                     },
                   },
                   "returnType": {
-                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                     "kind": "Boolean",
-                    "position": {
-                      "end": {
-                        "column": 4613,
-                        "line": 4,
-                      },
-                      "start": {
-                        "column": 4576,
-                        "line": 4,
-                      },
-                    },
                     "text": "boolean",
                   },
                   "tags": undefined,
@@ -14676,7 +11034,9 @@ describe('resolveType', () => {
             {
               "description": "All appearance variants supported by \`Button\`.",
               "filePath": "test.ts",
-              "kind": "UnionType",
+              "kind": "TypeAlias",
+              "name": "ButtonVariant",
+              "parameters": [],
               "position": {
                 "end": {
                   "column": 63,
@@ -14688,57 +11048,28 @@ describe('resolveType', () => {
                 },
               },
               "tags": undefined,
-              "text": ""primary" | "secondary" | "danger"",
-              "types": [
-                {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                  "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 4402,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 3482,
-                      "line": 4,
-                    },
+              "text": "ButtonVariant",
+              "type": {
+                "kind": "UnionType",
+                "text": ""primary" | "secondary" | "danger"",
+                "types": [
+                  {
+                    "kind": "String",
+                    "text": ""primary"",
+                    "value": "primary",
                   },
-                  "text": ""primary"",
-                  "value": "primary",
-                },
-                {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                  "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 4402,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 3482,
-                      "line": 4,
-                    },
+                  {
+                    "kind": "String",
+                    "text": ""secondary"",
+                    "value": "secondary",
                   },
-                  "text": ""secondary"",
-                  "value": "secondary",
-                },
-                {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                  "kind": "String",
-                  "position": {
-                    "end": {
-                      "column": 4402,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 3482,
-                      "line": 4,
-                    },
+                  {
+                    "kind": "String",
+                    "text": ""danger"",
+                    "value": "danger",
                   },
-                  "text": ""danger"",
-                  "value": "danger",
-                },
-              ],
+                ],
+              },
             },
           ],
         ],
@@ -14769,82 +11100,24 @@ describe('resolveType', () => {
                   "tags": undefined,
                   "text": "ButtonVariant | undefined",
                   "type": {
-                    "filePath": "test.ts",
                     "kind": "UnionType",
-                    "position": {
-                      "end": {
-                        "column": 2,
-                        "line": 10,
-                      },
-                      "start": {
-                        "column": 1,
-                        "line": 6,
-                      },
-                    },
-                    "text": "ButtonVariant | undefined",
+                    "text": "undefined | "primary" | "secondary" | "danger"",
                     "types": [
                       {
-                        "filePath": "test.ts",
-                        "kind": "Unknown",
-                        "position": {
-                          "end": {
-                            "column": 2,
-                            "line": 10,
-                          },
-                          "start": {
-                            "column": 1,
-                            "line": 6,
-                          },
-                        },
+                        "kind": "Undefined",
                         "text": "undefined",
                       },
                       {
-                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                        "kind": "String",
-                        "position": {
-                          "end": {
-                            "column": 4402,
-                            "line": 4,
-                          },
-                          "start": {
-                            "column": 3482,
-                            "line": 4,
-                          },
-                        },
+                        "kind": "TypeReference",
                         "text": ""primary"",
-                        "value": "primary",
                       },
                       {
-                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                        "kind": "String",
-                        "position": {
-                          "end": {
-                            "column": 4402,
-                            "line": 4,
-                          },
-                          "start": {
-                            "column": 3482,
-                            "line": 4,
-                          },
-                        },
+                        "kind": "TypeReference",
                         "text": ""secondary"",
-                        "value": "secondary",
                       },
                       {
-                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                        "kind": "String",
-                        "position": {
-                          "end": {
-                            "column": 4402,
-                            "line": 4,
-                          },
-                          "start": {
-                            "column": 3482,
-                            "line": 4,
-                          },
-                        },
+                        "kind": "TypeReference",
                         "text": ""danger"",
-                        "value": "danger",
                       },
                     ],
                   },
@@ -14910,7 +11183,9 @@ describe('resolveType', () => {
     expect(types).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "IntersectionType",
+        "kind": "TypeAlias",
+        "name": "TypeReferenceComponents",
+        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -14922,483 +11197,673 @@ describe('resolveType', () => {
           },
         },
         "text": "TypeReferenceComponents",
-        "types": [
-          {
-            "filePath": "test.ts",
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "MappedType",
-            "parameter": {
-              "constraint": {
-                "arguments": [],
-                "filePath": "test.ts",
-                "kind": "TypeReference",
-                "name": "SemanticTags",
-                "position": {
-                  "end": {
-                    "column": 11,
-                    "line": 18,
-                  },
-                  "start": {
-                    "column": 1,
-                    "line": 1,
-                  },
-                },
-                "text": "SemanticTags",
-              },
-              "kind": "TypeParameter",
-              "name": "Tag",
-              "text": "Tag in SemanticTags",
-            },
-            "position": {
-              "end": {
-                "column": 2,
-                "line": 26,
-              },
-              "start": {
-                "column": 39,
-                "line": 24,
-              },
-            },
-            "text": "{ section: "section" | React.ComponentType<React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement>>; h2: "h2" | React.ComponentType<React.DetailedHTMLProps<React.HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>>; h3: "h3" | React.ComponentType<React.DetailedHTMLProps<React.HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>>; h4: "h4" | React.ComponentType<React.DetailedHTMLProps<React.HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>>; p: "p" | React.ComponentType<React.DetailedHTMLProps<React.HTMLAttributes<HTMLParagraphElement>, HTMLParagraphElement>>; dl: "dl" | React.ComponentType<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDListElement>, HTMLDListElement>>; dt: "dt" | React.ComponentType<React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement>>; dd: "dd" | React.ComponentType<React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement>>; table: "table" | React.ComponentType<React.DetailedHTMLProps<React.TableHTMLAttributes<HTMLTableElement>, HTMLTableElement>>; thead: "thead" | React.ComponentType<React.DetailedHTMLProps<React.HTMLAttributes<HTMLTableSectionElement>, HTMLTableSectionElement>>; tbody: "tbody" | React.ComponentType<React.DetailedHTMLProps<React.HTMLAttributes<HTMLTableSectionElement>, HTMLTableSectionElement>>; tr: "tr" | React.ComponentType<React.DetailedHTMLProps<React.HTMLAttributes<HTMLTableRowElement>, HTMLTableRowElement>>; th: "th" | React.ComponentType<React.DetailedHTMLProps<React.ThHTMLAttributes<HTMLTableHeaderCellElement>, HTMLTableHeaderCellElement>>; td: "td" | React.ComponentType<React.DetailedHTMLProps<React.TdHTMLAttributes<HTMLTableDataCellElement>, HTMLTableDataCellElement>>; details: "details" | React.ComponentType<React.DetailedHTMLProps<React.DetailsHTMLAttributes<HTMLDetailsElement>, HTMLDetailsElement>>; summary: "summary" | React.ComponentType<React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement>>; code: "code" | React.ComponentType<React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement>>; }",
-            "type": {
+        "type": {
+          "kind": "TypeLiteral",
+          "members": [
+            {
               "filePath": "test.ts",
-              "kind": "UnionType",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "section",
               "position": {
                 "end": {
-                  "column": 78,
-                  "line": 25,
+                  "column": 2,
+                  "line": 26,
                 },
                 "start": {
-                  "column": 26,
-                  "line": 25,
+                  "column": 39,
+                  "line": 24,
                 },
               },
-              "text": "Tag | React.ComponentType<React.ComponentProps<Tag>>",
-              "types": [
-                {
-                  "arguments": [],
-                  "filePath": "test.ts",
-                  "kind": "TypeReference",
-                  "name": "Tag",
-                  "position": {
-                    "end": {
-                      "column": 23,
-                      "line": 25,
-                    },
-                    "start": {
-                      "column": 4,
-                      "line": 25,
-                    },
+              "text": ""section" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
+              "type": {
+                "kind": "UnionType",
+                "text": ""section" | ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>, any> | FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
+                "types": [
+                  {
+                    "kind": "String",
+                    "text": ""section"",
+                    "value": "section",
                   },
-                  "text": "Tag",
-                },
-                {
-                  "arguments": [
-                    {
-                      "arguments": [
-                        {
-                          "filePath": "test.ts",
-                          "kind": "TypeReference",
-                          "name": "Tag",
-                          "position": {
-                            "end": {
-                              "column": 23,
-                              "line": 25,
-                            },
-                            "start": {
-                              "column": 4,
-                              "line": 25,
-                            },
-                          },
-                          "text": "Tag",
-                        },
-                      ],
-                      "filePath": "node_modules/@types/react/index.d.ts",
-                      "kind": "TypeReference",
-                      "name": "ComponentProps",
-                      "position": {
-                        "end": {
-                          "column": 14,
-                          "line": 1430,
-                        },
-                        "start": {
-                          "column": 5,
-                          "line": 1427,
-                        },
-                      },
-                      "text": "React.ComponentProps<Tag>",
-                    },
-                  ],
-                  "filePath": "node_modules/@types/react/index.d.ts",
-                  "kind": "TypeReference",
-                  "name": "ComponentType",
-                  "position": {
-                    "end": {
-                      "column": 75,
-                      "line": 122,
-                    },
-                    "start": {
-                      "column": 5,
-                      "line": 122,
-                    },
+                  {
+                    "kind": "TypeReference",
+                    "text": "ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>, any>",
                   },
-                  "text": "React.ComponentType<React.ComponentProps<Tag>>",
-                },
-              ],
-            },
-          },
-          {
-            "filePath": "test.ts",
-            "kind": "TypeLiteral",
-            "members": [
-              {
-                "filePath": "test.ts",
-                "isOptional": false,
-                "isReadonly": false,
-                "kind": "PropertySignature",
-                "name": "Markdown",
-                "position": {
-                  "end": {
-                    "column": 47,
-                    "line": 27,
+                  {
+                    "kind": "TypeReference",
+                    "text": "FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
                   },
-                  "start": {
-                    "column": 3,
-                    "line": 27,
-                  },
-                },
-                "text": "ComponentType<MarkdownProps>",
-                "type": {
-                  "arguments": [
-                    {
-                      "filePath": "test.ts",
-                      "kind": "Interface",
-                      "members": [
-                        {
-                          "filePath": "test.ts",
-                          "isOptional": false,
-                          "isReadonly": false,
-                          "kind": "PropertySignature",
-                          "name": "children",
-                          "position": {
-                            "end": {
-                              "column": 28,
-                              "line": 21,
-                            },
-                            "start": {
-                              "column": 3,
-                              "line": 21,
-                            },
-                          },
-                          "text": "ReactNode",
-                          "type": {
-                            "description": "Represents all of the things React can render.
-
-      Where {@link ReactElement} only represents JSX, \`ReactNode\` represents everything that can be rendered.",
-                            "filePath": "node_modules/@types/react/index.d.ts",
-                            "kind": "UnionType",
-                            "position": {
-                              "end": {
-                                "column": 37,
-                                "line": 439,
-                              },
-                              "start": {
-                                "column": 5,
-                                "line": 426,
-                              },
-                            },
-                            "tags": [
-                              {
-                                "name": "see",
-                                "text": "{@link https://react-typescript-cheatsheet.netlify.app/docs/react-types/reactnode/ React TypeScript Cheatsheet}",
-                              },
-                              {
-                                "name": "example",
-                                "text": "\`\`\`tsx
-      // Typing children
-      type Props = { children: ReactNode }
-
-      const Component = ({ children }: Props) => <div>{children}</div>
-
-      <Component>hello</Component>
-      \`\`\`",
-                              },
-                              {
-                                "name": "example",
-                                "text": "\`\`\`tsx
-      // Typing a custom element
-      type Props = { customElement: ReactNode }
-
-      const Component = ({ customElement }: Props) => <div>{customElement}</div>
-
-      <Component customElement={<div>hello</div>} />
-      \`\`\`",
-                              },
-                            ],
-                            "text": "React.ReactNode",
-                            "types": [
-                              {
-                                "arguments": [],
-                                "filePath": "node_modules/@types/react/index.d.ts",
-                                "kind": "TypeReference",
-                                "name": "ReactElement",
-                                "position": {
-                                  "end": {
-                                    "column": 6,
-                                    "line": 322,
-                                  },
-                                  "start": {
-                                    "column": 5,
-                                    "line": 315,
-                                  },
-                                },
-                                "text": "ReactElement<unknown, string | JSXElementConstructor<any>>",
-                              },
-                              {
-                                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                                "kind": "String",
-                                "position": {
-                                  "end": {
-                                    "column": 4402,
-                                    "line": 4,
-                                  },
-                                  "start": {
-                                    "column": 3482,
-                                    "line": 4,
-                                  },
-                                },
-                                "text": "string",
-                                "value": undefined,
-                              },
-                              {
-                                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                                "kind": "Number",
-                                "position": {
-                                  "end": {
-                                    "column": 4943,
-                                    "line": 4,
-                                  },
-                                  "start": {
-                                    "column": 4755,
-                                    "line": 4,
-                                  },
-                                },
-                                "text": "number",
-                                "value": undefined,
-                              },
-                              {
-                                "arguments": [],
-                                "filePath": "node_modules/typescript/lib/lib.es2020.bigint.d.ts",
-                                "kind": "TypeReference",
-                                "name": "BigInt",
-                                "position": {
-                                  "end": {
-                                    "column": 817,
-                                    "line": 3,
-                                  },
-                                  "start": {
-                                    "column": 623,
-                                    "line": 3,
-                                  },
-                                },
-                                "text": "BigInt",
-                              },
-                              {
-                                "arguments": [
-                                  {
-                                    "arguments": [],
-                                    "filePath": "node_modules/@types/react/index.d.ts",
-                                    "kind": "TypeReference",
-                                    "name": "ReactNode",
-                                    "position": {
-                                      "end": {
-                                        "column": 37,
-                                        "line": 439,
-                                      },
-                                      "start": {
-                                        "column": 5,
-                                        "line": 426,
-                                      },
-                                    },
-                                    "text": "ReactNode",
-                                  },
-                                ],
-                                "filePath": "node_modules/typescript/lib/lib.es2015.iterable.d.ts",
-                                "kind": "TypeReference",
-                                "name": "Iterable",
-                                "position": {
-                                  "end": {
-                                    "column": 560,
-                                    "line": 3,
-                                  },
-                                  "start": {
-                                    "column": 469,
-                                    "line": 3,
-                                  },
-                                },
-                                "text": "Iterable<ReactNode>",
-                              },
-                              {
-                                "arguments": [],
-                                "filePath": "node_modules/@types/react/index.d.ts",
-                                "kind": "TypeReference",
-                                "name": "ReactPortal",
-                                "position": {
-                                  "end": {
-                                    "column": 6,
-                                    "line": 388,
-                                  },
-                                  "start": {
-                                    "column": 5,
-                                    "line": 386,
-                                  },
-                                },
-                                "text": "ReactPortal",
-                              },
-                              {
-                                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                                "kind": "Boolean",
-                                "position": {
-                                  "end": {
-                                    "column": 4613,
-                                    "line": 4,
-                                  },
-                                  "start": {
-                                    "column": 4576,
-                                    "line": 4,
-                                  },
-                                },
-                                "text": "boolean",
-                              },
-                              {
-                                "filePath": "node_modules/@types/react/index.d.ts",
-                                "kind": "Unknown",
-                                "position": {
-                                  "end": {
-                                    "column": 15,
-                                    "line": 434,
-                                  },
-                                  "start": {
-                                    "column": 11,
-                                    "line": 434,
-                                  },
-                                },
-                                "text": "null",
-                              },
-                              {
-                                "filePath": "node_modules/@types/react/index.d.ts",
-                                "kind": "Unknown",
-                                "position": {
-                                  "end": {
-                                    "column": 20,
-                                    "line": 435,
-                                  },
-                                  "start": {
-                                    "column": 11,
-                                    "line": 435,
-                                  },
-                                },
-                                "text": "undefined",
-                              },
-                              {
-                                "filePath": "node_modules/@types/react/index.d.ts",
-                                "kind": "Unknown",
-                                "position": {
-                                  "end": {
-                                    "column": 10,
-                                    "line": 438,
-                                  },
-                                  "start": {
-                                    "column": 11,
-                                    "line": 436,
-                                  },
-                                },
-                                "text": "never",
-                              },
-                              {
-                                "arguments": [
-                                  {
-                                    "arguments": [],
-                                    "filePath": "node_modules/@types/react/index.d.ts",
-                                    "kind": "TypeReference",
-                                    "name": "AwaitedReactNode",
-                                    "position": {
-                                      "end": {
-                                        "column": 7,
-                                        "line": 53,
-                                      },
-                                      "start": {
-                                        "column": 1,
-                                        "line": 41,
-                                      },
-                                    },
-                                    "text": "AwaitedReactNode",
-                                  },
-                                ],
-                                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                                "kind": "TypeReference",
-                                "name": "Promise",
-                                "position": {
-                                  "end": {
-                                    "column": 15356,
-                                    "line": 4,
-                                  },
-                                  "start": {
-                                    "column": 15015,
-                                    "line": 4,
-                                  },
-                                },
-                                "text": "Promise<AwaitedReactNode>",
-                              },
-                            ],
-                          },
-                        },
-                      ],
-                      "name": "MarkdownProps",
-                      "position": {
-                        "end": {
-                          "column": 2,
-                          "line": 22,
-                        },
-                        "start": {
-                          "column": 1,
-                          "line": 20,
-                        },
-                      },
-                      "text": "MarkdownProps",
-                    },
-                  ],
-                  "filePath": "test.ts",
-                  "kind": "TypeReference",
-                  "name": "ComponentType",
-                  "position": {
-                    "end": {
-                      "column": 47,
-                      "line": 27,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 27,
-                    },
-                  },
-                  "text": "React.ComponentType<MarkdownProps>",
-                },
-              },
-            ],
-            "position": {
-              "end": {
-                "column": 2,
-                "line": 28,
-              },
-              "start": {
-                "column": 5,
-                "line": 26,
+                ],
               },
             },
-            "text": "{ Markdown: React.ComponentType<MarkdownProps>; }",
-          },
-        ],
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "h2",
+              "position": {
+                "end": {
+                  "column": 2,
+                  "line": 26,
+                },
+                "start": {
+                  "column": 39,
+                  "line": 24,
+                },
+              },
+              "text": ""h2" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>>",
+              "type": {
+                "kind": "UnionType",
+                "text": ""h2" | ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>, any> | FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>>",
+                "types": [
+                  {
+                    "kind": "String",
+                    "text": ""h2"",
+                    "value": "h2",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>, any>",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>>",
+                  },
+                ],
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "h3",
+              "position": {
+                "end": {
+                  "column": 2,
+                  "line": 26,
+                },
+                "start": {
+                  "column": 39,
+                  "line": 24,
+                },
+              },
+              "text": ""h3" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>>",
+              "type": {
+                "kind": "UnionType",
+                "text": ""h3" | ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>, any> | FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>>",
+                "types": [
+                  {
+                    "kind": "String",
+                    "text": ""h3"",
+                    "value": "h3",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>, any>",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>>",
+                  },
+                ],
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "h4",
+              "position": {
+                "end": {
+                  "column": 2,
+                  "line": 26,
+                },
+                "start": {
+                  "column": 39,
+                  "line": 24,
+                },
+              },
+              "text": ""h4" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>>",
+              "type": {
+                "kind": "UnionType",
+                "text": ""h4" | ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>, any> | FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>>",
+                "types": [
+                  {
+                    "kind": "String",
+                    "text": ""h4"",
+                    "value": "h4",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>, any>",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>>",
+                  },
+                ],
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "p",
+              "position": {
+                "end": {
+                  "column": 2,
+                  "line": 26,
+                },
+                "start": {
+                  "column": 39,
+                  "line": 24,
+                },
+              },
+              "text": ""p" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLParagraphElement>, HTMLParagraphElement>>",
+              "type": {
+                "kind": "UnionType",
+                "text": ""p" | ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLParagraphElement>, HTMLParagraphElement>, any> | FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLParagraphElement>, HTMLParagraphElement>>",
+                "types": [
+                  {
+                    "kind": "String",
+                    "text": ""p"",
+                    "value": "p",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLParagraphElement>, HTMLParagraphElement>, any>",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLParagraphElement>, HTMLParagraphElement>>",
+                  },
+                ],
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "dl",
+              "position": {
+                "end": {
+                  "column": 2,
+                  "line": 26,
+                },
+                "start": {
+                  "column": 39,
+                  "line": 24,
+                },
+              },
+              "text": ""dl" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLDListElement>, HTMLDListElement>>",
+              "type": {
+                "kind": "UnionType",
+                "text": ""dl" | ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLDListElement>, HTMLDListElement>, any> | FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLDListElement>, HTMLDListElement>>",
+                "types": [
+                  {
+                    "kind": "String",
+                    "text": ""dl"",
+                    "value": "dl",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLDListElement>, HTMLDListElement>, any>",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLDListElement>, HTMLDListElement>>",
+                  },
+                ],
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "dt",
+              "position": {
+                "end": {
+                  "column": 2,
+                  "line": 26,
+                },
+                "start": {
+                  "column": 39,
+                  "line": 24,
+                },
+              },
+              "text": ""dt" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
+              "type": {
+                "kind": "UnionType",
+                "text": ""dt" | ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>, any> | FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
+                "types": [
+                  {
+                    "kind": "String",
+                    "text": ""dt"",
+                    "value": "dt",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>, any>",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
+                  },
+                ],
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "dd",
+              "position": {
+                "end": {
+                  "column": 2,
+                  "line": 26,
+                },
+                "start": {
+                  "column": 39,
+                  "line": 24,
+                },
+              },
+              "text": ""dd" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
+              "type": {
+                "kind": "UnionType",
+                "text": ""dd" | ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>, any> | FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
+                "types": [
+                  {
+                    "kind": "String",
+                    "text": ""dd"",
+                    "value": "dd",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>, any>",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
+                  },
+                ],
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "table",
+              "position": {
+                "end": {
+                  "column": 2,
+                  "line": 26,
+                },
+                "start": {
+                  "column": 39,
+                  "line": 24,
+                },
+              },
+              "text": ""table" | ComponentType<DetailedHTMLProps<TableHTMLAttributes<HTMLTableElement>, HTMLTableElement>>",
+              "type": {
+                "kind": "UnionType",
+                "text": ""table" | ComponentClass<DetailedHTMLProps<TableHTMLAttributes<HTMLTableElement>, HTMLTableElement>, any> | FunctionComponent<DetailedHTMLProps<TableHTMLAttributes<HTMLTableElement>, HTMLTableElement>>",
+                "types": [
+                  {
+                    "kind": "String",
+                    "text": ""table"",
+                    "value": "table",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "ComponentClass<DetailedHTMLProps<TableHTMLAttributes<HTMLTableElement>, HTMLTableElement>, any>",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "FunctionComponent<DetailedHTMLProps<TableHTMLAttributes<HTMLTableElement>, HTMLTableElement>>",
+                  },
+                ],
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "thead",
+              "position": {
+                "end": {
+                  "column": 2,
+                  "line": 26,
+                },
+                "start": {
+                  "column": 39,
+                  "line": 24,
+                },
+              },
+              "text": ""thead" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLTableSectionElement>, HTMLTableSectionElement>>",
+              "type": {
+                "kind": "UnionType",
+                "text": ""thead" | ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLTableSectionElement>, HTMLTableSectionElement>, any> | FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLTableSectionElement>, HTMLTableSectionElement>>",
+                "types": [
+                  {
+                    "kind": "String",
+                    "text": ""thead"",
+                    "value": "thead",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLTableSectionElement>, HTMLTableSectionElement>, any>",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLTableSectionElement>, HTMLTableSectionElement>>",
+                  },
+                ],
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "tbody",
+              "position": {
+                "end": {
+                  "column": 2,
+                  "line": 26,
+                },
+                "start": {
+                  "column": 39,
+                  "line": 24,
+                },
+              },
+              "text": ""tbody" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLTableSectionElement>, HTMLTableSectionElement>>",
+              "type": {
+                "kind": "UnionType",
+                "text": ""tbody" | ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLTableSectionElement>, HTMLTableSectionElement>, any> | FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLTableSectionElement>, HTMLTableSectionElement>>",
+                "types": [
+                  {
+                    "kind": "String",
+                    "text": ""tbody"",
+                    "value": "tbody",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLTableSectionElement>, HTMLTableSectionElement>, any>",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLTableSectionElement>, HTMLTableSectionElement>>",
+                  },
+                ],
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "tr",
+              "position": {
+                "end": {
+                  "column": 2,
+                  "line": 26,
+                },
+                "start": {
+                  "column": 39,
+                  "line": 24,
+                },
+              },
+              "text": ""tr" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLTableRowElement>, HTMLTableRowElement>>",
+              "type": {
+                "kind": "UnionType",
+                "text": ""tr" | ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLTableRowElement>, HTMLTableRowElement>, any> | FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLTableRowElement>, HTMLTableRowElement>>",
+                "types": [
+                  {
+                    "kind": "String",
+                    "text": ""tr"",
+                    "value": "tr",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLTableRowElement>, HTMLTableRowElement>, any>",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLTableRowElement>, HTMLTableRowElement>>",
+                  },
+                ],
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "th",
+              "position": {
+                "end": {
+                  "column": 2,
+                  "line": 26,
+                },
+                "start": {
+                  "column": 39,
+                  "line": 24,
+                },
+              },
+              "text": ""th" | ComponentType<DetailedHTMLProps<ThHTMLAttributes<HTMLTableHeaderCellElement>, HTMLTableHeaderCellElement>>",
+              "type": {
+                "kind": "UnionType",
+                "text": ""th" | ComponentClass<DetailedHTMLProps<ThHTMLAttributes<HTMLTableHeaderCellElement>, HTMLTableHeaderCellElement>, any> | FunctionComponent<DetailedHTMLProps<ThHTMLAttributes<HTMLTableHeaderCellElement>, HTMLTableHeaderCellElement>>",
+                "types": [
+                  {
+                    "kind": "String",
+                    "text": ""th"",
+                    "value": "th",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "ComponentClass<DetailedHTMLProps<ThHTMLAttributes<HTMLTableHeaderCellElement>, HTMLTableHeaderCellElement>, any>",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "FunctionComponent<DetailedHTMLProps<ThHTMLAttributes<HTMLTableHeaderCellElement>, HTMLTableHeaderCellElement>>",
+                  },
+                ],
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "td",
+              "position": {
+                "end": {
+                  "column": 2,
+                  "line": 26,
+                },
+                "start": {
+                  "column": 39,
+                  "line": 24,
+                },
+              },
+              "text": ""td" | ComponentType<DetailedHTMLProps<TdHTMLAttributes<HTMLTableDataCellElement>, HTMLTableDataCellElement>>",
+              "type": {
+                "kind": "UnionType",
+                "text": ""td" | ComponentClass<DetailedHTMLProps<TdHTMLAttributes<HTMLTableDataCellElement>, HTMLTableDataCellElement>, any> | FunctionComponent<DetailedHTMLProps<TdHTMLAttributes<HTMLTableDataCellElement>, HTMLTableDataCellElement>>",
+                "types": [
+                  {
+                    "kind": "String",
+                    "text": ""td"",
+                    "value": "td",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "ComponentClass<DetailedHTMLProps<TdHTMLAttributes<HTMLTableDataCellElement>, HTMLTableDataCellElement>, any>",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "FunctionComponent<DetailedHTMLProps<TdHTMLAttributes<HTMLTableDataCellElement>, HTMLTableDataCellElement>>",
+                  },
+                ],
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "details",
+              "position": {
+                "end": {
+                  "column": 2,
+                  "line": 26,
+                },
+                "start": {
+                  "column": 39,
+                  "line": 24,
+                },
+              },
+              "text": ""details" | ComponentType<DetailedHTMLProps<DetailsHTMLAttributes<HTMLDetailsElement>, HTMLDetailsElement>>",
+              "type": {
+                "kind": "UnionType",
+                "text": ""details" | ComponentClass<DetailedHTMLProps<DetailsHTMLAttributes<HTMLDetailsElement>, HTMLDetailsElement>, any> | FunctionComponent<DetailedHTMLProps<DetailsHTMLAttributes<HTMLDetailsElement>, HTMLDetailsElement>>",
+                "types": [
+                  {
+                    "kind": "String",
+                    "text": ""details"",
+                    "value": "details",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "ComponentClass<DetailedHTMLProps<DetailsHTMLAttributes<HTMLDetailsElement>, HTMLDetailsElement>, any>",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "FunctionComponent<DetailedHTMLProps<DetailsHTMLAttributes<HTMLDetailsElement>, HTMLDetailsElement>>",
+                  },
+                ],
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "summary",
+              "position": {
+                "end": {
+                  "column": 2,
+                  "line": 26,
+                },
+                "start": {
+                  "column": 39,
+                  "line": 24,
+                },
+              },
+              "text": ""summary" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
+              "type": {
+                "kind": "UnionType",
+                "text": ""summary" | ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>, any> | FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
+                "types": [
+                  {
+                    "kind": "String",
+                    "text": ""summary"",
+                    "value": "summary",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>, any>",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
+                  },
+                ],
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "code",
+              "position": {
+                "end": {
+                  "column": 2,
+                  "line": 26,
+                },
+                "start": {
+                  "column": 39,
+                  "line": 24,
+                },
+              },
+              "text": ""code" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
+              "type": {
+                "kind": "UnionType",
+                "text": ""code" | ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>, any> | FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
+                "types": [
+                  {
+                    "kind": "String",
+                    "text": ""code"",
+                    "value": "code",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "ComponentClass<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>, any>",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "FunctionComponent<DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>>",
+                  },
+                ],
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "Markdown",
+              "position": {
+                "end": {
+                  "column": 47,
+                  "line": 27,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 27,
+                },
+              },
+              "text": "ComponentType<MarkdownProps>",
+              "type": {
+                "kind": "UnionType",
+                "text": "ComponentClass<MarkdownProps, any> | FunctionComponent<MarkdownProps>",
+                "types": [
+                  {
+                    "kind": "TypeReference",
+                    "text": "ComponentClass<MarkdownProps, any>",
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "text": "FunctionComponent<MarkdownProps>",
+                  },
+                ],
+              },
+            },
+          ],
+          "text": "TypeReferenceComponents",
+        },
       }
     `)
   })
@@ -15444,18 +11909,7 @@ describe('resolveType', () => {
             },
             "text": "string",
             "type": {
-              "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
               "kind": "String",
-              "position": {
-                "end": {
-                  "column": 4402,
-                  "line": 4,
-                },
-                "start": {
-                  "column": 3482,
-                  "line": 4,
-                },
-              },
               "text": "string",
               "value": undefined,
             },
@@ -15478,18 +11932,7 @@ describe('resolveType', () => {
             },
             "text": "string",
             "type": {
-              "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
               "kind": "String",
-              "position": {
-                "end": {
-                  "column": 4402,
-                  "line": 4,
-                },
-                "start": {
-                  "column": 3482,
-                  "line": 4,
-                },
-              },
               "text": "string",
               "value": undefined,
             },
@@ -15510,18 +11953,7 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "filePath": "test.ts",
               "kind": "String",
-              "position": {
-                "end": {
-                  "column": 24,
-                  "line": 4,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 4,
-                },
-              },
               "text": "string",
               "value": undefined,
             },
@@ -15603,89 +12035,43 @@ describe('resolveType', () => {
               },
               "text": "Props",
               "type": {
-                "filePath": "test.ts",
-                "kind": "TypeLiteral",
-                "members": [
+                "kind": "IntersectionType",
+                "text": "Props",
+                "types": [
                   {
-                    "filePath": "test.ts",
-                    "isOptional": true,
-                    "isReadonly": false,
-                    "kind": "PropertySignature",
-                    "name": "required",
-                    "position": {
-                      "end": {
-                        "column": 40,
-                        "line": 3,
-                      },
-                      "start": {
-                        "column": 24,
-                        "line": 3,
-                      },
-                    },
-                    "text": "string",
-                    "type": {
-                      "filePath": "test.ts",
-                      "kind": "String",
-                      "position": {
-                        "end": {
-                          "column": 40,
-                          "line": 3,
-                        },
-                        "start": {
-                          "column": 24,
-                          "line": 3,
-                        },
-                      },
-                      "text": "string",
-                      "value": undefined,
-                    },
+                    "kind": "TypeReference",
+                    "text": "Partial<RequiredProps>",
                   },
                   {
-                    "filePath": "test.ts",
-                    "isOptional": false,
-                    "isReadonly": false,
-                    "kind": "PropertySignature",
-                    "name": "additional",
-                    "position": {
-                      "end": {
-                        "column": 59,
-                        "line": 5,
-                      },
-                      "start": {
-                        "column": 41,
-                        "line": 5,
-                      },
-                    },
-                    "text": "string",
-                    "type": {
-                      "filePath": "test.ts",
-                      "kind": "String",
-                      "position": {
-                        "end": {
-                          "column": 59,
-                          "line": 5,
+                    "kind": "TypeLiteral",
+                    "members": [
+                      {
+                        "filePath": "test.ts",
+                        "isOptional": false,
+                        "isReadonly": false,
+                        "kind": "PropertySignature",
+                        "name": "additional",
+                        "position": {
+                          "end": {
+                            "column": 59,
+                            "line": 5,
+                          },
+                          "start": {
+                            "column": 41,
+                            "line": 5,
+                          },
                         },
-                        "start": {
-                          "column": 41,
-                          "line": 5,
+                        "text": "string",
+                        "type": {
+                          "kind": "String",
+                          "text": "string",
+                          "value": undefined,
                         },
                       },
-                      "text": "string",
-                      "value": undefined,
-                    },
+                    ],
+                    "text": "{ additional: string; }",
                   },
                 ],
-                "position": {
-                  "end": {
-                    "column": 32,
-                    "line": 7,
-                  },
-                  "start": {
-                    "column": 20,
-                    "line": 7,
-                  },
-                },
-                "text": "Props",
               },
             },
             "position": {
@@ -15699,24 +12085,1381 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "filePath": "test.ts",
-              "kind": "Unknown",
-              "position": {
-                "end": {
-                  "column": 36,
-                  "line": 7,
-                },
-                "start": {
-                  "column": 1,
-                  "line": 7,
-                },
-              },
+              "kind": "Void",
               "text": "void",
             },
             "text": "function Component(props: Props): void",
           },
         ],
         "text": "(props: Props) => void",
+      }
+    `)
+  })
+
+  test('captures anonymous arrow function return type', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      function returnsFn() {
+        return () => false
+      }
+      `,
+      { overwrite: true }
+    )
+    const functionDeclaration = sourceFile.getFunctionOrThrow('returnsFn')
+    const types = resolveType(
+      functionDeclaration.getType(),
+      functionDeclaration
+    )
+
+    expect(types).toMatchInlineSnapshot(`
+      {
+        "filePath": "test.ts",
+        "kind": "Function",
+        "name": "returnsFn",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 3,
+          },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "signatures": [
+          {
+            "filePath": "test.ts",
+            "isAsync": false,
+            "isGenerator": false,
+            "kind": "FunctionSignature",
+            "parameters": [],
+            "position": {
+              "end": {
+                "column": 2,
+                "line": 3,
+              },
+              "start": {
+                "column": 1,
+                "line": 1,
+              },
+            },
+            "returnType": {
+              "isAsync": false,
+              "kind": "FunctionType",
+              "parameters": [],
+              "returnType": {
+                "kind": "Boolean",
+                "text": "boolean",
+              },
+              "text": "() => boolean",
+            },
+            "text": "function returnsFn(): () => boolean",
+          },
+        ],
+        "text": "() => () => boolean",
+      }
+    `)
+  })
+
+  test('complex type parameters', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      type LoaderTypes = {
+        mdx: { default: any }
+      }
+
+      function getFile<
+        ExtensionType extends keyof LoaderTypes | (string & {}),
+      >(extension?: ExtensionType | ExtensionType[]) {}
+      `,
+      { overwrite: true }
+    )
+    const functionDeclaration = sourceFile.getFunctionOrThrow('getFile')
+    const types = resolveType(
+      functionDeclaration.getType(),
+      functionDeclaration
+    )
+
+    expect(types).toMatchInlineSnapshot(`
+      {
+        "filePath": "test.ts",
+        "kind": "Function",
+        "name": "getFile",
+        "position": {
+          "end": {
+            "column": 50,
+            "line": 7,
+          },
+          "start": {
+            "column": 1,
+            "line": 5,
+          },
+        },
+        "signatures": [
+          {
+            "filePath": "test.ts",
+            "isAsync": false,
+            "isGenerator": false,
+            "kind": "FunctionSignature",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "test.ts",
+                "initializer": undefined,
+                "isOptional": true,
+                "kind": "Parameter",
+                "name": "extension",
+                "position": {
+                  "end": {
+                    "column": 46,
+                    "line": 7,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 7,
+                  },
+                },
+                "text": "ExtensionType | ExtensionType[]",
+                "type": {
+                  "kind": "UnionType",
+                  "text": "ExtensionType | ExtensionType[]",
+                  "types": [
+                    {
+                      "kind": "TypeReference",
+                      "text": "ExtensionType",
+                    },
+                    {
+                      "kind": "TypeReference",
+                      "text": "ExtensionType[]",
+                    },
+                  ],
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 50,
+                "line": 7,
+              },
+              "start": {
+                "column": 1,
+                "line": 5,
+              },
+            },
+            "returnType": {
+              "kind": "Void",
+              "text": "void",
+            },
+            "text": "function getFile<ExtensionType extends "mdx" | string>(extension?: ExtensionType | ExtensionType[]): void",
+            "typeParameters": [
+              {
+                "constraint": {
+                  "kind": "UnionType",
+                  "text": ""mdx" | string",
+                  "types": [
+                    {
+                      "kind": "String",
+                      "text": ""mdx"",
+                      "value": "mdx",
+                    },
+                    {
+                      "kind": "String",
+                      "text": "string",
+                      "value": undefined,
+                    },
+                  ],
+                },
+                "defaultType": undefined,
+                "kind": "TypeParameter",
+                "name": "ExtensionType",
+                "text": "ExtensionType extends keyof LoaderTypes | (string & {})",
+              },
+            ],
+          },
+        ],
+        "text": "<ExtensionType extends keyof LoaderTypes | (string & {})>(extension?: ExtensionType | ExtensionType[]) => void",
+      }
+    `)
+  })
+
+  test('type alias string', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      type Keys = string;
+      `,
+      { overwrite: true }
+    )
+    const typeAlias = sourceFile.getTypeAliasOrThrow('Keys')
+    const types = resolveType(typeAlias.getType(), typeAlias)
+
+    expect(types).toMatchInlineSnapshot(`
+      {
+        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+        "kind": "Interface",
+        "members": [
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "toString",
+            "parameters": [],
+            "position": {
+              "end": {
+                "column": 3517,
+                "line": 4,
+              },
+              "start": {
+                "column": 3499,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "TypeReference",
+              "text": "string",
+            },
+            "text": "() => string",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "charAt",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "pos",
+                "position": {
+                  "end": {
+                    "column": 3534,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3524,
+                    "line": 4,
+                  },
+                },
+                "text": "number",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 3543,
+                "line": 4,
+              },
+              "start": {
+                "column": 3517,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "TypeReference",
+              "text": "string",
+            },
+            "text": "(pos: number) => string",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "charCodeAt",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "index",
+                "position": {
+                  "end": {
+                    "column": 3566,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3554,
+                    "line": 4,
+                  },
+                },
+                "text": "number",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 3575,
+                "line": 4,
+              },
+              "start": {
+                "column": 3543,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "Number",
+              "text": "number",
+              "value": undefined,
+            },
+            "text": "(index: number) => number",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "concat",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "strings",
+                "position": {
+                  "end": {
+                    "column": 3601,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3582,
+                    "line": 4,
+                  },
+                },
+                "text": "string[]",
+                "type": {
+                  "kind": "TypeReference",
+                  "text": "string[]",
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 3610,
+                "line": 4,
+              },
+              "start": {
+                "column": 3575,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "TypeReference",
+              "text": "string",
+            },
+            "text": "(...strings: string[]) => string",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "indexOf",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "searchString",
+                "position": {
+                  "end": {
+                    "column": 3637,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3618,
+                    "line": 4,
+                  },
+                },
+                "text": "string",
+                "type": {
+                  "kind": "TypeReference",
+                  "text": "string",
+                },
+              },
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": true,
+                "kind": "Parameter",
+                "name": "position",
+                "position": {
+                  "end": {
+                    "column": 3654,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3638,
+                    "line": 4,
+                  },
+                },
+                "text": "number",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 3663,
+                "line": 4,
+              },
+              "start": {
+                "column": 3610,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "Number",
+              "text": "number",
+              "value": undefined,
+            },
+            "text": "(searchString: string, position?: number) => number",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "lastIndexOf",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "searchString",
+                "position": {
+                  "end": {
+                    "column": 3694,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3675,
+                    "line": 4,
+                  },
+                },
+                "text": "string",
+                "type": {
+                  "kind": "TypeReference",
+                  "text": "string",
+                },
+              },
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": true,
+                "kind": "Parameter",
+                "name": "position",
+                "position": {
+                  "end": {
+                    "column": 3711,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3695,
+                    "line": 4,
+                  },
+                },
+                "text": "number",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 3720,
+                "line": 4,
+              },
+              "start": {
+                "column": 3663,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "Number",
+              "text": "number",
+              "value": undefined,
+            },
+            "text": "(searchString: string, position?: number) => number",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "localeCompare",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "that",
+                "position": {
+                  "end": {
+                    "column": 3745,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3734,
+                    "line": 4,
+                  },
+                },
+                "text": "string",
+                "type": {
+                  "kind": "TypeReference",
+                  "text": "string",
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 3754,
+                "line": 4,
+              },
+              "start": {
+                "column": 3720,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "Number",
+              "text": "number",
+              "value": undefined,
+            },
+            "text": "{ (that: string): number; (that: string, locales?: string | string[], options?: CollatorOptions): number; (that: string, locales?: LocalesArgument, options?: CollatorOptions): number; }",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "match",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "regexp",
+                "position": {
+                  "end": {
+                    "column": 3780,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3760,
+                    "line": 4,
+                  },
+                },
+                "text": "string | RegExp",
+                "type": {
+                  "kind": "UnionType",
+                  "text": "string | RegExp",
+                  "types": [
+                    {
+                      "kind": "TypeReference",
+                      "text": "string",
+                    },
+                    {
+                      "kind": "TypeReference",
+                      "text": "RegExp",
+                    },
+                  ],
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 3804,
+                "line": 4,
+              },
+              "start": {
+                "column": 3754,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "TypeReference",
+              "text": "RegExpMatchArray",
+            },
+            "text": "{ (regexp: string | RegExp): RegExpMatchArray; (matcher: { [Symbol.match](string: string): RegExpMatchArray; }): RegExpMatchArray; }",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "replace",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "searchValue",
+                "position": {
+                  "end": {
+                    "column": 3837,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3812,
+                    "line": 4,
+                  },
+                },
+                "text": "string | RegExp",
+                "type": {
+                  "kind": "UnionType",
+                  "text": "string | RegExp",
+                  "types": [
+                    {
+                      "kind": "TypeReference",
+                      "text": "string",
+                    },
+                    {
+                      "kind": "TypeReference",
+                      "text": "RegExp",
+                    },
+                  ],
+                },
+              },
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "replaceValue",
+                "position": {
+                  "end": {
+                    "column": 3857,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3838,
+                    "line": 4,
+                  },
+                },
+                "text": "string",
+                "type": {
+                  "kind": "TypeReference",
+                  "text": "string",
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 3866,
+                "line": 4,
+              },
+              "start": {
+                "column": 3804,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "TypeReference",
+              "text": "string",
+            },
+            "text": "{ (searchValue: string | RegExp, replaceValue: string): string; (searchValue: string | RegExp, replacer: (substring: string, ...args: any[]) => string): string; (searchValue: { ...; }, replaceValue: string): string; (searchValue: { ...; }, replacer: (substring: string, ...args: any[]) => string): string; }",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "replace",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "searchValue",
+                "position": {
+                  "end": {
+                    "column": 3837,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3812,
+                    "line": 4,
+                  },
+                },
+                "text": "string | RegExp",
+                "type": {
+                  "kind": "UnionType",
+                  "text": "string | RegExp",
+                  "types": [
+                    {
+                      "kind": "TypeReference",
+                      "text": "string",
+                    },
+                    {
+                      "kind": "TypeReference",
+                      "text": "RegExp",
+                    },
+                  ],
+                },
+              },
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "replaceValue",
+                "position": {
+                  "end": {
+                    "column": 3857,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3838,
+                    "line": 4,
+                  },
+                },
+                "text": "string",
+                "type": {
+                  "kind": "TypeReference",
+                  "text": "string",
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 3958,
+                "line": 4,
+              },
+              "start": {
+                "column": 3866,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "TypeReference",
+              "text": "string",
+            },
+            "text": "{ (searchValue: string | RegExp, replaceValue: string): string; (searchValue: string | RegExp, replacer: (substring: string, ...args: any[]) => string): string; (searchValue: { ...; }, replaceValue: string): string; (searchValue: { ...; }, replacer: (substring: string, ...args: any[]) => string): string; }",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "search",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "regexp",
+                "position": {
+                  "end": {
+                    "column": 3985,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3965,
+                    "line": 4,
+                  },
+                },
+                "text": "string | RegExp",
+                "type": {
+                  "kind": "UnionType",
+                  "text": "string | RegExp",
+                  "types": [
+                    {
+                      "kind": "TypeReference",
+                      "text": "string",
+                    },
+                    {
+                      "kind": "TypeReference",
+                      "text": "RegExp",
+                    },
+                  ],
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 3994,
+                "line": 4,
+              },
+              "start": {
+                "column": 3958,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "Number",
+              "text": "number",
+              "value": undefined,
+            },
+            "text": "{ (regexp: string | RegExp): number; (searcher: { [Symbol.search](string: string): number; }): number; }",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "slice",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": true,
+                "kind": "Parameter",
+                "name": "start",
+                "position": {
+                  "end": {
+                    "column": 4013,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 4000,
+                    "line": 4,
+                  },
+                },
+                "text": "number",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+              },
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": true,
+                "kind": "Parameter",
+                "name": "end",
+                "position": {
+                  "end": {
+                    "column": 4025,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 4014,
+                    "line": 4,
+                  },
+                },
+                "text": "number",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 4034,
+                "line": 4,
+              },
+              "start": {
+                "column": 3994,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "TypeReference",
+              "text": "string",
+            },
+            "text": "(start?: number, end?: number) => string",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "split",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "separator",
+                "position": {
+                  "end": {
+                    "column": 4063,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 4040,
+                    "line": 4,
+                  },
+                },
+                "text": "string | RegExp",
+                "type": {
+                  "kind": "UnionType",
+                  "text": "string | RegExp",
+                  "types": [
+                    {
+                      "kind": "TypeReference",
+                      "text": "string",
+                    },
+                    {
+                      "kind": "TypeReference",
+                      "text": "RegExp",
+                    },
+                  ],
+                },
+              },
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": true,
+                "kind": "Parameter",
+                "name": "limit",
+                "position": {
+                  "end": {
+                    "column": 4077,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 4064,
+                    "line": 4,
+                  },
+                },
+                "text": "number",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 4088,
+                "line": 4,
+              },
+              "start": {
+                "column": 4034,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "TypeReference",
+              "text": "string[]",
+            },
+            "text": "{ (separator: string | RegExp, limit?: number): string[]; (splitter: { [Symbol.split](string: string, limit?: number): string[]; }, limit?: number): string[]; }",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "substring",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "start",
+                "position": {
+                  "end": {
+                    "column": 4110,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 4098,
+                    "line": 4,
+                  },
+                },
+                "text": "number",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+              },
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": true,
+                "kind": "Parameter",
+                "name": "end",
+                "position": {
+                  "end": {
+                    "column": 4122,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 4111,
+                    "line": 4,
+                  },
+                },
+                "text": "number",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 4131,
+                "line": 4,
+              },
+              "start": {
+                "column": 4088,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "TypeReference",
+              "text": "string",
+            },
+            "text": "(start: number, end?: number) => string",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "toLowerCase",
+            "parameters": [],
+            "position": {
+              "end": {
+                "column": 4152,
+                "line": 4,
+              },
+              "start": {
+                "column": 4131,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "TypeReference",
+              "text": "string",
+            },
+            "text": "() => string",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "toLocaleLowerCase",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": true,
+                "kind": "Parameter",
+                "name": "locales",
+                "position": {
+                  "end": {
+                    "column": 4194,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 4170,
+                    "line": 4,
+                  },
+                },
+                "text": "string | string[]",
+                "type": {
+                  "kind": "UnionType",
+                  "text": "string | string[]",
+                  "types": [
+                    {
+                      "kind": "TypeReference",
+                      "text": "string",
+                    },
+                    {
+                      "kind": "TypeReference",
+                      "text": "string[]",
+                    },
+                  ],
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 4203,
+                "line": 4,
+              },
+              "start": {
+                "column": 4152,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "TypeReference",
+              "text": "string",
+            },
+            "text": "{ (locales?: string | string[]): string; (locales?: LocalesArgument): string; }",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "toUpperCase",
+            "parameters": [],
+            "position": {
+              "end": {
+                "column": 4224,
+                "line": 4,
+              },
+              "start": {
+                "column": 4203,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "TypeReference",
+              "text": "string",
+            },
+            "text": "() => string",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "toLocaleUpperCase",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": true,
+                "kind": "Parameter",
+                "name": "locales",
+                "position": {
+                  "end": {
+                    "column": 4266,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 4242,
+                    "line": 4,
+                  },
+                },
+                "text": "string | string[]",
+                "type": {
+                  "kind": "UnionType",
+                  "text": "string | string[]",
+                  "types": [
+                    {
+                      "kind": "TypeReference",
+                      "text": "string",
+                    },
+                    {
+                      "kind": "TypeReference",
+                      "text": "string[]",
+                    },
+                  ],
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 4275,
+                "line": 4,
+              },
+              "start": {
+                "column": 4224,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "TypeReference",
+              "text": "string",
+            },
+            "text": "{ (locales?: string | string[]): string; (locales?: LocalesArgument): string; }",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "trim",
+            "parameters": [],
+            "position": {
+              "end": {
+                "column": 4289,
+                "line": 4,
+              },
+              "start": {
+                "column": 4275,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "TypeReference",
+              "text": "string",
+            },
+            "text": "() => string",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "isOptional": false,
+            "isReadonly": true,
+            "kind": "PropertySignature",
+            "name": "length",
+            "position": {
+              "end": {
+                "column": 4312,
+                "line": 4,
+              },
+              "start": {
+                "column": 4289,
+                "line": 4,
+              },
+            },
+            "text": "number",
+            "type": {
+              "kind": "Number",
+              "text": "number",
+              "value": undefined,
+            },
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "substr",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "from",
+                "position": {
+                  "end": {
+                    "column": 4330,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 4319,
+                    "line": 4,
+                  },
+                },
+                "text": "number",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+              },
+              {
+                "description": undefined,
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "initializer": undefined,
+                "isOptional": true,
+                "kind": "Parameter",
+                "name": "length",
+                "position": {
+                  "end": {
+                    "column": 4345,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 4331,
+                    "line": 4,
+                  },
+                },
+                "text": "number",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 4354,
+                "line": 4,
+              },
+              "start": {
+                "column": 4312,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "TypeReference",
+              "text": "string",
+            },
+            "text": "(from: number, length?: number) => string",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "MethodSignature",
+            "name": "valueOf",
+            "parameters": [],
+            "position": {
+              "end": {
+                "column": 4371,
+                "line": 4,
+              },
+              "start": {
+                "column": 4354,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "kind": "TypeReference",
+              "text": "string",
+            },
+            "text": "() => string",
+          },
+          {
+            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "kind": "IndexSignature",
+            "parameter": {
+              "kind": "IndexSignatureParameter",
+              "name": "index",
+              "text": "index: number",
+              "type": {
+                "kind": "Number",
+                "text": "number",
+                "value": undefined,
+              },
+            },
+            "position": {
+              "end": {
+                "column": 4401,
+                "line": 4,
+              },
+              "start": {
+                "column": 4371,
+                "line": 4,
+              },
+            },
+            "text": "readonly[index:number]:string;",
+            "type": {
+              "kind": "TypeReference",
+              "text": "string",
+            },
+          },
+        ],
+        "name": undefined,
+        "position": {
+          "end": {
+            "column": 4402,
+            "line": 4,
+          },
+          "start": {
+            "column": 3482,
+            "line": 4,
+          },
+        },
+        "text": "string",
       }
     `)
   })

@@ -69,6 +69,21 @@ export namespace Kind {
     kind: 'Symbol'
   }
 
+  export interface Null extends Shared {
+    kind: 'Null'
+  }
+
+  export interface Undefined extends Shared {
+    kind: 'Undefined'
+  }
+
+  export interface BigInt extends Shared {
+    kind: 'BigInt'
+
+    /** The literal value of the bigint if it is a bigint literal. */
+    value?: BigInteger
+  }
+
   export interface Array<Element extends TypeExpression = TypeExpression>
     extends Shared {
     kind: 'Array'
@@ -110,12 +125,20 @@ export namespace Kind {
     isReadonly?: boolean
   }
 
+  export interface Void extends Shared {
+    kind: 'Void'
+  }
+
   export interface Any extends Shared {
     kind: 'Any'
   }
 
   export interface Unknown extends Shared {
     kind: 'Unknown'
+  }
+
+  export interface Never extends Shared {
+    kind: 'Never'
   }
 
   export type MemberUnion =
@@ -164,10 +187,53 @@ export namespace Kind {
     isOptional?: boolean
   }
 
+  export interface ConditionalType extends Shared {
+    kind: 'ConditionalType'
+
+    /** Left‑hand side of `Type extends Union ? … : …`. */
+    checkType: TypeExpression
+
+    /** Right‑hand side of the `extends` clause. */
+    extendsType: TypeExpression
+
+    /** Result when the `extends` test succeeds. */
+    trueType: TypeExpression
+
+    /** Result when the `extends` test fails. */
+    falseType: TypeExpression
+
+    /**
+     * **`true`** when `checkType` is a *naked* type parameter
+     * (e.g. `Type extends ...`) so the conditional will distribute over unions.
+     *
+     * **`false`** or `undefined` when `checkType` is wrapped
+     * (e.g. `[Type]`, `Type[]`, `Promise<Type>`, `keyof Type`, etc.), which disables
+     * distribution.
+     */
+    isDistributive?: boolean
+  }
+
+  export type IndexSignatureParameterType =
+    | Kind.String
+    | Kind.Number
+    | Kind.Symbol
+
+  export interface IndexSignatureParameter<
+    Type extends IndexSignatureParameterType = IndexSignatureParameterType,
+  > extends Shared {
+    kind: 'IndexSignatureParameter'
+
+    /** The name of the index signature parameter, e.g. `key` in `{ [key: string]: Type }`. */
+    name: string
+
+    /** The type of the index signature parameter, e.g. `string` in `{ [key: string]: Type }`. */
+    type: Type
+  }
+
   export interface IndexSignature<Type extends TypeExpression = TypeExpression>
     extends Shared {
     kind: 'IndexSignature'
-    key: 'string' | 'number' | 'symbol'
+    parameter: IndexSignatureParameter
     type: Type
     isReadonly?: boolean
   }
@@ -212,7 +278,7 @@ export namespace Kind {
     scope?: 'abstract' | 'static'
 
     /** The visibility modifier of the class member. If not provided, the member is assumed to be public. */
-    visibility?: 'private' | 'protected' | 'public'
+    visibility?: 'public' | 'protected' | 'private'
 
     /** Whether the property is an override of a base class property. */
     isOverride?: boolean
@@ -261,7 +327,7 @@ export namespace Kind {
     typeParameters?: TypeParameter[]
 
     /** The return type of the call signature. */
-    returnType: TypeExpression
+    returnType?: TypeExpression
 
     /** Whether an async modifier is present or the return type includes a promise. */
     isAsync?: boolean
@@ -370,12 +436,22 @@ export namespace Kind {
     parameters: TypeParameter[]
   }
 
+  /** Represents a type operator e.g. `keyof Type` or `readonly Type`. */
+  export interface TypeOperator<
+    Type extends Kind.TypeExpression = Kind.TypeExpression,
+  > extends Kind.Shared {
+    kind: 'TypeOperator'
+
+    /** The operator of the type operator e.g. `keyof` or `readonly`. */
+    operator: 'keyof' | 'readonly' | 'unique'
+
+    /** The type operand of the type operator e.g. `Type` in `keyof Type`. */
+    type: Type
+  }
+
   /** Represents when a type alias is used as a reference e.g. `Partial<Type>`. */
   export interface TypeReference extends Shared {
     kind: 'TypeReference'
-
-    /** The name of the type reference, e.g. `Partial` in `Partial<Type>`. */
-    name: string
 
     /** The type arguments passed in during usage, e.g. `Type` in `Partial<Type>`. */
     arguments?: TypeExpression[]
@@ -426,17 +502,24 @@ export namespace Kind {
     | Number
     | Boolean
     | Symbol
+    | BigInt
     | Array
     | Tuple
     | IntersectionType
     | UnionType
     | MappedType
+    | ConditionalType
     | FunctionType
     | ComponentType
-    | TypeReference
     | TypeLiteral
+    | TypeOperator
+    | TypeReference
+    | Void
+    | Null
+    | Undefined
     | Any
     | Unknown
+    | Never
 
   export type All =
     | TypeExpression
@@ -460,7 +543,7 @@ export namespace Kind {
     | PropertySignature
     | Parameter
 
-  // TODO: still need to add ThisType, InferType, ConditionalType, IndexedAccessType
+  // TODO: still need to add ThisType, InferType, IndexedAccessType
 }
 
 export type TypeByKind<Type, Key> = Type extends { kind: Key } ? Type : never
@@ -538,17 +621,8 @@ export function resolveType(
       symbolMetadata.isInNodeModules ||
       symbolMetadata.isExternal)
   ) {
-    const name = typeName ?? symbolMetadata.name
-
-    if (!name) {
-      throw new Error(
-        `[renoun:resolveType]: No type name found for type reference "${typeText}" with kind "${symbolDeclaration?.getKindName()}" and enclosing node kind "${enclosingNode.getKindName()}". Please file an issue if you encounter this error.`
-      )
-    }
-
     return {
       kind: 'TypeReference',
-      name,
       text: typeText,
       arguments: enclosingNode
         .getTypeArguments()
@@ -590,17 +664,8 @@ export function resolveType(
     tsMorph.Node.isExportable(symbolDeclaration) &&
     symbolDeclaration.isExported()
   ) {
-    const name = typeName ?? symbolMetadata.name
-
-    if (!name) {
-      throw new Error(
-        `[renoun:resolveType]: No type name found for property signature "${typeText}" with kind "${symbolDeclaration?.getKindName()}" and enclosing node kind "${enclosingNode.getKindName()}". Please file an issue if you encounter this error.`
-      )
-    }
-
     return {
       kind: 'TypeReference',
-      name,
       text: typeText,
       ...declarationLocation,
     } satisfies Kind.TypeReference
@@ -641,18 +706,9 @@ export function resolveType(
             return
           }
 
-          const name = typeName ?? symbolMetadata.name
-
-          if (!name) {
-            throw new Error(
-              `[renoun:resolveType]: No type name found for type reference "${typeText}" with kind "${symbolDeclaration?.getKindName()}" and enclosing node kind "${enclosingNode.getKindName()}". Please file an issue if you encounter this error.`
-            )
-          }
-
           return {
             kind: 'TypeReference',
             text: typeText,
-            name,
             arguments: resolvedTypeArguments,
             ...declarationLocation,
           } satisfies Kind.TypeReference
@@ -662,24 +718,9 @@ export function resolveType(
               `[renoun:resolveType]: No file path found for "${typeText}". Please file an issue if you encounter this error.`
             )
           }
-          let name = typeName ?? symbolMetadata.name
-
-          if (!name && tsMorph.Node.isPropertySignature(enclosingNode)) {
-            const typeNode = enclosingNode.getTypeNode()
-            if (typeNode) {
-              name = typeNode.getText()
-            }
-          }
-
-          if (!name) {
-            throw new Error(
-              `[renoun:resolveType]: No type name found for type reference "${typeText}" with kind "${symbolDeclaration?.getKindName()}" and enclosing node kind "${enclosingNode.getKindName()}". Please file an issue if you encounter this error.`
-            )
-          }
 
           return {
             kind: 'TypeReference',
-            name,
             text: typeText,
             ...declarationLocation,
           } satisfies Kind.TypeReference
@@ -716,18 +757,8 @@ export function resolveType(
 
       /* Allow node_module references to be filtered in. */
       if (filter === defaultFilter ? true : !filter(symbolMetadata)) {
-        let name = typeName ?? symbolMetadata.name
-
-        if (!name && tsMorph.Node.isParameterDeclaration(enclosingNode)) {
-          const typeNode = enclosingNode.getTypeNode()
-          if (typeNode) {
-            name = typeNode.getText()
-          }
-        }
-
         return {
           kind: 'TypeReference',
-          name: name ?? '',
           text: typeText,
           ...declarationLocation,
         } satisfies Kind.TypeReference
@@ -752,442 +783,109 @@ export function resolveType(
     text: typeText,
   } satisfies Kind.Unknown
 
-  if (type.isBoolean() || type.isBooleanLiteral()) {
-    resolvedType = {
-      kind: 'Boolean',
-      text: typeText,
-    } satisfies Kind.Boolean
-  } else if (type.isNumber() || type.isNumberLiteral()) {
-    resolvedType = {
-      kind: 'Number',
-      text: typeText,
-      value: type.getLiteralValue() as number,
-    } satisfies Kind.Number
-  } else if (type.isString() || type.isStringLiteral()) {
-    resolvedType = {
-      kind: 'String',
-      text: typeText,
-      value: type.getLiteralValue() as string,
-    } satisfies Kind.String
-  } else if (isSymbol(type)) {
-    resolvedType = {
-      kind: 'Symbol',
-      text: typeText,
-    } satisfies Kind.Symbol
-  } else if (type.isArray()) {
-    const elementType = type.getArrayElementTypeOrThrow()
-    const resolvedElementType = resolveType(
-      elementType,
-      declaration,
+  // Attempt to resolve the type expression first.
+  let resolvedTypeExpression: Kind.TypeExpression | undefined
+
+  if (!isRootType) {
+    try {
+      resolvedTypeExpression = resolveTypeExpression(
+        type,
+        declaration,
+        filter,
+        defaultValues,
+        keepReferences,
+        dependencies
+      )
+    } catch (error) {
+      if (error instanceof UnresolvedTypeExpressionError) {
+        resolvedTypeExpression = undefined
+      } else {
+        throw error
+      }
+    }
+  }
+
+  if (resolvedTypeExpression) {
+    resolvedType = resolvedTypeExpression
+  } else if (tsMorph.Node.isTypeAliasDeclaration(symbolDeclaration)) {
+    const typeNode = symbolDeclaration.getTypeNodeOrThrow()
+    const typeAliasType = typeNode.getType()
+    const hadRootReference = rootReferences.delete(typeAliasType)
+    const resolvedTypeExpression = resolveTypeExpression(
+      typeAliasType,
+      typeNode,
       filter,
-      false,
       defaultValues,
-      keepReferences,
+      true,
       dependencies
-    ) as Kind.TypeExpression | undefined
-    if (resolvedElementType) {
-      resolvedType = {
-        kind: 'Array',
-        text: typeText,
-        element: resolvedElementType,
-      } satisfies Kind.Array
-    } else {
+    )
+
+    if (hadRootReference) {
+      rootReferences.add(typeAliasType)
+    }
+
+    if (!resolvedTypeExpression) {
       if (!keepReferences) {
         rootReferences.delete(type)
       }
       return
     }
-  } else if (
-    isRootType &&
-    tsMorph.Node.isTypeAliasDeclaration(enclosingNode) &&
-    aliasTypeArguments.length > 0
-  ) {
-    // Prevent the type from being resolved as a reference.
-    rootReferences.delete(type)
 
-    const resolvedUtilityType = resolveType(
-      type,
-      declaration,
-      filter,
-      false,
-      defaultValues,
-      keepReferences,
-      dependencies
-    )
+    const resolvedTypeParameters = symbolDeclaration
+      .getTypeParameters()
+      .map((typeParameter) => {
+        const constraintType = type.getConstraint()
+        const defaultType = type.getDefault()
 
-    // Restore the root reference cache after resolving the utility type.
-    rootReferences.add(type)
-
-    if (!resolvedUtilityType) {
-      console.log(
-        `[renoun:resolveType]: No utility type found for "${typeText}". Please file an issue if you encounter this error.`
-      )
-    }
-
-    const name = typeName ?? symbolMetadata.name
-
-    if (!name) {
-      throw new Error(
-        `[renoun:resolveType]: No type name found for type alias "${typeText}" with kind "${symbolDeclaration?.getKindName()}" and enclosing node kind "${enclosingNode.getKindName()}". Please file an issue if you encounter this error.`
-      )
-    }
-
-    resolvedType = {
-      kind: 'TypeAlias',
-      name,
-      text: typeText,
-      type: resolvedUtilityType as Kind.TypeExpression,
-      parameters: aliasTypeArguments
-        .map((type) =>
-          resolveType(
-            type,
-            declaration,
-            filter,
-            false,
-            defaultValues,
-            keepReferences,
-            dependencies
-          )
-        )
-        .filter((type): type is Kind.TypeParameter => Boolean(type)),
-    } satisfies Kind.TypeAlias
-  } else {
-    if (type.isTypeParameter()) {
-      if (tsMorph.Node.isTypeReference(enclosingNode)) {
-        const name = typeName ?? symbolMetadata.name
-
-        if (!name) {
-          throw new Error(
-            `[renoun:resolveType]: No type name found for type reference "${typeText}" with kind "${symbolDeclaration?.getKindName()}" and enclosing node kind "${enclosingNode.getKindName()}". Please file an issue if you encounter this error.`
-          )
-        }
-
-        resolvedType = {
-          kind: 'TypeReference',
-          name,
-          text: typeText,
-          arguments: typeArguments
-            .map((type) =>
-              resolveType(
-                type,
-                declaration,
+        return {
+          kind: 'TypeParameter',
+          name: typeParameter.getName(),
+          text: typeParameter.getText(),
+          constraint: constraintType
+            ? resolveTypeExpression(
+                constraintType,
+                symbolDeclaration,
                 filter,
-                false,
                 defaultValues,
                 keepReferences,
                 dependencies
               )
-            )
-            .filter(Boolean) as Kind.TypeExpression[],
-        } satisfies Kind.TypeReference
-      } else {
-        const constraintType = type.getConstraint()
-        const defaultType = type.getDefault()
-        const name = typeName ?? symbolMetadata.name
-
-        if (!name) {
-          throw new Error(
-            `[renoun:resolveType]: No type name found for type parameter "${typeText}" with kind "${symbolDeclaration?.getKindName()}" and enclosing node kind "${enclosingNode?.getKindName()}". Please file an issue if you encounter this error.`
-          )
-        }
-
-        resolvedType = {
-          kind: 'TypeParameter',
-          name,
-          text: typeText,
-          constraint: constraintType
-            ? (resolveType(
-                constraintType,
-                symbolDeclaration,
-                filter,
-                false,
-                defaultValues,
-                keepReferences,
-                dependencies
-              ) as Kind.TypeExpression)
             : undefined,
           defaultType: defaultType
-            ? (resolveType(
+            ? resolveTypeExpression(
                 defaultType,
                 symbolDeclaration,
                 filter,
-                false,
                 defaultValues,
                 keepReferences,
                 dependencies
-              ) as Kind.TypeExpression)
+              )
             : undefined,
+          ...getJsDocMetadata(typeParameter),
+          ...getDeclarationLocation(typeParameter),
         } satisfies Kind.TypeParameter
-      }
-    } else if (
-      type.isClass() ||
-      tsMorph.Node.isClassDeclaration(symbolDeclaration)
-    ) {
-      if (tsMorph.Node.isClassDeclaration(symbolDeclaration)) {
-        resolvedType = resolveClass(symbolDeclaration, filter, dependencies)
-        if (symbolMetadata.name) {
-          resolvedType.name = symbolMetadata.name
-        }
-      } else {
-        throw new Error(
-          `[renoun:resolveType]: No class declaration found for "${symbolMetadata.name}". Please file an issue if you encounter this error.`
-        )
-      }
-    } else if (type.isEnum()) {
-      if (tsMorph.Node.isEnumDeclaration(symbolDeclaration)) {
-        resolvedType = {
-          kind: 'Enum',
-          name: symbolMetadata.name,
-          text: typeText,
-          members: symbolDeclaration.getMembers().map((member) => {
-            const name = member.getName()
-            const value = member.getValue()
+      })
 
-            return {
-              kind: 'EnumMember',
-              name,
-              value,
-              text: member.getText(),
-              ...getJsDocMetadata(member),
-              ...getDeclarationLocation(member),
-            } satisfies Kind.EnumMember
-          }),
-        } satisfies Kind.Enum
-      } else {
-        throw new Error(
-          `[renoun:resolveType]: No enum declaration found for "${symbolMetadata.name}". Please file an issue if you encounter this error.`
-        )
-      }
-    } else if (type.isUnion()) {
-      let typeNode: tsMorph.TypeNode | undefined
-
-      if (tsMorph.Node.isTypeAliasDeclaration(symbolDeclaration)) {
-        typeNode = symbolDeclaration.getTypeNode()
-      } else if (
-        tsMorph.Node.isTypeAliasDeclaration(enclosingNode) ||
-        tsMorph.Node.isPropertySignature(enclosingNode) ||
-        tsMorph.Node.isPropertyDeclaration(enclosingNode) ||
-        tsMorph.Node.isParameterDeclaration(enclosingNode)
-      ) {
-        typeNode = enclosingNode.getTypeNode()
-      }
-
-      // Mixed intersection inside union (`A & B | C`)
-      if (tsMorph.Node.isIntersectionTypeNode(typeNode)) {
-        const resolvedIntersectionTypes = typeNode
-          .getTypeNodes()
-          .map((typeNode) =>
-            resolveType(
-              typeNode.getType(),
-              typeNode,
-              filter,
-              false,
-              defaultValues,
-              keepReferences,
-              dependencies
-            )
-          )
-          .filter(Boolean) as Kind.TypeExpression[]
-
-        if (resolvedIntersectionTypes.length === 0) {
-          if (!keepReferences) {
-            rootReferences.delete(type)
-          }
-          return
-        }
-
-        resolvedType = {
-          kind: 'IntersectionType',
-          text: typeText,
-          types: resolvedIntersectionTypes,
-        } satisfies Kind.IntersectionType
-      } else {
-        const unionMembers: Kind.TypeExpression[] = []
-        const unionNode = tsMorph.Node.isUnionTypeNode(typeNode)
-          ? typeNode
-          : tsMorph.Node.isUnionTypeNode(enclosingNode)
-            ? (enclosingNode as tsMorph.UnionTypeNode)
-            : undefined
-        const unionTypeNodes = unionNode
-          ? unionNode
-              .getTypeNodes()
-              .map((node) => ({ node, type: node.getType() }))
-          : type.getUnionTypes().map((t) => ({ node: enclosingNode, type: t }))
-
-        for (const { node: memberNode, type: memberType } of unionTypeNodes) {
-          const resolved = resolveType(
-            memberType,
-            memberNode,
-            filter,
-            false,
-            defaultValues,
-            keepReferences,
-            dependencies
-          ) as Kind.TypeExpression | undefined
-
-          if (resolved) {
-            const previous = unionMembers.at(-1)
-            /* Collapse `true | false` to just `boolean` */
-            if (resolved.kind === 'Boolean' && previous?.kind === 'Boolean') {
-              unionMembers.pop()
-              resolved.text = 'boolean'
-            }
-            unionMembers.push(resolved)
-          }
-        }
-
-        const uniqueUnionTypes: Kind.TypeExpression[] = []
-
-        for (const member of unionMembers) {
-          const duplicate = uniqueUnionTypes.some((unionType) => {
-            return (
-              unionType.kind === member.kind &&
-              unionType.text === member.text &&
-              unionType.path === member.path &&
-              member.position?.start.line === unionType.position?.start.line &&
-              member.position?.end.line === unionType.position?.end.line
-            )
-          })
-          if (!duplicate) {
-            uniqueUnionTypes.push(member)
-          }
-        }
-
-        if (uniqueUnionTypes.length === 0) {
-          if (!keepReferences) {
-            rootReferences.delete(type)
-          }
-          return
-        }
-
-        resolvedType = {
-          kind: 'UnionType',
-          text:
-            symbolMetadata.name === typeText
-              ? uniqueUnionTypes.map((type) => type.text).join(' | ')
-              : typeText,
-          types: uniqueUnionTypes,
-        } satisfies Kind.UnionType
-      }
-    } else if (type.isIntersection()) {
-      let intersectionNode: tsMorph.IntersectionTypeNode | undefined
-
-      if (tsMorph.Node.isIntersectionTypeNode(enclosingNode)) {
-        intersectionNode = enclosingNode
-      } else if (tsMorph.Node.isTypeAliasDeclaration(symbolDeclaration)) {
-        const typeNode = symbolDeclaration.getTypeNode()
-        if (tsMorph.Node.isIntersectionTypeNode(typeNode)) {
-          intersectionNode = typeNode
-        }
-      }
-
-      const intersectionTypes = type.getIntersectionTypes()
-      const intersectionNodes = intersectionNode
-        ? intersectionNode.getTypeNodes()
-        : []
-      const resolvedIntersectionTypes = intersectionTypes
-        .map((intersectionType, index) => {
-          const intersectionNode = intersectionNodes[index]
-          const isRootMapped = tsMorph.Node.isMappedTypeNode(intersectionNode)
-
-          return resolveType(
-            intersectionType,
-            isRootMapped ? intersectionNode : declaration,
-            filter,
-            false,
-            defaultValues,
-            keepReferences,
-            dependencies
-          )
-        })
-        .filter(Boolean) as Kind.TypeExpression[]
-
-      // Intersection types can safely merge the immediate property signatures to reduce nesting
-      const propertySignatures: Kind.PropertySignature[] = []
-      let allTypesArePropertySignatures = true
-
-      for (const resolveType of resolvedIntersectionTypes) {
-        if (resolveType.kind === 'TypeLiteral') {
-          for (const member of resolveType.members) {
-            if (member.kind === 'PropertySignature') {
-              propertySignatures.push(member)
-            } else {
-              allTypesArePropertySignatures = false
-              break
-            }
-          }
-        } else {
-          allTypesArePropertySignatures = false
-          break
-        }
-      }
-
-      if (allTypesArePropertySignatures) {
-        if (propertySignatures.length === 0) {
-          if (!keepReferences) {
-            rootReferences.delete(type)
-          }
-          return
-        }
-
-        resolvedType = {
-          kind: 'TypeLiteral',
-          text: typeText,
-          members: propertySignatures,
-        } satisfies Kind.TypeLiteral
-      } else {
-        if (resolvedIntersectionTypes.length === 0) {
-          if (!keepReferences) {
-            rootReferences.delete(type)
-          }
-          return
-        }
-
-        resolvedType = {
-          kind: 'IntersectionType',
-          text: typeText,
-          types: resolvedIntersectionTypes,
-        } satisfies Kind.IntersectionType
-      }
-    } else if (type.isTuple()) {
-      const elements = resolveTypeTupleElements(
-        type,
-        declaration,
-        filter,
-        false
-      )
-
-      if (elements.length === 0) {
-        if (!keepReferences) {
-          rootReferences.delete(type)
-        }
-        return
-      }
-
-      resolvedType = {
-        kind: 'Tuple',
-        text: typeText,
-        elements,
-      } satisfies Kind.Tuple
-    } else if (
-      !symbolMetadata.isExported &&
-      !symbolMetadata.isInNodeModules &&
-      !symbolMetadata.isGlobal &&
-      type.isInterface() &&
-      tsMorph.Node.isInterfaceDeclaration(symbolDeclaration)
-    ) {
+    resolvedType = {
+      kind: 'TypeAlias',
+      name: symbolMetadata.name,
+      text: typeText,
+      type: resolvedTypeExpression,
+      parameters: resolvedTypeParameters,
+    } satisfies Kind.TypeAlias
+  } else {
+    if (tsMorph.Node.isInterfaceDeclaration(symbolDeclaration)) {
       const resolvedMembers = symbolDeclaration
         .getMembers()
         .map((member) => {
-          const memberType = resolveType(
+          const memberType = resolveTypeExpression(
             member.getType(),
             symbolDeclaration,
             filter,
-            false,
             defaultValues,
             keepReferences,
             dependencies
-          ) as Kind.TypeExpression | undefined
+          )
 
           if (!memberType) {
             return undefined
@@ -1212,49 +910,47 @@ export function resolveType(
               ...getDeclarationLocation(member),
             } satisfies Kind.PropertySignature
           } else if (tsMorph.Node.isMethodSignature(member)) {
-            const callSignatures = member.getType().getCallSignatures()
+            const callSignature = member.getType().getCallSignatures().at(0)
 
-            // TODO: need to handle multiple signatures
+            if (!callSignature) {
+              throw new Error(
+                `[renoun:resolveType]: No call signature found for method "${memberText}". Please file an issue if you encounter this error.`
+              )
+            }
+
+            const signatureDeclaration = callSignature.getDeclaration()
+            const signatureParameters = callSignature.getParameters()
+            const parameterDeclarations = signatureParameters.map((parameter) =>
+              getPrimaryDeclaration(parameter)
+            ) as (ParameterDeclaration | undefined)[]
+            const resolvedParameters = resolveCallSignatureParameters(
+              signatureParameters,
+              parameterDeclarations,
+              signatureDeclaration,
+              member,
+              filter,
+              dependencies
+            )
+
             return {
               kind: 'MethodSignature',
               name: member.getName(),
               text: memberText,
-              parameters:
-                callSignatures[0]?.getParameters().map((param) => ({
-                  kind: 'Parameter',
-                  name: param.getName(),
-                  type: resolveType(
-                    param.getTypeAtLocation(member),
-                    member,
-                    filter,
-                    false,
-                    undefined,
-                    false,
-                    dependencies
-                  ) as Kind.TypeExpression,
-                  text: param
-                    .getTypeAtLocation(member)
-                    .getText(
-                      undefined,
-                      tsMorph.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope
-                    ),
-                  isOptional: param.isOptional(),
-                })) ?? [],
-              returnType: resolveType(
-                callSignatures[0]?.getReturnType() ?? type,
+              parameters: resolvedParameters,
+              returnType: resolveTypeExpression(
+                callSignature.getReturnType() ?? type,
                 member,
                 filter,
-                false,
                 undefined,
                 false,
                 dependencies
-              ) as Kind.TypeExpression,
+              ),
               ...getJsDocMetadata(member),
               ...getDeclarationLocation(member),
             } satisfies Kind.MethodSignature
           } else if (tsMorph.Node.isIndexSignatureDeclaration(member)) {
             return {
-              ...resolveIndexSignature(member, filter, false),
+              ...resolveIndexSignature(member, filter),
               ...getJsDocMetadata(member),
               ...getDeclarationLocation(member),
             } satisfies Kind.IndexSignature
@@ -1324,16 +1020,6 @@ export function resolveType(
             ),
           } satisfies Kind.Function
         }
-      } else if (type.isUnknown()) {
-        resolvedType = {
-          kind: 'Unknown',
-          text: typeText,
-        } satisfies Kind.Unknown
-      } else if (type.isAny()) {
-        resolvedType = {
-          kind: 'Any',
-          text: typeText,
-        } satisfies Kind.Any
       } else if (type.isObject()) {
         const isMapped = Boolean(
           type.compilerType.objectFlags & tsMorph.ObjectFlags.Mapped
@@ -1369,30 +1055,28 @@ export function resolveType(
           if (!shouldExpandMapped && mappedDeclaration) {
             const valueNode = mappedDeclaration.getTypeNode() // `Type[Key]`
             const valueType = valueNode
-              ? (resolveType(
+              ? resolveTypeExpression(
                   valueNode.getType(),
                   valueNode,
                   filter,
-                  false,
                   undefined,
                   true,
                   dependencies
-                ) as Kind.TypeExpression | undefined)
+                )
               : undefined
 
             if (valueType) {
               const typeParameter = mappedDeclaration.getTypeParameter()
               const typeParameterName = typeParameter.getName()
               const constraint = typeParameter.getConstraintOrThrow()
-              const constraintType = resolveType(
+              const constraintType = resolveTypeExpression(
                 constraint.getType(),
                 constraint,
                 filter,
-                false,
                 undefined,
                 true,
                 dependencies
-              ) as Kind.TypeExpression | undefined
+              )
 
               if (!constraintType) {
                 throw new Error(
@@ -1431,12 +1115,11 @@ export function resolveType(
 
         const indexSignatures = resolveIndexSignatures(
           symbolDeclaration,
-          filter,
-          false
+          filter
         )
         const propertySignatures = resolvePropertySignatures(
           type,
-          enclosingNode,
+          symbolDeclaration ?? enclosingNode,
           filter,
           false,
           defaultValues,
@@ -1451,11 +1134,10 @@ export function resolveType(
         ) {
           const resolvedTypeArguments = typeArguments
             .map((type) =>
-              resolveType(
+              resolveTypeExpression(
                 type,
                 declaration,
                 filter,
-                false,
                 defaultValues,
                 keepReferences,
                 dependencies
@@ -1480,7 +1162,6 @@ export function resolveType(
 
           resolvedType = {
             kind: 'TypeReference',
-            name,
             text: typeText,
             arguments: resolvedTypeArguments,
           } satisfies Kind.TypeReference
@@ -1498,23 +1179,15 @@ export function resolveType(
             rootReferences.delete(type)
           }
 
-          let name = typeName ?? symbolMetadata.name
-
-          if (tsMorph.Node.isMappedTypeNode(symbolDeclaration)) {
-            name = symbolDeclaration.getTypeParameter().getName()
-          }
-
           resolvedType = {
             kind: 'TypeReference',
-            name: name ?? '',
             text: typeText,
             arguments: typeArguments
               .map((type) =>
-                resolveType(
+                resolveTypeExpression(
                   type,
                   declaration,
                   filter,
-                  false,
                   defaultValues,
                   keepReferences,
                   dependencies
@@ -1551,7 +1224,6 @@ export function resolveType(
       }
     }
   }
-
   if (!keepReferences) {
     rootReferences.delete(type)
   }
@@ -1567,6 +1239,632 @@ export function resolveType(
     ...(metadataDeclaration ? getJsDocMetadata(metadataDeclaration) : {}),
     ...resolvedType,
     ...declarationLocation,
+  }
+}
+
+function resolveTypeExpression(
+  type: tsMorph.Type,
+  enclosingNode?: Node,
+  filter: SymbolFilter = defaultFilter,
+  defaultValues?: Record<string, unknown> | unknown,
+  keepReferences = false,
+  dependencies?: Set<string>
+): Kind.TypeExpression | undefined {
+  const typeText = type.getText(
+    undefined,
+    tsMorph.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope
+  )
+  const primaryDeclaration = getPrimaryDeclaration(type.getSymbol())
+
+  if (primaryDeclaration?.getSourceFile().isInNodeModules()) {
+    return {
+      kind: 'TypeReference',
+      text: typeText,
+    } satisfies Kind.TypeReference
+  }
+
+  if (rootReferences.has(type)) {
+    return {
+      kind: 'TypeReference',
+      text: typeText,
+    } as Kind.TypeReference
+  }
+
+  rootReferences.add(type)
+
+  try {
+    const symbol = type.getSymbol()
+    const symbolDeclaration = getPrimaryDeclaration(symbol)
+    let resolvedType: Kind.TypeExpression | undefined
+
+    if (type.isTypeParameter()) {
+      resolvedType = {
+        kind: 'TypeReference',
+        text: typeText,
+      } satisfies Kind.TypeReference
+    } else if (type.isBoolean() || type.isBooleanLiteral()) {
+      resolvedType = {
+        kind: 'Boolean',
+        text: typeText,
+      } satisfies Kind.Boolean
+    } else if (type.isNumber() || type.isNumberLiteral()) {
+      resolvedType = {
+        kind: 'Number',
+        text: typeText,
+        value: type.getLiteralValue() as number,
+      } satisfies Kind.Number
+    } else if (type.isBigInt() || type.isBigIntLiteral()) {
+      resolvedType = {
+        kind: 'BigInt',
+        text: typeText,
+        value: type.getLiteralValue() as unknown as BigInteger,
+      } satisfies Kind.BigInt
+    } else if (type.isString() || type.isStringLiteral()) {
+      resolvedType = {
+        kind: 'String',
+        text: typeText,
+        value: type.getLiteralValue() as string,
+      } satisfies Kind.String
+    } else if (isSymbol(type)) {
+      resolvedType = {
+        kind: 'Symbol',
+        text: typeText,
+      } satisfies Kind.Symbol
+    } else if (type.isTuple()) {
+      const elements = resolveTypeTupleElements(
+        type,
+        symbolDeclaration,
+        filter,
+        false
+      )
+
+      if (elements.length === 0) {
+        if (!keepReferences) {
+          rootReferences.delete(type)
+        }
+        return
+      }
+
+      resolvedType = {
+        kind: 'Tuple',
+        text: typeText,
+        elements,
+      } satisfies Kind.Tuple
+    } else if (type.isArray()) {
+      const elementType = type.getArrayElementTypeOrThrow()
+      const resolvedElementType = resolveTypeExpression(
+        elementType,
+        enclosingNode,
+        filter,
+        defaultValues,
+        keepReferences,
+        dependencies
+      )
+
+      if (resolvedElementType) {
+        resolvedType = {
+          kind: 'Array',
+          text: typeText,
+          element: resolvedElementType,
+        } satisfies Kind.Array
+      } else {
+        if (!keepReferences) {
+          rootReferences.delete(type)
+        }
+        return
+      }
+    } else if (isConditionalType(type)) {
+      let conditionalNode: tsMorph.ConditionalTypeNode | undefined
+
+      if (tsMorph.Node.isConditionalTypeNode(enclosingNode)) {
+        conditionalNode = enclosingNode
+      } else if (
+        tsMorph.Node.isTypeAliasDeclaration(symbolDeclaration) &&
+        tsMorph.Node.isConditionalTypeNode(symbolDeclaration.getTypeNode())
+      ) {
+        const typeNode = symbolDeclaration.getTypeNode()
+        conditionalNode = typeNode as tsMorph.ConditionalTypeNode
+      } else if (
+        tsMorph.Node.isTypeAliasDeclaration(enclosingNode) &&
+        tsMorph.Node.isConditionalTypeNode(enclosingNode.getTypeNode?.())
+      ) {
+        const typeNode = enclosingNode.getTypeNode()
+        conditionalNode = typeNode as tsMorph.ConditionalTypeNode
+      }
+
+      if (conditionalNode) {
+        const checkNode = conditionalNode.getCheckType()
+        const extendsNode = conditionalNode.getExtendsType()
+        const trueNode = conditionalNode.getTrueType()
+        const falseNode = conditionalNode.getFalseType()
+
+        const checkType = resolveTypeExpression(
+          checkNode.getType(),
+          checkNode,
+          filter,
+          defaultValues,
+          keepReferences,
+          dependencies
+        )
+        const extendsType = resolveTypeExpression(
+          extendsNode.getType(),
+          extendsNode,
+          filter,
+          defaultValues,
+          keepReferences,
+          dependencies
+        )
+        const trueType = resolveTypeExpression(
+          trueNode.getType(),
+          trueNode,
+          filter,
+          defaultValues,
+          keepReferences,
+          dependencies
+        )
+        const falseType = resolveTypeExpression(
+          falseNode.getType(),
+          falseNode,
+          filter,
+          defaultValues,
+          keepReferences,
+          dependencies
+        )
+
+        if (checkType && extendsType && trueType && falseType) {
+          const isDistributive = conditionalNode
+            .getCheckType()
+            .getType()
+            .isTypeParameter()
+
+          resolvedType = {
+            kind: 'ConditionalType',
+            text: typeText,
+            checkType,
+            extendsType,
+            trueType,
+            falseType,
+            isDistributive,
+          } satisfies Kind.ConditionalType
+        } else {
+          if (!keepReferences) rootReferences.delete(type)
+          return
+        }
+      } else {
+        resolvedType = {
+          kind: 'TypeReference',
+          text: typeText,
+        } satisfies Kind.TypeReference
+      }
+    } else if (type.isUnion()) {
+      let typeNode: tsMorph.TypeNode | undefined
+
+      if (tsMorph.Node.isTypeAliasDeclaration(symbolDeclaration)) {
+        typeNode = symbolDeclaration.getTypeNode()
+      } else if (
+        tsMorph.Node.isTypeAliasDeclaration(enclosingNode) ||
+        tsMorph.Node.isPropertySignature(enclosingNode) ||
+        tsMorph.Node.isPropertyDeclaration(enclosingNode) ||
+        tsMorph.Node.isParameterDeclaration(enclosingNode)
+      ) {
+        typeNode = enclosingNode.getTypeNode()
+      } else if (tsMorph.Node.isTypeParameterDeclaration(enclosingNode)) {
+        const constraintNode = enclosingNode.getConstraint()
+        if (constraintNode && tsMorph.Node.isUnionTypeNode(constraintNode)) {
+          typeNode = constraintNode
+        }
+      }
+
+      // Mixed intersection inside union (`A & B | C`)
+      if (tsMorph.Node.isIntersectionTypeNode(typeNode)) {
+        const resolvedIntersectionTypes = typeNode
+          .getTypeNodes()
+          .map((typeNode) =>
+            resolveTypeExpression(
+              typeNode.getType(),
+              typeNode,
+              filter,
+              defaultValues,
+              keepReferences,
+              dependencies
+            )
+          )
+          .filter(Boolean) as Kind.TypeExpression[]
+
+        if (resolvedIntersectionTypes.length === 0) {
+          if (!keepReferences) {
+            rootReferences.delete(type)
+          }
+          return
+        }
+
+        // Consolidate "string & {}" to just "string"
+        if (resolvedIntersectionTypes.length === 1) {
+          const intersectionType = resolvedIntersectionTypes[0]
+
+          if (intersectionType.kind === 'String') {
+            return intersectionType
+          }
+        }
+
+        resolvedType = {
+          kind: 'IntersectionType',
+          text: typeText,
+          types: resolvedIntersectionTypes,
+        } satisfies Kind.IntersectionType
+      } else {
+        const unionMembers: Kind.TypeExpression[] = []
+        const unionNode = tsMorph.Node.isUnionTypeNode(typeNode)
+          ? typeNode
+          : tsMorph.Node.isUnionTypeNode(enclosingNode)
+            ? (enclosingNode as tsMorph.UnionTypeNode)
+            : undefined
+        const unionTypeNodes = unionNode
+          ? unionNode
+              .getTypeNodes()
+              .map((node) => ({ node, type: node.getType() }))
+          : type.getUnionTypes().map((t) => ({ node: enclosingNode, type: t }))
+
+        for (const { node: memberNode, type: memberType } of unionTypeNodes) {
+          const resolvedMemberType = resolveTypeExpression(
+            memberType,
+            memberNode,
+            filter,
+            defaultValues,
+            keepReferences,
+            dependencies
+          )
+
+          if (resolvedMemberType) {
+            const previous = unionMembers.at(-1)
+            // Collapse `true | false` to just `boolean`
+            if (
+              resolvedMemberType.kind === 'Boolean' &&
+              previous?.kind === 'Boolean'
+            ) {
+              unionMembers.pop()
+              resolvedMemberType.text = 'boolean'
+            }
+            unionMembers.push(resolvedMemberType)
+          }
+        }
+
+        const uniqueUnionTypes: Kind.TypeExpression[] = []
+
+        for (const member of unionMembers) {
+          const duplicate = uniqueUnionTypes.some((unionType) => {
+            return (
+              unionType.kind === member.kind &&
+              unionType.text === member.text &&
+              unionType.path === member.path &&
+              member.position?.start.line === unionType.position?.start.line &&
+              member.position?.end.line === unionType.position?.end.line
+            )
+          })
+          if (!duplicate) {
+            uniqueUnionTypes.push(member)
+          }
+        }
+
+        if (uniqueUnionTypes.length === 0) {
+          if (!keepReferences) {
+            rootReferences.delete(type)
+          }
+          return
+        }
+
+        resolvedType = {
+          kind: 'UnionType',
+          text: uniqueUnionTypes.map((type) => type.text).join(' | '),
+          types: uniqueUnionTypes,
+        } satisfies Kind.UnionType
+      }
+    } else if (type.isIntersection()) {
+      let intersectionNode: tsMorph.IntersectionTypeNode | undefined
+
+      if (tsMorph.Node.isIntersectionTypeNode(enclosingNode)) {
+        intersectionNode = enclosingNode
+      } else if (tsMorph.Node.isTypeAliasDeclaration(symbolDeclaration)) {
+        const typeNode = symbolDeclaration.getTypeNode()
+        if (tsMorph.Node.isIntersectionTypeNode(typeNode)) {
+          intersectionNode = typeNode
+        }
+      }
+
+      const intersectionTypes = type.getIntersectionTypes()
+      const intersectionNodes = intersectionNode
+        ? intersectionNode.getTypeNodes()
+        : []
+      const resolvedIntersectionTypes = intersectionTypes
+        .map((intersectionType, index) => {
+          const intersectionNode = intersectionNodes[index]
+          const isRootMapped = tsMorph.Node.isMappedTypeNode(intersectionNode)
+
+          return resolveTypeExpression(
+            intersectionType,
+            isRootMapped ? intersectionNode : symbolDeclaration,
+            filter,
+            defaultValues,
+            keepReferences,
+            dependencies
+          )
+        })
+        .filter(Boolean) as Kind.TypeExpression[]
+
+      // Intersection types can safely merge the immediate property signatures to reduce nesting
+      const propertySignatures: Kind.PropertySignature[] = []
+      let allTypesArePropertySignatures = true
+
+      for (const resolveType of resolvedIntersectionTypes) {
+        if (resolveType.kind === 'TypeLiteral') {
+          for (const member of resolveType.members) {
+            if (member.kind === 'PropertySignature') {
+              propertySignatures.push(member)
+            } else {
+              allTypesArePropertySignatures = false
+              break
+            }
+          }
+        } else {
+          allTypesArePropertySignatures = false
+          break
+        }
+      }
+
+      if (allTypesArePropertySignatures) {
+        if (propertySignatures.length === 0) {
+          if (!keepReferences) {
+            rootReferences.delete(type)
+          }
+          return
+        }
+
+        resolvedType = {
+          kind: 'TypeLiteral',
+          text: typeText,
+          members: propertySignatures,
+        } satisfies Kind.TypeLiteral
+      } else {
+        if (resolvedIntersectionTypes.length === 0) {
+          if (!keepReferences) {
+            rootReferences.delete(type)
+          }
+          return
+        }
+
+        // Consolidate "string & {}" to just "string"
+        if (resolvedIntersectionTypes.length === 1) {
+          const intersectionType = resolvedIntersectionTypes[0]
+
+          if (intersectionType.kind === 'String') {
+            return intersectionType
+          }
+        }
+
+        resolvedType = {
+          kind: 'IntersectionType',
+          text: typeText,
+          types: resolvedIntersectionTypes,
+        } satisfies Kind.IntersectionType
+      }
+    } else if (type.isVoid()) {
+      resolvedType = {
+        kind: 'Void',
+        text: 'void',
+      } satisfies Kind.Void
+    } else if (type.isNull()) {
+      resolvedType = {
+        kind: 'Null',
+        text: 'null',
+      } satisfies Kind.Null
+    } else if (type.isUndefined()) {
+      resolvedType = {
+        kind: 'Undefined',
+        text: 'undefined',
+      } satisfies Kind.Undefined
+    } else if (type.isUnknown()) {
+      resolvedType = {
+        kind: 'Unknown',
+        text: typeText,
+      } satisfies Kind.Unknown
+    } else if (type.isNever()) {
+      resolvedType = {
+        kind: 'Never',
+        text: 'never',
+      } satisfies Kind.Never
+    } else if (type.isAny()) {
+      resolvedType = {
+        kind: 'Any',
+        text: typeText,
+      } satisfies Kind.Any
+    } else if (tsMorph.Node.isTypeOperatorTypeNode(enclosingNode)) {
+      const resolvedTarget = resolveTypeExpression(
+        enclosingNode.getType(),
+        enclosingNode,
+        filter,
+        defaultValues,
+        keepReferences,
+        dependencies
+      )
+
+      if (!resolvedTarget) {
+        if (!keepReferences) {
+          rootReferences.delete(type)
+        }
+        return
+      }
+
+      const operator = enclosingNode.getOperator()
+
+      resolvedType = {
+        kind: 'TypeOperator',
+        text: typeText,
+        operator: operator.toString() as 'keyof' | 'readonly' | 'unique',
+        type: resolvedTarget,
+      } satisfies Kind.TypeOperator
+    } else {
+      const callSignatures = type.getCallSignatures()
+
+      if (callSignatures.length) {
+        // If there are multiple call signatures, we need bail out since we can't
+        // determine which one to use. This most likely only happens in our initial
+        // `resolveType` call where we want it to continue resolving the type.
+        if (callSignatures.length > 1) {
+          return
+        }
+
+        const [signature] = callSignatures
+        const signatureDeclaration = signature.getDeclaration()
+        const signatureParameters = signature.getParameters()
+        const parameterDeclarations = signatureParameters.map((parameter) =>
+          getPrimaryDeclaration(parameter)
+        ) as (ParameterDeclaration | undefined)[]
+
+        const resolvedParams = resolveCallSignatureParameters(
+          signatureParameters,
+          parameterDeclarations,
+          signatureDeclaration,
+          enclosingNode,
+          filter,
+          dependencies
+        )
+
+        const resolvedTypeParams = signature
+          .getTypeParameters()
+          .map((typeParameter) => {
+            const symbol = typeParameter.getSymbol()
+            const declaration = getPrimaryDeclaration(symbol) as
+              | tsMorph.TypeParameterDeclaration
+              | undefined
+
+            if (!declaration) {
+              return undefined
+            }
+
+            const constraint = typeParameter.getConstraint()
+            const defaultType = typeParameter.getDefault()
+
+            return {
+              kind: 'TypeParameter',
+              name: declaration.getName(),
+              text: declaration.getText(),
+              constraint: constraint
+                ? resolveTypeExpression(
+                    constraint,
+                    declaration,
+                    filter,
+                    undefined,
+                    true,
+                    dependencies
+                  )
+                : undefined,
+              defaultType: defaultType
+                ? resolveTypeExpression(
+                    defaultType,
+                    declaration,
+                    filter,
+                    undefined,
+                    true,
+                    dependencies
+                  )
+                : undefined,
+            } satisfies Kind.TypeParameter
+          })
+          .filter(Boolean) as Kind.TypeParameter[]
+
+        const returnType = resolveTypeExpression(
+          signature.getReturnType(),
+          signatureDeclaration,
+          filter,
+          undefined,
+          false,
+          dependencies
+        )
+
+        resolvedType = {
+          kind: 'FunctionType',
+          text: typeText,
+          parameters: resolvedParams,
+          ...(resolvedTypeParams.length
+            ? { typeParameters: resolvedTypeParams }
+            : {}),
+          ...(returnType ? { returnType } : {}),
+          isAsync: returnType ? isPromiseLike(returnType) : false,
+        } satisfies Kind.FunctionType
+      } else if (type.isObject()) {
+        const indexSignatures = resolveIndexSignatures(
+          symbolDeclaration,
+          filter
+        )
+        const propertySignatures = resolvePropertySignatures(
+          type,
+          symbolDeclaration ?? enclosingNode,
+          filter,
+          false,
+          defaultValues,
+          keepReferences,
+          dependencies
+        )
+
+        // If the literal is truly empty we treat it like `{}` and bail
+        if (propertySignatures.length === 0 && indexSignatures.length === 0) {
+          if (!keepReferences) {
+            rootReferences.delete(type)
+          }
+          return
+        }
+
+        resolvedType = {
+          kind: 'TypeLiteral',
+          text: typeText,
+          members: [...propertySignatures, ...indexSignatures],
+        } satisfies Kind.TypeLiteral
+      } else if (symbolDeclaration?.getSourceFile().isInNodeModules()) {
+        const resolvedTypeArguments = type
+          .getTypeArguments()
+          .map((typeArgument) =>
+            resolveTypeExpression(
+              typeArgument,
+              enclosingNode,
+              filter,
+              defaultValues,
+              keepReferences,
+              dependencies
+            )
+          )
+          .filter(Boolean) as Kind.TypeExpression[]
+
+        resolvedType = {
+          kind: 'TypeReference',
+          arguments: resolvedTypeArguments,
+          text: type.getText(),
+        } satisfies Kind.TypeReference
+      } else {
+        throw new UnresolvedTypeExpressionError(type.getText(), enclosingNode)
+      }
+    }
+
+    return resolvedType
+  } finally {
+    if (!keepReferences) {
+      rootReferences.delete(type)
+    }
+  }
+}
+
+export class UnresolvedTypeExpressionError extends Error {
+  readonly typeText: string
+  readonly node?: Node
+
+  constructor(typeText: string, node?: Node) {
+    super(
+      `[renoun:UnresolvedTypeExpression] Could not resolve "${typeText}"${node ? ` in "${node.getText()}".` : '.'}`
+    )
+    this.name = 'UnresolvedTypeExpressionError'
+    this.typeText = typeText
+    this.node = node
+
+    Error.captureStackTrace?.(this, UnresolvedTypeExpressionError)
   }
 }
 
@@ -1623,26 +1921,24 @@ function resolveCallSignature(
       const constraint = parameter.getConstraint()
       const defaultType = parameter.getDefault()
       const resolvedConstraint = constraint
-        ? (resolveType(
+        ? resolveTypeExpression(
             constraint,
             parameterDeclaration,
             filter,
-            false,
             undefined,
             true,
             dependencies
-          ) as Kind.TypeExpression | undefined)
+          )
         : undefined
       const resolvedDefaultType = defaultType
-        ? (resolveType(
+        ? resolveTypeExpression(
             defaultType,
             parameterDeclaration,
             filter,
-            false,
             undefined,
             true,
             dependencies
-          ) as Kind.TypeExpression | undefined)
+          )
         : undefined
       const typeParameter: Kind.TypeParameter = {
         kind: 'TypeParameter',
@@ -1666,73 +1962,14 @@ function resolveCallSignature(
         .join(', ')}>`
     : ''
 
-  const resolvedParameters = signatureParameters
-    .map((parameter, index) => {
-      const parameterDeclaration = parameterDeclarations[index]
-      const isOptional = parameterDeclaration
-        ? parameterDeclaration.hasQuestionToken()
-        : undefined
-      const declaration = parameterDeclaration || enclosingNode
-
-      if (declaration) {
-        const defaultValue = parameterDeclaration
-          ? getPropertyDefaultValue(parameterDeclaration)
-          : undefined
-        const parameterType = getTypeAtLocation(
-          parameter,
-          signatureDeclaration,
-          parameterDeclaration
-        )
-        const resolvedParameterType = resolveType(
-          parameterType,
-          declaration,
-          filter,
-          false,
-          defaultValue,
-          false,
-          dependencies
-        ) as Kind.TypeExpression | undefined
-
-        if (resolvedParameterType) {
-          const resolvedType =
-            (isOptional ?? Boolean(defaultValue))
-              ? filterUndefinedFromUnion(resolvedParameterType)
-              : resolvedParameterType
-          let name: string | undefined = parameter.getName()
-
-          if (name.startsWith('__')) {
-            name = undefined
-          }
-
-          return {
-            kind: 'Parameter',
-            name,
-            type: resolvedType,
-            initializer: defaultValue
-              ? {
-                  text: parameterDeclaration
-                    ? (parameterDeclaration.getInitializer()?.getText() ?? '')
-                    : '',
-                  value: defaultValue,
-                }
-              : undefined,
-            isOptional: isOptional ?? Boolean(defaultValue),
-            description: getSymbolDescription(parameter),
-            text: parameterType.getText(
-              undefined,
-              tsMorph.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope
-            ),
-            ...getJsDocMetadata(declaration),
-            ...getDeclarationLocation(declaration),
-          } satisfies Kind.Parameter
-        }
-      } else {
-        throw new Error(
-          `[renoun:resolveCallSignatures]: No parameter declaration found for "${parameter.getName()}". You must pass the enclosing node as the second argument to "resolveCallSignatures".`
-        )
-      }
-    })
-    .filter(Boolean) as Kind.Parameter[]
+  const resolvedParameters = resolveCallSignatureParameters(
+    signatureParameters,
+    parameterDeclarations,
+    signatureDeclaration,
+    enclosingNode,
+    filter,
+    dependencies
+  )
 
   /** Skip signatures with filtered parameters if they are in node_modules. */
   if (
@@ -1743,15 +1980,14 @@ function resolveCallSignature(
     return
   }
 
-  const returnType = resolveType(
+  const returnType = resolveTypeExpression(
     signature.getReturnType(),
     signatureDeclaration,
     filter,
-    false,
     undefined,
     false,
     dependencies
-  ) as Kind.TypeExpression | undefined
+  )
 
   if (!returnType) {
     throw new Error(
@@ -1799,43 +2035,103 @@ function resolveCallSignature(
   return resolvedType
 }
 
+function resolveCallSignatureParameters(
+  parameters: Symbol[],
+  parameterDeclarations: (ParameterDeclaration | undefined)[],
+  signatureDeclaration: Node,
+  enclosingNode?: Node,
+  filter: SymbolFilter = defaultFilter,
+  dependencies?: Set<string>
+): Kind.Parameter[] {
+  return parameters
+    .map((parameter, index) => {
+      const parameterDeclaration = parameterDeclarations[index]
+      const isOptional = parameterDeclaration
+        ? parameterDeclaration.hasQuestionToken()
+        : undefined
+      const declaration = parameterDeclaration || enclosingNode
+
+      if (declaration) {
+        const defaultValue = parameterDeclaration
+          ? getPropertyDefaultValue(parameterDeclaration)
+          : undefined
+        const parameterType = getTypeAtLocation(
+          parameter,
+          signatureDeclaration,
+          parameterDeclaration
+        )
+        const resolvedParameterType = resolveTypeExpression(
+          parameterType,
+          declaration,
+          filter,
+          defaultValue,
+          false,
+          dependencies
+        )
+
+        if (resolvedParameterType) {
+          const resolvedType =
+            (isOptional ?? Boolean(defaultValue))
+              ? filterUndefinedFromUnion(resolvedParameterType)
+              : resolvedParameterType
+          let name: string | undefined = parameter.getName()
+
+          if (name.startsWith('__')) {
+            name = undefined
+          }
+
+          return {
+            kind: 'Parameter',
+            name,
+            type: resolvedType,
+            initializer: defaultValue
+              ? {
+                  text: parameterDeclaration
+                    ? (parameterDeclaration.getInitializer()?.getText() ?? '')
+                    : '',
+                  value: defaultValue,
+                }
+              : undefined,
+            isOptional: isOptional ?? Boolean(defaultValue),
+            description: getSymbolDescription(parameter),
+            text: parameterType.getText(
+              undefined,
+              tsMorph.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope
+            ),
+            ...getJsDocMetadata(declaration),
+            ...getDeclarationLocation(declaration),
+          } satisfies Kind.Parameter
+        }
+      } else {
+        throw new Error(
+          `[renoun:resolveCallSignatures]: No parameter declaration found for "${parameter.getName()}". You must pass the enclosing node as the second argument to "resolveCallSignatures".`
+        )
+      }
+    })
+    .filter(Boolean) as Kind.Parameter[]
+}
+
 /** Process index signatures of an interface or type alias. */
 function resolveIndexSignatures(
   node?: Node,
-  filter: SymbolFilter = defaultFilter,
-  isRootType: boolean = true
+  filter: SymbolFilter = defaultFilter
 ) {
   return getIndexSignatures(node).map((indexSignature) => {
-    return resolveIndexSignature(indexSignature, filter, isRootType)
+    return resolveIndexSignature(indexSignature, filter)
   }) as Kind.IndexSignature[]
 }
 
 /** Process an index signature. */
 function resolveIndexSignature(
   indexSignature: IndexSignatureDeclaration,
-  filter: SymbolFilter = defaultFilter,
-  isRootType: boolean = true
+  filter: SymbolFilter = defaultFilter
 ) {
   const text = indexSignature.getText()
-  const keyType = resolveType(
-    indexSignature.getKeyType(),
-    indexSignature,
-    filter,
-    isRootType
-  )
-
-  if (!keyType) {
-    throw new Error(
-      `[renoun]: No key type found for "${text}". Please file an issue if you encounter this error.`
-    )
-  }
-
-  const valueType = resolveType(
+  const valueType = resolveTypeExpression(
     indexSignature.getReturnType(),
     indexSignature,
-    filter,
-    isRootType
-  ) as Kind.TypeExpression | undefined
+    filter
+  )
 
   if (!valueType) {
     throw new Error(
@@ -1843,20 +2139,29 @@ function resolveIndexSignature(
     )
   }
 
-  const keyTypeText = keyType.text
-  if (
-    keyTypeText !== 'string' &&
-    keyTypeText !== 'number' &&
-    keyTypeText !== 'symbol'
-  ) {
+  const keyName = indexSignature.getKeyName()
+  const keyType = resolveTypeExpression(
+    indexSignature.getKeyType(),
+    indexSignature,
+    filter
+  ) as Kind.String | Kind.Number | Kind.Symbol | undefined
+
+  if (!keyType) {
     throw new Error(
-      `[renoun]: Invalid key type "${keyTypeText}" for index signature. Key type must be string, number, or symbol.`
+      `[renoun]: No key type found for "${text}". Please file an issue if you encounter this error.`
     )
+  }
+
+  const parameter: Kind.IndexSignatureParameter = {
+    kind: 'IndexSignatureParameter',
+    name: keyName,
+    type: keyType,
+    text: `${keyName}: ${keyType.text}`,
   }
 
   return {
     kind: 'IndexSignature',
-    key: keyTypeText,
+    parameter,
     type: valueType,
     text,
   } satisfies Kind.IndexSignature
@@ -1888,13 +2193,13 @@ export function resolvePropertySignatures(
   keepReferences: boolean = false,
   dependencies?: Set<string>
 ): Kind.PropertySignature[] {
-  const isReadonly = isTypeReadonly(type, enclosingNode)
+  const isReadonly = isReadonlyType(type, enclosingNode)
 
   return type
     .getApparentProperties()
     .map((property) => {
       const symbolMetadata = getSymbolMetadata(property, enclosingNode)
-      const propertyDeclaration = property.getDeclarations().at(0) as
+      const propertyDeclaration = getPrimaryDeclaration(property) as
         | PropertySignature
         | undefined
       const declaration = propertyDeclaration || enclosingNode
@@ -1921,15 +2226,14 @@ export function resolvePropertySignatures(
           enclosingNode ?? propertyDeclaration ?? declaration,
           propertyDeclaration
         )
-        const resolvedPropertyType = resolveType(
+        const resolvedPropertyType = resolveTypeExpression(
           propertyType,
           declaration,
           filter,
-          isRootType,
           defaultValue,
           keepReferences,
           dependencies
-        ) as Kind.TypeExpression | undefined
+        )
 
         if (resolvedPropertyType) {
           const isOptional =
@@ -1961,7 +2265,7 @@ export function resolvePropertySignatures(
         }
       } else {
         throw new Error(
-          `[renoun:resolveTypeProperties]: No property declaration found for "${property.getName()}". You must pass the enclosing node as the second argument to "resolveTypeProperties".`
+          `[renoun:resolvePropertySignatures]: No property declaration found for "${property.getName()}". You must pass the enclosing node as the second argument to "resolvePropertySignatures".`
         )
       }
     })
@@ -1986,12 +2290,12 @@ function resolveTypeTupleElements(
   return type
     .getTupleElements()
     .map((tupleElementType, index) => {
-      const resolvedType = resolveType(
+      const resolvedType = resolveTypeExpression(
         tupleElementType,
         enclosingNode,
-        filter,
-        isRootType
-      ) as Kind.TypeExpression | undefined
+        filter
+      )
+
       if (resolvedType) {
         const name = tupleNames[index]
 
@@ -2029,16 +2333,18 @@ function isPrimitiveType(type: Type) {
     type.isBooleanLiteral() ||
     type.isNumber() ||
     type.isNumberLiteral() ||
+    type.isBigInt() ||
+    type.isBigIntLiteral() ||
     type.isString() ||
     type.isStringLiteral() ||
     type.isTemplateLiteral() ||
     type.isUndefined() ||
     type.isNull() ||
+    type.isVoid() ||
     type.isAny() ||
     type.isUnknown() ||
     type.isNever() ||
-    isSymbol(type) ||
-    isBigInt(type)
+    isSymbol(type)
   )
 }
 
@@ -2046,11 +2352,6 @@ function isPrimitiveType(type: Type) {
 function isSymbol(type: Type) {
   const symbol = type.getSymbol()
   return symbol?.getName() === 'Symbol'
-}
-
-/** Check if a type is a bigint. */
-function isBigInt(type: Type) {
-  return type.getText() === 'bigint'
 }
 
 /** Gather metadata about a symbol. */
@@ -2275,7 +2576,7 @@ function filterUndefinedFromUnion(
   if (type.kind !== ('UnionType' as Kind.UnionType['kind'])) return type
 
   const filteredMembers = type.types.filter(
-    (member) => !(member.kind === 'Any' && member.text === 'undefined')
+    (member) => member.kind !== 'Undefined'
   )
 
   // Leave untouched if union only contained undefined
@@ -2400,11 +2701,10 @@ function resolveClass(
   const baseClass = classDeclaration.getExtends()
 
   if (baseClass) {
-    const resolvedBaseClass = resolveType(
+    const resolvedBaseClass = resolveTypeExpression(
       baseClass.getType(),
       classDeclaration,
       filter,
-      false,
       undefined,
       true
     ) as Kind.TypeReference
@@ -2419,11 +2719,10 @@ function resolveClass(
   if (implementClauses.length) {
     const resolvedImplementClauses = implementClauses
       .map((implementClause) =>
-        resolveType(
+        resolveTypeExpression(
           implementClause.getExpression().getType(),
           classDeclaration,
           filter,
-          false,
           undefined,
           true
         )
@@ -2488,15 +2787,14 @@ function resolveClassAccessor(
     )
   }
 
-  const returnType = resolveType(
+  const returnType = resolveTypeExpression(
     accessor.getReturnType(),
     accessor,
     filter,
-    false,
     undefined,
     false,
     dependencies
-  ) as Kind.TypeExpression | undefined
+  )
 
   if (!returnType) {
     throw new Error(
@@ -2632,7 +2930,7 @@ function getPrimaryDeclaration(symbol: Symbol | undefined): Node | undefined {
 }
 
 /** Determines if a type is readonly. */
-function isTypeReadonly(type: Type, enclosingNode: Node | undefined) {
+function isReadonlyType(type: Type, enclosingNode: Node | undefined) {
   let isReadonly = false
 
   /** Check if the type is marked as Readonly using the TypeScript utility type. */
@@ -2665,6 +2963,11 @@ function isTypeReadonly(type: Type, enclosingNode: Node | undefined) {
   }
 
   return isReadonly
+}
+
+/** Determines if a type is a conditional type. */
+function isConditionalType(type: Type): boolean {
+  return (type.getFlags() & tsMorph.TypeFlags.Conditional) !== 0
 }
 
 /** Determines if a function is a component based on its name and call signature shape. */
@@ -2701,6 +3004,9 @@ function isComponent(
       parameter.type.kind === 'Number' ||
       parameter.type.kind === 'Boolean' ||
       parameter.type.kind === 'Symbol' ||
+      parameter.type.kind === 'BigInt' ||
+      parameter.type.kind === 'Null' ||
+      parameter.type.kind === 'Undefined' ||
       parameter.type.kind === 'Any'
     ) {
       return false
@@ -2719,6 +3025,9 @@ function isComponent(
           member.kind === 'Number' ||
           member.kind === 'Boolean' ||
           member.kind === 'Symbol' ||
+          member.kind === 'BigInt' ||
+          member.kind === 'Null' ||
+          member.kind === 'Undefined' ||
           member.kind === 'Any'
         ) {
           return false
@@ -2728,6 +3037,25 @@ function isComponent(
 
     return true
   })
+}
+
+/** Checks if a resolved type is a promise-like. */
+function isPromiseLike(type: Kind.TypeExpression): boolean {
+  switch (type.kind) {
+    case 'TypeReference':
+      if (type.text === 'Promise' || type.text.startsWith('Promise<')) {
+        return true
+      }
+      if (type.path?.includes('lib.es') && type.path?.includes('promise')) {
+        return true
+      }
+      return false
+    case 'UnionType':
+    case 'IntersectionType':
+      return type.types.some(isPromiseLike)
+    default:
+      return false
+  }
 }
 
 /** Checks if a type contains free type parameters that are not bound to a specific type. */
