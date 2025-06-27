@@ -771,10 +771,7 @@ describe('resolveType', () => {
         "name": "Variant",
         "parameters": [
           {
-            "constraint": {
-              "kind": "TypeReference",
-              "text": "Variant<T>",
-            },
+            "constraint": undefined,
             "defaultType": undefined,
             "filePath": "test.ts",
             "kind": "TypeParameter",
@@ -2161,7 +2158,34 @@ describe('resolveType', () => {
         "name": "ModuleData",
         "parameters": [
           {
-            "constraint": undefined,
+            "constraint": {
+              "kind": "TypeLiteral",
+              "members": [
+                {
+                  "filePath": "test.ts",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "PropertySignature",
+                  "name": "frontMatter",
+                  "position": {
+                    "end": {
+                      "column": 64,
+                      "line": 5,
+                    },
+                    "start": {
+                      "column": 32,
+                      "line": 5,
+                    },
+                  },
+                  "text": "Record<string, any>",
+                  "type": {
+                    "kind": "TypeReference",
+                    "text": "Record<string, any>",
+                  },
+                },
+              ],
+              "text": "{ frontMatter: Record<string, any>; }",
+            },
             "defaultType": undefined,
             "filePath": "test.ts",
             "kind": "TypeParameter",
@@ -2936,42 +2960,32 @@ describe('resolveType', () => {
         "parameters": [
           {
             "constraint": {
-              "kind": "UnionType",
-              "text": "{ frontMatter: Record<string, any>; } | { frontMatter: Record<string, any>; }",
-              "types": [
+              "kind": "TypeLiteral",
+              "members": [
                 {
-                  "kind": "TypeReference",
-                  "text": "{ frontMatter: Record<string, any>; }",
-                },
-                {
-                  "kind": "TypeLiteral",
-                  "members": [
-                    {
-                      "filePath": "test.ts",
-                      "isOptional": false,
-                      "isReadonly": false,
-                      "kind": "PropertySignature",
-                      "name": "frontMatter",
-                      "position": {
-                        "end": {
-                          "column": 64,
-                          "line": 1,
-                        },
-                        "start": {
-                          "column": 32,
-                          "line": 1,
-                        },
-                      },
-                      "text": "Record<string, any>",
-                      "type": {
-                        "kind": "TypeReference",
-                        "text": "Record<string, any>",
-                      },
+                  "filePath": "test.ts",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "PropertySignature",
+                  "name": "frontMatter",
+                  "position": {
+                    "end": {
+                      "column": 64,
+                      "line": 1,
                     },
-                  ],
-                  "text": "{ frontMatter: Record<string, any>; }",
+                    "start": {
+                      "column": 32,
+                      "line": 1,
+                    },
+                  },
+                  "text": "Record<string, any>",
+                  "type": {
+                    "kind": "TypeReference",
+                    "text": "Record<string, any>",
+                  },
                 },
               ],
+              "text": "{ frontMatter: Record<string, any>; }",
             },
             "defaultType": undefined,
             "filePath": "test.ts",
@@ -3009,11 +3023,11 @@ describe('resolveType', () => {
           },
           "extendsType": {
             "kind": "TypeOperator",
-            "operator": "143",
+            "operator": "keyof",
             "text": "keyof Type",
             "type": {
               "kind": "TypeReference",
-              "text": "keyof Type",
+              "text": "Type",
             },
           },
           "falseType": {
@@ -9805,11 +9819,19 @@ describe('resolveType', () => {
             },
             "extendsType": {
               "kind": "TypeOperator",
-              "operator": "143",
+              "operator": "keyof",
               "text": "keyof Loaders[Extension]",
               "type": {
-                "kind": "TypeReference",
-                "text": "keyof Loaders[Extension]",
+                "indexType": {
+                  "kind": "TypeReference",
+                  "text": "Extension",
+                },
+                "kind": "IndexedAccessType",
+                "objectType": {
+                  "kind": "TypeReference",
+                  "text": "Loaders",
+                },
+                "text": "Loaders[Extension]",
               },
             },
             "falseType": {
@@ -9939,6 +9961,178 @@ describe('resolveType', () => {
             },
           ],
         },
+      }
+    `)
+  })
+
+  test('resolves type-parameter constraint', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+        export interface Types {
+          foo: string
+          bar: number
+        }
+
+        export type Constrained<Key extends keyof Types> = Key
+      `,
+      { overwrite: true }
+    )
+    const declaration = sourceFile.getTypeAliasOrThrow('Constrained')
+    const type = resolveType(declaration.getType(), declaration)
+
+    expect(type).toMatchInlineSnapshot(`
+      {
+        "filePath": "test.ts",
+        "kind": "TypeReference",
+        "position": {
+          "end": {
+            "column": 48,
+            "line": 6,
+          },
+          "start": {
+            "column": 25,
+            "line": 6,
+          },
+        },
+        "text": "Key",
+      }
+    `)
+  })
+
+  test('resolves function declaration type-parameter in with intersection', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      export async function resolveFileFromEntry<
+        Types extends Record<string, any>,
+        const Extension extends keyof Types & string = string,
+      >(
+        extension?: Extension | readonly Extension[]
+      ) {
+        return
+      }
+      `,
+      { overwrite: true }
+    )
+    const declaration = sourceFile.getFunctionOrThrow('resolveFileFromEntry')
+    const type = resolveType(declaration.getType(), declaration)
+
+    expect(type).toMatchInlineSnapshot(`
+      {
+        "filePath": "test.ts",
+        "kind": "Function",
+        "name": "resolveFileFromEntry",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 8,
+          },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "signatures": [
+          {
+            "filePath": "test.ts",
+            "isAsync": true,
+            "isGenerator": false,
+            "kind": "FunctionSignature",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "test.ts",
+                "initializer": undefined,
+                "isOptional": true,
+                "kind": "Parameter",
+                "name": "extension",
+                "position": {
+                  "end": {
+                    "column": 47,
+                    "line": 5,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 5,
+                  },
+                },
+                "text": "Extension | readonly Extension[]",
+                "type": {
+                  "kind": "UnionType",
+                  "text": "Extension | readonly Extension[]",
+                  "types": [
+                    {
+                      "kind": "TypeReference",
+                      "text": "Extension",
+                    },
+                    {
+                      "kind": "TypeReference",
+                      "text": "readonly Extension[]",
+                    },
+                  ],
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 2,
+                "line": 8,
+              },
+              "start": {
+                "column": 1,
+                "line": 1,
+              },
+            },
+            "returnType": {
+              "kind": "TypeReference",
+              "text": "Promise<void>",
+            },
+            "text": "function resolveFileFromEntry<Types extends Record<string, any>, Extension extends keyof Types & string>(extension?: Extension | readonly Extension[]): Promise<void>",
+            "typeParameters": [
+              {
+                "constraint": {
+                  "kind": "TypeReference",
+                  "text": "Record<string, any>",
+                },
+                "defaultType": undefined,
+                "kind": "TypeParameter",
+                "name": "Types",
+                "text": "Types extends Record<string, any>",
+              },
+              {
+                "constraint": {
+                  "kind": "IntersectionType",
+                  "text": "keyof Types & string",
+                  "types": [
+                    {
+                      "kind": "TypeOperator",
+                      "operator": "keyof",
+                      "text": "keyof Types",
+                      "type": {
+                        "kind": "TypeReference",
+                        "text": "Types",
+                      },
+                    },
+                    {
+                      "kind": "String",
+                      "text": "string",
+                      "value": undefined,
+                    },
+                  ],
+                },
+                "defaultType": {
+                  "kind": "TypeReference",
+                  "text": "string",
+                },
+                "kind": "TypeParameter",
+                "name": "Extension",
+                "text": "const Extension extends keyof Types & string = string",
+              },
+            ],
+          },
+        ],
+        "text": "<Types extends Record<string, any>, const Extension extends keyof Types & string = string>(extension?: Extension | readonly Extension[]) => Promise<void>",
       }
     `)
   })

@@ -881,27 +881,27 @@ export function resolveType(
     const resolvedTypeParameters = symbolDeclaration
       .getTypeParameters()
       .map((typeParameter) => {
-        const constraintType = type.getConstraint()
-        const defaultType = type.getDefault()
+        const constraintNode = typeParameter.getConstraint()
+        const defaultNode = typeParameter.getDefault()
 
         return {
           kind: 'TypeParameter',
           name: typeParameter.getName(),
           text: typeParameter.getText(),
-          constraint: constraintType
+          constraint: constraintNode
             ? resolveTypeExpression(
-                constraintType,
-                symbolDeclaration,
+                constraintNode.getType(),
+                constraintNode,
                 filter,
                 defaultValues,
                 keepReferences,
                 dependencies
               )
             : undefined,
-          defaultType: defaultType
+          defaultType: defaultNode
             ? resolveTypeExpression(
-                defaultType,
-                symbolDeclaration,
+                defaultNode.getType(),
+                defaultNode,
                 filter,
                 defaultValues,
                 keepReferences,
@@ -1450,6 +1450,32 @@ export function resolveTypeExpression(
           }
           return
         }
+      } else if (tsMorph.Node.isTypeOperatorTypeNode(enclosingNode)) {
+        const operandNode = enclosingNode.getTypeNode()
+        const operandType = resolveTypeExpression(
+          operandNode.getType(),
+          operandNode,
+          filter,
+          defaultValues,
+          keepReferences,
+          dependencies
+        )
+
+        if (!operandType) {
+          throw new UnresolvedTypeExpressionError(type.getText(), operandNode)
+        }
+
+        const operator = enclosingNode.getOperator()
+
+        resolvedType = {
+          kind: 'TypeOperator',
+          text: typeText,
+          operator: tsMorph.ts.tokenToString(operator) as
+            | 'keyof'
+            | 'readonly'
+            | 'unique',
+          type: operandType,
+        } satisfies Kind.TypeOperator
       } else if (isConditionalType(type)) {
         let conditionalNode: tsMorph.ConditionalTypeNode | undefined
 
@@ -1774,31 +1800,6 @@ export function resolveTypeExpression(
           kind: 'Any',
           text: typeText,
         } satisfies Kind.Any
-      } else if (tsMorph.Node.isTypeOperatorTypeNode(enclosingNode)) {
-        const resolvedTarget = resolveTypeExpression(
-          type,
-          enclosingNode,
-          filter,
-          defaultValues,
-          keepReferences,
-          dependencies
-        )
-
-        if (!resolvedTarget) {
-          if (!keepReferences) {
-            rootReferences.delete(type)
-          }
-          return
-        }
-
-        const operator = enclosingNode.getOperator()
-
-        resolvedType = {
-          kind: 'TypeOperator',
-          text: typeText,
-          operator: operator.toString() as 'keyof' | 'readonly' | 'unique',
-          type: resolvedTarget,
-        } satisfies Kind.TypeOperator
       } else {
         const callSignatures = type.getCallSignatures()
 
@@ -1830,48 +1831,52 @@ export function resolveTypeExpression(
             .getTypeParameters()
             .map((typeParameter) => {
               const symbol = typeParameter.getSymbol()
-              const declaration = getPrimaryDeclaration(symbol) as
+              const parameterDeclaration = getPrimaryDeclaration(symbol) as
                 | tsMorph.TypeParameterDeclaration
                 | undefined
 
-              if (!declaration) {
+              if (!parameterDeclaration) {
                 return undefined
               }
 
-              const constraint = typeParameter.getConstraint()
+              const constraintType = typeParameter.getConstraint()
+              const constraintNode = parameterDeclaration.getConstraint()
               const defaultType = typeParameter.getDefault()
+              const defaultNode = parameterDeclaration.getDefault()
 
               return {
                 kind: 'TypeParameter',
-                name: declaration.getName(),
-                text: declaration.getText(),
-                constraint: constraint
-                  ? resolveTypeExpression(
-                      constraint,
-                      declaration,
-                      filter,
-                      undefined,
-                      true,
-                      dependencies
-                    )
-                  : undefined,
-                defaultType: defaultType
-                  ? resolveTypeExpression(
-                      defaultType,
-                      declaration,
-                      filter,
-                      undefined,
-                      true,
-                      dependencies
-                    )
-                  : undefined,
+                name: parameterDeclaration.getName(),
+                text: parameterDeclaration.getText(),
+                constraint:
+                  constraintType && constraintNode
+                    ? resolveTypeExpression(
+                        constraintType,
+                        constraintNode,
+                        filter,
+                        undefined,
+                        true,
+                        dependencies
+                      )
+                    : undefined,
+                defaultType:
+                  defaultType && defaultNode
+                    ? resolveTypeExpression(
+                        defaultType,
+                        defaultNode,
+                        filter,
+                        undefined,
+                        true,
+                        dependencies
+                      )
+                    : undefined,
               } satisfies Kind.TypeParameter
             })
             .filter(Boolean) as Kind.TypeParameter[]
 
           const returnType = resolveTypeExpression(
             signature.getReturnType(),
-            signatureDeclaration,
+            signatureDeclaration.getReturnTypeNode() ?? signatureDeclaration,
             filter,
             undefined,
             false,
@@ -2075,28 +2080,32 @@ function resolveCallSignature(
         return undefined
       }
 
-      const constraint = parameter.getConstraint()
+      const constraintNode = parameterDeclaration.getConstraint()
+      const constraintType = parameter.getConstraint()
+      const defaultNode = parameterDeclaration.getDefault()
       const defaultType = parameter.getDefault()
-      const resolvedConstraint = constraint
-        ? resolveTypeExpression(
-            constraint,
-            parameterDeclaration,
-            filter,
-            undefined,
-            true,
-            dependencies
-          )
-        : undefined
-      const resolvedDefaultType = defaultType
-        ? resolveTypeExpression(
-            defaultType,
-            parameterDeclaration,
-            filter,
-            undefined,
-            true,
-            dependencies
-          )
-        : undefined
+      const resolvedConstraint =
+        constraintType && constraintNode
+          ? resolveTypeExpression(
+              constraintType,
+              constraintNode,
+              filter,
+              undefined,
+              true,
+              dependencies
+            )
+          : undefined
+      const resolvedDefaultType =
+        defaultType && defaultNode
+          ? resolveTypeExpression(
+              defaultType,
+              defaultNode,
+              filter,
+              undefined,
+              true,
+              dependencies
+            )
+          : undefined
       const typeParameter: Kind.TypeParameter = {
         kind: 'TypeParameter',
         name,
@@ -2139,7 +2148,7 @@ function resolveCallSignature(
 
   const returnType = resolveTypeExpression(
     signature.getReturnType(),
-    signatureDeclaration,
+    signatureDeclaration.getReturnTypeNode() ?? signatureDeclaration,
     filter,
     undefined,
     false,
@@ -2944,7 +2953,7 @@ function resolveClassAccessor(
 
   const returnType = resolveTypeExpression(
     accessor.getReturnType(),
-    accessor,
+    accessor.getReturnTypeNode() ?? accessor,
     filter,
     undefined,
     false,
