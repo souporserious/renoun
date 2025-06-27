@@ -1102,11 +1102,11 @@ describe('file system', () => {
     const directory = new Directory({ fileSystem })
     const file = await directory.getFile('index', 'ts')
     const fileExport = await file.getExport('Metadata')
-    const type = (await fileExport.getType()) as Kind.TypeLiteral
+    const type = (await fileExport.getType()) as Kind.TypeAlias
 
     expect(type).toBeDefined()
 
-    expect(type!.kind).toBe('TypeLiteral')
+    expect(type!.kind).toBe('TypeAlias')
   })
 
   test('getRuntimeValue resolves export runtime value from extension module', async () => {
