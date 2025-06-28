@@ -736,39 +736,48 @@ export function resolveType(
       }
     }
 
-    /*
-     * Determine if the symbol should be treated as a reference.
-     * TODO: this should account for what's actually exported from package.json exports to determine what's resolved.
-     */
-    const isReference = exportedReferences.has(type) || rootReferences.has(type)
-    const isLocallyExportedReference =
-      !symbolMetadata.isInNodeModules &&
-      !symbolMetadata.isExternal &&
-      symbolMetadata.isExported
-    const isExternalNonNodeModuleReference =
-      symbolMetadata.isExternal && !symbolMetadata.isInNodeModules
-    const isNodeModuleReference =
-      !symbolMetadata.isGlobal && symbolMetadata.isInNodeModules
+    const isAtDeclaringNode =
+      (!enclosingNode && symbolDeclaration) ||
+      enclosingNode === symbolDeclaration ||
+      (tsMorph.Node.isVariableDeclaration(enclosingNode) &&
+        enclosingNode.getInitializer() === symbolDeclaration)
 
-    if (
-      isReference ||
-      isLocallyExportedReference ||
-      isExternalNonNodeModuleReference ||
-      isNodeModuleReference
-    ) {
-      if (!declarationLocation.filePath) {
-        throw new Error(
-          `[renoun:resolveType]: No file path found for "${typeText}". Please file an issue if you encounter this error.`
-        )
-      }
+    if (!isAtDeclaringNode) {
+      /*
+       * Determine if the symbol should be treated as a reference.
+       * TODO: this should account for what's actually exported from package.json exports to determine what's resolved.
+       */
+      const isReference =
+        exportedReferences.has(type) || rootReferences.has(type)
+      const isLocallyExportedReference =
+        !symbolMetadata.isInNodeModules &&
+        !symbolMetadata.isExternal &&
+        symbolMetadata.isExported
+      const isExternalNonNodeModuleReference =
+        symbolMetadata.isExternal && !symbolMetadata.isInNodeModules
+      const isNodeModuleReference =
+        !symbolMetadata.isGlobal && symbolMetadata.isInNodeModules
 
-      /* Allow node_module references to be filtered in. */
-      if (filter === defaultFilter ? true : !filter(symbolMetadata)) {
-        return {
-          kind: 'TypeReference',
-          text: typeText,
-          ...declarationLocation,
-        } satisfies Kind.TypeReference
+      if (
+        isReference ||
+        isLocallyExportedReference ||
+        isExternalNonNodeModuleReference ||
+        isNodeModuleReference
+      ) {
+        if (!declarationLocation.filePath) {
+          throw new Error(
+            `[renoun:resolveType]: No file path found for "${typeText}". Please file an issue if you encounter this error.`
+          )
+        }
+
+        /* Allow node_module references to be filtered in. */
+        if (filter === defaultFilter ? true : !filter(symbolMetadata)) {
+          return {
+            kind: 'TypeReference',
+            text: typeText,
+            ...declarationLocation,
+          } satisfies Kind.TypeReference
+        }
       }
     }
   }
@@ -794,10 +803,14 @@ export function resolveType(
     // Top-level entry, caller didn’t give any context
     (!enclosingNode && symbolDeclaration) ||
     // We do have a context and it is exactly the node that declares the symbol
-    enclosingNode === symbolDeclaration
+    enclosingNode === symbolDeclaration ||
+    (tsMorph.Node.isVariableDeclaration(enclosingNode) &&
+      enclosingNode.getInitializer() === symbolDeclaration)
 
   // Attempt to resolve the type expression first.
   let resolvedTypeExpression: Kind.TypeExpression | undefined
+
+  debugger
 
   if (!isAtDeclaringNode) {
     try {

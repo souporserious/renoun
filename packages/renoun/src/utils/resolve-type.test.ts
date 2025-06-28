@@ -4778,7 +4778,8 @@ describe('resolveType', () => {
     expect(types).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "TypeReference",
+        "kind": "Function",
+        "name": "useCounter",
         "position": {
           "end": {
             "column": 52,
@@ -4789,6 +4790,53 @@ describe('resolveType', () => {
             "line": 1,
           },
         },
+        "signatures": [
+          {
+            "filePath": "test.ts",
+            "kind": "FunctionSignature",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "test.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "initialCount",
+                "position": {
+                  "end": {
+                    "column": 45,
+                    "line": 1,
+                  },
+                  "start": {
+                    "column": 21,
+                    "line": 1,
+                  },
+                },
+                "text": "number",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 52,
+                "line": 1,
+              },
+              "start": {
+                "column": 20,
+                "line": 1,
+              },
+            },
+            "returnType": {
+              "kind": "Void",
+              "text": "void",
+            },
+            "text": "(initialCount: number) => void",
+          },
+        ],
         "text": "(initialCount?: number) => void",
       }
     `)
@@ -4810,7 +4858,8 @@ describe('resolveType', () => {
     expect(types).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "TypeReference",
+        "kind": "Function",
+        "name": "useCounter",
         "position": {
           "end": {
             "column": 58,
@@ -4821,6 +4870,53 @@ describe('resolveType', () => {
             "line": 1,
           },
         },
+        "signatures": [
+          {
+            "filePath": "test.ts",
+            "kind": "FunctionSignature",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "test.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "initialCount",
+                "position": {
+                  "end": {
+                    "column": 54,
+                    "line": 1,
+                  },
+                  "start": {
+                    "column": 30,
+                    "line": 1,
+                  },
+                },
+                "text": "number",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 58,
+                "line": 1,
+              },
+              "start": {
+                "column": 20,
+                "line": 1,
+              },
+            },
+            "returnType": {
+              "kind": "Void",
+              "text": "void",
+            },
+            "text": "(initialCount: number) => void",
+          },
+        ],
         "text": "(initialCount?: number) => void",
       }
     `)
@@ -5941,7 +6037,8 @@ describe('resolveType', () => {
     expect(types).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "TypeReference",
+        "kind": "Component",
+        "name": "Text",
         "position": {
           "end": {
             "column": 2,
@@ -5952,6 +6049,242 @@ describe('resolveType', () => {
             "line": 21,
           },
         },
+        "signatures": [
+          {
+            "filePath": "test.ts",
+            "kind": "ComponentSignature",
+            "parameter": {
+              "description": undefined,
+              "filePath": "test.ts",
+              "initializer": {
+                "text": "",
+                "value": {
+                  "variant": "body1",
+                },
+              },
+              "isOptional": false,
+              "kind": "Parameter",
+              "name": "props",
+              "position": {
+                "end": {
+                  "column": 38,
+                  "line": 21,
+                },
+                "start": {
+                  "column": 22,
+                  "line": 21,
+                },
+              },
+              "text": "TextProps",
+              "type": {
+                "kind": "TypeLiteral",
+                "members": [
+                  {
+                    "filePath": "test.ts",
+                    "isOptional": true,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "className",
+                    "position": {
+                      "end": {
+                        "column": 21,
+                        "line": 17,
+                      },
+                      "start": {
+                        "column": 3,
+                        "line": 17,
+                      },
+                    },
+                    "text": "string",
+                    "type": {
+                      "kind": "String",
+                      "text": "string",
+                      "value": undefined,
+                    },
+                  },
+                  {
+                    "filePath": "test.ts",
+                    "isOptional": false,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "children",
+                    "position": {
+                      "end": {
+                        "column": 22,
+                        "line": 18,
+                      },
+                      "start": {
+                        "column": 3,
+                        "line": 18,
+                      },
+                    },
+                    "text": "ReactNode",
+                    "type": {
+                      "kind": "Any",
+                      "text": "ReactNode",
+                    },
+                  },
+                  {
+                    "filePath": "test.ts",
+                    "isOptional": true,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "variant",
+                    "position": {
+                      "end": {
+                        "column": 2,
+                        "line": 5,
+                      },
+                      "start": {
+                        "column": 35,
+                        "line": 3,
+                      },
+                    },
+                    "text": ""heading1" | "heading2" | "heading3" | "body1"",
+                    "type": {
+                      "kind": "UnionType",
+                      "text": ""heading1" | "heading2" | "heading3" | "body1"",
+                      "types": [
+                        {
+                          "kind": "String",
+                          "text": ""heading1"",
+                          "value": "heading1",
+                        },
+                        {
+                          "kind": "String",
+                          "text": ""heading2"",
+                          "value": "heading2",
+                        },
+                        {
+                          "kind": "String",
+                          "text": ""heading3"",
+                          "value": "heading3",
+                        },
+                        {
+                          "kind": "String",
+                          "text": ""body1"",
+                          "value": "body1",
+                        },
+                      ],
+                    },
+                  },
+                  {
+                    "filePath": "test.ts",
+                    "isOptional": true,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "alignment",
+                    "position": {
+                      "end": {
+                        "column": 2,
+                        "line": 5,
+                      },
+                      "start": {
+                        "column": 35,
+                        "line": 3,
+                      },
+                    },
+                    "text": ""start" | "center" | "end"",
+                    "type": {
+                      "kind": "UnionType",
+                      "text": ""start" | "center" | "end"",
+                      "types": [
+                        {
+                          "kind": "String",
+                          "text": ""start"",
+                          "value": "start",
+                        },
+                        {
+                          "kind": "String",
+                          "text": ""center"",
+                          "value": "center",
+                        },
+                        {
+                          "kind": "String",
+                          "text": ""end"",
+                          "value": "end",
+                        },
+                      ],
+                    },
+                  },
+                  {
+                    "filePath": "test.ts",
+                    "isOptional": true,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "width",
+                    "position": {
+                      "end": {
+                        "column": 2,
+                        "line": 5,
+                      },
+                      "start": {
+                        "column": 35,
+                        "line": 3,
+                      },
+                    },
+                    "text": "string | number",
+                    "type": {
+                      "kind": "UnionType",
+                      "text": "string | number",
+                      "types": [
+                        {
+                          "kind": "String",
+                          "text": "string",
+                          "value": undefined,
+                        },
+                        {
+                          "kind": "Number",
+                          "text": "number",
+                          "value": undefined,
+                        },
+                      ],
+                    },
+                  },
+                  {
+                    "filePath": "test.ts",
+                    "isOptional": true,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "lineHeight",
+                    "position": {
+                      "end": {
+                        "column": 2,
+                        "line": 5,
+                      },
+                      "start": {
+                        "column": 35,
+                        "line": 3,
+                      },
+                    },
+                    "text": "string",
+                    "type": {
+                      "kind": "String",
+                      "text": "string",
+                      "value": undefined,
+                    },
+                  },
+                ],
+                "text": "TextProps",
+              },
+            },
+            "position": {
+              "end": {
+                "column": 2,
+                "line": 29,
+              },
+              "start": {
+                "column": 21,
+                "line": 21,
+              },
+            },
+            "returnType": {
+              "kind": "Void",
+              "text": "void",
+            },
+            "text": "(props: TextProps) => void",
+          },
+        ],
         "text": "(props: TextProps) => void",
       }
     `)
@@ -7601,20 +7934,14 @@ describe('resolveType', () => {
         `,
       { overwrite: true }
     )
-    const variableDeclaration =
-      sourceFile.getVariableDeclarationOrThrow('Button')
-    const types = resolveType(
-      variableDeclaration.getType(),
-      variableDeclaration
-    )
-    // TODO: we need to normalize variable declarations with an immediate function expression
-    // we might want to capture this as FunctionType kind, but most likely we want to normalize
-    // this into Function kind which is essentially a function declaration or a function expression assigned to a variable declaration
+    const declaration = sourceFile.getVariableDeclarationOrThrow('Button')
+    const types = resolveType(declaration.getType(), declaration)
 
     expect(types).toMatchInlineSnapshot(`
       {
         "filePath": "test.tsx",
-        "kind": "TypeReference",
+        "kind": "Component",
+        "name": "Button",
         "position": {
           "end": {
             "column": 2,
@@ -7625,6 +7952,123 @@ describe('resolveType', () => {
             "line": 9,
           },
         },
+        "signatures": [
+          {
+            "filePath": "test.tsx",
+            "kind": "ComponentSignature",
+            "parameter": {
+              "description": undefined,
+              "filePath": "test.tsx",
+              "initializer": undefined,
+              "isOptional": false,
+              "kind": "Parameter",
+              "name": "props",
+              "position": {
+                "end": {
+                  "column": 42,
+                  "line": 9,
+                },
+                "start": {
+                  "column": 24,
+                  "line": 9,
+                },
+              },
+              "text": "ButtonProps",
+              "type": {
+                "kind": "IntersectionType",
+                "text": "ButtonProps",
+                "types": [
+                  {
+                    "kind": "TypeLiteral",
+                    "members": [
+                      {
+                        "filePath": "test.tsx",
+                        "isOptional": true,
+                        "isReadonly": false,
+                        "kind": "PropertySignature",
+                        "name": "variant",
+                        "position": {
+                          "end": {
+                            "column": 27,
+                            "line": 6,
+                          },
+                          "start": {
+                            "column": 3,
+                            "line": 6,
+                          },
+                        },
+                        "text": "ButtonVariant",
+                        "type": {
+                          "kind": "UnionType",
+                          "text": ""primary" | "secondary" | "danger"",
+                          "types": [
+                            {
+                              "kind": "String",
+                              "text": ""primary"",
+                              "value": "primary",
+                            },
+                            {
+                              "kind": "String",
+                              "text": ""secondary"",
+                              "value": "secondary",
+                            },
+                            {
+                              "kind": "String",
+                              "text": ""danger"",
+                              "value": "danger",
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                    "text": "{ variant?: ButtonVariant; }",
+                  },
+                  {
+                    "filePath": "node_modules/@types/react/index.d.ts",
+                    "kind": "TypeReference",
+                    "position": {
+                      "end": {
+                        "column": 6,
+                        "line": 2975,
+                      },
+                      "start": {
+                        "column": 5,
+                        "line": 2958,
+                      },
+                    },
+                    "text": "ButtonHTMLAttributes<HTMLButtonElement>",
+                  },
+                ],
+              },
+            },
+            "position": {
+              "end": {
+                "column": 2,
+                "line": 11,
+              },
+              "start": {
+                "column": 23,
+                "line": 9,
+              },
+            },
+            "returnType": {
+              "filePath": "node_modules/@types/react/index.d.ts",
+              "kind": "TypeReference",
+              "position": {
+                "end": {
+                  "column": 66,
+                  "line": 4028,
+                },
+                "start": {
+                  "column": 9,
+                  "line": 4028,
+                },
+              },
+              "text": "Element",
+            },
+            "text": "(props: ButtonProps) => Element",
+          },
+        ],
         "text": "(props: ButtonProps) => React.JSX.Element",
       }
     `)
