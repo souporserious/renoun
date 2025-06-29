@@ -6,9 +6,10 @@ import {
   type JavaScriptFile,
   type JavaScriptFileExport,
 } from 'renoun/file-system'
-import { APIReference, CodeBlock, Tokens } from 'renoun/components'
+import { CodeBlock, Tokens } from 'renoun/components'
 import type { MDXHeadings } from 'renoun/mdx'
 import { GeistMono } from 'geist/font/mono'
+import { APIReferences } from '@/components/APIReference'
 
 import { CollectionGroup, ComponentsCollection } from '@/collections'
 import { MDX } from '@/components/MDX'
@@ -190,12 +191,7 @@ export default async function Component({
             <h2 id="api-reference" css={{ margin: '0 0 2rem' }}>
               API Reference
             </h2>
-            {componentExports.map((exportSource) => (
-              <APIReference
-                key={exportSource.getSlug()}
-                source={exportSource}
-              />
-            ))}
+            <APIReferences fileExports={componentExports} />
           </div>
         ) : null}
 
@@ -310,6 +306,7 @@ async function Preview({
             css={{
               fontSize: '1rem',
               lineHeight: '1.35',
+              width: '100%',
               maxWidth: '-webkit-fill-available',
               padding: '4rem',
               margin: 'auto',

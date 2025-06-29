@@ -36,8 +36,9 @@ export function getPropertyDefaultValueKey(
 }
 
 /** Gets the default value for a single parameter or property. */
+// TODO: rename this to getInitializerValue
 export function getPropertyDefaultValue(
-  property: ParameterDeclaration | PropertyDeclaration | PropertySignature
+  property: ParameterDeclaration | PropertyDeclaration
 ): LiteralExpressionValue {
   if (
     tsMorph.Node.isSpreadAssignment(property) ||
@@ -56,7 +57,7 @@ export function getPropertyDefaultValue(
 
   if (!('getInitializer' in property)) {
     const kindName = (
-      property as ParameterDeclaration | PropertyDeclaration | PropertySignature
+      property as ParameterDeclaration | PropertyDeclaration
     ).getKindName()
     throw new Error(
       `[getDefaultValuesFromProperty] Property "${name}" of kind "${kindName}" does not have an initializer, so it cannot have a default value. This declaration should be filtered or file an issue for support.`

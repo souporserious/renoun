@@ -27,6 +27,9 @@ catalogs:
     '@types/react-dom':
       specifier: 19.1.6
       version: 19.1.6
+    geist:
+      specifier: 1.4.2
+      version: 1.4.2
     next:
       specifier: 15.3.3
       version: 15.3.3
@@ -105,7 +108,7 @@ importers:
         specifier: ^1.5.0
         version: 1.5.0(next@15.3.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react@19.1.0)
       geist:
-        specifier: ^1.4.2
+        specifier: 'catalog:'
         version: 1.4.2(next@15.3.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0))
       next:
         specifier: 'catalog:'
@@ -428,6 +431,9 @@ importers:
       dedent:
         specifier: ^1.6.0
         version: 1.6.0
+      geist:
+        specifier: 'catalog:'
+        version: 1.4.2(next@15.3.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0))
       react:
         specifier: 'catalog:'
         version: 19.1.0
