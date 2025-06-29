@@ -1333,11 +1333,11 @@ describe('resolveType', () => {
         "kind": "TypeReference",
         "position": {
           "end": {
-            "column": 19,
+            "column": 10,
             "line": 6,
           },
           "start": {
-            "column": 15,
+            "column": 19,
             "line": 2,
           },
         },
@@ -3839,16 +3839,16 @@ describe('resolveType', () => {
             "scope": undefined,
             "text": "string",
             "type": {
-              "filePath": "test.ts",
+              "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
               "kind": "TypeReference",
               "position": {
                 "end": {
-                  "column": 17,
-                  "line": 2,
+                  "column": 4402,
+                  "line": 4,
                 },
                 "start": {
-                  "column": 3,
-                  "line": 2,
+                  "column": 3482,
+                  "line": 4,
                 },
               },
               "text": "string",
@@ -3969,16 +3969,16 @@ describe('resolveType', () => {
 
     expect(processedProperties).toMatchInlineSnapshot(`
       {
-        "filePath": "test.ts",
+        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
         "kind": "TypeReference",
         "position": {
           "end": {
-            "column": 21,
-            "line": 1,
+            "column": 4402,
+            "line": 4,
           },
           "start": {
-            "column": 7,
-            "line": 1,
+            "column": 3482,
+            "line": 4,
           },
         },
         "text": ""blue"",
@@ -4003,16 +4003,16 @@ describe('resolveType', () => {
 
     expect(processedProperties).toMatchInlineSnapshot(`
       {
-        "filePath": "test.ts",
+        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
         "kind": "TypeReference",
         "position": {
           "end": {
-            "column": 74,
-            "line": 1,
+            "column": 218,
+            "line": 6,
           },
           "start": {
-            "column": 7,
-            "line": 1,
+            "column": 170,
+            "line": 6,
           },
         },
         "text": "Readonly<{ red: "red"; blue: "blue"; green: "green"; }>",
@@ -4786,7 +4786,7 @@ describe('resolveType', () => {
             "line": 1,
           },
           "start": {
-            "column": 7,
+            "column": 20,
             "line": 1,
           },
         },
@@ -4866,7 +4866,7 @@ describe('resolveType', () => {
             "line": 1,
           },
           "start": {
-            "column": 7,
+            "column": 20,
             "line": 1,
           },
         },
@@ -6045,7 +6045,7 @@ describe('resolveType', () => {
             "line": 29,
           },
           "start": {
-            "column": 14,
+            "column": 21,
             "line": 21,
           },
         },
@@ -7091,16 +7091,16 @@ describe('resolveType', () => {
             "scope": undefined,
             "text": "number",
             "type": {
-              "filePath": "test.ts",
+              "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
               "kind": "TypeReference",
               "position": {
                 "end": {
-                  "column": 28,
-                  "line": 2,
+                  "column": 4943,
+                  "line": 4,
                 },
                 "start": {
-                  "column": 3,
-                  "line": 2,
+                  "column": 4755,
+                  "line": 4,
                 },
               },
               "text": "number",
@@ -7116,16 +7116,16 @@ describe('resolveType', () => {
             "scope": "static",
             "text": "number",
             "type": {
-              "filePath": "test.ts",
+              "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
               "kind": "TypeReference",
               "position": {
                 "end": {
-                  "column": 34,
-                  "line": 6,
+                  "column": 4943,
+                  "line": 4,
                 },
                 "start": {
-                  "column": 3,
-                  "line": 6,
+                  "column": 4755,
+                  "line": 4,
                 },
               },
               "text": "number",
@@ -7935,7 +7935,16 @@ describe('resolveType', () => {
       { overwrite: true }
     )
     const declaration = sourceFile.getVariableDeclarationOrThrow('Button')
-    const types = resolveType(declaration.getType(), declaration)
+    const types = resolveType(
+      declaration.getType(),
+      declaration,
+      (symbolMetadata) => {
+        if (symbolMetadata.name === 'onClick') {
+          return true
+        }
+        return !symbolMetadata.isInNodeModules
+      }
+    )
 
     expect(types).toMatchInlineSnapshot(`
       {
@@ -7948,7 +7957,7 @@ describe('resolveType', () => {
             "line": 11,
           },
           "start": {
-            "column": 14,
+            "column": 23,
             "line": 9,
           },
         },
@@ -8599,16 +8608,16 @@ describe('resolveType', () => {
     expect(types).toMatchInlineSnapshot(`
       {
         "description": "The initial count of the counter.",
-        "filePath": "test.ts",
+        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
         "kind": "TypeReference",
         "position": {
           "end": {
-            "column": 30,
-            "line": 5,
+            "column": 4943,
+            "line": 4,
           },
           "start": {
-            "column": 14,
-            "line": 5,
+            "column": 4755,
+            "line": 4,
           },
         },
         "tags": [
@@ -8647,11 +8656,11 @@ describe('resolveType', () => {
         "kind": "TypeReference",
         "position": {
           "end": {
-            "column": 11,
+            "column": 2,
             "line": 5,
           },
           "start": {
-            "column": 14,
+            "column": 23,
             "line": 1,
           },
         },
@@ -8687,16 +8696,16 @@ describe('resolveType', () => {
     expect({ counterTypes, promiseTypes, awaitedTypes }).toMatchInlineSnapshot(`
       {
         "awaitedTypes": {
-          "filePath": "test.ts",
+          "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
           "kind": "TypeReference",
           "position": {
             "end": {
-              "column": 30,
-              "line": 10,
+              "column": 4943,
+              "line": 4,
             },
             "start": {
-              "column": 7,
-              "line": 10,
+              "column": 4755,
+              "line": 4,
             },
           },
           "text": "number",
@@ -8706,27 +8715,27 @@ describe('resolveType', () => {
           "kind": "TypeReference",
           "position": {
             "end": {
-              "column": 30,
-              "line": 8,
+              "column": 2,
+              "line": 6,
             },
             "start": {
-              "column": 7,
-              "line": 8,
+              "column": 1,
+              "line": 1,
             },
           },
           "text": "Counter",
         },
         "promiseTypes": {
-          "filePath": "test.ts",
+          "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
           "kind": "TypeReference",
           "position": {
             "end": {
-              "column": 61,
-              "line": 9,
+              "column": 15356,
+              "line": 4,
             },
             "start": {
-              "column": 7,
-              "line": 9,
+              "column": 15015,
+              "line": 4,
             },
           },
           "text": "Promise<number>",
@@ -10862,5 +10871,29 @@ describe('resolveType', () => {
         "text": "<Types extends Record<string, any>, const Extension extends keyof Types & string = string>(extension?: Extension | readonly Extension[]) => Promise<void>",
       }
     `)
+  })
+
+  test('includes moduleSpecifier for imported type references', () => {
+    project.createSourceFile('foo.ts', `export type Foo = string;`)
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      import type { Foo } from './foo';
+      export type Ref = Foo;
+      `,
+      { overwrite: true }
+    )
+    const typeAlias = sourceFile.getTypeAliasOrThrow('Ref')
+    const types = resolveType(typeAlias.getType(), typeAlias)
+
+    console.log(types)
+
+    // expect(resolved?.kind).toBe('TypeAlias')
+    // const referencedType = resolved?.type
+
+    // expect(referencedType).toMatchObject({
+    //   kind: 'TypeReference',
+    //   moduleSpecifier: './foo',
+    // })
   })
 })

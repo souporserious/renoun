@@ -465,6 +465,9 @@ export namespace Kind {
 
     /** The type arguments passed in during usage, e.g. `Type` in `Partial<Type>`. */
     arguments?: TypeExpression[]
+
+    /** The module specifier where the referenced type is exported from (e.g. "react"). */
+    moduleSpecifier?: string
   }
 
   /** A function or method parameter. */
@@ -600,56 +603,10 @@ export function resolveType(
   const symbolMetadata = getSymbolMetadata(symbol, enclosingNode)
   const symbolDeclaration = getPrimaryDeclaration(symbol)
   const declaration = symbolDeclaration || enclosingNode
-
-  let typeName: string | undefined = symbolDeclaration
-    ? (symbolDeclaration as any)?.getNameNode?.()?.getText()
+  const declarationLocation = declaration
+    ? getDeclarationLocation(declaration)
     : undefined
   let typeText = type.getText(enclosingNode, TYPE_FORMAT_FLAGS)
-  let declarationLocation: ReturnType<typeof getDeclarationLocation> = {}
-
-  if (declaration) {
-    /* Use the enclosing node's location if it is a member. */
-    const isMember =
-      tsMorph.Node.isVariableDeclaration(enclosingNode) ||
-      tsMorph.Node.isPropertyAssignment(enclosingNode) ||
-      tsMorph.Node.isPropertySignature(enclosingNode) ||
-      tsMorph.Node.isMethodSignature(enclosingNode) ||
-      tsMorph.Node.isParameterDeclaration(enclosingNode) ||
-      tsMorph.Node.isPropertyDeclaration(enclosingNode) ||
-      tsMorph.Node.isMethodDeclaration(enclosingNode) ||
-      tsMorph.Node.isGetAccessorDeclaration(enclosingNode) ||
-      tsMorph.Node.isSetAccessorDeclaration(enclosingNode)
-
-    declarationLocation = getDeclarationLocation(
-      isMember ? enclosingNode : declaration
-    )
-  }
-
-  if (
-    tsMorph.Node.isTypeReference(enclosingNode) &&
-    (symbolMetadata.isExported ||
-      symbolMetadata.isInNodeModules ||
-      symbolMetadata.isExternal)
-  ) {
-    return {
-      kind: 'TypeReference',
-      text: typeText,
-      arguments: enclosingNode
-        .getTypeArguments()
-        .map((argument) =>
-          resolveType(
-            argument.getType(),
-            argument,
-            filter,
-            defaultValues,
-            keepReferences,
-            dependencies
-          )
-        )
-        .filter(Boolean) as Kind.TypeExpression[],
-      ...declarationLocation,
-    } satisfies Kind.TypeReference
-  }
 
   /* Track the root type's dependencies for changes if they are provided. */
   if (dependencies && symbolDeclaration) {
@@ -659,125 +616,6 @@ export function resolveType(
         dependencies.add(filePath)
       } catch {
         // File was probably deleted
-      }
-    }
-  }
-
-  const isPrimitive = isPrimitiveType(type)
-  const typeArguments = type.getTypeArguments()
-  const aliasTypeArguments = type.getAliasTypeArguments()
-
-  /* When the type is a property signature, check if it is referencing an exported symbol. */
-  if (
-    tsMorph.Node.isPropertySignature(enclosingNode) &&
-    tsMorph.Node.isExportable(symbolDeclaration) &&
-    symbolDeclaration.isExported()
-  ) {
-    return {
-      kind: 'TypeReference',
-      text: typeText,
-      ...declarationLocation,
-    } satisfies Kind.TypeReference
-  }
-
-  /** Determine if the enclosing type is referencing a type in node modules. */
-  if (symbol && enclosingNode && !isPrimitive) {
-    const enclosingSymbolMetadata = enclosingNodeMetadata.get(enclosingNode)
-    const inSeparateProjects =
-      enclosingSymbolMetadata?.isInNodeModules === false &&
-      symbolMetadata.isInNodeModules
-
-    if (inSeparateProjects) {
-      /**
-       * Additionally, we check if type arguments exist and are all located in node_modules before
-       * treating the entire expression as a reference.
-       */
-      if (
-        typeArguments.length === 0 ||
-        isEveryTypeInNodeModules(typeArguments)
-      ) {
-        if (aliasTypeArguments.length > 0) {
-          const resolvedTypeArguments = aliasTypeArguments
-            .map((type) =>
-              resolveType(
-                type,
-                declaration,
-                filter,
-                defaultValues,
-                keepReferences,
-                dependencies
-              )
-            )
-            .filter((type): type is Kind.TypeExpression => Boolean(type))
-
-          if (resolvedTypeArguments.length === 0) {
-            return
-          }
-
-          return {
-            kind: 'TypeReference',
-            text: typeText,
-            arguments: resolvedTypeArguments,
-            ...declarationLocation,
-          } satisfies Kind.TypeReference
-        } else {
-          if (!declarationLocation.filePath) {
-            throw new Error(
-              `[renoun:resolveType]: No file path found for "${typeText}". Please file an issue if you encounter this error.`
-            )
-          }
-
-          return {
-            kind: 'TypeReference',
-            text: typeText,
-            ...declarationLocation,
-          } satisfies Kind.TypeReference
-        }
-      }
-    }
-
-    const isAtDeclaringNode =
-      (!enclosingNode && symbolDeclaration) ||
-      enclosingNode === symbolDeclaration ||
-      (tsMorph.Node.isVariableDeclaration(enclosingNode) &&
-        enclosingNode.getInitializer() === symbolDeclaration)
-
-    if (!isAtDeclaringNode) {
-      /*
-       * Determine if the symbol should be treated as a reference.
-       * TODO: this should account for what's actually exported from package.json exports to determine what's resolved.
-       */
-      const isReference =
-        exportedReferences.has(type) || rootReferences.has(type)
-      const isLocallyExportedReference =
-        !symbolMetadata.isInNodeModules &&
-        !symbolMetadata.isExternal &&
-        symbolMetadata.isExported
-      const isExternalNonNodeModuleReference =
-        symbolMetadata.isExternal && !symbolMetadata.isInNodeModules
-      const isNodeModuleReference =
-        !symbolMetadata.isGlobal && symbolMetadata.isInNodeModules
-
-      if (
-        isReference ||
-        isLocallyExportedReference ||
-        isExternalNonNodeModuleReference ||
-        isNodeModuleReference
-      ) {
-        if (!declarationLocation.filePath) {
-          throw new Error(
-            `[renoun:resolveType]: No file path found for "${typeText}". Please file an issue if you encounter this error.`
-          )
-        }
-
-        /* Allow node_module references to be filtered in. */
-        if (filter === defaultFilter ? true : !filter(symbolMetadata)) {
-          return {
-            kind: 'TypeReference',
-            text: typeText,
-            ...declarationLocation,
-          } satisfies Kind.TypeReference
-        }
       }
     }
   }
@@ -800,7 +638,7 @@ export function resolveType(
   } satisfies Kind.Unknown
 
   const isAtDeclaringNode =
-    // Top-level entry, caller didn’t give any context
+    // Top-level entry, caller didn't give any context
     (!enclosingNode && symbolDeclaration) ||
     // We do have a context and it is exactly the node that declares the symbol
     enclosingNode === symbolDeclaration ||
@@ -809,8 +647,6 @@ export function resolveType(
 
   // Attempt to resolve the type expression first.
   let resolvedTypeExpression: Kind.TypeExpression | undefined
-
-  debugger
 
   if (!isAtDeclaringNode) {
     try {
@@ -931,270 +767,162 @@ export function resolveType(
       type: resolvedTypeExpression,
       parameters: resolvedTypeParameters,
     } satisfies Kind.TypeAlias
-  } else {
-    if (tsMorph.Node.isInterfaceDeclaration(symbolDeclaration)) {
-      const resolvedMembers = symbolDeclaration
-        .getMembers()
-        .map((member) => {
-          const memberType = resolveTypeExpression(
-            member.getType(),
-            symbolDeclaration,
-            filter,
-            defaultValues,
-            keepReferences,
-            dependencies
-          )
-
-          if (!memberType) {
-            return undefined
-          }
-
-          const memberText = member
-            .getType()
-            .getText(
-              undefined,
-              tsMorph.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope
-            )
-
-          if (tsMorph.Node.isPropertySignature(member)) {
-            return {
-              kind: 'PropertySignature',
-              name: member.getName(),
-              type: memberType,
-              text: memberText,
-              isOptional: member.hasQuestionToken(),
-              isReadonly: member.isReadonly(),
-              ...getJsDocMetadata(member),
-              ...getDeclarationLocation(member),
-            } satisfies Kind.PropertySignature
-          } else if (tsMorph.Node.isMethodSignature(member)) {
-            const callSignature = member.getType().getCallSignatures().at(0)
-
-            if (!callSignature) {
-              throw new Error(
-                `[renoun:resolveType]: No call signature found for method "${memberText}". Please file an issue if you encounter this error.`
-              )
-            }
-
-            const signatureDeclaration = callSignature.getDeclaration()
-            const signatureParameters = callSignature.getParameters()
-            const parameterDeclarations = signatureParameters.map((parameter) =>
-              getPrimaryDeclaration(parameter)
-            ) as (ParameterDeclaration | undefined)[]
-            const resolvedParameters = resolveCallSignatureParameters(
-              signatureParameters,
-              parameterDeclarations,
-              signatureDeclaration,
-              member,
-              filter,
-              dependencies
-            )
-
-            return {
-              kind: 'MethodSignature',
-              name: member.getName(),
-              text: memberText,
-              parameters: resolvedParameters,
-              returnType: resolveTypeExpression(
-                callSignature.getReturnType() ?? type,
-                member,
-                filter,
-                undefined,
-                false,
-                dependencies
-              ),
-              ...getJsDocMetadata(member),
-              ...getDeclarationLocation(member),
-            } satisfies Kind.MethodSignature
-          } else if (tsMorph.Node.isIndexSignatureDeclaration(member)) {
-            return {
-              ...resolveIndexSignature(member, filter),
-              ...getJsDocMetadata(member),
-              ...getDeclarationLocation(member),
-            } satisfies Kind.IndexSignature
-          }
-        })
-        .filter(Boolean) as (
-        | Kind.PropertySignature
-        | Kind.MethodSignature
-        | Kind.IndexSignature
-      )[]
-
-      resolvedType = {
-        kind: 'Interface',
-        name: symbolMetadata.name,
-        text: typeText,
-        members: resolvedMembers,
-      } satisfies Kind.Interface
-    } else {
-      const callSignatures = type.getCallSignatures()
-
-      if (callSignatures.length > 0) {
-        const resolvedCallSignatures = resolveCallSignatures(
-          callSignatures,
-          declaration,
-          filter,
-          dependencies
-        )
-
-        if (
-          aliasSymbol === undefined &&
-          isComponent(symbolMetadata.name, resolvedCallSignatures)
-        ) {
-          resolvedType = {
-            kind: 'Component',
-            name: symbolMetadata.name,
-            text: typeText,
-            signatures: resolvedCallSignatures.map(
-              ({ kind, parameters, isGenerator, ...resolvedCallSignature }) => {
-                if (isGenerator) {
-                  throw new Error(
-                    '[renoun] Components cannot be generator functions.'
-                  )
-                }
-
-                return {
-                  ...resolvedCallSignature,
-                  kind: 'ComponentSignature',
-                  parameter: parameters.at(0) as
-                    | Kind.ComponentParameter
-                    | undefined,
-                } satisfies Kind.ComponentSignature
-              }
-            ),
-          } satisfies Kind.Component
-        } else {
-          resolvedType = {
-            kind: 'Function',
-            name: symbolMetadata.name,
-            text: typeText,
-            signatures: resolvedCallSignatures.map(
-              ({ kind, ...resolvedCallSignature }) => {
-                return {
-                  kind: 'FunctionSignature',
-                  ...resolvedCallSignature,
-                } satisfies Kind.FunctionSignature
-              }
-            ),
-          } satisfies Kind.Function
-        }
-      } else if (type.isObject()) {
-        const indexSignatures = resolveIndexSignatures(
+  } else if (tsMorph.Node.isInterfaceDeclaration(symbolDeclaration)) {
+    const resolvedMembers = symbolDeclaration
+      .getMembers()
+      .map((member) => {
+        const memberType = resolveTypeExpression(
+          member.getType(),
           symbolDeclaration,
-          filter
-        )
-        const propertySignatures = resolvePropertySignatures(
-          type,
-          symbolDeclaration ?? enclosingNode,
           filter,
           defaultValues,
           keepReferences,
           dependencies
         )
 
-        if (
-          indexSignatures.length === 0 &&
-          propertySignatures.length === 0 &&
-          typeArguments.length > 0
-        ) {
-          const resolvedTypeArguments = typeArguments
-            .map((type) =>
-              resolveTypeExpression(
-                type,
-                declaration,
-                filter,
-                defaultValues,
-                keepReferences,
-                dependencies
-              )
-            )
-            .filter(Boolean) as Kind.TypeExpression[]
-
-          if (resolvedTypeArguments.length === 0) {
-            if (!keepReferences) {
-              rootReferences.delete(type)
-            }
-            return
-          }
-
-          const name = typeName ?? symbolMetadata.name
-
-          if (!name) {
-            throw new Error(
-              `[renoun:resolveType]: No type name found for type reference "${typeText}" with kind "${symbolDeclaration?.getKindName()}" and enclosing node kind "${enclosingNode?.getKindName()}". Please file an issue if you encounter this error.`
-            )
-          }
-
-          resolvedType = {
-            kind: 'TypeReference',
-            text: typeText,
-            arguments: resolvedTypeArguments,
-          } satisfies Kind.TypeReference
-        } else if (
-          propertySignatures.length === 0 &&
-          indexSignatures.length > 0
-        ) {
-          resolvedType = {
-            kind: 'TypeLiteral',
-            text: typeText,
-            members: indexSignatures,
-          } satisfies Kind.TypeLiteral
-        } else if (propertySignatures.length === 0) {
-          if (!keepReferences) {
-            rootReferences.delete(type)
-          }
-
-          resolvedType = {
-            kind: 'TypeReference',
-            text: typeText,
-            arguments: typeArguments
-              .map((type) =>
-                resolveTypeExpression(
-                  type,
-                  declaration,
-                  filter,
-                  defaultValues,
-                  keepReferences,
-                  dependencies
-                )
-              )
-              .filter(Boolean) as Kind.TypeExpression[],
-          } satisfies Kind.TypeReference
-        } else {
-          resolvedType = {
-            kind: 'TypeLiteral',
-            text: typeText,
-            members: [...propertySignatures, ...indexSignatures],
-          } satisfies Kind.TypeLiteral
+        if (!memberType) {
+          return undefined
         }
-      } else {
-        /** Finally, try to resolve the apparent type if it is different from the current type. */
-        const apparentType = type.getApparentType()
 
-        if (type !== apparentType) {
-          if (!keepReferences) {
-            rootReferences.delete(type)
+        const memberText = member
+          .getType()
+          .getText(
+            undefined,
+            tsMorph.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope
+          )
+
+        if (tsMorph.Node.isPropertySignature(member)) {
+          return {
+            kind: 'PropertySignature',
+            name: member.getName(),
+            type: memberType,
+            text: memberText,
+            isOptional: member.hasQuestionToken(),
+            isReadonly: member.isReadonly(),
+            ...getJsDocMetadata(member),
+            ...getDeclarationLocation(member),
+          } satisfies Kind.PropertySignature
+        } else if (tsMorph.Node.isMethodSignature(member)) {
+          const callSignature = member.getType().getCallSignatures().at(0)
+
+          if (!callSignature) {
+            throw new Error(
+              `[renoun:resolveType]: No call signature found for method "${memberText}". Please file an issue if you encounter this error.`
+            )
           }
 
-          return resolveType(
-            apparentType,
-            declaration,
+          const signatureDeclaration = callSignature.getDeclaration()
+          const signatureParameters = callSignature.getParameters()
+          const parameterDeclarations = signatureParameters.map((parameter) =>
+            getPrimaryDeclaration(parameter)
+          ) as (ParameterDeclaration | undefined)[]
+          const resolvedParameters = resolveCallSignatureParameters(
+            signatureParameters,
+            parameterDeclarations,
+            signatureDeclaration,
+            member,
             filter,
-            defaultValues,
-            keepReferences,
             dependencies
           )
+
+          return {
+            kind: 'MethodSignature',
+            name: member.getName(),
+            text: memberText,
+            parameters: resolvedParameters,
+            returnType: resolveTypeExpression(
+              callSignature.getReturnType() ?? type,
+              member,
+              filter,
+              undefined,
+              false,
+              dependencies
+            ),
+            ...getJsDocMetadata(member),
+            ...getDeclarationLocation(member),
+          } satisfies Kind.MethodSignature
+        } else if (tsMorph.Node.isIndexSignatureDeclaration(member)) {
+          return {
+            ...resolveIndexSignature(member, filter),
+            ...getJsDocMetadata(member),
+            ...getDeclarationLocation(member),
+          } satisfies Kind.IndexSignature
         }
+      })
+      .filter(Boolean) as (
+      | Kind.PropertySignature
+      | Kind.MethodSignature
+      | Kind.IndexSignature
+    )[]
+
+    resolvedType = {
+      kind: 'Interface',
+      name: symbolMetadata.name,
+      text: typeText,
+      members: resolvedMembers,
+    } satisfies Kind.Interface
+  } else {
+    const callSignatures = type.getCallSignatures()
+
+    if (callSignatures.length > 0) {
+      const resolvedCallSignatures = resolveCallSignatures(
+        callSignatures,
+        declaration,
+        filter,
+        dependencies
+      )
+
+      if (
+        aliasSymbol === undefined &&
+        isComponent(symbolMetadata.name, resolvedCallSignatures)
+      ) {
+        resolvedType = {
+          kind: 'Component',
+          name: symbolMetadata.name,
+          text: typeText,
+          signatures: resolvedCallSignatures.map(
+            ({ kind, parameters, isGenerator, ...resolvedCallSignature }) => {
+              if (isGenerator) {
+                throw new Error(
+                  '[renoun] Components cannot be generator functions.'
+                )
+              }
+
+              return {
+                ...resolvedCallSignature,
+                kind: 'ComponentSignature',
+                parameter: parameters.at(0) as
+                  | Kind.ComponentParameter
+                  | undefined,
+              } satisfies Kind.ComponentSignature
+            }
+          ),
+        } satisfies Kind.Component
+      } else {
+        resolvedType = {
+          kind: 'Function',
+          name: symbolMetadata.name,
+          text: typeText,
+          signatures: resolvedCallSignatures.map(
+            ({ kind, ...resolvedCallSignature }) => {
+              return {
+                kind: 'FunctionSignature',
+                ...resolvedCallSignature,
+              } satisfies Kind.FunctionSignature
+            }
+          ),
+        } satisfies Kind.Function
       }
     }
   }
+
   if (!keepReferences) {
     rootReferences.delete(type)
   }
 
   let metadataDeclaration = declaration
 
-  /* If the type is a variable declaration, use the parent statement to retrieve jsdoc metadata. */
+  /* If the type is a variable declaration, use the parent statement to retrieve JSDoc metadata. */
   if (tsMorph.Node.isVariableDeclaration(enclosingNode)) {
     metadataDeclaration = enclosingNode
   }
@@ -1296,7 +1024,10 @@ export function resolveTypeExpression(
     }
 
     if (resolvedType === undefined) {
-      if (type.isTypeParameter()) {
+      if (
+        type.isTypeParameter() &&
+        tsMorph.Node.isTypeParameterDeclaration(symbolDeclaration)
+      ) {
         resolvedType = {
           kind: 'TypeReference',
           text: typeText,
@@ -1889,10 +1620,6 @@ export function resolveTypeExpression(
             }
           }
 
-          const indexSignatures = resolveIndexSignatures(
-            symbolDeclaration,
-            filter
-          )
           const propertySignatures = resolvePropertySignatures(
             type,
             symbolDeclaration ?? enclosingNode,
@@ -1900,6 +1627,10 @@ export function resolveTypeExpression(
             defaultValues,
             keepReferences,
             dependencies
+          )
+          const indexSignatures = resolveIndexSignatures(
+            symbolDeclaration,
+            filter
           )
 
           // If the literal is truly empty we treat it like `{}` and bail
@@ -1915,26 +1646,6 @@ export function resolveTypeExpression(
             text: typeText,
             members: [...propertySignatures, ...indexSignatures],
           } satisfies Kind.TypeLiteral
-        } else if (symbolDeclaration?.getSourceFile().isInNodeModules()) {
-          const resolvedTypeArguments = type
-            .getTypeArguments()
-            .map((typeArgument) =>
-              resolveTypeExpression(
-                typeArgument,
-                primaryDeclaration ?? enclosingNode,
-                filter,
-                defaultValues,
-                keepReferences,
-                dependencies
-              )
-            )
-            .filter(Boolean) as Kind.TypeExpression[]
-
-          resolvedType = {
-            kind: 'TypeReference',
-            arguments: resolvedTypeArguments,
-            text: type.getText(),
-          } satisfies Kind.TypeReference
         } else if (tsMorph.Node.isTypeReference(enclosingNode)) {
           return {
             kind: 'TypeReference',
@@ -3257,4 +2968,62 @@ function printNode(
   output += `Start: ${node.getStart()}, End: ${node.getEnd()}\n`
 
   return output
+}
+
+/** Attempt to get the module specifier for a type reference if it is imported from another module. */
+function getModuleSpecifierFromTypeReference(node: tsMorph.TypeReferenceNode) {
+  const typeName = node.getTypeName()
+
+  // Handle qualified names (e.g. React.Component) by taking the right-most identifier
+  let symbol: tsMorph.Symbol | undefined
+
+  if (tsMorph.Node.isQualifiedName(typeName)) {
+    symbol = typeName.getRight().getSymbol()
+  } else if (tsMorph.Node.isIdentifier(typeName)) {
+    symbol = typeName.getSymbol()
+  }
+
+  if (!symbol) {
+    return undefined
+  }
+
+  for (const declaration of symbol.getDeclarations()) {
+    // `import { Something } from "react"`
+    if (tsMorph.Node.isImportSpecifier(declaration)) {
+      const importDecl = declaration.getFirstAncestorByKind(
+        tsMorph.SyntaxKind.ImportDeclaration
+      )
+
+      if (importDecl) {
+        return importDecl.getModuleSpecifierValue()
+      }
+    }
+
+    // `import * as React from "react"` or `import React from "react"`
+    if (
+      tsMorph.Node.isImportClause(declaration) ||
+      tsMorph.Node.isNamespaceImport(declaration)
+    ) {
+      const importDecl = declaration.getFirstAncestorByKind(
+        tsMorph.SyntaxKind.ImportDeclaration
+      )
+
+      if (importDecl) {
+        return importDecl.getModuleSpecifierValue()
+      }
+    }
+
+    // `import fs = require("fs")`
+    if (tsMorph.Node.isImportEqualsDeclaration(declaration)) {
+      const moduleRef = declaration.getModuleReference()
+      if (tsMorph.Node.isExternalModuleReference(moduleRef)) {
+        const expr = moduleRef.getExpression()
+        if (expr && tsMorph.Node.isStringLiteral(expr)) {
+          return expr.getLiteralText()
+        }
+      }
+    }
+  }
+
+  return undefined
 }
