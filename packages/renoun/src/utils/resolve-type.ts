@@ -926,19 +926,24 @@ export function resolveTypeExpression(
     const symbolDeclaration = getPrimaryDeclaration(symbol)
     let resolvedType: Kind.TypeExpression | undefined
 
-    if (isTypeReference(type)) {
+    if (isTypeReference(type) || tsMorph.Node.isTypeReference(enclosingNode)) {
+      if (shouldResolveReference(type, enclosingNode)) {
+        const concrete = type.getApparentType()
+
+        return resolveTypeExpression(
+          concrete,
+          primaryDeclaration ?? enclosingNode,
+          filter,
+          defaultValues,
+          keepReferences,
+          dependencies
+        )
+      }
+
       resolvedType = {
         kind: 'TypeReference',
         text: typeText,
-        ...(primaryDeclaration
-          ? getDeclarationLocation(primaryDeclaration)
-          : {}),
-      } satisfies Kind.TypeReference
-    } else if (tsMorph.Node.isTypeReference(enclosingNode)) {
-      resolvedType = {
-        kind: 'TypeReference',
-        text: typeText,
-        ...getDeclarationLocation(enclosingNode),
+        ...(enclosingNode ? getDeclarationLocation(enclosingNode) : {}),
       } satisfies Kind.TypeReference
     } else if (tsMorph.Node.isTypeOperatorTypeNode(enclosingNode)) {
       const operandNode = enclosingNode.getTypeNode()
@@ -2118,14 +2123,29 @@ function isSymbol(type: Type) {
   return symbol?.getName() === 'Symbol'
 }
 
+/** Check if a declaration is external to the enclosing source file. */
+function isDeclarationExternal(
+  declaration: Node,
+  enclosingNode: Node | undefined
+) {
+  if (!enclosingNode) {
+    return false
+  }
+  const declarationFile = declaration.getSourceFile()
+  const enclosingFile = enclosingNode.getSourceFile()
+  return declarationFile !== enclosingFile && !declarationFile.isInNodeModules()
+}
+
 /** Check if a declaration is exported. */
-function isDeclarationExported(declaration: Node, enclosingNode?: Node) {
+function isDeclarationExported(
+  declaration: Node,
+  enclosingNode: Node | undefined
+) {
   /** Check if the declaration is exported if it is not the enclosing node. */
   let isExported = false
 
   if (declaration !== enclosingNode) {
-    if ('isExported' in declaration) {
-      // @ts-expect-error - isExported is not defined on all declaration types
+    if (tsMorph.Node.isExportable(declaration)) {
       isExported = declaration.isExported()
     } else {
       // alternatively, check if the declaration's parent is an exported variable declaration
@@ -2913,25 +2933,56 @@ export function getTypeAtLocation<
   )
 }
 
-/** Prints helpful information about a node for debugging. */
-function printNode(
-  node: tsMorph.Node | tsMorph.FunctionDeclaration | tsMorph.PropertyDeclaration
-) {
-  const kindName = node.getKindName()
-  let output = `(${kindName})\n`
-
-  if (tsMorph.Node.isFunctionDeclaration(node)) {
-    output += `Name: ${node.getName()}\n`
-    output += `Signature: ${node.getSignature().getDeclaration().getText()}\n`
-  } else if (tsMorph.Node.isPropertyDeclaration(node)) {
-    output += `Name: ${node.getName()}\n`
-    output += `Type: ${node.getType().getText()}\n`
+/**
+ * Decide whether a `TypeReference` should be resolved or kept as a reference:
+ * - If the alias itself is exported, external, or from node_modules
+ * - If it still contains free type parameters e.g. `Type` in `Type extends ...`
+ * - If any type argument is exported, external, or from node_modules
+ */
+function shouldResolveReference(type: Type, enclosingNode?: Node): boolean {
+  // Bail if we already began resolving this exact alias
+  if (rootReferences.has(type)) {
+    return false
   }
 
-  output += `Text:\n${node.getText()}\n`
-  output += `Start: ${node.getStart()}, End: ${node.getEnd()}\n`
+  const symbol = type.getAliasSymbol() ?? type.getSymbol()
 
-  return output
+  // Public / external aliases stay references
+  if (symbol) {
+    for (const declaration of symbol.getDeclarations()) {
+      if (
+        declaration.getSourceFile().isInNodeModules() ||
+        isDeclarationExported(declaration, enclosingNode) ||
+        isDeclarationExternal(declaration, enclosingNode)
+      ) {
+        return false
+      }
+    }
+  }
+
+  // Generic helper still has free type parameters
+  if (containsFreeTypeParameter(type)) {
+    return false
+  }
+
+  // Determine if any public / external type arguments exist
+  for (const argument of type.getTypeArguments()) {
+    const symbol = argument.getSymbol()
+    if (symbol) {
+      for (const declaration of symbol.getDeclarations()) {
+        if (
+          declaration.getSourceFile().isInNodeModules() ||
+          isDeclarationExported(declaration, enclosingNode) ||
+          isDeclarationExternal(declaration, enclosingNode)
+        ) {
+          return false
+        }
+      }
+    }
+  }
+
+  // If we got here, every part is local and concrete
+  return true
 }
 
 /** Attempt to get the module specifier for a type reference if it is imported from another module. */
@@ -2990,4 +3041,25 @@ function getModuleSpecifierFromTypeReference(node: tsMorph.TypeReferenceNode) {
   }
 
   return undefined
+}
+
+/** Prints helpful information about a node for debugging. */
+function printNode(
+  node: tsMorph.Node | tsMorph.FunctionDeclaration | tsMorph.PropertyDeclaration
+) {
+  const kindName = node.getKindName()
+  let output = `(${kindName})\n`
+
+  if (tsMorph.Node.isFunctionDeclaration(node)) {
+    output += `Name: ${node.getName()}\n`
+    output += `Signature: ${node.getSignature().getDeclaration().getText()}\n`
+  } else if (tsMorph.Node.isPropertyDeclaration(node)) {
+    output += `Name: ${node.getName()}\n`
+    output += `Type: ${node.getType().getText()}\n`
+  }
+
+  output += `Text:\n${node.getText()}\n`
+  output += `Start: ${node.getStart()}, End: ${node.getEnd()}\n`
+
+  return output
 }

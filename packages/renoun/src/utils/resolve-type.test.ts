@@ -143,16 +143,16 @@ describe('resolveType', () => {
                   },
                 ],
                 "returnType": {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                  "filePath": "test.ts",
                   "kind": "TypeReference",
                   "position": {
                     "end": {
-                      "column": 15356,
-                      "line": 4,
+                      "column": 71,
+                      "line": 8,
                     },
                     "start": {
-                      "column": 15015,
-                      "line": 4,
+                      "column": 56,
+                      "line": 8,
                     },
                   },
                   "text": "Promise<number>",
@@ -178,16 +178,16 @@ describe('resolveType', () => {
               },
               "text": "exportedTypes: Array<ExportedType>;",
               "type": {
-                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "filePath": "test.ts",
                 "kind": "TypeReference",
                 "position": {
                   "end": {
-                    "column": 14214,
-                    "line": 4,
+                    "column": 41,
+                    "line": 9,
                   },
                   "start": {
-                    "column": 12443,
-                    "line": 4,
+                    "column": 22,
+                    "line": 9,
                   },
                 },
                 "text": "ExportedType[]",
@@ -225,16 +225,16 @@ describe('resolveType', () => {
           },
           "text": "promiseObject?: Promise<ExportedType>;",
           "type": {
-            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "filePath": "test.ts",
             "kind": "TypeReference",
             "position": {
               "end": {
-                "column": 15356,
-                "line": 4,
+                "column": 44,
+                "line": 22,
               },
               "start": {
-                "column": 15015,
-                "line": 4,
+                "column": 23,
+                "line": 22,
               },
             },
             "text": "Promise<ExportedType>",
@@ -258,16 +258,16 @@ describe('resolveType', () => {
           },
           "text": "promiseFunction: Promise<(a: number, b: string) => void>;",
           "type": {
-            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "filePath": "test.ts",
             "kind": "TypeReference",
             "position": {
               "end": {
-                "column": 15356,
-                "line": 4,
+                "column": 63,
+                "line": 23,
               },
               "start": {
-                "column": 15015,
-                "line": 4,
+                "column": 24,
+                "line": 23,
               },
             },
             "text": "Promise<(a: number, b: string) => void>",
@@ -291,16 +291,16 @@ describe('resolveType', () => {
           },
           "text": "promiseVariable: ReturnType<typeof foo>;",
           "type": {
-            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "filePath": "test.ts",
             "kind": "TypeReference",
             "position": {
               "end": {
-                "column": 15356,
-                "line": 4,
+                "column": 46,
+                "line": 24,
               },
               "start": {
-                "column": 15015,
-                "line": 4,
+                "column": 24,
+                "line": 24,
               },
             },
             "text": "Promise<{ slug: string; filePath: string; }>",
@@ -481,16 +481,16 @@ describe('resolveType', () => {
                     },
                     "text": "c: (string | number)[]",
                     "type": {
-                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                      "filePath": "test.ts",
                       "kind": "TypeReference",
                       "position": {
                         "end": {
-                          "column": 14214,
-                          "line": 4,
+                          "column": 107,
+                          "line": 26,
                         },
                         "start": {
-                          "column": 12443,
-                          "line": 4,
+                          "column": 88,
+                          "line": 26,
                         },
                       },
                       "text": "(string | number)[]",
@@ -599,16 +599,16 @@ describe('resolveType', () => {
             "text": "Promise<ExportedType> & { a: string; } & { b(): void; }",
             "types": [
               {
-                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "filePath": "test.ts",
                 "kind": "TypeReference",
                 "position": {
                   "end": {
-                    "column": 15356,
-                    "line": 4,
+                    "column": 52,
+                    "line": 28,
                   },
                   "start": {
-                    "column": 15015,
-                    "line": 4,
+                    "column": 28,
+                    "line": 28,
                   },
                 },
                 "text": "Promise<ExportedType>",
@@ -697,7 +697,18 @@ describe('resolveType', () => {
           },
           "text": "tuple: [a: string, b: number, string];",
           "type": {
+            "filePath": "test.ts",
             "kind": "TypeReference",
+            "position": {
+              "end": {
+                "column": 44,
+                "line": 29,
+              },
+              "start": {
+                "column": 14,
+                "line": 29,
+              },
+            },
             "text": "[a: string, b: number, string]",
           },
         },
@@ -994,16 +1005,16 @@ describe('resolveType', () => {
               },
               "text": "arr: string[];",
               "type": {
-                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "filePath": "test.ts",
                 "kind": "TypeReference",
                 "position": {
                   "end": {
-                    "column": 14214,
-                    "line": 4,
+                    "column": 24,
+                    "line": 14,
                   },
                   "start": {
-                    "column": 12443,
-                    "line": 4,
+                    "column": 16,
+                    "line": 14,
                   },
                 },
                 "text": "string[]",
@@ -1122,16 +1133,16 @@ describe('resolveType', () => {
                 "kind": "FunctionType",
                 "parameters": [],
                 "returnType": {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                  "filePath": "test.ts",
                   "kind": "TypeReference",
                   "position": {
                     "end": {
-                      "column": 15356,
-                      "line": 4,
+                      "column": 32,
+                      "line": 28,
                     },
                     "start": {
-                      "column": 15015,
-                      "line": 4,
+                      "column": 9,
+                      "line": 28,
                     },
                   },
                   "text": "Promise<void>",
@@ -1388,15 +1399,15 @@ describe('resolveType', () => {
               },
               "text": "children: SelfReferencedType[];",
               "type": {
-                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "filePath": "test.ts",
                 "kind": "TypeReference",
                 "position": {
                   "end": {
-                    "column": 14214,
+                    "column": 41,
                     "line": 4,
                   },
                   "start": {
-                    "column": 12443,
+                    "column": 21,
                     "line": 4,
                   },
                 },
@@ -1490,12 +1501,12 @@ describe('resolveType', () => {
                 "kind": "TypeReference",
                 "position": {
                   "end": {
-                    "column": 30,
-                    "line": 5,
+                    "column": 25,
+                    "line": 3,
                   },
                   "start": {
-                    "column": 1,
-                    "line": 5,
+                    "column": 14,
+                    "line": 3,
                   },
                 },
                 "text": "DocChildren",
@@ -1588,12 +1599,12 @@ describe('resolveType', () => {
                 "kind": "TypeReference",
                 "position": {
                   "end": {
-                    "column": 37,
-                    "line": 5,
+                    "column": 25,
+                    "line": 3,
                   },
                   "start": {
-                    "column": 1,
-                    "line": 5,
+                    "column": 14,
+                    "line": 3,
                   },
                 },
                 "text": "DocChildren",
@@ -1684,12 +1695,12 @@ describe('resolveType', () => {
                 "kind": "TypeReference",
                 "position": {
                   "end": {
-                    "column": 2,
-                    "line": 7,
+                    "column": 35,
+                    "line": 2,
                   },
                   "start": {
-                    "column": 1,
-                    "line": 5,
+                    "column": 16,
+                    "line": 2,
                   },
                 },
                 "text": "Collection<Exports>",
@@ -1830,16 +1841,16 @@ describe('resolveType', () => {
                           },
                           "text": "data: Buffer",
                           "type": {
-                            "filePath": "node_modules/@types/node/buffer.buffer.d.ts",
+                            "filePath": "node_modules/@types/library/index.d.ts",
                             "kind": "TypeReference",
                             "position": {
                               "end": {
-                                "column": 10,
-                                "line": 453,
+                                "column": 82,
+                                "line": 1,
                               },
                               "start": {
-                                "column": 9,
-                                "line": 356,
+                                "column": 76,
+                                "line": 1,
                               },
                             },
                             "text": "Buffer<ArrayBufferLike>",
@@ -1924,16 +1935,16 @@ describe('resolveType', () => {
               },
               "text": "value: Promise<Foo>",
               "type": {
-                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "filePath": "test.ts",
                 "kind": "TypeReference",
                 "position": {
                   "end": {
-                    "column": 15356,
-                    "line": 4,
+                    "column": 22,
+                    "line": 6,
                   },
                   "start": {
-                    "column": 15015,
-                    "line": 4,
+                    "column": 10,
+                    "line": 6,
                   },
                 },
                 "text": "Promise<Foo>",
@@ -2354,16 +2365,16 @@ describe('resolveType', () => {
               },
               "text": "exportedTypes: Array<ExportedType>",
               "type": {
-                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "filePath": "test.ts",
                 "kind": "TypeReference",
                 "position": {
                   "end": {
-                    "column": 14214,
-                    "line": 4,
+                    "column": 37,
+                    "line": 6,
                   },
                   "start": {
-                    "column": 12443,
-                    "line": 4,
+                    "column": 18,
+                    "line": 6,
                   },
                 },
                 "text": "ExportedType[]",
@@ -3290,16 +3301,16 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "filePath": "node_modules/@types/react/index.d.ts",
+              "filePath": "node_modules/styled-components/dist/types.d.ts",
               "kind": "TypeReference",
               "position": {
                 "end": {
-                  "column": 66,
-                  "line": 4028,
+                  "column": 206,
+                  "line": 133,
                 },
                 "start": {
-                  "column": 9,
-                  "line": 4028,
+                  "column": 189,
+                  "line": 133,
                 },
               },
               "text": "Element",
@@ -3790,12 +3801,12 @@ describe('resolveType', () => {
                 "kind": "TypeReference",
                 "position": {
                   "end": {
-                    "column": 2,
-                    "line": 3,
+                    "column": 17,
+                    "line": 6,
                   },
                   "start": {
-                    "column": 1,
-                    "line": 1,
+                    "column": 9,
+                    "line": 6,
                   },
                 },
                 "text": "TextView",
@@ -4253,16 +4264,16 @@ describe('resolveType', () => {
               },
               "text": "functionReturn: ReturnType<typeof foo>;",
               "type": {
-                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "filePath": "test.ts",
                 "kind": "TypeReference",
                 "position": {
                   "end": {
-                    "column": 15356,
-                    "line": 4,
+                    "column": 41,
+                    "line": 9,
                   },
                   "start": {
-                    "column": 15015,
-                    "line": 4,
+                    "column": 19,
+                    "line": 9,
                   },
                 },
                 "text": "Promise<{ slug: string; filePath: string; }>",
@@ -5875,16 +5886,16 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "filePath": "node_modules/@types/react/index.d.ts",
+              "filePath": "node_modules/styled-components/dist/types.d.ts",
               "kind": "TypeReference",
               "position": {
                 "end": {
-                  "column": 66,
-                  "line": 4028,
+                  "column": 206,
+                  "line": 133,
                 },
                 "start": {
-                  "column": 9,
-                  "line": 4028,
+                  "column": 189,
+                  "line": 133,
                 },
               },
               "text": "Element",
@@ -6124,16 +6135,16 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "filePath": "node_modules/@types/react/index.d.ts",
+              "filePath": "node_modules/styled-components/dist/types.d.ts",
               "kind": "TypeReference",
               "position": {
                 "end": {
-                  "column": 66,
-                  "line": 4028,
+                  "column": 206,
+                  "line": 133,
                 },
                 "start": {
-                  "column": 9,
-                  "line": 4028,
+                  "column": 189,
+                  "line": 133,
                 },
               },
               "text": "Element",
@@ -6781,12 +6792,12 @@ describe('resolveType', () => {
                 "kind": "TypeReference",
                 "position": {
                   "end": {
-                    "column": 2,
-                    "line": 43,
+                    "column": 4,
+                    "line": 13,
                   },
                   "start": {
-                    "column": 1,
-                    "line": 1,
+                    "column": 3,
+                    "line": 9,
                   },
                 },
                 "text": "Counter",
@@ -7898,16 +7909,16 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "filePath": "node_modules/@types/react/index.d.ts",
+              "filePath": "test.tsx",
               "kind": "TypeReference",
               "position": {
                 "end": {
-                  "column": 66,
-                  "line": 4028,
+                  "column": 2,
+                  "line": 11,
                 },
                 "start": {
-                  "column": 9,
-                  "line": 4028,
+                  "column": 23,
+                  "line": 9,
                 },
               },
               "text": "Element",
@@ -8394,12 +8405,12 @@ describe('resolveType', () => {
             "kind": "TypeReference",
             "position": {
               "end": {
-                "column": 2,
-                "line": 6,
+                "column": 30,
+                "line": 8,
               },
               "start": {
-                "column": 1,
-                "line": 1,
+                "column": 7,
+                "line": 8,
               },
             },
             "text": "Counter",
@@ -8421,16 +8432,16 @@ describe('resolveType', () => {
           },
           "text": "Promise<number>",
           "type": {
-            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+            "filePath": "test.ts",
             "kind": "TypeReference",
             "position": {
               "end": {
-                "column": 15356,
-                "line": 4,
+                "column": 61,
+                "line": 9,
               },
               "start": {
-                "column": 15015,
-                "line": 4,
+                "column": 7,
+                "line": 9,
               },
             },
             "text": "Promise<number>",
@@ -8668,16 +8679,16 @@ describe('resolveType', () => {
             "typeParameters": [
               {
                 "constraint": {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                  "filePath": "test.ts",
                   "kind": "TypeReference",
                   "position": {
                     "end": {
-                      "column": 14214,
-                      "line": 4,
+                      "column": 52,
+                      "line": 1,
                     },
                     "start": {
-                      "column": 12443,
-                      "line": 4,
+                      "column": 44,
+                      "line": 1,
                     },
                   },
                   "text": "string[]",
@@ -9172,12 +9183,12 @@ describe('resolveType', () => {
                       "kind": "TypeReference",
                       "position": {
                         "end": {
-                          "column": 2,
-                          "line": 10,
+                          "column": 15,
+                          "line": 18,
                         },
                         "start": {
-                          "column": 1,
-                          "line": 6,
+                          "column": 4,
+                          "line": 18,
                         },
                       },
                       "text": "ButtonProps",
@@ -9868,16 +9879,16 @@ describe('resolveType', () => {
                       "text": "ExtensionType",
                     },
                     {
-                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                      "filePath": "test.ts",
                       "kind": "TypeReference",
                       "position": {
                         "end": {
-                          "column": 14214,
-                          "line": 4,
+                          "column": 46,
+                          "line": 7,
                         },
                         "start": {
-                          "column": 12443,
-                          "line": 4,
+                          "column": 31,
+                          "line": 7,
                         },
                       },
                       "text": "ExtensionType[]",
@@ -10631,16 +10642,16 @@ describe('resolveType', () => {
                       "text": "Extension",
                     },
                     {
-                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                      "filePath": "test.ts",
                       "kind": "TypeReference",
                       "position": {
                         "end": {
-                          "column": 12305,
-                          "line": 4,
+                          "column": 47,
+                          "line": 5,
                         },
                         "start": {
-                          "column": 10632,
-                          "line": 4,
+                          "column": 27,
+                          "line": 5,
                         },
                       },
                       "text": "readonly Extension[]",
@@ -10660,16 +10671,16 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+              "filePath": "test.ts",
               "kind": "TypeReference",
               "position": {
                 "end": {
-                  "column": 15356,
-                  "line": 4,
+                  "column": 17,
+                  "line": 6,
                 },
                 "start": {
-                  "column": 15015,
-                  "line": 4,
+                  "column": 4,
+                  "line": 6,
                 },
               },
               "text": "Promise<void>",
