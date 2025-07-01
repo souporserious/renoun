@@ -15,8 +15,8 @@ import {
   type LiteralExpressionValue,
 } from './resolve-expressions.js'
 
-/** Gets the key for a default value property. */
-export function getPropertyDefaultValueKey(
+/** Gets the key for an initializer value. */
+export function getInitializerValueKey(
   property:
     | BindingElement
     | ParameterDeclaration
@@ -35,48 +35,50 @@ export function getPropertyDefaultValueKey(
   return property.getName()
 }
 
-/** Gets the default value for a single parameter or property. */
-// TODO: rename this to getInitializerValue
-export function getPropertyDefaultValue(
-  property: ParameterDeclaration | PropertyDeclaration
+/** Gets the initializer value for a single parameter or property. */
+export function getInitializerValue(
+  declaration: ParameterDeclaration | PropertyDeclaration
 ): LiteralExpressionValue {
   if (
-    tsMorph.Node.isSpreadAssignment(property) ||
-    tsMorph.Node.isMethodSignature(property)
+    tsMorph.Node.isSpreadAssignment(declaration) ||
+    tsMorph.Node.isMethodSignature(declaration)
   ) {
     return
   }
 
-  const nameNode = property.getNameNode()
+  const nameNode = declaration.getNameNode()
 
   if (!nameNode) {
     return
   }
 
-  const name = getPropertyDefaultValueKey(property)
+  const name = getInitializerValueKey(declaration)
 
-  if (!('getInitializer' in property)) {
+  if (!('getInitializer' in declaration)) {
     const kindName = (
-      property as ParameterDeclaration | PropertyDeclaration
+      declaration as ParameterDeclaration | PropertyDeclaration
     ).getKindName()
     throw new Error(
       `[getDefaultValuesFromProperty] Property "${name}" of kind "${kindName}" does not have an initializer, so it cannot have a default value. This declaration should be filtered or file an issue for support.`
     )
   }
 
-  const initializer = property.getInitializer()
-  let defaultValue: LiteralExpressionValue = undefined
+  const initializer = declaration.getInitializer()
+  let initializerValue: LiteralExpressionValue = undefined
 
   if (initializer) {
-    defaultValue = getInitializerValue(initializer)
+    initializerValue = resolveInitializerValue(initializer)
   }
 
   if (tsMorph.Node.isObjectBindingPattern(nameNode)) {
-    defaultValue = getObjectBindingPatternDefaultValue(nameNode, defaultValue)
+    initializerValue = getObjectBindingPatternInitializerValue(
+      nameNode,
+      initializerValue
+    )
   }
 
   if (tsMorph.Node.isIdentifier(nameNode)) {
-    const references = property
+    const references = declaration
       .findReferencesAsNodes()
       .map((reference) => reference.getParentOrThrow())
       .filter((reference) =>
@@ -87,30 +89,30 @@ export function getPropertyDefaultValue(
       const referenceNameNode = reference.getNameNode()
 
       if (tsMorph.Node.isObjectBindingPattern(referenceNameNode)) {
-        defaultValue = getObjectBindingPatternDefaultValue(
+        initializerValue = getObjectBindingPatternInitializerValue(
           referenceNameNode,
-          defaultValue
+          initializerValue
         )
       }
     })
   }
 
-  return defaultValue
+  return initializerValue
 }
 
 /** Gets the default value for an object binding pattern. */
-function getObjectBindingPatternDefaultValue(
+function getObjectBindingPatternInitializerValue(
   nameNode: ObjectBindingPattern,
   previousDefaultValue: LiteralExpressionValue
 ) {
   let defaultValue: Record<string, any> | undefined = undefined
 
   nameNode.getElements().forEach((element) => {
-    const elementName = getPropertyDefaultValueKey(element)
+    const elementName = getInitializerValueKey(element)
     const elementInitializer = element.getInitializer()
 
     if (elementInitializer) {
-      let initializerValue = getInitializerValue(elementInitializer)
+      let initializerValue = resolveInitializerValue(elementInitializer)
 
       if (initializerValue !== undefined) {
         if (defaultValue === undefined) {
@@ -137,7 +139,7 @@ function getObjectBindingPatternDefaultValue(
 }
 
 /** Gets the value of an initializer expression. */
-function getInitializerValue(initializer: Expression) {
+function resolveInitializerValue(initializer: Expression) {
   const resolvedValue = resolveLiteralExpression(initializer)
 
   if (isLiteralExpressionValue(resolvedValue)) {
