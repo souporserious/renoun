@@ -574,11 +574,11 @@ export type SymbolMetadata = ReturnType<typeof getSymbolMetadata>
 
 export type SymbolFilter = (symbolMetadata: SymbolMetadata) => boolean
 
-/** Tracks exported references to link types together. */
-const exportedReferences = new WeakSet<Type>()
-
 /** Tracks root type references to prevent infinite recursion. */
 const rootReferences = new WeakSet<Type>()
+
+/** Tracks inlining references to prevent infinite recursion. */
+const resolvingReferences = new WeakSet<Type>()
 
 const defaultFilter = (metadata: SymbolMetadata) => {
   return !metadata.isPrivate && !metadata.isInNodeModules
@@ -623,14 +623,6 @@ export function resolveType(
         // File was probably deleted
       }
     }
-  }
-
-  if (
-    symbolMetadata.isExported &&
-    !symbolMetadata.isGlobal &&
-    !symbolMetadata.isVirtual
-  ) {
-    exportedReferences.add(type)
   }
 
   if (!symbolMetadata.isVirtual) {
@@ -903,8 +895,8 @@ export function resolveType(
   }
 }
 
-/** Resolves a type expression to a type. */
-export function resolveTypeExpression(
+/** Resolves a type expression. */
+function resolveTypeExpression(
   type: tsMorph.Type,
   enclosingNode?: Node,
   filter: SymbolFilter = defaultFilter,
@@ -912,39 +904,41 @@ export function resolveTypeExpression(
   keepReferences = false,
   dependencies?: Set<string>
 ): Kind.TypeExpression | undefined {
+  const symbol = type.getAliasSymbol() ?? type.getSymbol()
+  const symbolDeclaration = getPrimaryDeclaration(symbol)
   const typeText = type.getText(
     undefined,
     tsMorph.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope
   )
-  const symbol = type.getAliasSymbol() ?? type.getSymbol()
-  const primaryDeclaration = getPrimaryDeclaration(symbol)
 
   rootReferences.add(type)
 
   try {
-    const symbol = type.getSymbol()
-    const symbolDeclaration = getPrimaryDeclaration(symbol)
     let resolvedType: Kind.TypeExpression | undefined
 
     if (isTypeReference(type) || tsMorph.Node.isTypeReference(enclosingNode)) {
       if (shouldResolveReference(type, enclosingNode)) {
-        const concrete = type.getApparentType()
+        resolvingReferences.add(type)
 
-        return resolveTypeExpression(
-          concrete,
-          primaryDeclaration ?? enclosingNode,
+        const resolvedTypeExpression = resolveTypeExpression(
+          type.getApparentType(),
+          symbolDeclaration ?? enclosingNode,
           filter,
           defaultValues,
           keepReferences,
           dependencies
         )
-      }
 
-      resolvedType = {
-        kind: 'TypeReference',
-        text: typeText,
-        ...(enclosingNode ? getDeclarationLocation(enclosingNode) : {}),
-      } satisfies Kind.TypeReference
+        resolvingReferences.delete(type)
+
+        resolvedType = resolvedTypeExpression
+      } else {
+        resolvedType = {
+          kind: 'TypeReference',
+          text: typeText,
+          ...(enclosingNode ? getDeclarationLocation(enclosingNode) : {}),
+        } satisfies Kind.TypeReference
+      }
     } else if (tsMorph.Node.isTypeOperatorTypeNode(enclosingNode)) {
       const operandNode = enclosingNode.getTypeNode()
       const operandType = resolveTypeExpression(
@@ -1176,10 +1170,10 @@ export function resolveTypeExpression(
               type,
             }))
 
-        for (const { node: memberNode, type: memberType } of unionTypeNodes) {
+        for (const { node: typeNode, type: typeNodeType } of unionTypeNodes) {
           const resolvedMemberType = resolveTypeExpression(
-            memberType,
-            memberNode,
+            typeNodeType,
+            typeNode,
             filter,
             defaultValues,
             keepReferences,
@@ -1357,9 +1351,9 @@ export function resolveTypeExpression(
         }
 
         const [signature] = callSignatures
-        const signatureParameters = signature.getParameters()
         const resolvedParameters = resolveParameters(
-          signatureParameters,
+          signature.getParameters(),
+          signature.getDeclaration(),
           filter,
           dependencies
         )
@@ -1437,7 +1431,10 @@ export function resolveTypeExpression(
               const definitionNode = getPrimaryDeclaration(
                 constraintNode.getType().getAliasSymbol()
               )
-              if (definitionNode && isDeclarationExported(definitionNode)) {
+              if (
+                definitionNode &&
+                isDeclarationExported(definitionNode, constraintNode)
+              ) {
                 constraintType = {
                   kind: 'TypeReference',
                   text: constraintNode.getText(),
@@ -1517,7 +1514,7 @@ export function resolveTypeExpression(
       } else {
         throw new UnresolvedTypeExpressionError(
           type.getText(),
-          primaryDeclaration ?? enclosingNode
+          symbolDeclaration ?? enclosingNode
         )
       }
     }
@@ -1613,6 +1610,7 @@ function resolveMemberSignature(
     const callSignature = member.getType().getCallSignatures()[0]
     const parameters = resolveParameters(
       callSignature.getParameters(),
+      callSignature.getDeclaration(),
       filter,
       dependencies
     )
@@ -1773,6 +1771,7 @@ function resolveCallSignature(
 
   const resolvedParameters = resolveParameters(
     signatureParameters,
+    signatureDeclaration,
     filter,
     dependencies
   )
@@ -1813,6 +1812,7 @@ function resolveCallSignature(
 
 function resolveParameters(
   parameters: Symbol[],
+  enclosingNode?: Node,
   filter: SymbolFilter = defaultFilter,
   dependencies?: Set<string>
 ): Kind.Parameter[] {
@@ -1828,11 +1828,30 @@ function resolveParameters(
         )
       }
 
+      /**
+       * When resolving a generic function’s parameter type, we have two candidates:
+       *   1. The annotated type node
+       *   2. The contextual type at the call site
+       *
+       * We only want to further resolve the contextual type once all generics
+       * have been substituted i.e. once there are no free type parameters.
+       * - If the contextual type still has free type parameters, we’re still
+       *   in the generic’s definition context, so stick with the annotation.
+       * - Otherwise we’re at an instantiated call site, so use the contextual type.
+       */
+      const annotationNode = parameterDeclaration.getTypeNodeOrThrow()
+      const annotationType = annotationNode.getType()
+      const contextualType = enclosingNode
+        ? parameter.getTypeAtLocation(enclosingNode)
+        : undefined
+      const typeToResolve =
+        contextualType && !containsFreeTypeParameter(contextualType)
+          ? contextualType
+          : (annotationType ?? contextualType)
       const initializer = getInitializerValue(parameterDeclaration)
-      const typeNode = parameterDeclaration.getTypeNodeOrThrow()
       const resolvedParameterType = resolveTypeExpression(
-        typeNode.getType(),
-        typeNode,
+        typeToResolve,
+        annotationNode ?? enclosingNode,
         filter,
         initializer,
         false,
@@ -2941,7 +2960,7 @@ export function getTypeAtLocation<
  */
 function shouldResolveReference(type: Type, enclosingNode?: Node): boolean {
   // Bail if we already began resolving this exact alias
-  if (rootReferences.has(type)) {
+  if (resolvingReferences.has(type)) {
     return false
   }
 
