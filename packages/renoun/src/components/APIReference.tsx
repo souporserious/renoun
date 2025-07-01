@@ -842,14 +842,14 @@ function InitializerValue({
   initializer,
   components,
 }: {
-  initializer: Kind.Initializer | undefined
+  initializer: unknown | undefined
   components: APIReferenceComponents
 }) {
   if (initializer === undefined) {
     return '—'
   }
 
-  const valueType = typeof initializer.value
+  const valueType = typeof initializer
   let valueString: string | undefined = undefined
 
   if (
@@ -857,13 +857,13 @@ function InitializerValue({
     valueType === 'number' ||
     valueType === 'boolean'
   ) {
-    valueString = String(initializer.value)
-  }
-
-  try {
-    valueString = JSON.stringify(initializer.value)
-  } catch {
-    valueString = initializer.text
+    valueString = String(initializer)
+  } else {
+    try {
+      valueString = JSON.stringify(initializer)
+    } catch {
+      valueString = String(initializer)
+    }
   }
 
   return <components.code>{valueString}</components.code>
