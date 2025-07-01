@@ -3227,7 +3227,7 @@ describe('resolveType', () => {
     expect(processedType).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "Variable",
+        "kind": "Function",
         "name": undefined,
         "position": {
           "end": {
@@ -3239,33 +3239,211 @@ describe('resolveType', () => {
             "line": 2,
           },
         },
-        "text": "IStyledComponentBase<"web", Substitute<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, { fontSize: number; fontWeight?: number; }>> & string",
-        "type": {
-          "kind": "IntersectionType",
-          "text": "IStyledComponentBase<"web", Substitute<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, { fontSize: number; fontWeight?: number; }>> & string",
-          "types": [
-            {
-              "filePath": "node_modules/styled-components/dist/types.d.ts",
+        "signatures": [
+          {
+            "filePath": "node_modules/styled-components/dist/types.d.ts",
+            "kind": "FunctionSignature",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/styled-components/dist/types.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "props",
+                "position": {
+                  "end": {
+                    "column": 186,
+                    "line": 133,
+                  },
+                  "start": {
+                    "column": 111,
+                    "line": 133,
+                  },
+                },
+                "text": "props: PolymorphicComponentProps<R, BaseProps, AsTarget, ForwardedAsTarget>",
+                "type": {
+                  "filePath": "node_modules/styled-components/dist/types.d.ts",
+                  "kind": "TypeReference",
+                  "position": {
+                    "end": {
+                      "column": 186,
+                      "line": 133,
+                    },
+                    "start": {
+                      "column": 118,
+                      "line": 133,
+                    },
+                  },
+                  "text": "PolymorphicComponentProps<R, BaseProps, AsTarget, ForwardedAsTarget, AsTarget extends KnownTarget ? ComponentPropsWithRef<AsTarget> : {}, ForwardedAsTarget extends KnownTarget ? ComponentPropsWithRef<...> : {}>",
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 207,
+                "line": 133,
+              },
+              "start": {
+                "column": 5,
+                "line": 133,
+              },
+            },
+            "returnType": {
+              "filePath": "node_modules/@types/react/index.d.ts",
               "kind": "TypeReference",
               "position": {
                 "end": {
-                  "column": 2,
-                  "line": 138,
+                  "column": 66,
+                  "line": 4028,
                 },
                 "start": {
-                  "column": 1,
-                  "line": 135,
+                  "column": 9,
+                  "line": 4028,
                 },
               },
-              "text": "IStyledComponentBase<"web", Substitute<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, { fontSize: number; fontWeight?: number; }>>",
+              "text": "Element",
             },
-            {
-              "kind": "String",
-              "text": "string",
-              "value": undefined,
+            "text": "<AsTarget extends StyledTarget<R> | void, ForwardedAsTarget extends StyledTarget<R> | void>(props: PolymorphicComponentProps<R, BaseProps, AsTarget, ForwardedAsTarget>) => Element",
+            "typeParameters": [
+              {
+                "constraint": {
+                  "kind": "UnionType",
+                  "text": "StyledTarget<R> | void",
+                  "types": [
+                    {
+                      "filePath": "node_modules/styled-components/dist/types.d.ts",
+                      "kind": "TypeReference",
+                      "position": {
+                        "end": {
+                          "column": 38,
+                          "line": 133,
+                        },
+                        "start": {
+                          "column": 23,
+                          "line": 133,
+                        },
+                      },
+                      "text": "StyledTarget<R>",
+                    },
+                    {
+                      "kind": "Void",
+                      "text": "void",
+                    },
+                  ],
+                },
+                "defaultType": {
+                  "kind": "Void",
+                  "text": "void",
+                },
+                "kind": "TypeParameter",
+                "name": "AsTarget",
+                "text": "AsTarget extends StyledTarget<R> | void = void",
+              },
+              {
+                "constraint": {
+                  "kind": "UnionType",
+                  "text": "StyledTarget<R> | void",
+                  "types": [
+                    {
+                      "filePath": "node_modules/styled-components/dist/types.d.ts",
+                      "kind": "TypeReference",
+                      "position": {
+                        "end": {
+                          "column": 95,
+                          "line": 133,
+                        },
+                        "start": {
+                          "column": 80,
+                          "line": 133,
+                        },
+                      },
+                      "text": "StyledTarget<R>",
+                    },
+                    {
+                      "kind": "Void",
+                      "text": "void",
+                    },
+                  ],
+                },
+                "defaultType": {
+                  "kind": "Void",
+                  "text": "void",
+                },
+                "kind": "TypeParameter",
+                "name": "ForwardedAsTarget",
+                "text": "ForwardedAsTarget extends StyledTarget<R> | void = void",
+              },
+            ],
+          },
+          {
+            "filePath": "node_modules/@types/react/index.d.ts",
+            "kind": "FunctionSignature",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/@types/react/index.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "props",
+                "position": {
+                  "end": {
+                    "column": 18,
+                    "line": 562,
+                  },
+                  "start": {
+                    "column": 10,
+                    "line": 562,
+                  },
+                },
+                "text": "props: P",
+                "type": {
+                  "filePath": "node_modules/@types/react/index.d.ts",
+                  "kind": "TypeReference",
+                  "position": {
+                    "end": {
+                      "column": 18,
+                      "line": 562,
+                    },
+                    "start": {
+                      "column": 17,
+                      "line": 562,
+                    },
+                  },
+                  "text": "P",
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 31,
+                "line": 562,
+              },
+              "start": {
+                "column": 9,
+                "line": 562,
+              },
             },
-          ],
-        },
+            "returnType": {
+              "filePath": "node_modules/@types/react/index.d.ts",
+              "kind": "TypeReference",
+              "position": {
+                "end": {
+                  "column": 30,
+                  "line": 562,
+                },
+                "start": {
+                  "column": 21,
+                  "line": 562,
+                },
+              },
+              "text": "ReactNode",
+            },
+            "text": "(props: P) => ReactNode",
+          },
+        ],
+        "text": "IStyledComponentBase<"web", Substitute<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, { fontSize: number; fontWeight?: number; }>> & string",
       }
     `)
   })
@@ -4522,7 +4700,7 @@ describe('resolveType', () => {
     expect(types).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "Variable",
+        "kind": "Function",
         "name": "useCounter",
         "position": {
           "end": {
@@ -4534,42 +4712,54 @@ describe('resolveType', () => {
             "line": 1,
           },
         },
-        "text": "(initialCount?: number) => void",
-        "type": {
-          "isAsync": false,
-          "kind": "FunctionType",
-          "parameters": [
-            {
-              "description": undefined,
-              "filePath": "test.ts",
-              "initializer": 0,
-              "isOptional": false,
-              "kind": "Parameter",
-              "name": "initialCount",
-              "position": {
-                "end": {
-                  "column": 45,
-                  "line": 1,
+        "signatures": [
+          {
+            "filePath": "test.ts",
+            "kind": "FunctionSignature",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "test.ts",
+                "initializer": 0,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "initialCount",
+                "position": {
+                  "end": {
+                    "column": 45,
+                    "line": 1,
+                  },
+                  "start": {
+                    "column": 21,
+                    "line": 1,
+                  },
                 },
-                "start": {
-                  "column": 21,
-                  "line": 1,
+                "text": "initialCount: number = 0",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
                 },
               },
-              "text": "initialCount: number = 0",
-              "type": {
-                "kind": "Number",
-                "text": "number",
-                "value": undefined,
+            ],
+            "position": {
+              "end": {
+                "column": 52,
+                "line": 1,
+              },
+              "start": {
+                "column": 20,
+                "line": 1,
               },
             },
-          ],
-          "returnType": {
-            "kind": "Void",
-            "text": "void",
+            "returnType": {
+              "kind": "Void",
+              "text": "void",
+            },
+            "text": "(initialCount: number = 0) => void",
           },
-          "text": "(initialCount?: number) => void",
-        },
+        ],
+        "text": "(initialCount?: number) => void",
       }
     `)
   })
@@ -4590,7 +4780,7 @@ describe('resolveType', () => {
     expect(types).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "Variable",
+        "kind": "Function",
         "name": "useCounter",
         "position": {
           "end": {
@@ -4602,42 +4792,54 @@ describe('resolveType', () => {
             "line": 1,
           },
         },
-        "text": "(initialCount?: number) => void",
-        "type": {
-          "isAsync": false,
-          "kind": "FunctionType",
-          "parameters": [
-            {
-              "description": undefined,
-              "filePath": "test.ts",
-              "initializer": 0,
-              "isOptional": false,
-              "kind": "Parameter",
-              "name": "initialCount",
-              "position": {
-                "end": {
-                  "column": 54,
-                  "line": 1,
+        "signatures": [
+          {
+            "filePath": "test.ts",
+            "kind": "FunctionSignature",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "test.ts",
+                "initializer": 0,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "initialCount",
+                "position": {
+                  "end": {
+                    "column": 54,
+                    "line": 1,
+                  },
+                  "start": {
+                    "column": 30,
+                    "line": 1,
+                  },
                 },
-                "start": {
-                  "column": 30,
-                  "line": 1,
+                "text": "initialCount: number = 0",
+                "type": {
+                  "kind": "Number",
+                  "text": "number",
+                  "value": undefined,
                 },
               },
-              "text": "initialCount: number = 0",
-              "type": {
-                "kind": "Number",
-                "text": "number",
-                "value": undefined,
+            ],
+            "position": {
+              "end": {
+                "column": 58,
+                "line": 1,
+              },
+              "start": {
+                "column": 20,
+                "line": 1,
               },
             },
-          ],
-          "returnType": {
-            "kind": "Void",
-            "text": "void",
+            "returnType": {
+              "kind": "Void",
+              "text": "void",
+            },
+            "text": "(initialCount: number = 0) => void",
           },
-          "text": "(initialCount?: number) => void",
-        },
+        ],
+        "text": "(initialCount?: number) => void",
       }
     `)
   })
@@ -5505,7 +5707,7 @@ describe('resolveType', () => {
     expect(types).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "Variable",
+        "kind": "Component",
         "name": "Text",
         "position": {
           "end": {
@@ -5517,12 +5719,11 @@ describe('resolveType', () => {
             "line": 21,
           },
         },
-        "text": "(props: TextProps) => void",
-        "type": {
-          "isAsync": false,
-          "kind": "FunctionType",
-          "parameters": [
-            {
+        "signatures": [
+          {
+            "filePath": "test.ts",
+            "kind": "ComponentSignature",
+            "parameter": {
               "description": undefined,
               "filePath": "test.ts",
               "initializer": {
@@ -5558,13 +5759,24 @@ describe('resolveType', () => {
                 "text": "TextProps",
               },
             },
-          ],
-          "returnType": {
-            "kind": "Void",
-            "text": "void",
+            "position": {
+              "end": {
+                "column": 2,
+                "line": 29,
+              },
+              "start": {
+                "column": 21,
+                "line": 21,
+              },
+            },
+            "returnType": {
+              "kind": "Void",
+              "text": "void",
+            },
+            "text": "(props: TextProps) => void",
           },
-          "text": "(props: TextProps) => void",
-        },
+        ],
+        "text": "(props: TextProps) => void",
       }
     `)
   })
@@ -5600,7 +5812,7 @@ describe('resolveType', () => {
     expect(types).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "Variable",
+        "kind": "Function",
         "name": undefined,
         "position": {
           "end": {
@@ -5612,33 +5824,211 @@ describe('resolveType', () => {
             "line": 8,
           },
         },
-        "text": "IStyledComponentBase<"web", Substitute<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, GridProps>> & string",
-        "type": {
-          "kind": "IntersectionType",
-          "text": "IStyledComponentBase<"web", Substitute<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, GridProps>> & string",
-          "types": [
-            {
-              "filePath": "node_modules/styled-components/dist/types.d.ts",
+        "signatures": [
+          {
+            "filePath": "node_modules/styled-components/dist/types.d.ts",
+            "kind": "FunctionSignature",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/styled-components/dist/types.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "props",
+                "position": {
+                  "end": {
+                    "column": 186,
+                    "line": 133,
+                  },
+                  "start": {
+                    "column": 111,
+                    "line": 133,
+                  },
+                },
+                "text": "props: PolymorphicComponentProps<R, BaseProps, AsTarget, ForwardedAsTarget>",
+                "type": {
+                  "filePath": "node_modules/styled-components/dist/types.d.ts",
+                  "kind": "TypeReference",
+                  "position": {
+                    "end": {
+                      "column": 186,
+                      "line": 133,
+                    },
+                    "start": {
+                      "column": 118,
+                      "line": 133,
+                    },
+                  },
+                  "text": "PolymorphicComponentProps<R, BaseProps, AsTarget, ForwardedAsTarget, AsTarget extends KnownTarget ? ComponentPropsWithRef<AsTarget> : {}, ForwardedAsTarget extends KnownTarget ? ComponentPropsWithRef<...> : {}>",
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 207,
+                "line": 133,
+              },
+              "start": {
+                "column": 5,
+                "line": 133,
+              },
+            },
+            "returnType": {
+              "filePath": "node_modules/@types/react/index.d.ts",
               "kind": "TypeReference",
               "position": {
                 "end": {
-                  "column": 2,
-                  "line": 138,
+                  "column": 66,
+                  "line": 4028,
                 },
                 "start": {
-                  "column": 1,
-                  "line": 135,
+                  "column": 9,
+                  "line": 4028,
                 },
               },
-              "text": "IStyledComponentBase<"web", Substitute<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, GridProps>>",
+              "text": "Element",
             },
-            {
-              "kind": "String",
-              "text": "string",
-              "value": undefined,
+            "text": "<AsTarget extends StyledTarget<R> | void, ForwardedAsTarget extends StyledTarget<R> | void>(props: PolymorphicComponentProps<R, BaseProps, AsTarget, ForwardedAsTarget>) => Element",
+            "typeParameters": [
+              {
+                "constraint": {
+                  "kind": "UnionType",
+                  "text": "StyledTarget<R> | void",
+                  "types": [
+                    {
+                      "filePath": "node_modules/styled-components/dist/types.d.ts",
+                      "kind": "TypeReference",
+                      "position": {
+                        "end": {
+                          "column": 38,
+                          "line": 133,
+                        },
+                        "start": {
+                          "column": 23,
+                          "line": 133,
+                        },
+                      },
+                      "text": "StyledTarget<R>",
+                    },
+                    {
+                      "kind": "Void",
+                      "text": "void",
+                    },
+                  ],
+                },
+                "defaultType": {
+                  "kind": "Void",
+                  "text": "void",
+                },
+                "kind": "TypeParameter",
+                "name": "AsTarget",
+                "text": "AsTarget extends StyledTarget<R> | void = void",
+              },
+              {
+                "constraint": {
+                  "kind": "UnionType",
+                  "text": "StyledTarget<R> | void",
+                  "types": [
+                    {
+                      "filePath": "node_modules/styled-components/dist/types.d.ts",
+                      "kind": "TypeReference",
+                      "position": {
+                        "end": {
+                          "column": 95,
+                          "line": 133,
+                        },
+                        "start": {
+                          "column": 80,
+                          "line": 133,
+                        },
+                      },
+                      "text": "StyledTarget<R>",
+                    },
+                    {
+                      "kind": "Void",
+                      "text": "void",
+                    },
+                  ],
+                },
+                "defaultType": {
+                  "kind": "Void",
+                  "text": "void",
+                },
+                "kind": "TypeParameter",
+                "name": "ForwardedAsTarget",
+                "text": "ForwardedAsTarget extends StyledTarget<R> | void = void",
+              },
+            ],
+          },
+          {
+            "filePath": "node_modules/@types/react/index.d.ts",
+            "kind": "FunctionSignature",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/@types/react/index.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "props",
+                "position": {
+                  "end": {
+                    "column": 18,
+                    "line": 562,
+                  },
+                  "start": {
+                    "column": 10,
+                    "line": 562,
+                  },
+                },
+                "text": "props: P",
+                "type": {
+                  "filePath": "node_modules/@types/react/index.d.ts",
+                  "kind": "TypeReference",
+                  "position": {
+                    "end": {
+                      "column": 18,
+                      "line": 562,
+                    },
+                    "start": {
+                      "column": 17,
+                      "line": 562,
+                    },
+                  },
+                  "text": "P",
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 31,
+                "line": 562,
+              },
+              "start": {
+                "column": 9,
+                "line": 562,
+              },
             },
-          ],
-        },
+            "returnType": {
+              "filePath": "node_modules/@types/react/index.d.ts",
+              "kind": "TypeReference",
+              "position": {
+                "end": {
+                  "column": 30,
+                  "line": 562,
+                },
+                "start": {
+                  "column": 21,
+                  "line": 562,
+                },
+              },
+              "text": "ReactNode",
+            },
+            "text": "(props: P) => ReactNode",
+          },
+        ],
+        "text": "IStyledComponentBase<"web", Substitute<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, GridProps>> & string",
       }
     `)
   })
@@ -5671,7 +6061,7 @@ describe('resolveType', () => {
     expect(types).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "Variable",
+        "kind": "Function",
         "name": undefined,
         "position": {
           "end": {
@@ -5683,33 +6073,211 @@ describe('resolveType', () => {
             "line": 4,
           },
         },
-        "text": "IStyledComponentBase<"web", Substitute<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, { $gridTemplateColumns: string; $gridTemplateRows: string; }>> & string",
-        "type": {
-          "kind": "IntersectionType",
-          "text": "IStyledComponentBase<"web", Substitute<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, { $gridTemplateColumns: string; $gridTemplateRows: string; }>> & string",
-          "types": [
-            {
-              "filePath": "node_modules/styled-components/dist/types.d.ts",
+        "signatures": [
+          {
+            "filePath": "node_modules/styled-components/dist/types.d.ts",
+            "kind": "FunctionSignature",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/styled-components/dist/types.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "props",
+                "position": {
+                  "end": {
+                    "column": 186,
+                    "line": 133,
+                  },
+                  "start": {
+                    "column": 111,
+                    "line": 133,
+                  },
+                },
+                "text": "props: PolymorphicComponentProps<R, BaseProps, AsTarget, ForwardedAsTarget>",
+                "type": {
+                  "filePath": "node_modules/styled-components/dist/types.d.ts",
+                  "kind": "TypeReference",
+                  "position": {
+                    "end": {
+                      "column": 186,
+                      "line": 133,
+                    },
+                    "start": {
+                      "column": 118,
+                      "line": 133,
+                    },
+                  },
+                  "text": "PolymorphicComponentProps<R, BaseProps, AsTarget, ForwardedAsTarget, AsTarget extends KnownTarget ? ComponentPropsWithRef<AsTarget> : {}, ForwardedAsTarget extends KnownTarget ? ComponentPropsWithRef<...> : {}>",
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 207,
+                "line": 133,
+              },
+              "start": {
+                "column": 5,
+                "line": 133,
+              },
+            },
+            "returnType": {
+              "filePath": "node_modules/@types/react/index.d.ts",
               "kind": "TypeReference",
               "position": {
                 "end": {
-                  "column": 2,
-                  "line": 138,
+                  "column": 66,
+                  "line": 4028,
                 },
                 "start": {
-                  "column": 1,
-                  "line": 135,
+                  "column": 9,
+                  "line": 4028,
                 },
               },
-              "text": "IStyledComponentBase<"web", Substitute<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, { $gridTemplateColumns: string; $gridTemplateRows: string; }>>",
+              "text": "Element",
             },
-            {
-              "kind": "String",
-              "text": "string",
-              "value": undefined,
+            "text": "<AsTarget extends StyledTarget<R> | void, ForwardedAsTarget extends StyledTarget<R> | void>(props: PolymorphicComponentProps<R, BaseProps, AsTarget, ForwardedAsTarget>) => Element",
+            "typeParameters": [
+              {
+                "constraint": {
+                  "kind": "UnionType",
+                  "text": "StyledTarget<R> | void",
+                  "types": [
+                    {
+                      "filePath": "node_modules/styled-components/dist/types.d.ts",
+                      "kind": "TypeReference",
+                      "position": {
+                        "end": {
+                          "column": 38,
+                          "line": 133,
+                        },
+                        "start": {
+                          "column": 23,
+                          "line": 133,
+                        },
+                      },
+                      "text": "StyledTarget<R>",
+                    },
+                    {
+                      "kind": "Void",
+                      "text": "void",
+                    },
+                  ],
+                },
+                "defaultType": {
+                  "kind": "Void",
+                  "text": "void",
+                },
+                "kind": "TypeParameter",
+                "name": "AsTarget",
+                "text": "AsTarget extends StyledTarget<R> | void = void",
+              },
+              {
+                "constraint": {
+                  "kind": "UnionType",
+                  "text": "StyledTarget<R> | void",
+                  "types": [
+                    {
+                      "filePath": "node_modules/styled-components/dist/types.d.ts",
+                      "kind": "TypeReference",
+                      "position": {
+                        "end": {
+                          "column": 95,
+                          "line": 133,
+                        },
+                        "start": {
+                          "column": 80,
+                          "line": 133,
+                        },
+                      },
+                      "text": "StyledTarget<R>",
+                    },
+                    {
+                      "kind": "Void",
+                      "text": "void",
+                    },
+                  ],
+                },
+                "defaultType": {
+                  "kind": "Void",
+                  "text": "void",
+                },
+                "kind": "TypeParameter",
+                "name": "ForwardedAsTarget",
+                "text": "ForwardedAsTarget extends StyledTarget<R> | void = void",
+              },
+            ],
+          },
+          {
+            "filePath": "node_modules/@types/react/index.d.ts",
+            "kind": "FunctionSignature",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "node_modules/@types/react/index.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "props",
+                "position": {
+                  "end": {
+                    "column": 18,
+                    "line": 562,
+                  },
+                  "start": {
+                    "column": 10,
+                    "line": 562,
+                  },
+                },
+                "text": "props: P",
+                "type": {
+                  "filePath": "node_modules/@types/react/index.d.ts",
+                  "kind": "TypeReference",
+                  "position": {
+                    "end": {
+                      "column": 18,
+                      "line": 562,
+                    },
+                    "start": {
+                      "column": 17,
+                      "line": 562,
+                    },
+                  },
+                  "text": "P",
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 31,
+                "line": 562,
+              },
+              "start": {
+                "column": 9,
+                "line": 562,
+              },
             },
-          ],
-        },
+            "returnType": {
+              "filePath": "node_modules/@types/react/index.d.ts",
+              "kind": "TypeReference",
+              "position": {
+                "end": {
+                  "column": 30,
+                  "line": 562,
+                },
+                "start": {
+                  "column": 21,
+                  "line": 562,
+                },
+              },
+              "text": "ReactNode",
+            },
+            "text": "(props: P) => ReactNode",
+          },
+        ],
+        "text": "IStyledComponentBase<"web", Substitute<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, { $gridTemplateColumns: string; $gridTemplateRows: string; }>> & string",
       }
     `)
   })
@@ -7269,7 +7837,7 @@ describe('resolveType', () => {
     expect(types).toMatchInlineSnapshot(`
       {
         "filePath": "test.tsx",
-        "kind": "Variable",
+        "kind": "Component",
         "name": "Button",
         "position": {
           "end": {
@@ -7281,12 +7849,11 @@ describe('resolveType', () => {
             "line": 9,
           },
         },
-        "text": "(props: ButtonProps) => React.JSX.Element",
-        "type": {
-          "isAsync": false,
-          "kind": "FunctionType",
-          "parameters": [
-            {
+        "signatures": [
+          {
+            "filePath": "test.tsx",
+            "kind": "ComponentSignature",
+            "parameter": {
               "description": undefined,
               "filePath": "test.tsx",
               "initializer": undefined,
@@ -7320,24 +7887,35 @@ describe('resolveType', () => {
                 "text": "ButtonProps",
               },
             },
-          ],
-          "returnType": {
-            "filePath": "node_modules/@types/react/index.d.ts",
-            "kind": "TypeReference",
             "position": {
               "end": {
-                "column": 66,
-                "line": 4028,
+                "column": 2,
+                "line": 11,
               },
               "start": {
-                "column": 9,
-                "line": 4028,
+                "column": 23,
+                "line": 9,
               },
             },
-            "text": "Element",
+            "returnType": {
+              "filePath": "node_modules/@types/react/index.d.ts",
+              "kind": "TypeReference",
+              "position": {
+                "end": {
+                  "column": 66,
+                  "line": 4028,
+                },
+                "start": {
+                  "column": 9,
+                  "line": 4028,
+                },
+              },
+              "text": "Element",
+            },
+            "text": "(props: ButtonProps) => Element",
           },
-          "text": "(props: ButtonProps) => Element",
-        },
+        ],
+        "text": "(props: ButtonProps) => React.JSX.Element",
       }
     `)
   })

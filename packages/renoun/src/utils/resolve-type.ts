@@ -318,10 +318,10 @@ export namespace Kind {
     /** The type of the class property. */
     type: Type
 
-    /** The initial value assigned to the property. */
+    /** The initialized value assigned to the property. */
     initializer?: Initializer
 
-    /** Whether the property has a question token or initial value. */
+    /** Whether the property has a question token or initialized value. */
     isOptional?: boolean
 
     /** Whether the property has a readonly modifier. */
@@ -484,10 +484,10 @@ export namespace Kind {
     /** The type expression of the parameter. */
     type: Type
 
-    /** The initial value assigned to the parameter. */
+    /** The initialized value assigned to the parameter. */
     initializer?: Initializer
 
-    /** Whether the parameter has an optional modifier or initial value. If `isRest` is `true`, the parameter is always optional. */
+    /** Whether the parameter has an optional modifier or initialized value. If `isRest` is `true`, the parameter is always optional. */
     isOptional?: boolean
 
     /** Whether the parameter is a rest parameter, e.g. `...rest`. */
@@ -641,45 +641,12 @@ export function resolveType(
     kind: 'Unknown',
     text: typeText,
   } satisfies Kind.Unknown
+  const callSignatures = type.getCallSignatures()
 
-  // const isAtDeclaringNode =
-  //   (!enclosingNode && symbolDeclaration) ||
-  //   enclosingNode === symbolDeclaration ||
-  //   (tsMorph.Node.isVariableDeclaration(enclosingNode) &&
-  //     enclosingNode.getInitializer() === symbolDeclaration)
-
-  // // Attempt to resolve the type expression first.
-  // let resolvedTypeExpression: Kind.TypeExpression | undefined
-
-  // if (!isAtDeclaringNode) {
-  //   try {
-  //     // TODO: need to handle when enxlosing node is type alias declaration and get the type node
-  //     // then we can determine if we need to keep resolving or stop because it's exported
-  //     console.log({ enclosingNode, symbolDeclaration })
-  //     resolvedTypeExpression = resolveTypeExpression(
-  //       type,
-  //       declaration,
-  //       filter,
-  //       defaultValues,
-  //       keepReferences,
-  //       dependencies
-  //     )
-  //   } catch (error) {
-  //     if (error instanceof UnresolvedTypeExpressionError) {
-  //       resolvedTypeExpression = undefined
-  //     } else {
-  //       throw error
-  //     }
-  //   }
-  // }
-
-  const resolvedTypeExpression = false
-
-  debugger
-
-  if (resolvedTypeExpression) {
-    // resolvedType = resolvedTypeExpression
-  } else if (tsMorph.Node.isVariableDeclaration(enclosingNode)) {
+  if (
+    callSignatures.length === 0 &&
+    tsMorph.Node.isVariableDeclaration(enclosingNode)
+  ) {
     const typeNode = enclosingNode.getTypeNode()
     let variableTypeResolved: Kind.TypeExpression | undefined
 
@@ -853,72 +820,68 @@ export function resolveType(
         dependencies
       ),
     } satisfies Kind.Interface
-  } else {
-    const callSignatures = type.getCallSignatures()
+  } else if (callSignatures.length > 0) {
+    const resolvedCallSignatures = resolveCallSignatures(
+      callSignatures,
+      declaration,
+      filter,
+      dependencies
+    )
 
-    if (callSignatures.length > 0) {
-      const resolvedCallSignatures = resolveCallSignatures(
-        callSignatures,
-        declaration,
-        filter,
-        dependencies
-      )
-
-      if (isComponent(symbolMetadata.name, resolvedCallSignatures)) {
-        resolvedType = {
-          kind: 'Component',
-          name: symbolMetadata.name,
-          text: typeText,
-          signatures: resolvedCallSignatures.map(
-            ({ kind, parameters, isGenerator, ...resolvedCallSignature }) => {
-              if (isGenerator) {
-                throw new Error(
-                  '[renoun] Components cannot be generator functions.'
-                )
-              }
-
-              return {
-                ...resolvedCallSignature,
-                kind: 'ComponentSignature',
-                parameter: parameters.at(0) as
-                  | Kind.ComponentParameter
-                  | undefined,
-              } satisfies Kind.ComponentSignature
+    if (isComponent(symbolMetadata.name, resolvedCallSignatures)) {
+      resolvedType = {
+        kind: 'Component',
+        name: symbolMetadata.name,
+        text: typeText,
+        signatures: resolvedCallSignatures.map(
+          ({ kind, parameters, isGenerator, ...resolvedCallSignature }) => {
+            if (isGenerator) {
+              throw new Error(
+                '[renoun] Components cannot be generator functions.'
+              )
             }
-          ),
-        } satisfies Kind.Component
-      } else {
-        resolvedType = {
-          kind: 'Function',
-          name: symbolMetadata.name,
-          text: typeText,
-          signatures: resolvedCallSignatures.map(
-            ({ kind, ...resolvedCallSignature }) => {
-              return {
-                kind: 'FunctionSignature',
-                ...resolvedCallSignature,
-              } satisfies Kind.FunctionSignature
-            }
-          ),
-        } satisfies Kind.Function
-      }
+
+            return {
+              ...resolvedCallSignature,
+              kind: 'ComponentSignature',
+              parameter: parameters.at(0) as
+                | Kind.ComponentParameter
+                | undefined,
+            } satisfies Kind.ComponentSignature
+          }
+        ),
+      } satisfies Kind.Component
     } else {
-      const resolvedTypeExpression = resolveTypeExpression(
-        type,
-        declaration,
-        filter,
-        defaultValues,
-        keepReferences,
-        dependencies
-      )
+      resolvedType = {
+        kind: 'Function',
+        name: symbolMetadata.name,
+        text: typeText,
+        signatures: resolvedCallSignatures.map(
+          ({ kind, ...resolvedCallSignature }) => {
+            return {
+              kind: 'FunctionSignature',
+              ...resolvedCallSignature,
+            } satisfies Kind.FunctionSignature
+          }
+        ),
+      } satisfies Kind.Function
+    }
+  } else {
+    const resolvedTypeExpression = resolveTypeExpression(
+      type,
+      declaration,
+      filter,
+      defaultValues,
+      keepReferences,
+      dependencies
+    )
 
-      if (resolvedTypeExpression) {
-        resolvedType = resolvedTypeExpression
-      } else {
-        throw new Error(
-          `[renoun:resolveType]: No type could be resolved for "${symbolMetadata.name}". Please file an issue if you encounter this error.`
-        )
-      }
+    if (resolvedTypeExpression) {
+      resolvedType = resolvedTypeExpression
+    } else {
+      throw new Error(
+        `[renoun:resolveType]: No type could be resolved for "${symbolMetadata.name}". Please file an issue if you encounter this error.`
+      )
     }
   }
 
@@ -955,41 +918,12 @@ export function resolveTypeExpression(
   )
   const symbol = type.getAliasSymbol() ?? type.getSymbol()
   const primaryDeclaration = getPrimaryDeclaration(symbol)
-  // const symbolMetadata = getSymbolMetadata(symbol, enclosingNode)
-
-  // if (symbolMetadata.isInNodeModules) {
-  //   return {
-  //     kind: 'TypeReference',
-  //     text: typeText,
-  //     ...(primaryDeclaration ? getDeclarationLocation(primaryDeclaration) : {}),
-  //   } as Kind.TypeReference
-  // }
 
   rootReferences.add(type)
 
   try {
     const symbol = type.getSymbol()
     const symbolDeclaration = getPrimaryDeclaration(symbol)
-    // const symbolMetadata = getSymbolMetadata(symbol, enclosingNode)
-    // const isAtDeclaringNode =
-    //   (!enclosingNode && symbolDeclaration) ||
-    //   enclosingNode === symbolDeclaration
-
-    // if (
-    //   symbolDeclaration &&
-    //   !isAtDeclaringNode &&
-    //   (tsMorph.Node.isInterfaceDeclaration(symbolDeclaration) ||
-    //     tsMorph.Node.isTypeAliasDeclaration(symbolDeclaration))
-    // ) {
-    //   if (symbolMetadata.isExported || symbolMetadata.isInNodeModules) {
-    //     return {
-    //       kind: 'TypeReference',
-    //       text: typeText,
-    //       ...getDeclarationLocation(symbolDeclaration),
-    //     } satisfies Kind.TypeReference
-    //   }
-    // }
-
     let resolvedType: Kind.TypeExpression | undefined
 
     if (isTypeReference(type)) {
