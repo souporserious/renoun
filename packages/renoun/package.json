@@ -153,6 +153,7 @@
     "geist": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
+    "styled-components": "^6.1.19",
     "tm-grammars": "^1.23.26",
     "tm-themes": "^1.10.6",
     "valibot": "catalog:",

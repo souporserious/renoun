@@ -412,6 +412,14 @@ export namespace Kind {
     parameter?: ComponentParameter
   }
 
+  /** Represents a top-level `const`, `let`, or `var` statement. */
+  export interface Variable extends SharedDocumentable {
+    kind: 'Variable'
+
+    /** The annotated or inferred type of the variable. */
+    type: TypeExpression
+  }
+
   export interface Interface<Member extends MemberUnion = MemberUnion>
     extends SharedDocumentable {
     kind: 'Interface'
@@ -540,6 +548,7 @@ export namespace Kind {
     | ClassAccessor
     | Function
     | Component
+    | Variable
     | Interface
     | Enum
     | EnumMember
@@ -588,7 +597,6 @@ export function resolveType(
   keepReferences: boolean = false,
   dependencies?: Set<string>
 ): Kind.All | undefined {
-  debugger
   const aliasSymbol = type.getAliasSymbol()
   const symbol =
     /* First, attempt to get the aliased symbol for aliased types */
@@ -634,36 +642,80 @@ export function resolveType(
     text: typeText,
   } satisfies Kind.Unknown
 
-  const isAtDeclaringNode =
-    (!enclosingNode && symbolDeclaration) ||
-    enclosingNode === symbolDeclaration ||
-    (tsMorph.Node.isVariableDeclaration(enclosingNode) &&
-      enclosingNode.getInitializer() === symbolDeclaration)
+  // const isAtDeclaringNode =
+  //   (!enclosingNode && symbolDeclaration) ||
+  //   enclosingNode === symbolDeclaration ||
+  //   (tsMorph.Node.isVariableDeclaration(enclosingNode) &&
+  //     enclosingNode.getInitializer() === symbolDeclaration)
 
-  // Attempt to resolve the type expression first.
-  let resolvedTypeExpression: Kind.TypeExpression | undefined
+  // // Attempt to resolve the type expression first.
+  // let resolvedTypeExpression: Kind.TypeExpression | undefined
 
-  if (!isAtDeclaringNode) {
-    try {
-      resolvedTypeExpression = resolveTypeExpression(
+  // if (!isAtDeclaringNode) {
+  //   try {
+  //     // TODO: need to handle when enxlosing node is type alias declaration and get the type node
+  //     // then we can determine if we need to keep resolving or stop because it's exported
+  //     console.log({ enclosingNode, symbolDeclaration })
+  //     resolvedTypeExpression = resolveTypeExpression(
+  //       type,
+  //       declaration,
+  //       filter,
+  //       defaultValues,
+  //       keepReferences,
+  //       dependencies
+  //     )
+  //   } catch (error) {
+  //     if (error instanceof UnresolvedTypeExpressionError) {
+  //       resolvedTypeExpression = undefined
+  //     } else {
+  //       throw error
+  //     }
+  //   }
+  // }
+
+  const resolvedTypeExpression = false
+
+  debugger
+
+  if (resolvedTypeExpression) {
+    // resolvedType = resolvedTypeExpression
+  } else if (tsMorph.Node.isVariableDeclaration(enclosingNode)) {
+    const typeNode = enclosingNode.getTypeNode()
+    let variableTypeResolved: Kind.TypeExpression | undefined
+
+    if (typeNode) {
+      variableTypeResolved = resolveTypeExpression(
+        typeNode.getType(),
+        typeNode,
+        filter,
+        defaultValues,
+        false,
+        dependencies
+      )
+    } else {
+      variableTypeResolved = resolveTypeExpression(
         type,
-        declaration,
+        enclosingNode,
         filter,
         defaultValues,
         keepReferences,
         dependencies
       )
-    } catch (error) {
-      if (error instanceof UnresolvedTypeExpressionError) {
-        resolvedTypeExpression = undefined
-      } else {
-        throw error
-      }
     }
-  }
 
-  if (resolvedTypeExpression) {
-    resolvedType = resolvedTypeExpression
+    if (!variableTypeResolved) {
+      if (!keepReferences) {
+        rootReferences.delete(type)
+      }
+      return
+    }
+
+    resolvedType = {
+      kind: 'Variable',
+      name: symbolMetadata.name,
+      text: typeText,
+      type: variableTypeResolved,
+    } satisfies Kind.Variable
   } else if (tsMorph.Node.isClassDeclaration(symbolDeclaration)) {
     resolvedType = resolveClass(symbolDeclaration, filter, dependencies)
     if (symbolMetadata.name) {
@@ -851,9 +903,22 @@ export function resolveType(
         } satisfies Kind.Function
       }
     } else {
-      throw new Error(
-        `[renoun:resolveType]: No type could be resolved for "${symbolMetadata.name}". Please file an issue if you encounter this error.`
+      const resolvedTypeExpression = resolveTypeExpression(
+        type,
+        declaration,
+        filter,
+        defaultValues,
+        keepReferences,
+        dependencies
       )
+
+      if (resolvedTypeExpression) {
+        resolvedType = resolvedTypeExpression
+      } else {
+        throw new Error(
+          `[renoun:resolveType]: No type could be resolved for "${symbolMetadata.name}". Please file an issue if you encounter this error.`
+        )
+      }
     }
   }
 
@@ -1571,7 +1636,7 @@ function resolveMemberSignature(
   keepReferences: boolean = false,
   dependencies?: Set<string>
 ): Kind.MemberUnion | undefined {
-  const resolvedMemberType = resolveType(
+  const resolvedMemberType = resolveTypeExpression(
     member.getType(),
     member,
     filter,
@@ -2630,7 +2695,7 @@ function resolveClassProperty(
     return
   }
 
-  const resolvedType = resolveType(
+  const resolvedType = resolveTypeExpression(
     property.getType(),
     property,
     filter,
