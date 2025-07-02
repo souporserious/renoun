@@ -2121,38 +2121,6 @@ function resolveTypeTupleElements(
     .filter(Boolean) as Kind.TupleElement[]
 }
 
-/** Check if every type argument is in node_modules. */
-function isEveryTypeInNodeModules(types: (Type | TypeNode)[]) {
-  if (types.length === 0) {
-    return false
-  }
-  return types.every((type) =>
-    type.getSymbol()?.getDeclarations().at(0)?.getSourceFile().isInNodeModules()
-  )
-}
-
-/** Checks if a type is a primitive type. */
-function isPrimitiveType(type: Type) {
-  return (
-    type.isBoolean() ||
-    type.isBooleanLiteral() ||
-    type.isNumber() ||
-    type.isNumberLiteral() ||
-    type.isBigInt() ||
-    type.isBigIntLiteral() ||
-    type.isString() ||
-    type.isStringLiteral() ||
-    type.isTemplateLiteral() ||
-    type.isUndefined() ||
-    type.isNull() ||
-    type.isVoid() ||
-    type.isAny() ||
-    type.isUnknown() ||
-    type.isNever() ||
-    isSymbol(type)
-  )
-}
-
 /** Check if a type is a symbol. */
 function isSymbol(type: Type) {
   const symbol = type.getSymbol()
