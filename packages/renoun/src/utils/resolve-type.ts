@@ -1015,7 +1015,11 @@ function resolveTypeExpression(
         text: typeText,
         value: type.getLiteralValue() as unknown as BigInteger,
       } satisfies Kind.BigInt
-    } else if (type.isString() || type.isStringLiteral()) {
+    } else if (
+      type.isString() ||
+      type.isStringLiteral() ||
+      type.isTemplateLiteral()
+    ) {
       resolvedType = {
         kind: 'String',
         text: typeText,

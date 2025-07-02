@@ -11880,6 +11880,43 @@ describe('resolveType', () => {
     `)
   })
 
+  test('template literal', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      export type Foo = \`foo\${string}\`
+      `,
+      { overwrite: true }
+    )
+    const typeAlias = sourceFile.getTypeAliasOrThrow('Foo')
+    const types = resolveType(typeAlias.getType(), typeAlias)
+
+    expect(types).toMatchInlineSnapshot(`
+      {
+        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+        "kind": "TypeAlias",
+        "name": undefined,
+        "parameters": [],
+        "position": {
+          "end": {
+            "column": 4402,
+            "line": 4,
+          },
+          "start": {
+            "column": 3482,
+            "line": 4,
+          },
+        },
+        "text": "\`foo\${string}\`",
+        "type": {
+          "kind": "String",
+          "text": "\`foo\${string}\`",
+          "value": undefined,
+        },
+      }
+    `)
+  })
+
   test.skip('includes moduleSpecifier for imported type references', () => {
     project.createSourceFile('foo.ts', `export type Foo = string;`)
     const sourceFile = project.createSourceFile(
