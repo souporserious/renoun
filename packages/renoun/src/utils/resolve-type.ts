@@ -426,6 +426,9 @@ export namespace Kind {
 
     /** The member types of the interface. */
     members: Member[]
+
+    /** The type parameters that can be provided as arguments to the type alias. */
+    parameters: TypeParameter[]
   }
 
   export interface TypeParameter extends SharedDocumentable {
@@ -786,10 +789,25 @@ export function resolveType(
       type: resolvedTypeExpression,
     } satisfies Kind.TypeAlias
   } else if (tsMorph.Node.isInterfaceDeclaration(symbolDeclaration)) {
+    const resolvedTypeParameters = symbolDeclaration
+      .getTypeParameters()
+      .map((typeParameter) =>
+        resolveType(
+          typeParameter.getType(),
+          typeParameter,
+          filter,
+          undefined,
+          false,
+          dependencies
+        )
+      )
+      .filter(Boolean) as Kind.TypeParameter[]
+
     resolvedType = {
       kind: 'Interface',
       name: symbolMetadata.name,
       text: typeText,
+      parameters: resolvedTypeParameters,
       members: resolveMemberSignatures(
         symbolDeclaration.getMembers(),
         filter,

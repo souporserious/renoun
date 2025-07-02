@@ -6108,6 +6108,7 @@ describe('resolveType', () => {
           },
         ],
         "name": "CodeBlockProps",
+        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -6293,6 +6294,7 @@ describe('resolveType', () => {
           },
         ],
         "name": "FileExports",
+        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -6657,6 +6659,40 @@ describe('resolveType', () => {
           },
         ],
         "name": "EntryGroupOptions",
+        "parameters": [
+          {
+            "constraint": {
+              "filePath": "test.ts",
+              "kind": "TypeReference",
+              "position": {
+                "end": {
+                  "column": 74,
+                  "line": 3,
+                },
+                "start": {
+                  "column": 52,
+                  "line": 3,
+                },
+              },
+              "text": "any[]",
+            },
+            "defaultType": undefined,
+            "filePath": "test.ts",
+            "kind": "TypeParameter",
+            "name": "Entries",
+            "position": {
+              "end": {
+                "column": 74,
+                "line": 3,
+              },
+              "start": {
+                "column": 36,
+                "line": 3,
+              },
+            },
+            "text": "Entries extends FileSystemEntry<any>[]",
+          },
+        ],
         "position": {
           "end": {
             "column": 2,
@@ -7407,6 +7443,7 @@ describe('resolveType', () => {
           },
         ],
         "name": "Props",
+        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -10558,6 +10595,7 @@ describe('resolveType', () => {
                 },
               ],
               "name": "ButtonProps",
+              "parameters": [],
               "position": {
                 "end": {
                   "column": 2,
@@ -10819,6 +10857,7 @@ describe('resolveType', () => {
           },
         ],
         "name": "User",
+        "parameters": [],
         "position": {
           "end": {
             "column": 2,
