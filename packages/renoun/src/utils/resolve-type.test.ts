@@ -12103,6 +12103,210 @@ describe('resolveType', () => {
     `)
   })
 
+  test('inferred type parameter', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      type UnionToIntersection<Union> = (
+        Union extends any ? (distributedUnion: Union) => void : never
+      ) extends (mergedIntersection: infer Intersection) => void
+        ? Intersection & Union
+        : never
+      `,
+      { overwrite: true }
+    )
+    const declaration = sourceFile.getTypeAliasOrThrow('UnionToIntersection')
+    const types = resolveType(declaration.getType(), declaration)
+
+    expect(types).toMatchInlineSnapshot(`
+      {
+        "filePath": "test.ts",
+        "kind": "TypeAlias",
+        "name": "UnionToIntersection",
+        "position": {
+          "end": {
+            "column": 10,
+            "line": 5,
+          },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "text": "UnionToIntersection<Union>",
+        "type": {
+          "checkType": {
+            "isAsync": false,
+            "kind": "FunctionType",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "test.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "distributedUnion",
+                "position": {
+                  "end": {
+                    "column": 47,
+                    "line": 2,
+                  },
+                  "start": {
+                    "column": 24,
+                    "line": 2,
+                  },
+                },
+                "text": "distributedUnion: Union",
+                "type": {
+                  "filePath": "test.ts",
+                  "kind": "TypeReference",
+                  "position": {
+                    "end": {
+                      "column": 47,
+                      "line": 2,
+                    },
+                    "start": {
+                      "column": 42,
+                      "line": 2,
+                    },
+                  },
+                  "text": "Union",
+                },
+              },
+            ],
+            "returnType": {
+              "kind": "Void",
+              "text": "void",
+            },
+            "text": "Union extends any ? (distributedUnion: Union) => void : never",
+          },
+          "extendsType": {
+            "isAsync": false,
+            "kind": "FunctionType",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "test.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "kind": "Parameter",
+                "name": "mergedIntersection",
+                "position": {
+                  "end": {
+                    "column": 50,
+                    "line": 3,
+                  },
+                  "start": {
+                    "column": 12,
+                    "line": 3,
+                  },
+                },
+                "text": "mergedIntersection: infer Intersection",
+                "type": {
+                  "kind": "InferType",
+                  "text": "Intersection",
+                  "typeParameter": {
+                    "constraint": undefined,
+                    "defaultType": undefined,
+                    "kind": "TypeParameter",
+                    "name": "Intersection",
+                    "text": "Intersection",
+                  },
+                },
+              },
+            ],
+            "returnType": {
+              "kind": "Void",
+              "text": "void",
+            },
+            "text": "(mergedIntersection: Intersection) => void",
+          },
+          "falseType": {
+            "kind": "Never",
+            "text": "never",
+          },
+          "isDistributive": false,
+          "kind": "ConditionalType",
+          "text": "UnionToIntersection<Union>",
+          "trueType": {
+            "kind": "IntersectionType",
+            "text": "Intersection & Union",
+            "types": [
+              {
+                "filePath": "test.ts",
+                "kind": "TypeReference",
+                "position": {
+                  "end": {
+                    "column": 17,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 5,
+                    "line": 4,
+                  },
+                },
+                "text": "Intersection",
+              },
+              {
+                "filePath": "test.ts",
+                "kind": "TypeReference",
+                "position": {
+                  "end": {
+                    "column": 25,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 20,
+                    "line": 4,
+                  },
+                },
+                "text": "Union",
+              },
+            ],
+          },
+        },
+        "typeParameters": [
+          {
+            "constraint": undefined,
+            "defaultType": undefined,
+            "filePath": "test.ts",
+            "kind": "TypeParameter",
+            "name": "Union",
+            "position": {
+              "end": {
+                "column": 31,
+                "line": 1,
+              },
+              "start": {
+                "column": 26,
+                "line": 1,
+              },
+            },
+            "text": "Union",
+          },
+        ],
+      }
+    `)
+  })
+
+  test.skip('class generic type parameter in method', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      type StringUnion<Type> = Extract<Type, string> | (string & {})
+
+      type Loaders = { mdx: any, tsx: any }
+
+      type Extensions = StringUnion<keyof Loaders> | StringUnion<keyof Loaders>[]
+      `,
+      { overwrite: true }
+    )
+    const declaration = sourceFile.getTypeAliasOrThrow('Extensions')
+    const types = resolveType(declaration.getType(), declaration)
+
+    console.log(types)
+  })
+
   test.skip('includes moduleSpecifier for imported type references', () => {
     project.createSourceFile('foo.ts', `export type Foo = string;`)
     const sourceFile = project.createSourceFile(

@@ -24,6 +24,7 @@ import {
 } from './get-initializer-value.js'
 import { getJsDocMetadata } from './get-js-doc-metadata.js'
 import { getSymbolDescription } from './get-symbol-description.js'
+import { getRootDirectory } from './get-root-directory.js'
 
 export namespace Kind {
   /** Metadata present in all types. */
@@ -213,6 +214,11 @@ export namespace Kind {
      * distribution.
      */
     isDistributive?: boolean
+  }
+
+  export interface InferType extends Shared {
+    kind: 'InferType'
+    typeParameter: TypeParameter
   }
 
   export interface IndexedAccessType extends Shared {
@@ -439,6 +445,9 @@ export namespace Kind {
 
     /** The default type of the type parameter. */
     defaultType?: TypeExpression
+
+    /** Whether the type parameter is an inferred type parameter. */
+    isInferred?: boolean
   }
 
   /** Represents a type alias declaration e.g. `type Partial<Type> = { [Key in keyof Type]?: Type[Key] }`. */
@@ -537,6 +546,7 @@ export namespace Kind {
     | TypeLiteral
     | TypeOperator
     | TypeReference
+    | InferType
     | Void
     | Null
     | Undefined
@@ -955,7 +965,7 @@ function resolveTypeExpression(
       )
 
       if (!operandType) {
-        throw new UnresolvedTypeExpressionError(type.getText(), operandNode)
+        throw new UnresolvedTypeExpressionError(type, operandNode)
       }
 
       const operator = enclosingNode.getOperator()
@@ -993,7 +1003,7 @@ function resolveTypeExpression(
       )
 
       if (!resolvedObjectType || !resolvedIndexType) {
-        throw new UnresolvedTypeExpressionError(type.getText(), enclosingNode)
+        throw new UnresolvedTypeExpressionError(type, enclosingNode)
       }
 
       resolvedType = {
@@ -1002,6 +1012,26 @@ function resolveTypeExpression(
         objectType: resolvedObjectType,
         indexType: resolvedIndexType,
       } satisfies Kind.IndexedAccessType
+    } else if (
+      type.isTypeParameter() &&
+      tsMorph.Node.isTypeParameterDeclaration(symbolDeclaration) &&
+      tsMorph.Node.isInferTypeNode(enclosingNode)
+    ) {
+      const resolvedTypeParameter = resolveTypeParameterDeclaration(
+        symbolDeclaration,
+        filter,
+        dependencies
+      )
+
+      if (!resolvedTypeParameter) {
+        throw new UnresolvedTypeExpressionError(type, enclosingNode)
+      }
+
+      resolvedType = {
+        kind: 'InferType',
+        text: typeText,
+        typeParameter: resolvedTypeParameter,
+      } satisfies Kind.InferType
     } else if (type.isBoolean() || type.isBooleanLiteral()) {
       resolvedType = {
         kind: 'Boolean',
@@ -1491,10 +1521,7 @@ function resolveTypeExpression(
           members: [...propertySignatures, ...indexSignatures],
         } satisfies Kind.TypeLiteral
       } else {
-        throw new UnresolvedTypeExpressionError(
-          type.getText(),
-          symbolDeclaration ?? enclosingNode
-        )
+        throw new UnresolvedTypeExpressionError(type, enclosingNode)
       }
     }
 
@@ -1507,16 +1534,27 @@ function resolveTypeExpression(
 }
 
 export class UnresolvedTypeExpressionError extends Error {
-  readonly typeText: string
-  readonly node?: Node
+  readonly type: Type
+  readonly enclosingNode?: Node
 
-  constructor(typeText: string, node?: Node) {
-    super(
-      `[renoun:UnresolvedTypeExpression] Could not resolve "${typeText}".${node ? `\n\n${printNode(node)}` : ''}`
-    )
+  constructor(type: Type, enclosingNode?: Node) {
+    const symbol = type.getSymbol()
+    const symbolDeclaration = getPrimaryDeclaration(symbol)
+    let message = `[renoun:UnresolvedTypeExpression] Could not resolve "${type.getText()}"`
+
+    if (symbolDeclaration) {
+      message += `\n\nSymbol Declaration\n\n${printNode(symbolDeclaration)}`
+    }
+
+    if (enclosingNode) {
+      message += `\n\nEnclosing Node\n\n${printNode(enclosingNode)}`
+    }
+
+    super(message)
+
     this.name = 'UnresolvedTypeExpressionError'
-    this.typeText = typeText
-    this.node = node
+    this.type = type
+    this.enclosingNode = enclosingNode
 
     Error.captureStackTrace?.(this, UnresolvedTypeExpressionError)
   }
@@ -3042,9 +3080,7 @@ function getModuleSpecifierFromTypeReference(node: tsMorph.TypeReferenceNode) {
 }
 
 /** Prints helpful information about a node for debugging. */
-function printNode(
-  node: tsMorph.Node | tsMorph.FunctionDeclaration | tsMorph.PropertyDeclaration
-) {
+function printNode(node: tsMorph.Node) {
   const kindName = node.getKindName()
   let output = `Kind: ${kindName}\n`
 
@@ -3060,7 +3096,7 @@ function printNode(
 
   const sourceFile = node.getSourceFile()
 
-  output += `File: ${sourceFile.getFilePath().replace(process.cwd(), '')}\n`
+  output += `File: ${sourceFile.getFilePath().replace(getRootDirectory(), '').slice(1)}\n`
 
   const startPos = sourceFile.getLineAndColumnAtPos(node.getStart())
   const endPos = sourceFile.getLineAndColumnAtPos(node.getEnd())
