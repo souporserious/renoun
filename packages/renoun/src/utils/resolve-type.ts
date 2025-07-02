@@ -801,7 +801,6 @@ export function resolveType(
   } else if (callSignatures.length > 0) {
     const resolvedCallSignatures = resolveCallSignatures(
       callSignatures,
-      declaration,
       filter,
       dependencies
     )
@@ -1675,21 +1674,17 @@ function resolveTypeParameterDeclaration(
 /** Process all function signatures of a given type including their parameters and return types. */
 function resolveCallSignatures(
   signatures: Signature[],
-  enclosingNode?: Node,
   filter: SymbolFilter = defaultFilter,
   dependencies?: Set<string>
 ): Kind.CallSignature[] {
   return signatures
-    .map((signature) =>
-      resolveCallSignature(signature, enclosingNode, filter, dependencies)
-    )
+    .map((signature) => resolveCallSignature(signature, filter, dependencies))
     .filter(Boolean) as Kind.CallSignature[]
 }
 
 /** Process a single function signature including its parameters and return type. */
 function resolveCallSignature(
   signature: Signature,
-  enclosingNode?: Node,
   filter: SymbolFilter = defaultFilter,
   dependencies?: Set<string>
 ): Kind.CallSignature | undefined {
@@ -2394,7 +2389,6 @@ function resolveClass(
     )
     const resolvedFunctionSignatures = resolveCallSignatures(
       constructorSignaturesToResolve,
-      classDeclaration,
       filter,
       dependencies
     )
@@ -2525,7 +2519,6 @@ function resolveClassAccessor(
   if (tsMorph.Node.isSetAccessorDeclaration(accessor)) {
     const resolvedSignature = resolveCallSignature(
       accessor.getSignature(),
-      accessor,
       filter,
       dependencies
     )
@@ -2592,17 +2585,14 @@ function resolveClassMethod(
     name: method.getName(),
     scope: getScope(method),
     visibility: getVisibility(method),
-    signatures: resolveCallSignatures(
-      callSignatures,
-      method,
-      filter,
-      dependencies
-    ).map((signature) => {
-      return {
-        ...signature,
-        kind: 'FunctionSignature',
-      } satisfies Kind.FunctionSignature
-    }),
+    signatures: resolveCallSignatures(callSignatures, filter, dependencies).map(
+      (signature) => {
+        return {
+          ...signature,
+          kind: 'FunctionSignature',
+        } satisfies Kind.FunctionSignature
+      }
+    ),
     text: method.getType().getText(method, TYPE_FORMAT_FLAGS),
     ...getJsDocMetadata(method),
   } satisfies Kind.ClassMethod
