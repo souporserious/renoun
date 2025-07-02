@@ -1919,9 +1919,10 @@ function resolveIndexSignature(
   filter: SymbolFilter = defaultFilter
 ) {
   const text = indexSignature.getText()
+  const returnTypeNode = indexSignature.getReturnTypeNodeOrThrow()
   const valueType = resolveTypeExpression(
-    indexSignature.getReturnType(),
-    indexSignature,
+    returnTypeNode.getType(),
+    returnTypeNode,
     filter
   )
 

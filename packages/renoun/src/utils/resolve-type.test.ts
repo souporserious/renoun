@@ -6384,6 +6384,97 @@ describe('resolveType', () => {
     `)
   })
 
+  test('index signature that references type parameter', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      type ModuleExports<Value = any> = {
+        [exportName: string]: Value
+      }
+      `,
+      { overwrite: true }
+    )
+    const typeAlias = sourceFile.getTypeAliasOrThrow('ModuleExports')
+    const types = resolveType(typeAlias.getType(), typeAlias)
+
+    expect(types).toMatchInlineSnapshot(`
+      {
+        "filePath": "test.ts",
+        "kind": "TypeAlias",
+        "name": "ModuleExports",
+        "parameters": [
+          {
+            "constraint": undefined,
+            "defaultType": {
+              "kind": "Any",
+              "text": "any",
+            },
+            "filePath": "test.ts",
+            "kind": "TypeParameter",
+            "name": "Value",
+            "position": {
+              "end": {
+                "column": 31,
+                "line": 1,
+              },
+              "start": {
+                "column": 20,
+                "line": 1,
+              },
+            },
+            "text": "Value",
+          },
+        ],
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 3,
+          },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "text": "ModuleExports<Value>",
+        "type": {
+          "kind": "TypeLiteral",
+          "members": [
+            {
+              "kind": "IndexSignature",
+              "parameter": {
+                "kind": "IndexSignatureParameter",
+                "name": "exportName",
+                "text": "exportName: string",
+                "type": {
+                  "kind": "String",
+                  "text": "string",
+                  "value": undefined,
+                },
+              },
+              "text": "[exportName: string]: Value",
+              "type": {
+                "filePath": "test.ts",
+                "kind": "TypeReference",
+                "position": {
+                  "end": {
+                    "column": 30,
+                    "line": 2,
+                  },
+                  "start": {
+                    "column": 25,
+                    "line": 2,
+                  },
+                },
+                "text": "Value",
+              },
+            },
+          ],
+          "text": "ModuleExports<Value>",
+        },
+      }
+    `)
+  })
+
   test('mapped types without declarations', () => {
     project.createSourceFile(
       'theme.ts',
