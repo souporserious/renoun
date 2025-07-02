@@ -2475,7 +2475,7 @@ export type FileWithExtension<
 type StringUnion<Type> = Extract<Type, string> | (string & {})
 
 /** Resolves valid extension patterns from an object of loaders. */
-type LoadersToExtensions<
+export type LoadersToExtensions<
   DirectoryLoaders extends ModuleLoaders,
   ExtensionUnion = StringUnion<keyof DirectoryLoaders>,
 > = ExtensionUnion | ExtensionUnion[]
@@ -2486,7 +2486,7 @@ type LoadersToExtensions<
  */
 export function isFile<
   Types extends Record<string, any>,
-  const Extension extends StringUnion<keyof Types> | StringUnion<keyof Types>[],
+  const Extension extends LoadersToExtensions<Types>,
 >(
   entry: FileSystemEntry<Types> | undefined,
   extension?: Extension
