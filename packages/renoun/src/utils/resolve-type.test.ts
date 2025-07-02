@@ -57,7 +57,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "ModuleData",
-        "parameters": [],
         "position": {
           "end": {
             "column": 7,
@@ -196,6 +195,7 @@ describe('resolveType', () => {
           ],
           "text": "ModuleData",
         },
+        "typeParameters": [],
       }
     `)
   })
@@ -777,26 +777,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "Variant",
-        "parameters": [
-          {
-            "constraint": undefined,
-            "defaultType": undefined,
-            "filePath": "test.ts",
-            "kind": "TypeParameter",
-            "name": "T",
-            "position": {
-              "end": {
-                "column": 23,
-                "line": 14,
-              },
-              "start": {
-                "column": 22,
-                "line": 14,
-              },
-            },
-            "text": "T",
-          },
-        ],
         "position": {
           "end": {
             "column": 65,
@@ -919,6 +899,26 @@ describe('resolveType', () => {
             },
           ],
         },
+        "typeParameters": [
+          {
+            "constraint": undefined,
+            "defaultType": undefined,
+            "filePath": "test.ts",
+            "kind": "TypeParameter",
+            "name": "T",
+            "position": {
+              "end": {
+                "column": 23,
+                "line": 14,
+              },
+              "start": {
+                "column": 22,
+                "line": 14,
+              },
+            },
+            "text": "T",
+          },
+        ],
       }
     `)
   })
@@ -965,7 +965,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "Primitives",
-        "parameters": [],
         "position": {
           "end": {
             "column": 10,
@@ -1223,6 +1222,7 @@ describe('resolveType', () => {
           ],
           "text": "Primitives",
         },
+        "typeParameters": [],
       }
     `)
   })
@@ -1413,7 +1413,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "SelfReferencedType",
-        "parameters": [],
         "position": {
           "end": {
             "column": 10,
@@ -1487,6 +1486,7 @@ describe('resolveType', () => {
           ],
           "text": "SelfReferencedType",
         },
+        "typeParameters": [],
       }
     `)
   })
@@ -1511,7 +1511,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "DocNode",
-        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -1585,6 +1584,7 @@ describe('resolveType', () => {
           ],
           "text": "DocNode",
         },
+        "typeParameters": [],
       }
     `)
   })
@@ -1609,7 +1609,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "DocNode",
-        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -1683,6 +1682,7 @@ describe('resolveType', () => {
           ],
           "text": "DocNode",
         },
+        "typeParameters": [],
       }
     `)
   })
@@ -1709,26 +1709,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "FileSystemSource",
-        "parameters": [
-          {
-            "constraint": undefined,
-            "defaultType": undefined,
-            "filePath": "test.ts",
-            "kind": "TypeParameter",
-            "name": "Exports",
-            "position": {
-              "end": {
-                "column": 30,
-                "line": 1,
-              },
-              "start": {
-                "column": 23,
-                "line": 1,
-              },
-            },
-            "text": "Exports",
-          },
-        ],
         "position": {
           "end": {
             "column": 2,
@@ -1779,6 +1759,26 @@ describe('resolveType', () => {
           ],
           "text": "FileSystemSource<Exports>",
         },
+        "typeParameters": [
+          {
+            "constraint": undefined,
+            "defaultType": undefined,
+            "filePath": "test.ts",
+            "kind": "TypeParameter",
+            "name": "Exports",
+            "position": {
+              "end": {
+                "column": 30,
+                "line": 1,
+              },
+              "start": {
+                "column": 23,
+                "line": 1,
+              },
+            },
+            "text": "Exports",
+          },
+        ],
       }
     `)
   })
@@ -1810,7 +1810,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "FileSystem",
-        "parameters": [],
         "position": {
           "end": {
             "column": 57,
@@ -1945,6 +1944,7 @@ describe('resolveType', () => {
           ],
           "text": "FileSystem",
         },
+        "typeParameters": [],
       }
     `)
   })
@@ -1972,7 +1972,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "AsyncString",
-        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -2023,6 +2022,7 @@ describe('resolveType', () => {
           ],
           "text": "AsyncString",
         },
+        "typeParameters": [],
       }
     `)
   })
@@ -2067,7 +2067,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "ExportedType",
-        "parameters": [],
         "position": {
           "end": {
             "column": 78,
@@ -2199,6 +2198,7 @@ describe('resolveType', () => {
             },
           ],
         },
+        "typeParameters": [],
       }
     `)
   })
@@ -2233,7 +2233,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "TextProps",
-        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -2284,6 +2283,7 @@ describe('resolveType', () => {
           ],
           "text": "TextProps",
         },
+        "typeParameters": [],
       }
     `)
   })
@@ -2325,7 +2325,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "TextProps",
-        "parameters": [],
         "position": {
           "end": {
             "column": 38,
@@ -2416,6 +2415,7 @@ describe('resolveType', () => {
           ],
           "text": "TextProps",
         },
+        "typeParameters": [],
       }
     `)
   })
@@ -2468,7 +2468,57 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "ModuleData",
-        "parameters": [
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 7,
+          },
+          "start": {
+            "column": 1,
+            "line": 5,
+          },
+        },
+        "text": "ModuleData<Type>",
+        "type": {
+          "kind": "TypeLiteral",
+          "members": [
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "exportedTypes",
+              "position": {
+                "end": {
+                  "column": 37,
+                  "line": 6,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 6,
+                },
+              },
+              "text": "exportedTypes: Array<ExportedType>",
+              "type": {
+                "filePath": "test.ts",
+                "kind": "TypeReference",
+                "position": {
+                  "end": {
+                    "column": 37,
+                    "line": 6,
+                  },
+                  "start": {
+                    "column": 18,
+                    "line": 6,
+                  },
+                },
+                "text": "ExportedType[]",
+              },
+            },
+          ],
+          "text": "ModuleData<Type>",
+        },
+        "typeParameters": [
           {
             "constraint": {
               "kind": "TypeLiteral",
@@ -2526,56 +2576,6 @@ describe('resolveType', () => {
             "text": "Type extends { frontMatter: Record<string, any> }",
           },
         ],
-        "position": {
-          "end": {
-            "column": 2,
-            "line": 7,
-          },
-          "start": {
-            "column": 1,
-            "line": 5,
-          },
-        },
-        "text": "ModuleData<Type>",
-        "type": {
-          "kind": "TypeLiteral",
-          "members": [
-            {
-              "filePath": "test.ts",
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "PropertySignature",
-              "name": "exportedTypes",
-              "position": {
-                "end": {
-                  "column": 37,
-                  "line": 6,
-                },
-                "start": {
-                  "column": 3,
-                  "line": 6,
-                },
-              },
-              "text": "exportedTypes: Array<ExportedType>",
-              "type": {
-                "filePath": "test.ts",
-                "kind": "TypeReference",
-                "position": {
-                  "end": {
-                    "column": 37,
-                    "line": 6,
-                  },
-                  "start": {
-                    "column": 18,
-                    "line": 6,
-                  },
-                },
-                "text": "ExportedType[]",
-              },
-            },
-          ],
-          "text": "ModuleData<Type>",
-        },
       }
     `)
   })
@@ -2607,7 +2607,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "Text",
-        "parameters": [],
         "position": {
           "end": {
             "column": 42,
@@ -2664,6 +2663,7 @@ describe('resolveType', () => {
           },
           "text": "Text",
         },
+        "typeParameters": [],
       }
     `)
   })
@@ -2826,7 +2826,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "Text",
-        "parameters": [],
         "position": {
           "end": {
             "column": 46,
@@ -2883,6 +2882,7 @@ describe('resolveType', () => {
           },
           "text": "Text",
         },
+        "typeParameters": [],
       }
     `)
   })
@@ -3187,64 +3187,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "ModuleData",
-        "parameters": [
-          {
-            "constraint": {
-              "kind": "TypeLiteral",
-              "members": [
-                {
-                  "filePath": "test.ts",
-                  "isOptional": false,
-                  "isReadonly": false,
-                  "kind": "PropertySignature",
-                  "name": "frontMatter",
-                  "position": {
-                    "end": {
-                      "column": 64,
-                      "line": 1,
-                    },
-                    "start": {
-                      "column": 32,
-                      "line": 1,
-                    },
-                  },
-                  "text": "frontMatter: Record<string, any>",
-                  "type": {
-                    "filePath": "test.ts",
-                    "kind": "TypeReference",
-                    "position": {
-                      "end": {
-                        "column": 64,
-                        "line": 1,
-                      },
-                      "start": {
-                        "column": 45,
-                        "line": 1,
-                      },
-                    },
-                    "text": "Record<string, any>",
-                  },
-                },
-              ],
-              "text": "{ frontMatter: Record<string, any>; }",
-            },
-            "defaultType": undefined,
-            "filePath": "test.ts",
-            "kind": "TypeParameter",
-            "name": "Type",
-            "position": {
-              "end": {
-                "column": 66,
-                "line": 1,
-              },
-              "start": {
-                "column": 17,
-                "line": 1,
-              },
-            },
-            "text": "Type extends { frontMatter: Record<string, any> }",
-          },
-        ],
         "position": {
           "end": {
             "column": 43,
@@ -3340,6 +3282,64 @@ describe('resolveType', () => {
             "text": "Type",
           },
         },
+        "typeParameters": [
+          {
+            "constraint": {
+              "kind": "TypeLiteral",
+              "members": [
+                {
+                  "filePath": "test.ts",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "PropertySignature",
+                  "name": "frontMatter",
+                  "position": {
+                    "end": {
+                      "column": 64,
+                      "line": 1,
+                    },
+                    "start": {
+                      "column": 32,
+                      "line": 1,
+                    },
+                  },
+                  "text": "frontMatter: Record<string, any>",
+                  "type": {
+                    "filePath": "test.ts",
+                    "kind": "TypeReference",
+                    "position": {
+                      "end": {
+                        "column": 64,
+                        "line": 1,
+                      },
+                      "start": {
+                        "column": 45,
+                        "line": 1,
+                      },
+                    },
+                    "text": "Record<string, any>",
+                  },
+                },
+              ],
+              "text": "{ frontMatter: Record<string, any>; }",
+            },
+            "defaultType": undefined,
+            "filePath": "test.ts",
+            "kind": "TypeParameter",
+            "name": "Type",
+            "position": {
+              "end": {
+                "column": 66,
+                "line": 1,
+              },
+              "start": {
+                "column": 17,
+                "line": 1,
+              },
+            },
+            "text": "Type extends { frontMatter: Record<string, any> }",
+          },
+        ],
       }
     `)
   })
@@ -3511,7 +3511,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "TextProps",
-        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -3562,6 +3561,7 @@ describe('resolveType', () => {
           ],
           "text": "TextProps",
         },
+        "typeParameters": [],
       }
     `)
   })
@@ -3926,7 +3926,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "TextProps",
-        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -3983,6 +3982,7 @@ describe('resolveType', () => {
           ],
           "text": "TextProps",
         },
+        "typeParameters": [],
       }
     `)
   })
@@ -4242,7 +4242,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "CardViewProps",
-        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -4293,6 +4292,7 @@ describe('resolveType', () => {
           ],
           "text": "CardViewProps",
         },
+        "typeParameters": [],
       }
     `)
   })
@@ -4469,7 +4469,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "TextProps",
-        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -4520,6 +4519,7 @@ describe('resolveType', () => {
           ],
           "text": "TextProps",
         },
+        "typeParameters": [],
       }
     `)
   })
@@ -4546,7 +4546,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "TextProps",
-        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -4597,6 +4596,7 @@ describe('resolveType', () => {
           ],
           "text": "TextProps",
         },
+        "typeParameters": [],
       }
     `)
   })
@@ -4629,7 +4629,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "TextProps",
-        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -4680,6 +4679,7 @@ describe('resolveType', () => {
           ],
           "text": "TextProps",
         },
+        "typeParameters": [],
       }
     `)
   })
@@ -4709,7 +4709,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "ComplexType",
-        "parameters": [],
         "position": {
           "end": {
             "column": 3,
@@ -4760,6 +4759,7 @@ describe('resolveType', () => {
           ],
           "text": "ComplexType",
         },
+        "typeParameters": [],
       }
     `)
   })
@@ -6108,7 +6108,6 @@ describe('resolveType', () => {
           },
         ],
         "name": "CodeBlockProps",
-        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -6120,6 +6119,7 @@ describe('resolveType', () => {
           },
         },
         "text": "CodeBlockProps",
+        "typeParameters": [],
       }
     `)
   })
@@ -6294,7 +6294,6 @@ describe('resolveType', () => {
           },
         ],
         "name": "FileExports",
-        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -6306,6 +6305,7 @@ describe('resolveType', () => {
           },
         },
         "text": "FileExports",
+        "typeParameters": [],
       }
     `)
   })
@@ -6328,7 +6328,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "FileExports",
-        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -6387,6 +6386,7 @@ describe('resolveType', () => {
           ],
           "text": "FileExports",
         },
+        "typeParameters": [],
       }
     `)
   })
@@ -6409,29 +6409,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "ModuleExports",
-        "parameters": [
-          {
-            "constraint": undefined,
-            "defaultType": {
-              "kind": "Any",
-              "text": "any",
-            },
-            "filePath": "test.ts",
-            "kind": "TypeParameter",
-            "name": "Value",
-            "position": {
-              "end": {
-                "column": 31,
-                "line": 1,
-              },
-              "start": {
-                "column": 20,
-                "line": 1,
-              },
-            },
-            "text": "Value = any",
-          },
-        ],
         "position": {
           "end": {
             "column": 2,
@@ -6478,6 +6455,29 @@ describe('resolveType', () => {
           ],
           "text": "ModuleExports<Value>",
         },
+        "typeParameters": [
+          {
+            "constraint": undefined,
+            "defaultType": {
+              "kind": "Any",
+              "text": "any",
+            },
+            "filePath": "test.ts",
+            "kind": "TypeParameter",
+            "name": "Value",
+            "position": {
+              "end": {
+                "column": 31,
+                "line": 1,
+              },
+              "start": {
+                "column": 20,
+                "line": 1,
+              },
+            },
+            "text": "Value = any",
+          },
+        ],
       }
     `)
   })
@@ -6659,7 +6659,18 @@ describe('resolveType', () => {
           },
         ],
         "name": "EntryGroupOptions",
-        "parameters": [
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 5,
+          },
+          "start": {
+            "column": 1,
+            "line": 3,
+          },
+        },
+        "text": "EntryGroupOptions<Entries>",
+        "typeParameters": [
           {
             "constraint": {
               "filePath": "test.ts",
@@ -6693,17 +6704,6 @@ describe('resolveType', () => {
             "text": "Entries extends FileSystemEntry<any>[]",
           },
         ],
-        "position": {
-          "end": {
-            "column": 2,
-            "line": 5,
-          },
-          "start": {
-            "column": 1,
-            "line": 3,
-          },
-        },
-        "text": "EntryGroupOptions<Entries>",
       }
     `)
   })
@@ -7228,7 +7228,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "Props",
-        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -7329,6 +7328,7 @@ describe('resolveType', () => {
           ],
           "text": "Props",
         },
+        "typeParameters": [],
       }
     `)
   })
@@ -7443,7 +7443,6 @@ describe('resolveType', () => {
           },
         ],
         "name": "Props",
-        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -7455,6 +7454,7 @@ describe('resolveType', () => {
           },
         },
         "text": "Props",
+        "typeParameters": [],
       }
     `)
   })
@@ -8173,7 +8173,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "ButtonVariants",
-        "parameters": [],
         "position": {
           "end": {
             "column": 97,
@@ -8284,6 +8283,7 @@ describe('resolveType', () => {
             },
           ],
         },
+        "typeParameters": [],
       }
     `)
   })
@@ -8315,7 +8315,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "Config",
-        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -8514,6 +8513,7 @@ describe('resolveType', () => {
           ],
           "text": "Config",
         },
+        "typeParameters": [],
       }
     `)
   })
@@ -9306,7 +9306,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "AllMetadata",
-        "parameters": [],
         "position": {
           "end": {
             "column": 57,
@@ -9391,6 +9390,7 @@ describe('resolveType', () => {
             },
           ],
         },
+        "typeParameters": [],
       }
     `)
   })
@@ -9701,7 +9701,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "Foo",
-        "parameters": [],
         "position": {
           "end": {
             "column": 80,
@@ -9812,6 +9811,7 @@ describe('resolveType', () => {
             },
           ],
         },
+        "typeParameters": [],
       }
     `)
   })
@@ -10514,7 +10514,6 @@ describe('resolveType', () => {
               "filePath": "test.ts",
               "kind": "TypeAlias",
               "name": "ButtonVariant",
-              "parameters": [],
               "position": {
                 "end": {
                   "column": 63,
@@ -10548,6 +10547,7 @@ describe('resolveType', () => {
                   },
                 ],
               },
+              "typeParameters": [],
             },
           ],
         ],
@@ -10595,7 +10595,6 @@ describe('resolveType', () => {
                 },
               ],
               "name": "ButtonProps",
-              "parameters": [],
               "position": {
                 "end": {
                   "column": 2,
@@ -10607,6 +10606,7 @@ describe('resolveType', () => {
                 },
               },
               "text": "ButtonProps",
+              "typeParameters": [],
             },
           ],
         ],
@@ -10640,7 +10640,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "TypeReferenceComponents",
-        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -10760,6 +10759,7 @@ describe('resolveType', () => {
             },
           ],
         },
+        "typeParameters": [],
       }
     `)
   })
@@ -10857,7 +10857,6 @@ describe('resolveType', () => {
           },
         ],
         "name": "User",
-        "parameters": [],
         "position": {
           "end": {
             "column": 2,
@@ -10869,6 +10868,7 @@ describe('resolveType', () => {
           },
         },
         "text": "User",
+        "typeParameters": [],
       }
     `)
   })
@@ -11282,7 +11282,6 @@ describe('resolveType', () => {
         "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
         "kind": "TypeAlias",
         "name": undefined,
-        "parameters": [],
         "position": {
           "end": {
             "column": 4402,
@@ -11299,6 +11298,7 @@ describe('resolveType', () => {
           "text": "string",
           "value": undefined,
         },
+        "typeParameters": [],
       }
     `)
   })
@@ -11324,7 +11324,6 @@ describe('resolveType', () => {
         "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
         "kind": "TypeAlias",
         "name": undefined,
-        "parameters": [],
         "position": {
           "end": {
             "column": 4402,
@@ -11341,6 +11340,7 @@ describe('resolveType', () => {
           "text": "string",
           "value": undefined,
         },
+        "typeParameters": [],
       }
     `)
   })
@@ -11366,7 +11366,6 @@ describe('resolveType', () => {
         "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
         "kind": "TypeAlias",
         "name": undefined,
-        "parameters": [],
         "position": {
           "end": {
             "column": 4402,
@@ -11383,6 +11382,7 @@ describe('resolveType', () => {
           "text": "string",
           "value": undefined,
         },
+        "typeParameters": [],
       }
     `)
   })
@@ -11412,48 +11412,6 @@ describe('resolveType', () => {
         "filePath": "index.ts",
         "kind": "TypeAlias",
         "name": "LoaderExportValue",
-        "parameters": [
-          {
-            "constraint": undefined,
-            "defaultType": undefined,
-            "filePath": "index.ts",
-            "kind": "TypeParameter",
-            "name": "Loaders",
-            "position": {
-              "end": {
-                "column": 38,
-                "line": 6,
-              },
-              "start": {
-                "column": 31,
-                "line": 6,
-              },
-            },
-            "text": "Loaders",
-          },
-          {
-            "constraint": {
-              "kind": "String",
-              "text": "string",
-              "value": undefined,
-            },
-            "defaultType": undefined,
-            "filePath": "index.ts",
-            "kind": "TypeParameter",
-            "name": "Name",
-            "position": {
-              "end": {
-                "column": 59,
-                "line": 6,
-              },
-              "start": {
-                "column": 40,
-                "line": 6,
-              },
-            },
-            "text": "Name extends string",
-          },
-        ],
         "position": {
           "end": {
             "column": 35,
@@ -11627,6 +11585,48 @@ describe('resolveType', () => {
           },
           "text": "LoaderExportValue<Loaders, Name>",
         },
+        "typeParameters": [
+          {
+            "constraint": undefined,
+            "defaultType": undefined,
+            "filePath": "index.ts",
+            "kind": "TypeParameter",
+            "name": "Loaders",
+            "position": {
+              "end": {
+                "column": 38,
+                "line": 6,
+              },
+              "start": {
+                "column": 31,
+                "line": 6,
+              },
+            },
+            "text": "Loaders",
+          },
+          {
+            "constraint": {
+              "kind": "String",
+              "text": "string",
+              "value": undefined,
+            },
+            "defaultType": undefined,
+            "filePath": "index.ts",
+            "kind": "TypeParameter",
+            "name": "Name",
+            "position": {
+              "end": {
+                "column": 59,
+                "line": 6,
+              },
+              "start": {
+                "column": 40,
+                "line": 6,
+              },
+            },
+            "text": "Name extends string",
+          },
+        ],
       }
     `)
   })
@@ -11654,30 +11654,6 @@ describe('resolveType', () => {
         "filePath": "test.ts",
         "kind": "TypeAlias",
         "name": "InferDefaultModuleTypes",
-        "parameters": [
-          {
-            "constraint": {
-              "kind": "String",
-              "text": "string",
-              "value": undefined,
-            },
-            "defaultType": undefined,
-            "filePath": "test.ts",
-            "kind": "TypeParameter",
-            "name": "Extension",
-            "position": {
-              "end": {
-                "column": 61,
-                "line": 5,
-              },
-              "start": {
-                "column": 37,
-                "line": 5,
-              },
-            },
-            "text": "Extension extends string",
-          },
-        ],
         "position": {
           "end": {
             "column": 10,
@@ -11812,6 +11788,30 @@ describe('resolveType', () => {
             ],
           },
         },
+        "typeParameters": [
+          {
+            "constraint": {
+              "kind": "String",
+              "text": "string",
+              "value": undefined,
+            },
+            "defaultType": undefined,
+            "filePath": "test.ts",
+            "kind": "TypeParameter",
+            "name": "Extension",
+            "position": {
+              "end": {
+                "column": 61,
+                "line": 5,
+              },
+              "start": {
+                "column": 37,
+                "line": 5,
+              },
+            },
+            "text": "Extension extends string",
+          },
+        ],
       }
     `)
   })
@@ -12082,7 +12082,6 @@ describe('resolveType', () => {
         "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
         "kind": "TypeAlias",
         "name": undefined,
-        "parameters": [],
         "position": {
           "end": {
             "column": 4402,
@@ -12099,6 +12098,7 @@ describe('resolveType', () => {
           "text": "\`foo\${string}\`",
           "value": undefined,
         },
+        "typeParameters": [],
       }
     `)
   })

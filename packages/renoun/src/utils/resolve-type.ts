@@ -428,7 +428,7 @@ export namespace Kind {
     members: Member[]
 
     /** The type parameters that can be provided as arguments to the type alias. */
-    parameters: TypeParameter[]
+    typeParameters: TypeParameter[]
   }
 
   export interface TypeParameter extends SharedDocumentable {
@@ -450,7 +450,7 @@ export namespace Kind {
     type: Type
 
     /** The type parameters that can be provided as arguments to the type alias. */
-    parameters: TypeParameter[]
+    typeParameters: TypeParameter[]
   }
 
   /** Represents a type operator e.g. `keyof Type` or `readonly Type`. */
@@ -479,7 +479,7 @@ export namespace Kind {
 
   /** A function or method parameter. */
   export interface Parameter<
-    Type extends All = All,
+    Type extends TypeExpression = TypeExpression,
     Initializer extends unknown = unknown,
   > extends SharedDocumentable {
     kind: 'Parameter'
@@ -498,8 +498,9 @@ export namespace Kind {
   }
 
   /** An interface or type alias property signature. */
-  export interface PropertySignature<Type extends All = All>
-    extends SharedDocumentable {
+  export interface PropertySignature<
+    Type extends TypeExpression = TypeExpression,
+  > extends SharedDocumentable {
     kind: 'PropertySignature'
 
     /** The type expression of the property signature. */
@@ -747,7 +748,7 @@ export function resolveType(
       kind: 'TypeAlias',
       name: symbolMetadata.name,
       text: typeText,
-      parameters: resolvedTypeParameters,
+      typeParameters: resolvedTypeParameters,
       type: resolvedTypeExpression,
     } satisfies Kind.TypeAlias
   } else if (tsMorph.Node.isTypeAliasDeclaration(symbolDeclaration)) {
@@ -785,7 +786,7 @@ export function resolveType(
       kind: 'TypeAlias',
       name: symbolMetadata.name,
       text: typeText,
-      parameters: resolvedTypeParameters,
+      typeParameters: resolvedTypeParameters,
       type: resolvedTypeExpression,
     } satisfies Kind.TypeAlias
   } else if (tsMorph.Node.isInterfaceDeclaration(symbolDeclaration)) {
@@ -807,7 +808,7 @@ export function resolveType(
       kind: 'Interface',
       name: symbolMetadata.name,
       text: typeText,
-      parameters: resolvedTypeParameters,
+      typeParameters: resolvedTypeParameters,
       members: resolveMemberSignatures(
         symbolDeclaration.getMembers(),
         filter,
@@ -2362,7 +2363,9 @@ function getScope(
 }
 
 /** Filters out undefined from a union type. */
-function filterUndefinedFromUnion(type: Kind): Kind {
+function filterUndefinedFromUnion(
+  type: Kind.TypeExpression
+): Kind.TypeExpression {
   if (type.kind !== ('UnionType' as Kind.UnionType['kind'])) {
     return type
   }
