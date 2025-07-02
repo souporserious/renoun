@@ -1728,7 +1728,6 @@ function resolveCallSignature(
       return typeParameter
     })
     .filter((type): type is Kind.TypeParameter => Boolean(type))
-
   const typeParametersText = resolvedTypeParameters.length
     ? `<${resolvedTypeParameters
         .map((generic) => {
@@ -1839,24 +1838,38 @@ function resolveParameters(
        *   in the generic’s definition context, so stick with the annotation.
        * - Otherwise we’re at an instantiated call site, so use the contextual type.
        */
-      const annotationNode = parameterDeclaration.getTypeNodeOrThrow()
-      const annotationType = annotationNode.getType()
+      const annotationNode = parameterDeclaration.getTypeNode()
       const contextualType = enclosingNode
         ? parameter.getTypeAtLocation(enclosingNode)
         : undefined
-      const typeToResolve =
-        contextualType && !containsFreeTypeParameter(contextualType)
-          ? contextualType
-          : (annotationType ?? contextualType)
       const initializer = getInitializerValue(parameterDeclaration)
-      const resolvedParameterType = resolveTypeExpression(
-        typeToResolve,
-        annotationNode ?? enclosingNode,
-        filter,
-        initializer,
-        false,
-        dependencies
-      )
+      let resolvedParameterType: Kind.TypeExpression | undefined
+
+      if (annotationNode) {
+        const annotationType = annotationNode.getType()
+        const typeToResolve =
+          contextualType && !containsFreeTypeParameter(contextualType)
+            ? contextualType
+            : (annotationType ?? contextualType)
+
+        resolvedParameterType = resolveTypeExpression(
+          typeToResolve,
+          annotationNode ?? enclosingNode,
+          filter,
+          initializer,
+          false,
+          dependencies
+        )
+      } else if (contextualType) {
+        resolvedParameterType = resolveTypeExpression(
+          contextualType,
+          enclosingNode,
+          filter,
+          initializer,
+          false,
+          dependencies
+        )
+      }
 
       if (resolvedParameterType) {
         const isOptional = parameterDeclaration.hasQuestionToken()

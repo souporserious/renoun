@@ -4103,6 +4103,123 @@ describe('resolveType', () => {
     `)
   })
 
+  test('class method with implicit typed initializer', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+        class FileSystem {
+          isFilePath(filePath: string, isDirectory = false) {
+            return false
+          }
+        }
+      `,
+      { overwrite: true }
+    )
+    const declaration = sourceFile.getClassOrThrow('FileSystem')
+    const types = resolveType(declaration.getType(), declaration)
+
+    expect(types).toMatchInlineSnapshot(`
+      {
+        "constructor": undefined,
+        "filePath": "test.ts",
+        "kind": "Class",
+        "methods": [
+          {
+            "kind": "ClassMethod",
+            "name": "isFilePath",
+            "scope": undefined,
+            "signatures": [
+              {
+                "filePath": "test.ts",
+                "isAsync": false,
+                "isGenerator": false,
+                "kind": "FunctionSignature",
+                "parameters": [
+                  {
+                    "description": undefined,
+                    "filePath": "test.ts",
+                    "initializer": undefined,
+                    "isOptional": false,
+                    "kind": "Parameter",
+                    "name": "filePath",
+                    "position": {
+                      "end": {
+                        "column": 30,
+                        "line": 2,
+                      },
+                      "start": {
+                        "column": 14,
+                        "line": 2,
+                      },
+                    },
+                    "text": "filePath: string",
+                    "type": {
+                      "kind": "String",
+                      "text": "string",
+                      "value": undefined,
+                    },
+                  },
+                  {
+                    "description": undefined,
+                    "filePath": "test.ts",
+                    "initializer": false,
+                    "isOptional": false,
+                    "kind": "Parameter",
+                    "name": "isDirectory",
+                    "position": {
+                      "end": {
+                        "column": 51,
+                        "line": 2,
+                      },
+                      "start": {
+                        "column": 32,
+                        "line": 2,
+                      },
+                    },
+                    "text": "isDirectory = false",
+                    "type": {
+                      "kind": "Boolean",
+                      "text": "boolean",
+                    },
+                  },
+                ],
+                "position": {
+                  "end": {
+                    "column": 4,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 2,
+                  },
+                },
+                "returnType": {
+                  "kind": "Boolean",
+                  "text": "boolean",
+                },
+                "text": "(filePath: string, isDirectory = false) => boolean",
+              },
+            ],
+            "text": "(filePath: string, isDirectory?: boolean) => boolean",
+            "visibility": undefined,
+          },
+        ],
+        "name": "FileSystem",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 5,
+          },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "text": "FileSystem",
+      }
+    `)
+  })
+
   test('class as property', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
