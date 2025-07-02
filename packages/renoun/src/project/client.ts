@@ -119,7 +119,7 @@ export async function resolveTypeAtLocation(
   kind: SyntaxKind,
   filter?: SymbolFilter,
   projectOptions?: ProjectOptions
-): Promise<Kind.All | undefined> {
+): Promise<Kind | undefined> {
   if (client) {
     return client.callMethod<
       {

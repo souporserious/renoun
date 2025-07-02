@@ -114,7 +114,7 @@ async function APIReferenceAsync({
     source = new JavaScriptFile({ path: filePath })
   }
 
-  let resolvedType: Kind.All | Kind.All[] | undefined
+  let resolvedType: Kind | Kind[] | undefined
 
   if (source instanceof JavaScriptFile) {
     const exported = await Promise.all(
@@ -122,7 +122,7 @@ async function APIReferenceAsync({
         fileExport.getType(filter)
       )
     )
-    resolvedType = exported.filter(Boolean) as Kind.All[]
+    resolvedType = exported.filter(Boolean) as Kind[]
   } else {
     resolvedType = await source.getType(filter)
   }
@@ -157,7 +157,7 @@ function TypeNodeRouter({
   node,
   components,
 }: {
-  node: Kind.All
+  node: Kind
   components: APIReferenceComponents
 }) {
   switch (node.kind) {
@@ -195,6 +195,8 @@ function TypeNodeRouter({
     case 'Any':
     case 'Unknown':
       return <TypeExpressionSection node={node} components={components} />
+    case 'Variable':
+      return <components.code>{node.text}</components.code>
     default:
       throw new Error(
         `[renoun]: A render does not currently exist for type kind "${node.kind}". Please file an issue if you see this error.`

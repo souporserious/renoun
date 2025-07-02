@@ -6,7 +6,7 @@ import { resolveType, type Kind, type SymbolFilter } from './resolve-type.js'
 export const resolvedTypeCache = new Map<
   string,
   {
-    resolvedType?: Kind.All
+    resolvedType?: Kind
     dependencies: Map<string, number>
   }
 >()

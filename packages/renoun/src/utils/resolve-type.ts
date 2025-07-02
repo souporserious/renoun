@@ -543,35 +543,35 @@ export namespace Kind {
     | Unknown
     | Never
 
-  export type All =
-    | TypeExpression
-    | Class
-    | ClassProperty
-    | ClassMethod
-    | ClassAccessor
-    | Function
-    | Component
-    | Variable
-    | Interface
-    | Enum
-    | EnumMember
-    | TypeAlias
-    | TypeParameter
-    | CallSignature
-    | ConstructSignature
-    | ComponentSignature
-    | FunctionSignature
-    | IndexSignature
-    | MethodSignature
-    | PropertySignature
-    | Parameter
-
   // TODO: still need to add ThisType, InferType
 }
 
+export type Kind =
+  | Kind.TypeExpression
+  | Kind.Class
+  | Kind.ClassProperty
+  | Kind.ClassMethod
+  | Kind.ClassAccessor
+  | Kind.Function
+  | Kind.Component
+  | Kind.Variable
+  | Kind.Interface
+  | Kind.Enum
+  | Kind.EnumMember
+  | Kind.TypeAlias
+  | Kind.TypeParameter
+  | Kind.CallSignature
+  | Kind.ConstructSignature
+  | Kind.ComponentSignature
+  | Kind.FunctionSignature
+  | Kind.IndexSignature
+  | Kind.MethodSignature
+  | Kind.PropertySignature
+  | Kind.Parameter
+
 export type TypeByKind<Type, Key> = Type extends { kind: Key } ? Type : never
 
-export type TypeOfKind<Key extends Kind.All['kind']> = TypeByKind<Kind.All, Key>
+export type TypeOfKind<Key extends Kind['kind']> = TypeByKind<Kind, Key>
 
 export type SymbolMetadata = ReturnType<typeof getSymbolMetadata>
 
@@ -599,7 +599,7 @@ export function resolveType(
   defaultValues?: Record<string, unknown> | unknown,
   keepReferences: boolean = false,
   dependencies?: Set<string>
-): Kind.All | undefined {
+): Kind | undefined {
   const aliasSymbol = type.getAliasSymbol()
   const symbol =
     /* First, attempt to get the aliased symbol for aliased types */
@@ -632,7 +632,7 @@ export function resolveType(
     rootReferences.add(type)
   }
 
-  let resolvedType: Kind.All = {
+  let resolvedType: Kind = {
     kind: 'Unknown',
     text: typeText,
   } satisfies Kind.Unknown
@@ -2362,7 +2362,7 @@ function getScope(
 }
 
 /** Filters out undefined from a union type. */
-function filterUndefinedFromUnion(type: Kind.All): Kind.All {
+function filterUndefinedFromUnion(type: Kind): Kind {
   if (type.kind !== ('UnionType' as Kind.UnionType['kind'])) {
     return type
   }
