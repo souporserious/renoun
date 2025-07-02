@@ -1537,7 +1537,7 @@ export class UnresolvedTypeExpressionError extends Error {
 
   constructor(typeText: string, node?: Node) {
     super(
-      `[renoun:UnresolvedTypeExpression] Could not resolve "${typeText}"${node ? ` of kind "${node.getKindName()}" in "${node.getText()}".` : '.'}`
+      `[renoun:UnresolvedTypeExpression] Could not resolve "${typeText}".${node ? `\n\n${printNode(node)}` : ''}`
     )
     this.name = 'UnresolvedTypeExpressionError'
     this.typeText = typeText
@@ -3062,8 +3062,13 @@ function printNode(
     output += `Type: ${node.getType().getText()}\n`
   }
 
-  output += `Text:\n${node.getText()}\n`
-  output += `Start: ${node.getStart()}, End: ${node.getEnd()}\n`
+  output += `Text: ${node.getText()}\n`
+
+  const sourceFile = node.getSourceFile()
+  const startPos = sourceFile.getLineAndColumnAtPos(node.getStart())
+  const endPos = sourceFile.getLineAndColumnAtPos(node.getEnd())
+
+  output += `Position: ${startPos.line}:${startPos.column} – ${endPos.line}:${endPos.column}\n`
 
   return output
 }
