@@ -6081,17 +6081,22 @@ describe('resolveType', () => {
             "text": "Languages | "mdx"",
             "type": {
               "kind": "UnionType",
-              "text": ""jsx" | "tsx" | "mdx"",
+              "text": "Languages | "mdx"",
               "types": [
                 {
-                  "kind": "String",
-                  "text": ""jsx"",
-                  "value": "jsx",
-                },
-                {
-                  "kind": "String",
-                  "text": ""tsx"",
-                  "value": "tsx",
+                  "filePath": "test.tsx",
+                  "kind": "TypeReference",
+                  "position": {
+                    "end": {
+                      "column": 23,
+                      "line": 4,
+                    },
+                    "start": {
+                      "column": 14,
+                      "line": 4,
+                    },
+                  },
+                  "text": "Languages",
                 },
                 {
                   "kind": "String",
@@ -6593,6 +6598,76 @@ describe('resolveType', () => {
           },
         ],
         "text": "(props: TextProps) => void",
+      }
+    `)
+  })
+
+  test('interface property that references type parameter', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      type FileSystemEntry<Types> = any
+
+      export interface EntryGroupOptions<Entries extends FileSystemEntry<any>[]> {
+        entries: Entries
+      }
+      `,
+      { overwrite: true }
+    )
+    const declaration = sourceFile.getInterfaceOrThrow('EntryGroupOptions')
+    const types = resolveType(declaration.getType(), declaration)
+
+    expect(types).toMatchInlineSnapshot(`
+      {
+        "filePath": "test.ts",
+        "kind": "Interface",
+        "members": [
+          {
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "PropertySignature",
+            "name": "entries",
+            "position": {
+              "end": {
+                "column": 19,
+                "line": 4,
+              },
+              "start": {
+                "column": 3,
+                "line": 4,
+              },
+            },
+            "text": "Entries",
+            "type": {
+              "filePath": "test.ts",
+              "kind": "TypeReference",
+              "position": {
+                "end": {
+                  "column": 19,
+                  "line": 4,
+                },
+                "start": {
+                  "column": 12,
+                  "line": 4,
+                },
+              },
+              "text": "Entries",
+            },
+          },
+        ],
+        "name": "EntryGroupOptions",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 5,
+          },
+          "start": {
+            "column": 1,
+            "line": 3,
+          },
+        },
+        "text": "EntryGroupOptions<Entries>",
       }
     `)
   })
@@ -10466,40 +10541,19 @@ describe('resolveType', () => {
                   "tags": undefined,
                   "text": "ButtonVariant | undefined",
                   "type": {
-                    "kind": "UnionType",
-                    "text": "undefined | String",
-                    "types": [
-                      {
-                        "filePath": "test.ts",
-                        "kind": "TypeReference",
-                        "position": {
-                          "end": {
-                            "column": 26,
-                            "line": 9,
-                          },
-                          "start": {
-                            "column": 13,
-                            "line": 9,
-                          },
-                        },
-                        "text": "undefined",
+                    "filePath": "test.ts",
+                    "kind": "TypeReference",
+                    "position": {
+                      "end": {
+                        "column": 26,
+                        "line": 9,
                       },
-                      {
-                        "filePath": "test.ts",
-                        "kind": "TypeReference",
-                        "position": {
-                          "end": {
-                            "column": 26,
-                            "line": 9,
-                          },
-                          "start": {
-                            "column": 13,
-                            "line": 9,
-                          },
-                        },
-                        "text": "String",
+                      "start": {
+                        "column": 13,
+                        "line": 9,
                       },
-                    ],
+                    },
+                    "text": "ButtonVariant",
                   },
                 },
               ],

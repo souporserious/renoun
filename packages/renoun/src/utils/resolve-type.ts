@@ -1532,14 +1532,29 @@ function resolveMemberSignature(
   keepReferences: boolean = false,
   dependencies?: Set<string>
 ): Kind.MemberUnion | undefined {
-  const resolvedMemberType = resolveTypeExpression(
-    member.getType(),
-    member,
-    filter,
-    defaultValues,
-    keepReferences,
-    dependencies
-  )
+  let resolvedMemberType: Kind.TypeExpression | undefined
+
+  if (tsMorph.Node.isPropertySignature(member)) {
+    const typeNode = member.getTypeNodeOrThrow()
+
+    resolvedMemberType = resolveTypeExpression(
+      typeNode.getType(),
+      typeNode,
+      filter,
+      defaultValues,
+      keepReferences,
+      dependencies
+    )
+  } else {
+    resolvedMemberType = resolveTypeExpression(
+      member.getType(),
+      member,
+      filter,
+      defaultValues,
+      keepReferences,
+      dependencies
+    )
+  }
 
   if (!resolvedMemberType) {
     return
