@@ -695,34 +695,20 @@ export function resolveType(
       })),
     } satisfies Kind.Enum
   } else if (tsMorph.Node.isTypeParameterDeclaration(symbolDeclaration)) {
-    const constraintNode = symbolDeclaration.getConstraint()
-    const defaultNode = symbolDeclaration.getDefault()
+    const resolvedTypeParameter = resolveTypeParameter(
+      type,
+      filter,
+      dependencies
+    )
 
-    resolvedType = {
-      kind: 'TypeParameter',
-      name: symbolDeclaration.getName(),
-      text: typeText,
-      constraint: constraintNode
-        ? resolveTypeExpression(
-            constraintNode.getType(),
-            constraintNode,
-            filter,
-            defaultValues,
-            keepReferences,
-            dependencies
-          )
-        : undefined,
-      defaultType: defaultNode
-        ? resolveTypeExpression(
-            defaultNode.getType(),
-            defaultNode,
-            filter,
-            defaultValues,
-            keepReferences,
-            dependencies
-          )
-        : undefined,
-    } satisfies Kind.TypeParameter
+    if (!resolvedTypeParameter) {
+      if (!keepReferences) {
+        rootReferences.delete(type)
+      }
+      return
+    }
+
+    resolvedType = resolvedTypeParameter
   } else if (tsMorph.Node.isTypeAliasDeclaration(enclosingNode)) {
     const typeNode = enclosingNode.getTypeNodeOrThrow()
     const resolvedTypeExpression = resolveTypeExpression(
@@ -1427,35 +1413,11 @@ function resolveTypeExpression(
           }
 
           if (mappedNode) {
-            const typeParameter = mappedNode.getTypeParameter()
-            const constraintNode = typeParameter.getConstraintOrThrow()
-            let constraintType: Kind.TypeExpression | undefined
-
-            if (tsMorph.Node.isTypeReference(constraintNode)) {
-              const definitionNode = getPrimaryDeclaration(
-                constraintNode.getType().getAliasSymbol()
-              )
-              if (
-                definitionNode &&
-                isDeclarationExported(definitionNode, constraintNode)
-              ) {
-                constraintType = {
-                  kind: 'TypeReference',
-                  text: constraintNode.getText(),
-                  ...getDeclarationLocation(constraintNode),
-                } satisfies Kind.TypeReference
-              } else {
-                constraintType = resolveTypeExpression(
-                  constraintNode.getType(),
-                  constraintNode,
-                  filter,
-                  defaultValues,
-                  keepReferences,
-                  dependencies
-                )
-              }
-            }
-
+            const resolvedTypeParameter = resolveTypeParameterDeclaration(
+              mappedNode.getTypeParameter(),
+              filter,
+              dependencies
+            )
             const valueNode = mappedNode.getTypeNode()
             const valueType = valueNode
               ? resolveTypeExpression(
@@ -1468,16 +1430,11 @@ function resolveTypeExpression(
                 )
               : undefined
 
-            if (constraintType && valueType) {
+            if (resolvedTypeParameter && valueType) {
               resolvedType = {
                 kind: 'MappedType',
                 text: typeText,
-                parameter: {
-                  kind: 'TypeParameter',
-                  name: typeParameter.getName(),
-                  text: `${typeParameter.getName()} in ${constraintType.text}`,
-                  constraint: constraintType,
-                },
+                parameter: resolvedTypeParameter,
                 type: valueType,
                 isReadonly: Boolean(mappedNode.getReadonlyToken()),
                 isOptional: Boolean(mappedNode.getQuestionToken()),
@@ -1649,6 +1606,72 @@ function resolveMemberSignature(
   )
 }
 
+function resolveTypeParameter(
+  type: tsMorph.Type,
+  filter: SymbolFilter,
+  dependencies?: Set<string>
+): Kind.TypeParameter | undefined {
+  const parameterSymbol = type.getSymbol()
+
+  if (!parameterSymbol) {
+    throw new Error(
+      `[renoun:resolveTypeParameter]: No symbol found for type parameter "${type.getText()}". If you are seeing this error, please file an issue.`
+    )
+  }
+
+  const parameterDeclaration = getPrimaryDeclaration(parameterSymbol)
+
+  if (!tsMorph.Node.isTypeParameterDeclaration(parameterDeclaration)) {
+    throw new Error(
+      `[renoun:resolveTypeParameter]: Expected type parameter declaration, but got "${parameterDeclaration?.getKindName()}". If you are seeing this error, please file an issue.`
+    )
+  }
+
+  return resolveTypeParameterDeclaration(
+    parameterDeclaration,
+    filter,
+    dependencies
+  )
+}
+
+function resolveTypeParameterDeclaration(
+  parameterDeclaration: tsMorph.TypeParameterDeclaration,
+  filter: SymbolFilter,
+  dependencies?: Set<string>
+): Kind.TypeParameter | undefined {
+  const name = parameterDeclaration.getName()
+  const constraintNode = parameterDeclaration.getConstraint()
+  const resolvedConstraint = constraintNode
+    ? resolveTypeExpression(
+        constraintNode.getType(),
+        constraintNode,
+        filter,
+        undefined,
+        true,
+        dependencies
+      )
+    : undefined
+  const defaultNode = parameterDeclaration.getDefault()
+  const resolvedDefaultType = defaultNode
+    ? resolveTypeExpression(
+        defaultNode.getType(),
+        defaultNode,
+        filter,
+        undefined,
+        true,
+        dependencies
+      )
+    : undefined
+
+  return {
+    kind: 'TypeParameter',
+    name,
+    text: parameterDeclaration.getText(),
+    constraint: resolvedConstraint,
+    defaultType: resolvedDefaultType,
+  } satisfies Kind.TypeParameter
+}
+
 /** Process all function signatures of a given type including their parameters and return types. */
 function resolveCallSignatures(
   signatures: Signature[],
@@ -1674,63 +1697,7 @@ function resolveCallSignature(
   const signatureParameters = signature.getParameters()
   const resolvedTypeParameters = signature
     .getTypeParameters()
-    .map((parameter) => {
-      const parameterSymbol = parameter.getSymbol()
-
-      if (!parameterSymbol) return undefined
-
-      const parameterDeclaration = getPrimaryDeclaration(parameterSymbol) as
-        | tsMorph.TypeParameterDeclaration
-        | undefined
-
-      if (
-        !parameterDeclaration ||
-        !tsMorph.Node.isTypeParameterDeclaration(parameterDeclaration)
-      ) {
-        return undefined
-      }
-
-      const name = parameterDeclaration.getName()
-
-      if (!name) {
-        return undefined
-      }
-
-      const constraintNode = parameterDeclaration.getConstraint()
-      const constraintType = parameter.getConstraint()
-      const defaultNode = parameterDeclaration.getDefault()
-      const defaultType = parameter.getDefault()
-      const resolvedConstraint =
-        constraintType && constraintNode
-          ? resolveTypeExpression(
-              constraintType,
-              constraintNode,
-              filter,
-              undefined,
-              true,
-              dependencies
-            )
-          : undefined
-      const resolvedDefaultType =
-        defaultType && defaultNode
-          ? resolveTypeExpression(
-              defaultType,
-              defaultNode,
-              filter,
-              undefined,
-              true,
-              dependencies
-            )
-          : undefined
-      const typeParameter: Kind.TypeParameter = {
-        kind: 'TypeParameter',
-        name,
-        text: parameterDeclaration.getText(),
-        constraint: resolvedConstraint,
-        defaultType: resolvedDefaultType,
-      }
-      return typeParameter
-    })
+    .map((parameter) => resolveTypeParameter(parameter, filter, dependencies))
     .filter((type): type is Kind.TypeParameter => Boolean(type))
   const typeParametersText = resolvedTypeParameters.length
     ? `<${resolvedTypeParameters
@@ -1832,15 +1799,15 @@ function resolveParameters(
       }
 
       /**
-       * When resolving a generic function’s parameter type, we have two candidates:
+       * When resolving a generic function's parameter type, we have two candidates:
        *   1. The annotated type node
        *   2. The contextual type at the call site
        *
        * We only want to further resolve the contextual type once all generics
        * have been substituted i.e. once there are no free type parameters.
-       * - If the contextual type still has free type parameters, we’re still
-       *   in the generic’s definition context, so stick with the annotation.
-       * - Otherwise we’re at an instantiated call site, so use the contextual type.
+       * - If the contextual type still has free type parameters, we're still
+       *   in the generic's definition context, so stick with the annotation.
+       * - Otherwise we're at an instantiated call site, so use the contextual type.
        */
       const annotationNode = parameterDeclaration.getTypeNode()
       const contextualType = enclosingNode
@@ -3053,7 +3020,7 @@ function printNode(
   node: tsMorph.Node | tsMorph.FunctionDeclaration | tsMorph.PropertyDeclaration
 ) {
   const kindName = node.getKindName()
-  let output = `(${kindName})\n`
+  let output = `Kind: ${kindName}\n`
 
   if (tsMorph.Node.isFunctionDeclaration(node)) {
     output += `Name: ${node.getName()}\n`
@@ -3066,6 +3033,9 @@ function printNode(
   output += `Text: ${node.getText()}\n`
 
   const sourceFile = node.getSourceFile()
+
+  output += `File: ${sourceFile.getFilePath().replace(process.cwd(), '')}\n`
+
   const startPos = sourceFile.getLineAndColumnAtPos(node.getStart())
   const endPos = sourceFile.getLineAndColumnAtPos(node.getEnd())
 

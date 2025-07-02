@@ -2523,7 +2523,7 @@ describe('resolveType', () => {
                 "line": 5,
               },
             },
-            "text": "Type",
+            "text": "Type extends { frontMatter: Record<string, any> }",
           },
         ],
         "position": {
@@ -3242,7 +3242,7 @@ describe('resolveType', () => {
                 "line": 1,
               },
             },
-            "text": "Type",
+            "text": "Type extends { frontMatter: Record<string, any> }",
           },
         ],
         "position": {
@@ -6422,7 +6422,7 @@ describe('resolveType', () => {
                 "line": 1,
               },
             },
-            "text": "Value",
+            "text": "Value = any",
           },
         ],
         "position": {
@@ -10584,6 +10584,7 @@ describe('resolveType', () => {
                   },
                   "text": "SemanticTags",
                 },
+                "defaultType": undefined,
                 "kind": "TypeParameter",
                 "name": "Tag",
                 "text": "Tag in SemanticTags",
@@ -11357,7 +11358,7 @@ describe('resolveType', () => {
                 "line": 6,
               },
             },
-            "text": "Name",
+            "text": "Name extends string",
           },
         ],
         "position": {
@@ -11408,9 +11409,10 @@ describe('resolveType', () => {
                 },
                 "text": "Extract<keyof Loaders, "js" | "jsx" | "ts" | "tsx" | "mdx">",
               },
+              "defaultType": undefined,
               "kind": "TypeParameter",
               "name": "Extension",
-              "text": "Extension in Extract<keyof Loaders, "js" | "jsx" | "ts" | "tsx" | "mdx">",
+              "text": "Extension in LoadersWithRuntimeKeys<Loaders>",
             },
             "text": "{ [Extension in Extract<keyof Loaders, "js" | "jsx" | "ts" | "tsx" | "mdx">]: Name extends keyof Loaders[Extension] ? Loaders[Extension][Name] : never; }",
             "type": {
@@ -11580,7 +11582,7 @@ describe('resolveType', () => {
                 "line": 5,
               },
             },
-            "text": "Extension",
+            "text": "Extension extends string",
           },
         ],
         "position": {
@@ -11773,7 +11775,7 @@ describe('resolveType', () => {
             "line": 6,
           },
         },
-        "text": "Key",
+        "text": "Key extends keyof Types",
       }
     `)
   })
