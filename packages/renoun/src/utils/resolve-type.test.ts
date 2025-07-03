@@ -901,7 +901,7 @@ describe('resolveType', () => {
         },
         "typeParameters": [
           {
-            "constraint": undefined,
+            "constraintType": undefined,
             "defaultType": undefined,
             "filePath": "test.ts",
             "kind": "TypeParameter",
@@ -1761,7 +1761,7 @@ describe('resolveType', () => {
         },
         "typeParameters": [
           {
-            "constraint": undefined,
+            "constraintType": undefined,
             "defaultType": undefined,
             "filePath": "test.ts",
             "kind": "TypeParameter",
@@ -2520,7 +2520,7 @@ describe('resolveType', () => {
         },
         "typeParameters": [
           {
-            "constraint": {
+            "constraintType": {
               "kind": "TypeLiteral",
               "members": [
                 {
@@ -2787,6 +2787,7 @@ describe('resolveType', () => {
               "text": "void",
             },
             "text": "function Text(props?: TextProps): void",
+            "thisType": undefined,
           },
         ],
         "text": "(props?: TextProps) => void",
@@ -2974,6 +2975,7 @@ describe('resolveType', () => {
               "text": "void",
             },
             "text": "function Text(props: TextProps = { color: 'red' }): void",
+            "thisType": undefined,
           },
         ],
         "text": "(props?: TextProps) => void",
@@ -3162,6 +3164,7 @@ describe('resolveType', () => {
               "text": "void",
             },
             "text": "function Text({ style: { fontSize, color } }: TextProps = { style: { fontWeight: 400, color: 'blue' } }): void",
+            "thisType": undefined,
           },
         ],
         "text": "({ style: { fontSize, color } }?: TextProps) => void",
@@ -3284,7 +3287,7 @@ describe('resolveType', () => {
         },
         "typeParameters": [
           {
-            "constraint": {
+            "constraintType": {
               "kind": "TypeLiteral",
               "members": [
                 {
@@ -3671,9 +3674,10 @@ describe('resolveType', () => {
               "text": "Element",
             },
             "text": "<AsTarget extends StyledTarget<R> | void, ForwardedAsTarget extends StyledTarget<R> | void>(props: PolymorphicComponentProps<R, BaseProps, AsTarget, ForwardedAsTarget>) => Element",
+            "thisType": undefined,
             "typeParameters": [
               {
-                "constraint": {
+                "constraintType": {
                   "kind": "UnionType",
                   "text": "StyledTarget<R> | void",
                   "types": [
@@ -3707,7 +3711,7 @@ describe('resolveType', () => {
                 "text": "AsTarget extends StyledTarget<R> | void = void",
               },
               {
-                "constraint": {
+                "constraintType": {
                   "kind": "UnionType",
                   "text": "StyledTarget<R> | void",
                   "types": [
@@ -3807,6 +3811,7 @@ describe('resolveType', () => {
               "text": "ReactNode",
             },
             "text": "(props: P) => ReactNode",
+            "thisType": undefined,
           },
         ],
         "text": "IStyledComponentBase<"web", Substitute<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, { fontSize: number; fontWeight?: number; }>> & string",
@@ -4064,6 +4069,7 @@ describe('resolveType', () => {
                   "text": "void",
                 },
                 "text": "(value: string) => void",
+                "thisType": undefined,
               },
             ],
             "text": "(value: string) => void",
@@ -4198,6 +4204,7 @@ describe('resolveType', () => {
                   "text": "boolean",
                 },
                 "text": "(filePath: string, isDirectory = false) => boolean",
+                "thisType": undefined,
               },
             ],
             "text": "(filePath: string, isDirectory?: boolean) => boolean",
@@ -4825,6 +4832,7 @@ describe('resolveType', () => {
               "text": "ReactNode",
             },
             "text": "function Text(): ReactNode",
+            "thisType": undefined,
           },
         ],
         "text": "() => ReactNode",
@@ -4907,6 +4915,7 @@ describe('resolveType', () => {
               "text": "void",
             },
             "text": "function useCounter(initialCount: number = 0): void",
+            "thisType": undefined,
           },
         ],
         "text": "(initialCount?: number) => void",
@@ -5027,6 +5036,7 @@ describe('resolveType', () => {
             ],
             "text": "function useCounter({ initialCount = 0 }: {
       /** Provides the initial count. */ initialCount?: number }): void",
+            "thisType": undefined,
           },
         ],
         "tags": [
@@ -5166,6 +5176,7 @@ describe('resolveType', () => {
               "text": "void",
             },
             "text": "function useCounter({ initial = { count: 0 } }?: { initial?: { count: number } } = {}): void",
+            "thisType": undefined,
           },
         ],
         "text": "({ initial }?: { initial?: { count: number; }; }) => void",
@@ -5246,6 +5257,7 @@ describe('resolveType', () => {
               "text": "void",
             },
             "text": "(initialCount: number = 0) => void",
+            "thisType": undefined,
           },
         ],
         "text": "(initialCount?: number) => void",
@@ -5326,6 +5338,7 @@ describe('resolveType', () => {
               "text": "void",
             },
             "text": "(initialCount: number = 0) => void",
+            "thisType": undefined,
           },
         ],
         "text": "(initialCount?: number) => void",
@@ -5423,6 +5436,7 @@ describe('resolveType', () => {
               "text": "void",
             },
             "text": "function useCounter({ initialCount = 0 }: CounterOptions): void",
+            "thisType": undefined,
           },
         ],
         "text": "({ initialCount }: CounterOptions) => void",
@@ -5522,6 +5536,7 @@ describe('resolveType', () => {
               "text": "void",
             },
             "text": "function useCounterOverride({ initialCount = 0 }: ReturnType<typeof useCounter>): void",
+            "thisType": undefined,
           },
         ],
         "text": "({ initialCount }: ReturnType<typeof useCounter>) => void",
@@ -5710,6 +5725,7 @@ describe('resolveType', () => {
               "text": "void",
             },
             "text": "function Component(props: Props): void",
+            "thisType": undefined,
           },
         ],
         "text": "(props: Props) => void",
@@ -5829,6 +5845,7 @@ describe('resolveType', () => {
               "text": "void",
             },
             "text": "function Component(props: Props): void",
+            "thisType": undefined,
           },
         ],
         "text": "(props: Props) => void",
@@ -6024,6 +6041,7 @@ describe('resolveType', () => {
               "text": "void",
             },
             "text": "function Component(props: Props): void",
+            "thisType": undefined,
           },
         ],
         "text": "(props: Props) => void",
@@ -6236,6 +6254,7 @@ describe('resolveType', () => {
               "text": "void",
             },
             "text": "function Button(props: { variant?: 'primary' | 'secondary' }): void",
+            "thisType": undefined,
           },
         ],
         "text": "(props: { variant?: "primary" | "secondary"; }) => void",
@@ -6457,7 +6476,7 @@ describe('resolveType', () => {
         },
         "typeParameters": [
           {
-            "constraint": undefined,
+            "constraintType": undefined,
             "defaultType": {
               "kind": "Any",
               "text": "any",
@@ -6597,6 +6616,7 @@ describe('resolveType', () => {
               "text": "void",
             },
             "text": "(props: TextProps) => void",
+            "thisType": undefined,
           },
         ],
         "text": "(props: TextProps) => void",
@@ -6672,7 +6692,7 @@ describe('resolveType', () => {
         "text": "EntryGroupOptions<Entries>",
         "typeParameters": [
           {
-            "constraint": {
+            "constraintType": {
               "filePath": "test.ts",
               "kind": "TypeReference",
               "position": {
@@ -6817,9 +6837,10 @@ describe('resolveType', () => {
               "text": "Element",
             },
             "text": "<AsTarget extends StyledTarget<R> | void, ForwardedAsTarget extends StyledTarget<R> | void>(props: PolymorphicComponentProps<R, BaseProps, AsTarget, ForwardedAsTarget>) => Element",
+            "thisType": undefined,
             "typeParameters": [
               {
-                "constraint": {
+                "constraintType": {
                   "kind": "UnionType",
                   "text": "StyledTarget<R> | void",
                   "types": [
@@ -6853,7 +6874,7 @@ describe('resolveType', () => {
                 "text": "AsTarget extends StyledTarget<R> | void = void",
               },
               {
-                "constraint": {
+                "constraintType": {
                   "kind": "UnionType",
                   "text": "StyledTarget<R> | void",
                   "types": [
@@ -6953,6 +6974,7 @@ describe('resolveType', () => {
               "text": "ReactNode",
             },
             "text": "(props: P) => ReactNode",
+            "thisType": undefined,
           },
         ],
         "text": "IStyledComponentBase<"web", Substitute<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, GridProps>> & string",
@@ -7066,9 +7088,10 @@ describe('resolveType', () => {
               "text": "Element",
             },
             "text": "<AsTarget extends StyledTarget<R> | void, ForwardedAsTarget extends StyledTarget<R> | void>(props: PolymorphicComponentProps<R, BaseProps, AsTarget, ForwardedAsTarget>) => Element",
+            "thisType": undefined,
             "typeParameters": [
               {
-                "constraint": {
+                "constraintType": {
                   "kind": "UnionType",
                   "text": "StyledTarget<R> | void",
                   "types": [
@@ -7102,7 +7125,7 @@ describe('resolveType', () => {
                 "text": "AsTarget extends StyledTarget<R> | void = void",
               },
               {
-                "constraint": {
+                "constraintType": {
                   "kind": "UnionType",
                   "text": "StyledTarget<R> | void",
                   "types": [
@@ -7202,6 +7225,7 @@ describe('resolveType', () => {
               "text": "ReactNode",
             },
             "text": "(props: P) => ReactNode",
+            "thisType": undefined,
           },
         ],
         "text": "IStyledComponentBase<"web", Substitute<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, { $gridTemplateColumns: string; $gridTemplateRows: string; }>> & string",
@@ -7721,6 +7745,7 @@ describe('resolveType', () => {
               },
               "tags": undefined,
               "text": "(initialCount: number = 0) => Counter",
+              "thisType": undefined,
             },
           ],
           "tags": undefined,
@@ -7762,6 +7787,7 @@ describe('resolveType', () => {
                 },
                 "tags": undefined,
                 "text": "() => void",
+                "thisType": undefined,
               },
             ],
             "tags": undefined,
@@ -7797,6 +7823,7 @@ describe('resolveType', () => {
                 },
                 "tags": undefined,
                 "text": "() => void",
+                "thisType": undefined,
               },
             ],
             "tags": undefined,
@@ -7857,6 +7884,7 @@ describe('resolveType', () => {
                 },
                 "tags": undefined,
                 "text": "(isFloored?: boolean = true) => number",
+                "thisType": undefined,
               },
             ],
             "tags": undefined,
@@ -7890,6 +7918,7 @@ describe('resolveType', () => {
                   "value": undefined,
                 },
                 "text": "() => number",
+                "thisType": undefined,
               },
             ],
             "text": "() => number",
@@ -8044,6 +8073,7 @@ describe('resolveType', () => {
               "text": "void",
             },
             "text": "function useCounter({ initialCount: renamedInitialCount = 0 }: { initialCount: number } = {}): void",
+            "thisType": undefined,
           },
         ],
         "text": "({ initialCount: renamedInitialCount }?: { initialCount: number; }) => void",
@@ -8150,6 +8180,7 @@ describe('resolveType', () => {
               "value": undefined,
             },
             "text": "function add(a: number, b: number = 0): number",
+            "thisType": undefined,
           },
         ],
         "text": "(a: number, b?: number) => number",
@@ -8725,6 +8756,7 @@ describe('resolveType', () => {
               "text": "void",
             },
             "text": "function useCounter(settings: { apiEndpoint: string; apiKey: string; } | { dbHost: string; dbPort: number; dbName: string; }): void",
+            "thisType": undefined,
           },
         ],
         "text": "(settings: { apiEndpoint: string; apiKey: string; } | { dbHost: string; dbPort: number; dbName: string; }) => void",
@@ -8881,6 +8913,7 @@ describe('resolveType', () => {
               "text": "Element",
             },
             "text": "(props: ButtonProps) => Element",
+            "thisType": undefined,
           },
         ],
         "text": "(props: ButtonProps) => React.JSX.Element",
@@ -9224,6 +9257,7 @@ describe('resolveType', () => {
               "text": "void",
             },
             "text": "function ExportedTypes({ children }: ExportedTypesProps): void",
+            "thisType": undefined,
           },
         ],
         "text": "({ children }: ExportedTypesProps) => void",
@@ -9898,9 +9932,10 @@ describe('resolveType', () => {
               "text": "void",
             },
             "text": "function loggedMethod<Args extends string[]>(...args: Args): void",
+            "thisType": undefined,
             "typeParameters": [
               {
-                "constraint": {
+                "constraintType": {
                   "filePath": "test.ts",
                   "kind": "TypeReference",
                   "position": {
@@ -10013,6 +10048,7 @@ describe('resolveType', () => {
                   "value": undefined,
                 },
                 "text": "(name: string) => string",
+                "thisType": undefined,
               },
             ],
             "text": "(name: string) => string",
@@ -10156,9 +10192,10 @@ describe('resolveType', () => {
             },
             "tags": undefined,
             "text": "function withSchema<Types>(loader: Loader<Types>): Loader<Types>",
+            "thisType": undefined,
             "typeParameters": [
               {
-                "constraint": undefined,
+                "constraintType": undefined,
                 "defaultType": undefined,
                 "kind": "TypeParameter",
                 "name": "Types",
@@ -10331,9 +10368,10 @@ describe('resolveType', () => {
             },
             "tags": undefined,
             "text": "function withSchema<Types extends Record<string, any>>(schema: Schema<Types>, loader: Loader<{ [Key in keyof Types]: Types[Key] }>): Loader<{ [Key in keyof Types]: Types[Key]; }>",
+            "thisType": undefined,
             "typeParameters": [
               {
-                "constraint": {
+                "constraintType": {
                   "filePath": "test.ts",
                   "kind": "TypeReference",
                   "position": {
@@ -10499,6 +10537,7 @@ describe('resolveType', () => {
         children,
         ...props
       }: ButtonProps): boolean",
+                  "thisType": undefined,
                 },
               ],
               "tags": undefined,
@@ -10659,27 +10698,6 @@ describe('resolveType', () => {
               "isOptional": false,
               "isReadonly": false,
               "kind": "MappedType",
-              "parameter": {
-                "constraint": {
-                  "filePath": "test.ts",
-                  "kind": "TypeReference",
-                  "position": {
-                    "end": {
-                      "column": 23,
-                      "line": 8,
-                    },
-                    "start": {
-                      "column": 11,
-                      "line": 8,
-                    },
-                  },
-                  "text": "SemanticTags",
-                },
-                "defaultType": undefined,
-                "kind": "TypeParameter",
-                "name": "Tag",
-                "text": "Tag in SemanticTags",
-              },
               "text": "{ h1: "h1" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>>; h2: "h2" | ComponentType<...>; p: "p" | ComponentType<...>; }",
               "type": {
                 "kind": "UnionType",
@@ -10716,6 +10734,27 @@ describe('resolveType', () => {
                     "text": "ComponentType<ComponentProps<Tag>>",
                   },
                 ],
+              },
+              "typeParameter": {
+                "constraintType": {
+                  "filePath": "test.ts",
+                  "kind": "TypeReference",
+                  "position": {
+                    "end": {
+                      "column": 23,
+                      "line": 8,
+                    },
+                    "start": {
+                      "column": 11,
+                      "line": 8,
+                    },
+                  },
+                  "text": "SemanticTags",
+                },
+                "defaultType": undefined,
+                "kind": "TypeParameter",
+                "name": "Tag",
+                "text": "Tag in SemanticTags",
               },
             },
             {
@@ -10997,6 +11036,7 @@ describe('resolveType', () => {
               "text": "void",
             },
             "text": "function Component(props: Props): void",
+            "thisType": undefined,
           },
         ],
         "text": "(props: Props) => void",
@@ -11063,6 +11103,7 @@ describe('resolveType', () => {
               "text": "() => boolean",
             },
             "text": "function returnsFn(): () => boolean",
+            "thisType": undefined,
           },
         ],
         "text": "() => () => boolean",
@@ -11183,9 +11224,10 @@ describe('resolveType', () => {
               "text": "void",
             },
             "text": "function getFile<ExtensionType extends "mdx" | string>(extension?: ExtensionType | ExtensionType[]): void",
+            "thisType": undefined,
             "typeParameters": [
               {
-                "constraint": {
+                "constraintType": {
                   "kind": "UnionType",
                   "text": ""mdx" | string",
                   "types": [
@@ -11444,27 +11486,6 @@ describe('resolveType', () => {
             "isOptional": false,
             "isReadonly": false,
             "kind": "MappedType",
-            "parameter": {
-              "constraint": {
-                "filePath": "index.ts",
-                "kind": "TypeReference",
-                "position": {
-                  "end": {
-                    "column": 48,
-                    "line": 7,
-                  },
-                  "start": {
-                    "column": 17,
-                    "line": 7,
-                  },
-                },
-                "text": "Extract<keyof Loaders, "js" | "jsx" | "ts" | "tsx" | "mdx">",
-              },
-              "defaultType": undefined,
-              "kind": "TypeParameter",
-              "name": "Extension",
-              "text": "Extension in LoadersWithRuntimeKeys<Loaders>",
-            },
             "text": "{ [Extension in Extract<keyof Loaders, "js" | "jsx" | "ts" | "tsx" | "mdx">]: Name extends keyof Loaders[Extension] ? Loaders[Extension][Name] : never; }",
             "type": {
               "checkType": {
@@ -11582,12 +11603,33 @@ describe('resolveType', () => {
                 "text": "Loaders[Extension][Name]",
               },
             },
+            "typeParameter": {
+              "constraintType": {
+                "filePath": "index.ts",
+                "kind": "TypeReference",
+                "position": {
+                  "end": {
+                    "column": 48,
+                    "line": 7,
+                  },
+                  "start": {
+                    "column": 17,
+                    "line": 7,
+                  },
+                },
+                "text": "Extract<keyof Loaders, "js" | "jsx" | "ts" | "tsx" | "mdx">",
+              },
+              "defaultType": undefined,
+              "kind": "TypeParameter",
+              "name": "Extension",
+              "text": "Extension in LoadersWithRuntimeKeys<Loaders>",
+            },
           },
           "text": "LoaderExportValue<Loaders, Name>",
         },
         "typeParameters": [
           {
-            "constraint": undefined,
+            "constraintType": undefined,
             "defaultType": undefined,
             "filePath": "index.ts",
             "kind": "TypeParameter",
@@ -11605,7 +11647,7 @@ describe('resolveType', () => {
             "text": "Loaders",
           },
           {
-            "constraint": {
+            "constraintType": {
               "kind": "String",
               "text": "string",
               "value": undefined,
@@ -11790,7 +11832,7 @@ describe('resolveType', () => {
         },
         "typeParameters": [
           {
-            "constraint": {
+            "constraintType": {
               "kind": "String",
               "text": "string",
               "value": undefined,
@@ -11834,7 +11876,7 @@ describe('resolveType', () => {
 
     expect(type).toMatchInlineSnapshot(`
       {
-        "constraint": {
+        "constraintType": {
           "kind": "TypeOperator",
           "operator": "keyof",
           "text": "keyof Types",
@@ -11995,9 +12037,10 @@ describe('resolveType', () => {
               "text": "Promise<void>",
             },
             "text": "function resolveFileFromEntry<Types extends Record<string, any>, Extension extends keyof Types & string>(extension?: Extension | readonly Extension[]): Promise<void>",
+            "thisType": undefined,
             "typeParameters": [
               {
-                "constraint": {
+                "constraintType": {
                   "filePath": "test.ts",
                   "kind": "TypeReference",
                   "position": {
@@ -12018,7 +12061,7 @@ describe('resolveType', () => {
                 "text": "Types extends Record<string, any>",
               },
               {
-                "constraint": {
+                "constraintType": {
                   "kind": "IntersectionType",
                   "text": "keyof Types & string",
                   "types": [
@@ -12206,7 +12249,7 @@ describe('resolveType', () => {
                   "kind": "InferType",
                   "text": "Intersection",
                   "typeParameter": {
-                    "constraint": undefined,
+                    "constraintType": undefined,
                     "defaultType": undefined,
                     "kind": "TypeParameter",
                     "name": "Intersection",
@@ -12267,7 +12310,7 @@ describe('resolveType', () => {
         },
         "typeParameters": [
           {
-            "constraint": undefined,
+            "constraintType": undefined,
             "defaultType": undefined,
             "filePath": "test.ts",
             "kind": "TypeParameter",
@@ -12342,9 +12385,10 @@ describe('resolveType', () => {
               "text": "void",
             },
             "text": "function isFile<Types extends Record<string, any>, Extension extends string | Extract<keyof Types, string>>(): void",
+            "thisType": undefined,
             "typeParameters": [
               {
-                "constraint": {
+                "constraintType": {
                   "filePath": "test.ts",
                   "kind": "TypeReference",
                   "position": {
@@ -12365,7 +12409,7 @@ describe('resolveType', () => {
                 "text": "Types extends Record<string, any>",
               },
               {
-                "constraint": {
+                "constraintType": {
                   "kind": "UnionType",
                   "text": "string | Extract<keyof Types, string>",
                   "types": [
@@ -12439,6 +12483,66 @@ describe('resolveType', () => {
           },
         ],
         "text": "<Types extends Record<string, any>, const Extension extends StringUnion<keyof Types>>() => void",
+      }
+    `)
+  })
+
+  test('this parameter type', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      function foo(this: string) {}
+      `,
+      { overwrite: true }
+    )
+    const declaration = sourceFile.getFunctionOrThrow('foo')
+    const types = resolveType(declaration.getType(), declaration)
+
+    expect(types).toMatchInlineSnapshot(`
+      {
+        "filePath": "test.ts",
+        "kind": "Function",
+        "name": "foo",
+        "position": {
+          "end": {
+            "column": 30,
+            "line": 1,
+          },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "signatures": [
+          {
+            "filePath": "test.ts",
+            "isAsync": false,
+            "isGenerator": false,
+            "kind": "FunctionSignature",
+            "parameters": [],
+            "position": {
+              "end": {
+                "column": 30,
+                "line": 1,
+              },
+              "start": {
+                "column": 1,
+                "line": 1,
+              },
+            },
+            "returnType": {
+              "kind": "Void",
+              "text": "void",
+            },
+            "text": "function foo(): void",
+            "thisType": {
+              "kind": "String",
+              "text": "string",
+              "value": undefined,
+            },
+          },
+        ],
+        "text": "(this: string) => void",
       }
     `)
   })

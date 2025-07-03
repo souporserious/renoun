@@ -338,6 +338,9 @@ export namespace Kind {
     /** The parameters of the call signature. */
     typeParameters?: TypeParameter[]
 
+    /** The type of `this` for the call signature. */
+    thisType?: TypeExpression
+
     /** The return type of the call signature. */
     returnType?: TypeExpression
 
@@ -553,8 +556,6 @@ export namespace Kind {
     | Any
     | Unknown
     | Never
-
-  // TODO: still need to add ThisType
 }
 
 export type Kind =
@@ -1774,8 +1775,6 @@ function resolveCallSignature(
   filter: SymbolFilter = defaultFilter,
   dependencies?: Set<string>
 ): Kind.CallSignature | undefined {
-  const signatureDeclaration = signature.getDeclaration()
-  const signatureParameters = signature.getParameters()
   const resolvedTypeParameters = signature
     .getTypeParameters()
     .map((parameter) => resolveTypeParameter(parameter, filter, dependencies))
@@ -1790,6 +1789,25 @@ function resolveCallSignature(
         })
         .join(', ')}>`
     : ''
+  const signatureDeclaration = signature.getDeclaration()
+  let thisType: Kind.TypeExpression | undefined
+
+  if (tsMorph.Node.isSignaturedDeclaration(signatureDeclaration)) {
+    const parameters = signatureDeclaration.getParameters()
+
+    for (const parameter of parameters) {
+      if (parameter.getName() === 'this') {
+        thisType = resolveTypeExpression(
+          parameter.getType(),
+          parameter,
+          filter,
+          undefined,
+          false,
+          dependencies
+        )
+      }
+    }
+  }
 
   const returnTypeNode = signatureDeclaration.getReturnTypeNode()
   let returnType: Kind.TypeExpression | undefined
@@ -1820,6 +1838,7 @@ function resolveCallSignature(
     )
   }
 
+  const signatureParameters = signature.getParameters()
   const resolvedParameters = resolveParameters(
     signatureParameters,
     signatureDeclaration,
@@ -1841,6 +1860,7 @@ function resolveCallSignature(
     kind: 'CallSignature',
     text: simplifiedTypeText,
     parameters: resolvedParameters,
+    thisType,
     returnType,
     ...getJsDocMetadata(signatureDeclaration),
     ...getDeclarationLocation(signatureDeclaration),
