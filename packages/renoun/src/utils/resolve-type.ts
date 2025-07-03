@@ -8,6 +8,7 @@ import type {
   PropertyDeclaration,
   PropertySignature,
   IndexSignatureDeclaration,
+  SignaturedDeclaration,
   TypeAliasDeclaration,
   VariableDeclaration,
   Signature,
@@ -1396,7 +1397,6 @@ function resolveTypeExpression(
 
         const [signature] = callSignatures
         const resolvedParameters = resolveParameters(
-          signature.getParameters(),
           signature.getDeclaration(),
           filter,
           dependencies
@@ -1656,7 +1656,6 @@ function resolveMemberSignature(
   if (tsMorph.Node.isMethodSignature(member)) {
     const callSignature = member.getType().getCallSignatures()[0]
     const parameters = resolveParameters(
-      callSignature.getParameters(),
       callSignature.getDeclaration(),
       filter,
       dependencies
@@ -1790,24 +1789,32 @@ function resolveCallSignature(
         .join(', ')}>`
     : ''
   const signatureDeclaration = signature.getDeclaration()
+  const resolvedParameters: Kind.Parameter[] = []
   let thisType: Kind.TypeExpression | undefined
 
   if (tsMorph.Node.isSignaturedDeclaration(signatureDeclaration)) {
     const parameters = signatureDeclaration.getParameters()
 
     for (const parameter of parameters) {
-      if (parameter.getName() === 'this') {
-        thisType = resolveTypeExpression(
-          parameter.getType(),
-          parameter,
-          filter,
-          undefined,
-          false,
-          dependencies
-        )
+      const resolvedParameter = resolveParameter(
+        parameter,
+        signatureDeclaration,
+        filter,
+        dependencies
+      )
+      if (resolvedParameter) {
+        if (parameter.getName() === 'this') {
+          thisType = resolvedParameter.type
+        } else {
+          resolvedParameters.push(resolvedParameter)
+        }
       }
     }
   }
+
+  const parametersText = resolvedParameters
+    .map((parameter) => parameter.text)
+    .join(', ')
 
   const returnTypeNode = signatureDeclaration.getReturnTypeNode()
   let returnType: Kind.TypeExpression | undefined
@@ -1838,16 +1845,6 @@ function resolveCallSignature(
     )
   }
 
-  const signatureParameters = signature.getParameters()
-  const resolvedParameters = resolveParameters(
-    signatureParameters,
-    signatureDeclaration,
-    filter,
-    dependencies
-  )
-  const parametersText = resolvedParameters
-    .map((parameter) => parameter.text)
-    .join(', ')
   let simplifiedTypeText: string
 
   if (tsMorph.Node.isFunctionDeclaration(signatureDeclaration)) {
@@ -1882,93 +1879,92 @@ function resolveCallSignature(
 }
 
 function resolveParameters(
-  parameters: Symbol[],
-  enclosingNode?: Node,
+  signatureDeclaration: Node,
   filter: SymbolFilter = defaultFilter,
   dependencies?: Set<string>
 ): Kind.Parameter[] {
-  return parameters
-    .map((parameter) => {
-      const parameterDeclaration = getPrimaryDeclaration(parameter) as
-        | ParameterDeclaration
-        | undefined
-
-      if (!parameterDeclaration) {
-        throw new Error(
-          `[renoun:resolveCallSignatureParameters]: No parameter declaration found for "${parameter.getName()}". If you are seeing this error, please file an issue.`
-        )
-      }
-
-      /**
-       * When resolving a generic function's parameter type, we have two candidates:
-       *   1. The annotated type node
-       *   2. The contextual type at the call site
-       *
-       * We only want to further resolve the contextual type once all generics
-       * have been substituted i.e. once there are no free type parameters.
-       * - If the contextual type still has free type parameters, we're still
-       *   in the generic's definition context, so stick with the annotation.
-       * - Otherwise we're at an instantiated call site, so use the contextual type.
-       */
-      const annotationNode = parameterDeclaration.getTypeNode()
-      const contextualType = enclosingNode
-        ? parameter.getTypeAtLocation(enclosingNode)
-        : undefined
-      const initializer = getInitializerValue(parameterDeclaration)
-      let resolvedParameterType: Kind.TypeExpression | undefined
-
-      if (annotationNode) {
-        const annotationType = annotationNode.getType()
-        const typeToResolve =
-          contextualType && !containsFreeTypeParameter(contextualType)
-            ? contextualType
-            : (annotationType ?? contextualType)
-
-        resolvedParameterType = resolveTypeExpression(
-          typeToResolve,
-          annotationNode ?? enclosingNode,
-          filter,
-          initializer,
-          false,
-          dependencies
-        )
-      } else if (contextualType) {
-        resolvedParameterType = resolveTypeExpression(
-          contextualType,
-          enclosingNode,
-          filter,
-          initializer,
-          false,
-          dependencies
-        )
-      }
-
-      if (resolvedParameterType) {
-        const isOptional = parameterDeclaration.hasQuestionToken()
-        const resolvedType =
-          (isOptional ?? Boolean(initializer))
-            ? filterUndefinedFromUnion(resolvedParameterType)
-            : resolvedParameterType
-        let name: string | undefined = parameter.getName()
-
-        if (name.startsWith('__')) {
-          name = undefined
-        }
-
-        return {
-          kind: 'Parameter',
-          name,
-          type: resolvedType,
-          initializer,
-          isOptional: isOptional ?? Boolean(initializer),
-          description: getSymbolDescription(parameter),
-          text: parameterDeclaration.getText(),
-          ...getJsDocMetadata(parameterDeclaration),
-          ...getDeclarationLocation(parameterDeclaration),
-        } satisfies Kind.Parameter
-      }
-    })
+  return (signatureDeclaration as unknown as SignaturedDeclaration)
+    .getParameters()
+    .map((parameter) =>
+      resolveParameter(parameter, signatureDeclaration, filter, dependencies)
+    )
     .filter(Boolean) as Kind.Parameter[]
+}
+
+function resolveParameter(
+  parameterDeclaration: ParameterDeclaration,
+  signatureDeclaration: Node,
+  filter: SymbolFilter = defaultFilter,
+  dependencies?: Set<string>
+): Kind.Parameter | undefined {
+  /**
+   * When resolving a generic function's parameter type, we have two candidates:
+   *   1. The annotated type node
+   *   2. The contextual type at the call site
+   *
+   * We only want to further resolve the contextual type once all generics
+   * have been substituted i.e. once there are no free type parameters.
+   * - If the contextual type still has free type parameters, we're still
+   *   in the generic's definition context, so stick with the annotation.
+   * - Otherwise we're at an instantiated call site, so use the contextual type.
+   */
+  const parameterTypeNode = parameterDeclaration.getTypeNode()
+  const parameterType = parameterDeclaration.getType()
+  const initializer = getInitializerValue(parameterDeclaration)
+  let resolvedParameterType: Kind.TypeExpression | undefined
+
+  if (parameterTypeNode) {
+    const annotationType = parameterTypeNode.getType()
+    const typeToResolve =
+      parameterType && !containsFreeTypeParameter(parameterType)
+        ? parameterType
+        : (annotationType ?? parameterType)
+
+    resolvedParameterType = resolveTypeExpression(
+      typeToResolve,
+      parameterTypeNode ?? signatureDeclaration,
+      filter,
+      initializer,
+      false,
+      dependencies
+    )
+  } else if (parameterType) {
+    resolvedParameterType = resolveTypeExpression(
+      parameterType,
+      signatureDeclaration as any,
+      filter,
+      initializer,
+      false,
+      dependencies
+    )
+  }
+
+  if (resolvedParameterType) {
+    const isOptional = parameterDeclaration.hasQuestionToken()
+    const resolvedType =
+      (isOptional ?? Boolean(initializer))
+        ? filterUndefinedFromUnion(resolvedParameterType)
+        : resolvedParameterType
+    let name: string | undefined = parameterDeclaration.getName()
+
+    if (name.startsWith('__')) {
+      name = undefined
+    }
+
+    return {
+      kind: 'Parameter',
+      name,
+      type: resolvedType,
+      initializer,
+      isOptional: isOptional ?? Boolean(initializer),
+      description: getSymbolDescription(
+        parameterDeclaration.getSymbolOrThrow()
+      ),
+      text: parameterDeclaration.getText(),
+      ...getJsDocMetadata(parameterDeclaration),
+      ...getDeclarationLocation(parameterDeclaration),
+    } satisfies Kind.Parameter
+  }
 }
 
 /** Process index signatures of an interface or type alias. */

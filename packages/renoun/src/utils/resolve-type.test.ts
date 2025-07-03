@@ -3033,7 +3033,7 @@ describe('resolveType', () => {
               },
               "isOptional": false,
               "kind": "Parameter",
-              "name": undefined,
+              "name": "{ style: { fontSize, color } }",
               "position": {
                 "end": {
                   "column": 111,
@@ -3781,7 +3781,7 @@ describe('resolveType', () => {
                       "line": 562,
                     },
                   },
-                  "text": "Substitute<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, { fontSize: number; fontWeight?: number; }>",
+                  "text": "P",
                 },
               },
             ],
@@ -4968,7 +4968,7 @@ describe('resolveType', () => {
                 },
                 "isOptional": false,
                 "kind": "Parameter",
-                "name": undefined,
+                "name": "{ initialCount = 0 }",
                 "position": {
                   "end": {
                     "column": 59,
@@ -5094,7 +5094,7 @@ describe('resolveType', () => {
                 },
                 "isOptional": true,
                 "kind": "Parameter",
-                "name": undefined,
+                "name": "{ initial = { count: 0 } }",
                 "position": {
                   "end": {
                     "column": 86,
@@ -5392,7 +5392,7 @@ describe('resolveType', () => {
                 },
                 "isOptional": false,
                 "kind": "Parameter",
-                "name": undefined,
+                "name": "{ initialCount = 0 }",
                 "position": {
                   "end": {
                     "column": 98,
@@ -5492,7 +5492,7 @@ describe('resolveType', () => {
                 },
                 "isOptional": false,
                 "kind": "Parameter",
-                "name": undefined,
+                "name": "{ initialCount = 0 }",
                 "position": {
                   "end": {
                     "column": 117,
@@ -6944,7 +6944,7 @@ describe('resolveType', () => {
                       "line": 562,
                     },
                   },
-                  "text": "Substitute<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, GridProps>",
+                  "text": "P",
                 },
               },
             ],
@@ -7195,7 +7195,7 @@ describe('resolveType', () => {
                       "line": 562,
                     },
                   },
-                  "text": "Substitute<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, { $gridTemplateColumns: string; $gridTemplateRows: string; }>",
+                  "text": "P",
                 },
               },
             ],
@@ -8015,7 +8015,7 @@ describe('resolveType', () => {
                 },
                 "isOptional": false,
                 "kind": "Parameter",
-                "name": undefined,
+                "name": "{ initialCount: renamedInitialCount = 0 }",
                 "position": {
                   "end": {
                     "column": 93,
@@ -8986,7 +8986,7 @@ describe('resolveType', () => {
               "initializer": undefined,
               "isOptional": false,
               "kind": "Parameter",
-              "name": undefined,
+              "name": "{ children }",
               "position": {
                 "end": {
                   "column": 56,
@@ -10483,7 +10483,12 @@ describe('resolveType', () => {
                     },
                     "isOptional": false,
                     "kind": "Parameter",
-                    "name": undefined,
+                    "name": "{
+        variant = 'primary',
+        className = '',
+        children,
+        ...props
+      }",
                     "position": {
                       "end": {
                         "column": 15,
@@ -12543,6 +12548,148 @@ describe('resolveType', () => {
           },
         ],
         "text": "(this: string) => void",
+      }
+    `)
+  })
+
+  test('this parameter with complex type', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      function getDefaultExport<Types>(
+        this: Types extends { default: infer DefaultType }
+          ? DefaultType
+          : never
+      ) {}
+      `,
+      { overwrite: true }
+    )
+    const declaration = sourceFile.getFunctionOrThrow('getDefaultExport')
+    const types = resolveType(declaration.getType(), declaration)
+
+    expect(types).toMatchInlineSnapshot(`
+      {
+        "filePath": "test.ts",
+        "kind": "Function",
+        "name": "getDefaultExport",
+        "position": {
+          "end": {
+            "column": 5,
+            "line": 5,
+          },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "signatures": [
+          {
+            "filePath": "test.ts",
+            "isAsync": false,
+            "isGenerator": false,
+            "kind": "FunctionSignature",
+            "parameters": [],
+            "position": {
+              "end": {
+                "column": 5,
+                "line": 5,
+              },
+              "start": {
+                "column": 1,
+                "line": 1,
+              },
+            },
+            "returnType": {
+              "kind": "Void",
+              "text": "void",
+            },
+            "text": "function getDefaultExport<Types>(): void",
+            "thisType": {
+              "checkType": {
+                "filePath": "test.ts",
+                "kind": "TypeReference",
+                "position": {
+                  "end": {
+                    "column": 14,
+                    "line": 2,
+                  },
+                  "start": {
+                    "column": 9,
+                    "line": 2,
+                  },
+                },
+                "text": "Types",
+              },
+              "extendsType": {
+                "kind": "TypeLiteral",
+                "members": [
+                  {
+                    "filePath": "test.ts",
+                    "isOptional": false,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "default",
+                    "position": {
+                      "end": {
+                        "column": 51,
+                        "line": 2,
+                      },
+                      "start": {
+                        "column": 25,
+                        "line": 2,
+                      },
+                    },
+                    "text": "default: infer DefaultType",
+                    "type": {
+                      "kind": "InferType",
+                      "text": "DefaultType",
+                      "typeParameter": {
+                        "constraintType": undefined,
+                        "defaultType": undefined,
+                        "kind": "TypeParameter",
+                        "name": "DefaultType",
+                        "text": "DefaultType",
+                      },
+                    },
+                  },
+                ],
+                "text": "{ default: DefaultType; }",
+              },
+              "falseType": {
+                "kind": "Never",
+                "text": "never",
+              },
+              "isDistributive": true,
+              "kind": "ConditionalType",
+              "text": "Types extends { default: infer DefaultType; } ? DefaultType : never",
+              "trueType": {
+                "filePath": "test.ts",
+                "kind": "TypeReference",
+                "position": {
+                  "end": {
+                    "column": 18,
+                    "line": 3,
+                  },
+                  "start": {
+                    "column": 7,
+                    "line": 3,
+                  },
+                },
+                "text": "DefaultType",
+              },
+            },
+            "typeParameters": [
+              {
+                "constraintType": undefined,
+                "defaultType": undefined,
+                "kind": "TypeParameter",
+                "name": "Types",
+                "text": "Types",
+              },
+            ],
+          },
+        ],
+        "text": "<Types>(this: Types extends { default: infer DefaultType; } ? DefaultType : never) => void",
       }
     `)
   })
