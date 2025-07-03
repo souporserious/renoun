@@ -1458,6 +1458,25 @@ function resolveTypeExpression(
           }
 
           if (mappedNode) {
+            if (shouldResolveMappedType(type, mappedNode)) {
+              const members = resolvePropertySignatures(
+                type,
+                mappedNode,
+                filter,
+                defaultValues,
+                keepReferences,
+                dependencies
+              )
+
+              if (members.length) {
+                return {
+                  kind: 'TypeLiteral',
+                  text: typeText,
+                  members,
+                } satisfies Kind.TypeLiteral
+              }
+            }
+
             const resolvedTypeParameter = resolveTypeParameterDeclaration(
               mappedNode.getTypeParameter(),
               filter,
@@ -3019,6 +3038,29 @@ function shouldResolveReference(type: Type, enclosingNode?: Node): boolean {
 
   // If we got here, every part is local and concrete
   return true
+}
+
+/**
+ * Decide whether a `MappedType` should be resolved or kept as a reference:
+ * - If the mapped type itself has free type parameters
+ * - If the constraint type is exported, external, or from node_modules
+ */
+function shouldResolveMappedType(
+  mappedType: tsMorph.Type,
+  mappedNode: tsMorph.MappedTypeNode
+): boolean {
+  if (containsFreeTypeParameter(mappedType)) {
+    return false
+  }
+
+  const typeParameter = mappedNode.getTypeParameter()
+  const constraintType = typeParameter.getConstraintOrThrow().getType()
+
+  if (!constraintType) {
+    return false
+  }
+
+  return shouldResolveReference(constraintType, mappedNode)
 }
 
 /** Attempt to get the module specifier for a type reference if it is imported from another module. */

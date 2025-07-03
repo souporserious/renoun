@@ -2083,274 +2083,118 @@ describe('resolveType', () => {
           "text": "UnwrapPromisesInMap<Omit<A, "title">> | UnwrapPromisesInMap<Omit<B, "title">>",
           "types": [
             {
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "MappedType",
-              "parameter": {
-                "constraint": {
-                  "kind": "TypeOperator",
-                  "operator": "keyof",
-                  "text": "keyof T",
+              "kind": "TypeLiteral",
+              "members": [
+                {
+                  "filePath": "test.ts",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "PropertySignature",
+                  "name": "a",
+                  "position": {
+                    "end": {
+                      "column": 21,
+                      "line": 11,
+                    },
+                    "start": {
+                      "column": 3,
+                      "line": 11,
+                    },
+                  },
+                  "text": "a: Promise<number>",
                   "type": {
                     "filePath": "test.ts",
                     "kind": "TypeReference",
                     "position": {
                       "end": {
-                        "column": 16,
-                        "line": 21,
-                      },
-                      "start": {
-                        "column": 15,
-                        "line": 21,
-                      },
-                    },
-                    "text": "T",
-                  },
-                },
-                "defaultType": undefined,
-                "kind": "TypeParameter",
-                "name": "K",
-                "text": "K in keyof T",
-              },
-              "text": "UnwrapPromisesInMap<Omit<A, "title">>",
-              "type": {
-                "checkType": {
-                  "indexType": {
-                    "filePath": "test.ts",
-                    "kind": "TypeReference",
-                    "position": {
-                      "end": {
-                        "column": 22,
-                        "line": 21,
-                      },
-                      "start": {
                         "column": 21,
-                        "line": 21,
-                      },
-                    },
-                    "text": "K",
-                  },
-                  "kind": "IndexedAccessType",
-                  "objectType": {
-                    "filePath": "test.ts",
-                    "kind": "TypeReference",
-                    "position": {
-                      "end": {
-                        "column": 20,
-                        "line": 21,
+                        "line": 11,
                       },
                       "start": {
-                        "column": 19,
-                        "line": 21,
+                        "column": 6,
+                        "line": 11,
                       },
                     },
-                    "text": "T",
+                    "text": "Promise<number>",
                   },
-                  "text": "T[K]",
                 },
-                "extendsType": {
+                {
                   "filePath": "test.ts",
-                  "kind": "TypeReference",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "PropertySignature",
+                  "name": "url",
                   "position": {
                     "end": {
-                      "column": 48,
-                      "line": 21,
+                      "column": 14,
+                      "line": 6,
                     },
                     "start": {
-                      "column": 32,
-                      "line": 21,
+                      "column": 3,
+                      "line": 6,
                     },
                   },
-                  "text": "Promise<U>",
+                  "text": "url: string",
+                  "type": {
+                    "kind": "String",
+                    "text": "string",
+                    "value": undefined,
+                  },
                 },
-                "falseType": {
-                  "indexType": {
-                    "filePath": "test.ts",
-                    "kind": "TypeReference",
-                    "position": {
-                      "end": {
-                        "column": 58,
-                        "line": 21,
-                      },
-                      "start": {
-                        "column": 57,
-                        "line": 21,
-                      },
-                    },
-                    "text": "K",
-                  },
-                  "kind": "IndexedAccessType",
-                  "objectType": {
-                    "filePath": "test.ts",
-                    "kind": "TypeReference",
-                    "position": {
-                      "end": {
-                        "column": 56,
-                        "line": 21,
-                      },
-                      "start": {
-                        "column": 55,
-                        "line": 21,
-                      },
-                    },
-                    "text": "T",
-                  },
-                  "text": "T[K]",
-                },
-                "isDistributive": false,
-                "kind": "ConditionalType",
-                "text": "T[K] extends Promise<infer U> ? U : T[K]",
-                "trueType": {
-                  "filePath": "test.ts",
-                  "kind": "TypeReference",
-                  "position": {
-                    "end": {
-                      "column": 52,
-                      "line": 21,
-                    },
-                    "start": {
-                      "column": 51,
-                      "line": 21,
-                    },
-                  },
-                  "text": "U",
-                },
-              },
+              ],
+              "text": "UnwrapPromisesInMap<Omit<A, "title">>",
             },
             {
-              "isOptional": false,
-              "isReadonly": false,
-              "kind": "MappedType",
-              "parameter": {
-                "constraint": {
-                  "kind": "TypeOperator",
-                  "operator": "keyof",
-                  "text": "keyof T",
+              "kind": "TypeLiteral",
+              "members": [
+                {
+                  "filePath": "test.ts",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "PropertySignature",
+                  "name": "url",
+                  "position": {
+                    "end": {
+                      "column": 14,
+                      "line": 6,
+                    },
+                    "start": {
+                      "column": 3,
+                      "line": 6,
+                    },
+                  },
+                  "text": "url: string",
                   "type": {
-                    "filePath": "test.ts",
-                    "kind": "TypeReference",
-                    "position": {
-                      "end": {
-                        "column": 16,
-                        "line": 21,
-                      },
-                      "start": {
-                        "column": 15,
-                        "line": 21,
-                      },
-                    },
-                    "text": "T",
+                    "kind": "String",
+                    "text": "string",
+                    "value": undefined,
                   },
                 },
-                "defaultType": undefined,
-                "kind": "TypeParameter",
-                "name": "K",
-                "text": "K in keyof T",
-              },
+                {
+                  "filePath": "test.ts",
+                  "isOptional": false,
+                  "isReadonly": false,
+                  "kind": "PropertySignature",
+                  "name": "b",
+                  "position": {
+                    "end": {
+                      "column": 12,
+                      "line": 15,
+                    },
+                    "start": {
+                      "column": 3,
+                      "line": 15,
+                    },
+                  },
+                  "text": "b: number",
+                  "type": {
+                    "kind": "Number",
+                    "text": "number",
+                    "value": undefined,
+                  },
+                },
+              ],
               "text": "UnwrapPromisesInMap<Omit<B, "title">>",
-              "type": {
-                "checkType": {
-                  "indexType": {
-                    "filePath": "test.ts",
-                    "kind": "TypeReference",
-                    "position": {
-                      "end": {
-                        "column": 22,
-                        "line": 21,
-                      },
-                      "start": {
-                        "column": 21,
-                        "line": 21,
-                      },
-                    },
-                    "text": "K",
-                  },
-                  "kind": "IndexedAccessType",
-                  "objectType": {
-                    "filePath": "test.ts",
-                    "kind": "TypeReference",
-                    "position": {
-                      "end": {
-                        "column": 20,
-                        "line": 21,
-                      },
-                      "start": {
-                        "column": 19,
-                        "line": 21,
-                      },
-                    },
-                    "text": "T",
-                  },
-                  "text": "T[K]",
-                },
-                "extendsType": {
-                  "filePath": "test.ts",
-                  "kind": "TypeReference",
-                  "position": {
-                    "end": {
-                      "column": 48,
-                      "line": 21,
-                    },
-                    "start": {
-                      "column": 32,
-                      "line": 21,
-                    },
-                  },
-                  "text": "Promise<U>",
-                },
-                "falseType": {
-                  "indexType": {
-                    "filePath": "test.ts",
-                    "kind": "TypeReference",
-                    "position": {
-                      "end": {
-                        "column": 58,
-                        "line": 21,
-                      },
-                      "start": {
-                        "column": 57,
-                        "line": 21,
-                      },
-                    },
-                    "text": "K",
-                  },
-                  "kind": "IndexedAccessType",
-                  "objectType": {
-                    "filePath": "test.ts",
-                    "kind": "TypeReference",
-                    "position": {
-                      "end": {
-                        "column": 56,
-                        "line": 21,
-                      },
-                      "start": {
-                        "column": 55,
-                        "line": 21,
-                      },
-                    },
-                    "text": "T",
-                  },
-                  "text": "T[K]",
-                },
-                "isDistributive": false,
-                "kind": "ConditionalType",
-                "text": "T[K] extends Promise<infer U> ? U : T[K]",
-                "trueType": {
-                  "filePath": "test.ts",
-                  "kind": "TypeReference",
-                  "position": {
-                    "end": {
-                      "column": 52,
-                      "line": 21,
-                    },
-                    "start": {
-                      "column": 51,
-                      "line": 21,
-                    },
-                  },
-                  "text": "U",
-                },
-              },
             },
           ],
         },
