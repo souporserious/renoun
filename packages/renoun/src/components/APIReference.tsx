@@ -161,6 +161,8 @@ function TypeNodeRouter({
   components: APIReferenceComponents
 }) {
   switch (node.kind) {
+    case 'Variable':
+      return <VariableSection node={node} components={components} />
     case 'Class':
       return <ClassSection node={node} components={components} />
     case 'Component':
@@ -195,8 +197,6 @@ function TypeNodeRouter({
     case 'Any':
     case 'Unknown':
       return <TypeExpressionSection node={node} components={components} />
-    case 'Variable':
-      return <components.code>{node.text}</components.code>
     default:
       throw new Error(
         `[renoun]: A render does not currently exist for type kind "${node.kind}". Please file an issue if you see this error.`
@@ -299,6 +299,28 @@ function TypeTable<RowType>({
         })}
       </components.tbody>
     </components.table>
+  )
+}
+
+function VariableSection({
+  node,
+  components,
+}: {
+  node: TypeOfKind<'Variable'>
+  components: APIReferenceComponents
+}) {
+  return (
+    <TypeSection
+      label="Variable"
+      title={node.name}
+      description={node.description}
+      id={node.name}
+      components={components}
+    >
+      <TypeDetail label="Type" components={components}>
+        <components.code>{node.text}</components.code>
+      </TypeDetail>
+    </TypeSection>
   )
 }
 
