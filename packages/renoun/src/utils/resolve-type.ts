@@ -1201,17 +1201,22 @@ function resolveTypeExpression(
           ? enclosingNode
               .getTypeNodes()
               .map((node) => ({ node, type: node.getType() }))
-          : type.getUnionTypes().map((type) => ({
-              node: hasTypeNode(enclosingNode)
-                ? enclosingNode.getTypeNode()
-                : enclosingNode,
-              type,
-            }))
+          : type.getUnionTypes().map((unionType) => {
+              const primaryDeclaration = getPrimaryDeclaration(
+                unionType.getAliasSymbol() || unionType.getSymbol()
+              )
+              return {
+                node: hasTypeNode(primaryDeclaration)
+                  ? primaryDeclaration.getTypeNode()
+                  : primaryDeclaration,
+                type: unionType,
+              }
+            })
 
         for (const { node: typeNode, type: typeNodeType } of unionTypeNodes) {
           const resolvedMemberType = resolveTypeExpression(
             typeNodeType,
-            typeNode,
+            typeNode ?? symbolDeclaration,
             filter,
             defaultValues,
             keepReferences,
@@ -1443,21 +1448,13 @@ function resolveTypeExpression(
           isAsync: returnType ? isPromiseLike(returnType) : false,
         } satisfies Kind.FunctionType
       } else if (type.isObject()) {
-        const isMapped = Boolean(
-          type.compilerType.objectFlags & tsMorph.ObjectFlags.Mapped
-        )
-
-        if (isMapped) {
+        if (isMappedType(type)) {
           let mappedNode: tsMorph.MappedTypeNode | undefined
 
-          if (enclosingNode) {
-            if (tsMorph.Node.isMappedTypeNode(enclosingNode)) {
-              mappedNode = enclosingNode
-            }
-          } else if (symbolDeclaration) {
-            if (tsMorph.Node.isMappedTypeNode(symbolDeclaration)) {
-              mappedNode = symbolDeclaration
-            }
+          if (tsMorph.Node.isMappedTypeNode(enclosingNode)) {
+            mappedNode = enclosingNode
+          } else if (tsMorph.Node.isMappedTypeNode(symbolDeclaration)) {
+            mappedNode = symbolDeclaration
           }
 
           if (mappedNode) {
@@ -1479,7 +1476,7 @@ function resolveTypeExpression(
               : undefined
 
             if (resolvedTypeParameter && valueType) {
-              resolvedType = {
+              return {
                 kind: 'MappedType',
                 text: typeText,
                 parameter: resolvedTypeParameter,
@@ -1487,8 +1484,6 @@ function resolveTypeExpression(
                 isReadonly: Boolean(mappedNode.getReadonlyToken()),
                 isOptional: Boolean(mappedNode.getQuestionToken()),
               } satisfies Kind.MappedType
-
-              return resolvedType
             }
           }
         }
@@ -1538,7 +1533,7 @@ export class UnresolvedTypeExpressionError extends Error {
   readonly enclosingNode?: Node
 
   constructor(type: Type, enclosingNode?: Node) {
-    const symbol = type.getSymbol()
+    const symbol = type.getAliasSymbol() ?? type.getSymbol()
     const symbolDeclaration = getPrimaryDeclaration(symbol)
     let message = `[renoun:UnresolvedTypeExpression] Could not resolve "${type.getText()}"`
 
@@ -2790,6 +2785,11 @@ function isReadonlyType(type: Type, enclosingNode: Node | undefined) {
 /** Determines if a type is a reference type. */
 function isTypeReference(type: Type): boolean {
   return (type.getObjectFlags() & tsMorph.ObjectFlags.Reference) !== 0
+}
+
+/** Determines if a type is a mapped type. */
+function isMappedType(type: Type): boolean {
+  return (type.getObjectFlags() & tsMorph.ObjectFlags.Mapped) !== 0
 }
 
 /** Determines if a type is a conditional type. */
