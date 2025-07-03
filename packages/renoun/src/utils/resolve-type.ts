@@ -178,7 +178,7 @@ export namespace Kind {
     kind: 'MappedType'
 
     /** The type parameter e.g. `[Key in keyof Type]` for `{ [Key in keyof Type]: Type[Key] }`. */
-    parameter: TypeParameter
+    typeParameter: TypeParameter
 
     /** The resolved type e.g. `Type[Key]` for `{ [Key in keyof Type]: Type[Key] }`. */
     type: TypeExpression
@@ -441,7 +441,7 @@ export namespace Kind {
     kind: 'TypeParameter'
 
     /** The constraint type of the type parameter. */
-    constraint?: TypeExpression
+    constraintType?: TypeExpression
 
     /** The default type of the type parameter. */
     defaultType?: TypeExpression
@@ -554,7 +554,7 @@ export namespace Kind {
     | Unknown
     | Never
 
-  // TODO: still need to add ThisType, InferType
+  // TODO: still need to add ThisType
 }
 
 export type Kind =
@@ -1498,7 +1498,7 @@ function resolveTypeExpression(
               return {
                 kind: 'MappedType',
                 text: typeText,
-                parameter: resolvedTypeParameter,
+                typeParameter: resolvedTypeParameter,
                 type: valueType,
                 isReadonly: Boolean(mappedNode.getReadonlyToken()),
                 isOptional: Boolean(mappedNode.getQuestionToken()),
@@ -1752,7 +1752,7 @@ function resolveTypeParameterDeclaration(
     kind: 'TypeParameter',
     name,
     text: parameterDeclaration.getText(),
-    constraint: resolvedConstraint,
+    constraintType: resolvedConstraint,
     defaultType: resolvedDefaultType,
   } satisfies Kind.TypeParameter
 }
@@ -1783,8 +1783,8 @@ function resolveCallSignature(
   const typeParametersText = resolvedTypeParameters.length
     ? `<${resolvedTypeParameters
         .map((generic) => {
-          const constraintText = generic.constraint
-            ? ` extends ${generic.constraint.text}`
+          const constraintText = generic.constraintType
+            ? ` extends ${generic.constraintType.text}`
             : ''
           return generic.name + constraintText
         })

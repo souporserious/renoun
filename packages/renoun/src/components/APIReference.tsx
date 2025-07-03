@@ -713,7 +713,7 @@ function MappedSection({
   node: TypeOfKind<'MappedType'>
   components: APIReferenceComponents
 }) {
-  const parameterText = `${node.parameter.name} in ${node.parameter.constraint?.text ?? '?'}`
+  const parameterText = `${node.typeParameter.name} in ${node.typeParameter.constraintType?.text ?? '?'}`
   const valueText = node.type.text
 
   // TODO: this needs an incoming name prop that will be provided by the enclosing declaration
@@ -787,7 +787,7 @@ function IntersectionSection({
         }
       } else if (type.kind === 'MappedType') {
         rows.push({
-          name: type.parameter.text,
+          name: type.typeParameter.text,
           text: type.type.text,
           isOptional: type.isOptional,
           isReadonly: type.isReadonly,
