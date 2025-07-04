@@ -134,7 +134,7 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && chmod +x dist/cli/index.js",
     "dev": "tsc -w",
     "textmate": "tsx ./scripts/textmate.ts",
     "test": "vitest --typecheck"

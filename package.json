@@ -3,9 +3,9 @@
   "private": true,
   "license": "AGPL-3.0-or-later",
   "scripts": {
-    "build": "turbo run build --filter=renoun --filter=@apps/site",
-    "build:site": "turbo run build --filter=@apps/site",
-    "build:examples": "turbo run build --filter=@examples/*",
+    "build": "turbo run build",
+    "build:site": "pnpm build --filter=@apps/site",
+    "build:examples": "pnpm build --filter=@examples/*",
     "dev": "turbo run dev",
     "dev:site": "pnpm dev --filter=renoun --filter=@apps/site",
     "dev:examples": "pnpm dev --filter=renoun --filter=@examples/*",
@@ -13,7 +13,7 @@
     "test": "turbo run test",
     "format": "prettier --write '**/**/*.{js,ts,tsx,json,css}'",
     "ci:version": "pnpm changeset version && pnpm install --no-frozen-lockfile && git add .",
-    "ci:publish": "turbo run build && pnpm publish -r --access public --publish-branch main && pnpm changeset tag",
+    "ci:publish": "pnpm build && pnpm publish -r --access public --publish-branch main && pnpm changeset tag",
     "clean": "node -e \"(function rm(directory) { ['.next', '.turbo', 'node_modules', 'dist'].includes(path.basename(directory)) ? fs.rmSync(directory, { recursive: true, force: true }) : fs.existsSync(directory) && fs.statSync(directory).isDirectory() && fs.readdirSync(directory).forEach(filePath => rm(path.join(directory, filePath))); })('.');\""
   },
   "devDependencies": {
