@@ -71,7 +71,7 @@ export function TableOfContents({
                   css={{ paddingLeft: (level - 2) * 0.8 + 'rem' }}
                   title={text}
                 >
-                  {children}
+                  {children ?? text}
                 </Link>
               </li>
             ) : null

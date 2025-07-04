@@ -2,9 +2,9 @@ import { describe, test, expect } from 'vitest'
 import dedent from 'dedent'
 import { Project, SyntaxKind } from 'ts-morph'
 
-import { getPropertyDefaultValue } from './get-property-default-value.js'
+import { getInitializerValue } from './get-initializer-value.js'
 
-describe('getParameterDefaultValue', () => {
+describe('getInitializerValue', () => {
   const project = new Project()
 
   test('function parameters', () => {
@@ -18,7 +18,7 @@ describe('getParameterDefaultValue', () => {
     )
     const defaultValues = functionDeclaration
       .getParameters()
-      .map(getPropertyDefaultValue)
+      .map(getInitializerValue)
 
     expect(defaultValues).toEqual([0, { incrementAmount: 1 }])
   })
@@ -33,7 +33,7 @@ describe('getParameterDefaultValue', () => {
       .getFunctionOrThrow('useCounter')
       .getParameters()
 
-    expect(getPropertyDefaultValue(parameter)).toEqual({ initialCount: 0 })
+    expect(getInitializerValue(parameter)).toEqual({ initialCount: 0 })
   })
 
   test('template string default values', () => {
@@ -45,7 +45,7 @@ describe('getParameterDefaultValue', () => {
     const functionDeclaration = sourceFile.getFirstDescendantByKindOrThrow(
       SyntaxKind.ArrowFunction
     )
-    const defaultValue = getPropertyDefaultValue(
+    const defaultValue = getInitializerValue(
       functionDeclaration.getParameters().at(0)!
     )
 
@@ -61,7 +61,7 @@ describe('getParameterDefaultValue', () => {
     const functionDeclaration = sourceFile.getFirstDescendantByKindOrThrow(
       SyntaxKind.ArrowFunction
     )
-    const defaultValue = getPropertyDefaultValue(
+    const defaultValue = getInitializerValue(
       functionDeclaration.getParameters().at(0)!
     )
 
@@ -76,7 +76,7 @@ describe('getParameterDefaultValue', () => {
     )
     const functionDeclaration =
       sourceFile.getVariableDeclarationOrThrow('createCounter')
-    const defaultValue = getPropertyDefaultValue(
+    const defaultValue = getInitializerValue(
       functionDeclaration
         .getInitializerIfKindOrThrow(SyntaxKind.ArrowFunction)
         .getParameters()
@@ -95,7 +95,7 @@ describe('getParameterDefaultValue', () => {
     const functionDeclaration = sourceFile.getFirstDescendantByKindOrThrow(
       SyntaxKind.ArrowFunction
     )
-    const defaultValue = getPropertyDefaultValue(
+    const defaultValue = getInitializerValue(
       functionDeclaration.getParameters().at(0)!
     )
 
@@ -116,7 +116,7 @@ describe('getParameterDefaultValue', () => {
     const functionDeclaration = sourceFile.getFirstDescendantByKindOrThrow(
       SyntaxKind.ArrowFunction
     )
-    const defaultValue = getPropertyDefaultValue(
+    const defaultValue = getInitializerValue(
       functionDeclaration.getParameters().at(0)!
     )
 
