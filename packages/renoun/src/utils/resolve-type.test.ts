@@ -144,6 +144,7 @@ describe('resolveType', () => {
                 "returnType": {
                   "filePath": "test.ts",
                   "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
                   "position": {
                     "end": {
                       "column": 71,
@@ -179,6 +180,7 @@ describe('resolveType', () => {
               "type": {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 41,
@@ -227,6 +229,7 @@ describe('resolveType', () => {
           "type": {
             "filePath": "test.ts",
             "kind": "TypeReference",
+            "moduleSpecifier": undefined,
             "position": {
               "end": {
                 "column": 44,
@@ -260,6 +263,7 @@ describe('resolveType', () => {
           "type": {
             "filePath": "test.ts",
             "kind": "TypeReference",
+            "moduleSpecifier": undefined,
             "position": {
               "end": {
                 "column": 63,
@@ -293,6 +297,7 @@ describe('resolveType', () => {
           "type": {
             "filePath": "test.ts",
             "kind": "TypeReference",
+            "moduleSpecifier": undefined,
             "position": {
               "end": {
                 "column": 46,
@@ -483,6 +488,7 @@ describe('resolveType', () => {
                     "type": {
                       "filePath": "test.ts",
                       "kind": "TypeReference",
+                      "moduleSpecifier": undefined,
                       "position": {
                         "end": {
                           "column": 107,
@@ -601,6 +607,7 @@ describe('resolveType', () => {
               {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 52,
@@ -699,6 +706,7 @@ describe('resolveType', () => {
           "type": {
             "filePath": "test.ts",
             "kind": "TypeReference",
+            "moduleSpecifier": undefined,
             "position": {
               "end": {
                 "column": 44,
@@ -732,6 +740,7 @@ describe('resolveType', () => {
           "type": {
             "filePath": "test.ts",
             "kind": "TypeReference",
+            "moduleSpecifier": undefined,
             "position": {
               "end": {
                 "column": 29,
@@ -828,6 +837,7 @@ describe('resolveType', () => {
                 {
                   "filePath": "test.ts",
                   "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
                   "position": {
                     "end": {
                       "column": 24,
@@ -878,6 +888,7 @@ describe('resolveType', () => {
                 {
                   "filePath": "test.ts",
                   "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
                   "position": {
                     "end": {
                       "column": 24,
@@ -1076,6 +1087,7 @@ describe('resolveType', () => {
               "type": {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 24,
@@ -1109,6 +1121,7 @@ describe('resolveType', () => {
               "type": {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 49,
@@ -1204,6 +1217,7 @@ describe('resolveType', () => {
                 "returnType": {
                   "filePath": "test.ts",
                   "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
                   "position": {
                     "end": {
                       "column": 32,
@@ -1470,6 +1484,7 @@ describe('resolveType', () => {
               "type": {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 41,
@@ -1568,6 +1583,7 @@ describe('resolveType', () => {
               "type": {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 30,
@@ -1666,6 +1682,7 @@ describe('resolveType', () => {
               "type": {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 25,
@@ -1743,6 +1760,7 @@ describe('resolveType', () => {
               "type": {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 35,
@@ -1912,6 +1930,7 @@ describe('resolveType', () => {
                           "type": {
                             "filePath": "node_modules/@types/library/index.d.ts",
                             "kind": "TypeReference",
+                            "moduleSpecifier": undefined,
                             "position": {
                               "end": {
                                 "column": 82,
@@ -2006,6 +2025,7 @@ describe('resolveType', () => {
               "type": {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 22,
@@ -2105,6 +2125,7 @@ describe('resolveType', () => {
                   "type": {
                     "filePath": "test.ts",
                     "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
                     "position": {
                       "end": {
                         "column": 21,
@@ -2267,6 +2288,7 @@ describe('resolveType', () => {
               "type": {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": "./library",
                 "position": {
                   "end": {
                     "column": 15,
@@ -2502,6 +2524,7 @@ describe('resolveType', () => {
               "type": {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 37,
@@ -2543,6 +2566,7 @@ describe('resolveType', () => {
                   "type": {
                     "filePath": "test.ts",
                     "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
                     "position": {
                       "end": {
                         "column": 64,
@@ -2643,6 +2667,7 @@ describe('resolveType', () => {
               "type": {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": "library",
                 "position": {
                   "end": {
                     "column": 33,
@@ -2755,6 +2780,7 @@ describe('resolveType', () => {
                     "type": {
                       "filePath": "test.ts",
                       "kind": "TypeReference",
+                      "moduleSpecifier": "library",
                       "position": {
                         "end": {
                           "column": 15,
@@ -2863,6 +2889,7 @@ describe('resolveType', () => {
               "type": {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 37,
@@ -2947,6 +2974,7 @@ describe('resolveType', () => {
               "type": {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 38,
@@ -3214,6 +3242,7 @@ describe('resolveType', () => {
             "type": {
               "filePath": "test.ts",
               "kind": "TypeReference",
+              "moduleSpecifier": undefined,
               "position": {
                 "end": {
                   "column": 102,
@@ -3250,6 +3279,7 @@ describe('resolveType', () => {
                 "type": {
                   "filePath": "test.ts",
                   "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
                   "position": {
                     "end": {
                       "column": 41,
@@ -3272,6 +3302,7 @@ describe('resolveType', () => {
           "trueType": {
             "filePath": "test.ts",
             "kind": "TypeReference",
+            "moduleSpecifier": undefined,
             "position": {
               "end": {
                 "column": 11,
@@ -3310,6 +3341,7 @@ describe('resolveType', () => {
                   "type": {
                     "filePath": "test.ts",
                     "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
                     "position": {
                       "end": {
                         "column": 64,
@@ -3634,6 +3666,7 @@ describe('resolveType', () => {
                 "type": {
                   "filePath": "node_modules/styled-components/dist/types.d.ts",
                   "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
                   "position": {
                     "end": {
                       "column": 186,
@@ -3661,6 +3694,7 @@ describe('resolveType', () => {
             "returnType": {
               "filePath": "node_modules/styled-components/dist/types.d.ts",
               "kind": "TypeReference",
+              "moduleSpecifier": "react",
               "position": {
                 "end": {
                   "column": 206,
@@ -3684,6 +3718,7 @@ describe('resolveType', () => {
                     {
                       "filePath": "node_modules/styled-components/dist/types.d.ts",
                       "kind": "TypeReference",
+                      "moduleSpecifier": undefined,
                       "position": {
                         "end": {
                           "column": 38,
@@ -3718,6 +3753,7 @@ describe('resolveType', () => {
                     {
                       "filePath": "node_modules/styled-components/dist/types.d.ts",
                       "kind": "TypeReference",
+                      "moduleSpecifier": undefined,
                       "position": {
                         "end": {
                           "column": 95,
@@ -3771,6 +3807,7 @@ describe('resolveType', () => {
                 "type": {
                   "filePath": "node_modules/@types/react/index.d.ts",
                   "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
                   "position": {
                     "end": {
                       "column": 18,
@@ -3798,6 +3835,7 @@ describe('resolveType', () => {
             "returnType": {
               "filePath": "node_modules/@types/react/index.d.ts",
               "kind": "TypeReference",
+              "moduleSpecifier": undefined,
               "position": {
                 "end": {
                   "column": 30,
@@ -4283,6 +4321,7 @@ describe('resolveType', () => {
               "type": {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 2,
@@ -4510,6 +4549,7 @@ describe('resolveType', () => {
               "type": {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 37,
@@ -4587,6 +4627,7 @@ describe('resolveType', () => {
               "type": {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 37,
@@ -4670,6 +4711,7 @@ describe('resolveType', () => {
               "type": {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": "colors",
                 "position": {
                   "end": {
                     "column": 16,
@@ -4750,6 +4792,7 @@ describe('resolveType', () => {
               "type": {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 41,
@@ -4819,6 +4862,7 @@ describe('resolveType', () => {
             "returnType": {
               "filePath": "test.ts",
               "kind": "TypeReference",
+              "moduleSpecifier": "react",
               "position": {
                 "end": {
                   "column": 40,
@@ -5407,6 +5451,7 @@ describe('resolveType', () => {
                 "type": {
                   "filePath": "test.ts",
                   "kind": "TypeReference",
+                  "moduleSpecifier": "./types",
                   "position": {
                     "end": {
                       "column": 98,
@@ -5507,6 +5552,7 @@ describe('resolveType', () => {
                 "type": {
                   "filePath": "test.ts",
                   "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
                   "position": {
                     "end": {
                       "column": 117,
@@ -6104,6 +6150,7 @@ describe('resolveType', () => {
                 {
                   "filePath": "test.tsx",
                   "kind": "TypeReference",
+                  "moduleSpecifier": "./types",
                   "position": {
                     "end": {
                       "column": 23,
@@ -6458,6 +6505,7 @@ describe('resolveType', () => {
               "type": {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 30,
@@ -6588,6 +6636,7 @@ describe('resolveType', () => {
               "type": {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 38,
@@ -6664,6 +6713,7 @@ describe('resolveType', () => {
             "type": {
               "filePath": "test.ts",
               "kind": "TypeReference",
+              "moduleSpecifier": undefined,
               "position": {
                 "end": {
                   "column": 19,
@@ -6695,6 +6745,7 @@ describe('resolveType', () => {
             "constraintType": {
               "filePath": "test.ts",
               "kind": "TypeReference",
+              "moduleSpecifier": undefined,
               "position": {
                 "end": {
                   "column": 74,
@@ -6797,6 +6848,7 @@ describe('resolveType', () => {
                 "type": {
                   "filePath": "node_modules/styled-components/dist/types.d.ts",
                   "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
                   "position": {
                     "end": {
                       "column": 186,
@@ -6824,6 +6876,7 @@ describe('resolveType', () => {
             "returnType": {
               "filePath": "node_modules/styled-components/dist/types.d.ts",
               "kind": "TypeReference",
+              "moduleSpecifier": "react",
               "position": {
                 "end": {
                   "column": 206,
@@ -6847,6 +6900,7 @@ describe('resolveType', () => {
                     {
                       "filePath": "node_modules/styled-components/dist/types.d.ts",
                       "kind": "TypeReference",
+                      "moduleSpecifier": undefined,
                       "position": {
                         "end": {
                           "column": 38,
@@ -6881,6 +6935,7 @@ describe('resolveType', () => {
                     {
                       "filePath": "node_modules/styled-components/dist/types.d.ts",
                       "kind": "TypeReference",
+                      "moduleSpecifier": undefined,
                       "position": {
                         "end": {
                           "column": 95,
@@ -6934,6 +6989,7 @@ describe('resolveType', () => {
                 "type": {
                   "filePath": "node_modules/@types/react/index.d.ts",
                   "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
                   "position": {
                     "end": {
                       "column": 18,
@@ -6961,6 +7017,7 @@ describe('resolveType', () => {
             "returnType": {
               "filePath": "node_modules/@types/react/index.d.ts",
               "kind": "TypeReference",
+              "moduleSpecifier": undefined,
               "position": {
                 "end": {
                   "column": 30,
@@ -7048,6 +7105,7 @@ describe('resolveType', () => {
                 "type": {
                   "filePath": "node_modules/styled-components/dist/types.d.ts",
                   "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
                   "position": {
                     "end": {
                       "column": 186,
@@ -7075,6 +7133,7 @@ describe('resolveType', () => {
             "returnType": {
               "filePath": "node_modules/styled-components/dist/types.d.ts",
               "kind": "TypeReference",
+              "moduleSpecifier": "react",
               "position": {
                 "end": {
                   "column": 206,
@@ -7098,6 +7157,7 @@ describe('resolveType', () => {
                     {
                       "filePath": "node_modules/styled-components/dist/types.d.ts",
                       "kind": "TypeReference",
+                      "moduleSpecifier": undefined,
                       "position": {
                         "end": {
                           "column": 38,
@@ -7132,6 +7192,7 @@ describe('resolveType', () => {
                     {
                       "filePath": "node_modules/styled-components/dist/types.d.ts",
                       "kind": "TypeReference",
+                      "moduleSpecifier": undefined,
                       "position": {
                         "end": {
                           "column": 95,
@@ -7185,6 +7246,7 @@ describe('resolveType', () => {
                 "type": {
                   "filePath": "node_modules/@types/react/index.d.ts",
                   "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
                   "position": {
                     "end": {
                       "column": 18,
@@ -7212,6 +7274,7 @@ describe('resolveType', () => {
             "returnType": {
               "filePath": "node_modules/@types/react/index.d.ts",
               "kind": "TypeReference",
+              "moduleSpecifier": undefined,
               "position": {
                 "end": {
                   "column": 30,
@@ -7731,6 +7794,7 @@ describe('resolveType', () => {
               "returnType": {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 2,
@@ -8881,7 +8945,19 @@ describe('resolveType', () => {
                     "text": "{ variant?: ButtonVariant; }",
                   },
                   {
+                    "filePath": "test.tsx",
                     "kind": "TypeReference",
+                    "moduleSpecifier": "react",
+                    "position": {
+                      "end": {
+                        "column": 50,
+                        "line": 7,
+                      },
+                      "start": {
+                        "column": 5,
+                        "line": 7,
+                      },
+                    },
                     "text": "ButtonHTMLAttributes<HTMLButtonElement>",
                   },
                 ],
@@ -8900,6 +8976,7 @@ describe('resolveType', () => {
             "returnType": {
               "filePath": "test.tsx",
               "kind": "TypeReference",
+              "moduleSpecifier": undefined,
               "position": {
                 "end": {
                   "column": 2,
@@ -9074,6 +9151,7 @@ describe('resolveType', () => {
                               "type": {
                                 "filePath": "test.ts",
                                 "kind": "TypeReference",
+                                "moduleSpecifier": undefined,
                                 "position": {
                                   "end": {
                                     "column": 55,
@@ -9091,6 +9169,7 @@ describe('resolveType', () => {
                           "returnType": {
                             "filePath": "test.ts",
                             "kind": "TypeReference",
+                            "moduleSpecifier": "react",
                             "position": {
                               "end": {
                                 "column": 23,
@@ -9204,6 +9283,7 @@ describe('resolveType', () => {
                               "type": {
                                 "filePath": "test.ts",
                                 "kind": "TypeReference",
+                                "moduleSpecifier": undefined,
                                 "position": {
                                   "end": {
                                     "column": 55,
@@ -9221,6 +9301,7 @@ describe('resolveType', () => {
                           "returnType": {
                             "filePath": "test.ts",
                             "kind": "TypeReference",
+                            "moduleSpecifier": "react",
                             "position": {
                               "end": {
                                 "column": 23,
@@ -9358,6 +9439,7 @@ describe('resolveType', () => {
             {
               "filePath": "test.ts",
               "kind": "TypeReference",
+              "moduleSpecifier": "library",
               "position": {
                 "end": {
                   "column": 37,
@@ -9659,6 +9741,7 @@ describe('resolveType', () => {
           "type": {
             "filePath": "test.ts",
             "kind": "TypeReference",
+            "moduleSpecifier": undefined,
             "position": {
               "end": {
                 "column": 2,
@@ -9690,6 +9773,7 @@ describe('resolveType', () => {
           "type": {
             "filePath": "test.ts",
             "kind": "TypeReference",
+            "moduleSpecifier": undefined,
             "position": {
               "end": {
                 "column": 61,
@@ -9753,6 +9837,7 @@ describe('resolveType', () => {
             {
               "filePath": "test.ts",
               "kind": "TypeReference",
+              "moduleSpecifier": undefined,
               "position": {
                 "end": {
                   "column": 20,
@@ -9903,6 +9988,7 @@ describe('resolveType', () => {
                 "type": {
                   "filePath": "test.ts",
                   "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
                   "position": {
                     "end": {
                       "column": 67,
@@ -9938,6 +10024,7 @@ describe('resolveType', () => {
                 "constraintType": {
                   "filePath": "test.ts",
                   "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
                   "position": {
                     "end": {
                       "column": 52,
@@ -10151,6 +10238,7 @@ describe('resolveType', () => {
                 "type": {
                   "filePath": "test.ts",
                   "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
                   "position": {
                     "end": {
                       "column": 49,
@@ -10178,6 +10266,7 @@ describe('resolveType', () => {
             "returnType": {
               "filePath": "test.ts",
               "kind": "TypeReference",
+              "moduleSpecifier": undefined,
               "position": {
                 "end": {
                   "column": 65,
@@ -10231,6 +10320,7 @@ describe('resolveType', () => {
                 "type": {
                   "filePath": "test.ts",
                   "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
                   "position": {
                     "end": {
                       "column": 24,
@@ -10294,6 +10384,7 @@ describe('resolveType', () => {
                   "returnType": {
                     "filePath": "test.ts",
                     "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
                     "position": {
                       "end": {
                         "column": 54,
@@ -10352,6 +10443,7 @@ describe('resolveType', () => {
               "returnType": {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 54,
@@ -10374,6 +10466,7 @@ describe('resolveType', () => {
                 "constraintType": {
                   "filePath": "test.ts",
                   "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
                   "position": {
                     "end": {
                       "column": 54,
@@ -10508,6 +10601,7 @@ describe('resolveType', () => {
                     "type": {
                       "filePath": "test.ts",
                       "kind": "TypeReference",
+                      "moduleSpecifier": undefined,
                       "position": {
                         "end": {
                           "column": 15,
@@ -10624,6 +10718,7 @@ describe('resolveType', () => {
                   "type": {
                     "filePath": "test.ts",
                     "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
                     "position": {
                       "end": {
                         "column": 26,
@@ -10711,6 +10806,7 @@ describe('resolveType', () => {
                   {
                     "filePath": "test.ts",
                     "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
                     "position": {
                       "end": {
                         "column": 29,
@@ -10726,6 +10822,7 @@ describe('resolveType', () => {
                   {
                     "filePath": "test.ts",
                     "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
                     "position": {
                       "end": {
                         "column": 78,
@@ -10744,6 +10841,7 @@ describe('resolveType', () => {
                 "constraintType": {
                   "filePath": "test.ts",
                   "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
                   "position": {
                     "end": {
                       "column": 23,
@@ -10785,6 +10883,7 @@ describe('resolveType', () => {
                   "type": {
                     "filePath": "test.ts",
                     "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
                     "position": {
                       "end": {
                         "column": 47,
@@ -10982,6 +11081,7 @@ describe('resolveType', () => {
                   {
                     "filePath": "test.ts",
                     "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
                     "position": {
                       "end": {
                         "column": 36,
@@ -11183,6 +11283,7 @@ describe('resolveType', () => {
                     {
                       "filePath": "test.ts",
                       "kind": "TypeReference",
+                      "moduleSpecifier": undefined,
                       "position": {
                         "end": {
                           "column": 28,
@@ -11198,6 +11299,7 @@ describe('resolveType', () => {
                     {
                       "filePath": "test.ts",
                       "kind": "TypeReference",
+                      "moduleSpecifier": undefined,
                       "position": {
                         "end": {
                           "column": 46,
@@ -11474,6 +11576,7 @@ describe('resolveType', () => {
           "indexType": {
             "filePath": "index.ts",
             "kind": "TypeReference",
+            "moduleSpecifier": undefined,
             "position": {
               "end": {
                 "column": 34,
@@ -11496,6 +11599,7 @@ describe('resolveType', () => {
               "checkType": {
                 "filePath": "index.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 55,
@@ -11516,6 +11620,7 @@ describe('resolveType', () => {
                   "indexType": {
                     "filePath": "index.ts",
                     "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
                     "position": {
                       "end": {
                         "column": 87,
@@ -11532,6 +11637,7 @@ describe('resolveType', () => {
                   "objectType": {
                     "filePath": "index.ts",
                     "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
                     "position": {
                       "end": {
                         "column": 77,
@@ -11558,6 +11664,7 @@ describe('resolveType', () => {
                 "indexType": {
                   "filePath": "index.ts",
                   "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
                   "position": {
                     "end": {
                       "column": 30,
@@ -11575,6 +11682,7 @@ describe('resolveType', () => {
                   "indexType": {
                     "filePath": "index.ts",
                     "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
                     "position": {
                       "end": {
                         "column": 24,
@@ -11591,6 +11699,7 @@ describe('resolveType', () => {
                   "objectType": {
                     "filePath": "index.ts",
                     "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
                     "position": {
                       "end": {
                         "column": 14,
@@ -11612,6 +11721,7 @@ describe('resolveType', () => {
               "constraintType": {
                 "filePath": "index.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 48,
@@ -11716,6 +11826,7 @@ describe('resolveType', () => {
           "checkType": {
             "filePath": "test.ts",
             "kind": "TypeReference",
+            "moduleSpecifier": undefined,
             "position": {
               "end": {
                 "column": 12,
@@ -11735,6 +11846,7 @@ describe('resolveType', () => {
             "type": {
               "filePath": "test.ts",
               "kind": "TypeReference",
+              "moduleSpecifier": undefined,
               "position": {
                 "end": {
                   "column": 45,
@@ -11763,6 +11875,7 @@ describe('resolveType', () => {
                 "indexType": {
                   "filePath": "test.ts",
                   "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
                   "position": {
                     "end": {
                       "column": 35,
@@ -11779,6 +11892,7 @@ describe('resolveType', () => {
                 "objectType": {
                   "filePath": "test.ts",
                   "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
                   "position": {
                     "end": {
                       "column": 25,
@@ -11816,6 +11930,7 @@ describe('resolveType', () => {
                     "type": {
                       "filePath": "test.ts",
                       "kind": "TypeReference",
+                      "moduleSpecifier": undefined,
                       "position": {
                         "end": {
                           "column": 70,
@@ -11888,6 +12003,7 @@ describe('resolveType', () => {
           "type": {
             "filePath": "test.ts",
             "kind": "TypeReference",
+            "moduleSpecifier": undefined,
             "position": {
               "end": {
                 "column": 48,
@@ -11985,6 +12101,7 @@ describe('resolveType', () => {
                     {
                       "filePath": "test.ts",
                       "kind": "TypeReference",
+                      "moduleSpecifier": undefined,
                       "position": {
                         "end": {
                           "column": 24,
@@ -12000,6 +12117,7 @@ describe('resolveType', () => {
                     {
                       "filePath": "test.ts",
                       "kind": "TypeReference",
+                      "moduleSpecifier": undefined,
                       "position": {
                         "end": {
                           "column": 47,
@@ -12029,6 +12147,7 @@ describe('resolveType', () => {
             "returnType": {
               "filePath": "test.ts",
               "kind": "TypeReference",
+              "moduleSpecifier": undefined,
               "position": {
                 "end": {
                   "column": 17,
@@ -12048,6 +12167,7 @@ describe('resolveType', () => {
                 "constraintType": {
                   "filePath": "test.ts",
                   "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
                   "position": {
                     "end": {
                       "column": 36,
@@ -12077,6 +12197,7 @@ describe('resolveType', () => {
                       "type": {
                         "filePath": "test.ts",
                         "kind": "TypeReference",
+                        "moduleSpecifier": undefined,
                         "position": {
                           "end": {
                             "column": 38,
@@ -12208,6 +12329,7 @@ describe('resolveType', () => {
                 "type": {
                   "filePath": "test.ts",
                   "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
                   "position": {
                     "end": {
                       "column": 47,
@@ -12283,6 +12405,7 @@ describe('resolveType', () => {
               {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 17,
@@ -12298,6 +12421,7 @@ describe('resolveType', () => {
               {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 25,
@@ -12396,6 +12520,7 @@ describe('resolveType', () => {
                 "constraintType": {
                   "filePath": "test.ts",
                   "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
                   "position": {
                     "end": {
                       "column": 36,
@@ -12427,6 +12552,7 @@ describe('resolveType', () => {
                       "checkType": {
                         "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                         "kind": "TypeReference",
+                        "moduleSpecifier": undefined,
                         "position": {
                           "end": {
                             "column": 372,
@@ -12442,6 +12568,7 @@ describe('resolveType', () => {
                       "extendsType": {
                         "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                         "kind": "TypeReference",
+                        "moduleSpecifier": undefined,
                         "position": {
                           "end": {
                             "column": 382,
@@ -12464,6 +12591,7 @@ describe('resolveType', () => {
                       "trueType": {
                         "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                         "kind": "TypeReference",
+                        "moduleSpecifier": undefined,
                         "position": {
                           "end": {
                             "column": 384,
@@ -12608,6 +12736,7 @@ describe('resolveType', () => {
               "checkType": {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 14,
@@ -12665,6 +12794,7 @@ describe('resolveType', () => {
               "trueType": {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 18,

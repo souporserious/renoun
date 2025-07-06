@@ -949,9 +949,14 @@ function resolveTypeExpression(
 
         resolvedType = resolvedTypeExpression
       } else {
+        const moduleSpecifier = tsMorph.Node.isTypeReference(enclosingNode)
+          ? getModuleSpecifierFromTypeReference(enclosingNode)
+          : undefined
+
         resolvedType = {
           kind: 'TypeReference',
           text: typeText,
+          moduleSpecifier,
           ...(enclosingNode ? getDeclarationLocation(enclosingNode) : {}),
         } satisfies Kind.TypeReference
       }
@@ -3084,61 +3089,94 @@ function shouldResolveMappedType(
   return shouldResolveReference(constraintType, mappedNode)
 }
 
-/** Attempt to get the module specifier for a type reference if it is imported from another module. */
-function getModuleSpecifierFromTypeReference(node: tsMorph.TypeReferenceNode) {
-  const typeName = node.getTypeName()
-
-  // Handle qualified names (e.g. React.Component) by taking the right-most identifier
-  let symbol: tsMorph.Symbol | undefined
-
-  if (tsMorph.Node.isQualifiedName(typeName)) {
-    symbol = typeName.getRight().getSymbol()
-  } else if (tsMorph.Node.isIdentifier(typeName)) {
-    symbol = typeName.getSymbol()
-  }
-
+/**
+ * Examine every declaration for the provided symbol and return the first
+ * module specifier that comes from an import-style declaration.
+ */
+function getModuleFromSymbol(symbol: tsMorph.Symbol | undefined) {
   if (!symbol) {
     return undefined
   }
 
   for (const declaration of symbol.getDeclarations()) {
-    // `import { Something } from "react"`
+    //`import { Button } from 'ui/components'
     if (tsMorph.Node.isImportSpecifier(declaration)) {
-      const importDecl = declaration.getFirstAncestorByKind(
+      const importDeclaration = declaration.getFirstAncestorByKind(
         tsMorph.SyntaxKind.ImportDeclaration
       )
-
-      if (importDecl) {
-        return importDecl.getModuleSpecifierValue()
+      if (importDeclaration) {
+        return importDeclaration.getModuleSpecifierValue()
       }
     }
 
     // `import * as React from "react"` or `import React from "react"`
     if (
-      tsMorph.Node.isImportClause(declaration) ||
-      tsMorph.Node.isNamespaceImport(declaration)
+      tsMorph.Node.isNamespaceImport(declaration) ||
+      tsMorph.Node.isImportClause(declaration)
     ) {
-      const importDecl = declaration.getFirstAncestorByKind(
+      const importDeclaration = declaration.getFirstAncestorByKind(
         tsMorph.SyntaxKind.ImportDeclaration
       )
-
-      if (importDecl) {
-        return importDecl.getModuleSpecifierValue()
+      if (importDeclaration) {
+        return importDeclaration.getModuleSpecifierValue()
       }
     }
 
-    // `import fs = require("fs")`
+    // `import fs = require('fs')`
     if (tsMorph.Node.isImportEqualsDeclaration(declaration)) {
-      const moduleRef = declaration.getModuleReference()
-      if (tsMorph.Node.isExternalModuleReference(moduleRef)) {
-        const expr = moduleRef.getExpression()
-        if (expr && tsMorph.Node.isStringLiteral(expr)) {
-          return expr.getLiteralText()
+      const moduleReference = declaration.getModuleReference()
+      if (tsMorph.Node.isExternalModuleReference(moduleReference)) {
+        const expression = moduleReference.getExpression()
+        if (tsMorph.Node.isStringLiteral(expression)) {
+          return expression.getLiteralText()
         }
       }
     }
   }
+}
 
+/** Return the module specifier (e.g. `react`) for a given `TypeReferenceNode`. */
+function getModuleSpecifierFromTypeReference(
+  typeReferenceNode: tsMorph.TypeReferenceNode
+): string | undefined {
+  const typeName = typeReferenceNode.getTypeName()
+
+  if (tsMorph.Node.isQualifiedName(typeName)) {
+    const rightMostIdentifierSymbol = typeName.getRight().getSymbol()
+    const moduleFromRightIdentifier = getModuleFromSymbol(
+      rightMostIdentifierSymbol
+    )
+    if (moduleFromRightIdentifier) {
+      return moduleFromRightIdentifier
+    }
+
+    // Walk left until we reach the root identifier and try that.
+    let leftSide: tsMorph.EntityName | tsMorph.Expression = typeName.getLeft()
+    while (tsMorph.Node.isQualifiedName(leftSide)) {
+      leftSide = leftSide.getLeft()
+    }
+
+    if (tsMorph.Node.isIdentifier(leftSide)) {
+      const leftMostIdentifierSymbol = leftSide.getSymbol()
+      const moduleFromLeftIdentifier = getModuleFromSymbol(
+        leftMostIdentifierSymbol
+      )
+      if (moduleFromLeftIdentifier) {
+        return moduleFromLeftIdentifier
+      }
+    }
+  }
+
+  // Simple identifier name
+  if (tsMorph.Node.isIdentifier(typeName)) {
+    const identifierSymbol = typeName.getSymbol()
+    const moduleFromIdentifier = getModuleFromSymbol(identifierSymbol)
+    if (moduleFromIdentifier) {
+      return moduleFromIdentifier
+    }
+  }
+
+  // Nothing matched, the reference is likely global (standard lib, DOM, etc.)
   return undefined
 }
 
