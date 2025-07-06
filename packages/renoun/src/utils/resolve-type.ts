@@ -1274,6 +1274,11 @@ function resolveTypeExpression(
 
       if (tsMorph.Node.isIntersectionTypeNode(enclosingNode)) {
         intersectionNode = enclosingNode
+      } else if (tsMorph.Node.isTypeAliasDeclaration(enclosingNode)) {
+        const typeNode = enclosingNode.getTypeNode()
+        if (tsMorph.Node.isIntersectionTypeNode(typeNode)) {
+          intersectionNode = typeNode
+        }
       } else if (tsMorph.Node.isTypeAliasDeclaration(symbolDeclaration)) {
         const typeNode = symbolDeclaration.getTypeNode()
         if (tsMorph.Node.isIntersectionTypeNode(typeNode)) {
