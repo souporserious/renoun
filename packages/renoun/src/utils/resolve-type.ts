@@ -2837,11 +2837,6 @@ function isMappedType(type: Type): boolean {
   return (type.getObjectFlags() & tsMorph.ObjectFlags.Mapped) !== 0
 }
 
-/** Determines if a type is a conditional type. */
-function isConditionalType(type: Type): boolean {
-  return (type.getFlags() & tsMorph.TypeFlags.Conditional) !== 0
-}
-
 /** Determines if a type is an indexed access type. */
 function isIndexedAccessType(type: Type): boolean {
   return (type.getFlags() & tsMorph.TypeFlags.IndexedAccess) !== 0
