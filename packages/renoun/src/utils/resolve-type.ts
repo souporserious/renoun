@@ -2847,6 +2847,22 @@ function isIndexedAccessType(type: Type): boolean {
   return (type.getFlags() & tsMorph.TypeFlags.IndexedAccess) !== 0
 }
 
+/** Determines if a resolved type is a primitive type. */
+function isPrimitiveTypeExpression(type: Kind.TypeExpression): boolean {
+  return (
+    type.kind === 'String' ||
+    type.kind === 'Number' ||
+    type.kind === 'Boolean' ||
+    type.kind === 'Symbol' ||
+    type.kind === 'BigInt' ||
+    type.kind === 'Null' ||
+    type.kind === 'Undefined' ||
+    type.kind === 'Void' ||
+    type.kind === 'Never' ||
+    type.kind === 'Any'
+  )
+}
+
 /** Determines if a function is a component based on its name and call signature shape. */
 function isComponent(
   name: string | undefined,
@@ -2876,16 +2892,7 @@ function isComponent(
     const parameter = signature.parameters[0]
 
     // Check if the parameter type is a primitive type
-    if (
-      parameter.type.kind === 'String' ||
-      parameter.type.kind === 'Number' ||
-      parameter.type.kind === 'Boolean' ||
-      parameter.type.kind === 'Symbol' ||
-      parameter.type.kind === 'BigInt' ||
-      parameter.type.kind === 'Null' ||
-      parameter.type.kind === 'Undefined' ||
-      parameter.type.kind === 'Any'
-    ) {
+    if (isPrimitiveTypeExpression(parameter.type)) {
       return false
     }
 
@@ -2897,16 +2904,7 @@ function isComponent(
         ++index
       ) {
         const member = parameter.type.types[index]
-        if (
-          member.kind === 'String' ||
-          member.kind === 'Number' ||
-          member.kind === 'Boolean' ||
-          member.kind === 'Symbol' ||
-          member.kind === 'BigInt' ||
-          member.kind === 'Null' ||
-          member.kind === 'Undefined' ||
-          member.kind === 'Any'
-        ) {
+        if (isPrimitiveTypeExpression(member)) {
           return false
         }
       }
