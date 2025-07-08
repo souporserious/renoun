@@ -16,6 +16,10 @@ import type {
   TypeNode,
   Type,
   Node,
+  ConstructorDeclaration,
+  FunctionDeclaration,
+  FunctionExpression,
+  ArrowFunction,
 } from 'ts-morph'
 import tsMorph from 'ts-morph'
 
@@ -865,17 +869,26 @@ export function resolveType(
       } satisfies Kind.Function
     }
   } else {
-    const resolvedTypeExpression = resolveTypeExpression(
-      type,
-      declaration,
-      filter,
-      defaultValues,
-      keepReferences,
-      dependencies
-    )
+    if (tsMorph.Node.isVariableDeclaration(enclosingNode)) {
+      const resolvedTypeExpression = resolveTypeExpression(
+        type,
+        declaration,
+        filter,
+        defaultValues,
+        keepReferences,
+        dependencies
+      )
 
-    if (resolvedTypeExpression) {
-      resolvedType = resolvedTypeExpression
+      if (resolvedTypeExpression) {
+        resolvedType = {
+          kind: 'Variable',
+          name: symbolMetadata.name,
+          text: typeText,
+          type: resolvedTypeExpression,
+        } satisfies Kind.Variable
+      } else {
+        throw new UnresolvedTypeExpressionError(type, enclosingNode)
+      }
     } else {
       throw new Error(
         `[renoun:resolveType]: No type could be resolved for "${symbolMetadata.name}". Please file an issue if you encounter this error.`
@@ -926,7 +939,7 @@ function resolveTypeExpression(
       if (shouldResolveReference(type, enclosingNode)) {
         resolvingReferences.add(type)
 
-        const resolvedTypeExpression = resolveTypeExpression(
+        resolvedType = resolveTypeExpression(
           type.getApparentType(),
           symbolDeclaration ?? enclosingNode,
           filter,
@@ -936,8 +949,6 @@ function resolveTypeExpression(
         )
 
         resolvingReferences.delete(type)
-
-        resolvedType = resolvedTypeExpression
       } else {
         const moduleSpecifier = tsMorph.Node.isTypeReference(enclosingNode)
           ? getModuleSpecifierFromTypeReference(enclosingNode)
@@ -1056,7 +1067,7 @@ function resolveTypeExpression(
         text: typeText,
         value: type.getLiteralValue() as string,
       } satisfies Kind.String
-    } else if (isSymbol(type)) {
+    } else if (isSymbolType(type)) {
       resolvedType = {
         kind: 'Symbol',
         text: typeText,
@@ -2191,12 +2202,6 @@ function resolveTypeTupleElements(
     .filter(Boolean) as Kind.TupleElement[]
 }
 
-/** Check if a type is a symbol. */
-function isSymbol(type: Type) {
-  const symbol = type.getSymbol()
-  return symbol?.getName() === 'Symbol'
-}
-
 /** Check if a declaration is external to the enclosing source file. */
 function isDeclarationExternal(
   declaration: Node,
@@ -2842,6 +2847,36 @@ function isIndexedAccessType(type: Type): boolean {
   return (type.getFlags() & tsMorph.TypeFlags.IndexedAccess) !== 0
 }
 
+/** Determines if a type is a bigint type. */
+function isBigIntType(type: Type) {
+  return (type.getFlags() & tsMorph.TypeFlags.BigIntLike) !== 0
+}
+
+/** Determines if a type is a symbol type. */
+function isSymbolType(type: Type) {
+  return type.getSymbol()?.getName() === 'Symbol'
+}
+
+/** Determines if a type is a primitive type. */
+function isPrimitiveType(type: Type): boolean {
+  return (
+    type.isString() ||
+    type.isStringLiteral() ||
+    type.isNumber() ||
+    type.isNumberLiteral() ||
+    type.isBoolean() ||
+    type.isBooleanLiteral() ||
+    type.isNull() ||
+    type.isUndefined() ||
+    type.isVoid() ||
+    type.isAny() ||
+    type.isUnknown() ||
+    type.isNever() ||
+    isBigIntType(type) ||
+    isSymbolType(type)
+  )
+}
+
 /** Determines if a resolved type is a primitive type. */
 function isPrimitiveTypeExpression(type: Kind.TypeExpression): boolean {
   return (
@@ -2926,6 +2961,67 @@ function isPromiseLike(type: Kind.TypeExpression): boolean {
     default:
       return false
   }
+}
+
+/** Determines if a node is a concrete function. */
+function isConcreteFunction(
+  node: Node
+): node is
+  | FunctionDeclaration
+  | FunctionExpression
+  | ArrowFunction
+  | ConstructorDeclaration
+  | MethodDeclaration
+  | GetAccessorDeclaration
+  | SetAccessorDeclaration {
+  const kind = node.getKind()
+
+  switch (kind) {
+    case tsMorph.SyntaxKind.FunctionDeclaration:
+    case tsMorph.SyntaxKind.FunctionExpression:
+    case tsMorph.SyntaxKind.ArrowFunction:
+    case tsMorph.SyntaxKind.Constructor:
+    case tsMorph.SyntaxKind.GetAccessor:
+    case tsMorph.SyntaxKind.SetAccessor:
+      return Boolean(
+        (
+          node as
+            | FunctionDeclaration
+            | FunctionExpression
+            | ArrowFunction
+            | ConstructorDeclaration
+            | GetAccessorDeclaration
+            | SetAccessorDeclaration
+        ).getBody()
+      )
+
+    case tsMorph.SyntaxKind.MethodDeclaration:
+      const method = node as MethodDeclaration
+      return !method.isAbstract() && Boolean(method.getBody())
+  }
+
+  return false
+}
+
+/** Determines if a type is a concrete function type. */
+function isConcreteFunctionType(type: Type): boolean {
+  const symbol = type.getSymbol() ?? type.getAliasSymbol()
+
+  if (!symbol) {
+    return false
+  }
+
+  const declarations = symbol.getDeclarations()
+
+  for (let index = 0, length = declarations.length; index < length; ++index) {
+    const declaration = declarations[index]
+
+    if (isConcreteFunction(declaration)) {
+      return true
+    }
+  }
+
+  return false
 }
 
 /** Checks if a node has a type node. */
@@ -3016,9 +3112,9 @@ export function getTypeAtLocation<
 
 /**
  * Decide whether a `TypeReference` should be resolved or kept as a reference:
- * - If the alias itself is exported, external, or from node_modules
- * - If it still contains free type parameters e.g. `Type` in `Type extends ...`
- * - If any type argument is exported, external, or from node_modules
+ *   - If the alias itself is exported, external, or from node_modules
+ *   - If it still contains free type parameters e.g. `Type` in `Type extends ...`
+ *   - If any type argument is exported, external, or from node_modules
  */
 function shouldResolveReference(type: Type, enclosingNode?: Node): boolean {
   // Bail if we already began resolving this exact alias
