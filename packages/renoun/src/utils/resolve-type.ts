@@ -2954,13 +2954,20 @@ export function hasTypeNode(
   | PropertySignature
   | VariableDeclaration
   | TypeAliasDeclaration {
-  return (
-    tsMorph.Node.isParameterDeclaration(node) ||
-    tsMorph.Node.isPropertyDeclaration(node) ||
-    tsMorph.Node.isPropertySignature(node) ||
-    tsMorph.Node.isVariableDeclaration(node) ||
-    tsMorph.Node.isTypeAliasDeclaration(node)
-  )
+  if (!node) {
+    return false
+  }
+
+  switch (node.getKind()) {
+    case tsMorph.SyntaxKind.Parameter:
+    case tsMorph.SyntaxKind.PropertyDeclaration:
+    case tsMorph.SyntaxKind.PropertySignature:
+    case tsMorph.SyntaxKind.VariableDeclaration:
+    case tsMorph.SyntaxKind.TypeAliasDeclaration:
+      return true
+  }
+
+  return false
 }
 
 /** Checks if a type contains free type parameters that are not bound to a specific type. */
