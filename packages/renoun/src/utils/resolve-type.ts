@@ -9,17 +9,19 @@ import type {
   PropertySignature,
   IndexSignatureDeclaration,
   SignaturedDeclaration,
-  TypeAliasDeclaration,
   VariableDeclaration,
+  TypeAliasDeclaration,
+  InterfaceDeclaration,
+  EnumDeclaration,
+  ConstructorDeclaration,
+  FunctionDeclaration,
+  FunctionExpression,
+  ArrowFunction,
   Signature,
   Symbol,
   TypeNode,
   Type,
   Node,
-  ConstructorDeclaration,
-  FunctionDeclaration,
-  FunctionExpression,
-  ArrowFunction,
 } from 'ts-morph'
 import tsMorph from 'ts-morph'
 
@@ -2267,8 +2269,31 @@ function getSymbolMetadata(
   /** The file path for the symbol declaration. */
   filePath?: string
 } {
+  let name: string | undefined
+
+  const kind = enclosingNode?.getKind()
+  if (
+    kind === tsMorph.SyntaxKind.TypeAliasDeclaration ||
+    kind === tsMorph.SyntaxKind.InterfaceDeclaration ||
+    kind === tsMorph.SyntaxKind.ClassDeclaration ||
+    kind === tsMorph.SyntaxKind.EnumDeclaration ||
+    kind === tsMorph.SyntaxKind.FunctionDeclaration ||
+    kind === tsMorph.SyntaxKind.VariableDeclaration
+  ) {
+    name = (
+      enclosingNode as
+        | TypeAliasDeclaration
+        | InterfaceDeclaration
+        | ClassDeclaration
+        | EnumDeclaration
+        | FunctionDeclaration
+        | VariableDeclaration
+    ).getName()
+  }
+
   if (!symbol) {
     return {
+      name,
       isExported: false,
       isExternal: false,
       isInNodeModules: false,
@@ -2282,6 +2307,7 @@ function getSymbolMetadata(
 
   if (declarations.length === 0) {
     return {
+      name,
       isExported: false,
       isExternal: false,
       isInNodeModules: false,
@@ -2291,31 +2317,16 @@ function getSymbolMetadata(
     }
   }
 
-  const declaration = declarations.at(0)!
+  const declaration = declarations[0]
   const declarationSourceFile = declaration?.getSourceFile()
   const enclosingNodeSourceFile = enclosingNode?.getSourceFile()
 
   /** Attempt to get the name of the symbol. */
-  let name: string | undefined
-
-  if (
-    // If the symbol value declaration is a variable use the name from the enclosing node if provided
-    tsMorph.Node.isVariableDeclaration(symbol.getValueDeclaration()) ||
-    // Otherwise, use the enclosing node if it is a variable declaration
-    tsMorph.Node.isVariableDeclaration(enclosingNode)
-  ) {
-    if (
-      tsMorph.Node.isVariableDeclaration(enclosingNode) &&
-      declaration !== enclosingNode
-    ) {
-      name = enclosingNode.getName()
-    }
-    // Don't use the name from the symbol if this fails to prevent using apparent names like String, Number, etc.
-  } else {
+  if (name === undefined) {
     name = symbol.getName()
   }
 
-  // Ignore private symbol names e.g. __type, __call, __0, etc.
+  /** Ignore private symbol names e.g. __type, __call, __0, etc. */
   if (name?.startsWith('__')) {
     name = undefined
   }

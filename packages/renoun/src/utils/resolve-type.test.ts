@@ -3616,20 +3616,14 @@ describe('resolveType', () => {
     const variableDeclaration = sourceFile.getVariableDeclarationOrThrow('Text')
     const processedType = resolveType(
       variableDeclaration.getType(),
-      variableDeclaration,
-      (symbolMetadata) => {
-        if (symbolMetadata.name === 'theme') {
-          return true
-        }
-        return !symbolMetadata.isInNodeModules
-      }
+      variableDeclaration
     )
 
     expect(processedType).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "Function",
-        "name": undefined,
+        "kind": "Component",
+        "name": "Text",
         "position": {
           "end": {
             "column": 79,
@@ -3643,44 +3637,42 @@ describe('resolveType', () => {
         "signatures": [
           {
             "filePath": "node_modules/styled-components/dist/types.d.ts",
-            "kind": "CallSignature",
-            "parameters": [
-              {
-                "description": undefined,
+            "kind": "ComponentSignature",
+            "parameter": {
+              "description": undefined,
+              "filePath": "node_modules/styled-components/dist/types.d.ts",
+              "initializer": undefined,
+              "isOptional": false,
+              "kind": "Parameter",
+              "name": "props",
+              "position": {
+                "end": {
+                  "column": 186,
+                  "line": 133,
+                },
+                "start": {
+                  "column": 111,
+                  "line": 133,
+                },
+              },
+              "text": "props: PolymorphicComponentProps<R, BaseProps, AsTarget, ForwardedAsTarget>",
+              "type": {
                 "filePath": "node_modules/styled-components/dist/types.d.ts",
-                "initializer": undefined,
-                "isOptional": false,
-                "kind": "Parameter",
-                "name": "props",
+                "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 186,
                     "line": 133,
                   },
                   "start": {
-                    "column": 111,
+                    "column": 118,
                     "line": 133,
                   },
                 },
-                "text": "props: PolymorphicComponentProps<R, BaseProps, AsTarget, ForwardedAsTarget>",
-                "type": {
-                  "filePath": "node_modules/styled-components/dist/types.d.ts",
-                  "kind": "TypeReference",
-                  "moduleSpecifier": undefined,
-                  "position": {
-                    "end": {
-                      "column": 186,
-                      "line": 133,
-                    },
-                    "start": {
-                      "column": 118,
-                      "line": 133,
-                    },
-                  },
-                  "text": "PolymorphicComponentProps<R, BaseProps, AsTarget, ForwardedAsTarget, AsTarget extends KnownTarget ? ComponentPropsWithRef<AsTarget> : {}, ForwardedAsTarget extends KnownTarget ? ComponentPropsWithRef<...> : {}>",
-                },
+                "text": "PolymorphicComponentProps<R, BaseProps, AsTarget, ForwardedAsTarget, AsTarget extends KnownTarget ? ComponentPropsWithRef<AsTarget> : {}, ForwardedAsTarget extends KnownTarget ? ComponentPropsWithRef<...> : {}>",
               },
-            ],
+            },
             "position": {
               "end": {
                 "column": 207,
@@ -3784,44 +3776,42 @@ describe('resolveType', () => {
           },
           {
             "filePath": "node_modules/@types/react/index.d.ts",
-            "kind": "CallSignature",
-            "parameters": [
-              {
-                "description": undefined,
+            "kind": "ComponentSignature",
+            "parameter": {
+              "description": undefined,
+              "filePath": "node_modules/@types/react/index.d.ts",
+              "initializer": undefined,
+              "isOptional": false,
+              "kind": "Parameter",
+              "name": "props",
+              "position": {
+                "end": {
+                  "column": 18,
+                  "line": 562,
+                },
+                "start": {
+                  "column": 10,
+                  "line": 562,
+                },
+              },
+              "text": "props: P",
+              "type": {
                 "filePath": "node_modules/@types/react/index.d.ts",
-                "initializer": undefined,
-                "isOptional": false,
-                "kind": "Parameter",
-                "name": "props",
+                "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 18,
                     "line": 562,
                   },
                   "start": {
-                    "column": 10,
+                    "column": 17,
                     "line": 562,
                   },
                 },
-                "text": "props: P",
-                "type": {
-                  "filePath": "node_modules/@types/react/index.d.ts",
-                  "kind": "TypeReference",
-                  "moduleSpecifier": undefined,
-                  "position": {
-                    "end": {
-                      "column": 18,
-                      "line": 562,
-                    },
-                    "start": {
-                      "column": 17,
-                      "line": 562,
-                    },
-                  },
-                  "text": "P",
-                },
+                "text": "P",
               },
-            ],
+            },
             "position": {
               "end": {
                 "column": 31,
@@ -6810,8 +6800,8 @@ describe('resolveType', () => {
     expect(types).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "Function",
-        "name": undefined,
+        "kind": "Component",
+        "name": "Grid",
         "position": {
           "end": {
             "column": 4,
@@ -6825,44 +6815,42 @@ describe('resolveType', () => {
         "signatures": [
           {
             "filePath": "node_modules/styled-components/dist/types.d.ts",
-            "kind": "CallSignature",
-            "parameters": [
-              {
-                "description": undefined,
+            "kind": "ComponentSignature",
+            "parameter": {
+              "description": undefined,
+              "filePath": "node_modules/styled-components/dist/types.d.ts",
+              "initializer": undefined,
+              "isOptional": false,
+              "kind": "Parameter",
+              "name": "props",
+              "position": {
+                "end": {
+                  "column": 186,
+                  "line": 133,
+                },
+                "start": {
+                  "column": 111,
+                  "line": 133,
+                },
+              },
+              "text": "props: PolymorphicComponentProps<R, BaseProps, AsTarget, ForwardedAsTarget>",
+              "type": {
                 "filePath": "node_modules/styled-components/dist/types.d.ts",
-                "initializer": undefined,
-                "isOptional": false,
-                "kind": "Parameter",
-                "name": "props",
+                "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 186,
                     "line": 133,
                   },
                   "start": {
-                    "column": 111,
+                    "column": 118,
                     "line": 133,
                   },
                 },
-                "text": "props: PolymorphicComponentProps<R, BaseProps, AsTarget, ForwardedAsTarget>",
-                "type": {
-                  "filePath": "node_modules/styled-components/dist/types.d.ts",
-                  "kind": "TypeReference",
-                  "moduleSpecifier": undefined,
-                  "position": {
-                    "end": {
-                      "column": 186,
-                      "line": 133,
-                    },
-                    "start": {
-                      "column": 118,
-                      "line": 133,
-                    },
-                  },
-                  "text": "PolymorphicComponentProps<R, BaseProps, AsTarget, ForwardedAsTarget, AsTarget extends KnownTarget ? ComponentPropsWithRef<AsTarget> : {}, ForwardedAsTarget extends KnownTarget ? ComponentPropsWithRef<...> : {}>",
-                },
+                "text": "PolymorphicComponentProps<R, BaseProps, AsTarget, ForwardedAsTarget, AsTarget extends KnownTarget ? ComponentPropsWithRef<AsTarget> : {}, ForwardedAsTarget extends KnownTarget ? ComponentPropsWithRef<...> : {}>",
               },
-            ],
+            },
             "position": {
               "end": {
                 "column": 207,
@@ -6966,44 +6954,42 @@ describe('resolveType', () => {
           },
           {
             "filePath": "node_modules/@types/react/index.d.ts",
-            "kind": "CallSignature",
-            "parameters": [
-              {
-                "description": undefined,
+            "kind": "ComponentSignature",
+            "parameter": {
+              "description": undefined,
+              "filePath": "node_modules/@types/react/index.d.ts",
+              "initializer": undefined,
+              "isOptional": false,
+              "kind": "Parameter",
+              "name": "props",
+              "position": {
+                "end": {
+                  "column": 18,
+                  "line": 562,
+                },
+                "start": {
+                  "column": 10,
+                  "line": 562,
+                },
+              },
+              "text": "props: P",
+              "type": {
                 "filePath": "node_modules/@types/react/index.d.ts",
-                "initializer": undefined,
-                "isOptional": false,
-                "kind": "Parameter",
-                "name": "props",
+                "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 18,
                     "line": 562,
                   },
                   "start": {
-                    "column": 10,
+                    "column": 17,
                     "line": 562,
                   },
                 },
-                "text": "props: P",
-                "type": {
-                  "filePath": "node_modules/@types/react/index.d.ts",
-                  "kind": "TypeReference",
-                  "moduleSpecifier": undefined,
-                  "position": {
-                    "end": {
-                      "column": 18,
-                      "line": 562,
-                    },
-                    "start": {
-                      "column": 17,
-                      "line": 562,
-                    },
-                  },
-                  "text": "P",
-                },
+                "text": "P",
               },
-            ],
+            },
             "position": {
               "end": {
                 "column": 31,
@@ -7067,8 +7053,8 @@ describe('resolveType', () => {
     expect(types).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
-        "kind": "Function",
-        "name": undefined,
+        "kind": "Component",
+        "name": "Grid",
         "position": {
           "end": {
             "column": 2,
@@ -7082,44 +7068,42 @@ describe('resolveType', () => {
         "signatures": [
           {
             "filePath": "node_modules/styled-components/dist/types.d.ts",
-            "kind": "CallSignature",
-            "parameters": [
-              {
-                "description": undefined,
+            "kind": "ComponentSignature",
+            "parameter": {
+              "description": undefined,
+              "filePath": "node_modules/styled-components/dist/types.d.ts",
+              "initializer": undefined,
+              "isOptional": false,
+              "kind": "Parameter",
+              "name": "props",
+              "position": {
+                "end": {
+                  "column": 186,
+                  "line": 133,
+                },
+                "start": {
+                  "column": 111,
+                  "line": 133,
+                },
+              },
+              "text": "props: PolymorphicComponentProps<R, BaseProps, AsTarget, ForwardedAsTarget>",
+              "type": {
                 "filePath": "node_modules/styled-components/dist/types.d.ts",
-                "initializer": undefined,
-                "isOptional": false,
-                "kind": "Parameter",
-                "name": "props",
+                "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 186,
                     "line": 133,
                   },
                   "start": {
-                    "column": 111,
+                    "column": 118,
                     "line": 133,
                   },
                 },
-                "text": "props: PolymorphicComponentProps<R, BaseProps, AsTarget, ForwardedAsTarget>",
-                "type": {
-                  "filePath": "node_modules/styled-components/dist/types.d.ts",
-                  "kind": "TypeReference",
-                  "moduleSpecifier": undefined,
-                  "position": {
-                    "end": {
-                      "column": 186,
-                      "line": 133,
-                    },
-                    "start": {
-                      "column": 118,
-                      "line": 133,
-                    },
-                  },
-                  "text": "PolymorphicComponentProps<R, BaseProps, AsTarget, ForwardedAsTarget, AsTarget extends KnownTarget ? ComponentPropsWithRef<AsTarget> : {}, ForwardedAsTarget extends KnownTarget ? ComponentPropsWithRef<...> : {}>",
-                },
+                "text": "PolymorphicComponentProps<R, BaseProps, AsTarget, ForwardedAsTarget, AsTarget extends KnownTarget ? ComponentPropsWithRef<AsTarget> : {}, ForwardedAsTarget extends KnownTarget ? ComponentPropsWithRef<...> : {}>",
               },
-            ],
+            },
             "position": {
               "end": {
                 "column": 207,
@@ -7223,44 +7207,42 @@ describe('resolveType', () => {
           },
           {
             "filePath": "node_modules/@types/react/index.d.ts",
-            "kind": "CallSignature",
-            "parameters": [
-              {
-                "description": undefined,
+            "kind": "ComponentSignature",
+            "parameter": {
+              "description": undefined,
+              "filePath": "node_modules/@types/react/index.d.ts",
+              "initializer": undefined,
+              "isOptional": false,
+              "kind": "Parameter",
+              "name": "props",
+              "position": {
+                "end": {
+                  "column": 18,
+                  "line": 562,
+                },
+                "start": {
+                  "column": 10,
+                  "line": 562,
+                },
+              },
+              "text": "props: P",
+              "type": {
                 "filePath": "node_modules/@types/react/index.d.ts",
-                "initializer": undefined,
-                "isOptional": false,
-                "kind": "Parameter",
-                "name": "props",
+                "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "position": {
                   "end": {
                     "column": 18,
                     "line": 562,
                   },
                   "start": {
-                    "column": 10,
+                    "column": 17,
                     "line": 562,
                   },
                 },
-                "text": "props: P",
-                "type": {
-                  "filePath": "node_modules/@types/react/index.d.ts",
-                  "kind": "TypeReference",
-                  "moduleSpecifier": undefined,
-                  "position": {
-                    "end": {
-                      "column": 18,
-                      "line": 562,
-                    },
-                    "start": {
-                      "column": 17,
-                      "line": 562,
-                    },
-                  },
-                  "text": "P",
-                },
+                "text": "P",
               },
-            ],
+            },
             "position": {
               "end": {
                 "column": 31,
@@ -11430,7 +11412,7 @@ describe('resolveType', () => {
       {
         "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
         "kind": "TypeAlias",
-        "name": undefined,
+        "name": "Keys",
         "position": {
           "end": {
             "column": 4402,
@@ -11472,7 +11454,7 @@ describe('resolveType', () => {
       {
         "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
         "kind": "TypeAlias",
-        "name": undefined,
+        "name": "Foo",
         "position": {
           "end": {
             "column": 4402,
@@ -11514,7 +11496,7 @@ describe('resolveType', () => {
       {
         "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
         "kind": "TypeAlias",
-        "name": undefined,
+        "name": "Foo",
         "position": {
           "end": {
             "column": 4402,
@@ -12250,7 +12232,7 @@ describe('resolveType', () => {
       {
         "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
         "kind": "TypeAlias",
-        "name": undefined,
+        "name": "Foo",
         "position": {
           "end": {
             "column": 4402,
