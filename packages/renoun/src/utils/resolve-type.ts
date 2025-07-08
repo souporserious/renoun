@@ -2756,39 +2756,56 @@ function resolveClassProperty(
   )
 }
 
-/** Get the primary declaration of a symbol preferred by type hierarchy. */
-function getPrimaryDeclaration(symbol: Symbol | undefined): Node | undefined {
-  if (!symbol) return undefined
+/**
+ * Attempts to find the primary declaration of a symbol based on the following criteria:
+ *   - Type-like declarations (`type`, `interface`, `enum`, `class`)
+ *   - First function-like declaration that has a body
+ *   - Otherwise, the first declaration in the array
+ */
+export function getPrimaryDeclaration(symbol?: Symbol): Node | undefined {
+  if (!symbol) {
+    return undefined
+  }
 
   const declarations = symbol.getDeclarations()
 
-  // Prioritize declarations based on the preferred type hierarchy
-  // Type-related symbols: TypeAlias, Interface, Enum, Class
-  const typeRelatedDeclaration = declarations.find(
-    (declaration) =>
-      declaration.getKind() === tsMorph.SyntaxKind.TypeAliasDeclaration ||
-      declaration.getKind() === tsMorph.SyntaxKind.InterfaceDeclaration ||
-      declaration.getKind() === tsMorph.SyntaxKind.EnumDeclaration ||
-      declaration.getKind() === tsMorph.SyntaxKind.ClassDeclaration
-  )
-
-  if (typeRelatedDeclaration) {
-    return typeRelatedDeclaration
+  if (declarations.length === 0) {
+    return undefined
   }
 
-  // If no type-related declaration, check for functions with a body in the case of function overloads
-  const functionWithBodyDeclaration = declarations.find((declaration) => {
-    return (
-      tsMorph.Node.isFunctionDeclaration(declaration) && declaration.hasBody()
-    )
-  })
+  let firstDeclaration: Node | undefined
 
-  if (functionWithBodyDeclaration) {
-    return functionWithBodyDeclaration
+  for (let index = 0; index < declarations.length; ++index) {
+    const declaration = declarations[index]
+    const kind = declaration.getKind()
+
+    switch (kind) {
+      case tsMorph.SyntaxKind.TypeAliasDeclaration:
+      case tsMorph.SyntaxKind.InterfaceDeclaration:
+      case tsMorph.SyntaxKind.EnumDeclaration:
+      case tsMorph.SyntaxKind.ClassDeclaration:
+        return declaration
+    }
+
+    switch (kind) {
+      case tsMorph.SyntaxKind.FunctionDeclaration:
+      case tsMorph.SyntaxKind.MethodDeclaration:
+      case tsMorph.SyntaxKind.Constructor:
+      case tsMorph.SyntaxKind.GetAccessor:
+      case tsMorph.SyntaxKind.SetAccessor:
+      case tsMorph.SyntaxKind.FunctionExpression:
+      case tsMorph.SyntaxKind.ArrowFunction:
+        if ((declaration as any).getBody?.()) {
+          return declaration
+        }
+    }
+
+    if (index === 0) {
+      firstDeclaration = declaration
+    }
   }
 
-  // If no type-related or function with body, fallback to any available declaration
-  return declarations[0]
+  return firstDeclaration
 }
 
 /** Determines if a type is readonly. */
