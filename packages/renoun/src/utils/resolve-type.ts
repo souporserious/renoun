@@ -129,6 +129,10 @@ export namespace Kind {
     isReadonly?: boolean
   }
 
+  export interface Object extends Shared {
+    kind: 'Object'
+  }
+
   export interface Void extends Shared {
     kind: 'Void'
   }
@@ -531,6 +535,7 @@ export namespace Kind {
     | Boolean
     | Symbol
     | BigInt
+    | Object
     | Array
     | Tuple
     | IntersectionType
@@ -1530,6 +1535,11 @@ function resolveTypeExpression(
           text: typeText,
           members: [...propertySignatures, ...indexSignatures],
         } satisfies Kind.TypeLiteral
+      } else if (tsMorph.Node.isObjectKeyword(enclosingNode)) {
+        resolvedType = {
+          kind: 'Object',
+          text: typeText,
+        } satisfies Kind.Object
       } else {
         throw new UnresolvedTypeExpressionError(type, enclosingNode)
       }
