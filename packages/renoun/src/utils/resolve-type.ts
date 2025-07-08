@@ -281,7 +281,7 @@ export namespace Kind {
 
   export interface ClassConstructor extends SharedDocumentable {
     kind: 'ClassConstructor'
-    signatures: FunctionSignature[]
+    signatures: CallSignature[]
   }
 
   export interface SharedClassMember extends SharedDocumentable {
@@ -313,7 +313,7 @@ export namespace Kind {
 
   export interface ClassMethod extends SharedClassMember {
     kind: 'ClassMethod'
-    signatures: FunctionSignature[]
+    signatures: CallSignature[]
   }
 
   export interface ClassProperty<
@@ -382,16 +382,9 @@ export namespace Kind {
     parameter: Parameter
   }
 
-  export interface FunctionSignature
-    extends SharedDocumentable,
-      SharedCallable {
-    kind: 'FunctionSignature'
-    parameters: Parameter[]
-  }
-
   export interface Function extends SharedDocumentable {
     kind: 'Function'
-    signatures: FunctionSignature[]
+    signatures: CallSignature[]
   }
 
   export interface FunctionType extends SharedCallable {
@@ -576,7 +569,6 @@ export type Kind =
   | Kind.CallSignature
   | Kind.ConstructSignature
   | Kind.ComponentSignature
-  | Kind.FunctionSignature
   | Kind.IndexSignature
   | Kind.MethodSignature
   | Kind.PropertySignature
@@ -864,14 +856,7 @@ export function resolveType(
         kind: 'Function',
         name: symbolMetadata.name,
         text: typeText,
-        signatures: resolvedCallSignatures.map(
-          ({ kind, ...resolvedCallSignature }) => {
-            return {
-              kind: 'FunctionSignature',
-              ...resolvedCallSignature,
-            } satisfies Kind.FunctionSignature
-          }
-        ),
+        signatures: resolvedCallSignatures,
       } satisfies Kind.Function
     }
   } else {
@@ -2501,22 +2486,17 @@ function resolveClass(
     const constructorSignaturesToResolve = constructorDeclarations.map(
       (constructor) => constructor.getSignature()
     )
-    const resolvedFunctionSignatures = resolveCallSignatures(
+    const resolvedCallSignatures = resolveCallSignatures(
       constructorSignaturesToResolve,
       filter,
       dependencies
     )
 
-    if (resolvedFunctionSignatures.length > 0) {
+    if (resolvedCallSignatures.length > 0) {
       const primaryConstructorDeclaration = constructorDeclarations[0]
       const constructor: Kind.ClassConstructor = {
         kind: 'ClassConstructor',
-        signatures: resolvedFunctionSignatures.map((signature) => {
-          return {
-            ...signature,
-            kind: 'FunctionSignature',
-          } satisfies Kind.FunctionSignature
-        }),
+        signatures: resolvedCallSignatures,
         text: primaryConstructorDeclaration.getText(),
         ...getJsDocMetadata(primaryConstructorDeclaration),
         ...getDeclarationLocation(primaryConstructorDeclaration),
@@ -2699,14 +2679,7 @@ function resolveClassMethod(
     name: method.getName(),
     scope: getScope(method),
     visibility: getVisibility(method),
-    signatures: resolveCallSignatures(callSignatures, filter, dependencies).map(
-      (signature) => {
-        return {
-          ...signature,
-          kind: 'FunctionSignature',
-        } satisfies Kind.FunctionSignature
-      }
-    ),
+    signatures: resolveCallSignatures(callSignatures, filter, dependencies),
     text: method.getType().getText(method, TYPE_FORMAT_FLAGS),
     ...getJsDocMetadata(method),
   } satisfies Kind.ClassMethod

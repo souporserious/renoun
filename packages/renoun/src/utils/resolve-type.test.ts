@@ -3643,7 +3643,7 @@ describe('resolveType', () => {
         "signatures": [
           {
             "filePath": "node_modules/styled-components/dist/types.d.ts",
-            "kind": "FunctionSignature",
+            "kind": "CallSignature",
             "parameters": [
               {
                 "description": undefined,
@@ -3784,7 +3784,7 @@ describe('resolveType', () => {
           },
           {
             "filePath": "node_modules/@types/react/index.d.ts",
-            "kind": "FunctionSignature",
+            "kind": "CallSignature",
             "parameters": [
               {
                 "description": undefined,
@@ -4065,7 +4065,7 @@ describe('resolveType', () => {
                 "filePath": "test.ts",
                 "isAsync": false,
                 "isGenerator": false,
-                "kind": "FunctionSignature",
+                "kind": "CallSignature",
                 "parameters": [
                   {
                     "description": undefined,
@@ -4177,7 +4177,7 @@ describe('resolveType', () => {
                 "filePath": "test.ts",
                 "isAsync": false,
                 "isGenerator": false,
-                "kind": "FunctionSignature",
+                "kind": "CallSignature",
                 "parameters": [
                   {
                     "description": undefined,
@@ -4917,7 +4917,7 @@ describe('resolveType', () => {
             "filePath": "test.ts",
             "isAsync": false,
             "isGenerator": false,
-            "kind": "FunctionSignature",
+            "kind": "CallSignature",
             "parameters": [
               {
                 "description": "Provides the initial count.",
@@ -5002,7 +5002,7 @@ describe('resolveType', () => {
             "filePath": "test.ts",
             "isAsync": false,
             "isGenerator": false,
-            "kind": "FunctionSignature",
+            "kind": "CallSignature",
             "parameters": [
               {
                 "description": undefined,
@@ -5126,7 +5126,7 @@ describe('resolveType', () => {
             "filePath": "test.ts",
             "isAsync": false,
             "isGenerator": false,
-            "kind": "FunctionSignature",
+            "kind": "CallSignature",
             "parameters": [
               {
                 "description": undefined,
@@ -5259,7 +5259,7 @@ describe('resolveType', () => {
         "signatures": [
           {
             "filePath": "test.ts",
-            "kind": "FunctionSignature",
+            "kind": "CallSignature",
             "parameters": [
               {
                 "description": undefined,
@@ -5340,7 +5340,7 @@ describe('resolveType', () => {
         "signatures": [
           {
             "filePath": "test.ts",
-            "kind": "FunctionSignature",
+            "kind": "CallSignature",
             "parameters": [
               {
                 "description": undefined,
@@ -5426,7 +5426,7 @@ describe('resolveType', () => {
             "filePath": "test.ts",
             "isAsync": false,
             "isGenerator": false,
-            "kind": "FunctionSignature",
+            "kind": "CallSignature",
             "parameters": [
               {
                 "description": undefined,
@@ -5527,7 +5527,7 @@ describe('resolveType', () => {
             "filePath": "test.ts",
             "isAsync": false,
             "isGenerator": false,
-            "kind": "FunctionSignature",
+            "kind": "CallSignature",
             "parameters": [
               {
                 "description": undefined,
@@ -5814,7 +5814,7 @@ describe('resolveType', () => {
             "filePath": "test.ts",
             "isAsync": false,
             "isGenerator": false,
-            "kind": "FunctionSignature",
+            "kind": "CallSignature",
             "parameters": [
               {
                 "description": undefined,
@@ -6825,7 +6825,7 @@ describe('resolveType', () => {
         "signatures": [
           {
             "filePath": "node_modules/styled-components/dist/types.d.ts",
-            "kind": "FunctionSignature",
+            "kind": "CallSignature",
             "parameters": [
               {
                 "description": undefined,
@@ -6966,7 +6966,7 @@ describe('resolveType', () => {
           },
           {
             "filePath": "node_modules/@types/react/index.d.ts",
-            "kind": "FunctionSignature",
+            "kind": "CallSignature",
             "parameters": [
               {
                 "description": undefined,
@@ -7082,7 +7082,7 @@ describe('resolveType', () => {
         "signatures": [
           {
             "filePath": "node_modules/styled-components/dist/types.d.ts",
-            "kind": "FunctionSignature",
+            "kind": "CallSignature",
             "parameters": [
               {
                 "description": undefined,
@@ -7223,7 +7223,7 @@ describe('resolveType', () => {
           },
           {
             "filePath": "node_modules/@types/react/index.d.ts",
-            "kind": "FunctionSignature",
+            "kind": "CallSignature",
             "parameters": [
               {
                 "description": undefined,
@@ -7754,7 +7754,7 @@ describe('resolveType', () => {
             {
               "description": "Constructs a new counter.",
               "filePath": "test.ts",
-              "kind": "FunctionSignature",
+              "kind": "CallSignature",
               "parameters": [
                 {
                   "description": undefined,
@@ -7833,7 +7833,7 @@ describe('resolveType', () => {
                 "filePath": "test.ts",
                 "isAsync": false,
                 "isGenerator": false,
-                "kind": "FunctionSignature",
+                "kind": "CallSignature",
                 "parameters": [],
                 "position": {
                   "end": {
@@ -7869,7 +7869,7 @@ describe('resolveType', () => {
                 "filePath": "test.ts",
                 "isAsync": false,
                 "isGenerator": false,
-                "kind": "FunctionSignature",
+                "kind": "CallSignature",
                 "parameters": [],
                 "position": {
                   "end": {
@@ -7905,7 +7905,7 @@ describe('resolveType', () => {
                 "filePath": "test.ts",
                 "isAsync": false,
                 "isGenerator": false,
-                "kind": "FunctionSignature",
+                "kind": "CallSignature",
                 "parameters": [
                   {
                     "description": undefined,
@@ -7964,7 +7964,7 @@ describe('resolveType', () => {
                 "filePath": "test.ts",
                 "isAsync": false,
                 "isGenerator": false,
-                "kind": "FunctionSignature",
+                "kind": "CallSignature",
                 "parameters": [],
                 "position": {
                   "end": {
@@ -8069,7 +8069,7 @@ describe('resolveType', () => {
             "filePath": "test.ts",
             "isAsync": false,
             "isGenerator": false,
-            "kind": "FunctionSignature",
+            "kind": "CallSignature",
             "parameters": [
               {
                 "description": undefined,
@@ -8177,7 +8177,7 @@ describe('resolveType', () => {
             "filePath": "test.ts",
             "isAsync": false,
             "isGenerator": false,
-            "kind": "FunctionSignature",
+            "kind": "CallSignature",
             "parameters": [
               {
                 "description": undefined,
@@ -8650,7 +8650,7 @@ describe('resolveType', () => {
             "filePath": "test.ts",
             "isAsync": false,
             "isGenerator": false,
-            "kind": "FunctionSignature",
+            "kind": "CallSignature",
             "parameters": [
               {
                 "description": undefined,
@@ -9965,7 +9965,7 @@ describe('resolveType', () => {
             "filePath": "test.ts",
             "isAsync": false,
             "isGenerator": false,
-            "kind": "FunctionSignature",
+            "kind": "CallSignature",
             "parameters": [
               {
                 "description": undefined,
@@ -10092,7 +10092,7 @@ describe('resolveType', () => {
                 "filePath": "test.ts",
                 "isAsync": false,
                 "isGenerator": false,
-                "kind": "FunctionSignature",
+                "kind": "CallSignature",
                 "parameters": [
                   {
                     "description": undefined,
@@ -10215,7 +10215,7 @@ describe('resolveType', () => {
             "filePath": "test.ts",
             "isAsync": false,
             "isGenerator": false,
-            "kind": "FunctionSignature",
+            "kind": "CallSignature",
             "parameters": [
               {
                 "description": undefined,
@@ -10297,7 +10297,7 @@ describe('resolveType', () => {
             "filePath": "test.ts",
             "isAsync": false,
             "isGenerator": false,
-            "kind": "FunctionSignature",
+            "kind": "CallSignature",
             "parameters": [
               {
                 "description": undefined,
@@ -11185,7 +11185,7 @@ describe('resolveType', () => {
             "filePath": "test.ts",
             "isAsync": false,
             "isGenerator": false,
-            "kind": "FunctionSignature",
+            "kind": "CallSignature",
             "parameters": [],
             "position": {
               "end": {
@@ -11256,7 +11256,7 @@ describe('resolveType', () => {
             "filePath": "test.ts",
             "isAsync": false,
             "isGenerator": false,
-            "kind": "FunctionSignature",
+            "kind": "CallSignature",
             "parameters": [
               {
                 "description": undefined,
@@ -12074,7 +12074,7 @@ describe('resolveType', () => {
             "filePath": "test.ts",
             "isAsync": true,
             "isGenerator": false,
-            "kind": "FunctionSignature",
+            "kind": "CallSignature",
             "parameters": [
               {
                 "description": undefined,
@@ -12497,7 +12497,7 @@ describe('resolveType', () => {
             "filePath": "test.ts",
             "isAsync": false,
             "isGenerator": false,
-            "kind": "FunctionSignature",
+            "kind": "CallSignature",
             "parameters": [],
             "position": {
               "end": {
@@ -12651,7 +12651,7 @@ describe('resolveType', () => {
             "filePath": "test.ts",
             "isAsync": false,
             "isGenerator": false,
-            "kind": "FunctionSignature",
+            "kind": "CallSignature",
             "parameters": [],
             "position": {
               "end": {
@@ -12715,7 +12715,7 @@ describe('resolveType', () => {
             "filePath": "test.ts",
             "isAsync": false,
             "isGenerator": false,
-            "kind": "FunctionSignature",
+            "kind": "CallSignature",
             "parameters": [],
             "position": {
               "end": {
