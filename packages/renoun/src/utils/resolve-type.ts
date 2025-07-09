@@ -1410,7 +1410,7 @@ function resolveTypeExpression(
 
         const [signature] = callSignatures
         const resolvedParameters = resolveParameters(
-          signature.getDeclaration(),
+          signature,
           filter,
           dependencies
         )
@@ -1454,7 +1454,7 @@ function resolveTypeExpression(
         resolvedType = {
           kind: 'FunctionType',
           text: typeText,
-          parameters: resolvedParameters,
+          ...resolvedParameters,
           ...(resolvedTypeParameters.length
             ? { typeParameters: resolvedTypeParameters }
             : {}),
@@ -1673,8 +1673,8 @@ function resolveMemberSignature(
 
   if (tsMorph.Node.isMethodSignature(member)) {
     const callSignature = member.getType().getCallSignatures()[0]
-    const parameters = resolveParameters(
-      callSignature.getDeclaration(),
+    const resolvedParameters = resolveParameters(
+      callSignature,
       filter,
       dependencies
     )
@@ -1682,7 +1682,7 @@ function resolveMemberSignature(
       kind: 'MethodSignature',
       name: member.getName(),
       text,
-      parameters: parameters,
+      ...resolvedParameters,
       returnType: resolveTypeExpression(
         callSignature.getReturnType(),
         member,
@@ -1792,6 +1792,7 @@ function resolveCallSignature(
   filter: SymbolFilter = defaultFilter,
   dependencies?: Set<string>
 ): Kind.CallSignature | undefined {
+  const signatureDeclaration = signature.getDeclaration()
   const resolvedTypeParameters = signature
     .getTypeParameters()
     .map((parameter) => resolveTypeParameter(parameter, filter, dependencies))
@@ -1806,34 +1807,10 @@ function resolveCallSignature(
         })
         .join(', ')}>`
     : ''
-  const signatureDeclaration = signature.getDeclaration()
-  const resolvedParameters: Kind.Parameter[] = []
-  let thisType: Kind.TypeExpression | undefined
-
-  if (tsMorph.Node.isSignaturedDeclaration(signatureDeclaration)) {
-    const parameters = signatureDeclaration.getParameters()
-
-    for (const parameter of parameters) {
-      const resolvedParameter = resolveParameter(
-        parameter,
-        signatureDeclaration,
-        filter,
-        dependencies
-      )
-      if (resolvedParameter) {
-        if (parameter.getName() === 'this') {
-          thisType = resolvedParameter.type
-        } else {
-          resolvedParameters.push(resolvedParameter)
-        }
-      }
-    }
-  }
-
-  const parametersText = resolvedParameters
+  const resolvedParameters = resolveParameters(signature, filter, dependencies)
+  const parametersText = resolvedParameters.parameters
     .map((parameter) => parameter.text)
     .join(', ')
-
   const returnTypeNode = signatureDeclaration.getReturnTypeNode()
   let returnType: Kind.TypeExpression | undefined
 
@@ -1874,8 +1851,7 @@ function resolveCallSignature(
   const resolvedType: Kind.CallSignature = {
     kind: 'CallSignature',
     text: simplifiedTypeText,
-    parameters: resolvedParameters,
-    thisType,
+    ...resolvedParameters,
     returnType,
     ...getJsDocMetadata(signatureDeclaration),
     ...getDeclarationLocation(signatureDeclaration),
@@ -1897,16 +1873,40 @@ function resolveCallSignature(
 }
 
 function resolveParameters(
-  signatureDeclaration: Node,
+  signature: Signature,
   filter: SymbolFilter = defaultFilter,
   dependencies?: Set<string>
-): Kind.Parameter[] {
-  return (signatureDeclaration as unknown as SignaturedDeclaration)
-    .getParameters()
-    .map((parameter) =>
-      resolveParameter(parameter, signatureDeclaration, filter, dependencies)
+): { parameters: Kind.Parameter[]; thisType?: Kind.TypeExpression } {
+  const signatureDeclaration = signature.getDeclaration()
+  const parameters: Kind.Parameter[] = []
+  let thisType: Kind.TypeExpression | undefined
+
+  if (tsMorph.Node.isSignaturedDeclaration(signatureDeclaration)) {
+    for (const parameter of signatureDeclaration.getParameters()) {
+      const resolved = resolveParameter(
+        parameter,
+        signatureDeclaration,
+        filter,
+        dependencies
+      )
+
+      if (!resolved) {
+        continue
+      }
+
+      if (parameter.getName() === 'this') {
+        thisType = resolved.type
+      } else {
+        parameters.push(resolved)
+      }
+    }
+  } else {
+    throw new Error(
+      `[renoun:resolveParameters]: Expected signature declaration, but got "${signatureDeclaration.getKindName()}". If you are seeing this error, please file an issue.`
     )
-    .filter(Boolean) as Kind.Parameter[]
+  }
+
+  return { parameters, thisType }
 }
 
 function resolveParameter(
@@ -2109,7 +2109,7 @@ export function resolvePropertySignatures(
         } else {
           const propertyType = getTypeAtLocation(
             property,
-            enclosingNode ?? propertyDeclaration ?? declaration,
+            enclosingNode ?? declaration,
             propertyDeclaration
           )
 
