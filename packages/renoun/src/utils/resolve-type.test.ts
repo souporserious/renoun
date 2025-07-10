@@ -2631,7 +2631,7 @@ describe('resolveType', () => {
       { overwrite: true }
     )
     const typeAlias = sourceFile.getTypeAliasOrThrow('Text')
-    const processedProperties = resolveType(typeAlias.getType())
+    const processedProperties = resolveType(typeAlias.getType(), typeAlias)
 
     expect(processedProperties).toMatchInlineSnapshot(`
       {
@@ -2854,7 +2854,7 @@ describe('resolveType', () => {
       { overwrite: true }
     )
     const typeAlias = sourceFile.getTypeAliasOrThrow('Text')
-    const processedProperties = resolveType(typeAlias.getType())
+    const processedProperties = resolveType(typeAlias.getType(), typeAlias)
 
     expect(processedProperties).toMatchInlineSnapshot(`
       {
@@ -3818,7 +3818,7 @@ describe('resolveType', () => {
                     "line": 562,
                   },
                 },
-                "text": "P",
+                "text": "Substitute<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, { fontSize: number; fontWeight?: number; }>",
               },
             },
             "position": {
@@ -6996,7 +6996,7 @@ describe('resolveType', () => {
                     "line": 562,
                   },
                 },
-                "text": "P",
+                "text": "Substitute<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, GridProps>",
               },
             },
             "position": {
@@ -7249,7 +7249,7 @@ describe('resolveType', () => {
                     "line": 562,
                   },
                 },
-                "text": "P",
+                "text": "Substitute<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, { $gridTemplateColumns: string; $gridTemplateRows: string; }>",
               },
             },
             "position": {
@@ -12846,5 +12846,478 @@ describe('resolveType', () => {
     //   kind: 'TypeReference',
     //   moduleSpecifier: './foo',
     // })
+  })
+
+  test('resolves variable component with generic parameters', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      import * as React from "react";
+
+      type Component<Props> = {
+        (props: Props): React.ReactNode;
+      };
+
+      const Text: Component<{
+        fontSize: number;
+        fontWeight?: number;
+      }> = function (props: any) {
+        return <span />;
+      }
+      `,
+      { overwrite: true }
+    )
+    const variableDeclaration = sourceFile.getVariableDeclarationOrThrow('Text')
+    const types = resolveType(
+      variableDeclaration.getType(),
+      variableDeclaration
+    )
+
+    expect(types).toMatchInlineSnapshot(`
+      {
+        "filePath": "test.ts",
+        "kind": "Component",
+        "name": "Text",
+        "position": {
+          "end": {
+            "column": 3,
+            "line": 5,
+          },
+          "start": {
+            "column": 1,
+            "line": 3,
+          },
+        },
+        "signatures": [
+          {
+            "filePath": "test.ts",
+            "kind": "ComponentSignature",
+            "parameter": {
+              "description": undefined,
+              "filePath": "test.ts",
+              "initializer": undefined,
+              "isOptional": false,
+              "kind": "Parameter",
+              "name": "props",
+              "position": {
+                "end": {
+                  "column": 16,
+                  "line": 4,
+                },
+                "start": {
+                  "column": 4,
+                  "line": 4,
+                },
+              },
+              "text": "props: Props",
+              "type": {
+                "kind": "TypeLiteral",
+                "members": [
+                  {
+                    "filePath": "test.ts",
+                    "isOptional": false,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "fontSize",
+                    "position": {
+                      "end": {
+                        "column": 20,
+                        "line": 8,
+                      },
+                      "start": {
+                        "column": 3,
+                        "line": 8,
+                      },
+                    },
+                    "text": "fontSize: number;",
+                    "type": {
+                      "kind": "Number",
+                      "text": "number",
+                      "value": undefined,
+                    },
+                  },
+                  {
+                    "filePath": "test.ts",
+                    "isOptional": true,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "fontWeight",
+                    "position": {
+                      "end": {
+                        "column": 23,
+                        "line": 9,
+                      },
+                      "start": {
+                        "column": 3,
+                        "line": 9,
+                      },
+                    },
+                    "text": "fontWeight?: number;",
+                    "type": {
+                      "kind": "Number",
+                      "text": "number",
+                      "value": undefined,
+                    },
+                  },
+                ],
+                "text": "{ fontSize: number; fontWeight?: number; }",
+              },
+            },
+            "position": {
+              "end": {
+                "column": 35,
+                "line": 4,
+              },
+              "start": {
+                "column": 3,
+                "line": 4,
+              },
+            },
+            "returnType": {
+              "filePath": "test.ts",
+              "kind": "TypeReference",
+              "moduleSpecifier": "react",
+              "position": {
+                "end": {
+                  "column": 34,
+                  "line": 4,
+                },
+                "start": {
+                  "column": 19,
+                  "line": 4,
+                },
+              },
+              "text": "ReactNode",
+            },
+            "text": "(props: Props) => ReactNode",
+            "thisType": undefined,
+          },
+        ],
+        "text": "Component<{ fontSize: number; fontWeight?: number; }>",
+      }
+    `)
+  })
+
+  test('resolves variable component with multiple signatures and generic parameters', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      type PolyComponent<Props> = {
+        <As = void, ForwardedAs = void>(
+          props: Props & { as?: As; forwardedAs?: ForwardedAs }
+        ): number;
+
+        (props: Props): string;
+      };
+
+      const Text: PolyComponent<{
+        fontSize: number;
+        fontWeight?: number;
+      }> = function (props: any) {
+        return
+      };
+      `,
+      { overwrite: true }
+    )
+    const variableDeclaration = sourceFile.getVariableDeclarationOrThrow('Text')
+    const types = resolveType(
+      variableDeclaration.getType(),
+      variableDeclaration
+    )
+
+    expect(types).toMatchInlineSnapshot(`
+      {
+        "filePath": "test.ts",
+        "kind": "Component",
+        "name": "Text",
+        "position": {
+          "end": {
+            "column": 3,
+            "line": 7,
+          },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "signatures": [
+          {
+            "filePath": "test.ts",
+            "kind": "ComponentSignature",
+            "parameter": {
+              "description": undefined,
+              "filePath": "test.ts",
+              "initializer": undefined,
+              "isOptional": false,
+              "kind": "Parameter",
+              "name": "props",
+              "position": {
+                "end": {
+                  "column": 58,
+                  "line": 3,
+                },
+                "start": {
+                  "column": 5,
+                  "line": 3,
+                },
+              },
+              "text": "props: Props & { as?: As; forwardedAs?: ForwardedAs }",
+              "type": {
+                "kind": "TypeLiteral",
+                "members": [
+                  {
+                    "filePath": "test.ts",
+                    "isOptional": false,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "fontSize",
+                    "position": {
+                      "end": {
+                        "column": 20,
+                        "line": 10,
+                      },
+                      "start": {
+                        "column": 3,
+                        "line": 10,
+                      },
+                    },
+                    "text": "fontSize: number;",
+                    "type": {
+                      "kind": "Number",
+                      "text": "number",
+                      "value": undefined,
+                    },
+                  },
+                  {
+                    "filePath": "test.ts",
+                    "isOptional": true,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "fontWeight",
+                    "position": {
+                      "end": {
+                        "column": 23,
+                        "line": 11,
+                      },
+                      "start": {
+                        "column": 3,
+                        "line": 11,
+                      },
+                    },
+                    "text": "fontWeight?: number;",
+                    "type": {
+                      "kind": "Number",
+                      "text": "number",
+                      "value": undefined,
+                    },
+                  },
+                  {
+                    "filePath": "test.ts",
+                    "isOptional": true,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "as",
+                    "position": {
+                      "end": {
+                        "column": 30,
+                        "line": 3,
+                      },
+                      "start": {
+                        "column": 22,
+                        "line": 3,
+                      },
+                    },
+                    "text": "as?: As;",
+                    "type": {
+                      "filePath": "test.ts",
+                      "kind": "TypeReference",
+                      "moduleSpecifier": undefined,
+                      "position": {
+                        "end": {
+                          "column": 29,
+                          "line": 3,
+                        },
+                        "start": {
+                          "column": 27,
+                          "line": 3,
+                        },
+                      },
+                      "text": "As",
+                    },
+                  },
+                  {
+                    "filePath": "test.ts",
+                    "isOptional": true,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "forwardedAs",
+                    "position": {
+                      "end": {
+                        "column": 56,
+                        "line": 3,
+                      },
+                      "start": {
+                        "column": 31,
+                        "line": 3,
+                      },
+                    },
+                    "text": "forwardedAs?: ForwardedAs",
+                    "type": {
+                      "filePath": "test.ts",
+                      "kind": "TypeReference",
+                      "moduleSpecifier": undefined,
+                      "position": {
+                        "end": {
+                          "column": 56,
+                          "line": 3,
+                        },
+                        "start": {
+                          "column": 45,
+                          "line": 3,
+                        },
+                      },
+                      "text": "ForwardedAs",
+                    },
+                  },
+                ],
+                "text": "{ fontSize: number; fontWeight?: number; } & { as?: As; forwardedAs?: ForwardedAs; }",
+              },
+            },
+            "position": {
+              "end": {
+                "column": 13,
+                "line": 4,
+              },
+              "start": {
+                "column": 3,
+                "line": 2,
+              },
+            },
+            "returnType": {
+              "kind": "Number",
+              "text": "number",
+              "value": undefined,
+            },
+            "text": "<As, ForwardedAs>(props: Props & { as?: As; forwardedAs?: ForwardedAs }) => number",
+            "thisType": undefined,
+            "typeParameters": [
+              {
+                "constraintType": undefined,
+                "defaultType": {
+                  "kind": "Void",
+                  "text": "void",
+                },
+                "kind": "TypeParameter",
+                "name": "As",
+                "text": "As = void",
+              },
+              {
+                "constraintType": undefined,
+                "defaultType": {
+                  "kind": "Void",
+                  "text": "void",
+                },
+                "kind": "TypeParameter",
+                "name": "ForwardedAs",
+                "text": "ForwardedAs = void",
+              },
+            ],
+          },
+          {
+            "filePath": "test.ts",
+            "kind": "ComponentSignature",
+            "parameter": {
+              "description": undefined,
+              "filePath": "test.ts",
+              "initializer": undefined,
+              "isOptional": false,
+              "kind": "Parameter",
+              "name": "props",
+              "position": {
+                "end": {
+                  "column": 16,
+                  "line": 6,
+                },
+                "start": {
+                  "column": 4,
+                  "line": 6,
+                },
+              },
+              "text": "props: Props",
+              "type": {
+                "kind": "TypeLiteral",
+                "members": [
+                  {
+                    "filePath": "test.ts",
+                    "isOptional": false,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "fontSize",
+                    "position": {
+                      "end": {
+                        "column": 20,
+                        "line": 10,
+                      },
+                      "start": {
+                        "column": 3,
+                        "line": 10,
+                      },
+                    },
+                    "text": "fontSize: number;",
+                    "type": {
+                      "kind": "Number",
+                      "text": "number",
+                      "value": undefined,
+                    },
+                  },
+                  {
+                    "filePath": "test.ts",
+                    "isOptional": true,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "fontWeight",
+                    "position": {
+                      "end": {
+                        "column": 23,
+                        "line": 11,
+                      },
+                      "start": {
+                        "column": 3,
+                        "line": 11,
+                      },
+                    },
+                    "text": "fontWeight?: number;",
+                    "type": {
+                      "kind": "Number",
+                      "text": "number",
+                      "value": undefined,
+                    },
+                  },
+                ],
+                "text": "{ fontSize: number; fontWeight?: number; }",
+              },
+            },
+            "position": {
+              "end": {
+                "column": 26,
+                "line": 6,
+              },
+              "start": {
+                "column": 3,
+                "line": 6,
+              },
+            },
+            "returnType": {
+              "kind": "String",
+              "text": "string",
+              "value": undefined,
+            },
+            "text": "(props: Props) => string",
+            "thisType": undefined,
+          },
+        ],
+        "text": "PolyComponent<{ fontSize: number; fontWeight?: number; }>",
+      }
+    `)
   })
 })

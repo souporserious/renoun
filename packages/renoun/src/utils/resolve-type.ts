@@ -694,6 +694,47 @@ export function resolveType(
       text: typeText,
       type: variableTypeResolved,
     } satisfies Kind.Variable
+  } else if (
+    callSignatures.length > 0 &&
+    !tsMorph.Node.isTypeAliasDeclaration(enclosingNode)
+  ) {
+    const resolvedCallSignatures = resolveCallSignatures(
+      callSignatures,
+      filter,
+      dependencies
+    )
+
+    if (isComponent(symbolMetadata.name, resolvedCallSignatures)) {
+      resolvedType = {
+        kind: 'Component',
+        name: symbolMetadata.name,
+        text: typeText,
+        signatures: resolvedCallSignatures.map(
+          ({ kind, parameters, isGenerator, ...resolvedCallSignature }) => {
+            if (isGenerator) {
+              throw new Error(
+                '[renoun] Components cannot be generator functions.'
+              )
+            }
+
+            return {
+              ...resolvedCallSignature,
+              kind: 'ComponentSignature',
+              parameter: parameters.at(0) as
+                | Kind.ComponentParameter
+                | undefined,
+            } satisfies Kind.ComponentSignature
+          }
+        ),
+      } satisfies Kind.Component
+    } else {
+      resolvedType = {
+        kind: 'Function',
+        name: symbolMetadata.name,
+        text: typeText,
+        signatures: resolvedCallSignatures,
+      } satisfies Kind.Function
+    }
   } else if (tsMorph.Node.isClassDeclaration(symbolDeclaration)) {
     resolvedType = resolveClass(symbolDeclaration, filter, dependencies)
     if (symbolMetadata.name) {
@@ -832,44 +873,6 @@ export function resolveType(
         dependencies
       ),
     } satisfies Kind.Interface
-  } else if (callSignatures.length > 0) {
-    const resolvedCallSignatures = resolveCallSignatures(
-      callSignatures,
-      filter,
-      dependencies
-    )
-
-    if (isComponent(symbolMetadata.name, resolvedCallSignatures)) {
-      resolvedType = {
-        kind: 'Component',
-        name: symbolMetadata.name,
-        text: typeText,
-        signatures: resolvedCallSignatures.map(
-          ({ kind, parameters, isGenerator, ...resolvedCallSignature }) => {
-            if (isGenerator) {
-              throw new Error(
-                '[renoun] Components cannot be generator functions.'
-              )
-            }
-
-            return {
-              ...resolvedCallSignature,
-              kind: 'ComponentSignature',
-              parameter: parameters.at(0) as
-                | Kind.ComponentParameter
-                | undefined,
-            } satisfies Kind.ComponentSignature
-          }
-        ),
-      } satisfies Kind.Component
-    } else {
-      resolvedType = {
-        kind: 'Function',
-        name: symbolMetadata.name,
-        text: typeText,
-        signatures: resolvedCallSignatures,
-      } satisfies Kind.Function
-    }
   } else {
     if (tsMorph.Node.isVariableDeclaration(enclosingNode)) {
       const resolvedTypeExpression = resolveTypeExpression(
@@ -1882,7 +1885,24 @@ function resolveParameters(
   let thisType: Kind.TypeExpression | undefined
 
   if (tsMorph.Node.isSignaturedDeclaration(signatureDeclaration)) {
-    for (const parameter of signatureDeclaration.getParameters()) {
+    const thisParameter = signatureDeclaration.getParameters().at(0)
+
+    if (thisParameter?.getName() === 'this') {
+      const resolvedThisParameter = resolveParameter(
+        thisParameter,
+        signatureDeclaration,
+        filter,
+        dependencies
+      )
+
+      if (resolvedThisParameter) {
+        thisType = resolvedThisParameter.type
+      }
+    }
+
+    const contextualParameters = signature.getParameters()
+
+    for (const parameter of contextualParameters) {
       const resolved = resolveParameter(
         parameter,
         signatureDeclaration,
@@ -1894,11 +1914,7 @@ function resolveParameters(
         continue
       }
 
-      if (parameter.getName() === 'this') {
-        thisType = resolved.type
-      } else {
-        parameters.push(resolved)
-      }
+      parameters.push(resolved)
     }
   } else {
     throw new Error(
@@ -1910,11 +1926,51 @@ function resolveParameters(
 }
 
 function resolveParameter(
-  parameterDeclaration: ParameterDeclaration,
-  signatureDeclaration: Node,
+  parameterDeclarationOrSymbol: ParameterDeclaration | Symbol,
+  enclosingNode: Node | undefined,
   filter: SymbolFilter = defaultFilter,
   dependencies?: Set<string>
 ): Kind.Parameter | undefined {
+  let parameterDeclaration: ParameterDeclaration | undefined
+  let isContextualSymbol = false
+
+  if (tsMorph.Node.isNode(parameterDeclarationOrSymbol)) {
+    parameterDeclaration = parameterDeclarationOrSymbol
+  } else {
+    const symbolDeclaration = getPrimaryDeclaration(
+      parameterDeclarationOrSymbol
+    ) as ParameterDeclaration | undefined
+
+    if (tsMorph.Node.isParameterDeclaration(symbolDeclaration)) {
+      parameterDeclaration = symbolDeclaration
+    }
+
+    isContextualSymbol = true
+  }
+
+  if (!parameterDeclaration) {
+    throw new Error(
+      `[renoun:resolveParameter]: No parameter declaration found. If you are seeing this error, please file an issue.`
+    )
+  }
+
+  // when dealing with a symbol, we need to get the fully-substituted type of the parameter at the call site
+  let contextualType: tsMorph.Type | undefined
+
+  if (isContextualSymbol) {
+    if (enclosingNode) {
+      contextualType = getTypeAtLocation(
+        parameterDeclarationOrSymbol as tsMorph.Symbol,
+        enclosingNode,
+        parameterDeclaration
+      )
+    } else {
+      throw new Error(
+        `[renoun:resolveParameter]: No enclosing node found when resolving a contextual parameter symbol. If you are seeing this error, please file an issue.`
+      )
+    }
+  }
+
   /**
    * When resolving a generic function's parameter type, we have two candidates:
    *   1. The annotated type node
@@ -1931,16 +1987,18 @@ function resolveParameter(
   const initializer = getInitializerValue(parameterDeclaration)
   let resolvedParameterType: Kind.TypeExpression | undefined
 
-  if (parameterTypeNode) {
-    const annotationType = parameterTypeNode.getType()
-    const typeToResolve =
-      parameterType && !containsFreeTypeParameter(parameterType)
-        ? parameterType
-        : (annotationType ?? parameterType)
+  if (parameterTypeNode || contextualType) {
+    const hasConcreteContext =
+      contextualType && !containsFreeTypeParameter(contextualType)
+    const typeToResolve = hasConcreteContext
+      ? contextualType! // already instantiated with generics
+      : parameterTypeNode
+        ? parameterTypeNode.getType() // keep annotation if still generic
+        : parameterType
 
     resolvedParameterType = resolveTypeExpression(
       typeToResolve,
-      parameterTypeNode ?? signatureDeclaration,
+      parameterTypeNode ?? enclosingNode,
       filter,
       initializer,
       false,
@@ -1949,7 +2007,7 @@ function resolveParameter(
   } else if (parameterType) {
     resolvedParameterType = resolveTypeExpression(
       parameterType,
-      signatureDeclaration as any,
+      enclosingNode,
       filter,
       initializer,
       false,
@@ -3081,6 +3139,22 @@ function containsFreeTypeParameter(type: Type | undefined): boolean {
   for (let index = 0, length = typeArguments.length; index < length; ++index) {
     if (containsFreeTypeParameter(typeArguments[index])) {
       return true
+    }
+  }
+
+  if (type.isIntersection()) {
+    for (const intersectionType of type.getIntersectionTypes()) {
+      if (containsFreeTypeParameter(intersectionType)) {
+        return true
+      }
+    }
+  }
+
+  if (type.isUnion()) {
+    for (const unionType of type.getUnionTypes()) {
+      if (containsFreeTypeParameter(unionType)) {
+        return true
+      }
     }
   }
 
