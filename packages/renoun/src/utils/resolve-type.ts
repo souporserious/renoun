@@ -3119,7 +3119,10 @@ export function hasTypeNode(
 }
 
 /** Checks if a type contains free type parameters that are not bound to a specific type. */
-function containsFreeTypeParameter(type: Type | undefined): boolean {
+function containsFreeTypeParameter(
+  type: Type | undefined,
+  seen: Set<Type> = new Set()
+): boolean {
   if (!type) {
     return false
   }
@@ -3128,23 +3131,29 @@ function containsFreeTypeParameter(type: Type | undefined): boolean {
     return true
   }
 
+  // avoid infinite recursion for self-referential types
+  if (seen.has(type)) {
+    return false
+  }
+  seen.add(type)
+
   const aliasArguments = type.getAliasTypeArguments()
   for (let index = 0, length = aliasArguments.length; index < length; ++index) {
-    if (containsFreeTypeParameter(aliasArguments[index])) {
+    if (containsFreeTypeParameter(aliasArguments[index], seen)) {
       return true
     }
   }
 
   const typeArguments = type.getTypeArguments()
   for (let index = 0, length = typeArguments.length; index < length; ++index) {
-    if (containsFreeTypeParameter(typeArguments[index])) {
+    if (containsFreeTypeParameter(typeArguments[index], seen)) {
       return true
     }
   }
 
   if (type.isIntersection()) {
     for (const intersectionType of type.getIntersectionTypes()) {
-      if (containsFreeTypeParameter(intersectionType)) {
+      if (containsFreeTypeParameter(intersectionType, seen)) {
         return true
       }
     }
@@ -3152,7 +3161,7 @@ function containsFreeTypeParameter(type: Type | undefined): boolean {
 
   if (type.isUnion()) {
     for (const unionType of type.getUnionTypes()) {
-      if (containsFreeTypeParameter(unionType)) {
+      if (containsFreeTypeParameter(unionType, seen)) {
         return true
       }
     }
