@@ -940,7 +940,7 @@ function resolveTypeExpression(
   try {
     let resolvedType: Kind.TypeExpression | undefined
 
-    if (isTypeReference(type) || tsMorph.Node.isTypeReference(enclosingNode)) {
+    if (isTypeReference(type, enclosingNode)) {
       if (shouldResolveReference(type, enclosingNode)) {
         resolvingReferences.add(type)
 
@@ -2901,8 +2901,15 @@ function isReadonlyType(type: Type, enclosingNode: Node | undefined) {
   return isReadonly
 }
 
+/** Determines if a type or enclosing node is a type reference. */
+function isTypeReference(type: Type, enclosingNode?: Node): boolean {
+  return (
+    isTypeReferenceType(type) || tsMorph.Node.isTypeReference(enclosingNode)
+  )
+}
+
 /** Determines if a type is a reference type. */
-function isTypeReference(type: Type): boolean {
+function isTypeReferenceType(type: Type): boolean {
   return (type.getObjectFlags() & tsMorph.ObjectFlags.Reference) !== 0
 }
 
