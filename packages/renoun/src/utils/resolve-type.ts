@@ -1,5 +1,6 @@
 import type {
   Project,
+  Node,
   ClassDeclaration,
   MethodDeclaration,
   ParameterDeclaration,
@@ -8,7 +9,6 @@ import type {
   PropertyDeclaration,
   PropertySignature,
   IndexSignatureDeclaration,
-  SignaturedDeclaration,
   VariableDeclaration,
   TypeAliasDeclaration,
   InterfaceDeclaration,
@@ -19,9 +19,11 @@ import type {
   ArrowFunction,
   Signature,
   Symbol,
-  TypeNode,
   Type,
-  Node,
+  TypeElement,
+  TypeNode,
+  TypeParameterDeclaration,
+  TypeReferenceNode,
 } from 'ts-morph'
 import tsMorph from 'ts-morph'
 
@@ -921,7 +923,7 @@ export function resolveType(
 
 /** Resolves a type expression. */
 function resolveTypeExpression(
-  type: tsMorph.Type,
+  type: Type,
   enclosingNode?: Node,
   filter: SymbolFilter = defaultFilter,
   defaultValues?: Record<string, unknown> | unknown,
@@ -1598,7 +1600,7 @@ export class UnresolvedTypeExpressionError extends Error {
 
 /** Resolve all member signatures of a type. */
 function resolveMemberSignatures(
-  members: tsMorph.TypeElement[],
+  members: TypeElement[],
   filter: SymbolFilter,
   defaultValues?: Record<string, unknown> | unknown,
   keepReferences: boolean = false,
@@ -1619,7 +1621,7 @@ function resolveMemberSignatures(
 
 /** Resolve a member signature of a type element. */
 function resolveMemberSignature(
-  member: tsMorph.TypeElement,
+  member: TypeElement,
   filter: SymbolFilter,
   defaultValues?: Record<string, unknown> | unknown,
   keepReferences: boolean = false,
@@ -1713,7 +1715,7 @@ function resolveMemberSignature(
 }
 
 function resolveTypeParameter(
-  type: tsMorph.Type,
+  type: Type,
   filter: SymbolFilter,
   dependencies?: Set<string>
 ): Kind.TypeParameter | undefined {
@@ -1741,7 +1743,7 @@ function resolveTypeParameter(
 }
 
 function resolveTypeParameterDeclaration(
-  parameterDeclaration: tsMorph.TypeParameterDeclaration,
+  parameterDeclaration: TypeParameterDeclaration,
   filter: SymbolFilter,
   dependencies?: Set<string>
 ): Kind.TypeParameter | undefined {
@@ -1955,7 +1957,7 @@ function resolveParameter(
   }
 
   // when dealing with a symbol, we need to get the fully-substituted type of the parameter at the call site
-  let contextualType: tsMorph.Type | undefined
+  let contextualType: Type | undefined
 
   if (isContextualSymbol) {
     if (enclosingNode) {
@@ -3058,7 +3060,7 @@ function isConcreteFunction(
     case tsMorph.SyntaxKind.ArrowFunction:
     case tsMorph.SyntaxKind.Constructor:
     case tsMorph.SyntaxKind.GetAccessor:
-    case tsMorph.SyntaxKind.SetAccessor:
+    case tsMorph.SyntaxKind.SetAccessor: {
       return Boolean(
         (
           node as
@@ -3070,10 +3072,12 @@ function isConcreteFunction(
             | SetAccessorDeclaration
         ).getBody()
       )
+    }
 
-    case tsMorph.SyntaxKind.MethodDeclaration:
+    case tsMorph.SyntaxKind.MethodDeclaration: {
       const method = node as MethodDeclaration
       return !method.isAbstract() && Boolean(method.getBody())
+    }
   }
 
   return false
@@ -3081,6 +3085,22 @@ function isConcreteFunction(
 
 /** Determines if a type is a concrete function type. */
 function isConcreteFunctionType(type: Type): boolean {
+  if (type.isIntersection()) {
+    for (const intersectionType of type.getIntersectionTypes()) {
+      if (isConcreteFunctionType(intersectionType)) {
+        return true
+      }
+    }
+  }
+
+  if (type.isUnion()) {
+    for (const unionType of type.getUnionTypes()) {
+      if (isConcreteFunctionType(unionType)) {
+        return true
+      }
+    }
+  }
+
   const symbol = type.getSymbol() ?? type.getAliasSymbol()
 
   if (!symbol) {
@@ -3098,6 +3118,19 @@ function isConcreteFunctionType(type: Type): boolean {
   }
 
   return false
+}
+
+/** Returns true if the given type is callable (i.e., has one or more call signatures). */
+function isCallableType(type: Type): boolean {
+  return type.getCallSignatures().length > 0
+}
+
+/**
+ * Returns true if the given type is a factory function type.
+ * A factory function type is a callable type that is not a concrete function type.
+ */
+function isFactoryFunctionType(type: Type): boolean {
+  return isCallableType(type) && !isConcreteFunctionType(type)
 }
 
 /** Checks if a node has a type node. */
@@ -3293,7 +3326,7 @@ function shouldResolveReference(type: Type, enclosingNode?: Node): boolean {
  * - If the constraint type is exported, external, or from node_modules
  */
 function shouldResolveMappedType(
-  mappedType: tsMorph.Type,
+  mappedType: Type,
   mappedNode: tsMorph.MappedTypeNode
 ): boolean {
   if (containsFreeTypeParameter(mappedType)) {
@@ -3358,7 +3391,7 @@ function getModuleFromSymbol(symbol: tsMorph.Symbol | undefined) {
 
 /** Return the module specifier (e.g. `react`) for a given `TypeReferenceNode`. */
 function getModuleSpecifierFromTypeReference(
-  typeReferenceNode: tsMorph.TypeReferenceNode
+  typeReferenceNode: TypeReferenceNode
 ): string | undefined {
   const typeName = typeReferenceNode.getTypeName()
 
