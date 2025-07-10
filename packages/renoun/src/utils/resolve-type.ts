@@ -3118,7 +3118,31 @@ export function hasTypeNode(
   return false
 }
 
-/** Checks if a type contains free type parameters that are not bound to a specific type. */
+/**
+ * Checks if a type contains free type parameters that are not bound to a specific type.
+ * This will recursively inspect the given type and its type arguments (including
+ * those from aliases, unions, and intersections) to determine if any unbound type
+ * parameters are present. It uses a set to track types that have already been checked
+ * to avoid infinite recursion.
+ *
+ * A free type parameter is a type variable (like `Type` in a generic function or class)
+ * that has not been substituted with a concrete type. These are typically present
+ * in generic declarations before they are instantiated and represent types that
+ * are still "open" or unresolved.
+ *
+ * ```ts
+ * function identity<Type>(value: Type): Type {
+ *   return value;
+ * }
+ * ```
+ *
+ * `Type` is a free type parameter in the type of `identity` above. Once it is
+ * called with a concrete type, `Type` is bound to that type, and is no longer free:
+ *
+ * ```ts
+ * const result = identity(123) // `Type` is now bound to `number`
+ * ```
+ */
 function containsFreeTypeParameter(
   type: Type | undefined,
   seen: Set<Type> = new Set()
