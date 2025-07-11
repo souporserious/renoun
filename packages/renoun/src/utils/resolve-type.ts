@@ -848,19 +848,21 @@ export function resolveType(
       type: resolvedTypeExpression,
     } satisfies Kind.TypeAlias
   } else if (tsMorph.Node.isInterfaceDeclaration(symbolDeclaration)) {
-    const resolvedTypeParameters = symbolDeclaration
-      .getTypeParameters()
-      .map((typeParameter) =>
-        resolveType(
-          typeParameter.getType(),
-          typeParameter,
-          filter,
-          undefined,
-          false,
-          dependencies
-        )
-      )
-      .filter(Boolean) as Kind.TypeParameter[]
+    const resolvedTypeParameters: Kind.TypeParameter[] = []
+
+    for (const typeParameter of symbolDeclaration.getTypeParameters()) {
+      const resolved = resolveType(
+        typeParameter.getType(),
+        typeParameter,
+        filter,
+        undefined,
+        false,
+        dependencies
+      ) as Kind.TypeParameter | undefined
+      if (resolved) {
+        resolvedTypeParameters.push(resolved)
+      }
+    }
 
     resolvedType = {
       kind: 'Interface',
@@ -1175,19 +1177,27 @@ function resolveTypeExpression(
     } else if (type.isUnion()) {
       // Mixed intersection inside union (`A & B | C`)
       if (tsMorph.Node.isIntersectionTypeNode(enclosingNode)) {
-        const resolvedIntersectionTypes = enclosingNode
-          .getTypeNodes()
-          .map((typeNode) =>
-            resolveTypeExpression(
-              typeNode.getType(),
-              typeNode,
-              filter,
-              defaultValues,
-              keepReferences,
-              dependencies
-            )
+        const intersectionTypeNodes = enclosingNode.getTypeNodes()
+        const resolvedIntersectionTypes: Kind.TypeExpression[] = []
+
+        for (
+          let index = 0, length = intersectionTypeNodes.length;
+          index < length;
+          ++index
+        ) {
+          const typeNode = intersectionTypeNodes[index]
+          const resolved = resolveTypeExpression(
+            typeNode.getType(),
+            typeNode,
+            filter,
+            defaultValues,
+            keepReferences,
+            dependencies
           )
-          .filter(Boolean) as Kind.TypeExpression[]
+          if (resolved) {
+            resolvedIntersectionTypes.push(resolved)
+          }
+        }
 
         if (resolvedIntersectionTypes.length === 0) {
           if (!keepReferences) {
@@ -1303,18 +1313,25 @@ function resolveTypeExpression(
       const intersectionNodes = intersectionNode
         ? intersectionNode.getTypeNodes()
         : []
-      const resolvedIntersectionTypes = intersectionTypes
-        .map((intersectionType, index) => {
-          return resolveTypeExpression(
-            intersectionType,
-            intersectionNodes[index] ?? symbolDeclaration,
-            filter,
-            defaultValues,
-            keepReferences,
-            dependencies
-          )
-        })
-        .filter(Boolean) as Kind.TypeExpression[]
+      const resolvedIntersectionTypes: Kind.TypeExpression[] = []
+      for (
+        let index = 0, length = intersectionTypes.length;
+        index < length;
+        ++index
+      ) {
+        const intersectionType = intersectionTypes[index]
+        const resolved = resolveTypeExpression(
+          intersectionType,
+          intersectionNodes[index] ?? symbolDeclaration,
+          filter,
+          defaultValues,
+          keepReferences,
+          dependencies
+        )
+        if (resolved) {
+          resolvedIntersectionTypes.push(resolved)
+        }
+      }
 
       // Intersection types can safely merge the immediate property signatures to reduce nesting
       const propertySignatures: Kind.PropertySignature[] = []
@@ -1419,19 +1436,17 @@ function resolveTypeExpression(
           filter,
           dependencies
         )
-        const resolvedTypeParameters = signature
-          .getTypeParameters()
-          .map((typeParameter) =>
-            resolveType(
-              typeParameter,
-              getPrimaryDeclaration(typeParameter.getSymbol()) ?? enclosingNode,
-              filter,
-              undefined,
-              false,
-              dependencies
-            )
+        const resolvedTypeParameters: Kind.TypeParameter[] = []
+        for (const typeParameter of signature.getTypeParameters()) {
+          const resolved = resolveTypeParameter(
+            typeParameter,
+            filter,
+            dependencies
           )
-          .filter(Boolean) as Kind.TypeParameter[]
+          if (resolved) {
+            resolvedTypeParameters.push(resolved)
+          }
+        }
         const signatureDeclaration = signature.getDeclaration()
         const returnTypeNode = signatureDeclaration.getReturnTypeNode()
         let returnType: Kind.TypeExpression | undefined
@@ -1611,17 +1626,22 @@ function resolveMemberSignatures(
   keepReferences: boolean = false,
   dependencies?: Set<string>
 ): Kind.MemberUnion[] {
-  return members
-    .map((member) =>
-      resolveMemberSignature(
-        member,
-        filter,
-        defaultValues,
-        keepReferences,
-        dependencies
-      )
+  const resolvedMembers: Kind.MemberUnion[] = []
+
+  for (let index = 0, length = members.length; index < length; ++index) {
+    const resolved = resolveMemberSignature(
+      members[index],
+      filter,
+      defaultValues,
+      keepReferences,
+      dependencies
     )
-    .filter(Boolean) as Kind.MemberUnion[]
+    if (resolved) {
+      resolvedMembers.push(resolved)
+    }
+  }
+
+  return resolvedMembers
 }
 
 /** Resolve a member signature of a type element. */
@@ -1811,9 +1831,18 @@ function resolveCallSignatures(
   filter: SymbolFilter = defaultFilter,
   dependencies?: Set<string>
 ): Kind.CallSignature[] {
-  return signatures
-    .map((signature) => resolveCallSignature(signature, filter, dependencies))
-    .filter(Boolean) as Kind.CallSignature[]
+  const resolvedSignatures: Kind.CallSignature[] = []
+  for (let index = 0, length = signatures.length; index < length; ++index) {
+    const resolvedSignature = resolveCallSignature(
+      signatures[index],
+      filter,
+      dependencies
+    )
+    if (resolvedSignature) {
+      resolvedSignatures.push(resolvedSignature)
+    }
+  }
+  return resolvedSignatures
 }
 
 /** Process a single function signature including its parameters and return type. */
@@ -2158,96 +2187,98 @@ export function resolvePropertySignatures(
 ): Kind.PropertySignature[] {
   const isReadonly = isReadonlyType(type, enclosingNode)
 
-  return type
-    .getApparentProperties()
-    .map((property) => {
-      const symbolMetadata = getSymbolMetadata(property, enclosingNode)
-      const propertyDeclaration = getPrimaryDeclaration(property) as
-        | PropertySignature
-        | undefined
-      const declaration = propertyDeclaration || enclosingNode
-      const filterResult = filter(symbolMetadata)
+  const apparentProperties = type.getApparentProperties()
+  const signatures: Kind.PropertySignature[] = []
 
-      if (filterResult === false) {
-        return
-      }
+  for (const property of apparentProperties) {
+    const symbolMetadata = getSymbolMetadata(property, enclosingNode)
+    const propertyDeclaration = getPrimaryDeclaration(property) as
+      | PropertySignature
+      | undefined
+    const declaration = propertyDeclaration || enclosingNode
+    const filterResult = filter(symbolMetadata)
 
-      if (declaration) {
-        const name = property.getName()
-        const defaultValue =
-          defaultValues && propertyDeclaration
-            ? (defaultValues as Record<string, unknown>)[
-                getInitializerValueKey(propertyDeclaration)
-              ]
-            : undefined
-        let resolvedPropertyType: Kind.TypeExpression | undefined
-        let typeText: string | undefined
+    if (filterResult === false) {
+      continue
+    }
 
-        if (tsMorph.Node.isPropertySignature(propertyDeclaration)) {
-          const typeNode = propertyDeclaration.getTypeNodeOrThrow()
+    if (declaration) {
+      const name = property.getName()
+      const defaultValue =
+        defaultValues && propertyDeclaration
+          ? (defaultValues as Record<string, unknown>)[
+              getInitializerValueKey(propertyDeclaration)
+            ]
+          : undefined
+      let resolvedPropertyType: Kind.TypeExpression | undefined
+      let typeText: string | undefined
 
-          resolvedPropertyType = resolveTypeExpression(
-            typeNode.getType(),
-            typeNode,
-            filter,
-            defaultValue,
-            keepReferences,
-            dependencies
-          )
-          typeText = propertyDeclaration.getText()
-        } else {
-          const propertyType = getTypeAtLocation(
-            property,
-            enclosingNode ?? declaration,
-            propertyDeclaration
-          )
+      if (tsMorph.Node.isPropertySignature(propertyDeclaration)) {
+        const typeNode = propertyDeclaration.getTypeNodeOrThrow()
 
-          resolvedPropertyType = resolveTypeExpression(
-            propertyType,
-            declaration,
-            filter,
-            defaultValue,
-            keepReferences,
-            dependencies
-          )
-          typeText = propertyType.getText(
-            undefined,
-            tsMorph.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope
-          )
-        }
-
-        if (resolvedPropertyType) {
-          const isOptional =
-            (property.getFlags() & tsMorph.SymbolFlags.Optional) !== 0 ||
-            defaultValue !== undefined
-          const isPropertyReadonly = propertyDeclaration
-            ? 'isReadonly' in propertyDeclaration
-              ? propertyDeclaration.isReadonly()
-              : false
-            : false
-          const resolvedType =
-            (isOptional ?? Boolean(defaultValue))
-              ? filterUndefinedFromUnion(resolvedPropertyType)
-              : resolvedPropertyType
-
-          return {
-            kind: 'PropertySignature',
-            name,
-            type: resolvedType,
-            isOptional,
-            isReadonly: isReadonly || isPropertyReadonly,
-            text: typeText,
-            ...getJsDocMetadata(declaration),
-            ...getDeclarationLocation(declaration),
-          } satisfies Kind.PropertySignature
-        }
+        resolvedPropertyType = resolveTypeExpression(
+          typeNode.getType(),
+          typeNode,
+          filter,
+          defaultValue,
+          keepReferences,
+          dependencies
+        )
+        typeText = propertyDeclaration.getText()
       } else {
-        throw new Error(
-          `[renoun:resolvePropertySignatures]: No property declaration found for "${property.getName()}". You must pass the enclosing node as the second argument to "resolvePropertySignatures".`
+        const propertyType = getTypeAtLocation(
+          property,
+          enclosingNode ?? declaration,
+          propertyDeclaration
+        )
+
+        resolvedPropertyType = resolveTypeExpression(
+          propertyType,
+          declaration,
+          filter,
+          defaultValue,
+          keepReferences,
+          dependencies
+        )
+        typeText = propertyType.getText(
+          undefined,
+          tsMorph.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope
         )
       }
-    })
-    .filter(Boolean) as Kind.PropertySignature[]
+
+      if (resolvedPropertyType) {
+        const isOptional =
+          (property.getFlags() & tsMorph.SymbolFlags.Optional) !== 0 ||
+          defaultValue !== undefined
+        const isPropertyReadonly = propertyDeclaration
+          ? 'isReadonly' in propertyDeclaration
+            ? propertyDeclaration.isReadonly()
+            : false
+          : false
+        const resolvedType =
+          isOptional || Boolean(defaultValue)
+            ? filterUndefinedFromUnion(resolvedPropertyType)
+            : resolvedPropertyType
+
+        signatures.push({
+          kind: 'PropertySignature',
+          name,
+          type: resolvedType,
+          isOptional,
+          isReadonly: isReadonly || isPropertyReadonly,
+          text: typeText,
+          ...getJsDocMetadata(declaration),
+          ...getDeclarationLocation(declaration),
+        })
+      }
+    } else {
+      throw new Error(
+        `[renoun:resolvePropertySignatures]: No property declaration found for "${property.getName()}". You must pass the enclosing node as the second argument to "resolvePropertySignatures".`
+      )
+    }
+  }
+
+  return signatures
 }
 
 /** Process all elements of a tuple type. */
@@ -2264,33 +2295,36 @@ function resolveTypeTupleElements(
       const [name] = signature.split(':')
       return name ? name.trim() : undefined
     })
-  return type
-    .getTupleElements()
-    .map((tupleElementType, index) => {
-      const resolvedType = resolveTypeExpression(
-        tupleElementType,
-        enclosingNode,
-        filter
-      )
+  const tupleElements = type.getTupleElements()
+  const resolvedElements: Kind.TupleElement[] = []
 
-      if (resolvedType) {
-        const name = tupleNames[index]
+  for (let index = 0, length = tupleElements.length; index < length; ++index) {
+    const tupleElementType = tupleElements[index]
+    const resolvedType = resolveTypeExpression(
+      tupleElementType,
+      enclosingNode,
+      filter
+    )
 
-        if (!name) {
-          throw new Error(
-            `[renoun:resolveType]: No type name found for tuple element "${tupleElementType.getText()}". Please file an issue if you encounter this error.`
-          )
-        }
+    if (resolvedType) {
+      const name = tupleNames[index]
 
-        return {
-          kind: 'TupleElement',
-          type: resolvedType,
-          text: resolvedType.text,
-          name,
-        } satisfies Kind.TupleElement<Kind.TypeExpression>
+      if (!name) {
+        throw new Error(
+          `[renoun:resolveType]: No type name found for tuple element "${tupleElementType.getText()}". Please file an issue if you encounter this error.`
+        )
       }
-    })
-    .filter(Boolean) as Kind.TupleElement[]
+
+      resolvedElements.push({
+        kind: 'TupleElement',
+        type: resolvedType,
+        text: resolvedType.text,
+        name,
+      } as Kind.TupleElement)
+    }
+  }
+
+  return resolvedElements
 }
 
 /** Check if a declaration is external to the enclosing source file. */
@@ -2694,18 +2728,19 @@ function resolveClass(
   const implementClauses = classDeclaration.getImplements()
 
   if (implementClauses.length) {
-    const resolvedImplementClauses = implementClauses
-      .map((implementClause) =>
-        resolveTypeExpression(
-          implementClause.getExpression().getType(),
-          classDeclaration,
-          filter,
-          undefined,
-          true
-        )
-      )
-      .filter(Boolean) as Kind.TypeReference[]
-
+    const resolvedImplementClauses: Kind.TypeReference[] = []
+    for (const implementClause of implementClauses) {
+      const resolved = resolveTypeExpression(
+        implementClause.getExpression().getType(),
+        classDeclaration,
+        filter,
+        undefined,
+        true
+      ) as Kind.TypeReference | undefined
+      if (resolved) {
+        resolvedImplementClauses.push(resolved)
+      }
+    }
     if (resolvedImplementClauses.length) {
       classMetadata.implements = resolvedImplementClauses
     }
