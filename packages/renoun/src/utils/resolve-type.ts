@@ -3269,10 +3269,19 @@ export function getTypeAtLocation<
 }
 
 /**
- * Decide whether a `TypeReference` should be resolved or kept as a reference:
- *   - If the alias itself is exported, external, or from node_modules
- *   - If it still contains free type parameters e.g. `Type` in `Type extends ...`
- *   - If any type argument is exported, external, or from node_modules
+ * Decide whether a `TypeReference` should be fully resolved or kept as a reference.
+ *
+ * The guiding principle is to inline only when every part of the reference is
+ * local to the project and concrete. The alias is kept when it is public,
+ * external, or still generic.
+ *
+ * Concretely a type is resolved when all of the following criteria are met:
+ * - The reference is not already being resolved (prevents infinite loops).
+ * - The reference itself doesn't contain any free type parameters (i.e. it is already fully instantiated).
+ * - At least one type-argument is *internal* and none of the arguments are:
+ *    - imported into the current file
+ *    - exported from their source file
+ *    - declared in `node_modules`
  */
 function shouldResolveReference(type: Type, enclosingNode?: Node): boolean {
   // Bail if we already began resolving this exact alias
