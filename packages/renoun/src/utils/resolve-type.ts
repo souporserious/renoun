@@ -1785,6 +1785,26 @@ function resolveTypeParameterDeclaration(
   } satisfies Kind.TypeParameter
 }
 
+/**
+ * Decides if a call signature is worth resolving when:
+ * - Authored inside the project
+ * - External and no longer generic
+ */
+function shouldResolveCallSignature(signature: tsMorph.Signature): boolean {
+  // Always keep signatures authored in the project
+  if (!signature.getDeclaration().getSourceFile().isInNodeModules()) {
+    return true
+  }
+
+  // Drop external helpers that are still generic
+  if (signature.getTypeParameters().length > 0) {
+    return false
+  }
+
+  // Keep external non-generic overloads (instantiated at call site)
+  return true
+}
+
 /** Process all function signatures of a given type including their parameters and return types. */
 function resolveCallSignatures(
   signatures: Signature[],
@@ -1802,6 +1822,10 @@ function resolveCallSignature(
   filter: SymbolFilter = defaultFilter,
   dependencies?: Set<string>
 ): Kind.CallSignature | undefined {
+  if (!shouldResolveCallSignature(signature)) {
+    return
+  }
+
   const signatureDeclaration = signature.getDeclaration()
   const resolvedTypeParameters = signature
     .getTypeParameters()
@@ -2280,6 +2304,16 @@ function isDeclarationExternal(
   const declarationFile = declaration.getSourceFile()
   const enclosingFile = enclosingNode.getSourceFile()
   return declarationFile !== enclosingFile && !declarationFile.isInNodeModules()
+}
+
+function isDeclarationInternal(
+  declaration: Node,
+  enclosingNode: Node | undefined
+) {
+  return (
+    !declaration.getSourceFile().isInNodeModules() &&
+    !isDeclarationExported(declaration, enclosingNode)
+  )
 }
 
 /** Check if a declaration is exported. */
