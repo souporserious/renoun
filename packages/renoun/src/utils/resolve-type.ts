@@ -2917,40 +2917,59 @@ function getPrimaryDeclaration(symbol?: Symbol): Node | undefined {
   return firstDeclaration
 }
 
-/** Determines if a type is readonly. */
-function isReadonlyType(type: Type, enclosingNode: Node | undefined) {
-  let isReadonly = false
-
-  /** Check if the type is marked as Readonly using the TypeScript utility type. */
-  if (type.getText().startsWith('Readonly')) {
-    isReadonly = Boolean(
-      type
-        .getSymbol()
-        ?.getDeclarations()
-        .at(0)
-        ?.getSourceFile()
-        .getFilePath()
-        .includes('node_modules/typescript')
+/**
+ * Determines if a type is readonly based on the following criteria:
+ * - If the type is a type alias for the `Readonly` utility type.
+ * - If the type is a readonly array or tuple.
+ * - If the type is an object type where all properties are readonly.
+ */
+function isReadonlyType(type: Type, enclosingNode: Node | undefined): boolean {
+  if (enclosingNode) {
+    const typeChecker = enclosingNode.getProject().getTypeChecker()
+    const numberIndexInfo = typeChecker.compilerObject.getIndexInfoOfType(
+      type.compilerType,
+      tsMorph.ts.IndexKind.Number
     )
-  }
-
-  /** Alternatively, check for const assertion. */
-  if (
-    isReadonly === false &&
-    tsMorph.Node.isVariableDeclaration(enclosingNode)
-  ) {
-    const initializer = enclosingNode.getInitializer()
-
-    if (tsMorph.Node.isAsExpression(initializer)) {
-      const typeNode = initializer.getTypeNode()
-
-      if (typeNode) {
-        isReadonly = typeNode.getText() === 'const'
-      }
+    if (numberIndexInfo?.isReadonly) {
+      return true
     }
   }
 
-  return isReadonly
+  // Check if the type is an alias to the `Readonly` utility type.
+  const aliasSymbol = type.getAliasSymbol()
+  if (aliasSymbol?.getName() === 'Readonly') {
+    return true
+  }
+
+  // Check if the type is an object type with all readonly properties.
+  if (type.isObject() && !type.isTuple() && !type.isArray()) {
+    const properties = type.getProperties()
+
+    if (properties.length === 0) {
+      return false
+    }
+
+    // Iterate through all properties and ensure each one is readonly.
+    for (let index = 0, length = properties.length; index < length; ++index) {
+      const property = properties[index]
+      const declaration = property.getValueDeclaration()
+
+      if (
+        tsMorph.Node.isPropertyDeclaration(declaration) ||
+        tsMorph.Node.isPropertySignature(declaration)
+      ) {
+        if (!declaration.isReadonly()) {
+          return false
+        }
+      } else {
+        return false
+      }
+    }
+
+    return true
+  }
+
+  return false
 }
 
 /** Determines if a type or enclosing node is a type reference. */
