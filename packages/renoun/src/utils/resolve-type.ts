@@ -2177,7 +2177,7 @@ function getIndexSignatures(node?: Node) {
 }
 
 /** Process all apparent properties of a given type. */
-export function resolvePropertySignatures(
+function resolvePropertySignatures(
   type: Type,
   enclosingNode?: Node,
   filter: SymbolFilter = defaultFilter,
@@ -2186,7 +2186,6 @@ export function resolvePropertySignatures(
   dependencies?: Set<string>
 ): Kind.PropertySignature[] {
   const isReadonly = isReadonlyType(type, enclosingNode)
-
   const apparentProperties = type.getApparentProperties()
   const signatures: Kind.PropertySignature[] = []
 
@@ -2325,29 +2324,6 @@ function resolveTypeTupleElements(
   }
 
   return resolvedElements
-}
-
-/** Check if a declaration is external to the enclosing source file. */
-function isDeclarationExternal(
-  declaration: Node,
-  enclosingNode: Node | undefined
-) {
-  if (!enclosingNode) {
-    return false
-  }
-  const declarationFile = declaration.getSourceFile()
-  const enclosingFile = enclosingNode.getSourceFile()
-  return declarationFile !== enclosingFile && !declarationFile.isInNodeModules()
-}
-
-function isDeclarationInternal(
-  declaration: Node,
-  enclosingNode: Node | undefined
-) {
-  return (
-    !declaration.getSourceFile().isInNodeModules() &&
-    !isDeclarationExported(declaration, enclosingNode)
-  )
 }
 
 /** Check if a declaration is exported. */
@@ -2895,7 +2871,7 @@ function resolveClassProperty(
  *   - First function-like declaration that has a body
  *   - Otherwise, the first declaration in the array
  */
-export function getPrimaryDeclaration(symbol?: Symbol): Node | undefined {
+function getPrimaryDeclaration(symbol?: Symbol): Node | undefined {
   if (!symbol) {
     return undefined
   }
@@ -2999,34 +2975,9 @@ function isIndexedAccessType(type: Type): boolean {
   return (type.getFlags() & tsMorph.TypeFlags.IndexedAccess) !== 0
 }
 
-/** Determines if a type is a bigint type. */
-function isBigIntType(type: Type) {
-  return (type.getFlags() & tsMorph.TypeFlags.BigIntLike) !== 0
-}
-
 /** Determines if a type is a symbol type. */
 function isSymbolType(type: Type) {
   return type.getSymbol()?.getName() === 'Symbol'
-}
-
-/** Determines if a type is a primitive type. */
-function isPrimitiveType(type: Type): boolean {
-  return (
-    type.isString() ||
-    type.isStringLiteral() ||
-    type.isNumber() ||
-    type.isNumberLiteral() ||
-    type.isBoolean() ||
-    type.isBooleanLiteral() ||
-    type.isNull() ||
-    type.isUndefined() ||
-    type.isVoid() ||
-    type.isAny() ||
-    type.isUnknown() ||
-    type.isNever() ||
-    isBigIntType(type) ||
-    isSymbolType(type)
-  )
 }
 
 /** Determines if a resolved type is a primitive type. */
@@ -3208,7 +3159,7 @@ function isFactoryFunctionType(type: Type): boolean {
 }
 
 /** Checks if a node has a type node. */
-export function hasTypeNode(
+function hasTypeNode(
   node?: Node
 ): node is
   | ParameterDeclaration
@@ -3334,7 +3285,7 @@ function getDeclaredAnnotationType(declaration?: Node): Type | undefined {
 }
 
 /** Preserves aliases when the declaration has an explicit annotation. */
-export function getTypeAtLocation<
+function getTypeAtLocation<
   Symbol extends { getTypeAtLocation(node: Node): Type },
 >(symbol: Symbol, location: Node, declaration?: Node): Type {
   return (
