@@ -1474,6 +1474,11 @@ function resolveTypeExpression(
             mappedNode = enclosingNode
           } else if (tsMorph.Node.isMappedTypeNode(symbolDeclaration)) {
             mappedNode = symbolDeclaration
+          } else if (tsMorph.Node.isTypeAliasDeclaration(symbolDeclaration)) {
+            const typeNode = symbolDeclaration.getTypeNode()
+            if (tsMorph.Node.isMappedTypeNode(typeNode)) {
+              mappedNode = typeNode
+            }
           }
 
           if (mappedNode) {

@@ -1105,6 +1105,68 @@ describe('resolveType', () => {
               },
             },
             {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "obj",
+              "position": {
+                "end": {
+                  "column": 50,
+                  "line": 17,
+                },
+                "start": {
+                  "column": 11,
+                  "line": 17,
+                },
+              },
+              "text": "obj: Record<string, { value: number }>;",
+              "type": {
+                "isOptional": false,
+                "isReadonly": false,
+                "kind": "MappedType",
+                "text": "Record<string, { value: number; }>",
+                "type": {
+                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                  "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
+                  "position": {
+                    "end": {
+                      "column": 312,
+                      "line": 6,
+                    },
+                    "start": {
+                      "column": 311,
+                      "line": 6,
+                    },
+                  },
+                  "text": "T",
+                },
+                "typeParameter": {
+                  "constraintType": {
+                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                    "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
+                    "position": {
+                      "end": {
+                        "column": 309,
+                        "line": 6,
+                      },
+                      "start": {
+                        "column": 308,
+                        "line": 6,
+                      },
+                    },
+                    "text": "K",
+                  },
+                  "defaultType": undefined,
+                  "kind": "TypeParameter",
+                  "name": "P",
+                  "text": "P in K",
+                },
+              },
+            },
+            {
               "description": "Accepts a string",
               "filePath": "test.ts",
               "isOptional": false,
@@ -2380,7 +2442,7 @@ describe('resolveType', () => {
                   "line": 5,
                 },
                 "start": {
-                  "column": 1,
+                  "column": 28,
                   "line": 3,
                 },
               },
