@@ -3284,48 +3284,54 @@ export function getTypeAtLocation<
  *    - declared in `node_modules`
  */
 function shouldResolveReference(type: Type, enclosingNode?: Node): boolean {
-  // Bail if we already began resolving this exact alias
   if (resolvingReferences.has(type)) {
     return false
   }
 
-  const symbol = type.getAliasSymbol() ?? type.getSymbol()
-
-  // Public / external aliases stay references
-  if (symbol) {
-    for (const declaration of symbol.getDeclarations()) {
-      if (
-        declaration.getSourceFile().isInNodeModules() ||
-        isDeclarationExported(declaration, enclosingNode) ||
-        isDeclarationExternal(declaration, enclosingNode)
-      ) {
-        return false
-      }
-    }
-  }
-
-  // Generic helper still has free type parameters
   if (containsFreeTypeParameter(type)) {
     return false
   }
 
-  // Determine if any public / external type arguments exist
-  for (const argument of type.getTypeArguments()) {
-    const symbol = argument.getSymbol()
-    if (symbol) {
-      for (const declaration of symbol.getDeclarations()) {
-        if (
-          declaration.getSourceFile().isInNodeModules() ||
-          isDeclarationExported(declaration, enclosingNode) ||
-          isDeclarationExternal(declaration, enclosingNode)
-        ) {
-          return false
-        }
-      }
+  const typeArguments = [
+    ...type.getAliasTypeArguments(),
+    ...type.getTypeArguments(),
+  ]
+  const hasInternalTypeArgument = typeArguments.some((typeArgument) => {
+    const symbol = typeArgument.getSymbol() ?? typeArgument.getAliasSymbol()
+
+    if (!symbol) {
+      return false
     }
+
+    return symbol.getDeclarations().every((declaration) => {
+      return (
+        !declaration.getSourceFile().isInNodeModules() &&
+        !isDeclarationExported(declaration, undefined)
+      )
+    })
+  })
+
+  // keep resolving only for internal type arguments
+  if (hasInternalTypeArgument) {
+    return true
   }
 
-  // If we got here, every part is local and concrete
+  // keep alias when:
+  // - all type arguments are public or external
+  // - the alias symbol itself is external / exported
+  const symbol = type.getAliasSymbol() ?? type.getSymbol()
+
+  if (
+    symbol?.getDeclarations().some((declaration) => {
+      return (
+        declaration.getSourceFile().isInNodeModules() ||
+        isDeclarationExported(declaration, enclosingNode)
+      )
+    })
+  ) {
+    return false
+  }
+
   return true
 }
 
