@@ -2190,6 +2190,35 @@ function resolvePropertySignatures(
   const signatures: Kind.PropertySignature[] = []
 
   for (const property of apparentProperties) {
+    const resolvedProperty = resolvePropertySignature(
+      property,
+      enclosingNode,
+      filter,
+      defaultValues,
+      keepReferences,
+      dependencies
+    )
+
+    if (resolvedProperty) {
+      if (isReadonly) {
+        resolvedProperty.isReadonly = true
+      }
+      signatures.push(resolvedProperty)
+    }
+  }
+
+  return signatures
+}
+
+/** Resolve a property signature. */
+function resolvePropertySignature(
+  property: Symbol,
+  enclosingNode?: Node,
+  filter?: TypeFilter,
+  defaultValues?: Record<string, unknown> | unknown,
+  keepReferences: boolean = false,
+  dependencies?: Set<string>
+): Kind.PropertySignature | undefined {
     const symbolMetadata = getSymbolMetadata(property, enclosingNode)
     const propertyDeclaration = getPrimaryDeclaration(property) as
       | PropertySignature
@@ -2198,10 +2227,15 @@ function resolvePropertySignatures(
     const filterResult = filter(symbolMetadata)
 
     if (filterResult === false) {
-      continue
+    return
     }
 
-    if (declaration) {
+  if (!declaration) {
+    throw new Error(
+      `[renoun:resolvePropertySignatures]: No property declaration found for "${property.getName()}". You must pass the enclosing node as the second argument to "resolvePropertySignatures".`
+    )
+  }
+
       const name = property.getName()
       const defaultValue =
         defaultValues && propertyDeclaration
@@ -2249,7 +2283,7 @@ function resolvePropertySignatures(
         const isOptional =
           (property.getFlags() & tsMorph.SymbolFlags.Optional) !== 0 ||
           defaultValue !== undefined
-        const isPropertyReadonly = propertyDeclaration
+    const isReadonly = propertyDeclaration
           ? 'isReadonly' in propertyDeclaration
             ? propertyDeclaration.isReadonly()
             : false
@@ -2259,25 +2293,17 @@ function resolvePropertySignatures(
             ? filterUndefinedFromUnion(resolvedPropertyType)
             : resolvedPropertyType
 
-        signatures.push({
+    return {
           kind: 'PropertySignature',
           name,
           type: resolvedType,
-          isOptional,
-          isReadonly: isReadonly || isPropertyReadonly,
           text: typeText,
+      isOptional,
+      isReadonly,
           ...getJsDocMetadata(declaration),
           ...getDeclarationLocation(declaration),
-        })
-      }
-    } else {
-      throw new Error(
-        `[renoun:resolvePropertySignatures]: No property declaration found for "${property.getName()}". You must pass the enclosing node as the second argument to "resolvePropertySignatures".`
-      )
-    }
+    } satisfies Kind.PropertySignature
   }
-
-  return signatures
 }
 
 /** Process all elements of a tuple type. */
