@@ -15,7 +15,7 @@ import {
   removeAllExtensions,
   removeOrderPrefixes,
 } from '../utils/path.js'
-import type { SymbolFilter } from '../utils/resolve-type.js'
+import type { TypeFilter } from '../utils/resolve-type.js'
 import type { DirectoryEntry } from './types.js'
 
 export interface FileSystemOptions {
@@ -163,7 +163,7 @@ export abstract class FileSystem {
     filePath: string,
     position: number,
     kind: SyntaxKind,
-    filter?: SymbolFilter
+    filter?: TypeFilter
   ) {
     return resolveTypeAtLocation(
       filePath,

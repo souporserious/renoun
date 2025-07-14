@@ -1,7 +1,8 @@
 import type { Project } from 'ts-morph'
 import { SyntaxKind } from 'ts-morph'
 
-import { resolveType, type Kind, type SymbolFilter } from './resolve-type.js'
+import type { Kind, TypeFilter } from './resolve-type.js'
+import { resolveType } from './resolve-type.js'
 
 export const resolvedTypeCache = new Map<
   string,
@@ -17,7 +18,7 @@ export async function resolveTypeAtLocation(
   filePath: string,
   position: number,
   kind: SyntaxKind,
-  filter?: SymbolFilter,
+  filter?: TypeFilter,
   isMemoryFileSystem = false
 ) {
   const typeId = `${filePath}:${position}:${kind}`
