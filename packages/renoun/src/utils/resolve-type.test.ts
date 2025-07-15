@@ -131,7 +131,18 @@ describe('resolveType', () => {
                           },
                           "text": "objectValue: number",
                           "type": {
+                            "filePath": "test.ts",
                             "kind": "Number",
+                            "position": {
+                              "end": {
+                                "column": 51,
+                                "line": 8,
+                              },
+                              "start": {
+                                "column": 45,
+                                "line": 8,
+                              },
+                            },
                             "text": "number",
                             "value": undefined,
                           },
@@ -159,7 +170,18 @@ describe('resolveType', () => {
                   "text": "Promise<number>",
                   "typeArguments": [
                     {
+                      "filePath": "test.ts",
                       "kind": "Number",
+                      "position": {
+                        "end": {
+                          "column": 70,
+                          "line": 8,
+                        },
+                        "start": {
+                          "column": 64,
+                          "line": 8,
+                        },
+                      },
                       "text": "number",
                       "value": undefined,
                     },
@@ -368,7 +390,18 @@ describe('resolveType', () => {
                         },
                         "text": "a: number",
                         "type": {
+                          "filePath": "test.ts",
                           "kind": "Number",
+                          "position": {
+                            "end": {
+                              "column": 42,
+                              "line": 23,
+                            },
+                            "start": {
+                              "column": 36,
+                              "line": 23,
+                            },
+                          },
                           "text": "number",
                           "value": undefined,
                         },
@@ -392,14 +425,36 @@ describe('resolveType', () => {
                         },
                         "text": "b: string",
                         "type": {
+                          "filePath": "test.ts",
                           "kind": "String",
+                          "position": {
+                            "end": {
+                              "column": 53,
+                              "line": 23,
+                            },
+                            "start": {
+                              "column": 47,
+                              "line": 23,
+                            },
+                          },
                           "text": "string",
                           "value": undefined,
                         },
                       },
                     ],
                     "returnType": {
+                      "filePath": "test.ts",
                       "kind": "Void",
+                      "position": {
+                        "end": {
+                          "column": 62,
+                          "line": 23,
+                        },
+                        "start": {
+                          "column": 58,
+                          "line": 23,
+                        },
+                      },
                       "text": "void",
                     },
                     "text": "(a: number, b: string) => void",
@@ -484,12 +539,34 @@ describe('resolveType', () => {
                 "text": "string | number",
                 "types": [
                   {
+                    "filePath": "test.ts",
                     "kind": "String",
+                    "position": {
+                      "end": {
+                        "column": 20,
+                        "line": 25,
+                      },
+                      "start": {
+                        "column": 14,
+                        "line": 25,
+                      },
+                    },
                     "text": "string",
                     "value": undefined,
                   },
                   {
+                    "filePath": "test.ts",
                     "kind": "Number",
+                    "position": {
+                      "end": {
+                        "column": 29,
+                        "line": 25,
+                      },
+                      "start": {
+                        "column": 23,
+                        "line": 25,
+                      },
+                    },
                     "text": "number",
                     "value": undefined,
                   },
@@ -540,7 +617,18 @@ describe('resolveType', () => {
                         },
                         "text": "a: string",
                         "type": {
+                          "filePath": "test.ts",
                           "kind": "String",
+                          "position": {
+                            "end": {
+                              "column": 32,
+                              "line": 26,
+                            },
+                            "start": {
+                              "column": 26,
+                              "line": 26,
+                            },
+                          },
                           "text": "string",
                           "value": undefined,
                         },
@@ -551,12 +639,34 @@ describe('resolveType', () => {
                       "text": "string | number",
                       "types": [
                         {
+                          "filePath": "test.ts",
                           "kind": "String",
+                          "position": {
+                            "end": {
+                              "column": 43,
+                              "line": 26,
+                            },
+                            "start": {
+                              "column": 37,
+                              "line": 26,
+                            },
+                          },
                           "text": "string",
                           "value": undefined,
                         },
                         {
+                          "filePath": "test.ts",
                           "kind": "Number",
+                          "position": {
+                            "end": {
+                              "column": 52,
+                              "line": 26,
+                            },
+                            "start": {
+                              "column": 46,
+                              "line": 26,
+                            },
+                          },
                           "text": "number",
                           "value": undefined,
                         },
@@ -586,7 +696,18 @@ describe('resolveType', () => {
                         },
                         "text": "a: string",
                         "type": {
+                          "filePath": "test.ts",
                           "kind": "String",
+                          "position": {
+                            "end": {
+                              "column": 67,
+                              "line": 26,
+                            },
+                            "start": {
+                              "column": 61,
+                              "line": 26,
+                            },
+                          },
                           "text": "string",
                           "value": undefined,
                         },
@@ -615,7 +736,18 @@ describe('resolveType', () => {
                         },
                         "text": "b: number,",
                         "type": {
+                          "filePath": "test.ts",
                           "kind": "Number",
+                          "position": {
+                            "end": {
+                              "column": 83,
+                              "line": 26,
+                            },
+                            "start": {
+                              "column": 77,
+                              "line": 26,
+                            },
+                          },
                           "text": "number",
                           "value": undefined,
                         },
@@ -665,7 +797,18 @@ describe('resolveType', () => {
                     "text": "{ b: number; c: Array<string | number>; }",
                   },
                   {
+                    "filePath": "test.ts",
                     "kind": "String",
+                    "position": {
+                      "end": {
+                        "column": 118,
+                        "line": 26,
+                      },
+                      "start": {
+                        "column": 112,
+                        "line": 26,
+                      },
+                    },
                     "text": "string",
                     "value": undefined,
                   },
@@ -710,7 +853,18 @@ describe('resolveType', () => {
                     },
                     "text": "a: string",
                     "type": {
+                      "filePath": "test.ts",
                       "kind": "String",
+                      "position": {
+                        "end": {
+                          "column": 32,
+                          "line": 27,
+                        },
+                        "start": {
+                          "column": 26,
+                          "line": 27,
+                        },
+                      },
                       "text": "string",
                       "value": undefined,
                     },
@@ -733,7 +887,18 @@ describe('resolveType', () => {
                     },
                     "text": "b: number",
                     "type": {
+                      "filePath": "test.ts",
                       "kind": "Number",
+                      "position": {
+                        "end": {
+                          "column": 48,
+                          "line": 27,
+                        },
+                        "start": {
+                          "column": 42,
+                          "line": 27,
+                        },
+                      },
                       "text": "number",
                       "value": undefined,
                     },
@@ -821,7 +986,18 @@ describe('resolveType', () => {
                         },
                         "text": "a: string",
                         "type": {
+                          "filePath": "test.ts",
                           "kind": "String",
+                          "position": {
+                            "end": {
+                              "column": 66,
+                              "line": 28,
+                            },
+                            "start": {
+                              "column": 60,
+                              "line": 28,
+                            },
+                          },
                           "text": "string",
                           "value": undefined,
                         },
@@ -854,7 +1030,18 @@ describe('resolveType', () => {
                           "kind": "FunctionType",
                           "parameters": [],
                           "returnType": {
+                            "filePath": "test.ts",
                             "kind": "Void",
+                            "position": {
+                              "end": {
+                                "column": 82,
+                                "line": 28,
+                              },
+                              "start": {
+                                "column": 78,
+                                "line": 28,
+                              },
+                            },
                             "text": "void",
                           },
                           "text": "() => void",
@@ -1010,7 +1197,18 @@ describe('resolveType', () => {
           "text": "Foo",
           "typeArguments": [
             {
+              "filePath": "test.ts",
               "kind": "String",
+              "position": {
+                "end": {
+                  "column": 26,
+                  "line": 1,
+                },
+                "start": {
+                  "column": 20,
+                  "line": 1,
+                },
+              },
               "text": "string",
               "value": undefined,
             },
@@ -1066,12 +1264,34 @@ describe('resolveType', () => {
           "text": "Foo",
           "typeArguments": [
             {
+              "filePath": "test.ts",
               "kind": "String",
+              "position": {
+                "end": {
+                  "column": 25,
+                  "line": 1,
+                },
+                "start": {
+                  "column": 19,
+                  "line": 1,
+                },
+              },
               "text": "string",
               "value": undefined,
             },
             {
+              "filePath": "test.ts",
               "kind": "Any",
+              "position": {
+                "end": {
+                  "column": 30,
+                  "line": 1,
+                },
+                "start": {
+                  "column": 27,
+                  "line": 1,
+                },
+              },
               "text": "any",
             },
           ],
@@ -1161,7 +1381,18 @@ describe('resolveType', () => {
               "typeArguments": [],
             },
             {
+              "filePath": "test.ts",
               "kind": "String",
+              "position": {
+                "end": {
+                  "column": 64,
+                  "line": 14,
+                },
+                "start": {
+                  "column": 58,
+                  "line": 14,
+                },
+              },
               "text": "string",
               "value": undefined,
             },
@@ -1267,7 +1498,18 @@ describe('resolveType', () => {
               "tags": undefined,
               "text": "str: string;",
               "type": {
+                "filePath": "test.ts",
                 "kind": "String",
+                "position": {
+                  "end": {
+                    "column": 22,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 16,
+                    "line": 4,
+                  },
+                },
                 "text": "string",
                 "value": undefined,
               },
@@ -1297,7 +1539,18 @@ describe('resolveType', () => {
               ],
               "text": "num: number;",
               "type": {
+                "filePath": "test.ts",
                 "kind": "Number",
+                "position": {
+                  "end": {
+                    "column": 22,
+                    "line": 10,
+                  },
+                  "start": {
+                    "column": 16,
+                    "line": 10,
+                  },
+                },
                 "text": "number",
                 "value": undefined,
               },
@@ -1320,7 +1573,18 @@ describe('resolveType', () => {
               },
               "text": "bool: boolean;",
               "type": {
+                "filePath": "test.ts",
                 "kind": "Boolean",
+                "position": {
+                  "end": {
+                    "column": 24,
+                    "line": 12,
+                  },
+                  "start": {
+                    "column": 17,
+                    "line": 12,
+                  },
+                },
                 "text": "boolean",
               },
             },
@@ -1347,7 +1611,18 @@ describe('resolveType', () => {
                 "text": "Array<string>",
                 "typeArguments": [
                   {
+                    "filePath": "test.ts",
                     "kind": "String",
+                    "position": {
+                      "end": {
+                        "column": 22,
+                        "line": 14,
+                      },
+                      "start": {
+                        "column": 16,
+                        "line": 14,
+                      },
+                    },
                     "text": "string",
                     "value": undefined,
                   },
@@ -1389,7 +1664,18 @@ describe('resolveType', () => {
                 "text": "Record<string, { value: number; }>",
                 "typeArguments": [
                   {
+                    "filePath": "test.ts",
                     "kind": "String",
+                    "position": {
+                      "end": {
+                        "column": 29,
+                        "line": 17,
+                      },
+                      "start": {
+                        "column": 23,
+                        "line": 17,
+                      },
+                    },
                     "text": "string",
                     "value": undefined,
                   },
@@ -1414,7 +1700,18 @@ describe('resolveType', () => {
                         },
                         "text": "value: number",
                         "type": {
+                          "filePath": "test.ts",
                           "kind": "Number",
+                          "position": {
+                            "end": {
+                              "column": 46,
+                              "line": 17,
+                            },
+                            "start": {
+                              "column": 40,
+                              "line": 17,
+                            },
+                          },
                           "text": "number",
                           "value": undefined,
                         },
@@ -1470,14 +1767,36 @@ describe('resolveType', () => {
                     },
                     "text": "a: string",
                     "type": {
+                      "filePath": "test.ts",
                       "kind": "String",
+                      "position": {
+                        "end": {
+                          "column": 22,
+                          "line": 22,
+                        },
+                        "start": {
+                          "column": 16,
+                          "line": 22,
+                        },
+                      },
                       "text": "string",
                       "value": undefined,
                     },
                   },
                 ],
                 "returnType": {
+                  "filePath": "test.ts",
                   "kind": "Void",
+                  "position": {
+                    "end": {
+                      "column": 20,
+                      "line": 23,
+                    },
+                    "start": {
+                      "column": 16,
+                      "line": 23,
+                    },
+                  },
                   "text": "void",
                 },
                 "text": "(a: string) => void",
@@ -1609,7 +1928,18 @@ describe('resolveType', () => {
                     },
                     "text": "number",
                     "type": {
+                      "filePath": "test.ts",
                       "kind": "Number",
+                      "position": {
+                        "end": {
+                          "column": 17,
+                          "line": 10,
+                        },
+                        "start": {
+                          "column": 13,
+                          "line": 10,
+                        },
+                      },
                       "text": "number",
                       "value": undefined,
                     },
@@ -1636,7 +1966,18 @@ describe('resolveType', () => {
               },
               "text": "string",
               "type": {
+                "filePath": "test.ts",
                 "kind": "String",
+                "position": {
+                  "end": {
+                    "column": 22,
+                    "line": 12,
+                  },
+                  "start": {
+                    "column": 11,
+                    "line": 12,
+                  },
+                },
                 "text": "string",
                 "value": undefined,
               },
@@ -1659,7 +2000,18 @@ describe('resolveType', () => {
               },
               "text": "1",
               "type": {
+                "filePath": "test.ts",
                 "kind": "Number",
+                "position": {
+                  "end": {
+                    "column": 15,
+                    "line": 3,
+                  },
+                  "start": {
+                    "column": 11,
+                    "line": 3,
+                  },
+                },
                 "text": "1",
                 "value": 1,
               },
@@ -1682,7 +2034,18 @@ describe('resolveType', () => {
               },
               "text": ""string"",
               "type": {
+                "filePath": "test.ts",
                 "kind": "String",
+                "position": {
+                  "end": {
+                    "column": 22,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 11,
+                    "line": 4,
+                  },
+                },
                 "text": ""string"",
                 "value": "string",
               },
@@ -1913,7 +2276,18 @@ describe('resolveType', () => {
               },
               "text": "title: string;",
               "type": {
+                "filePath": "test.ts",
                 "kind": "String",
+                "position": {
+                  "end": {
+                    "column": 16,
+                    "line": 2,
+                  },
+                  "start": {
+                    "column": 10,
+                    "line": 2,
+                  },
+                },
                 "text": "string",
                 "value": undefined,
               },
@@ -2368,7 +2742,18 @@ describe('resolveType', () => {
                   "typeArguments": [],
                 },
                 {
+                  "filePath": "test.ts",
                   "kind": "String",
+                  "position": {
+                    "end": {
+                      "column": 76,
+                      "line": 24,
+                    },
+                    "start": {
+                      "column": 69,
+                      "line": 24,
+                    },
+                  },
                   "text": ""title"",
                   "value": "title",
                 },
@@ -2546,12 +2931,34 @@ describe('resolveType', () => {
                     "text": "string | number",
                     "types": [
                       {
+                        "filePath": "test.ts",
                         "kind": "String",
+                        "position": {
+                          "end": {
+                            "column": 22,
+                            "line": 12,
+                          },
+                          "start": {
+                            "column": 16,
+                            "line": 12,
+                          },
+                        },
                         "text": "string",
                         "value": undefined,
                       },
                       {
+                        "filePath": "test.ts",
                         "kind": "Number",
+                        "position": {
+                          "end": {
+                            "column": 31,
+                            "line": 12,
+                          },
+                          "start": {
+                            "column": 25,
+                            "line": 12,
+                          },
+                        },
                         "text": "number",
                         "value": undefined,
                       },
@@ -2765,12 +3172,34 @@ describe('resolveType', () => {
                     "text": "Record<string, any>",
                     "typeArguments": [
                       {
+                        "filePath": "test.ts",
                         "kind": "String",
+                        "position": {
+                          "end": {
+                            "column": 58,
+                            "line": 5,
+                          },
+                          "start": {
+                            "column": 52,
+                            "line": 5,
+                          },
+                        },
                         "text": "string",
                         "value": undefined,
                       },
                       {
+                        "filePath": "test.ts",
                         "kind": "Any",
+                        "position": {
+                          "end": {
+                            "column": 63,
+                            "line": 5,
+                          },
+                          "start": {
+                            "column": 60,
+                            "line": 5,
+                          },
+                        },
                         "text": "any",
                       },
                     ],
@@ -2881,7 +3310,18 @@ describe('resolveType', () => {
             },
           ],
           "returnType": {
+            "filePath": "test.ts",
             "kind": "Void",
+            "position": {
+              "end": {
+                "column": 42,
+                "line": 3,
+              },
+              "start": {
+                "column": 38,
+                "line": 3,
+              },
+            },
             "text": "void",
           },
           "text": "Text",
@@ -2986,7 +3426,18 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
+              "filePath": "test.ts",
               "kind": "Void",
+              "position": {
+                "end": {
+                  "column": 43,
+                  "line": 7,
+                },
+                "start": {
+                  "column": 1,
+                  "line": 7,
+                },
+              },
               "text": "void",
             },
             "text": "function Text(props?: TextProps): void",
@@ -3084,7 +3535,18 @@ describe('resolveType', () => {
             },
           ],
           "returnType": {
+            "filePath": "test.ts",
             "kind": "Void",
+            "position": {
+              "end": {
+                "column": 46,
+                "line": 8,
+              },
+              "start": {
+                "column": 42,
+                "line": 8,
+              },
+            },
             "text": "void",
           },
           "text": "Text",
@@ -3181,7 +3643,18 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
+              "filePath": "test.ts",
               "kind": "Void",
+              "position": {
+                "end": {
+                  "column": 61,
+                  "line": 6,
+                },
+                "start": {
+                  "column": 1,
+                  "line": 6,
+                },
+              },
               "text": "void",
             },
             "text": "function Text(props: TextProps = { color: 'red' }): void",
@@ -3285,7 +3758,18 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
+              "filePath": "test.ts",
               "kind": "Void",
+              "position": {
+                "end": {
+                  "column": 115,
+                  "line": 9,
+                },
+                "start": {
+                  "column": 1,
+                  "line": 9,
+                },
+              },
               "text": "void",
             },
             "text": "function Text({ style: { fontSize, color } }: TextProps = { style: { fontWeight: 400, color: 'blue' } }): void",
@@ -3328,7 +3812,18 @@ describe('resolveType', () => {
         "text": "ModuleData<Type>",
         "type": {
           "checkType": {
+            "filePath": "test.ts",
             "kind": "String",
+            "position": {
+              "end": {
+                "column": 83,
+                "line": 1,
+              },
+              "start": {
+                "column": 70,
+                "line": 1,
+              },
+            },
             "text": ""frontMatter"",
             "value": "frontMatter",
           },
@@ -3393,12 +3888,34 @@ describe('resolveType', () => {
                   "text": "Record<string, any>",
                   "typeArguments": [
                     {
+                      "filePath": "test.ts",
                       "kind": "String",
+                      "position": {
+                        "end": {
+                          "column": 35,
+                          "line": 3,
+                        },
+                        "start": {
+                          "column": 29,
+                          "line": 3,
+                        },
+                      },
                       "text": "string",
                       "value": undefined,
                     },
                     {
+                      "filePath": "test.ts",
                       "kind": "Any",
+                      "position": {
+                        "end": {
+                          "column": 40,
+                          "line": 3,
+                        },
+                        "start": {
+                          "column": 37,
+                          "line": 3,
+                        },
+                      },
                       "text": "any",
                     },
                   ],
@@ -3469,12 +3986,34 @@ describe('resolveType', () => {
                     "text": "Record<string, any>",
                     "typeArguments": [
                       {
+                        "filePath": "test.ts",
                         "kind": "String",
+                        "position": {
+                          "end": {
+                            "column": 58,
+                            "line": 1,
+                          },
+                          "start": {
+                            "column": 52,
+                            "line": 1,
+                          },
+                        },
                         "text": "string",
                         "value": undefined,
                       },
                       {
+                        "filePath": "test.ts",
                         "kind": "Any",
+                        "position": {
+                          "end": {
+                            "column": 63,
+                            "line": 1,
+                          },
+                          "start": {
+                            "column": 60,
+                            "line": 1,
+                          },
+                        },
                         "text": "any",
                       },
                     ],
@@ -3707,12 +4246,34 @@ describe('resolveType', () => {
                 "text": "string | undefined",
                 "types": [
                   {
+                    "filePath": "test.ts",
                     "kind": "String",
+                    "position": {
+                      "end": {
+                        "column": 16,
+                        "line": 2,
+                      },
+                      "start": {
+                        "column": 10,
+                        "line": 2,
+                      },
+                    },
                     "text": "string",
                     "value": undefined,
                   },
                   {
+                    "filePath": "test.ts",
                     "kind": "Undefined",
+                    "position": {
+                      "end": {
+                        "column": 28,
+                        "line": 2,
+                      },
+                      "start": {
+                        "column": 19,
+                        "line": 2,
+                      },
+                    },
                     "text": "undefined",
                   },
                 ],
@@ -4063,7 +4624,18 @@ describe('resolveType', () => {
                     },
                     "text": "value: string",
                     "type": {
+                      "filePath": "test.ts",
                       "kind": "String",
+                      "position": {
+                        "end": {
+                          "column": 25,
+                          "line": 4,
+                        },
+                        "start": {
+                          "column": 19,
+                          "line": 4,
+                        },
+                      },
                       "text": "string",
                       "value": undefined,
                     },
@@ -4080,7 +4652,18 @@ describe('resolveType', () => {
                   },
                 },
                 "returnType": {
+                  "filePath": "test.ts",
                   "kind": "Void",
+                  "position": {
+                    "end": {
+                      "column": 4,
+                      "line": 6,
+                    },
+                    "start": {
+                      "column": 3,
+                      "line": 4,
+                    },
+                  },
                   "text": "void",
                 },
                 "text": "(value: string) => void",
@@ -4112,7 +4695,18 @@ describe('resolveType', () => {
             "scope": undefined,
             "text": "string",
             "type": {
+              "filePath": "test.ts",
               "kind": "String",
+              "position": {
+                "end": {
+                  "column": 17,
+                  "line": 2,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 2,
+                },
+              },
               "text": "string",
               "value": undefined,
             },
@@ -4175,7 +4769,18 @@ describe('resolveType', () => {
                     },
                     "text": "filePath: string",
                     "type": {
+                      "filePath": "test.ts",
                       "kind": "String",
+                      "position": {
+                        "end": {
+                          "column": 30,
+                          "line": 2,
+                        },
+                        "start": {
+                          "column": 24,
+                          "line": 2,
+                        },
+                      },
                       "text": "string",
                       "value": undefined,
                     },
@@ -4199,7 +4804,18 @@ describe('resolveType', () => {
                     },
                     "text": "isDirectory = false",
                     "type": {
+                      "filePath": "test.ts",
                       "kind": "Boolean",
+                      "position": {
+                        "end": {
+                          "column": 4,
+                          "line": 4,
+                        },
+                        "start": {
+                          "column": 3,
+                          "line": 2,
+                        },
+                      },
                       "text": "boolean",
                     },
                   },
@@ -4215,7 +4831,18 @@ describe('resolveType', () => {
                   },
                 },
                 "returnType": {
+                  "filePath": "test.ts",
                   "kind": "Boolean",
+                  "position": {
+                    "end": {
+                      "column": 4,
+                      "line": 4,
+                    },
+                    "start": {
+                      "column": 3,
+                      "line": 2,
+                    },
+                  },
                   "text": "boolean",
                 },
                 "text": "(filePath: string, isDirectory = false) => boolean",
@@ -4354,7 +4981,18 @@ describe('resolveType', () => {
         },
         "text": ""blue"",
         "type": {
+          "filePath": "test.ts",
           "kind": "String",
+          "position": {
+            "end": {
+              "column": 21,
+              "line": 1,
+            },
+            "start": {
+              "column": 7,
+              "line": 1,
+            },
+          },
           "text": ""blue"",
           "value": "blue",
         },
@@ -5015,7 +5653,18 @@ describe('resolveType', () => {
                 },
                 "text": "initialCount: number = 0",
                 "type": {
+                  "filePath": "test.ts",
                   "kind": "Number",
+                  "position": {
+                    "end": {
+                      "column": 56,
+                      "line": 2,
+                    },
+                    "start": {
+                      "column": 50,
+                      "line": 2,
+                    },
+                  },
                   "text": "number",
                   "value": undefined,
                 },
@@ -5032,7 +5681,18 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
+              "filePath": "test.ts",
               "kind": "Void",
+              "position": {
+                "end": {
+                  "column": 64,
+                  "line": 2,
+                },
+                "start": {
+                  "column": 1,
+                  "line": 1,
+                },
+              },
               "text": "void",
             },
             "text": "function useCounter(initialCount: number = 0): void",
@@ -5125,7 +5785,18 @@ describe('resolveType', () => {
                       "tags": undefined,
                       "text": "initialCount?: number",
                       "type": {
+                        "filePath": "test.ts",
                         "kind": "Number",
+                        "position": {
+                          "end": {
+                            "column": 57,
+                            "line": 5,
+                          },
+                          "start": {
+                            "column": 51,
+                            "line": 5,
+                          },
+                        },
                         "text": "number",
                         "value": undefined,
                       },
@@ -5146,7 +5817,18 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
+              "filePath": "test.ts",
               "kind": "Void",
+              "position": {
+                "end": {
+                  "column": 63,
+                  "line": 5,
+                },
+                "start": {
+                  "column": 1,
+                  "line": 4,
+                },
+              },
               "text": "void",
             },
             "tags": [
@@ -5268,7 +5950,18 @@ describe('resolveType', () => {
                             },
                             "text": "count: number",
                             "type": {
+                              "filePath": "test.ts",
                               "kind": "Number",
+                              "position": {
+                                "end": {
+                                  "column": 77,
+                                  "line": 1,
+                                },
+                                "start": {
+                                  "column": 71,
+                                  "line": 1,
+                                },
+                              },
                               "text": "number",
                               "value": undefined,
                             },
@@ -5293,7 +5986,18 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
+              "filePath": "test.ts",
               "kind": "Void",
+              "position": {
+                "end": {
+                  "column": 90,
+                  "line": 1,
+                },
+                "start": {
+                  "column": 1,
+                  "line": 1,
+                },
+              },
               "text": "void",
             },
             "text": "function useCounter({ initial = { count: 0 } }?: { initial?: { count: number } } = {}): void",
@@ -5357,7 +6061,18 @@ describe('resolveType', () => {
                 },
                 "text": "initialCount: number = 0",
                 "type": {
+                  "filePath": "test.ts",
                   "kind": "Number",
+                  "position": {
+                    "end": {
+                      "column": 41,
+                      "line": 1,
+                    },
+                    "start": {
+                      "column": 35,
+                      "line": 1,
+                    },
+                  },
                   "text": "number",
                   "value": undefined,
                 },
@@ -5374,7 +6089,18 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
+              "filePath": "test.ts",
               "kind": "Void",
+              "position": {
+                "end": {
+                  "column": 52,
+                  "line": 1,
+                },
+                "start": {
+                  "column": 20,
+                  "line": 1,
+                },
+              },
               "text": "void",
             },
             "text": "(initialCount: number = 0) => void",
@@ -5438,7 +6164,18 @@ describe('resolveType', () => {
                 },
                 "text": "initialCount: number = 0",
                 "type": {
+                  "filePath": "test.ts",
                   "kind": "Number",
+                  "position": {
+                    "end": {
+                      "column": 50,
+                      "line": 1,
+                    },
+                    "start": {
+                      "column": 44,
+                      "line": 1,
+                    },
+                  },
                   "text": "number",
                   "value": undefined,
                 },
@@ -5455,7 +6192,18 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
+              "filePath": "test.ts",
               "kind": "Void",
+              "position": {
+                "end": {
+                  "column": 58,
+                  "line": 1,
+                },
+                "start": {
+                  "column": 20,
+                  "line": 1,
+                },
+              },
               "text": "void",
             },
             "text": "(initialCount: number = 0) => void",
@@ -5556,7 +6304,18 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
+              "filePath": "test.ts",
               "kind": "Void",
+              "position": {
+                "end": {
+                  "column": 102,
+                  "line": 1,
+                },
+                "start": {
+                  "column": 42,
+                  "line": 1,
+                },
+              },
               "text": "void",
             },
             "text": "function useCounter({ initialCount = 0 }: CounterOptions): void",
@@ -5677,7 +6436,18 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
+              "filePath": "test.ts",
               "kind": "Void",
+              "position": {
+                "end": {
+                  "column": 121,
+                  "line": 1,
+                },
+                "start": {
+                  "column": 38,
+                  "line": 1,
+                },
+              },
               "text": "void",
             },
             "text": "function useCounterOverride({ initialCount = 0 }: ReturnType<typeof useCounter>): void",
@@ -5774,7 +6544,18 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
+              "filePath": "test.ts",
               "kind": "Void",
+              "position": {
+                "end": {
+                  "column": 36,
+                  "line": 5,
+                },
+                "start": {
+                  "column": 1,
+                  "line": 5,
+                },
+              },
               "text": "void",
             },
             "text": "function Component(props: Props): void",
@@ -5869,7 +6650,18 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
+              "filePath": "test.ts",
               "kind": "Void",
+              "position": {
+                "end": {
+                  "column": 36,
+                  "line": 3,
+                },
+                "start": {
+                  "column": 1,
+                  "line": 3,
+                },
+              },
               "text": "void",
             },
             "text": "function Component(props: Props): void",
@@ -5973,7 +6765,18 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
+              "filePath": "test.ts",
               "kind": "Void",
+              "position": {
+                "end": {
+                  "column": 36,
+                  "line": 5,
+                },
+                "start": {
+                  "column": 1,
+                  "line": 5,
+                },
+              },
               "text": "void",
             },
             "text": "function Component(props: Props): void",
@@ -6056,7 +6859,18 @@ describe('resolveType', () => {
                   "typeArguments": [],
                 },
                 {
+                  "filePath": "test.tsx",
                   "kind": "String",
+                  "position": {
+                    "end": {
+                      "column": 31,
+                      "line": 4,
+                    },
+                    "start": {
+                      "column": 26,
+                      "line": 4,
+                    },
+                  },
                   "text": ""mdx"",
                   "value": "mdx",
                 },
@@ -6162,12 +6976,34 @@ describe('resolveType', () => {
                       "text": ""primary" | "secondary"",
                       "types": [
                         {
+                          "filePath": "test.ts",
                           "kind": "String",
+                          "position": {
+                            "end": {
+                              "column": 45,
+                              "line": 1,
+                            },
+                            "start": {
+                              "column": 36,
+                              "line": 1,
+                            },
+                          },
                           "text": ""primary"",
                           "value": "primary",
                         },
                         {
+                          "filePath": "test.ts",
                           "kind": "String",
+                          "position": {
+                            "end": {
+                              "column": 59,
+                              "line": 1,
+                            },
+                            "start": {
+                              "column": 48,
+                              "line": 1,
+                            },
+                          },
                           "text": ""secondary"",
                           "value": "secondary",
                         },
@@ -6189,7 +7025,18 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
+              "filePath": "test.ts",
               "kind": "Void",
+              "position": {
+                "end": {
+                  "column": 65,
+                  "line": 1,
+                },
+                "start": {
+                  "column": 1,
+                  "line": 1,
+                },
+              },
               "text": "void",
             },
             "text": "function Button(props: { variant?: 'primary' | 'secondary' }): void",
@@ -6229,7 +7076,18 @@ describe('resolveType', () => {
               "name": "key",
               "text": "key: string",
               "type": {
+                "filePath": "test.ts",
                 "kind": "String",
+                "position": {
+                  "end": {
+                    "column": 25,
+                    "line": 2,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 2,
+                  },
+                },
                 "text": "string",
                 "value": undefined,
               },
@@ -6246,7 +7104,18 @@ describe('resolveType', () => {
             },
             "text": "[key: string]: unknown",
             "type": {
+              "filePath": "test.ts",
               "kind": "Unknown",
+              "position": {
+                "end": {
+                  "column": 25,
+                  "line": 2,
+                },
+                "start": {
+                  "column": 18,
+                  "line": 2,
+                },
+              },
               "text": "unknown",
             },
           },
@@ -6318,7 +7187,18 @@ describe('resolveType', () => {
               },
               "text": "foo: string",
               "type": {
+                "filePath": "test.ts",
                 "kind": "String",
+                "position": {
+                  "end": {
+                    "column": 14,
+                    "line": 3,
+                  },
+                  "start": {
+                    "column": 8,
+                    "line": 3,
+                  },
+                },
                 "text": "string",
                 "value": undefined,
               },
@@ -6330,14 +7210,36 @@ describe('resolveType', () => {
                 "name": "key",
                 "text": "key: string",
                 "type": {
+                  "filePath": "test.ts",
                   "kind": "String",
+                  "position": {
+                    "end": {
+                      "column": 25,
+                      "line": 2,
+                    },
+                    "start": {
+                      "column": 3,
+                      "line": 2,
+                    },
+                  },
                   "text": "string",
                   "value": undefined,
                 },
               },
               "text": "[key: string]: unknown",
               "type": {
+                "filePath": "test.ts",
                 "kind": "Unknown",
+                "position": {
+                  "end": {
+                    "column": 25,
+                    "line": 2,
+                  },
+                  "start": {
+                    "column": 18,
+                    "line": 2,
+                  },
+                },
                 "text": "unknown",
               },
             },
@@ -6388,7 +7290,18 @@ describe('resolveType', () => {
                 "name": "exportName",
                 "text": "exportName: string",
                 "type": {
+                  "filePath": "test.ts",
                   "kind": "String",
+                  "position": {
+                    "end": {
+                      "column": 30,
+                      "line": 2,
+                    },
+                    "start": {
+                      "column": 3,
+                      "line": 2,
+                    },
+                  },
                   "text": "string",
                   "value": undefined,
                 },
@@ -6420,7 +7333,18 @@ describe('resolveType', () => {
           {
             "constraintType": undefined,
             "defaultType": {
+              "filePath": "test.ts",
               "kind": "Any",
+              "position": {
+                "end": {
+                  "column": 31,
+                  "line": 1,
+                },
+                "start": {
+                  "column": 28,
+                  "line": 1,
+                },
+              },
               "text": "any",
             },
             "filePath": "test.ts",
@@ -6557,7 +7481,18 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
+              "filePath": "test.ts",
               "kind": "Void",
+              "position": {
+                "end": {
+                  "column": 2,
+                  "line": 29,
+                },
+                "start": {
+                  "column": 21,
+                  "line": 21,
+                },
+              },
               "text": "void",
             },
             "text": "(props: TextProps) => void",
@@ -6646,7 +7581,18 @@ describe('resolveType', () => {
               "text": "Array<any>",
               "typeArguments": [
                 {
+                  "filePath": "test.ts",
                   "kind": "Any",
+                  "position": {
+                    "end": {
+                      "column": 72,
+                      "line": 3,
+                    },
+                    "start": {
+                      "column": 52,
+                      "line": 3,
+                    },
+                  },
                   "text": "any",
                 },
               ],
@@ -7087,27 +8033,82 @@ describe('resolveType', () => {
                 "text": ""heading1" | "heading2" | "heading3" | "body1" | "body2"",
                 "types": [
                   {
+                    "filePath": "test.ts",
                     "kind": "String",
+                    "position": {
+                      "end": {
+                        "column": 22,
+                        "line": 2,
+                      },
+                      "start": {
+                        "column": 12,
+                        "line": 2,
+                      },
+                    },
                     "text": ""heading1"",
                     "value": "heading1",
                   },
                   {
+                    "filePath": "test.ts",
                     "kind": "String",
+                    "position": {
+                      "end": {
+                        "column": 35,
+                        "line": 2,
+                      },
+                      "start": {
+                        "column": 25,
+                        "line": 2,
+                      },
+                    },
                     "text": ""heading2"",
                     "value": "heading2",
                   },
                   {
+                    "filePath": "test.ts",
                     "kind": "String",
+                    "position": {
+                      "end": {
+                        "column": 48,
+                        "line": 2,
+                      },
+                      "start": {
+                        "column": 38,
+                        "line": 2,
+                      },
+                    },
                     "text": ""heading3"",
                     "value": "heading3",
                   },
                   {
+                    "filePath": "test.ts",
                     "kind": "String",
+                    "position": {
+                      "end": {
+                        "column": 58,
+                        "line": 2,
+                      },
+                      "start": {
+                        "column": 51,
+                        "line": 2,
+                      },
+                    },
                     "text": ""body1"",
                     "value": "body1",
                   },
                   {
+                    "filePath": "test.ts",
                     "kind": "String",
+                    "position": {
+                      "end": {
+                        "column": 68,
+                        "line": 2,
+                      },
+                      "start": {
+                        "column": 61,
+                        "line": 2,
+                      },
+                    },
                     "text": ""body2"",
                     "value": "body2",
                   },
@@ -7136,12 +8137,34 @@ describe('resolveType', () => {
                 "text": "string | number",
                 "types": [
                   {
+                    "filePath": "test.ts",
                     "kind": "String",
+                    "position": {
+                      "end": {
+                        "column": 17,
+                        "line": 3,
+                      },
+                      "start": {
+                        "column": 11,
+                        "line": 3,
+                      },
+                    },
                     "text": "string",
                     "value": undefined,
                   },
                   {
+                    "filePath": "test.ts",
                     "kind": "Number",
+                    "position": {
+                      "end": {
+                        "column": 26,
+                        "line": 3,
+                      },
+                      "start": {
+                        "column": 20,
+                        "line": 3,
+                      },
+                    },
                     "text": "number",
                     "value": undefined,
                   },
@@ -7203,27 +8226,82 @@ describe('resolveType', () => {
               "text": ""heading1" | "heading2" | "heading3" | "body1" | "body2"",
               "types": [
                 {
+                  "filePath": "test.ts",
                   "kind": "String",
+                  "position": {
+                    "end": {
+                      "column": 22,
+                      "line": 5,
+                    },
+                    "start": {
+                      "column": 12,
+                      "line": 5,
+                    },
+                  },
                   "text": ""heading1"",
                   "value": "heading1",
                 },
                 {
+                  "filePath": "test.ts",
                   "kind": "String",
+                  "position": {
+                    "end": {
+                      "column": 35,
+                      "line": 5,
+                    },
+                    "start": {
+                      "column": 25,
+                      "line": 5,
+                    },
+                  },
                   "text": ""heading2"",
                   "value": "heading2",
                 },
                 {
+                  "filePath": "test.ts",
                   "kind": "String",
+                  "position": {
+                    "end": {
+                      "column": 48,
+                      "line": 5,
+                    },
+                    "start": {
+                      "column": 38,
+                      "line": 5,
+                    },
+                  },
                   "text": ""heading3"",
                   "value": "heading3",
                 },
                 {
+                  "filePath": "test.ts",
                   "kind": "String",
+                  "position": {
+                    "end": {
+                      "column": 58,
+                      "line": 5,
+                    },
+                    "start": {
+                      "column": 51,
+                      "line": 5,
+                    },
+                  },
                   "text": ""body1"",
                   "value": "body1",
                 },
                 {
+                  "filePath": "test.ts",
                   "kind": "String",
+                  "position": {
+                    "end": {
+                      "column": 68,
+                      "line": 5,
+                    },
+                    "start": {
+                      "column": 61,
+                      "line": 5,
+                    },
+                  },
                   "text": ""body2"",
                   "value": "body2",
                 },
@@ -7252,12 +8330,34 @@ describe('resolveType', () => {
               "text": "string | number",
               "types": [
                 {
+                  "filePath": "test.ts",
                   "kind": "String",
+                  "position": {
+                    "end": {
+                      "column": 17,
+                      "line": 6,
+                    },
+                    "start": {
+                      "column": 11,
+                      "line": 6,
+                    },
+                  },
                   "text": "string",
                   "value": undefined,
                 },
                 {
+                  "filePath": "test.ts",
                   "kind": "Number",
+                  "position": {
+                    "end": {
+                      "column": 26,
+                      "line": 6,
+                    },
+                    "start": {
+                      "column": 20,
+                      "line": 6,
+                    },
+                  },
                   "text": "number",
                   "value": undefined,
                 },
@@ -7447,7 +8547,18 @@ describe('resolveType', () => {
               },
               "text": "value: number",
               "type": {
+                "filePath": "test.ts",
                 "kind": "Number",
+                "position": {
+                  "end": {
+                    "column": 34,
+                    "line": 26,
+                  },
+                  "start": {
+                    "column": 28,
+                    "line": 26,
+                  },
+                },
                 "text": "number",
                 "value": undefined,
               },
@@ -7462,7 +8573,18 @@ describe('resolveType', () => {
             "kind": "ClassGetAccessor",
             "name": "accessorCount",
             "returnType": {
+              "filePath": "test.ts",
               "kind": "Number",
+              "position": {
+                "end": {
+                  "column": 30,
+                  "line": 31,
+                },
+                "start": {
+                  "column": 24,
+                  "line": 31,
+                },
+              },
               "text": "number",
               "value": undefined,
             },
@@ -7511,7 +8633,18 @@ describe('resolveType', () => {
                   },
                   "text": "initialCount: number = 0",
                   "type": {
+                    "filePath": "test.ts",
                     "kind": "Number",
+                    "position": {
+                      "end": {
+                        "column": 35,
+                        "line": 9,
+                      },
+                      "start": {
+                        "column": 29,
+                        "line": 9,
+                      },
+                    },
                     "text": "number",
                     "value": undefined,
                   },
@@ -7583,7 +8716,18 @@ describe('resolveType', () => {
                   },
                 },
                 "returnType": {
+                  "filePath": "test.ts",
                   "kind": "Void",
+                  "position": {
+                    "end": {
+                      "column": 4,
+                      "line": 18,
+                    },
+                    "start": {
+                      "column": 3,
+                      "line": 16,
+                    },
+                  },
                   "text": "void",
                 },
                 "tags": undefined,
@@ -7619,7 +8763,18 @@ describe('resolveType', () => {
                   },
                 },
                 "returnType": {
+                  "filePath": "test.ts",
                   "kind": "Void",
+                  "position": {
+                    "end": {
+                      "column": 4,
+                      "line": 23,
+                    },
+                    "start": {
+                      "column": 3,
+                      "line": 21,
+                    },
+                  },
                   "text": "void",
                 },
                 "tags": undefined,
@@ -7663,7 +8818,18 @@ describe('resolveType', () => {
                     },
                     "text": "isFloored?: boolean = true",
                     "type": {
+                      "filePath": "test.ts",
                       "kind": "Boolean",
+                      "position": {
+                        "end": {
+                          "column": 38,
+                          "line": 36,
+                        },
+                        "start": {
+                          "column": 31,
+                          "line": 36,
+                        },
+                      },
                       "text": "boolean",
                     },
                   },
@@ -7679,7 +8845,18 @@ describe('resolveType', () => {
                   },
                 },
                 "returnType": {
+                  "filePath": "test.ts",
                   "kind": "Number",
+                  "position": {
+                    "end": {
+                      "column": 54,
+                      "line": 36,
+                    },
+                    "start": {
+                      "column": 48,
+                      "line": 36,
+                    },
+                  },
                   "text": "number",
                   "value": undefined,
                 },
@@ -7714,7 +8891,18 @@ describe('resolveType', () => {
                   },
                 },
                 "returnType": {
+                  "filePath": "test.ts",
                   "kind": "Number",
+                  "position": {
+                    "end": {
+                      "column": 34,
+                      "line": 40,
+                    },
+                    "start": {
+                      "column": 28,
+                      "line": 40,
+                    },
+                  },
                   "text": "number",
                   "value": undefined,
                 },
@@ -7747,7 +8935,18 @@ describe('resolveType', () => {
             "scope": undefined,
             "text": "number",
             "type": {
+              "filePath": "test.ts",
               "kind": "Number",
+              "position": {
+                "end": {
+                  "column": 28,
+                  "line": 2,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 2,
+                },
+              },
               "text": "number",
               "value": undefined,
             },
@@ -7762,7 +8961,18 @@ describe('resolveType', () => {
             "scope": "static",
             "text": "number",
             "type": {
+              "filePath": "test.ts",
               "kind": "Number",
+              "position": {
+                "end": {
+                  "column": 34,
+                  "line": 6,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 6,
+                },
+              },
               "text": "number",
               "value": undefined,
             },
@@ -7849,7 +9059,18 @@ describe('resolveType', () => {
                       },
                       "text": "initialCount: number",
                       "type": {
+                        "filePath": "test.ts",
                         "kind": "Number",
+                        "position": {
+                          "end": {
+                            "column": 86,
+                            "line": 1,
+                          },
+                          "start": {
+                            "column": 80,
+                            "line": 1,
+                          },
+                        },
                         "text": "number",
                         "value": undefined,
                       },
@@ -7870,7 +9091,18 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
+              "filePath": "test.ts",
               "kind": "Void",
+              "position": {
+                "end": {
+                  "column": 97,
+                  "line": 1,
+                },
+                "start": {
+                  "column": 1,
+                  "line": 1,
+                },
+              },
               "text": "void",
             },
             "text": "function useCounter({ initialCount: renamedInitialCount = 0 }: { initialCount: number } = {}): void",
@@ -7935,7 +9167,18 @@ describe('resolveType', () => {
                 },
                 "text": "a: number",
                 "type": {
+                  "filePath": "test.ts",
                   "kind": "Number",
+                  "position": {
+                    "end": {
+                      "column": 23,
+                      "line": 1,
+                    },
+                    "start": {
+                      "column": 17,
+                      "line": 1,
+                    },
+                  },
                   "text": "number",
                   "value": undefined,
                 },
@@ -7959,7 +9202,18 @@ describe('resolveType', () => {
                 },
                 "text": "b: number = 0",
                 "type": {
+                  "filePath": "test.ts",
                   "kind": "Number",
+                  "position": {
+                    "end": {
+                      "column": 34,
+                      "line": 1,
+                    },
+                    "start": {
+                      "column": 28,
+                      "line": 1,
+                    },
+                  },
                   "text": "number",
                   "value": undefined,
                 },
@@ -7976,7 +9230,18 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
+              "filePath": "test.ts",
               "kind": "Number",
+              "position": {
+                "end": {
+                  "column": 47,
+                  "line": 1,
+                },
+                "start": {
+                  "column": 41,
+                  "line": 1,
+                },
+              },
               "text": "number",
               "value": undefined,
             },
@@ -8041,7 +9306,18 @@ describe('resolveType', () => {
                   },
                   "text": "color:string",
                   "type": {
+                    "filePath": "test.ts",
                     "kind": "String",
+                    "position": {
+                      "end": {
+                        "column": 37,
+                        "line": 1,
+                      },
+                      "start": {
+                        "column": 31,
+                        "line": 1,
+                      },
+                    },
                     "text": "string",
                     "value": undefined,
                   },
@@ -8074,7 +9350,18 @@ describe('resolveType', () => {
                       },
                       "text": "backgroundColor: string",
                       "type": {
+                        "filePath": "test.ts",
                         "kind": "String",
+                        "position": {
+                          "end": {
+                            "column": 68,
+                            "line": 1,
+                          },
+                          "start": {
+                            "column": 62,
+                            "line": 1,
+                          },
+                        },
                         "text": "string",
                         "value": undefined,
                       },
@@ -8103,7 +9390,18 @@ describe('resolveType', () => {
                       },
                       "text": "borderColor: string",
                       "type": {
+                        "filePath": "test.ts",
                         "kind": "String",
+                        "position": {
+                          "end": {
+                            "column": 94,
+                            "line": 1,
+                          },
+                          "start": {
+                            "column": 88,
+                            "line": 1,
+                          },
+                        },
                         "text": "string",
                         "value": undefined,
                       },
@@ -8179,7 +9477,18 @@ describe('resolveType', () => {
               },
               "text": "siteName: string",
               "type": {
+                "filePath": "test.ts",
                 "kind": "String",
+                "position": {
+                  "end": {
+                    "column": 19,
+                    "line": 2,
+                  },
+                  "start": {
+                    "column": 13,
+                    "line": 2,
+                  },
+                },
                 "text": "string",
                 "value": undefined,
               },
@@ -8233,7 +9542,18 @@ describe('resolveType', () => {
                         },
                         "text": "apiEndpoint: string;",
                         "type": {
+                          "filePath": "test.ts",
                           "kind": "String",
+                          "position": {
+                            "end": {
+                              "column": 24,
+                              "line": 4,
+                            },
+                            "start": {
+                              "column": 18,
+                              "line": 4,
+                            },
+                          },
                           "text": "string",
                           "value": undefined,
                         },
@@ -8256,7 +9576,18 @@ describe('resolveType', () => {
                         },
                         "text": "apiKey: string;",
                         "type": {
+                          "filePath": "test.ts",
                           "kind": "String",
+                          "position": {
+                            "end": {
+                              "column": 19,
+                              "line": 5,
+                            },
+                            "start": {
+                              "column": 13,
+                              "line": 5,
+                            },
+                          },
                           "text": "string",
                           "value": undefined,
                         },
@@ -8285,7 +9616,18 @@ describe('resolveType', () => {
                         },
                         "text": "dbHost: string;",
                         "type": {
+                          "filePath": "test.ts",
                           "kind": "String",
+                          "position": {
+                            "end": {
+                              "column": 19,
+                              "line": 7,
+                            },
+                            "start": {
+                              "column": 13,
+                              "line": 7,
+                            },
+                          },
                           "text": "string",
                           "value": undefined,
                         },
@@ -8308,7 +9650,18 @@ describe('resolveType', () => {
                         },
                         "text": "dbPort: number;",
                         "type": {
+                          "filePath": "test.ts",
                           "kind": "Number",
+                          "position": {
+                            "end": {
+                              "column": 19,
+                              "line": 8,
+                            },
+                            "start": {
+                              "column": 13,
+                              "line": 8,
+                            },
+                          },
                           "text": "number",
                           "value": undefined,
                         },
@@ -8331,7 +9684,18 @@ describe('resolveType', () => {
                         },
                         "text": "dbName: string;",
                         "type": {
+                          "filePath": "test.ts",
                           "kind": "String",
+                          "position": {
+                            "end": {
+                              "column": 19,
+                              "line": 9,
+                            },
+                            "start": {
+                              "column": 13,
+                              "line": 9,
+                            },
+                          },
                           "text": "string",
                           "value": undefined,
                         },
@@ -8432,7 +9796,18 @@ describe('resolveType', () => {
                           },
                           "text": "apiEndpoint: string;",
                           "type": {
+                            "filePath": "test.ts",
                             "kind": "String",
+                            "position": {
+                              "end": {
+                                "column": 34,
+                                "line": 2,
+                              },
+                              "start": {
+                                "column": 28,
+                                "line": 2,
+                              },
+                            },
                             "text": "string",
                             "value": undefined,
                           },
@@ -8455,7 +9830,18 @@ describe('resolveType', () => {
                           },
                           "text": "apiKey: string;",
                           "type": {
+                            "filePath": "test.ts",
                             "kind": "String",
+                            "position": {
+                              "end": {
+                                "column": 50,
+                                "line": 2,
+                              },
+                              "start": {
+                                "column": 44,
+                                "line": 2,
+                              },
+                            },
                             "text": "string",
                             "value": undefined,
                           },
@@ -8484,7 +9870,18 @@ describe('resolveType', () => {
                           },
                           "text": "dbHost: string;",
                           "type": {
+                            "filePath": "test.ts",
                             "kind": "String",
+                            "position": {
+                              "end": {
+                                "column": 72,
+                                "line": 2,
+                              },
+                              "start": {
+                                "column": 66,
+                                "line": 2,
+                              },
+                            },
                             "text": "string",
                             "value": undefined,
                           },
@@ -8507,7 +9904,18 @@ describe('resolveType', () => {
                           },
                           "text": "dbPort: number;",
                           "type": {
+                            "filePath": "test.ts",
                             "kind": "Number",
+                            "position": {
+                              "end": {
+                                "column": 88,
+                                "line": 2,
+                              },
+                              "start": {
+                                "column": 82,
+                                "line": 2,
+                              },
+                            },
                             "text": "number",
                             "value": undefined,
                           },
@@ -8530,7 +9938,18 @@ describe('resolveType', () => {
                           },
                           "text": "dbName: string;",
                           "type": {
+                            "filePath": "test.ts",
                             "kind": "String",
+                            "position": {
+                              "end": {
+                                "column": 104,
+                                "line": 2,
+                              },
+                              "start": {
+                                "column": 98,
+                                "line": 2,
+                              },
+                            },
                             "text": "string",
                             "value": undefined,
                           },
@@ -8553,7 +9972,18 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
+              "filePath": "test.ts",
               "kind": "Void",
+              "position": {
+                "end": {
+                  "column": 5,
+                  "line": 3,
+                },
+                "start": {
+                  "column": 1,
+                  "line": 1,
+                },
+              },
               "text": "void",
             },
             "text": "function useCounter(settings: { apiEndpoint: string; apiKey: string; } | { dbHost: string; dbPort: number; dbName: string; }): void",
@@ -8626,7 +10056,18 @@ describe('resolveType', () => {
                   },
                   "text": "isDisabled?: boolean;",
                   "type": {
+                    "filePath": "test.tsx",
                     "kind": "Boolean",
+                    "position": {
+                      "end": {
+                        "column": 23,
+                        "line": 4,
+                      },
+                      "start": {
+                        "column": 16,
+                        "line": 4,
+                      },
+                    },
                     "text": "boolean",
                   },
                 },
@@ -8903,7 +10344,18 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
+              "filePath": "test.ts",
               "kind": "Void",
+              "position": {
+                "end": {
+                  "column": 60,
+                  "line": 26,
+                },
+                "start": {
+                  "column": 1,
+                  "line": 26,
+                },
+              },
               "text": "void",
             },
             "text": "function ExportedTypes({ children }: ExportedTypesProps): void",
@@ -9091,7 +10543,18 @@ describe('resolveType', () => {
         ],
         "text": "0",
         "type": {
+          "filePath": "test.ts",
           "kind": "Number",
+          "position": {
+            "end": {
+              "column": 30,
+              "line": 5,
+            },
+            "start": {
+              "column": 14,
+              "line": 5,
+            },
+          },
           "text": "0",
           "value": 0,
         },
@@ -9155,7 +10618,18 @@ describe('resolveType', () => {
               },
               "text": ""#ff0000"",
               "type": {
+                "filePath": "test.ts",
                 "kind": "String",
+                "position": {
+                  "end": {
+                    "column": 21,
+                    "line": 2,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 2,
+                  },
+                },
                 "text": ""#ff0000"",
                 "value": "#ff0000",
               },
@@ -9178,7 +10652,18 @@ describe('resolveType', () => {
               },
               "text": ""#00ff00"",
               "type": {
+                "filePath": "test.ts",
                 "kind": "String",
+                "position": {
+                  "end": {
+                    "column": 23,
+                    "line": 3,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 3,
+                  },
+                },
                 "text": ""#00ff00"",
                 "value": "#00ff00",
               },
@@ -9201,7 +10686,18 @@ describe('resolveType', () => {
               },
               "text": ""#0000ff"",
               "type": {
+                "filePath": "test.ts",
                 "kind": "String",
+                "position": {
+                  "end": {
+                    "column": 22,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 4,
+                  },
+                },
                 "text": ""#0000ff"",
                 "value": "#0000ff",
               },
@@ -9255,7 +10751,18 @@ describe('resolveType', () => {
           },
           "text": "number",
           "type": {
+            "filePath": "test.ts",
             "kind": "Number",
+            "position": {
+              "end": {
+                "column": 30,
+                "line": 10,
+              },
+              "start": {
+                "column": 7,
+                "line": 10,
+              },
+            },
             "text": "number",
             "value": undefined,
           },
@@ -9325,7 +10832,18 @@ describe('resolveType', () => {
             "text": "Promise<number>",
             "typeArguments": [
               {
+                "filePath": "test.ts",
                 "kind": "Number",
+                "position": {
+                  "end": {
+                    "column": 61,
+                    "line": 9,
+                  },
+                  "start": {
+                    "column": 7,
+                    "line": 9,
+                  },
+                },
                 "text": "number",
                 "value": undefined,
               },
@@ -9422,12 +10940,34 @@ describe('resolveType', () => {
                     "text": "string | boolean",
                     "types": [
                       {
+                        "filePath": "test.ts",
                         "kind": "String",
+                        "position": {
+                          "end": {
+                            "column": 38,
+                            "line": 11,
+                          },
+                          "start": {
+                            "column": 32,
+                            "line": 11,
+                          },
+                        },
                         "text": "string",
                         "value": undefined,
                       },
                       {
+                        "filePath": "test.ts",
                         "kind": "Boolean",
+                        "position": {
+                          "end": {
+                            "column": 48,
+                            "line": 11,
+                          },
+                          "start": {
+                            "column": 41,
+                            "line": 11,
+                          },
+                        },
                         "text": "boolean",
                       },
                     ],
@@ -9459,12 +10999,34 @@ describe('resolveType', () => {
                       "text": "string | boolean",
                       "types": [
                         {
+                          "filePath": "test.ts",
                           "kind": "String",
+                          "position": {
+                            "end": {
+                              "column": 68,
+                              "line": 11,
+                            },
+                            "start": {
+                              "column": 62,
+                              "line": 11,
+                            },
+                          },
                           "text": "string",
                           "value": undefined,
                         },
                         {
+                          "filePath": "test.ts",
                           "kind": "Boolean",
+                          "position": {
+                            "end": {
+                              "column": 78,
+                              "line": 11,
+                            },
+                            "start": {
+                              "column": 71,
+                              "line": 11,
+                            },
+                          },
                           "text": "boolean",
                         },
                       ],
@@ -9564,7 +11126,18 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
+              "filePath": "test.ts",
               "kind": "Void",
+              "position": {
+                "end": {
+                  "column": 74,
+                  "line": 1,
+                },
+                "start": {
+                  "column": 70,
+                  "line": 1,
+                },
+              },
               "text": "void",
             },
             "text": "function loggedMethod<Args extends Array<string>>(...args: Args): void",
@@ -9577,7 +11150,18 @@ describe('resolveType', () => {
                   "text": "Array<string>",
                   "typeArguments": [
                     {
+                      "filePath": "test.ts",
                       "kind": "String",
+                      "position": {
+                        "end": {
+                          "column": 50,
+                          "line": 1,
+                        },
+                        "start": {
+                          "column": 44,
+                          "line": 1,
+                        },
+                      },
                       "text": "string",
                       "value": undefined,
                     },
@@ -9659,7 +11243,18 @@ describe('resolveType', () => {
                     },
                     "text": "name: string",
                     "type": {
+                      "filePath": "test.ts",
                       "kind": "String",
+                      "position": {
+                        "end": {
+                          "column": 21,
+                          "line": 15,
+                        },
+                        "start": {
+                          "column": 15,
+                          "line": 15,
+                        },
+                      },
                       "text": "string",
                       "value": undefined,
                     },
@@ -9676,7 +11271,18 @@ describe('resolveType', () => {
                   },
                 },
                 "returnType": {
+                  "filePath": "test.ts",
                   "kind": "String",
+                  "position": {
+                    "end": {
+                      "column": 4,
+                      "line": 17,
+                    },
+                    "start": {
+                      "column": 3,
+                      "line": 14,
+                    },
+                  },
                   "text": "string",
                   "value": undefined,
                 },
@@ -10337,7 +11943,18 @@ describe('resolveType', () => {
                     },
                   },
                   "returnType": {
+                    "filePath": "test.ts",
                     "kind": "Boolean",
+                    "position": {
+                      "end": {
+                        "column": 2,
+                        "line": 26,
+                      },
+                      "start": {
+                        "column": 1,
+                        "line": 13,
+                      },
+                    },
                     "text": "boolean",
                   },
                   "tags": undefined,
@@ -10380,17 +11997,50 @@ describe('resolveType', () => {
                 "text": ""primary" | "secondary" | "danger"",
                 "types": [
                   {
+                    "filePath": "test.ts",
                     "kind": "String",
+                    "position": {
+                      "end": {
+                        "column": 38,
+                        "line": 4,
+                      },
+                      "start": {
+                        "column": 29,
+                        "line": 4,
+                      },
+                    },
                     "text": ""primary"",
                     "value": "primary",
                   },
                   {
+                    "filePath": "test.ts",
                     "kind": "String",
+                    "position": {
+                      "end": {
+                        "column": 52,
+                        "line": 4,
+                      },
+                      "start": {
+                        "column": 41,
+                        "line": 4,
+                      },
+                    },
                     "text": ""secondary"",
                     "value": "secondary",
                   },
                   {
+                    "filePath": "test.ts",
                     "kind": "String",
+                    "position": {
+                      "end": {
+                        "column": 63,
+                        "line": 4,
+                      },
+                      "start": {
+                        "column": 55,
+                        "line": 4,
+                      },
+                    },
                     "text": ""danger"",
                     "value": "danger",
                   },
@@ -10726,7 +12376,18 @@ describe('resolveType', () => {
             },
             "text": "string",
             "type": {
+              "filePath": "test.ts",
               "kind": "String",
+              "position": {
+                "end": {
+                  "column": 20,
+                  "line": 2,
+                },
+                "start": {
+                  "column": 14,
+                  "line": 2,
+                },
+              },
               "text": "string",
               "value": undefined,
             },
@@ -10749,7 +12410,18 @@ describe('resolveType', () => {
             },
             "text": "string",
             "type": {
+              "filePath": "test.ts",
               "kind": "String",
+              "position": {
+                "end": {
+                  "column": 19,
+                  "line": 3,
+                },
+                "start": {
+                  "column": 13,
+                  "line": 3,
+                },
+              },
               "text": "string",
               "value": undefined,
             },
@@ -10770,7 +12442,18 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
+              "filePath": "test.ts",
               "kind": "String",
+              "position": {
+                "end": {
+                  "column": 24,
+                  "line": 4,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 4,
+                },
+              },
               "text": "string",
               "value": undefined,
             },
@@ -10883,7 +12566,18 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
+              "filePath": "test.ts",
               "kind": "Void",
+              "position": {
+                "end": {
+                  "column": 36,
+                  "line": 7,
+                },
+                "start": {
+                  "column": 1,
+                  "line": 7,
+                },
+              },
               "text": "void",
             },
             "text": "function Component(props: Props): void",
@@ -10948,7 +12642,18 @@ describe('resolveType', () => {
               "kind": "FunctionType",
               "parameters": [],
               "returnType": {
+                "filePath": "test.ts",
                 "kind": "Boolean",
+                "position": {
+                  "end": {
+                    "column": 21,
+                    "line": 2,
+                  },
+                  "start": {
+                    "column": 10,
+                    "line": 2,
+                  },
+                },
                 "text": "boolean",
               },
               "text": "() => boolean",
@@ -11085,7 +12790,18 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
+              "filePath": "test.ts",
               "kind": "Void",
+              "position": {
+                "end": {
+                  "column": 50,
+                  "line": 7,
+                },
+                "start": {
+                  "column": 1,
+                  "line": 5,
+                },
+              },
               "text": "void",
             },
             "text": "function getFile<ExtensionType extends "mdx" | string>(extension?: ExtensionType | ExtensionType[]): void",
@@ -11167,7 +12883,18 @@ describe('resolveType', () => {
         },
         "text": "string",
         "type": {
+          "filePath": "test.ts",
           "kind": "String",
+          "position": {
+            "end": {
+              "column": 19,
+              "line": 1,
+            },
+            "start": {
+              "column": 13,
+              "line": 1,
+            },
+          },
           "text": "string",
           "value": undefined,
         },
@@ -11252,7 +12979,18 @@ describe('resolveType', () => {
         "text": "string",
         "type": {
           "indexType": {
+            "filePath": "test.ts",
             "kind": "String",
+            "position": {
+              "end": {
+                "column": 28,
+                "line": 6,
+              },
+              "start": {
+                "column": 23,
+                "line": 6,
+              },
+            },
             "text": ""foo"",
             "value": "foo",
           },
@@ -11360,14 +13098,36 @@ describe('resolveType', () => {
         "text": "string",
         "type": {
           "indexType": {
+            "filePath": "index.ts",
             "kind": "String",
+            "position": {
+              "end": {
+                "column": 24,
+                "line": 7,
+              },
+              "start": {
+                "column": 19,
+                "line": 7,
+              },
+            },
             "text": ""bar"",
             "value": "bar",
           },
           "kind": "IndexedAccessType",
           "objectType": {
             "indexType": {
+              "filePath": "index.ts",
               "kind": "String",
+              "position": {
+                "end": {
+                  "column": 17,
+                  "line": 7,
+                },
+                "start": {
+                  "column": 12,
+                  "line": 7,
+                },
+              },
               "text": ""foo"",
               "value": "foo",
             },
@@ -11782,7 +13542,18 @@ describe('resolveType', () => {
             },
           },
           "falseType": {
+            "filePath": "test.ts",
             "kind": "Any",
+            "position": {
+              "end": {
+                "column": 10,
+                "line": 8,
+              },
+              "start": {
+                "column": 7,
+                "line": 8,
+              },
+            },
             "text": "any",
           },
           "isDistributive": true,
@@ -11870,12 +13641,34 @@ describe('resolveType', () => {
                       "text": "Record<string, any>",
                       "typeArguments": [
                         {
+                          "filePath": "test.ts",
                           "kind": "String",
+                          "position": {
+                            "end": {
+                              "column": 64,
+                              "line": 7,
+                            },
+                            "start": {
+                              "column": 58,
+                              "line": 7,
+                            },
+                          },
                           "text": "string",
                           "value": undefined,
                         },
                         {
+                          "filePath": "test.ts",
                           "kind": "Any",
+                          "position": {
+                            "end": {
+                              "column": 69,
+                              "line": 7,
+                            },
+                            "start": {
+                              "column": 66,
+                              "line": 7,
+                            },
+                          },
                           "text": "any",
                         },
                       ],
@@ -11890,7 +13683,18 @@ describe('resolveType', () => {
         "typeParameters": [
           {
             "constraintType": {
+              "filePath": "test.ts",
               "kind": "String",
+              "position": {
+                "end": {
+                  "column": 61,
+                  "line": 5,
+                },
+                "start": {
+                  "column": 55,
+                  "line": 5,
+                },
+              },
               "text": "string",
               "value": undefined,
             },
@@ -12117,7 +13921,18 @@ describe('resolveType', () => {
               "text": "Promise<void>",
               "typeArguments": [
                 {
+                  "filePath": "test.ts",
                   "kind": "Void",
+                  "position": {
+                    "end": {
+                      "column": 16,
+                      "line": 6,
+                    },
+                    "start": {
+                      "column": 12,
+                      "line": 6,
+                    },
+                  },
                   "text": "void",
                 },
               ],
@@ -12144,12 +13959,34 @@ describe('resolveType', () => {
                   "text": "Record<string, any>",
                   "typeArguments": [
                     {
+                      "filePath": "test.ts",
                       "kind": "String",
+                      "position": {
+                        "end": {
+                          "column": 30,
+                          "line": 2,
+                        },
+                        "start": {
+                          "column": 24,
+                          "line": 2,
+                        },
+                      },
                       "text": "string",
                       "value": undefined,
                     },
                     {
+                      "filePath": "test.ts",
                       "kind": "Any",
+                      "position": {
+                        "end": {
+                          "column": 35,
+                          "line": 2,
+                        },
+                        "start": {
+                          "column": 32,
+                          "line": 2,
+                        },
+                      },
                       "text": "any",
                     },
                   ],
@@ -12188,14 +14025,36 @@ describe('resolveType', () => {
                       },
                     },
                     {
+                      "filePath": "test.ts",
                       "kind": "String",
+                      "position": {
+                        "end": {
+                          "column": 47,
+                          "line": 3,
+                        },
+                        "start": {
+                          "column": 41,
+                          "line": 3,
+                        },
+                      },
                       "text": "string",
                       "value": undefined,
                     },
                   ],
                 },
                 "defaultType": {
+                  "filePath": "test.ts",
                   "kind": "String",
+                  "position": {
+                    "end": {
+                      "column": 56,
+                      "line": 3,
+                    },
+                    "start": {
+                      "column": 50,
+                      "line": 3,
+                    },
+                  },
                   "text": "string",
                   "value": undefined,
                 },
@@ -12239,7 +14098,18 @@ describe('resolveType', () => {
         },
         "text": "\`foo\${string}\`",
         "type": {
+          "filePath": "test.ts",
           "kind": "String",
+          "position": {
+            "end": {
+              "column": 33,
+              "line": 1,
+            },
+            "start": {
+              "column": 19,
+              "line": 1,
+            },
+          },
           "text": "\`foo\${string}\`",
           "value": undefined,
         },
@@ -12323,7 +14193,18 @@ describe('resolveType', () => {
               },
             ],
             "returnType": {
+              "filePath": "test.ts",
               "kind": "Void",
+              "position": {
+                "end": {
+                  "column": 56,
+                  "line": 2,
+                },
+                "start": {
+                  "column": 52,
+                  "line": 2,
+                },
+              },
               "text": "void",
             },
             "text": "Union extends any ? (distributedUnion: Union) => void : never",
@@ -12365,14 +14246,36 @@ describe('resolveType', () => {
               },
             ],
             "returnType": {
+              "filePath": "test.ts",
               "kind": "Void",
+              "position": {
+                "end": {
+                  "column": 59,
+                  "line": 3,
+                },
+                "start": {
+                  "column": 55,
+                  "line": 3,
+                },
+              },
               "text": "void",
             },
             "text": "(mergedIntersection: Intersection) => void",
             "thisType": undefined,
           },
           "falseType": {
+            "filePath": "test.ts",
             "kind": "Never",
+            "position": {
+              "end": {
+                "column": 10,
+                "line": 5,
+              },
+              "start": {
+                "column": 5,
+                "line": 5,
+              },
+            },
             "text": "never",
           },
           "isDistributive": false,
@@ -12494,7 +14397,18 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
+              "filePath": "test.ts",
               "kind": "Void",
+              "position": {
+                "end": {
+                  "column": 7,
+                  "line": 6,
+                },
+                "start": {
+                  "column": 1,
+                  "line": 3,
+                },
+              },
               "text": "void",
             },
             "text": "function isFile<Types extends Record<string, any>, Extension extends StringUnion<keyof Types>>(): void",
@@ -12519,12 +14433,34 @@ describe('resolveType', () => {
                   "text": "Record<string, any>",
                   "typeArguments": [
                     {
+                      "filePath": "test.ts",
                       "kind": "String",
+                      "position": {
+                        "end": {
+                          "column": 30,
+                          "line": 4,
+                        },
+                        "start": {
+                          "column": 24,
+                          "line": 4,
+                        },
+                      },
                       "text": "string",
                       "value": undefined,
                     },
                     {
+                      "filePath": "test.ts",
                       "kind": "Any",
+                      "position": {
+                        "end": {
+                          "column": 35,
+                          "line": 4,
+                        },
+                        "start": {
+                          "column": 32,
+                          "line": 4,
+                        },
+                      },
                       "text": "any",
                     },
                   ],
@@ -12634,12 +14570,34 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
+              "filePath": "test.ts",
               "kind": "Void",
+              "position": {
+                "end": {
+                  "column": 30,
+                  "line": 1,
+                },
+                "start": {
+                  "column": 1,
+                  "line": 1,
+                },
+              },
               "text": "void",
             },
             "text": "function foo(): void",
             "thisType": {
+              "filePath": "test.ts",
               "kind": "String",
+              "position": {
+                "end": {
+                  "column": 26,
+                  "line": 1,
+                },
+                "start": {
+                  "column": 20,
+                  "line": 1,
+                },
+              },
               "text": "string",
               "value": undefined,
             },
@@ -12698,7 +14656,18 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
+              "filePath": "test.ts",
               "kind": "Void",
+              "position": {
+                "end": {
+                  "column": 5,
+                  "line": 5,
+                },
+                "start": {
+                  "column": 1,
+                  "line": 1,
+                },
+              },
               "text": "void",
             },
             "text": "function getDefaultExport<Types>(): void",
@@ -12757,7 +14726,18 @@ describe('resolveType', () => {
                 "text": "{ default: DefaultType; }",
               },
               "falseType": {
+                "filePath": "test.ts",
                 "kind": "Never",
+                "position": {
+                  "end": {
+                    "column": 12,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 7,
+                    "line": 4,
+                  },
+                },
                 "text": "never",
               },
               "isDistributive": true,
@@ -13118,7 +15098,18 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
+              "filePath": "test.ts",
               "kind": "Number",
+              "position": {
+                "end": {
+                  "column": 12,
+                  "line": 4,
+                },
+                "start": {
+                  "column": 6,
+                  "line": 4,
+                },
+              },
               "text": "number",
               "value": undefined,
             },
@@ -13128,7 +15119,18 @@ describe('resolveType', () => {
               {
                 "constraintType": undefined,
                 "defaultType": {
+                  "filePath": "test.ts",
                   "kind": "Void",
+                  "position": {
+                    "end": {
+                      "column": 13,
+                      "line": 2,
+                    },
+                    "start": {
+                      "column": 9,
+                      "line": 2,
+                    },
+                  },
                   "text": "void",
                 },
                 "kind": "TypeParameter",
@@ -13138,7 +15140,18 @@ describe('resolveType', () => {
               {
                 "constraintType": undefined,
                 "defaultType": {
+                  "filePath": "test.ts",
                   "kind": "Void",
+                  "position": {
+                    "end": {
+                      "column": 33,
+                      "line": 2,
+                    },
+                    "start": {
+                      "column": 29,
+                      "line": 2,
+                    },
+                  },
                   "text": "void",
                 },
                 "kind": "TypeParameter",
@@ -13198,7 +15211,18 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
+              "filePath": "test.ts",
               "kind": "String",
+              "position": {
+                "end": {
+                  "column": 25,
+                  "line": 6,
+                },
+                "start": {
+                  "column": 19,
+                  "line": 6,
+                },
+              },
               "text": "string",
               "value": undefined,
             },

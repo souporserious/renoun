@@ -2997,7 +2997,7 @@ function resolvePrimitiveType(
 
   return {
     ...resolvedType,
-    // ...(enclosingNode ? getDeclarationLocation(enclosingNode) : {}),
+    ...(enclosingNode ? getDeclarationLocation(enclosingNode) : {}),
   }
 }
 
