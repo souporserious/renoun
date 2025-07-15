@@ -949,14 +949,16 @@ function resolveTypeExpression(
 ): Kind.TypeExpression | undefined {
   const symbol = type.getSymbol()
   const aliasSymbol = type.getAliasSymbol()
-  const primarySymbol = symbol && aliasSymbol ? symbol : aliasSymbol || symbol
   const symbolDeclaration = getPrimaryDeclaration(aliasSymbol || symbol)
   const typeText = type.getText(undefined, TYPE_FORMAT_FLAGS)
 
   try {
     let resolvedType: Kind.TypeExpression | undefined
 
-    if (isTypeReference(type, enclosingNode)) {
+    if (
+      isTypeReference(type, enclosingNode) &&
+      !shouldResolveTypeReference(type, enclosingNode)
+    ) {
       if (tsMorph.Node.isTypeReference(enclosingNode)) {
         const resolvedTypeArguments: Kind.TypeExpression[] = []
 
@@ -1118,29 +1120,48 @@ function resolveTypeExpression(
           typeArguments: resolvedTypeArguments,
           ...getDeclarationLocation(enclosingNode),
         } satisfies Kind.TypeQuery
-      } else if (
-        isIndexedAccessType(type) &&
-        tsMorph.Node.isIndexedAccessTypeNode(enclosingNode)
-      ) {
-        const objectType = enclosingNode.getObjectTypeNode()
+      } else if (tsMorph.Node.isIndexedAccessTypeNode(enclosingNode)) {
+        const rootReference = getLeftMostTypeReference(enclosingNode)
+
+        // If the left-most type reference is not exported resolve the type without context to flatten
+        if (rootReference) {
+          const isExported = isTypeReferenceExported(rootReference)
+
+          if (isExported === false) {
+            return resolveTypeExpression(
+              type,
+              undefined,
+              filter,
+              defaultValues,
+              dependencies
+            )
+          }
+        }
+
+        const objectTypeNode = enclosingNode.getObjectTypeNode()
         const resolvedObjectType = resolveTypeExpression(
-          objectType.getType(),
-          objectType,
-          filter,
-          defaultValues,
-          dependencies
-        )
-        const indexType = enclosingNode.getIndexTypeNode()
-        const resolvedIndexType = resolveTypeExpression(
-          indexType.getType(),
-          indexType,
+          objectTypeNode.getType(),
+          objectTypeNode,
           filter,
           defaultValues,
           dependencies
         )
 
-        if (!resolvedObjectType || !resolvedIndexType) {
-          throw new UnresolvedTypeExpressionError(type, enclosingNode)
+        if (!resolvedObjectType) {
+          throw new UnresolvedTypeExpressionError(type, objectTypeNode)
+        }
+
+        const indexTypeNode = enclosingNode.getIndexTypeNode()
+        const resolvedIndexType = resolveTypeExpression(
+          indexTypeNode.getType(),
+          indexTypeNode,
+          filter,
+          defaultValues,
+          dependencies
+        )
+
+        if (!resolvedIndexType) {
+          throw new UnresolvedTypeExpressionError(type, indexTypeNode)
         }
 
         resolvedType = {
@@ -1169,38 +1190,8 @@ function resolveTypeExpression(
           text: typeText,
           typeParameter: resolvedTypeParameter,
         } satisfies Kind.InferType
-      } else if (type.isBoolean() || type.isBooleanLiteral()) {
-        resolvedType = {
-          kind: 'Boolean',
-          text: typeText,
-        } satisfies Kind.Boolean
-      } else if (type.isNumber() || type.isNumberLiteral()) {
-        resolvedType = {
-          kind: 'Number',
-          text: typeText,
-          value: type.getLiteralValue() as number,
-        } satisfies Kind.Number
-      } else if (type.isBigInt() || type.isBigIntLiteral()) {
-        resolvedType = {
-          kind: 'BigInt',
-          text: typeText,
-          value: type.getLiteralValue() as unknown as BigInteger,
-        } satisfies Kind.BigInt
-      } else if (
-        type.isString() ||
-        type.isStringLiteral() ||
-        type.isTemplateLiteral()
-      ) {
-        resolvedType = {
-          kind: 'String',
-          text: typeText,
-          value: type.getLiteralValue() as string,
-        } satisfies Kind.String
-      } else if (isSymbolType(type)) {
-        resolvedType = {
-          kind: 'Symbol',
-          text: typeText,
-        } satisfies Kind.Symbol
+      } else if (isPrimitiveType(type)) {
+        resolvedType = resolvePrimitiveType(type, enclosingNode)
       } else if (type.isTuple()) {
         const elements = resolveTypeTupleElements(
           type,
@@ -1490,36 +1481,6 @@ function resolveTypeExpression(
             types: resolvedIntersectionTypes,
           } satisfies Kind.IntersectionType
         }
-      } else if (type.isVoid()) {
-        resolvedType = {
-          kind: 'Void',
-          text: 'void',
-        } satisfies Kind.Void
-      } else if (type.isNull()) {
-        resolvedType = {
-          kind: 'Null',
-          text: 'null',
-        } satisfies Kind.Null
-      } else if (type.isUndefined()) {
-        resolvedType = {
-          kind: 'Undefined',
-          text: 'undefined',
-        } satisfies Kind.Undefined
-      } else if (type.isUnknown()) {
-        resolvedType = {
-          kind: 'Unknown',
-          text: typeText,
-        } satisfies Kind.Unknown
-      } else if (type.isNever()) {
-        resolvedType = {
-          kind: 'Never',
-          text: 'never',
-        } satisfies Kind.Never
-      } else if (type.isAny()) {
-        resolvedType = {
-          kind: 'Any',
-          text: typeText,
-        } satisfies Kind.Any
       } else {
         const callSignatures = type.getCallSignatures()
 
@@ -2321,12 +2282,13 @@ function resolvePropertySignature(
       : undefined
   let resolvedPropertyType: Kind.TypeExpression | undefined
   let typeText: string | undefined
-  debugger
+
   if (tsMorph.Node.isPropertySignature(propertyDeclaration)) {
     const typeNode = propertyDeclaration.getTypeNodeOrThrow()
+    const typeNodeType = typeNode.getType()
 
     resolvedPropertyType = resolveTypeExpression(
-      typeNode.getType(),
+      typeNodeType,
       typeNode,
       filter,
       defaultValue,
@@ -2963,6 +2925,82 @@ function resolveClassProperty(
   )
 }
 
+/** Resolves a primitive type. */
+function resolvePrimitiveType(
+  type: Type,
+  enclosingNode: Node | undefined
+): Kind.TypeExpression | undefined {
+  const typeText = type.getText(enclosingNode, TYPE_FORMAT_FLAGS)
+  let resolvedType: Kind.TypeExpression
+
+  if (type.isString() || type.isStringLiteral() || type.isTemplateLiteral()) {
+    resolvedType = {
+      kind: 'String',
+      text: typeText,
+      value: type.getLiteralValue() as string,
+    } satisfies Kind.String
+  } else if (isSymbolType(type)) {
+    resolvedType = {
+      kind: 'Symbol',
+      text: typeText,
+    } satisfies Kind.Symbol
+  } else if (type.isNumber() || type.isNumberLiteral()) {
+    resolvedType = {
+      kind: 'Number',
+      text: typeText,
+      value: type.getLiteralValue() as number,
+    } satisfies Kind.Number
+  } else if (type.isBigInt() || type.isBigIntLiteral()) {
+    resolvedType = {
+      kind: 'BigInt',
+      text: typeText,
+      value: type.getLiteralValue() as unknown as BigInteger,
+    } satisfies Kind.BigInt
+  } else if (type.isBoolean() || type.isBooleanLiteral()) {
+    resolvedType = {
+      kind: 'Boolean',
+      text: typeText,
+    } satisfies Kind.Boolean
+  } else if (type.isNull()) {
+    resolvedType = {
+      kind: 'Null',
+      text: 'null',
+    } satisfies Kind.Null
+  } else if (type.isUndefined()) {
+    resolvedType = {
+      kind: 'Undefined',
+      text: 'undefined',
+    } satisfies Kind.Undefined
+  } else if (type.isVoid()) {
+    resolvedType = {
+      kind: 'Void',
+      text: 'void',
+    } satisfies Kind.Void
+  } else if (type.isUnknown()) {
+    resolvedType = {
+      kind: 'Unknown',
+      text: typeText,
+    } satisfies Kind.Unknown
+  } else if (type.isNever()) {
+    resolvedType = {
+      kind: 'Never',
+      text: 'never',
+    } satisfies Kind.Never
+  } else if (type.isAny()) {
+    resolvedType = {
+      kind: 'Any',
+      text: typeText,
+    } satisfies Kind.Any
+  } else {
+    return undefined
+  }
+
+  return {
+    ...resolvedType,
+    // ...(enclosingNode ? getDeclarationLocation(enclosingNode) : {}),
+  }
+}
+
 /**
  * Attempts to find the primary declaration of a symbol based on the following criteria:
  *   - Type-like declarations (`type`, `interface`, `enum`, `class`)
@@ -3075,30 +3113,26 @@ function isPrimitiveType(type: Type): boolean {
   return (
     type.isString() ||
     type.isStringLiteral() ||
+    type.isTemplateLiteral() ||
+    isSymbolType(type) ||
     type.isNumber() ||
     type.isNumberLiteral() ||
-    type.isBoolean() ||
-    type.isBooleanLiteral() ||
     type.isBigInt() ||
     type.isBigIntLiteral() ||
+    type.isBoolean() ||
+    type.isBooleanLiteral() ||
     type.isNull() ||
     type.isUndefined() ||
     type.isVoid() ||
-    type.isAny() ||
     type.isUnknown() ||
     type.isNever() ||
-    isSymbolType(type)
+    type.isAny()
   )
 }
 
 /** Determines if a type is a mapped type. */
 function isMappedType(type: Type): boolean {
   return (type.getObjectFlags() & tsMorph.ObjectFlags.Mapped) !== 0
-}
-
-/** Determines if a type is an indexed access type. */
-function isIndexedAccessType(type: Type): boolean {
-  return (type.getFlags() & tsMorph.TypeFlags.IndexedAccess) !== 0
 }
 
 /** Determines if a type is a symbol type. */
@@ -3125,7 +3159,7 @@ function isTypeReference(type: Type, enclosingNode?: Node): boolean {
     return false
   }
 
-  return rootReferences.has(type) || isReferenceType(type)
+  return isReferenceType(type)
 }
 
 /** Determines if a resolved type is a primitive type. */
@@ -3211,6 +3245,29 @@ function isPromiseLike(type: Kind.TypeExpression): boolean {
       return type.types.some(isPromiseLike)
   }
   return false
+}
+
+/** Checks if a type reference's primary declaration is exported. */
+function isTypeReferenceExported(
+  typeReference: tsMorph.TypeReferenceNode
+): boolean {
+  const declaration = getPrimaryDeclaration(
+    typeReference.getTypeName().getSymbolOrThrow()
+  )
+  return tsMorph.Node.isExportable(declaration)
+    ? declaration.isExported()
+    : false
+}
+
+/** Gets the left most type reference of an indexed access type node. */
+function getLeftMostTypeReference(
+  node: tsMorph.IndexedAccessTypeNode
+): tsMorph.TypeReferenceNode | undefined {
+  let current: tsMorph.TypeNode = node.getObjectTypeNode()
+  while (tsMorph.Node.isIndexedAccessTypeNode(current)) {
+    current = current.getObjectTypeNode()
+  }
+  return tsMorph.Node.isTypeReference(current) ? current : undefined
 }
 
 /** Checks if a node has a type node. */
@@ -3355,7 +3412,7 @@ function getTypeAtLocation<
  * local to the project and concrete. The alias is kept when it is public,
  * external, or still generic.
  *
- * Concretely a type is resolved when all of the following criteria are met:
+ * A type is resolved when all of the following criteria are met:
  * - The reference is not already being resolved (prevents infinite loops).
  * - The reference itself doesn't contain any free type parameters (i.e. it is already fully instantiated).
  * - At least one type-argument is *internal* and none of the arguments are:
@@ -3364,51 +3421,47 @@ function getTypeAtLocation<
  *    - declared in `node_modules`
  */
 function shouldResolveTypeReference(type: Type, enclosingNode?: Node): boolean {
-  if (containsFreeTypeParameter(type)) {
+  if (rootReferences.has(type) || containsFreeTypeParameter(type)) {
     return false
   }
 
-  const typeArguments = [
-    ...type.getAliasTypeArguments(),
-    ...type.getTypeArguments(),
-  ]
-  const hasInternalTypeArgument = typeArguments.some((typeArgument) => {
-    const symbol = typeArgument.getSymbol() ?? typeArgument.getAliasSymbol()
+  const symbol = type.getAliasSymbol() ?? type.getSymbol()
+  const aliasIsInternal =
+    symbol?.getDeclarations().every((declaration) => {
+      const isInNodeModules = declaration.getSourceFile().isInNodeModules()
+      if (isInNodeModules) {
+        return false
+      }
+      const isExported = isDeclarationExported(declaration, enclosingNode)
+      if (isExported) {
+        return false
+      }
+      return true
+    }) ?? true
 
-    if (!symbol) {
+  // Only inline when the alias and at least one argument are internal
+  return aliasIsInternal && type.getTypeArguments().some(isInternalType)
+}
+
+/** Determines if a type is internal. */
+function isInternalType(type: Type): boolean {
+  const symbol = type.getSymbol() ?? type.getAliasSymbol()
+
+  if (!symbol) {
+    return false
+  }
+
+  return symbol.getDeclarations().every((declaration) => {
+    const isInNodeModules = declaration.getSourceFile().isInNodeModules()
+    if (isInNodeModules) {
       return false
     }
-
-    return symbol.getDeclarations().every((declaration) => {
-      return (
-        !declaration.getSourceFile().isInNodeModules() &&
-        !isDeclarationExported(declaration, undefined)
-      )
-    })
-  })
-
-  // keep resolving only for internal type arguments
-  if (hasInternalTypeArgument) {
+    const isExported = isDeclarationExported(declaration, undefined)
+    if (isExported) {
+      return false
+    }
     return true
-  }
-
-  // keep alias when:
-  // - all type arguments are public or external
-  // - the alias symbol itself is external / exported
-  const symbol = type.getAliasSymbol() ?? type.getSymbol()
-
-  if (
-    symbol?.getDeclarations().some((declaration) => {
-      return (
-        declaration.getSourceFile().isInNodeModules() ||
-        isDeclarationExported(declaration, enclosingNode)
-      )
-    })
-  ) {
-    return false
-  }
-
-  return true
+  })
 }
 
 /**
