@@ -15467,4 +15467,150 @@ describe('resolveType', () => {
       }
     `)
   })
+
+  test('namespace', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      namespace Kind {
+        export interface Shared {
+          text: string
+        }
+      }
+      `,
+      { overwrite: true }
+    )
+    const moduleDeclaration = sourceFile.getModuleOrThrow('Kind')
+    const type = resolveType(moduleDeclaration.getType(), moduleDeclaration)
+
+    expect(type).toMatchInlineSnapshot(`
+      {
+        "filePath": "test.ts",
+        "kind": "Namespace",
+        "name": "Kind",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 5,
+          },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "text": "any",
+        "types": [
+          {
+            "filePath": "test.ts",
+            "kind": "Interface",
+            "members": [
+              {
+                "filePath": "test.ts",
+                "isOptional": false,
+                "isReadonly": false,
+                "kind": "PropertySignature",
+                "name": "text",
+                "position": {
+                  "end": {
+                    "column": 17,
+                    "line": 3,
+                  },
+                  "start": {
+                    "column": 5,
+                    "line": 3,
+                  },
+                },
+                "text": "string",
+                "type": {
+                  "filePath": "test.ts",
+                  "kind": "String",
+                  "position": {
+                    "end": {
+                      "column": 17,
+                      "line": 3,
+                    },
+                    "start": {
+                      "column": 11,
+                      "line": 3,
+                    },
+                  },
+                  "text": "string",
+                  "value": undefined,
+                },
+              },
+            ],
+            "name": "Shared",
+            "position": {
+              "end": {
+                "column": 4,
+                "line": 4,
+              },
+              "start": {
+                "column": 3,
+                "line": 2,
+              },
+            },
+            "text": "Shared",
+            "typeParameters": [],
+          },
+        ],
+      }
+    `)
+  })
+
+  test('namespace alias', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      export namespace Kind {
+        export interface Shared {
+          text: string
+        }
+      }
+
+      type SharedKind = Kind.Shared
+      `,
+      { overwrite: true }
+    )
+    const typeAlias = sourceFile.getTypeAliasOrThrow('SharedKind')
+    const type = resolveType(typeAlias.getType(), typeAlias)
+
+    expect(type).toMatchInlineSnapshot(`
+      {
+        "filePath": "test.ts",
+        "kind": "TypeAlias",
+        "name": "SharedKind",
+        "position": {
+          "end": {
+            "column": 4,
+            "line": 4,
+          },
+          "start": {
+            "column": 3,
+            "line": 2,
+          },
+        },
+        "text": "Kind.Shared",
+        "type": {
+          "filePath": "test.ts",
+          "kind": "TypeReference",
+          "moduleSpecifier": undefined,
+          "name": "Kind.Shared",
+          "position": {
+            "end": {
+              "column": 30,
+              "line": 7,
+            },
+            "start": {
+              "column": 19,
+              "line": 7,
+            },
+          },
+          "text": "Shared",
+          "typeArguments": [],
+        },
+        "typeParameters": [],
+      }
+    `)
+  })
 })

@@ -21,6 +21,7 @@ import type {
   TypeNode,
   TypeParameterDeclaration,
   TypeReferenceNode,
+  ModuleDeclaration,
 } from 'ts-morph'
 import tsMorph from 'ts-morph'
 
@@ -562,6 +563,13 @@ export namespace Kind {
     | Any
     | Unknown
     | Never
+
+  export interface Namespace extends SharedDocumentable {
+    kind: 'Namespace'
+
+    /** All declarations exported from the namespace. */
+    types: Kind[]
+  }
 }
 
 export type Kind =
@@ -585,6 +593,7 @@ export type Kind =
   | Kind.MethodSignature
   | Kind.PropertySignature
   | Kind.Parameter
+  | Kind.Namespace
 
 export type TypeByKind<Type, Key> = Type extends { kind: Key } ? Type : never
 
@@ -896,6 +905,33 @@ export function resolveType(
         dependencies
       ),
     } satisfies Kind.Interface
+  } else if (tsMorph.Node.isModuleDeclaration(enclosingNode)) {
+    const types: Kind[] = []
+
+    for (const declarations of enclosingNode
+      .getExportedDeclarations()
+      .values()) {
+      for (const declaration of declarations) {
+        const resolvedMemberType = resolveType(
+          declaration.getType(),
+          declaration,
+          filter,
+          defaultValues,
+          dependencies
+        )
+
+        if (resolvedMemberType) {
+          types.push(resolvedMemberType)
+        }
+      }
+    }
+
+    resolvedType = {
+      kind: 'Namespace',
+      name: symbolMetadata.name,
+      text: typeText,
+      types,
+    } satisfies Kind.Namespace
   } else {
     if (tsMorph.Node.isVariableDeclaration(enclosingNode)) {
       const resolvedTypeExpression = resolveTypeExpression(
@@ -2449,6 +2485,7 @@ function getSymbolMetadata(
 
   const kind = enclosingNode?.getKind()
   if (
+    kind === tsMorph.SyntaxKind.ModuleDeclaration ||
     kind === tsMorph.SyntaxKind.TypeAliasDeclaration ||
     kind === tsMorph.SyntaxKind.InterfaceDeclaration ||
     kind === tsMorph.SyntaxKind.ClassDeclaration ||
@@ -2458,6 +2495,7 @@ function getSymbolMetadata(
   ) {
     name = (
       enclosingNode as
+        | ModuleDeclaration
         | TypeAliasDeclaration
         | InterfaceDeclaration
         | ClassDeclaration
