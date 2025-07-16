@@ -956,10 +956,7 @@ function resolveTypeExpression(
     let resolvedType: Kind.TypeExpression | undefined
     let moduleSpecifier: string | undefined
 
-    if (
-      isTypeReference(type, enclosingNode) &&
-      !shouldResolveTypeReference(type, enclosingNode)
-    ) {
+    if (isTypeReference(type, enclosingNode)) {
       if (tsMorph.Node.isTypeReference(enclosingNode)) {
         const resolvedTypeArguments: Kind.TypeExpression[] = []
 
@@ -3474,9 +3471,13 @@ function isInternalType(type: Type): boolean {
 
 /**
  * Decide whether a `MappedType` should be resolved when:
- * - The mapped type itself has free type parameters
- * - The mapped node is readonly
- * - The constraint type is not a reference type (e.g. `keyof Type`)
+ * - It does not contain any free type parameters.
+ * - It has an explicit `readonly` modifier (i.e., it's not implicitly mutable).
+ * - Its type parameter has a constraint.
+ * - That constraint is not a reference type (e.g., not another type alias or interface).
+ *
+ * This helps avoid premature or incorrect resolution of mapped types
+ * that are too generic, unconstrained, or structurally recursive.
  */
 function shouldResolveMappedType(
   mappedType: Type,
@@ -3492,12 +3493,7 @@ function shouldResolveMappedType(
     return false
   }
 
-  const constraintType = constraintNode.getType()
-
-  return (
-    !isReferenceType(constraintType) ||
-    shouldResolveTypeReference(constraintType, constraintNode)
-  )
+  return !isReferenceType(constraintNode.getType())
 }
 
 /**

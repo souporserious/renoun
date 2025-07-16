@@ -2191,29 +2191,22 @@ describe('resolveType', () => {
               },
               "text": "children?: DocChildren;",
               "type": {
+                "filePath": "test.ts",
                 "kind": "TypeReference",
-                "name": "Array",
-                "text": "Array<DocNode>",
-                "typeArguments": [
-                  {
-                    "filePath": "test.ts",
-                    "kind": "TypeReference",
-                    "moduleSpecifier": undefined,
-                    "name": "DocChildren",
-                    "position": {
-                      "end": {
-                        "column": 25,
-                        "line": 2,
-                      },
-                      "start": {
-                        "column": 14,
-                        "line": 2,
-                      },
-                    },
-                    "text": "DocNode",
-                    "typeArguments": [],
+                "moduleSpecifier": undefined,
+                "name": "DocChildren",
+                "position": {
+                  "end": {
+                    "column": 25,
+                    "line": 2,
                   },
-                ],
+                  "start": {
+                    "column": 14,
+                    "line": 2,
+                  },
+                },
+                "text": "DocChildren",
+                "typeArguments": [],
               },
             },
           ],
