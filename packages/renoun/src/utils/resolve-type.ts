@@ -3465,26 +3465,31 @@ function isInternalType(type: Type): boolean {
 }
 
 /**
- * Decide whether a `MappedType` should be resolved or kept as a reference:
- * - If the mapped type itself has free type parameters
- * - If the constraint type is exported, external, or from node_modules
+ * Decide whether a `MappedType` should be resolved when:
+ * - The mapped type itself has free type parameters
+ * - The mapped node is readonly
+ * - The constraint type is not a reference type (e.g. `keyof Type`)
  */
 function shouldResolveMappedType(
   mappedType: Type,
   mappedNode: tsMorph.MappedTypeNode
 ): boolean {
-  if (containsFreeTypeParameter(mappedType)) {
+  if (containsFreeTypeParameter(mappedType) || !mappedNode.getReadonlyToken()) {
     return false
   }
 
-  const typeParameter = mappedNode.getTypeParameter()
-  const constraintType = typeParameter.getConstraintOrThrow().getType()
+  const constraintNode = mappedNode.getTypeParameter().getConstraint()
 
-  if (!constraintType) {
+  if (!constraintNode) {
     return false
   }
 
-  return shouldResolveTypeReference(constraintType, mappedNode)
+  const constraintType = constraintNode.getType()
+
+  return (
+    !isReferenceType(constraintType) ||
+    shouldResolveTypeReference(constraintType, constraintNode)
+  )
 }
 
 /**
