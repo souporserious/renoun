@@ -1121,13 +1121,19 @@ function resolveTypeExpression(
           ...getDeclarationLocation(enclosingNode),
         } satisfies Kind.TypeQuery
       } else if (tsMorph.Node.isIndexedAccessTypeNode(enclosingNode)) {
-        const rootReference = getLeftMostTypeReference(enclosingNode)
+        const leftMostTypeReference = getLeftMostTypeReference(enclosingNode)
 
         // If the left-most type reference is not exported resolve the type without context to flatten
-        if (rootReference) {
-          const isExported = isTypeReferenceExported(rootReference)
+        if (leftMostTypeReference) {
+          const referenceDeclaration = getPrimaryDeclaration(
+            leftMostTypeReference.getTypeName().getSymbolOrThrow()
+          )
 
-          if (isExported === false) {
+          // Only flatten for non-exported concrete declarations
+          if (
+            !tsMorph.Node.isTypeParameterDeclaration(referenceDeclaration) &&
+            isTypeReferenceExported(leftMostTypeReference) === false
+          ) {
             return resolveTypeExpression(
               type,
               undefined,

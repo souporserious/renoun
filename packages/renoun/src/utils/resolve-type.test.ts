@@ -11568,84 +11568,98 @@ describe('resolveType', () => {
                 },
                 "text": "loader: Loader<{ [Key in keyof Types]: Types[Key] }>",
                 "type": {
-                  "isAsync": true,
-                  "kind": "FunctionType",
-                  "parameters": [
+                  "filePath": "test.ts",
+                  "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
+                  "name": "Loader",
+                  "position": {
+                    "end": {
+                      "column": 55,
+                      "line": 13,
+                    },
+                    "start": {
+                      "column": 11,
+                      "line": 13,
+                    },
+                  },
+                  "text": "Loader<{ [Key in keyof Types]: Types[Key]; }>",
+                  "typeArguments": [
                     {
-                      "description": undefined,
-                      "filePath": "test.ts",
-                      "initializer": undefined,
                       "isOptional": false,
-                      "kind": "Parameter",
-                      "name": "path",
-                      "position": {
-                        "end": {
-                          "column": 35,
-                          "line": 1,
-                        },
-                        "start": {
-                          "column": 23,
-                          "line": 1,
-                        },
-                      },
-                      "text": "path: string",
+                      "isReadonly": false,
+                      "kind": "MappedType",
+                      "text": "{ [Key in keyof Types]: Types[Key]; }",
                       "type": {
-                        "filePath": "test.ts",
-                        "kind": "String",
-                        "position": {
-                          "end": {
-                            "column": 35,
-                            "line": 1,
+                        "indexType": {
+                          "filePath": "test.ts",
+                          "kind": "TypeReference",
+                          "moduleSpecifier": undefined,
+                          "name": "Key",
+                          "position": {
+                            "end": {
+                              "column": 51,
+                              "line": 13,
+                            },
+                            "start": {
+                              "column": 48,
+                              "line": 13,
+                            },
                           },
-                          "start": {
-                            "column": 29,
-                            "line": 1,
+                          "text": "Key",
+                          "typeArguments": [],
+                        },
+                        "kind": "IndexedAccessType",
+                        "objectType": {
+                          "filePath": "test.ts",
+                          "kind": "TypeReference",
+                          "moduleSpecifier": undefined,
+                          "name": "Types",
+                          "position": {
+                            "end": {
+                              "column": 47,
+                              "line": 13,
+                            },
+                            "start": {
+                              "column": 42,
+                              "line": 13,
+                            },
+                          },
+                          "text": "Types",
+                          "typeArguments": [],
+                        },
+                        "text": "Types[Key]",
+                      },
+                      "typeParameter": {
+                        "constraintType": {
+                          "kind": "TypeOperator",
+                          "operator": "keyof",
+                          "text": "keyof Types",
+                          "type": {
+                            "filePath": "test.ts",
+                            "kind": "TypeReference",
+                            "moduleSpecifier": undefined,
+                            "name": "Types",
+                            "position": {
+                              "end": {
+                                "column": 39,
+                                "line": 13,
+                              },
+                              "start": {
+                                "column": 34,
+                                "line": 13,
+                              },
+                            },
+                            "text": "Types",
+                            "typeArguments": [],
                           },
                         },
-                        "text": "string",
-                        "value": undefined,
+                        "defaultType": undefined,
+                        "kind": "TypeParameter",
+                        "name": "Key",
+                        "text": "Key in keyof Types",
                       },
                     },
                   ],
-                  "returnType": {
-                    "filePath": "test.ts",
-                    "kind": "TypeReference",
-                    "moduleSpecifier": undefined,
-                    "name": "Promise",
-                    "position": {
-                      "end": {
-                        "column": 54,
-                        "line": 1,
-                      },
-                      "start": {
-                        "column": 40,
-                        "line": 1,
-                      },
-                    },
-                    "text": "Promise<Types>",
-                    "typeArguments": [
-                      {
-                        "filePath": "test.ts",
-                        "kind": "TypeReference",
-                        "moduleSpecifier": undefined,
-                        "name": "Types",
-                        "position": {
-                          "end": {
-                            "column": 53,
-                            "line": 1,
-                          },
-                          "start": {
-                            "column": 48,
-                            "line": 1,
-                          },
-                        },
-                        "text": "Types",
-                        "typeArguments": [],
-                      },
-                    ],
-                  },
-                  "text": "Loader<{ [Key in keyof Types]: Types[Key]; }>",
-                  "thisType": undefined,
                 },
               },
             ],
@@ -11660,84 +11674,98 @@ describe('resolveType', () => {
               },
             },
             "returnType": {
-              "isAsync": true,
-              "kind": "FunctionType",
-              "parameters": [
+              "filePath": "test.ts",
+              "kind": "TypeReference",
+              "moduleSpecifier": undefined,
+              "name": "Loader",
+              "position": {
+                "end": {
+                  "column": 48,
+                  "line": 14,
+                },
+                "start": {
+                  "column": 4,
+                  "line": 14,
+                },
+              },
+              "text": "Loader<{ [Key in keyof Types]: Types[Key]; }>",
+              "typeArguments": [
                 {
-                  "description": undefined,
-                  "filePath": "test.ts",
-                  "initializer": undefined,
                   "isOptional": false,
-                  "kind": "Parameter",
-                  "name": "path",
-                  "position": {
-                    "end": {
-                      "column": 35,
-                      "line": 1,
-                    },
-                    "start": {
-                      "column": 23,
-                      "line": 1,
-                    },
-                  },
-                  "text": "path: string",
+                  "isReadonly": false,
+                  "kind": "MappedType",
+                  "text": "{ [Key in keyof Types]: Types[Key]; }",
                   "type": {
-                    "filePath": "test.ts",
-                    "kind": "String",
-                    "position": {
-                      "end": {
-                        "column": 35,
-                        "line": 1,
+                    "indexType": {
+                      "filePath": "test.ts",
+                      "kind": "TypeReference",
+                      "moduleSpecifier": undefined,
+                      "name": "Key",
+                      "position": {
+                        "end": {
+                          "column": 44,
+                          "line": 14,
+                        },
+                        "start": {
+                          "column": 41,
+                          "line": 14,
+                        },
                       },
-                      "start": {
-                        "column": 29,
-                        "line": 1,
+                      "text": "Key",
+                      "typeArguments": [],
+                    },
+                    "kind": "IndexedAccessType",
+                    "objectType": {
+                      "filePath": "test.ts",
+                      "kind": "TypeReference",
+                      "moduleSpecifier": undefined,
+                      "name": "Types",
+                      "position": {
+                        "end": {
+                          "column": 40,
+                          "line": 14,
+                        },
+                        "start": {
+                          "column": 35,
+                          "line": 14,
+                        },
+                      },
+                      "text": "Types",
+                      "typeArguments": [],
+                    },
+                    "text": "Types[Key]",
+                  },
+                  "typeParameter": {
+                    "constraintType": {
+                      "kind": "TypeOperator",
+                      "operator": "keyof",
+                      "text": "keyof Types",
+                      "type": {
+                        "filePath": "test.ts",
+                        "kind": "TypeReference",
+                        "moduleSpecifier": undefined,
+                        "name": "Types",
+                        "position": {
+                          "end": {
+                            "column": 32,
+                            "line": 14,
+                          },
+                          "start": {
+                            "column": 27,
+                            "line": 14,
+                          },
+                        },
+                        "text": "Types",
+                        "typeArguments": [],
                       },
                     },
-                    "text": "string",
-                    "value": undefined,
+                    "defaultType": undefined,
+                    "kind": "TypeParameter",
+                    "name": "Key",
+                    "text": "Key in keyof Types",
                   },
                 },
               ],
-              "returnType": {
-                "filePath": "test.ts",
-                "kind": "TypeReference",
-                "moduleSpecifier": undefined,
-                "name": "Promise",
-                "position": {
-                  "end": {
-                    "column": 54,
-                    "line": 1,
-                  },
-                  "start": {
-                    "column": 40,
-                    "line": 1,
-                  },
-                },
-                "text": "Promise<Types>",
-                "typeArguments": [
-                  {
-                    "filePath": "test.ts",
-                    "kind": "TypeReference",
-                    "moduleSpecifier": undefined,
-                    "name": "Types",
-                    "position": {
-                      "end": {
-                        "column": 53,
-                        "line": 1,
-                      },
-                      "start": {
-                        "column": 48,
-                        "line": 1,
-                      },
-                    },
-                    "text": "Types",
-                    "typeArguments": [],
-                  },
-                ],
-              },
-              "text": "Loader<{ [Key in keyof Types]: Types[Key]; }>",
-              "thisType": undefined,
             },
             "tags": undefined,
             "text": "function withSchema<Types extends Record<string, any>>(schema: Schema<Types>, loader: Loader<{ [Key in keyof Types]: Types[Key] }>): Loader<{ [Key in keyof Types]: Types[Key]; }>",
@@ -13304,7 +13332,18 @@ describe('resolveType', () => {
                 },
               },
               "falseType": {
+                "filePath": "index.ts",
                 "kind": "Never",
+                "position": {
+                  "end": {
+                    "column": 12,
+                    "line": 9,
+                  },
+                  "start": {
+                    "column": 7,
+                    "line": 9,
+                  },
+                },
                 "text": "never",
               },
               "isDistributive": true,
@@ -13440,7 +13479,18 @@ describe('resolveType', () => {
           },
           {
             "constraintType": {
+              "filePath": "index.ts",
               "kind": "String",
+              "position": {
+                "end": {
+                  "column": 59,
+                  "line": 6,
+                },
+                "start": {
+                  "column": 53,
+                  "line": 6,
+                },
+              },
               "text": "string",
               "value": undefined,
             },
