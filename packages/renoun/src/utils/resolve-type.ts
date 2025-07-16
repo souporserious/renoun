@@ -954,6 +954,7 @@ function resolveTypeExpression(
 
   try {
     let resolvedType: Kind.TypeExpression | undefined
+    let moduleSpecifier: string | undefined
 
     if (
       isTypeReference(type, enclosingNode) &&
@@ -976,65 +977,17 @@ function resolveTypeExpression(
           }
         }
 
+        moduleSpecifier = getModuleSpecifierFromTypeReference(enclosingNode)
+
         resolvedType = {
           kind: 'TypeReference',
           name: enclosingNode.getTypeName().getText(),
           text: typeText,
           typeArguments: resolvedTypeArguments,
-          moduleSpecifier: getModuleSpecifierFromTypeReference(enclosingNode),
+          moduleSpecifier,
           ...getDeclarationLocation(enclosingNode),
         } satisfies Kind.TypeReference
       } else {
-        // Determine if we need to further resolve based on a matching filter
-        // if (filter) {
-        //   const normalizedFilter = Array.isArray(filter) ? filter : [filter]
-        //   const moduleSpecifierFilter = normalizedFilter.find(
-        //     (descriptor) => descriptor.moduleSpecifier === moduleSpecifier
-        //   )
-
-        //   if (moduleSpecifierFilter) {
-        //     const typeFilterMatch = moduleSpecifierFilter.types.find((type) =>
-        //       symbol ? type.name === symbol.getName() : null
-        //     )
-
-        //     // Attempt to resolve a `TypeLiteral` with the properties that match the filter
-        //     if (typeFilterMatch?.properties) {
-        //       const members: Kind.PropertySignature[] = []
-
-        //       for (const propertyName of typeFilterMatch.properties) {
-        //         const property = type.getApparentProperty(propertyName)
-
-        //         if (!property) {
-        //           continue
-        //         }
-
-        //         const resolved = resolvePropertySignature(
-        //           property,
-        //           enclosingNode,
-        //           undefined,
-        //           defaultValues,
-        //           true,
-        //           dependencies
-        //         )
-
-        //         if (resolved) {
-        //           members.push(resolved)
-        //         }
-        //       }
-
-        //       if (members.length) {
-        //         resolvedType = {
-        //           kind: 'TypeLiteral',
-        //           text: members
-        //             .map((member) => member.text.replace(/\s*;\s*$/, ''))
-        //             .join('; '),
-        //           members,
-        //         } satisfies Kind.TypeLiteral
-        //       }
-        //     }
-        //   }
-        // }
-
         const resolvedTypeArguments: Kind.TypeExpression[] = []
 
         for (const typeArgument of type.getTypeArguments()) {
@@ -1067,6 +1020,55 @@ function resolveTypeExpression(
           typeArguments: resolvedTypeArguments,
           ...(enclosingNode ? getDeclarationLocation(enclosingNode) : {}),
         } satisfies Kind.TypeReference
+      }
+
+      // Determine if we need to further resolve based on a matching filter
+      if (filter) {
+        const normalizedFilter = Array.isArray(filter) ? filter : [filter]
+        const moduleSpecifierFilter = normalizedFilter.find(
+          (descriptor) => descriptor.moduleSpecifier === moduleSpecifier
+        )
+
+        if (moduleSpecifierFilter) {
+          const typeFilterMatch = moduleSpecifierFilter.types.find((type) =>
+            symbol ? type.name === symbol.getName() : null
+          )
+
+          // Attempt to resolve a `TypeLiteral` with the properties that match the filter
+          if (typeFilterMatch?.properties) {
+            const members: Kind.PropertySignature[] = []
+
+            for (const propertyName of typeFilterMatch.properties) {
+              const property = type.getApparentProperty(propertyName)
+
+              if (!property) {
+                continue
+              }
+
+              const resolved = resolvePropertySignature(
+                property,
+                enclosingNode,
+                undefined,
+                defaultValues,
+                dependencies
+              )
+
+              if (resolved) {
+                members.push(resolved)
+              }
+            }
+
+            if (members.length) {
+              resolvedType = {
+                kind: 'TypeLiteral',
+                text: members
+                  .map((member) => member.text.replace(/\s*;\s*$/, ''))
+                  .join('; '),
+                members,
+              } satisfies Kind.TypeLiteral
+            }
+          }
+        }
       }
     } else {
       rootReferences.add(type)

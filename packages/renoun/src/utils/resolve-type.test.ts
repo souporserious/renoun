@@ -10032,86 +10032,121 @@ describe('resolveType', () => {
         },
         "text": "ButtonProps",
         "type": {
-          "kind": "IntersectionType",
-          "text": "ButtonProps",
-          "types": [
-            {
-              "kind": "TypeLiteral",
-              "members": [
-                {
-                  "filePath": "test.tsx",
-                  "isOptional": true,
-                  "isReadonly": false,
-                  "kind": "PropertySignature",
-                  "name": "isDisabled",
-                  "position": {
-                    "end": {
-                      "column": 24,
-                      "line": 4,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 4,
-                    },
-                  },
-                  "text": "isDisabled?: boolean;",
-                  "type": {
-                    "filePath": "test.tsx",
-                    "kind": "Boolean",
-                    "position": {
-                      "end": {
-                        "column": 23,
-                        "line": 4,
-                      },
-                      "start": {
-                        "column": 16,
-                        "line": 4,
-                      },
-                    },
-                    "text": "boolean",
-                  },
-                },
-              ],
-              "text": "{ isDisabled?: boolean; }",
-            },
+          "kind": "TypeLiteral",
+          "members": [
             {
               "filePath": "test.tsx",
-              "kind": "TypeReference",
-              "moduleSpecifier": "react",
-              "name": "React.ButtonHTMLAttributes",
+              "isOptional": true,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "isDisabled",
               "position": {
                 "end": {
-                  "column": 50,
-                  "line": 5,
+                  "column": 24,
+                  "line": 4,
                 },
                 "start": {
-                  "column": 5,
-                  "line": 5,
+                  "column": 3,
+                  "line": 4,
                 },
               },
-              "text": "ButtonHTMLAttributes<HTMLButtonElement>",
-              "typeArguments": [
-                {
-                  "filePath": "test.tsx",
-                  "kind": "TypeReference",
-                  "moduleSpecifier": undefined,
-                  "name": "HTMLButtonElement",
-                  "position": {
-                    "end": {
-                      "column": 49,
-                      "line": 5,
+              "text": "isDisabled?: boolean;",
+              "type": {
+                "filePath": "test.tsx",
+                "kind": "Boolean",
+                "position": {
+                  "end": {
+                    "column": 23,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 16,
+                    "line": 4,
+                  },
+                },
+                "text": "boolean",
+              },
+            },
+            {
+              "filePath": "node_modules/@types/react/index.d.ts",
+              "isOptional": true,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "onClick",
+              "position": {
+                "end": {
+                  "column": 52,
+                  "line": 2281,
+                },
+                "start": {
+                  "column": 9,
+                  "line": 2281,
+                },
+              },
+              "text": "onClick?: MouseEventHandler<T> | undefined;",
+              "type": {
+                "isAsync": false,
+                "kind": "FunctionType",
+                "parameters": [
+                  {
+                    "description": undefined,
+                    "filePath": "node_modules/@types/react/index.d.ts",
+                    "initializer": undefined,
+                    "isOptional": false,
+                    "kind": "Parameter",
+                    "name": "event",
+                    "position": {
+                      "end": {
+                        "column": 81,
+                        "line": 2136,
+                      },
+                      "start": {
+                        "column": 73,
+                        "line": 2136,
+                      },
                     },
-                    "start": {
-                      "column": 32,
-                      "line": 5,
+                    "text": "event: E",
+                    "type": {
+                      "filePath": "node_modules/@types/react/index.d.ts",
+                      "kind": "TypeReference",
+                      "moduleSpecifier": undefined,
+                      "name": "E",
+                      "position": {
+                        "end": {
+                          "column": 81,
+                          "line": 2136,
+                        },
+                        "start": {
+                          "column": 80,
+                          "line": 2136,
+                        },
+                      },
+                      "text": "E",
+                      "typeArguments": [],
                     },
                   },
-                  "text": "HTMLButtonElement",
-                  "typeArguments": [],
+                ],
+                "returnType": {
+                  "filePath": "node_modules/@types/react/index.d.ts",
+                  "kind": "Void",
+                  "position": {
+                    "end": {
+                      "column": 88,
+                      "line": 2136,
+                    },
+                    "start": {
+                      "column": 84,
+                      "line": 2136,
+                    },
+                  },
+                  "text": "void",
                 },
-              ],
+                "text": "MouseEventHandler<T>",
+                "thisType": undefined,
+              },
             },
           ],
+          "text": "ButtonProps",
         },
         "typeParameters": [],
       }
