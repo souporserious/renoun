@@ -21,7 +21,6 @@ import {
   type GetSourceTextMetadataOptions,
 } from '../utils/get-source-text-metadata.js'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.js'
-import type { SymbolFilter } from '../utils/resolve-type.js'
 import { resolveTypeAtLocation as baseResolveTypeAtLocation } from '../utils/resolve-type-at-location.js'
 import { transpileSourceFile as baseTranspileSourceFile } from '../utils/transpile-source-file.js'
 import { WebSocketServer } from './rpc/server.js'

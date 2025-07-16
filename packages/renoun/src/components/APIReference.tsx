@@ -7,7 +7,7 @@ import {
 } from '../file-system/index.js'
 import {
   type Kind,
-  type SymbolFilter,
+  type TypeFilter,
   type TypeOfKind,
 } from '../utils/resolve-type.js'
 import { Collapse } from './Collapse/index.js'
@@ -73,8 +73,8 @@ export interface APIReferenceProps {
   /** The file path, `JavaScriptFile`, or `JavaScriptFileExport` type reference to resolve. */
   source: string | JavaScriptFile<any> | JavaScriptFileExport<any>
 
-  /** Optional filter for exported symbols. */
-  filter?: SymbolFilter
+  /** Optional filter for including additional properties from referenced types. */
+  filter?: TypeFilter
 
   /** Base directory for relative `source` values. */
   baseDirectory?: string
@@ -186,7 +186,6 @@ function TypeNodeRouter({
     case 'IntersectionType':
       return <IntersectionSection node={node} components={components} />
     case 'UnionType':
-    case 'Array':
     case 'Tuple':
     case 'TypeLiteral':
     case 'TypeReference':

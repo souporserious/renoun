@@ -30,7 +30,7 @@ import {
   removeOrderPrefixes,
   relativePath,
 } from '../utils/path.js'
-import type { SymbolFilter } from '../utils/resolve-type.js'
+import type { TypeFilter } from '../utils/resolve-type.js'
 import type { FileSystem } from './FileSystem.js'
 import { NodeFileSystem } from './NodeFileSystem.js'
 import {
@@ -748,7 +748,7 @@ export class JavaScriptFileExport<Value> {
   }
 
   /** Get the resolved type of the export. */
-  async getType(filter?: SymbolFilter) {
+  async getType(filter?: TypeFilter) {
     const location = await this.#getLocation()
 
     if (location === undefined) {
