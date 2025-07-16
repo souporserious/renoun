@@ -209,39 +209,46 @@ describe('resolveType', () => {
               },
               "text": "exportedTypes: Array<ExportedType>;",
               "type": {
-                "filePath": "test.ts",
                 "kind": "TypeReference",
-                "moduleSpecifier": undefined,
                 "name": "Array",
-                "position": {
-                  "end": {
-                    "column": 41,
-                    "line": 9,
-                  },
-                  "start": {
-                    "column": 22,
-                    "line": 9,
-                  },
-                },
                 "text": "Array<ExportedType>",
                 "typeArguments": [
                   {
                     "filePath": "test.ts",
                     "kind": "TypeReference",
                     "moduleSpecifier": undefined,
-                    "name": "ExportedType",
+                    "name": "Array",
                     "position": {
                       "end": {
-                        "column": 40,
+                        "column": 41,
                         "line": 9,
                       },
                       "start": {
-                        "column": 28,
+                        "column": 22,
                         "line": 9,
                       },
                     },
                     "text": "ExportedType",
-                    "typeArguments": [],
+                    "typeArguments": [
+                      {
+                        "filePath": "test.ts",
+                        "kind": "TypeReference",
+                        "moduleSpecifier": undefined,
+                        "name": "ExportedType",
+                        "position": {
+                          "end": {
+                            "column": 40,
+                            "line": 9,
+                          },
+                          "start": {
+                            "column": 28,
+                            "line": 9,
+                          },
+                        },
+                        "text": "ExportedType",
+                        "typeArguments": [],
+                      },
+                    ],
                   },
                 ],
               },
@@ -2191,22 +2198,29 @@ describe('resolveType', () => {
               },
               "text": "children?: DocChildren;",
               "type": {
-                "filePath": "test.ts",
                 "kind": "TypeReference",
-                "moduleSpecifier": undefined,
-                "name": "DocChildren",
-                "position": {
-                  "end": {
-                    "column": 25,
-                    "line": 2,
+                "name": "Array",
+                "text": "Array<DocNode>",
+                "typeArguments": [
+                  {
+                    "filePath": "test.ts",
+                    "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
+                    "name": "DocChildren",
+                    "position": {
+                      "end": {
+                        "column": 25,
+                        "line": 2,
+                      },
+                      "start": {
+                        "column": 14,
+                        "line": 2,
+                      },
+                    },
+                    "text": "DocNode",
+                    "typeArguments": [],
                   },
-                  "start": {
-                    "column": 14,
-                    "line": 2,
-                  },
-                },
-                "text": "DocChildren",
-                "typeArguments": [],
+                ],
               },
             },
           ],
@@ -2303,22 +2317,29 @@ describe('resolveType', () => {
               },
               "text": "children?: DocChildren;",
               "type": {
-                "filePath": "test.ts",
                 "kind": "TypeReference",
-                "moduleSpecifier": undefined,
-                "name": "DocChildren",
-                "position": {
-                  "end": {
-                    "column": 25,
-                    "line": 3,
+                "name": "Array",
+                "text": "Array<DocNode>",
+                "typeArguments": [
+                  {
+                    "filePath": "test.ts",
+                    "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
+                    "name": "DocChildren",
+                    "position": {
+                      "end": {
+                        "column": 25,
+                        "line": 3,
+                      },
+                      "start": {
+                        "column": 14,
+                        "line": 3,
+                      },
+                    },
+                    "text": "DocNode",
+                    "typeArguments": [],
                   },
-                  "start": {
-                    "column": 14,
-                    "line": 3,
-                  },
-                },
-                "text": "DocChildren",
-                "typeArguments": [],
+                ],
               },
             },
           ],
@@ -3085,39 +3106,46 @@ describe('resolveType', () => {
               },
               "text": "exportedTypes: Array<ExportedType>",
               "type": {
-                "filePath": "test.ts",
                 "kind": "TypeReference",
-                "moduleSpecifier": undefined,
                 "name": "Array",
-                "position": {
-                  "end": {
-                    "column": 37,
-                    "line": 6,
-                  },
-                  "start": {
-                    "column": 18,
-                    "line": 6,
-                  },
-                },
                 "text": "Array<ExportedType>",
                 "typeArguments": [
                   {
                     "filePath": "test.ts",
                     "kind": "TypeReference",
                     "moduleSpecifier": undefined,
-                    "name": "ExportedType",
+                    "name": "Array",
                     "position": {
                       "end": {
-                        "column": 36,
+                        "column": 37,
                         "line": 6,
                       },
                       "start": {
-                        "column": 24,
+                        "column": 18,
                         "line": 6,
                       },
                     },
                     "text": "ExportedType",
-                    "typeArguments": [],
+                    "typeArguments": [
+                      {
+                        "filePath": "test.ts",
+                        "kind": "TypeReference",
+                        "moduleSpecifier": undefined,
+                        "name": "ExportedType",
+                        "position": {
+                          "end": {
+                            "column": 36,
+                            "line": 6,
+                          },
+                          "start": {
+                            "column": 24,
+                            "line": 6,
+                          },
+                        },
+                        "text": "ExportedType",
+                        "typeArguments": [],
+                      },
+                    ],
                   },
                 ],
               },
@@ -12391,6 +12419,133 @@ describe('resolveType', () => {
     `)
   })
 
+  test('complex mapped type', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      import * as React from 'react'
+
+      type MarkdownComponents = {
+        [Key in keyof React.JSX.IntrinsicElements]?:
+          | React.ComponentType<React.JSX.IntrinsicElements[Key]>
+          | keyof React.JSX.IntrinsicElements
+      }
+      `,
+      { overwrite: true }
+    )
+    const typeAlias = sourceFile.getTypeAliasOrThrow('MarkdownComponents')
+    const types = resolveType(typeAlias.getType(), typeAlias)
+
+    expect(types).toMatchInlineSnapshot(`
+      {
+        "filePath": "test.ts",
+        "kind": "TypeAlias",
+        "name": "MarkdownComponents",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 7,
+          },
+          "start": {
+            "column": 1,
+            "line": 3,
+          },
+        },
+        "text": "MarkdownComponents",
+        "type": {
+          "isOptional": true,
+          "isReadonly": false,
+          "kind": "MappedType",
+          "text": "MarkdownComponents",
+          "type": {
+            "kind": "UnionType",
+            "text": "ComponentType<IntrinsicElements[Key]> | keyof IntrinsicElements",
+            "types": [
+              {
+                "filePath": "test.ts",
+                "kind": "TypeReference",
+                "moduleSpecifier": "react",
+                "name": "React.ComponentType",
+                "position": {
+                  "end": {
+                    "column": 60,
+                    "line": 5,
+                  },
+                  "start": {
+                    "column": 7,
+                    "line": 5,
+                  },
+                },
+                "text": "ComponentType<IntrinsicElements[Key]>",
+                "typeArguments": [
+                  {
+                    "kind": "TypeReference",
+                    "name": undefined,
+                    "text": "IntrinsicElements[Key]",
+                    "typeArguments": [],
+                  },
+                ],
+              },
+              {
+                "kind": "TypeOperator",
+                "operator": "keyof",
+                "text": "keyof IntrinsicElements",
+                "type": {
+                  "filePath": "test.ts",
+                  "kind": "TypeReference",
+                  "moduleSpecifier": "react",
+                  "name": "React.JSX.IntrinsicElements",
+                  "position": {
+                    "end": {
+                      "column": 40,
+                      "line": 6,
+                    },
+                    "start": {
+                      "column": 13,
+                      "line": 6,
+                    },
+                  },
+                  "text": "IntrinsicElements",
+                  "typeArguments": [],
+                },
+              },
+            ],
+          },
+          "typeParameter": {
+            "constraintType": {
+              "kind": "TypeOperator",
+              "operator": "keyof",
+              "text": "keyof IntrinsicElements",
+              "type": {
+                "filePath": "test.ts",
+                "kind": "TypeReference",
+                "moduleSpecifier": "react",
+                "name": "React.JSX.IntrinsicElements",
+                "position": {
+                  "end": {
+                    "column": 44,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 17,
+                    "line": 4,
+                  },
+                },
+                "text": "IntrinsicElements",
+                "typeArguments": [],
+              },
+            },
+            "defaultType": undefined,
+            "kind": "TypeParameter",
+            "name": "Key",
+            "text": "Key in keyof React.JSX.IntrinsicElements",
+          },
+        },
+        "typeParameters": [],
+      }
+    `)
+  })
+
   test('interfaces', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
@@ -13857,7 +14012,7 @@ describe('resolveType', () => {
     `)
   })
 
-  test('resolves function declaration type-parameter in with intersection', () => {
+  test('resolves function declaration type-parameter with intersection', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       dedent`

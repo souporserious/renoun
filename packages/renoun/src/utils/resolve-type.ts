@@ -3152,16 +3152,13 @@ function isReferenceType(type: Type): boolean {
 
 /** Determines if a type or enclosing node is a type reference. */
 function isTypeReference(type: Type, enclosingNode?: Node): boolean {
-  if (isPrimitiveType(type)) {
+  // Primitive and array types can carry a reference flag, so we need to check for that first.
+  if (isPrimitiveType(type) || type.isArray() || type.isTuple()) {
     return false
   }
 
-  if (tsMorph.Node.isTypeReference(enclosingNode)) {
+  if (rootReferences.has(type) || tsMorph.Node.isTypeReference(enclosingNode)) {
     return true
-  }
-
-  if (type.isArray() || type.isTuple()) {
-    return false
   }
 
   return isReferenceType(type)
