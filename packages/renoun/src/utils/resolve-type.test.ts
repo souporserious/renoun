@@ -11649,15 +11649,14 @@ describe('resolveType', () => {
                         "indexType": {
                           "filePath": "test.ts",
                           "kind": "TypeReference",
-                          "moduleSpecifier": undefined,
                           "name": "Key",
                           "position": {
                             "end": {
-                              "column": 51,
+                              "column": 52,
                               "line": 13,
                             },
                             "start": {
-                              "column": 48,
+                              "column": 42,
                               "line": 13,
                             },
                           },
@@ -11668,11 +11667,10 @@ describe('resolveType', () => {
                         "objectType": {
                           "filePath": "test.ts",
                           "kind": "TypeReference",
-                          "moduleSpecifier": undefined,
                           "name": "Types",
                           "position": {
                             "end": {
-                              "column": 47,
+                              "column": 52,
                               "line": 13,
                             },
                             "start": {
@@ -11755,15 +11753,14 @@ describe('resolveType', () => {
                     "indexType": {
                       "filePath": "test.ts",
                       "kind": "TypeReference",
-                      "moduleSpecifier": undefined,
                       "name": "Key",
                       "position": {
                         "end": {
-                          "column": 44,
+                          "column": 45,
                           "line": 14,
                         },
                         "start": {
-                          "column": 41,
+                          "column": 35,
                           "line": 14,
                         },
                       },
@@ -11774,11 +11771,10 @@ describe('resolveType', () => {
                     "objectType": {
                       "filePath": "test.ts",
                       "kind": "TypeReference",
-                      "moduleSpecifier": undefined,
                       "name": "Types",
                       "position": {
                         "end": {
-                          "column": 40,
+                          "column": 45,
                           "line": 14,
                         },
                         "start": {
@@ -12479,10 +12475,31 @@ describe('resolveType', () => {
                 "text": "ComponentType<IntrinsicElements[Key]>",
                 "typeArguments": [
                   {
-                    "kind": "TypeReference",
-                    "name": undefined,
+                    "indexType": {
+                      "filePath": "test.ts",
+                      "kind": "TypeReference",
+                      "name": "Key",
+                      "position": {
+                        "end": {
+                          "column": 59,
+                          "line": 5,
+                        },
+                        "start": {
+                          "column": 27,
+                          "line": 5,
+                        },
+                      },
+                      "text": "Key",
+                      "typeArguments": [],
+                    },
+                    "kind": "IndexedAccessType",
+                    "objectType": {
+                      "kind": "TypeReference",
+                      "name": "IntrinsicElements",
+                      "text": "IntrinsicElements",
+                      "typeArguments": [],
+                    },
                     "text": "IntrinsicElements[Key]",
-                    "typeArguments": [],
                   },
                 ],
               },
@@ -13408,236 +13425,336 @@ describe('resolveType', () => {
         "text": "LoaderExportValue<Loaders, Name>",
         "type": {
           "indexType": {
-            "filePath": "index.ts",
-            "kind": "TypeReference",
-            "moduleSpecifier": undefined,
-            "name": "LoadersWithRuntimeKeys",
-            "position": {
-              "end": {
-                "column": 34,
-                "line": 10,
+            "indexType": {
+              "filePath": "index.ts",
+              "kind": "TypeReference",
+              "moduleSpecifier": undefined,
+              "name": "LoadersWithRuntimeKeys",
+              "position": {
+                "end": {
+                  "column": 34,
+                  "line": 10,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 10,
+                },
               },
-              "start": {
-                "column": 3,
-                "line": 10,
-              },
+              "text": "Extract<keyof Loaders, "js" | "jsx" | "ts" | "tsx" | "mdx">",
+              "typeArguments": [
+                {
+                  "filePath": "index.ts",
+                  "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
+                  "name": "Loaders",
+                  "position": {
+                    "end": {
+                      "column": 33,
+                      "line": 10,
+                    },
+                    "start": {
+                      "column": 26,
+                      "line": 10,
+                    },
+                  },
+                  "text": "Loaders",
+                  "typeArguments": [],
+                },
+              ],
             },
-            "text": "Extract<keyof Loaders, "js" | "jsx" | "ts" | "tsx" | "mdx">",
-            "typeArguments": [
-              {
-                "filePath": "index.ts",
-                "kind": "TypeReference",
-                "moduleSpecifier": undefined,
-                "name": "Loaders",
-                "position": {
-                  "end": {
-                    "column": 33,
-                    "line": 10,
-                  },
-                  "start": {
-                    "column": 26,
-                    "line": 10,
-                  },
-                },
-                "text": "Loaders",
-                "typeArguments": [],
-              },
-            ],
-          },
-          "kind": "IndexedAccessType",
-          "objectType": {
-            "isOptional": false,
-            "isReadonly": false,
-            "kind": "MappedType",
-            "text": "{ [Extension in Extract<keyof Loaders, "js" | "jsx" | "ts" | "tsx" | "mdx">]: Name extends keyof Loaders[Extension] ? Loaders[Extension][Name] : never; }",
-            "type": {
-              "checkType": {
-                "filePath": "index.ts",
-                "kind": "TypeReference",
-                "moduleSpecifier": undefined,
-                "name": "Name",
-                "position": {
-                  "end": {
-                    "column": 55,
-                    "line": 7,
-                  },
-                  "start": {
-                    "column": 51,
-                    "line": 7,
-                  },
-                },
-                "text": "Name",
-                "typeArguments": [],
-              },
-              "extendsType": {
-                "kind": "TypeOperator",
-                "operator": "keyof",
-                "text": "keyof Loaders[Extension]",
-                "type": {
-                  "indexType": {
-                    "filePath": "index.ts",
-                    "kind": "TypeReference",
-                    "moduleSpecifier": undefined,
-                    "name": "Extension",
-                    "position": {
-                      "end": {
-                        "column": 87,
-                        "line": 7,
-                      },
-                      "start": {
-                        "column": 78,
-                        "line": 7,
-                      },
-                    },
-                    "text": "Extension",
-                    "typeArguments": [],
-                  },
-                  "kind": "IndexedAccessType",
-                  "objectType": {
-                    "filePath": "index.ts",
-                    "kind": "TypeReference",
-                    "moduleSpecifier": undefined,
-                    "name": "Loaders",
-                    "position": {
-                      "end": {
-                        "column": 77,
-                        "line": 7,
-                      },
-                      "start": {
-                        "column": 70,
-                        "line": 7,
-                      },
-                    },
-                    "text": "Loaders",
-                    "typeArguments": [],
-                  },
-                  "text": "Loaders[Extension]",
-                },
-              },
-              "falseType": {
-                "filePath": "index.ts",
-                "kind": "Never",
-                "position": {
-                  "end": {
-                    "column": 12,
-                    "line": 9,
-                  },
-                  "start": {
-                    "column": 7,
-                    "line": 9,
-                  },
-                },
-                "text": "never",
-              },
-              "isDistributive": true,
-              "kind": "ConditionalType",
-              "text": "Name extends keyof Loaders[Extension] ? Loaders[Extension][Name] : never",
-              "trueType": {
-                "indexType": {
+            "kind": "IndexedAccessType",
+            "objectType": {
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "MappedType",
+              "text": "{ [Extension in Extract<keyof Loaders, "js" | "jsx" | "ts" | "tsx" | "mdx">]: Name extends keyof Loaders[Extension] ? Loaders[Extension][Name] : never; }",
+              "type": {
+                "checkType": {
                   "filePath": "index.ts",
                   "kind": "TypeReference",
                   "moduleSpecifier": undefined,
                   "name": "Name",
                   "position": {
                     "end": {
-                      "column": 30,
-                      "line": 8,
+                      "column": 55,
+                      "line": 7,
                     },
                     "start": {
-                      "column": 26,
-                      "line": 8,
+                      "column": 51,
+                      "line": 7,
                     },
                   },
                   "text": "Name",
                   "typeArguments": [],
                 },
-                "kind": "IndexedAccessType",
-                "objectType": {
-                  "indexType": {
-                    "filePath": "index.ts",
-                    "kind": "TypeReference",
-                    "moduleSpecifier": undefined,
-                    "name": "Extension",
-                    "position": {
-                      "end": {
-                        "column": 24,
-                        "line": 8,
+                "extendsType": {
+                  "kind": "TypeOperator",
+                  "operator": "keyof",
+                  "text": "keyof Loaders[Extension]",
+                  "type": {
+                    "indexType": {
+                      "filePath": "index.ts",
+                      "kind": "TypeReference",
+                      "name": "Extension",
+                      "position": {
+                        "end": {
+                          "column": 88,
+                          "line": 7,
+                        },
+                        "start": {
+                          "column": 70,
+                          "line": 7,
+                        },
                       },
-                      "start": {
-                        "column": 15,
-                        "line": 8,
-                      },
+                      "text": "Extension",
+                      "typeArguments": [],
                     },
-                    "text": "Extension",
-                    "typeArguments": [],
+                    "kind": "IndexedAccessType",
+                    "objectType": {
+                      "filePath": "index.ts",
+                      "kind": "TypeReference",
+                      "name": "Loaders",
+                      "position": {
+                        "end": {
+                          "column": 88,
+                          "line": 7,
+                        },
+                        "start": {
+                          "column": 70,
+                          "line": 7,
+                        },
+                      },
+                      "text": "Loaders",
+                      "typeArguments": [],
+                    },
+                    "text": "Loaders[Extension]",
+                  },
+                },
+                "falseType": {
+                  "filePath": "index.ts",
+                  "kind": "Never",
+                  "position": {
+                    "end": {
+                      "column": 12,
+                      "line": 9,
+                    },
+                    "start": {
+                      "column": 7,
+                      "line": 9,
+                    },
+                  },
+                  "text": "never",
+                },
+                "isDistributive": true,
+                "kind": "ConditionalType",
+                "text": "Name extends keyof Loaders[Extension] ? Loaders[Extension][Name] : never",
+                "trueType": {
+                  "indexType": {
+                    "indexType": {
+                      "filePath": "index.ts",
+                      "kind": "TypeReference",
+                      "moduleSpecifier": undefined,
+                      "name": "Name",
+                      "position": {
+                        "end": {
+                          "column": 30,
+                          "line": 8,
+                        },
+                        "start": {
+                          "column": 26,
+                          "line": 8,
+                        },
+                      },
+                      "text": "Name",
+                      "typeArguments": [],
+                    },
+                    "kind": "IndexedAccessType",
+                    "objectType": {
+                      "indexType": {
+                        "filePath": "index.ts",
+                        "kind": "TypeReference",
+                        "name": "Extension",
+                        "position": {
+                          "end": {
+                            "column": 25,
+                            "line": 8,
+                          },
+                          "start": {
+                            "column": 7,
+                            "line": 8,
+                          },
+                        },
+                        "text": "Extension",
+                        "typeArguments": [],
+                      },
+                      "kind": "IndexedAccessType",
+                      "objectType": {
+                        "filePath": "index.ts",
+                        "kind": "TypeReference",
+                        "name": "Loaders",
+                        "position": {
+                          "end": {
+                            "column": 25,
+                            "line": 8,
+                          },
+                          "start": {
+                            "column": 7,
+                            "line": 8,
+                          },
+                        },
+                        "text": "Loaders",
+                        "typeArguments": [],
+                      },
+                      "text": "Loaders[Extension]",
+                    },
+                    "text": "Name",
                   },
                   "kind": "IndexedAccessType",
                   "objectType": {
-                    "filePath": "index.ts",
-                    "kind": "TypeReference",
-                    "moduleSpecifier": undefined,
-                    "name": "Loaders",
-                    "position": {
-                      "end": {
-                        "column": 14,
-                        "line": 8,
+                    "indexType": {
+                      "filePath": "index.ts",
+                      "kind": "TypeReference",
+                      "name": "Extension",
+                      "position": {
+                        "end": {
+                          "column": 31,
+                          "line": 8,
+                        },
+                        "start": {
+                          "column": 7,
+                          "line": 8,
+                        },
                       },
-                      "start": {
-                        "column": 7,
-                        "line": 8,
-                      },
+                      "text": "Extension",
+                      "typeArguments": [],
                     },
-                    "text": "Loaders",
-                    "typeArguments": [],
+                    "kind": "IndexedAccessType",
+                    "objectType": {
+                      "filePath": "index.ts",
+                      "kind": "TypeReference",
+                      "name": "Loaders",
+                      "position": {
+                        "end": {
+                          "column": 31,
+                          "line": 8,
+                        },
+                        "start": {
+                          "column": 7,
+                          "line": 8,
+                        },
+                      },
+                      "text": "Loaders",
+                      "typeArguments": [],
+                    },
+                    "text": "Loaders[Extension]",
                   },
-                  "text": "Loaders[Extension]",
+                  "text": "Loaders[Extension][Name]",
                 },
-                "text": "Loaders[Extension][Name]",
+              },
+              "typeParameter": {
+                "constraintType": {
+                  "filePath": "index.ts",
+                  "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
+                  "name": "LoadersWithRuntimeKeys",
+                  "position": {
+                    "end": {
+                      "column": 48,
+                      "line": 7,
+                    },
+                    "start": {
+                      "column": 17,
+                      "line": 7,
+                    },
+                  },
+                  "text": "Extract<keyof Loaders, "js" | "jsx" | "ts" | "tsx" | "mdx">",
+                  "typeArguments": [
+                    {
+                      "filePath": "index.ts",
+                      "kind": "TypeReference",
+                      "moduleSpecifier": undefined,
+                      "name": "Loaders",
+                      "position": {
+                        "end": {
+                          "column": 47,
+                          "line": 7,
+                        },
+                        "start": {
+                          "column": 40,
+                          "line": 7,
+                        },
+                      },
+                      "text": "Loaders",
+                      "typeArguments": [],
+                    },
+                  ],
+                },
+                "defaultType": undefined,
+                "kind": "TypeParameter",
+                "name": "Extension",
+                "text": "Extension in LoadersWithRuntimeKeys<Loaders>",
               },
             },
-            "typeParameter": {
-              "constraintType": {
-                "filePath": "index.ts",
-                "kind": "TypeReference",
-                "moduleSpecifier": undefined,
-                "name": "LoadersWithRuntimeKeys",
-                "position": {
-                  "end": {
-                    "column": 48,
-                    "line": 7,
-                  },
-                  "start": {
-                    "column": 17,
-                    "line": 7,
-                  },
+            "text": "Extract<keyof Loaders, "js" | "jsx" | "ts" | "tsx" | "mdx">",
+          },
+          "kind": "IndexedAccessType",
+          "objectType": {
+            "indexType": {
+              "filePath": "index.ts",
+              "kind": "TypeReference",
+              "moduleSpecifier": undefined,
+              "name": "LoadersWithRuntimeKeys",
+              "position": {
+                "end": {
+                  "column": 34,
+                  "line": 10,
                 },
-                "text": "Extract<keyof Loaders, "js" | "jsx" | "ts" | "tsx" | "mdx">",
-                "typeArguments": [
-                  {
-                    "filePath": "index.ts",
-                    "kind": "TypeReference",
-                    "moduleSpecifier": undefined,
-                    "name": "Loaders",
-                    "position": {
-                      "end": {
-                        "column": 47,
-                        "line": 7,
-                      },
-                      "start": {
-                        "column": 40,
-                        "line": 7,
-                      },
-                    },
-                    "text": "Loaders",
-                    "typeArguments": [],
-                  },
-                ],
+                "start": {
+                  "column": 3,
+                  "line": 10,
+                },
               },
-              "defaultType": undefined,
-              "kind": "TypeParameter",
-              "name": "Extension",
-              "text": "Extension in LoadersWithRuntimeKeys<Loaders>",
+              "text": "Extract<keyof Loaders, "js" | "jsx" | "ts" | "tsx" | "mdx">",
+              "typeArguments": [
+                {
+                  "filePath": "index.ts",
+                  "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
+                  "name": "Loaders",
+                  "position": {
+                    "end": {
+                      "column": 33,
+                      "line": 10,
+                    },
+                    "start": {
+                      "column": 26,
+                      "line": 10,
+                    },
+                  },
+                  "text": "Loaders",
+                  "typeArguments": [],
+                },
+              ],
             },
+            "kind": "IndexedAccessType",
+            "objectType": {
+              "filePath": "index.ts",
+              "kind": "TypeReference",
+              "name": undefined,
+              "position": {
+                "end": {
+                  "column": 2,
+                  "line": 10,
+                },
+                "start": {
+                  "column": 63,
+                  "line": 6,
+                },
+              },
+              "text": "{ [Extension in Extract<keyof Loaders, "js" | "jsx" | "ts" | "tsx" | "mdx">]: Name extends keyof Loaders[Extension] ? Loaders[Extension][Name] : never; }",
+              "typeArguments": [],
+            },
+            "text": "{ [Extension in Extract<keyof Loaders, "js" | "jsx" | "ts" | "tsx" | "mdx">]: Name extends keyof Loaders[Extension] ? Loaders[Extension][Name] : never; }",
           },
           "text": "LoaderExportValue<Loaders, Name>",
         },
@@ -13798,41 +13915,85 @@ describe('resolveType', () => {
             "types": [
               {
                 "indexType": {
-                  "filePath": "test.ts",
-                  "kind": "TypeReference",
-                  "moduleSpecifier": undefined,
-                  "name": "Extension",
-                  "position": {
-                    "end": {
-                      "column": 35,
-                      "line": 7,
+                  "indexType": {
+                    "filePath": "test.ts",
+                    "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
+                    "name": "Extension",
+                    "position": {
+                      "end": {
+                        "column": 35,
+                        "line": 7,
+                      },
+                      "start": {
+                        "column": 26,
+                        "line": 7,
+                      },
                     },
-                    "start": {
-                      "column": 26,
-                      "line": 7,
+                    "text": "Extension",
+                    "typeArguments": [],
+                  },
+                  "kind": "IndexedAccessType",
+                  "objectType": {
+                    "filePath": "test.ts",
+                    "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
+                    "name": "DefaultModuleTypes",
+                    "position": {
+                      "end": {
+                        "column": 25,
+                        "line": 7,
+                      },
+                      "start": {
+                        "column": 7,
+                        "line": 7,
+                      },
                     },
+                    "text": "DefaultModuleTypes",
+                    "typeArguments": [],
                   },
                   "text": "Extension",
-                  "typeArguments": [],
                 },
                 "kind": "IndexedAccessType",
                 "objectType": {
-                  "filePath": "test.ts",
-                  "kind": "TypeReference",
-                  "moduleSpecifier": undefined,
-                  "name": "DefaultModuleTypes",
-                  "position": {
-                    "end": {
-                      "column": 25,
-                      "line": 7,
+                  "indexType": {
+                    "filePath": "test.ts",
+                    "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
+                    "name": "Extension",
+                    "position": {
+                      "end": {
+                        "column": 35,
+                        "line": 7,
+                      },
+                      "start": {
+                        "column": 26,
+                        "line": 7,
+                      },
                     },
-                    "start": {
-                      "column": 7,
-                      "line": 7,
+                    "text": "Extension",
+                    "typeArguments": [],
+                  },
+                  "kind": "IndexedAccessType",
+                  "objectType": {
+                    "filePath": "test.ts",
+                    "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
+                    "name": "DefaultModuleTypes",
+                    "position": {
+                      "end": {
+                        "column": 25,
+                        "line": 7,
+                      },
+                      "start": {
+                        "column": 7,
+                        "line": 7,
+                      },
                     },
+                    "text": "DefaultModuleTypes",
+                    "typeArguments": [],
                   },
                   "text": "DefaultModuleTypes",
-                  "typeArguments": [],
                 },
                 "text": "DefaultModuleTypes[Extension]",
               },
@@ -14384,64 +14545,116 @@ describe('resolveType', () => {
         "text": "UnionToIntersection<Union>",
         "type": {
           "checkType": {
-            "isAsync": false,
-            "kind": "FunctionType",
-            "parameters": [
-              {
-                "description": undefined,
-                "filePath": "test.ts",
-                "initializer": undefined,
-                "isOptional": false,
-                "kind": "Parameter",
-                "name": "distributedUnion",
-                "position": {
-                  "end": {
-                    "column": 47,
-                    "line": 2,
-                  },
-                  "start": {
-                    "column": 24,
-                    "line": 2,
-                  },
+            "checkType": {
+              "filePath": "test.ts",
+              "kind": "TypeReference",
+              "name": "Union",
+              "position": {
+                "end": {
+                  "column": 2,
+                  "line": 3,
                 },
-                "text": "distributedUnion: Union",
-                "type": {
+                "start": {
+                  "column": 35,
+                  "line": 1,
+                },
+              },
+              "text": "Union",
+              "typeArguments": [],
+            },
+            "extendsType": {
+              "filePath": "test.ts",
+              "kind": "Any",
+              "position": {
+                "end": {
+                  "column": 2,
+                  "line": 3,
+                },
+                "start": {
+                  "column": 35,
+                  "line": 1,
+                },
+              },
+              "text": "any",
+            },
+            "falseType": {
+              "filePath": "test.ts",
+              "kind": "Never",
+              "position": {
+                "end": {
+                  "column": 2,
+                  "line": 3,
+                },
+                "start": {
+                  "column": 35,
+                  "line": 1,
+                },
+              },
+              "text": "never",
+            },
+            "isDistributive": true,
+            "kind": "ConditionalType",
+            "text": "Union extends any ? (distributedUnion: Union) => void : never",
+            "trueType": {
+              "isAsync": false,
+              "kind": "FunctionType",
+              "parameters": [
+                {
+                  "description": undefined,
                   "filePath": "test.ts",
-                  "kind": "TypeReference",
-                  "moduleSpecifier": undefined,
-                  "name": "Union",
+                  "initializer": undefined,
+                  "isOptional": false,
+                  "kind": "Parameter",
+                  "name": "distributedUnion",
                   "position": {
                     "end": {
                       "column": 47,
                       "line": 2,
                     },
                     "start": {
-                      "column": 42,
+                      "column": 24,
                       "line": 2,
                     },
                   },
-                  "text": "Union",
-                  "typeArguments": [],
+                  "text": "distributedUnion: Union",
+                  "type": {
+                    "filePath": "test.ts",
+                    "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
+                    "name": "Union",
+                    "position": {
+                      "end": {
+                        "column": 47,
+                        "line": 2,
+                      },
+                      "start": {
+                        "column": 42,
+                        "line": 2,
+                      },
+                    },
+                    "text": "Union",
+                    "typeArguments": [],
+                  },
                 },
+              ],
+              "returnType": {
+                "filePath": "test.ts",
+                "kind": "Void",
+                "position": {
+                  "end": {
+                    "column": 56,
+                    "line": 2,
+                  },
+                  "start": {
+                    "column": 52,
+                    "line": 2,
+                  },
+                },
+                "text": "void",
               },
-            ],
-            "returnType": {
-              "filePath": "test.ts",
-              "kind": "Void",
-              "position": {
-                "end": {
-                  "column": 56,
-                  "line": 2,
-                },
-                "start": {
-                  "column": 52,
-                  "line": 2,
-                },
-              },
-              "text": "void",
+              "text": "(distributedUnion: Union) => void",
+              "thisType": undefined,
             },
-            "text": "Union extends any ? (distributedUnion: Union) => void : never",
-            "thisType": undefined,
           },
           "extendsType": {
             "isAsync": false,
@@ -15736,6 +15949,171 @@ describe('resolveType', () => {
           },
         },
         "text": "Foo<Type>",
+      }
+    `)
+  })
+
+  test('synthetic indexed access type', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      class FileSystem<Types extends Record<string, any>> {
+        getExport<Name extends Extract<keyof Types, string>>(
+          name: Name
+        ): Types[Name] {
+          return undefined as any
+        }
+
+        getExports() {
+          return this.getExport('' as Extract<keyof Types, string>)
+        }
+      }
+      `,
+      { overwrite: true }
+    )
+    const declaration = sourceFile
+      .getClassOrThrow('FileSystem')
+      .getInstanceMethodOrThrow('getExports')
+    const type = resolveType(declaration.getType(), declaration)
+
+    expect(type).toMatchInlineSnapshot(`
+      {
+        "filePath": "test.ts",
+        "kind": "Function",
+        "name": "getExports",
+        "position": {
+          "end": {
+            "column": 4,
+            "line": 10,
+          },
+          "start": {
+            "column": 3,
+            "line": 8,
+          },
+        },
+        "signatures": [
+          {
+            "filePath": "test.ts",
+            "isAsync": false,
+            "isGenerator": false,
+            "kind": "CallSignature",
+            "parameters": [],
+            "position": {
+              "end": {
+                "column": 4,
+                "line": 10,
+              },
+              "start": {
+                "column": 3,
+                "line": 8,
+              },
+            },
+            "returnType": {
+              "indexType": {
+                "checkType": {
+                  "kind": "TypeOperator",
+                  "operator": "keyof",
+                  "text": "keyof Types",
+                  "type": {
+                    "filePath": "test.ts",
+                    "kind": "TypeReference",
+                    "name": "Types",
+                    "position": {
+                      "end": {
+                        "column": 4,
+                        "line": 10,
+                      },
+                      "start": {
+                        "column": 3,
+                        "line": 8,
+                      },
+                    },
+                    "text": "Types",
+                    "typeArguments": [],
+                  },
+                },
+                "extendsType": {
+                  "filePath": "test.ts",
+                  "kind": "String",
+                  "position": {
+                    "end": {
+                      "column": 4,
+                      "line": 10,
+                    },
+                    "start": {
+                      "column": 3,
+                      "line": 8,
+                    },
+                  },
+                  "text": "string",
+                  "value": undefined,
+                },
+                "falseType": {
+                  "filePath": "test.ts",
+                  "kind": "Never",
+                  "position": {
+                    "end": {
+                      "column": 4,
+                      "line": 10,
+                    },
+                    "start": {
+                      "column": 3,
+                      "line": 8,
+                    },
+                  },
+                  "text": "never",
+                },
+                "isDistributive": false,
+                "kind": "ConditionalType",
+                "text": "Extract<keyof Types, string>",
+                "trueType": {
+                  "kind": "IntersectionType",
+                  "text": "string & keyof Types",
+                  "types": [
+                    {
+                      "kind": "String",
+                      "text": "string",
+                      "value": undefined,
+                    },
+                    {
+                      "kind": "TypeOperator",
+                      "operator": "keyof",
+                      "text": "keyof Types",
+                      "type": {
+                        "kind": "TypeReference",
+                        "name": "Types",
+                        "text": "Types",
+                        "typeArguments": [],
+                      },
+                    },
+                  ],
+                },
+              },
+              "kind": "IndexedAccessType",
+              "objectType": {
+                "filePath": "test.ts",
+                "kind": "TypeReference",
+                "name": "Types",
+                "position": {
+                  "end": {
+                    "column": 4,
+                    "line": 10,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 8,
+                  },
+                },
+                "text": "Types",
+                "typeArguments": [],
+              },
+              "text": "Types[Extract<keyof Types, string>]",
+            },
+            "text": "() => Types[Extract<keyof Types, string>]",
+            "thisType": undefined,
+          },
+        ],
+        "text": "() => Types[Extract<keyof Types, string>]",
       }
     `)
   })

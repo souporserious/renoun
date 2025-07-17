@@ -1128,6 +1128,27 @@ function resolveTypeExpression(
             | 'unique',
           type: operandType,
         } satisfies Kind.TypeOperator
+      } else if (isTypeOperatorType(type)) {
+        const compilerFactory = (type as any)._context.compilerFactory
+        const operandType = compilerFactory.getType(type.compilerType.type)
+        const resolvedOperand = resolveTypeExpression(
+          operandType,
+          enclosingNode,
+          filter,
+          defaultValues,
+          dependencies
+        )
+
+        if (!resolvedOperand) {
+          throw new UnresolvedTypeExpressionError(operandType, enclosingNode)
+        }
+
+        resolvedType = {
+          kind: 'TypeOperator',
+          text: typeText,
+          operator: 'keyof',
+          type: resolvedOperand,
+        } satisfies Kind.TypeOperator
       } else if (tsMorph.Node.isTypeQuery(enclosingNode)) {
         let resolvedTypeArguments: Kind.TypeExpression[] = []
 
@@ -1152,6 +1173,40 @@ function resolveTypeExpression(
           typeArguments: resolvedTypeArguments,
           ...getDeclarationLocation(enclosingNode),
         } satisfies Kind.TypeQuery
+      } else if (isIndexedAccessType(type)) {
+        const compilerFactory = (type as any)._context.compilerFactory
+        const objectType = compilerFactory.getType(type.compilerType.objectType)
+        const resolvedObjectType = resolveTypeExpression(
+          objectType,
+          enclosingNode,
+          filter,
+          defaultValues,
+          dependencies
+        )
+
+        if (!resolvedObjectType) {
+          throw new UnresolvedTypeExpressionError(objectType, enclosingNode)
+        }
+
+        const indexType = compilerFactory.getType(type.compilerType.indexType)
+        const resolvedIndexType = resolveTypeExpression(
+          indexType,
+          enclosingNode,
+          filter,
+          defaultValues,
+          dependencies
+        )
+
+        if (!resolvedIndexType) {
+          throw new UnresolvedTypeExpressionError(indexType, enclosingNode)
+        }
+
+        resolvedType = {
+          kind: 'IndexedAccessType',
+          text: typeText,
+          objectType: resolvedObjectType,
+          indexType: resolvedIndexType,
+        } satisfies Kind.IndexedAccessType
       } else if (tsMorph.Node.isIndexedAccessTypeNode(enclosingNode)) {
         const leftMostTypeReference = getLeftMostTypeReference(enclosingNode)
 
@@ -1177,8 +1232,9 @@ function resolveTypeExpression(
         }
 
         const objectTypeNode = enclosingNode.getObjectTypeNode()
+        const objectType = objectTypeNode.getType()
         const resolvedObjectType = resolveTypeExpression(
-          objectTypeNode.getType(),
+          objectType,
           objectTypeNode,
           filter,
           defaultValues,
@@ -1186,12 +1242,13 @@ function resolveTypeExpression(
         )
 
         if (!resolvedObjectType) {
-          throw new UnresolvedTypeExpressionError(type, objectTypeNode)
+          throw new UnresolvedTypeExpressionError(objectType, objectTypeNode)
         }
 
         const indexTypeNode = enclosingNode.getIndexTypeNode()
+        const indexType = indexTypeNode.getType()
         const resolvedIndexType = resolveTypeExpression(
-          indexTypeNode.getType(),
+          indexType,
           indexTypeNode,
           filter,
           defaultValues,
@@ -1199,7 +1256,7 @@ function resolveTypeExpression(
         )
 
         if (!resolvedIndexType) {
-          throw new UnresolvedTypeExpressionError(type, indexTypeNode)
+          throw new UnresolvedTypeExpressionError(indexType, indexTypeNode)
         }
 
         resolvedType = {
@@ -1283,52 +1340,119 @@ function resolveTypeExpression(
         } satisfies Kind.TypeReference
       } else if (tsMorph.Node.isConditionalTypeNode(enclosingNode)) {
         const checkNode = enclosingNode.getCheckType()
-        const checkNodeType = checkNode.getType()
-        const checkType = resolveTypeExpression(
-          checkNodeType,
+        const checkType = checkNode.getType()
+        const resolvedCheckType = resolveTypeExpression(
+          checkType,
           checkNode,
           filter,
           defaultValues,
           dependencies
         )
         const extendsNode = enclosingNode.getExtendsType()
-        const extendsType = resolveTypeExpression(
-          extendsNode.getType(),
+        const extendsType = extendsNode.getType()
+        const resolvedExtendsType = resolveTypeExpression(
+          extendsType,
           extendsNode,
           filter,
           defaultValues,
           dependencies
         )
         const trueNode = enclosingNode.getTrueType()
-        const trueType = resolveTypeExpression(
-          trueNode.getType(),
+        const trueType = trueNode.getType()
+        const resolvedTrueType = resolveTypeExpression(
+          trueType,
           trueNode,
           filter,
           defaultValues,
           dependencies
         )
         const falseNode = enclosingNode.getFalseType()
-        const falseType = resolveTypeExpression(
-          falseNode.getType(),
+        const falseType = falseNode.getType()
+        const resolvedFalseType = resolveTypeExpression(
+          falseType,
           falseNode,
           filter,
           defaultValues,
           dependencies
         )
 
-        if (checkType && extendsType && trueType && falseType) {
-          resolvedType = {
-            kind: 'ConditionalType',
-            text: typeText,
-            checkType,
-            extendsType,
-            trueType,
-            falseType,
-            isDistributive: checkNodeType.isTypeParameter(),
-          } satisfies Kind.ConditionalType
-        } else {
-          return
+        if (
+          !resolvedCheckType ||
+          !resolvedExtendsType ||
+          !resolvedTrueType ||
+          !resolvedFalseType
+        ) {
+          throw new UnresolvedTypeExpressionError(type, enclosingNode)
         }
+
+        resolvedType = {
+          kind: 'ConditionalType',
+          text: typeText,
+          checkType: resolvedCheckType,
+          extendsType: resolvedExtendsType,
+          trueType: resolvedTrueType,
+          falseType: resolvedFalseType,
+          isDistributive: checkType.isTypeParameter(),
+        } satisfies Kind.ConditionalType
+      } else if (isConditionalType(type)) {
+        const compilerFactory = (type as any)._context.compilerFactory
+        const checkType = compilerFactory.getType(type.compilerType.checkType)
+        const resolvedCheckType = resolveTypeExpression(
+          checkType,
+          enclosingNode,
+          filter,
+          defaultValues,
+          dependencies
+        )
+        const extendsType = compilerFactory.getType(
+          type.compilerType.extendsType
+        )
+        const resolvedExtendsType = resolveTypeExpression(
+          extendsType,
+          enclosingNode,
+          filter,
+          defaultValues,
+          dependencies
+        )
+        const trueType = compilerFactory.getType(
+          type.compilerType.resolvedTrueType
+        )
+        const resolvedTrueType = resolveTypeExpression(
+          trueType,
+          enclosingNode,
+          filter,
+          defaultValues,
+          dependencies
+        )
+        const falseType = compilerFactory.getType(
+          type.compilerType.resolvedFalseType
+        )
+        const resolvedFalseType = resolveTypeExpression(
+          falseType,
+          enclosingNode,
+          filter,
+          defaultValues,
+          dependencies
+        )
+
+        if (
+          !resolvedCheckType ||
+          !resolvedExtendsType ||
+          !resolvedTrueType ||
+          !resolvedFalseType
+        ) {
+          throw new UnresolvedTypeExpressionError(type, enclosingNode)
+        }
+
+        resolvedType = {
+          kind: 'ConditionalType',
+          text: typeText,
+          checkType: resolvedCheckType,
+          extendsType: resolvedExtendsType,
+          trueType: resolvedTrueType,
+          falseType: resolvedFalseType,
+          isDistributive: checkType.isTypeParameter(),
+        } satisfies Kind.ConditionalType
       } else if (type.isUnion()) {
         // Mixed intersection inside union (`A & B | C`)
         if (tsMorph.Node.isIntersectionTypeNode(enclosingNode)) {
@@ -1689,12 +1813,31 @@ export class UnresolvedTypeExpressionError extends Error {
   readonly enclosingNode?: Node
 
   constructor(type: Type, enclosingNode?: Node) {
-    const symbol = type.getAliasSymbol() ?? type.getSymbol()
-    const symbolDeclaration = getPrimaryDeclaration(symbol)
-    let message = `[renoun:UnresolvedTypeExpression] Could not resolve "${type.getText()}"`
+    let message = `[renoun:UnresolvedTypeExpression] Could not resolve type expression:`
 
+    message += `\n\nType\n\nText: ${type.getText()}`
+
+    const typeFlags = getFlagNames(type.getFlags(), tsMorph.ts.TypeFlags)
+    if (typeFlags) {
+      message += `\nType Flags: ${typeFlags}`
+    }
+
+    const objectFlags = getFlagNames(
+      type.getObjectFlags(),
+      tsMorph.ts.ObjectFlags
+    )
+    if (objectFlags) {
+      message += `\nObject Flags: ${objectFlags}`
+    }
+
+    const symbolDeclaration = getPrimaryDeclaration(type.getSymbol())
     if (symbolDeclaration) {
       message += `\n\nSymbol Declaration\n\n${printNode(symbolDeclaration)}`
+    }
+
+    const aliasSymbolDeclaration = getPrimaryDeclaration(type.getAliasSymbol())
+    if (aliasSymbolDeclaration) {
+      message += `\n\nAlias Symbol Declaration\n\n${printNode(aliasSymbolDeclaration)}`
     }
 
     if (enclosingNode) {
@@ -3175,14 +3318,35 @@ function isMappedType(type: Type): boolean {
   return (type.getObjectFlags() & tsMorph.ObjectFlags.Mapped) !== 0
 }
 
-/** Determines if a type is a symbol type. */
-function isSymbolType(type: Type) {
-  return type.getSymbol()?.getName() === 'Symbol'
-}
-
 /** Determines if a type is a reference type. */
 function isReferenceType(type: Type): boolean {
   return (type.getObjectFlags() & tsMorph.ObjectFlags.Reference) !== 0
+}
+
+/** Returns true if the given Type is a conditional type (e.g. `A extends B ? X : Y`). */
+function isConditionalType(
+  type: Type
+): type is Type & { compilerType: tsMorph.ts.ConditionalType } {
+  return (type.compilerType.flags & tsMorph.ts.TypeFlags.Conditional) !== 0
+}
+
+/** Returns true if the given type is an indexed access type (e.g. `Type[Key]`). */
+function isIndexedAccessType(
+  type: Type
+): type is Type & { compilerType: tsMorph.ts.IndexedAccessType } {
+  return (type.compilerType.flags & tsMorph.ts.TypeFlags.IndexedAccess) !== 0
+}
+
+/** Returns true if the given type is a type operator type (e.g. `keyof Type`). */
+function isTypeOperatorType(
+  type: Type
+): type is Type & { compilerType: tsMorph.ts.IndexType } {
+  return (type.compilerType.flags & tsMorph.ts.TypeFlags.Index) !== 0
+}
+
+/** Determines if a type is a symbol type. */
+function isSymbolType(type: Type) {
+  return type.getSymbol()?.getName() === 'Symbol'
 }
 
 /** Determines if a type or enclosing node is a type reference. */
@@ -3649,4 +3813,15 @@ function printNode(node: tsMorph.Node) {
   output += `Position: ${startPos.line}:${startPos.column} – ${endPos.line}:${endPos.column}\n`
 
   return output
+}
+
+/** Returns a list of the flag names that are set on the given value. */
+function getFlagNames<Flags extends number>(flags: Flags, allFlags: any) {
+  const names: string[] = []
+  for (const [key, value] of Object.entries(allFlags)) {
+    if (typeof value === 'number' && (flags & value) !== 0) {
+      names.push(key)
+    }
+  }
+  return names.join(', ')
 }
