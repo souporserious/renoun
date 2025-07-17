@@ -652,7 +652,20 @@ function shouldIncludeType(
 }
 
 /** Tracks root type references to prevent infinite recursion. */
-const rootReferences = new WeakSet<Type>()
+const rootReferences = new WeakMap<Type, number>()
+
+function markType(type: Type) {
+  rootReferences.set(type, (rootReferences.get(type) ?? 0) + 1)
+}
+
+function unmarkType(type: Type) {
+  const number = (rootReferences.get(type) ?? 1) - 1
+  if (number === 0) {
+    rootReferences.delete(type)
+  } else {
+    rootReferences.set(type, number)
+  }
+}
 
 const TYPE_FORMAT_FLAGS =
   tsMorph.TypeFormatFlags.NoTruncation |
@@ -667,6 +680,7 @@ export function resolveType(
   defaultValues?: Record<string, unknown> | unknown,
   dependencies?: Set<string>
 ): Kind | undefined {
+  markType(type)
   const aliasSymbol = type.getAliasSymbol()
   const symbol =
     /* First, attempt to get the aliased symbol for aliased types */
@@ -956,7 +970,7 @@ export function resolveType(
     }
   }
 
-  rootReferences.delete(type)
+  unmarkType(type)
 
   let metadataDeclaration = declaration
 
@@ -980,6 +994,7 @@ function resolveTypeExpression(
   defaultValues?: Record<string, unknown> | unknown,
   dependencies?: Set<string>
 ): Kind.TypeExpression | undefined {
+  markType(type)
   const symbol = type.getSymbol()
   const aliasSymbol = type.getAliasSymbol()
   const symbolDeclaration = getPrimaryDeclaration(aliasSymbol || symbol)
@@ -1101,8 +1116,6 @@ function resolveTypeExpression(
         }
       }
     } else {
-      rootReferences.add(type)
-
       if (tsMorph.Node.isTypeOperatorTypeNode(enclosingNode)) {
         const operandNode = enclosingNode.getTypeNode()
         const operandType = resolveTypeExpression(
@@ -1173,40 +1186,6 @@ function resolveTypeExpression(
           typeArguments: resolvedTypeArguments,
           ...getDeclarationLocation(enclosingNode),
         } satisfies Kind.TypeQuery
-      } else if (isIndexedAccessType(type)) {
-        const compilerFactory = (type as any)._context.compilerFactory
-        const objectType = compilerFactory.getType(type.compilerType.objectType)
-        const resolvedObjectType = resolveTypeExpression(
-          objectType,
-          enclosingNode,
-          filter,
-          defaultValues,
-          dependencies
-        )
-
-        if (!resolvedObjectType) {
-          throw new UnresolvedTypeExpressionError(objectType, enclosingNode)
-        }
-
-        const indexType = compilerFactory.getType(type.compilerType.indexType)
-        const resolvedIndexType = resolveTypeExpression(
-          indexType,
-          enclosingNode,
-          filter,
-          defaultValues,
-          dependencies
-        )
-
-        if (!resolvedIndexType) {
-          throw new UnresolvedTypeExpressionError(indexType, enclosingNode)
-        }
-
-        resolvedType = {
-          kind: 'IndexedAccessType',
-          text: typeText,
-          objectType: resolvedObjectType,
-          indexType: resolvedIndexType,
-        } satisfies Kind.IndexedAccessType
       } else if (tsMorph.Node.isIndexedAccessTypeNode(enclosingNode)) {
         const leftMostTypeReference = getLeftMostTypeReference(enclosingNode)
 
@@ -1215,9 +1194,13 @@ function resolveTypeExpression(
           const referenceDeclaration = getPrimaryDeclaration(
             leftMostTypeReference.getTypeName().getSymbolOrThrow()
           )
+          const isInNodeModules = referenceDeclaration
+            ? referenceDeclaration.getSourceFile().isInNodeModules()
+            : false
 
           // Only flatten for non-exported concrete declarations
           if (
+            !isInNodeModules &&
             !tsMorph.Node.isTypeParameterDeclaration(referenceDeclaration) &&
             isTypeReferenceExported(leftMostTypeReference) === false
           ) {
@@ -1257,6 +1240,40 @@ function resolveTypeExpression(
 
         if (!resolvedIndexType) {
           throw new UnresolvedTypeExpressionError(indexType, indexTypeNode)
+        }
+
+        resolvedType = {
+          kind: 'IndexedAccessType',
+          text: typeText,
+          objectType: resolvedObjectType,
+          indexType: resolvedIndexType,
+        } satisfies Kind.IndexedAccessType
+      } else if (isIndexedAccessType(type)) {
+        const compilerFactory = (type as any)._context.compilerFactory
+        const objectType = compilerFactory.getType(type.compilerType.objectType)
+        const resolvedObjectType = resolveTypeExpression(
+          objectType,
+          enclosingNode,
+          filter,
+          defaultValues,
+          dependencies
+        )
+
+        if (!resolvedObjectType) {
+          throw new UnresolvedTypeExpressionError(objectType, enclosingNode)
+        }
+
+        const indexType = compilerFactory.getType(type.compilerType.indexType)
+        const resolvedIndexType = resolveTypeExpression(
+          indexType,
+          enclosingNode,
+          filter,
+          defaultValues,
+          dependencies
+        )
+
+        if (!resolvedIndexType) {
+          throw new UnresolvedTypeExpressionError(indexType, enclosingNode)
         }
 
         resolvedType = {
@@ -1804,7 +1821,7 @@ function resolveTypeExpression(
 
     return resolvedType
   } finally {
-    rootReferences.delete(type)
+    unmarkType(type)
   }
 }
 
@@ -3361,7 +3378,7 @@ function isTypeReference(type: Type, enclosingNode?: Node): boolean {
     return true
   }
 
-  if (rootReferences.has(type) || tsMorph.Node.isTypeReference(enclosingNode)) {
+  if (tsMorph.Node.isTypeReference(enclosingNode)) {
     return true
   }
 
@@ -3627,7 +3644,7 @@ function getTypeAtLocation<
  *    - declared in `node_modules`
  */
 function shouldResolveTypeReference(type: Type, enclosingNode?: Node): boolean {
-  if (rootReferences.has(type) || containsFreeTypeParameter(type)) {
+  if (containsFreeTypeParameter(type)) {
     return false
   }
 
