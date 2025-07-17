@@ -15613,4 +15613,130 @@ describe('resolveType', () => {
       }
     `)
   })
+
+  test('class constructor with type parameters', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      class Foo<Type extends string> {
+        constructor() {}
+      }
+      `,
+      { overwrite: true }
+    )
+    const declaration = sourceFile.getClassOrThrow('Foo')
+    const type = resolveType(declaration.getType(), declaration)
+
+    expect(type).toMatchInlineSnapshot(`
+      {
+        "constructor": {
+          "filePath": "test.ts",
+          "kind": "ClassConstructor",
+          "position": {
+            "end": {
+              "column": 19,
+              "line": 2,
+            },
+            "start": {
+              "column": 3,
+              "line": 2,
+            },
+          },
+          "signatures": [
+            {
+              "filePath": "test.ts",
+              "kind": "CallSignature",
+              "parameters": [],
+              "position": {
+                "end": {
+                  "column": 19,
+                  "line": 2,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 2,
+                },
+              },
+              "returnType": {
+                "filePath": "test.ts",
+                "kind": "TypeReference",
+                "name": "Foo",
+                "position": {
+                  "end": {
+                    "column": 19,
+                    "line": 2,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 2,
+                  },
+                },
+                "text": "Foo<Type>",
+                "typeArguments": [
+                  {
+                    "filePath": "test.ts",
+                    "kind": "TypeReference",
+                    "name": "Type",
+                    "position": {
+                      "end": {
+                        "column": 19,
+                        "line": 2,
+                      },
+                      "start": {
+                        "column": 3,
+                        "line": 2,
+                      },
+                    },
+                    "text": "Type",
+                    "typeArguments": [],
+                  },
+                ],
+              },
+              "text": "<Type extends string>() => Foo<Type>",
+              "thisType": undefined,
+              "typeParameters": [
+                {
+                  "constraintType": {
+                    "filePath": "test.ts",
+                    "kind": "String",
+                    "position": {
+                      "end": {
+                        "column": 30,
+                        "line": 1,
+                      },
+                      "start": {
+                        "column": 24,
+                        "line": 1,
+                      },
+                    },
+                    "text": "string",
+                    "value": undefined,
+                  },
+                  "defaultType": undefined,
+                  "kind": "TypeParameter",
+                  "name": "Type",
+                  "text": "Type extends string",
+                },
+              ],
+            },
+          ],
+          "text": "constructor() {}",
+        },
+        "filePath": "test.ts",
+        "kind": "Class",
+        "name": "Foo",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 3,
+          },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "text": "Foo<Type>",
+      }
+    `)
+  })
 })

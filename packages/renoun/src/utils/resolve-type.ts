@@ -603,22 +603,19 @@ export type SymbolMetadata = ReturnType<typeof getSymbolMetadata>
 
 export type SymbolFilter = (symbolMetadata: SymbolMetadata) => boolean
 
-/** Which properties to resolve from a type. */
-export interface TypeSelection {
-  /** Fully‑qualified name e.g. `React.ButtonHTMLAttributes`. */
-  name: string
-
-  /** Optional allowlist of property names for the matched type. */
-  properties?: string[]
-}
-
 /** Describes one “include” rule. */
 export interface FilterDescriptor {
   /** Package name that exported the type, e.g. `react`. Omit to match any package. */
   moduleSpecifier?: string
 
   /** One or more type selections. */
-  types: TypeSelection[]
+  types: {
+    /** Fully‑qualified name e.g. `React.ButtonHTMLAttributes`. */
+    name: string
+
+    /** Optional allowlist of property names for the matched type. */
+    properties?: string[]
+  }[]
 }
 
 export type TypeFilter = FilterDescriptor | FilterDescriptor[]
@@ -1989,17 +1986,17 @@ function resolveCallSignature(
     )
   }
 
-  let simplifiedTypeText: string
+  let typeText: string
 
   if (tsMorph.Node.isFunctionDeclaration(signatureDeclaration)) {
-    simplifiedTypeText = `function ${signatureDeclaration.getName()}${typeParametersText}(${parametersText}): ${returnType.text}`
+    typeText = `function ${signatureDeclaration.getName()}${typeParametersText}(${parametersText}): ${returnType.text}`
   } else {
-    simplifiedTypeText = `${typeParametersText}(${parametersText}) => ${returnType.text}`
+    typeText = `${typeParametersText}(${parametersText}) => ${returnType.text}`
   }
 
   const resolvedType: Kind.CallSignature = {
     kind: 'CallSignature',
-    text: simplifiedTypeText,
+    text: typeText,
     ...resolvedParameters,
     returnType,
     ...getJsDocMetadata(signatureDeclaration),
@@ -3193,6 +3190,11 @@ function isTypeReference(type: Type, enclosingNode?: Node): boolean {
   // Primitive and array types can carry a reference flag, so we need to check for that first.
   if (isPrimitiveType(type) || type.isArray() || type.isTuple()) {
     return false
+  }
+
+  // If the type is a type parameter and the enclosing node is not an infer type node, then treat it as a type reference.
+  if (type.isTypeParameter() && !tsMorph.Node.isInferTypeNode(enclosingNode)) {
+    return true
   }
 
   if (rootReferences.has(type) || tsMorph.Node.isTypeReference(enclosingNode)) {
