@@ -1159,6 +1159,37 @@ describe('resolveType', () => {
     `)
   })
 
+  test('string type', () => {
+    const sourceFile = project.createSourceFile(
+      'index.ts',
+      dedent`
+      type Foo = 'foo'
+      `,
+      { overwrite: true }
+    )
+    const declaration = sourceFile.getTypeAliasOrThrow('Foo')
+    const types = resolveType(declaration.getType())
+
+    expect(types).toMatchInlineSnapshot(`
+      {
+        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+        "kind": "String",
+        "position": {
+          "end": {
+            "column": 4402,
+            "line": 4,
+          },
+          "start": {
+            "column": 3482,
+            "line": 4,
+          },
+        },
+        "text": ""foo"",
+        "value": "foo",
+      }
+    `)
+  })
+
   test('external class reference type arguments', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',

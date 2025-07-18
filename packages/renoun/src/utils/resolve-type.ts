@@ -855,7 +855,10 @@ export function resolveType(
       typeParameters: resolvedTypeParameters,
       type: resolvedTypeExpression,
     } satisfies Kind.TypeAlias
-  } else if (tsMorph.Node.isTypeAliasDeclaration(symbolDeclaration)) {
+  } else if (
+    tsMorph.Node.isTypeAliasDeclaration(symbolDeclaration) &&
+    !symbolDeclaration.getSourceFile().isInNodeModules()
+  ) {
     const typeNode = symbolDeclaration.getTypeNodeOrThrow()
     const resolvedTypeExpression = resolveTypeExpression(
       typeNode.getType(),
@@ -888,7 +891,38 @@ export function resolveType(
       typeParameters: resolvedTypeParameters,
       type: resolvedTypeExpression,
     } satisfies Kind.TypeAlias
-  } else if (tsMorph.Node.isInterfaceDeclaration(symbolDeclaration)) {
+  } else if (tsMorph.Node.isInterfaceDeclaration(enclosingNode)) {
+    const resolvedTypeParameters: Kind.TypeParameter[] = []
+
+    for (const typeParameter of enclosingNode.getTypeParameters()) {
+      const resolved = resolveType(
+        typeParameter.getType(),
+        typeParameter,
+        filter,
+        undefined,
+        dependencies
+      ) as Kind.TypeParameter | undefined
+      if (resolved) {
+        resolvedTypeParameters.push(resolved)
+      }
+    }
+
+    resolvedType = {
+      kind: 'Interface',
+      name: symbolMetadata.name,
+      text: typeText,
+      typeParameters: resolvedTypeParameters,
+      members: resolveMemberSignatures(
+        enclosingNode.getMembers(),
+        filter,
+        defaultValues,
+        dependencies
+      ),
+    } satisfies Kind.Interface
+  } else if (
+    tsMorph.Node.isInterfaceDeclaration(symbolDeclaration) &&
+    !symbolDeclaration.getSourceFile().isInNodeModules()
+  ) {
     const resolvedTypeParameters: Kind.TypeParameter[] = []
 
     for (const typeParameter of symbolDeclaration.getTypeParameters()) {
@@ -963,7 +997,15 @@ export function resolveType(
       } else {
         throw new UnresolvedTypeExpressionError(type, enclosingNode)
       }
-    } else {
+    } else if (isPrimitiveType(type)) {
+      const resolvedPrimitiveType = resolvePrimitiveType(type, enclosingNode)
+
+      if (resolvedPrimitiveType) {
+        resolvedType = resolvedPrimitiveType
+      }
+    }
+
+    if (!resolvedType) {
       throw new Error(
         `[renoun:resolveType]: No type could be resolved for "${symbolMetadata.name}". Please file an issue if you encounter this error.`
       )
@@ -995,6 +1037,7 @@ function resolveTypeExpression(
   dependencies?: Set<string>
 ): Kind.TypeExpression | undefined {
   markType(type)
+
   const symbol = type.getSymbol()
   const aliasSymbol = type.getAliasSymbol()
   const symbolDeclaration = getPrimaryDeclaration(aliasSymbol || symbol)
@@ -3074,12 +3117,18 @@ function resolveClassMethod(
     return
   }
 
+  const resolvedCallSignatures = resolveCallSignatures(
+    callSignatures,
+    filter,
+    dependencies
+  )
+
   return {
     kind: 'ClassMethod',
     name: method.getName(),
     scope: getScope(method),
     visibility: getVisibility(method),
-    signatures: resolveCallSignatures(callSignatures, filter, dependencies),
+    signatures: resolvedCallSignatures,
     text: method.getType().getText(method, TYPE_FORMAT_FLAGS),
     ...getJsDocMetadata(method),
   } satisfies Kind.ClassMethod
