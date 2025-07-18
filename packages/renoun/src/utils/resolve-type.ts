@@ -1033,9 +1033,12 @@ function resolveTypeExpression(
           ...getDeclarationLocation(enclosingNode),
         } satisfies Kind.TypeReference
       } else {
+        const typeArguments = aliasSymbol
+          ? type.getAliasTypeArguments()
+          : type.getTypeArguments()
         const resolvedTypeArguments: Kind.TypeExpression[] = []
 
-        for (const typeArgument of type.getTypeArguments()) {
+        for (const typeArgument of typeArguments) {
           const resolvedTypeArgument = resolveTypeExpression(
             typeArgument,
             enclosingNode,

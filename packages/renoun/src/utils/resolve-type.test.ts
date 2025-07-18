@@ -15990,4 +15990,99 @@ describe('resolveType', () => {
       }
     `)
   })
+
+  test('synthetic recursive return type', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      interface UnionType<Types> {
+        types: Types
+      }
+
+      type TypeExpression = UnionType<TypeExpression>
+
+      function resolveTypeAtLocation() {
+        return undefined as unknown as UnionType<TypeExpression>
+      }
+      `,
+      { overwrite: true }
+    )
+    const declaration = sourceFile.getFunctionOrThrow('resolveTypeAtLocation')
+    const types = resolveType(declaration.getType(), declaration)
+
+    expect(types).toMatchInlineSnapshot(`
+      {
+        "filePath": "test.ts",
+        "kind": "Function",
+        "name": "resolveTypeAtLocation",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 9,
+          },
+          "start": {
+            "column": 1,
+            "line": 7,
+          },
+        },
+        "signatures": [
+          {
+            "filePath": "test.ts",
+            "isAsync": false,
+            "isGenerator": false,
+            "kind": "CallSignature",
+            "parameters": [],
+            "position": {
+              "end": {
+                "column": 2,
+                "line": 9,
+              },
+              "start": {
+                "column": 1,
+                "line": 7,
+              },
+            },
+            "returnType": {
+              "filePath": "test.ts",
+              "kind": "TypeReference",
+              "name": "UnionType",
+              "position": {
+                "end": {
+                  "column": 2,
+                  "line": 9,
+                },
+                "start": {
+                  "column": 1,
+                  "line": 7,
+                },
+              },
+              "text": "UnionType<TypeExpression>",
+              "typeArguments": [
+                {
+                  "filePath": "test.ts",
+                  "kind": "TypeReference",
+                  "name": "UnionType",
+                  "position": {
+                    "end": {
+                      "column": 2,
+                      "line": 9,
+                    },
+                    "start": {
+                      "column": 1,
+                      "line": 7,
+                    },
+                  },
+                  "text": "TypeExpression",
+                  "typeArguments": [],
+                },
+              ],
+            },
+            "text": "function resolveTypeAtLocation(): UnionType<TypeExpression>",
+            "thisType": undefined,
+          },
+        ],
+        "text": "() => UnionType<TypeExpression>",
+      }
+    `)
+  })
 })
