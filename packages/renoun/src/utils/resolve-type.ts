@@ -1082,6 +1082,9 @@ function resolveTypeExpression(
         const resolvedTypeArguments: Kind.TypeExpression[] = []
 
         for (const typeArgument of typeArguments) {
+          if (typeArgument.getText(undefined, 16384) === 'Kind | undefined') {
+            debugger
+          }
           const resolvedTypeArgument = resolveTypeExpression(
             typeArgument,
             enclosingNode,
@@ -1517,6 +1520,9 @@ function resolveTypeExpression(
           isDistributive: checkType.isTypeParameter(),
         } satisfies Kind.ConditionalType
       } else if (type.isUnion()) {
+        if (typeText === 'Kind | undefined') {
+          debugger
+        }
         // Mixed intersection inside union (`A & B | C`)
         if (tsMorph.Node.isIntersectionTypeNode(enclosingNode)) {
           const intersectionTypeNodes = enclosingNode.getTypeNodes()
@@ -1562,7 +1568,7 @@ function resolveTypeExpression(
           const isUnionTypeNode = tsMorph.Node.isUnionTypeNode(enclosingNode)
           const unionElements = isUnionTypeNode
             ? enclosingNode.getTypeNodes()
-            : type.getUnionTypes()
+            : getOriginUnionTypes(type)
           const unionMembers: Kind.TypeExpression[] = []
 
           for (const element of unionElements) {
@@ -1576,17 +1582,50 @@ function resolveTypeExpression(
             } else {
               const unionType = element as tsMorph.Type
               currentType = unionType
+              const elementAliasSymbol = unionType.getAliasSymbol()
               const unionDeclaration = getPrimaryDeclaration(
-                unionType.getAliasSymbol() || unionType.getSymbol()
+                elementAliasSymbol || unionType.getSymbol()
               )
               currentNode = hasTypeNode(unionDeclaration)
                 ? unionDeclaration.getTypeNode()!
                 : unionDeclaration
+
+              // Check if this union element is a type alias that should be preserved as a reference
+              if (elementAliasSymbol) {
+                const declaration = getPrimaryDeclaration(elementAliasSymbol)
+
+                if (tsMorph.Node.isTypeAliasDeclaration(declaration)) {
+                  const resolvedTypeArguments: Kind.TypeExpression[] = []
+
+                  for (const typeArgument of unionType.getAliasTypeArguments()) {
+                    const resolvedTypeArgument = resolveTypeExpression(
+                      typeArgument,
+                      currentNode ?? symbolDeclaration,
+                      filter,
+                      defaultValues,
+                      dependencies
+                    )
+                    if (resolvedTypeArgument) {
+                      resolvedTypeArguments.push(resolvedTypeArgument)
+                    }
+                  }
+
+                  unionMembers.push({
+                    kind: 'TypeReference',
+                    name: elementAliasSymbol.getName(),
+                    text: currentType.getText(undefined, TYPE_FORMAT_FLAGS),
+                    typeArguments: resolvedTypeArguments,
+                    ...getDeclarationLocation(declaration),
+                  } satisfies Kind.TypeReference)
+
+                  continue
+                }
+              }
             }
 
             const resolvedMemberType = resolveTypeExpression(
               currentType,
-              currentNode ?? symbolDeclaration,
+              currentNode,
               filter,
               defaultValues,
               dependencies
@@ -3418,9 +3457,22 @@ function isSymbolType(type: Type) {
   return type.getSymbol()?.getName() === 'Symbol'
 }
 
+/** True when `type` is *using* a type‑alias, i.e. we are
+ *  *outside* the alias’ own definition. */
+function isAliasUsage(type: Type, enclosingNode?: Node): boolean {
+  const symbol = type.getAliasSymbol() ?? type.getSymbol()
+  if (!symbol) return false
+
+  const aliasDecl = getPrimaryDeclaration(symbol)
+  if (!tsMorph.Node.isTypeAliasDeclaration(aliasDecl)) return false
+
+  // Inside the alias’ declaration the enclosing node _is_ its type node.
+  return aliasDecl.getTypeNode() !== enclosingNode
+}
+
 /** Determines if a type or enclosing node is a type reference. */
 function isTypeReference(type: Type, enclosingNode?: Node): boolean {
-  // Primitive and array types can carry a reference flag, so we need to check for that first.
+  // Primitive and array types can carry a reference flag, so we need to continue checking.
   if (isPrimitiveType(type) || type.isArray() || type.isTuple()) {
     return false
   }
@@ -3433,6 +3485,38 @@ function isTypeReference(type: Type, enclosingNode?: Node): boolean {
   if (tsMorph.Node.isTypeReference(enclosingNode)) {
     return true
   }
+
+  // Handle synthetic union type references created by getOriginUnionTypes
+  // if (tsMorph.Node.isUnionTypeNode(enclosingNode)) {
+  //   const aliasSymbol = type.getAliasSymbol()
+  //   const symbol = type.getSymbol()
+  //   if (aliasSymbol) {
+  //     const aliasDeclaration = getPrimaryDeclaration(aliasSymbol)
+  //     if (tsMorph.Node.isTypeAliasDeclaration(aliasDeclaration)) {
+  //       const typeNode = aliasDeclaration.getTypeNodeOrThrow()
+
+  //       console.log({
+  //         symbolDeclaration: getPrimaryDeclaration(symbol)?.getText(),
+  //         aliasDeclaration: aliasDeclaration.getText(),
+  //         typeNode: typeNode.getText(),
+  //         enclosingNode: enclosingNode.getText(),
+  //       })
+
+  //       // if (tsMorph.Node.isUnionTypeNode(typeNode)) {
+  //       //   return true
+  //       // }
+  //       // console.log(type.getText())
+  //       // console.log(aliasDeclaration.getTypeNodeOrThrow() === enclosingNode)
+  //       // const typeNode = aliasDeclaration.getTypeNodeOrThrow()
+  //       // const insideOwnDefinition = typeNode === enclosingNode
+  //       // return !insideOwnDefinition
+
+  //       // console.log(aliasDeclaration.getTypeNodeOrThrow(), enclosingNode)
+
+  //       // return true
+  //     }
+  //   }
+  // }
 
   return isReferenceType(type)
 }
@@ -3855,6 +3939,28 @@ function getModuleSpecifierFromTypeReference(
 
   // Nothing matched, the reference is likely global (standard lib, DOM, etc.)
   return undefined
+}
+
+/** Returns the origin union types of a type. */
+function getOriginUnionTypes(type: Type): Type[] {
+  const compilerType = type.compilerType as any
+  const origin = compilerType.origin
+
+  if (!origin) {
+    return type.getUnionTypes()
+  }
+
+  if (!(origin.flags & tsMorph.ts.TypeFlags.Union)) {
+    throw new Error(
+      '[getOriginUnionTypes] Type is not a union: ' + type.getText()
+    )
+  }
+
+  const compilerFactory = (type as any)._context.compilerFactory
+
+  return origin.types.map((unionType: tsMorph.ts.Type) =>
+    compilerFactory.getType(unionType)
+  )
 }
 
 /** Prints helpful information about a node for debugging. */

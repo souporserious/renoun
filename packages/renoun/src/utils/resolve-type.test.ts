@@ -16116,4 +16116,93 @@ describe('resolveType', () => {
       }
     `)
   })
+
+  test('synthetic return type union types', () => {
+    const project = new Project({
+      compilerOptions: { strict: true },
+      useInMemoryFileSystem: true,
+    })
+    const sourceFile = project.createSourceFile(
+      'index.ts',
+      `
+      type Base  = 'a' | 'b';
+      type Union = Base | 'c';
+
+      function foo() {
+        return 'd' as Union | 'd';
+      }
+    `,
+      { overwrite: true }
+    )
+    const foo = sourceFile.getFunctionOrThrow('foo')
+    const types = resolveType(foo.getType(), foo)
+
+    expect(types).toMatchInlineSnapshot(`
+      {
+        "filePath": "index.ts",
+        "kind": "Function",
+        "name": "foo",
+        "position": {
+          "end": {
+            "column": 8,
+            "line": 7,
+          },
+          "start": {
+            "column": 7,
+            "line": 5,
+          },
+        },
+        "signatures": [
+          {
+            "filePath": "index.ts",
+            "isAsync": false,
+            "isGenerator": false,
+            "kind": "CallSignature",
+            "parameters": [],
+            "position": {
+              "end": {
+                "column": 8,
+                "line": 7,
+              },
+              "start": {
+                "column": 7,
+                "line": 5,
+              },
+            },
+            "returnType": {
+              "kind": "UnionType",
+              "text": ""d" | Union",
+              "types": [
+                {
+                  "kind": "String",
+                  "text": ""d"",
+                  "value": "d",
+                },
+                {
+                  "filePath": "index.ts",
+                  "kind": "TypeReference",
+                  "name": "Union",
+                  "position": {
+                    "end": {
+                      "column": 31,
+                      "line": 3,
+                    },
+                    "start": {
+                      "column": 7,
+                      "line": 3,
+                    },
+                  },
+                  "text": "Union",
+                  "typeArguments": [],
+                },
+              ],
+            },
+            "text": "function foo(): "d" | Union",
+            "thisType": undefined,
+          },
+        ],
+        "text": "() => Union | "d"",
+      }
+    `)
+  })
 })
