@@ -603,7 +603,7 @@ export type SymbolMetadata = ReturnType<typeof getSymbolMetadata>
 
 export type SymbolFilter = (symbolMetadata: SymbolMetadata) => boolean
 
-/** Describes one “include” rule. */
+/** Describes one "include" rule. */
 export interface FilterDescriptor {
   /** Package name that exported the type, e.g. `react`. Omit to match any package. */
   moduleSpecifier?: string
@@ -3457,19 +3457,6 @@ function isSymbolType(type: Type) {
   return type.getSymbol()?.getName() === 'Symbol'
 }
 
-/** True when `type` is *using* a type‑alias, i.e. we are
- *  *outside* the alias’ own definition. */
-function isAliasUsage(type: Type, enclosingNode?: Node): boolean {
-  const symbol = type.getAliasSymbol() ?? type.getSymbol()
-  if (!symbol) return false
-
-  const aliasDecl = getPrimaryDeclaration(symbol)
-  if (!tsMorph.Node.isTypeAliasDeclaration(aliasDecl)) return false
-
-  // Inside the alias’ declaration the enclosing node _is_ its type node.
-  return aliasDecl.getTypeNode() !== enclosingNode
-}
-
 /** Determines if a type or enclosing node is a type reference. */
 function isTypeReference(type: Type, enclosingNode?: Node): boolean {
   // Primitive and array types can carry a reference flag, so we need to continue checking.
@@ -3485,38 +3472,6 @@ function isTypeReference(type: Type, enclosingNode?: Node): boolean {
   if (tsMorph.Node.isTypeReference(enclosingNode)) {
     return true
   }
-
-  // Handle synthetic union type references created by getOriginUnionTypes
-  // if (tsMorph.Node.isUnionTypeNode(enclosingNode)) {
-  //   const aliasSymbol = type.getAliasSymbol()
-  //   const symbol = type.getSymbol()
-  //   if (aliasSymbol) {
-  //     const aliasDeclaration = getPrimaryDeclaration(aliasSymbol)
-  //     if (tsMorph.Node.isTypeAliasDeclaration(aliasDeclaration)) {
-  //       const typeNode = aliasDeclaration.getTypeNodeOrThrow()
-
-  //       console.log({
-  //         symbolDeclaration: getPrimaryDeclaration(symbol)?.getText(),
-  //         aliasDeclaration: aliasDeclaration.getText(),
-  //         typeNode: typeNode.getText(),
-  //         enclosingNode: enclosingNode.getText(),
-  //       })
-
-  //       // if (tsMorph.Node.isUnionTypeNode(typeNode)) {
-  //       //   return true
-  //       // }
-  //       // console.log(type.getText())
-  //       // console.log(aliasDeclaration.getTypeNodeOrThrow() === enclosingNode)
-  //       // const typeNode = aliasDeclaration.getTypeNodeOrThrow()
-  //       // const insideOwnDefinition = typeNode === enclosingNode
-  //       // return !insideOwnDefinition
-
-  //       // console.log(aliasDeclaration.getTypeNodeOrThrow(), enclosingNode)
-
-  //       // return true
-  //     }
-  //   }
-  // }
 
   return isReferenceType(type)
 }
@@ -3762,65 +3717,6 @@ function getTypeAtLocation<
   return (
     getDeclaredAnnotationType(declaration) ?? symbol.getTypeAtLocation(location)
   )
-}
-
-/**
- * Decide whether a `TypeReference` should be fully resolved or kept as a reference.
- *
- * The guiding principle is to inline only when every part of the reference is
- * local to the project and concrete. The alias is kept when it is public,
- * external, or still generic.
- *
- * A type is resolved when all of the following criteria are met:
- * - The reference is not already being resolved (prevents infinite loops).
- * - The reference itself doesn't contain any free type parameters (i.e. it is already fully instantiated).
- * - At least one type-argument is *internal* and none of the arguments are:
- *    - imported into the current file
- *    - exported from their source file
- *    - declared in `node_modules`
- */
-function shouldResolveTypeReference(type: Type, enclosingNode?: Node): boolean {
-  if (containsFreeTypeParameter(type)) {
-    return false
-  }
-
-  const symbol = type.getAliasSymbol() ?? type.getSymbol()
-  const aliasIsInternal =
-    symbol?.getDeclarations().every((declaration) => {
-      const isInNodeModules = declaration.getSourceFile().isInNodeModules()
-      if (isInNodeModules) {
-        return false
-      }
-      const isExported = isDeclarationExported(declaration, enclosingNode)
-      if (isExported) {
-        return false
-      }
-      return true
-    }) ?? true
-
-  // Only inline when the alias and at least one argument are internal
-  return aliasIsInternal && type.getTypeArguments().some(isInternalType)
-}
-
-/** Determines if a type is internal. */
-function isInternalType(type: Type): boolean {
-  const symbol = type.getSymbol() ?? type.getAliasSymbol()
-
-  if (!symbol) {
-    return false
-  }
-
-  return symbol.getDeclarations().every((declaration) => {
-    const isInNodeModules = declaration.getSourceFile().isInNodeModules()
-    if (isInNodeModules) {
-      return false
-    }
-    const isExported = isDeclarationExported(declaration, undefined)
-    if (isExported) {
-      return false
-    }
-    return true
-  })
 }
 
 /**

@@ -2899,7 +2899,7 @@ describe('resolveType', () => {
     `)
   })
 
-  test('creates reference for virtual types pointing to node modules', () => {
+  test('creates reference for synthetic types pointing to node modules', () => {
     const project = new Project()
 
     project.createSourceFile(
