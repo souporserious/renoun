@@ -3842,13 +3842,13 @@ function getOriginUnionTypes(type: Type): Type[] {
   const compilerType = type.compilerType as any
   const origin = compilerType.origin
 
-  if (!origin) {
+  if (!origin || (origin.flags & tsMorph.ts.TypeFlags.Intersection) !== 0) {
     return type.getUnionTypes()
   }
 
-  if (!(origin.flags & tsMorph.ts.TypeFlags.Union)) {
+  if ((origin.flags & tsMorph.ts.TypeFlags.Union) === 0) {
     throw new Error(
-      '[getOriginUnionTypes] Type is not a union: ' + type.getText()
+      '[getOriginUnionTypes] Origin type is not a union: ' + type.getText()
     )
   }
 
