@@ -1457,6 +1457,8 @@ function resolveTypeExpression(
       } satisfies Kind.ConditionalType
     } else if (isConditionalType(type)) {
       const compilerFactory = (type as any)._context.compilerFactory
+      const typeChecker = (type as any)._context.typeChecker
+        .compilerObject as tsMorph.ts.TypeChecker
       const checkType = compilerFactory.getType(type.compilerType.checkType)
       const resolvedCheckType = resolveTypeExpression(
         checkType,
@@ -1474,7 +1476,8 @@ function resolveTypeExpression(
         dependencies
       )
       const trueType = compilerFactory.getType(
-        type.compilerType.resolvedTrueType
+        type.compilerType.resolvedTrueType ??
+          typeChecker.getTypeFromTypeNode(type.compilerType.root.node.trueType)
       )
       const resolvedTrueType = resolveTypeExpression(
         trueType,
@@ -1484,7 +1487,8 @@ function resolveTypeExpression(
         dependencies
       )
       const falseType = compilerFactory.getType(
-        type.compilerType.resolvedFalseType
+        type.compilerType.resolvedFalseType ??
+          typeChecker.getTypeFromTypeNode(type.compilerType.root.node.falseType)
       )
       const resolvedFalseType = resolveTypeExpression(
         falseType,
@@ -3804,35 +3808,6 @@ function shouldResolveMappedType(mappedNode: tsMorph.MappedTypeNode): boolean {
       )
 
   return !operandIsExternal
-}
-
-/**
- * Collect *all* free (un-bound) type-parameter symbols that occur inside `type`.
- * We need the full set so we can later subtract the mapped type’s own `Key`.
- */
-function collectFreeTypeParameters(
-  type: Type,
-  seen: Set<Type> = new Set(),
-  out: Set<tsMorph.Symbol> = new Set()
-): Set<tsMorph.Symbol> {
-  if (!type || seen.has(type)) return out
-  seen.add(type)
-
-  if (type.isTypeParameter()) {
-    const sym = type.getSymbol()
-    if (sym) out.add(sym)
-  }
-
-  // recurse into alias args, normal args, union/intersection constituents…
-  for (const t of [
-    ...type.getAliasTypeArguments(),
-    ...type.getTypeArguments(),
-    ...(type.getUnionTypes?.() ?? []),
-    ...(type.getIntersectionTypes?.() ?? []),
-  ]) {
-    collectFreeTypeParameters(t, seen, out)
-  }
-  return out
 }
 
 /**
