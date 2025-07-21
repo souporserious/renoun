@@ -57,7 +57,7 @@ const defaultGaps = {
 }
 
 /** Default implementations for every slot. */
-export const defaultComponents: APIReferenceComponents = {
+const defaultComponents: APIReferenceComponents = {
   Section: 'section',
   SectionHeading: 'h3',
   SectionBody: ({ children }) => children,
