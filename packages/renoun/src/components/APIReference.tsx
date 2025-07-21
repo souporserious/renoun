@@ -520,7 +520,9 @@ function ComponentSection({
                             {property.isOptional ? '?' : ''}
                           </components.TableData>
                           <components.TableData>
-                            <components.Code>{property.text}</components.Code>
+                            <components.Code>
+                              {property.type.text}
+                            </components.Code>
                           </components.TableData>
                           <components.TableData>
                             {/* TODO: immediate type literals should have an initializer e.g. function Button({ variant = 'outline' }: { variant: 'fill' | 'outline' }) {}, this could be a special ImmediateTypeLiteral/Object kind that provides it. */}
@@ -684,7 +686,7 @@ function MembersSection({
                   {property.isOptional ? '?' : ''}
                 </components.TableData>
                 <components.TableData colSpan={2}>
-                  <components.Code>{property.text}</components.Code>
+                  <components.Code>{property.type.text}</components.Code>
                 </components.TableData>
               </>
             )}
