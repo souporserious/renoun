@@ -10,63 +10,92 @@ import {
   type TypeFilter,
   type TypeOfKind,
 } from '../utils/resolve-type.js'
-import { Collapse } from './Collapse/index.js'
 import { WorkingDirectoryContext } from './Context.js'
 
-type ElementTags =
-  | 'section'
-  | 'div'
-  | 'h3'
-  | 'h4'
-  | 'p'
-  | 'code'
-  | 'table'
-  | 'thead'
-  | 'tbody'
-  | 'tr'
-  | 'th'
-  | 'td'
-
-type ElementPropOverrides = {
-  div: {
-    'data-type'?: 'column' | 'row' | 'detail' | 'signatures'
-    'data-gap'?: 'small' | 'medium' | 'large'
-  }
-  p: {
-    'data-type'?: 'description'
-  }
-  tr: {
-    'data-type'?: 'sub-row'
-  }
+/** Simplified layout component props that support an optional gap prop. */
+export interface LayoutProps extends React.HTMLAttributes<HTMLElement> {
+  as?: React.ElementType
+  gap?: 'small' | 'medium' | 'large'
 }
 
-type ElementProps<Tag extends ElementTags> =
-  Tag extends keyof ElementPropOverrides
-    ? React.ComponentProps<Tag> & ElementPropOverrides[Tag]
-    : React.ComponentProps<Tag>
-
+/**
+ * Component slots that can be overridden via the `components` prop. These map to
+ * the structural parts of the rendered API reference rather than raw HTML
+ * elements so consumers can more easily style each piece.
+ */
 export type APIReferenceComponents = {
-  [Tag in ElementTags]: Tag | React.ComponentType<ElementProps<Tag>>
+  Section: React.ElementType
+  SectionHeading: React.ElementType
+  SectionBody: React.ComponentType<{
+    hasDescription: boolean
+    children: React.ReactNode
+  }>
+  Block: React.ComponentType<LayoutProps>
+  Inline: React.ComponentType<LayoutProps>
+  Code: React.ElementType
+  Description: React.ElementType
+  Detail: React.ElementType
+  Signatures: React.ElementType
+  DetailHeading: React.ElementType
+  Table: React.ElementType
+  TableHead: React.ElementType
+  TableBody: React.ElementType
+  TableRow: React.ElementType
+  TableRowGroup: React.ComponentType<{
+    hasSubRow: boolean
+    children: React.ReactNode
+  }>
+  TableSubRow: React.ElementType
+  TableHeader: React.ElementType
+  TableData: React.ElementType
 }
 
-const defaultComponents: APIReferenceComponents = {
-  section: 'section',
-  div: 'div',
-  h3: 'h3',
-  h4: 'h4',
-  p: 'p',
-  code: 'code',
-  table: 'table',
-  thead: 'thead',
-  tbody: 'tbody',
-  tr: (props) =>
-    props['data-type'] === 'sub-row' ? (
-      <Collapse.Content as="tr" {...props} />
-    ) : (
-      <tr {...props} />
-    ),
-  th: 'th',
-  td: 'td',
+const defaultGaps = {
+  small: '0.25rem',
+  medium: '0.5rem',
+  large: '2rem',
+}
+
+/** Default implementations for every slot. */
+export const defaultComponents: APIReferenceComponents = {
+  Section: 'section',
+  SectionHeading: 'h3',
+  SectionBody: ({ children }) => children,
+  Block: ({ gap, as: Component = 'div', style, ...rest }: LayoutProps) => (
+    <Component
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: gap ? defaultGaps[gap] : undefined,
+        ...style,
+      }}
+      {...rest}
+    />
+  ),
+  Inline: ({ gap, as: Component = 'div', style, ...rest }: LayoutProps) => (
+    <Component
+      style={{
+        display: 'flex',
+        flexDirection: 'row',
+        gap: gap ? defaultGaps[gap] : undefined,
+        ...style,
+      }}
+      {...rest}
+    />
+  ),
+  Code: 'code',
+  Description: 'p',
+  Detail: 'div',
+  DetailHeading: 'h4',
+  Signatures: 'div',
+  Table: 'table',
+  TableHead: 'thead',
+  TableHeader: 'th',
+  TableBody: 'tbody',
+  TableData: 'td',
+  TableRow: 'tr',
+  TableSubRow: 'tr',
+  TableRowGroup: ({ children }) => children,
 }
 
 export interface APIReferenceProps {
@@ -83,8 +112,6 @@ export interface APIReferenceProps {
   components?: Partial<APIReferenceComponents>
 }
 
-// TODO: add badges like rendering environment, deprecation, unstable, overloaded etc.
-// TODO: remove data attributes and use specific components from component prop instead Block, Inline, Detail, Signatures, Collapse, etc. this way props are typed for each component
 export function APIReference(props: APIReferenceProps) {
   return (
     <Suspense>
@@ -219,23 +246,21 @@ function TypeSection({
   components: APIReferenceComponents
 }) {
   return (
-    <Collapse.Provider>
-      <components.section id={id}>
-        <components.h3 aria-label={`${title} ${label}`}>
-          <span>{label}</span> {title}
-        </components.h3>
-        <Collapse.Content>
-          {description ? (
-            <components.div data-type="column" data-gap="large">
-              <components.p data-type="description">{description}</components.p>
-              {children}
-            </components.div>
-          ) : (
-            children
-          )}
-        </Collapse.Content>
-      </components.section>
-    </Collapse.Provider>
+    <components.Section id={id}>
+      <components.SectionHeading aria-label={`${title} ${label}`}>
+        <span>{label}</span> {title}
+      </components.SectionHeading>
+      <components.SectionBody hasDescription={!!description}>
+        {description ? (
+          <components.Block gap="large">
+            <components.Description>{description}</components.Description>
+            {children}
+          </components.Block>
+        ) : (
+          children
+        )}
+      </components.SectionBody>
+    </components.Section>
   )
 }
 
@@ -249,10 +274,12 @@ function TypeDetail({
   components: APIReferenceComponents
 }) {
   return (
-    <components.div data-type="detail">
-      {label ? <components.h4>{label}</components.h4> : null}
+    <components.Detail>
+      {label ? (
+        <components.DetailHeading>{label}</components.DetailHeading>
+      ) : null}
       {children}
-    </components.div>
+    </components.Detail>
   )
 }
 
@@ -270,34 +297,38 @@ function TypeTable<RowType>({
   components: APIReferenceComponents
 }) {
   return (
-    <components.table>
+    <components.Table>
       {headers ? (
-        <components.thead>
-          <components.tr>
+        <components.TableHead>
+          <components.TableRow>
             {headers.map((header, index) => (
-              <components.th key={index}>{header}</components.th>
+              <components.TableHeader key={index}>
+                {header}
+              </components.TableHeader>
             ))}
-          </components.tr>
-        </components.thead>
+          </components.TableRow>
+        </components.TableHead>
       ) : null}
 
-      <components.tbody>
+      <components.TableBody>
         {rows.map((row, index) => {
           const subRow = renderSubRow?.(row, index)
 
           return (
-            <Collapse.Provider key={index}>
-              <components.tr>{renderRow(row, index)}</components.tr>
+            <components.TableRowGroup key={index} hasSubRow={!!subRow}>
+              <components.TableRow>{renderRow(row, index)}</components.TableRow>
               {subRow ? (
-                <components.tr data-type="sub-row">
-                  <components.td colSpan={3}>{subRow}</components.td>
-                </components.tr>
+                <components.TableSubRow>
+                  <components.TableData colSpan={3}>
+                    {subRow}
+                  </components.TableData>
+                </components.TableSubRow>
               ) : null}
-            </Collapse.Provider>
+            </components.TableRowGroup>
           )
         })}
-      </components.tbody>
-    </components.table>
+      </components.TableBody>
+    </components.Table>
   )
 }
 
@@ -317,7 +348,7 @@ function VariableSection({
       components={components}
     >
       <TypeDetail label="Type" components={components}>
-        <components.code>{node.text}</components.code>
+        <components.Code>{node.text}</components.Code>
       </TypeDetail>
     </TypeSection>
   )
@@ -329,19 +360,19 @@ function renderClassPropertyRow(
 ) {
   return (
     <>
-      <components.td>
+      <components.TableData>
         {property.name}
         {property.isOptional ? '?' : ''}
-      </components.td>
-      <components.td>
-        <components.code>{property.text}</components.code>
-      </components.td>
-      <components.td>
+      </components.TableData>
+      <components.TableData>
+        <components.Code>{property.text}</components.Code>
+      </components.TableData>
+      <components.TableData>
         <InitializerValue
           initializer={property.initializer}
           components={components}
         />
-      </components.td>
+      </components.TableData>
     </>
   )
 }
@@ -354,10 +385,10 @@ function renderMethodRow(
 
   return (
     <>
-      <components.td>{method.name}</components.td>
-      <components.td colSpan={2}>
-        <components.code>{signature.text}</components.code>
-      </components.td>
+      <components.TableData>{method.name}</components.TableData>
+      <components.TableData colSpan={2}>
+        <components.Code>{signature.text}</components.Code>
+      </components.TableData>
     </>
   )
 }
@@ -384,7 +415,7 @@ function renderMethodSubRow(
 
       {signature.returnType ? (
         <TypeDetail components={components}>
-          <components.code>{signature.returnType.text}</components.code>
+          <components.Code>{signature.returnType.text}</components.Code>
         </TypeDetail>
       ) : null}
     </>
@@ -434,22 +465,22 @@ function ClassSection({
       {node.extends || node.implements?.length ? (
         <TypeDetail components={components}>
           {node.extends ? (
-            <components.div data-type="column" data-gap="medium">
-              <components.h4>Extends</components.h4>
-              <components.code>{node.extends.text}</components.code>
-            </components.div>
+            <components.Block gap="medium">
+              <components.DetailHeading>Extends</components.DetailHeading>
+              <components.Code>{node.extends.text}</components.Code>
+            </components.Block>
           ) : null}
 
           {node.implements?.length ? (
-            <components.div data-type="column" data-gap="medium">
-              <components.h4>Implements</components.h4>
+            <components.Block gap="medium">
+              <components.DetailHeading>Implements</components.DetailHeading>
               {node.implements.map((implementation, index) => (
                 <React.Fragment key={index}>
                   {index > 0 ? ', ' : null}
-                  <components.code>{implementation.text}</components.code>
+                  <components.Code>{implementation.text}</components.Code>
                 </React.Fragment>
               ))}
-            </components.div>
+            </components.Block>
           ) : null}
         </TypeDetail>
       ) : null}
@@ -472,10 +503,10 @@ function ComponentSection({
       id={node.name}
       components={components}
     >
-      <components.div data-type="signatures">
+      <components.Signatures>
         {node.signatures.map((signature, index) => {
           return (
-            <components.div data-type="column" data-gap="large" key={index}>
+            <components.Block gap="large" key={index}>
               <TypeDetail label="Properties" components={components}>
                 {signature.parameter?.kind === 'TypeLiteral' ? (
                   <TypeTable
@@ -484,39 +515,39 @@ function ComponentSection({
                     renderRow={(property) =>
                       property.kind === 'PropertySignature' ? (
                         <>
-                          <components.td>
+                          <components.TableData>
                             {property.name}
                             {property.isOptional ? '?' : ''}
-                          </components.td>
-                          <components.td>
-                            <components.code>{property.text}</components.code>
-                          </components.td>
-                          <components.td>
+                          </components.TableData>
+                          <components.TableData>
+                            <components.Code>{property.text}</components.Code>
+                          </components.TableData>
+                          <components.TableData>
                             {/* TODO: immediate type literals should have an initializer e.g. function Button({ variant = 'outline' }: { variant: 'fill' | 'outline' }) {}, this could be a special ImmediateTypeLiteral/Object kind that provides it. */}
                             {/* <InitializerValue
                           value={property.initializer}
                           components={components}
                         /> */}
-                          </components.td>
+                          </components.TableData>
                         </>
                       ) : (
-                        <components.td colSpan={3}>
-                          <components.code>{property.text}</components.code>
-                        </components.td>
+                        <components.TableData colSpan={3}>
+                          <components.Code>{property.text}</components.Code>
+                        </components.TableData>
                       )
                     }
                     components={components}
                   />
                 ) : (
-                  <components.code>
+                  <components.Code>
                     {signature.parameter?.text ?? '—'}
-                  </components.code>
+                  </components.Code>
                 )}
               </TypeDetail>
-            </components.div>
+            </components.Block>
           )
         })}
-      </components.div>
+      </components.Signatures>
     </TypeSection>
   )
 }
@@ -527,19 +558,19 @@ function renderParameterRow(
 ) {
   return (
     <>
-      <components.td>
+      <components.TableData>
         {parameter.name}
         {parameter.isOptional ? '?' : ''}
-      </components.td>
-      <components.td>
-        <components.code>{parameter.text}</components.code>
-      </components.td>
-      <components.td>
+      </components.TableData>
+      <components.TableData>
+        <components.Code>{parameter.text}</components.Code>
+      </components.TableData>
+      <components.TableData>
         <InitializerValue
           initializer={parameter.initializer}
           components={components}
         />
-      </components.td>
+      </components.TableData>
     </>
   )
 }
@@ -559,9 +590,9 @@ function FunctionSection({
       id={node.name}
       components={components}
     >
-      <components.div data-type="signatures">
+      <components.Signatures>
         {node.signatures.map((signature, index) => (
-          <components.div key={index} data-type="column" data-gap="large">
+          <components.Block key={index} gap="large">
             {signature.parameters.length > 0 ? (
               <TypeDetail label="Parameters" components={components}>
                 <TypeTable
@@ -575,12 +606,12 @@ function FunctionSection({
 
             {signature.returnType ? (
               <TypeDetail label="Returns" components={components}>
-                <components.code>{signature.returnType.text}</components.code>
+                <components.Code>{signature.returnType.text}</components.Code>
               </TypeDetail>
             ) : null}
-          </components.div>
+          </components.Block>
         ))}
-      </components.div>
+      </components.Signatures>
     </TypeSection>
   )
 }
@@ -601,7 +632,7 @@ function TypeAliasSection({
       components={components}
     >
       <TypeDetail label="Type" components={components}>
-        <components.code>{node.text}</components.code>
+        <components.Code>{node.text}</components.Code>
       </TypeDetail>
     </TypeSection>
   )
@@ -648,13 +679,13 @@ function MembersSection({
             headers={['Property', 'Type']}
             renderRow={(property) => (
               <>
-                <components.td>
+                <components.TableData>
                   {property.name}
                   {property.isOptional ? '?' : ''}
-                </components.td>
-                <components.td colSpan={2}>
-                  <components.code>{property.text}</components.code>
-                </components.td>
+                </components.TableData>
+                <components.TableData colSpan={2}>
+                  <components.Code>{property.text}</components.Code>
+                </components.TableData>
               </>
             )}
             components={components}
@@ -669,10 +700,10 @@ function MembersSection({
             headers={['Method', 'Type']}
             renderRow={(method) => (
               <>
-                <components.td>{method.name}</components.td>
-                <components.td colSpan={2}>
-                  <components.code>{method.text}</components.code>
-                </components.td>
+                <components.TableData>{method.name}</components.TableData>
+                <components.TableData colSpan={2}>
+                  <components.Code>{method.text}</components.Code>
+                </components.TableData>
               </>
             )}
             components={components}
@@ -687,14 +718,14 @@ function MembersSection({
             headers={['Key', 'Type']}
             renderRow={(indexSignature) => (
               <>
-                <components.td>
-                  <components.code>
+                <components.TableData>
+                  <components.Code>
                     {indexSignature.parameter.text}
-                  </components.code>
-                </components.td>
-                <components.td colSpan={2}>
-                  <components.code>{indexSignature.type.text}</components.code>
-                </components.td>
+                  </components.Code>
+                </components.TableData>
+                <components.TableData colSpan={2}>
+                  <components.Code>{indexSignature.type.text}</components.Code>
+                </components.TableData>
               </>
             )}
             components={components}
@@ -724,17 +755,17 @@ function MappedSection({
       components={components}
     >
       <TypeDetail label="Parameter" components={components}>
-        <components.code>{parameterText}</components.code>
+        <components.Code>{parameterText}</components.Code>
       </TypeDetail>
       <TypeDetail label="Type" components={components}>
-        <components.code>{valueText}</components.code>
+        <components.Code>{valueText}</components.Code>
       </TypeDetail>
       <TypeDetail label="Modifiers" components={components}>
-        <components.code>
+        <components.Code>
           {node.isReadonly ? 'readonly ' : null}
           {node.isOptional ? 'optional' : null}
           {!node.isReadonly && !node.isOptional ? '—' : null}
-        </components.code>
+        </components.Code>
       </TypeDetail>
     </TypeSection>
   )
@@ -747,7 +778,7 @@ function IntersectionSection({
   node: TypeOfKind<'IntersectionType'>
   components: APIReferenceComponents
 }) {
-  // Flatten into one table if every member is either an TypeLiteral or a MappedType kind
+  // Flatten into one table if every member is either a TypeLiteral or a MappedType kind
   if (
     node.types.length > 1 &&
     node.types.every(
@@ -808,13 +839,13 @@ function IntersectionSection({
             headers={['Property', 'Type']}
             renderRow={(r) => (
               <>
-                <components.td>
+                <components.TableData>
                   {r.name}
                   {r.isOptional ? '?' : ''}
-                </components.td>
-                <components.td colSpan={2}>
-                  <components.code>{r.text}</components.code>
-                </components.td>
+                </components.TableData>
+                <components.TableData colSpan={2}>
+                  <components.Code>{r.text}</components.Code>
+                </components.TableData>
               </>
             )}
             components={components}
@@ -832,13 +863,13 @@ function IntersectionSection({
       id="Intersection"
       components={components}
     >
-      <div data-type="column" data-gap="medium">
+      <components.Block gap="medium">
         {node.types.map((type, index) => (
-          <div key={index} data-type="row" data-gap="small">
+          <components.Inline key={index} gap="small">
             <TypeNodeRouter node={type} components={components} />
-          </div>
+          </components.Inline>
         ))}
-      </div>
+      </components.Block>
     </TypeSection>
   )
 }
@@ -855,7 +886,7 @@ function TypeExpressionSection({
   return (
     <TypeSection label={label} title={'-'} components={components}>
       <TypeDetail label="Type" components={components}>
-        <components.code>{node.text}</components.code>
+        <components.Code>{node.text}</components.Code>
       </TypeDetail>
     </TypeSection>
   )
@@ -889,7 +920,7 @@ function InitializerValue({
     }
   }
 
-  return <components.code>{valueString}</components.code>
+  return <components.Code>{valueString}</components.Code>
 }
 
 /** Convert kind name from PascalCase to space separated label. */

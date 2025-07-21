@@ -2,11 +2,12 @@ import type { JavaScriptFileExport } from 'renoun/file-system'
 import {
   APIReference as DefaultAPIReference,
   type APIReferenceProps,
+  type APIReferenceComponents,
 } from 'renoun/components'
-import { Collapse } from 'renoun/components/Collapse/index'
 import { styled } from 'restyle'
 import { GeistMono } from 'geist/font/mono'
 
+import { Collapse } from './Collapse'
 import { Markdown } from './Markdown'
 
 export function APIReferences({
@@ -33,185 +34,201 @@ export function APIReferences({
 }
 
 export function APIReference(props: APIReferenceProps) {
-  return (
-    <DefaultAPIReference
-      {...props}
-      components={{
-        section: (props) => (
-          <section
-            {...props}
+  const components = {
+    Section: (props) => (
+      <Collapse.Provider>
+        <section
+          {...props}
+          css={{
+            display: 'flex',
+            flexDirection: 'column',
+            position: 'relative',
+          }}
+        />
+      </Collapse.Provider>
+    ),
+    SectionHeading: (props) => (
+      <h3
+        {...props}
+        css={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.5rem',
+          fontSize: 'var(--font-size-heading-3)',
+          lineHeight: 'var(--line-height-heading-3)',
+          fontWeight: 'var(--font-weight-heading)',
+
+          '& span': {
+            textTransform: 'uppercase',
+            letterSpacing: '0.1rem',
+            fontSize: 'var(--font-size-title)',
+            lineHeight: 1,
+            color: 'var(--color-foreground-secondary)',
+          },
+        }}
+      >
+        <StyledTrigger>
+          <svg
+            viewBox="0 0 12 12"
             css={{
-              display: 'flex',
-              flexDirection: 'column',
-              position: 'relative',
-            }}
-          />
-        ),
-        div: (props) => (
-          <div
-            {...props}
-            css={{
-              '&[data-type="column"]': {
-                display: 'flex',
-                flexDirection: 'column',
-              },
+              position: 'absolute',
+              width: 16,
+              height: 16,
+              top: '3.2rem',
+              left: '-2rem',
+              transition: 'transform 0.2s ease',
 
-              '&[data-type="row"]': {
-                display: 'flex',
-                flexDirection: 'row',
-              },
-
-              '&[data-type="detail"]': {
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '0.5rem',
-                marginBottom: '1rem',
-              },
-
-              '&[data-type="signatures"]': {
-                display: 'flex',
-                flexDirection: 'column',
-
-                '& > *': {
-                  padding: '2rem 0',
-                },
-                '& > *:not(:last-child)': {
-                  borderBottom: '1px solid var(--color-separator-secondary)',
-                },
-              },
-
-              '&[data-gap="small"]': {
-                gap: '0.25rem',
-              },
-
-              '&[data-gap="medium"]': {
-                gap: '0.5rem',
-              },
-
-              '&[data-gap="large"]': {
-                gap: '2rem',
-              },
-            }}
-          />
-        ),
-        h3: (props) => (
-          <h3
-            {...props}
-            css={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.5rem',
-              fontSize: 'var(--font-size-heading-3)',
-              lineHeight: 'var(--line-height-heading-3)',
-              fontWeight: 'var(--font-weight-heading)',
-
-              '& span': {
-                textTransform: 'uppercase',
-                letterSpacing: '0.1rem',
-                fontSize: 'var(--font-size-title)',
-                lineHeight: 1,
-                color: 'var(--color-foreground-secondary)',
+              '[aria-expanded="true"] &': {
+                transform: 'rotate(90deg)',
               },
             }}
           >
-            <StyledTrigger>
-              <svg
-                viewBox="0 0 12 12"
-                css={{
-                  position: 'absolute',
-                  width: 16,
-                  height: 16,
-                  top: '3.2rem',
-                  left: '-2rem',
-                  transition: 'transform 0.2s ease',
+            <path d="M3 2l4 4-4 4" fill="none" stroke="currentColor" />
+          </svg>
+          {props.children}
+        </StyledTrigger>
+      </h3>
+    ),
+    SectionBody: ({ children }) => (
+      <Collapse.Content>{children}</Collapse.Content>
+    ),
+    Block: ({ gap, ...props }) => (
+      <div
+        {...props}
+        css={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap:
+            gap === 'small'
+              ? '0.25rem'
+              : gap === 'medium'
+                ? '0.5rem'
+                : gap === 'large'
+                  ? '2rem'
+                  : undefined,
+        }}
+      />
+    ),
+    Inline: ({ gap, ...props }) => (
+      <div
+        {...props}
+        css={{
+          display: 'flex',
+          flexDirection: 'row',
+          gap:
+            gap === 'small'
+              ? '0.25rem'
+              : gap === 'medium'
+                ? '0.5rem'
+                : gap === 'large'
+                  ? '2rem'
+                  : undefined,
+        }}
+      />
+    ),
+    Detail: (props) => (
+      <div
+        {...props}
+        css={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.5rem',
+          marginBottom: '1rem',
+        }}
+      />
+    ),
+    DetailHeading: (props) => (
+      <h4
+        {...props}
+        css={{
+          fontSize: 'var(--font-size-body-1)',
+          lineHeight: 'var(--line-height-body-1)',
+          fontWeight: 'var(--font-weight-body)',
+        }}
+      />
+    ),
+    Signatures: (props) => (
+      <div
+        {...props}
+        css={{
+          display: 'flex',
+          flexDirection: 'column',
+          '& > *': { padding: '2rem 0' },
+          '& > *:not(:last-child)': {
+            borderBottom: '1px solid var(--color-separator-secondary)',
+          },
+        }}
+      />
+    ),
+    Table: (props) => (
+      <table
+        {...props}
+        css={{
+          width: '100%',
+          tableLayout: 'fixed',
+          fontSize: 'var(--font-size-body-2)',
+          lineHeight: 'var(--line-height-body-2)',
+          borderBottom: '1px solid var(--color-separator)',
+          borderCollapse: 'collapse',
 
-                  '[aria-expanded="true"] &': {
-                    transform: 'rotate(90deg)',
-                  },
-                }}
-              >
-                <path d="M3 2l4 4-4 4" fill="none" stroke="currentColor" />
-              </svg>
-              {props.children}
-            </StyledTrigger>
-          </h3>
-        ),
-        h4: (props) => (
-          <h4
-            {...props}
-            css={{
-              fontSize: 'var(--font-size-body-1)',
-              lineHeight: 'var(--line-height-body-1)',
-              fontWeight: 'var(--font-weight-body)',
-            }}
-          />
-        ),
-        table: (props) => (
-          <table
-            {...props}
-            css={{
-              width: '100%',
-              tableLayout: 'fixed',
-              fontSize: 'var(--font-size-body-2)',
-              lineHeight: 'var(--line-height-body-2)',
-              borderBottom: '1px solid var(--color-separator)',
-              borderCollapse: 'collapse',
+          'th, td': {
+            padding: '0.5rem 0',
+          },
+          'th + th, td + td': {
+            paddingLeft: '1rem',
+          },
+        }}
+      />
+    ),
+    TableRow: (props) => (
+      <tr
+        {...props}
+        css={{ borderBottom: '1px solid var(--color-separator)' }}
+      />
+    ),
+    TableRowGroup: ({ hasSubRow, children }) =>
+      hasSubRow ? (
+        <Collapse.Provider>{children}</Collapse.Provider>
+      ) : (
+        <>{children}</>
+      ),
+    TableSubRow: (props) => <StyledCollapse as="tr" {...props} />,
+    TableHeader: (props) => (
+      <th
+        {...props}
+        css={{
+          textAlign: 'left',
+          fontWeight: 'var(--font-weight-heading)',
+          color: 'var(--color-foreground)',
+        }}
+      />
+    ),
+    TableData: (props) => (
+      <td
+        {...props}
+        css={{
+          whiteSpace: 'nowrap',
+          overflowX: 'auto',
+          mask: 'linear-gradient(to right, #0000, #ffff var(--start-fade) calc(100% - var(--end-fade)), #0000)',
+          animationName: 'scroll-mask',
+          animationTimeline: '--scroll-mask',
+          scrollTimeline: '--scroll-mask x',
+          width: '100%',
 
-              'th, td': {
-                padding: '0.5rem 0',
-              },
-              'th + th, td + td': {
-                paddingLeft: '1rem',
-              },
-            }}
-          />
-        ),
-        tr: (props) =>
-          props['data-type'] === 'sub-row' ? (
-            <StyledCollapse as="tr" {...props} />
-          ) : (
-            <tr
-              {...props}
-              css={{
-                borderBottom: '1px solid var(--color-separator)',
-              }}
-            />
-          ),
-        th: (props) => (
-          <th
-            {...props}
-            css={{
-              textAlign: 'left',
-              fontWeight: 'var(--font-weight-heading)',
-              color: 'var(--color-foreground)',
-            }}
-          />
-        ),
-        td: (props) => (
-          <td
-            {...props}
-            css={{
-              whiteSpace: 'nowrap',
-              overflowX: 'auto',
-              mask: 'linear-gradient(to right, #0000, #ffff var(--start-fade) calc(100% - var(--end-fade)), #0000)',
-              animationName: 'scroll-mask',
-              animationTimeline: '--scroll-mask',
-              scrollTimeline: '--scroll-mask x',
-
-              ':nth-child(1)': {
-                width: '30.77%',
-              },
-              ':nth-child(2)': {
-                width: '38.46%',
-              },
-              ':nth-child(3)': {
-                width: '30.77%',
-              },
-            }}
-          >
-            {props.children}
-            <style href="scroll-mask" precedence="scroll-mask">
-              {`
+          ':nth-child(1)': {
+            maxWidth: '30.77%',
+          },
+          ':nth-child(2)': {
+            maxWidth: '38.46%',
+          },
+          ':nth-child(3)': {
+            maxWidth: '30.77%',
+          },
+        }}
+      >
+        {props.children}
+        <style href="scroll-mask" precedence="scroll-mask">
+          {`
                 @property --start-fade {
                   syntax: '<length>';
                   inherits: false;
@@ -239,31 +256,28 @@ export function APIReference(props: APIReferenceProps) {
                   }
                 }
               `}
-            </style>
-          </td>
-        ),
-        code: (props) => (
-          <code
-            {...props}
-            css={{
-              color: 'var(--color-foreground-interactive)',
-              wordWrap: 'break-word',
-            }}
-            className={GeistMono.className}
-          />
-        ),
-        p: (props) =>
-          props['data-type'] === 'description' ? (
-            <div css={{ padding: '0.5rem 0' }}>
-              <Markdown children={props.children as string} />
-            </div>
-          ) : (
-            <p {...props} />
-          ),
-        ...props.components,
-      }}
-    />
-  )
+        </style>
+      </td>
+    ),
+    Code: (props) => (
+      <code
+        {...props}
+        css={{
+          color: 'var(--color-foreground-interactive)',
+          wordWrap: 'break-word',
+        }}
+        className={GeistMono.className}
+      />
+    ),
+    Description: ({ children }) => (
+      <div css={{ padding: '0.5rem 0' }}>
+        <Markdown children={children as string} />
+      </div>
+    ),
+    ...props.components,
+  } satisfies Partial<APIReferenceComponents>
+
+  return <DefaultAPIReference {...props} components={components} />
 }
 
 const StyledTrigger = styled(Collapse.Trigger, {
