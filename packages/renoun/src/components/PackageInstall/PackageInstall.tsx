@@ -16,7 +16,7 @@ const packageManagers = {
   yarn: 'yarn add',
 } as const
 
-interface PackageInstallProps {
+export interface PackageInstallProps {
   /** The package names to install. */
   packages: string[]
 
