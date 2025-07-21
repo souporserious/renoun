@@ -12,17 +12,6 @@ import {
 } from '../utils/resolve-type.js'
 import { WorkingDirectoryContext } from './Context.js'
 
-/** Simplified layout component props that support an optional gap prop. */
-export interface LayoutProps extends React.HTMLAttributes<HTMLElement> {
-  as?: React.ElementType
-  gap?: 'small' | 'medium' | 'large'
-}
-
-/**
- * Component slots that can be overridden via the `components` prop. These map to
- * the structural parts of the rendered API reference rather than raw HTML
- * elements so consumers can more easily style each piece.
- */
 export type APIReferenceComponents = {
   Section: React.ElementType
   SectionHeading: React.ElementType
@@ -30,8 +19,14 @@ export type APIReferenceComponents = {
     hasDescription: boolean
     children: React.ReactNode
   }>
-  Block: React.ComponentType<LayoutProps>
-  Inline: React.ComponentType<LayoutProps>
+  Block: React.ComponentType<{
+    gap?: 'small' | 'medium' | 'large'
+    children: React.ReactNode
+  }>
+  Inline: React.ComponentType<{
+    gap?: 'small' | 'medium' | 'large'
+    children: React.ReactNode
+  }>
   Code: React.ElementType
   Description: React.ElementType
   Detail: React.ElementType
@@ -61,26 +56,24 @@ const defaultComponents: APIReferenceComponents = {
   Section: 'section',
   SectionHeading: 'h3',
   SectionBody: ({ children }) => children,
-  Block: ({ gap, as: Component = 'div', style, ...rest }: LayoutProps) => (
-    <Component
+  Block: ({ gap, children }) => (
+    <div
       style={{
         display: 'flex',
         flexDirection: 'column',
         gap: gap ? defaultGaps[gap] : undefined,
-        ...style,
       }}
-      {...rest}
+      children={children}
     />
   ),
-  Inline: ({ gap, as: Component = 'div', style, ...rest }: LayoutProps) => (
-    <Component
+  Inline: ({ gap, children }) => (
+    <div
       style={{
         display: 'flex',
         flexDirection: 'row',
         gap: gap ? defaultGaps[gap] : undefined,
-        ...style,
       }}
-      {...rest}
+      children={children}
     />
   ),
   Code: 'code',
@@ -162,6 +155,7 @@ async function APIReferenceAsync({
     ...defaultComponents,
     ...components,
   }
+  const slug = source.getSlug()
 
   return (
     <WorkingDirectoryContext value={filePath ? dirname(filePath) : undefined}>
