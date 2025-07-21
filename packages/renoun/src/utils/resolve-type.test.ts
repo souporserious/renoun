@@ -18862,4 +18862,38 @@ describe('resolveType', () => {
       }
     `)
   })
+
+  test('skips private class properties', () => {
+    const sourceFile = project.createSourceFile(
+      'index.ts',
+      dedent`
+      class Foo {
+        #private = ''
+      }
+      `,
+      { overwrite: true }
+    )
+    const declaration = sourceFile.getClassOrThrow('Foo')
+    const types = resolveType(declaration.getType(), declaration)
+
+    expect(types).toMatchInlineSnapshot(`
+      {
+        "constructor": undefined,
+        "filePath": "index.ts",
+        "kind": "Class",
+        "name": "Foo",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 3,
+          },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "text": "Foo",
+      }
+    `)
+  })
 })

@@ -2994,7 +2994,13 @@ function resolveClass(
       tsMorph.Node.isGetAccessorDeclaration(member) ||
       tsMorph.Node.isSetAccessorDeclaration(member)
     ) {
-      if (!member.hasModifier(tsMorph.SyntaxKind.PrivateKeyword)) {
+      const accessorIsPrivateIdentifier =
+        member.getNameNode()?.getKind() === tsMorph.SyntaxKind.PrivateIdentifier
+
+      if (
+        !member.hasModifier(tsMorph.SyntaxKind.PrivateKeyword) &&
+        !accessorIsPrivateIdentifier
+      ) {
         if (!classMetadata.accessors) {
           classMetadata.accessors = []
         }
@@ -3008,7 +3014,13 @@ function resolveClass(
         }
       }
     } else if (tsMorph.Node.isMethodDeclaration(member)) {
-      if (!member.hasModifier(tsMorph.SyntaxKind.PrivateKeyword)) {
+      const methodIsPrivateIdentifier =
+        member.getNameNode()?.getKind() === tsMorph.SyntaxKind.PrivateIdentifier
+
+      if (
+        !member.hasModifier(tsMorph.SyntaxKind.PrivateKeyword) &&
+        !methodIsPrivateIdentifier
+      ) {
         if (!classMetadata.methods) {
           classMetadata.methods = []
         }
@@ -3018,7 +3030,17 @@ function resolveClass(
         }
       }
     } else if (tsMorph.Node.isPropertyDeclaration(member)) {
-      if (!member.hasModifier(tsMorph.SyntaxKind.PrivateKeyword)) {
+      // Skip properties that are marked private via the `private` keyword or
+      // that use JavaScript private identifiers (e.g. `#private`).
+      const isPrivateIdentifier =
+        member.getNameNode()?.getKind() ===
+          tsMorph.SyntaxKind.PrivateIdentifier ||
+        member.getName().startsWith('#')
+
+      if (
+        !member.hasModifier(tsMorph.SyntaxKind.PrivateKeyword) &&
+        !isPrivateIdentifier
+      ) {
         if (!classMetadata.properties) {
           classMetadata.properties = []
         }
@@ -3779,10 +3801,7 @@ function shouldResolveTypeReference(type: Type, enclosingNode?: Node): boolean {
 }
 
 /**
- * Inline a `MappedType` **unless** its `keyof`-operand is external
- * (exported or from `node_modules`).  This prevents React’s gigantic
- * `IntrinsicElements` from exploding while still flattening local helpers
- * like `DropDollarPrefix`.
+ * Determine whether a `MappedType` should be fully resolved or kept as a reference.
  */
 function shouldResolveMappedType(mappedNode: tsMorph.MappedTypeNode): boolean {
   const constraint = mappedNode.getTypeParameter().getConstraint()
@@ -3795,17 +3814,19 @@ function shouldResolveMappedType(mappedNode: tsMorph.MappedTypeNode): boolean {
     ? constraint.getTypeNode() // `keyof X` -> X
     : constraint //  plain X
   const operandType = operandNode.getType()
-  const operandSym = operandType.getAliasSymbol() ?? operandType.getSymbol()
+  const operandSymbol = operandType.getAliasSymbol() ?? operandType.getSymbol()
 
-  const operandIsExternal =
-    operandSym &&
-    operandSym
-      .getDeclarations()
-      .some(
-        (d) =>
-          d.getSourceFile().isInNodeModules() ||
-          isDeclarationExported(d, mappedNode)
-      )
+  if (!operandSymbol) {
+    return false
+  }
+
+  const operandIsExternal = operandSymbol
+    .getDeclarations()
+    .some(
+      (declaration) =>
+        declaration.getSourceFile().isInNodeModules() ||
+        isDeclarationExported(declaration, mappedNode)
+    )
 
   return !operandIsExternal
 }
