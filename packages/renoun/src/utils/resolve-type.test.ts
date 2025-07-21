@@ -8130,7 +8130,7 @@ describe('resolveType', () => {
                 "line": 4,
               },
             },
-            "text": "Languages | "mdx"",
+            "text": "language?: Languages | 'mdx'",
             "type": {
               "kind": "UnionType",
               "text": "Languages | "mdx"",
@@ -8835,7 +8835,7 @@ describe('resolveType', () => {
                 "line": 4,
               },
             },
-            "text": "Entries",
+            "text": "entries: Entries",
             "type": {
               "filePath": "test.ts",
               "kind": "TypeReference",
@@ -9836,7 +9836,7 @@ describe('resolveType', () => {
                 "line": 5,
               },
             },
-            "text": ""heading1" | "heading2" | "heading3" | "body1" | "body2"",
+            "text": "variant: 'heading1' | 'heading2' | 'heading3' | 'body1' | 'body2'",
             "type": {
               "kind": "UnionType",
               "text": ""heading1" | "heading2" | "heading3" | "body1" | "body2"",
@@ -9940,7 +9940,7 @@ describe('resolveType', () => {
                 "line": 6,
               },
             },
-            "text": "string | number",
+            "text": "width?: string | number",
             "type": {
               "kind": "UnionType",
               "text": "string | number",
@@ -14392,7 +14392,7 @@ describe('resolveType', () => {
                     },
                   },
                   "tags": undefined,
-                  "text": "ButtonVariant | undefined",
+                  "text": "variant?: ButtonVariant",
                   "type": {
                     "filePath": "test.ts",
                     "kind": "TypeReference",
@@ -14956,7 +14956,7 @@ describe('resolveType', () => {
                 "line": 2,
               },
             },
-            "text": "string",
+            "text": "firstName: string",
             "type": {
               "filePath": "test.ts",
               "kind": "String",
@@ -14990,7 +14990,7 @@ describe('resolveType', () => {
                 "line": 3,
               },
             },
-            "text": "string",
+            "text": "lastName: string",
             "type": {
               "filePath": "test.ts",
               "kind": "String",
@@ -18294,7 +18294,7 @@ describe('resolveType', () => {
                     "line": 3,
                   },
                 },
-                "text": "string",
+                "text": "text: string",
                 "type": {
                   "filePath": "test.ts",
                   "kind": "String",

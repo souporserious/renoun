@@ -2004,29 +2004,27 @@ function resolveMemberSignature(
     return
   }
 
-  const text = member
-    .getType()
-    .getText(
-      undefined,
-      tsMorph.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope
-    )
-
-  // TODO: determine when we need resolvePropertySignatures
   if (tsMorph.Node.isPropertySignature(member)) {
-    return {
-      kind: 'PropertySignature',
-      name: member.getName(),
-      type: resolvedMemberType,
-      text,
-      isOptional: member.hasQuestionToken(),
-      isReadonly: member.isReadonly(),
-      ...getJsDocMetadata(member),
-      ...getDeclarationLocation(member),
+    const symbol = member.getSymbol()
+
+    if (!symbol) {
+      throw new Error(
+        '[renoun:resolveMemberSignature] PropertySignature has no symbol.'
+      )
     }
+
+    return resolvePropertySignature(
+      symbol,
+      member,
+      filter,
+      defaultValues,
+      dependencies
+    )
   }
 
   if (tsMorph.Node.isMethodSignature(member)) {
-    const callSignature = member.getType().getCallSignatures()[0]
+    const memberType = member.getType()
+    const callSignature = memberType.getCallSignatures()[0]
     const resolvedParameters = resolveParameters(
       callSignature,
       filter,
@@ -2035,7 +2033,10 @@ function resolveMemberSignature(
     return {
       kind: 'MethodSignature',
       name: member.getName(),
-      text,
+      text: memberType.getText(
+        undefined,
+        tsMorph.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope
+      ),
       ...resolvedParameters,
       returnType: resolveTypeExpression(
         callSignature.getReturnType(),
