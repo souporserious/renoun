@@ -268,6 +268,26 @@ export namespace Kind {
     members: EnumMember[]
   }
 
+  /** A function or method parameter. */
+  export interface Parameter<
+    Type extends TypeExpression = TypeExpression,
+    Initializer extends unknown = unknown,
+  > extends SharedDocumentable {
+    kind: 'Parameter'
+
+    /** The type expression of the parameter. */
+    type: Type
+
+    /** The initialized value assigned to the parameter. */
+    initializer?: Initializer
+
+    /** Whether the parameter has an optional modifier or initialized value. If `isRest` is `true`, the parameter is always optional. */
+    isOptional?: boolean
+
+    /** Whether the parameter is a rest parameter, e.g. `...rest`. */
+    isRest?: boolean
+  }
+
   export interface Class extends SharedDocumentable {
     kind: 'Class'
     constructor?: ClassConstructor
@@ -391,11 +411,15 @@ export namespace Kind {
     parameters: Parameter[]
   }
 
-  export type ComponentParameter =
+  export type ComponentParameterTypeExpression =
     | TypeLiteral<MethodSignature | PropertySignature>
     | TypeReference
-    | IntersectionType<ComponentParameter>
-    | UnionType<ComponentParameter>
+
+  export type ComponentParameter = Parameter<
+    | ComponentParameterTypeExpression
+    | IntersectionType<ComponentParameterTypeExpression>
+    | UnionType<ComponentParameterTypeExpression>
+  >
 
   export interface ComponentSignature
     extends SharedDocumentable,
@@ -493,26 +517,6 @@ export namespace Kind {
 
     /** The module specifier where the referenced type is exported from (e.g. "react"). */
     moduleSpecifier?: string
-  }
-
-  /** A function or method parameter. */
-  export interface Parameter<
-    Type extends TypeExpression = TypeExpression,
-    Initializer extends unknown = unknown,
-  > extends SharedDocumentable {
-    kind: 'Parameter'
-
-    /** The type expression of the parameter. */
-    type: Type
-
-    /** The initialized value assigned to the parameter. */
-    initializer?: Initializer
-
-    /** Whether the parameter has an optional modifier or initialized value. If `isRest` is `true`, the parameter is always optional. */
-    isOptional?: boolean
-
-    /** Whether the parameter is a rest parameter, e.g. `...rest`. */
-    isRest?: boolean
   }
 
   /** An interface or type alias property signature. */

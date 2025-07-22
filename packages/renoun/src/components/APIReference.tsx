@@ -522,9 +522,9 @@ function ComponentSection({
           return (
             <components.Block gap="large" key={index}>
               <TypeDetail label="Properties" components={components}>
-                {signature.parameter?.kind === 'TypeLiteral' ? (
+                {signature.parameter?.type.kind === 'TypeLiteral' ? (
                   <TypeTable
-                    rows={signature.parameter.members}
+                    rows={signature.parameter.type.members}
                     headers={['Property', 'Type', 'Default Value']}
                     renderRow={(property) =>
                       property.kind === 'PropertySignature' ? (
@@ -556,7 +556,7 @@ function ComponentSection({
                   />
                 ) : (
                   <components.Code>
-                    {signature.parameter?.text ?? '—'}
+                    {getParameterText(signature.parameter)}
                   </components.Code>
                 )}
               </TypeDetail>
@@ -579,7 +579,7 @@ function renderParameterRow(
         {parameter.isOptional ? '?' : ''}
       </components.TableData>
       <components.TableData>
-        <components.Code>{parameter.text}</components.Code>
+        <components.Code>{getParameterText(parameter)}</components.Code>
       </components.TableData>
       <components.TableData>
         <InitializerValue
@@ -951,6 +951,19 @@ function InitializerValue({
   }
 
   return <components.Code>{valueString}</components.Code>
+}
+
+/** Return the preferred text representation for a parameter. */
+function getParameterText(parameter?: Kind.Parameter): string {
+  if (!parameter) {
+    return '—'
+  }
+
+  if (parameter.type.kind === 'TypeReference') {
+    return parameter.type.name!
+  }
+
+  return parameter.text
 }
 
 /** Convert kind name from PascalCase to space separated label. */
