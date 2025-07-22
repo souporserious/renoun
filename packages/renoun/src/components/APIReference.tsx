@@ -258,9 +258,9 @@ function TypeSection({
       <components.SectionHeading aria-label={`${title} ${label}`}>
         <span>{label}</span> {title}
       </components.SectionHeading>
-      <components.SectionBody hasDescription={!!description}>
+      <components.SectionBody hasDescription={Boolean(description)}>
         {description ? (
-          <components.Block gap="large">
+          <components.Block gap="small">
             <components.Description>{description}</components.Description>
             {children}
           </components.Block>
@@ -863,14 +863,14 @@ function IntersectionSection({
           <TypeTable
             rows={rows}
             headers={['Property', 'Type']}
-            renderRow={(r) => (
+            renderRow={(row) => (
               <>
                 <components.TableData>
-                  {r.name}
-                  {r.isOptional ? '?' : ''}
+                  {row.name}
+                  {row.isOptional ? '?' : ''}
                 </components.TableData>
                 <components.TableData colSpan={2}>
-                  <components.Code>{r.text}</components.Code>
+                  <components.Code>{row.text}</components.Code>
                 </components.TableData>
               </>
             )}
