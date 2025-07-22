@@ -97,6 +97,7 @@ describe('resolveType', () => {
                     "filePath": "test.ts",
                     "initializer": undefined,
                     "isOptional": false,
+                    "isRest": false,
                     "kind": "Parameter",
                     "name": "parameterValue",
                     "position": {
@@ -448,6 +449,7 @@ describe('resolveType', () => {
                         "filePath": "test.ts",
                         "initializer": undefined,
                         "isOptional": false,
+                        "isRest": false,
                         "kind": "Parameter",
                         "name": "a",
                         "position": {
@@ -483,6 +485,7 @@ describe('resolveType', () => {
                         "filePath": "test.ts",
                         "initializer": undefined,
                         "isOptional": false,
+                        "isRest": false,
                         "kind": "Parameter",
                         "name": "b",
                         "position": {
@@ -731,6 +734,7 @@ describe('resolveType', () => {
                         "filePath": "test.ts",
                         "initializer": undefined,
                         "isOptional": false,
+                        "isRest": false,
                         "kind": "Parameter",
                         "name": "a",
                         "position": {
@@ -2054,6 +2058,7 @@ describe('resolveType', () => {
                     "filePath": "test.ts",
                     "initializer": undefined,
                     "isOptional": false,
+                    "isRest": false,
                     "kind": "Parameter",
                     "name": "a",
                     "position": {
@@ -3937,6 +3942,7 @@ describe('resolveType', () => {
               "filePath": "test.ts",
               "initializer": undefined,
               "isOptional": false,
+              "isRest": false,
               "kind": "Parameter",
               "name": "color",
               "position": {
@@ -4044,6 +4050,7 @@ describe('resolveType', () => {
               "filePath": "test.ts",
               "initializer": undefined,
               "isOptional": true,
+              "isRest": false,
               "kind": "Parameter",
               "name": "props",
               "position": {
@@ -4186,6 +4193,7 @@ describe('resolveType', () => {
               "filePath": "test.ts",
               "initializer": undefined,
               "isOptional": false,
+              "isRest": false,
               "kind": "Parameter",
               "name": "props",
               "position": {
@@ -4285,6 +4293,7 @@ describe('resolveType', () => {
                 "color": "red",
               },
               "isOptional": false,
+              "isRest": false,
               "kind": "Parameter",
               "name": "props",
               "position": {
@@ -4400,6 +4409,7 @@ describe('resolveType', () => {
                 },
               },
               "isOptional": false,
+              "isRest": false,
               "kind": "Parameter",
               "name": "{ style: { fontSize, color } }",
               "position": {
@@ -5132,6 +5142,7 @@ describe('resolveType', () => {
               "filePath": "node_modules/@types/react/index.d.ts",
               "initializer": undefined,
               "isOptional": false,
+              "isRest": false,
               "kind": "Parameter",
               "name": "props",
               "position": {
@@ -5571,6 +5582,7 @@ describe('resolveType', () => {
                     "filePath": "test.ts",
                     "initializer": undefined,
                     "isOptional": false,
+                    "isRest": false,
                     "kind": "Parameter",
                     "name": "value",
                     "position": {
@@ -5716,6 +5728,7 @@ describe('resolveType', () => {
                     "filePath": "test.ts",
                     "initializer": undefined,
                     "isOptional": false,
+                    "isRest": false,
                     "kind": "Parameter",
                     "name": "filePath",
                     "position": {
@@ -5751,6 +5764,7 @@ describe('resolveType', () => {
                     "filePath": "test.ts",
                     "initializer": false,
                     "isOptional": false,
+                    "isRest": false,
                     "kind": "Parameter",
                     "name": "isDirectory",
                     "position": {
@@ -6622,6 +6636,7 @@ describe('resolveType', () => {
                 "filePath": "test.ts",
                 "initializer": 0,
                 "isOptional": false,
+                "isRest": false,
                 "kind": "Parameter",
                 "name": "initialCount",
                 "position": {
@@ -6731,6 +6746,7 @@ describe('resolveType', () => {
                   "initialCount": 0,
                 },
                 "isOptional": false,
+                "isRest": false,
                 "kind": "Parameter",
                 "name": "{ initialCount = 0 }",
                 "position": {
@@ -6879,6 +6895,7 @@ describe('resolveType', () => {
                   },
                 },
                 "isOptional": true,
+                "isRest": false,
                 "kind": "Parameter",
                 "name": "{ initial = { count: 0 } }",
                 "position": {
@@ -7030,6 +7047,7 @@ describe('resolveType', () => {
                 "filePath": "test.ts",
                 "initializer": 0,
                 "isOptional": false,
+                "isRest": false,
                 "kind": "Parameter",
                 "name": "initialCount",
                 "position": {
@@ -7133,6 +7151,7 @@ describe('resolveType', () => {
                 "filePath": "test.ts",
                 "initializer": 0,
                 "isOptional": false,
+                "isRest": false,
                 "kind": "Parameter",
                 "name": "initialCount",
                 "position": {
@@ -7243,6 +7262,7 @@ describe('resolveType', () => {
                   "initialCount": 0,
                 },
                 "isOptional": false,
+                "isRest": false,
                 "kind": "Parameter",
                 "name": "{ initialCount = 0 }",
                 "position": {
@@ -7357,6 +7377,7 @@ describe('resolveType', () => {
                   "initialCount": 0,
                 },
                 "isOptional": false,
+                "isRest": false,
                 "kind": "Parameter",
                 "name": "{ initialCount = 0 }",
                 "position": {
@@ -7488,6 +7509,7 @@ describe('resolveType', () => {
               "filePath": "test.ts",
               "initializer": undefined,
               "isOptional": false,
+              "isRest": false,
               "kind": "Parameter",
               "name": "props",
               "position": {
@@ -7732,6 +7754,7 @@ describe('resolveType', () => {
                 "filePath": "test.ts",
                 "initializer": undefined,
                 "isOptional": false,
+                "isRest": false,
                 "kind": "Parameter",
                 "name": "props",
                 "position": {
@@ -7881,6 +7904,7 @@ describe('resolveType', () => {
               "filePath": "test.ts",
               "initializer": undefined,
               "isOptional": false,
+              "isRest": false,
               "kind": "Parameter",
               "name": "props",
               "position": {
@@ -8233,6 +8257,7 @@ describe('resolveType', () => {
               "filePath": "test.ts",
               "initializer": undefined,
               "isOptional": false,
+              "isRest": false,
               "kind": "Parameter",
               "name": "props",
               "position": {
@@ -8733,6 +8758,7 @@ describe('resolveType', () => {
                 "variant": "body1",
               },
               "isOptional": false,
+              "isRest": false,
               "kind": "Parameter",
               "name": "props",
               "position": {
@@ -8976,6 +9002,7 @@ describe('resolveType', () => {
               "filePath": "node_modules/@types/react/index.d.ts",
               "initializer": undefined,
               "isOptional": false,
+              "isRest": false,
               "kind": "Parameter",
               "name": "props",
               "position": {
@@ -9219,6 +9246,7 @@ describe('resolveType', () => {
               "filePath": "node_modules/@types/react/index.d.ts",
               "initializer": undefined,
               "isOptional": false,
+              "isRest": false,
               "kind": "Parameter",
               "name": "props",
               "position": {
@@ -9403,6 +9431,7 @@ describe('resolveType', () => {
               "filePath": "node_modules/@types/react/index.d.ts",
               "initializer": undefined,
               "isOptional": false,
+              "isRest": false,
               "kind": "Parameter",
               "name": "props",
               "position": {
@@ -10149,6 +10178,7 @@ describe('resolveType', () => {
               "filePath": "test.ts",
               "initializer": undefined,
               "isOptional": false,
+              "isRest": false,
               "kind": "Parameter",
               "name": "value",
               "position": {
@@ -10235,6 +10265,7 @@ describe('resolveType', () => {
                   "filePath": "test.ts",
                   "initializer": 0,
                   "isOptional": false,
+                  "isRest": false,
                   "kind": "Parameter",
                   "name": "initialCount",
                   "position": {
@@ -10420,6 +10451,7 @@ describe('resolveType', () => {
                     "filePath": "test.ts",
                     "initializer": true,
                     "isOptional": true,
+                    "isRest": false,
                     "kind": "Parameter",
                     "name": "isFloored",
                     "position": {
@@ -10641,6 +10673,7 @@ describe('resolveType', () => {
                   "initialCount": 0,
                 },
                 "isOptional": false,
+                "isRest": false,
                 "kind": "Parameter",
                 "name": "{ initialCount: renamedInitialCount = 0 }",
                 "position": {
@@ -10769,6 +10802,7 @@ describe('resolveType', () => {
                 "filePath": "test.ts",
                 "initializer": undefined,
                 "isOptional": false,
+                "isRest": false,
                 "kind": "Parameter",
                 "name": "a",
                 "position": {
@@ -10804,6 +10838,7 @@ describe('resolveType', () => {
                 "filePath": "test.ts",
                 "initializer": 0,
                 "isOptional": false,
+                "isRest": false,
                 "kind": "Parameter",
                 "name": "b",
                 "position": {
@@ -11374,6 +11409,7 @@ describe('resolveType', () => {
                 "filePath": "test.ts",
                 "initializer": undefined,
                 "isOptional": false,
+                "isRest": false,
                 "kind": "Parameter",
                 "name": "settings",
                 "position": {
@@ -11709,6 +11745,7 @@ describe('resolveType', () => {
                     "filePath": "node_modules/@types/react/index.d.ts",
                     "initializer": undefined,
                     "isOptional": false,
+                    "isRest": false,
                     "kind": "Parameter",
                     "name": "event",
                     "position": {
@@ -11820,6 +11857,7 @@ describe('resolveType', () => {
               "filePath": "test.tsx",
               "initializer": undefined,
               "isOptional": false,
+              "isRest": false,
               "kind": "Parameter",
               "name": "props",
               "position": {
@@ -11971,6 +12009,7 @@ describe('resolveType', () => {
                                   "filePath": "node_modules/@types/react/index.d.ts",
                                   "initializer": undefined,
                                   "isOptional": false,
+                                  "isRest": false,
                                   "kind": "Parameter",
                                   "name": "event",
                                   "position": {
@@ -12131,6 +12170,7 @@ describe('resolveType', () => {
               "filePath": "test.ts",
               "initializer": undefined,
               "isOptional": false,
+              "isRest": false,
               "kind": "Parameter",
               "name": "{ children }",
               "position": {
@@ -12215,6 +12255,7 @@ describe('resolveType', () => {
                               "filePath": "test.ts",
                               "initializer": undefined,
                               "isOptional": false,
+                              "isRest": false,
                               "kind": "Parameter",
                               "name": "exportedTypes",
                               "position": {
@@ -12448,6 +12489,7 @@ describe('resolveType', () => {
                               "filePath": "test.ts",
                               "initializer": undefined,
                               "isOptional": false,
+                              "isRest": false,
                               "kind": "Parameter",
                               "name": "exportedTypes",
                               "position": {
@@ -13388,6 +13430,7 @@ describe('resolveType', () => {
                 "filePath": "test.ts",
                 "initializer": undefined,
                 "isOptional": false,
+                "isRest": true,
                 "kind": "Parameter",
                 "name": "args",
                 "position": {
@@ -13546,6 +13589,7 @@ describe('resolveType', () => {
                     "filePath": "test.ts",
                     "initializer": undefined,
                     "isOptional": false,
+                    "isRest": false,
                     "kind": "Parameter",
                     "name": "name",
                     "position": {
@@ -13691,6 +13735,7 @@ describe('resolveType', () => {
                 "filePath": "test.ts",
                 "initializer": undefined,
                 "isOptional": false,
+                "isRest": false,
                 "kind": "Parameter",
                 "name": "loader",
                 "position": {
@@ -13815,6 +13860,7 @@ describe('resolveType', () => {
                 "filePath": "test.ts",
                 "initializer": undefined,
                 "isOptional": false,
+                "isRest": false,
                 "kind": "Parameter",
                 "name": "schema",
                 "position": {
@@ -13871,6 +13917,7 @@ describe('resolveType', () => {
                 "filePath": "test.ts",
                 "initializer": undefined,
                 "isOptional": false,
+                "isRest": false,
                 "kind": "Parameter",
                 "name": "loader",
                 "position": {
@@ -13893,6 +13940,7 @@ describe('resolveType', () => {
                       "filePath": "test.ts",
                       "initializer": undefined,
                       "isOptional": false,
+                      "isRest": false,
                       "kind": "Parameter",
                       "name": "path",
                       "position": {
@@ -13985,6 +14033,7 @@ describe('resolveType', () => {
                   "filePath": "test.ts",
                   "initializer": undefined,
                   "isOptional": false,
+                  "isRest": false,
                   "kind": "Parameter",
                   "name": "path",
                   "position": {
@@ -14207,6 +14256,7 @@ describe('resolveType', () => {
                       "variant": "primary",
                     },
                     "isOptional": false,
+                    "isRest": false,
                     "kind": "Parameter",
                     "name": "{
         variant = 'primary',
@@ -15105,6 +15155,7 @@ describe('resolveType', () => {
               "filePath": "test.ts",
               "initializer": undefined,
               "isOptional": false,
+              "isRest": false,
               "kind": "Parameter",
               "name": "props",
               "position": {
@@ -15400,6 +15451,7 @@ describe('resolveType', () => {
                 "filePath": "test.ts",
                 "initializer": undefined,
                 "isOptional": true,
+                "isRest": false,
                 "kind": "Parameter",
                 "name": "extension",
                 "position": {
@@ -16587,6 +16639,7 @@ describe('resolveType', () => {
                 "filePath": "test.ts",
                 "initializer": undefined,
                 "isOptional": true,
+                "isRest": false,
                 "kind": "Parameter",
                 "name": "extension",
                 "position": {
@@ -16984,6 +17037,7 @@ describe('resolveType', () => {
                   "filePath": "test.ts",
                   "initializer": undefined,
                   "isOptional": false,
+                  "isRest": false,
                   "kind": "Parameter",
                   "name": "distributedUnion",
                   "position": {
@@ -17045,6 +17099,7 @@ describe('resolveType', () => {
                 "filePath": "test.ts",
                 "initializer": undefined,
                 "isOptional": false,
+                "isRest": false,
                 "kind": "Parameter",
                 "name": "mergedIntersection",
                 "position": {
@@ -17702,6 +17757,7 @@ describe('resolveType', () => {
               "filePath": "test.ts",
               "initializer": undefined,
               "isOptional": false,
+              "isRest": false,
               "kind": "Parameter",
               "name": "props",
               "position": {
@@ -17878,6 +17934,7 @@ describe('resolveType', () => {
               "filePath": "test.ts",
               "initializer": undefined,
               "isOptional": false,
+              "isRest": false,
               "kind": "Parameter",
               "name": "props",
               "position": {
@@ -18119,6 +18176,7 @@ describe('resolveType', () => {
               "filePath": "test.ts",
               "initializer": undefined,
               "isOptional": false,
+              "isRest": false,
               "kind": "Parameter",
               "name": "props",
               "position": {

@@ -2411,6 +2411,7 @@ function resolveParameter(
       type: resolvedType,
       initializer,
       isOptional: isOptional ?? Boolean(initializer),
+      isRest: parameterDeclaration.isRestParameter(),
       description: getSymbolDescription(
         parameterDeclaration.getSymbolOrThrow()
       ),
