@@ -1101,12 +1101,15 @@ function resolveTypeExpression(
       }
 
       let name = symbol?.getName()
-      let aliasName = aliasSymbol?.getName()
+      let locationNode = enclosingNode
 
-      if (name?.startsWith('__')) {
-        name = aliasName
-      } else if (aliasName?.startsWith('__')) {
-        name = undefined
+      // Prefer the alias name if defined in the project
+      if (aliasSymbol) {
+        const symbolVisibility = getSymbolVisibility(aliasSymbol, enclosingNode)
+        if (symbolVisibility !== 'node-modules') {
+          name = aliasSymbol.getName()
+          locationNode = getPrimaryDeclaration(aliasSymbol)
+        }
       }
 
       resolvedType = {
@@ -1114,7 +1117,7 @@ function resolveTypeExpression(
         name,
         text: typeText,
         typeArguments: resolvedTypeArguments,
-        ...(enclosingNode ? getDeclarationLocation(enclosingNode) : {}),
+        ...(locationNode ? getDeclarationLocation(locationNode) : {}),
       } satisfies Kind.TypeReference
     }
 
@@ -3822,8 +3825,30 @@ function shouldResolveTypeReference(type: Type, enclosingNode?: Node): boolean {
     return false
   }
 
-  // Inline purely internal project aliases.
   if (symbolVisibility === 'local-internal') {
+    if (enclosingNode) {
+      // Walk up to the first TypeReference that *contains* this alias.
+      let parent: tsMorph.Node | undefined = enclosingNode.getParent()
+      while (parent && !tsMorph.Node.isTypeReference(parent)) {
+        parent = parent.getParent()
+      }
+
+      if (parent && tsMorph.Node.isTypeReference(parent)) {
+        const parentType = parent.getType()
+        const parentSymbol =
+          parentType.getAliasSymbol() ?? parentType.getSymbol()
+        const parentVisibility = getSymbolVisibility(parentSymbol, parent)
+
+        // When the surrounding generic comes from node_modules we want to
+        // preserve the alias (so consumers still see `GridProps`, *not* the
+        // expanded object literal).
+        if (parentVisibility === 'node-modules') {
+          return false // keep it as `TypeReference`
+        }
+      }
+    }
+
+    // default: flatten local-internal aliases
     return true
   }
 

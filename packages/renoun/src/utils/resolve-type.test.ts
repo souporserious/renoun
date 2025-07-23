@@ -18632,7 +18632,7 @@ describe('resolveType', () => {
                 {
                   "filePath": "test.ts",
                   "kind": "TypeReference",
-                  "name": "UnionType",
+                  "name": "TypeExpression",
                   "position": {
                     "end": {
                       "column": 48,
