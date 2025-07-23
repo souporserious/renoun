@@ -86,6 +86,11 @@ export function APIReference(props: APIReferenceProps) {
                 opacity: 1,
               },
             },
+            '&[aria-expanded="true"]': {
+              svg: {
+                opacity: 1,
+              },
+            },
           }}
         >
           <Collapse.TriggerIcon
@@ -96,6 +101,7 @@ export function APIReference(props: APIReferenceProps) {
               top: '3.2rem',
               left: '-2rem',
               opacity: 0,
+              color: 'var(--color-foreground-secondary)',
             }}
           />
           {props.children}
@@ -139,15 +145,10 @@ export function APIReference(props: APIReferenceProps) {
       <h4
         {...props}
         css={{
-          position: 'absolute',
-          width: '1px',
-          height: '1px',
-          padding: 0,
-          margin: '-1px',
-          overflow: 'hidden',
-          clip: 'rect(0, 0, 0, 0)',
-          whiteSpace: 'nowrap',
-          border: 0,
+          fontSize: 'var(--font-size-body-1)',
+          lineHeight: 'var(--line-height-body-1)',
+          fontWeight: 'var(--font-weight-body)',
+          color: 'var(--color-foreground-secondary)',
         }}
       />
     ),
@@ -200,7 +201,9 @@ export function APIReference(props: APIReferenceProps) {
     TableSubRow: ({ children }) => (
       <tr>
         <td colSpan={3} css={{ padding: 0 }}>
-          <Collapse.Content>{children}</Collapse.Content>
+          <Collapse.Content>
+            <div css={{ padding: '1rem 0' }}>{children}</div>
+          </Collapse.Content>
         </td>
       </tr>
     ),
@@ -246,18 +249,26 @@ export function APIReference(props: APIReferenceProps) {
                 inset: '0 0 0 -2rem',
                 cursor: 'pointer',
 
-                svg: {
-                  opacity: 0,
-                },
-
                 '&:hover': {
+                  svg: {
+                    opacity: 1,
+                  },
+                },
+                '&[aria-expanded="true"]': {
                   svg: {
                     opacity: 1,
                   },
                 },
               }}
             >
-              <Collapse.TriggerIcon css={{ width: 16, height: 16 }} />
+              <Collapse.TriggerIcon
+                css={{
+                  width: 16,
+                  height: 16,
+                  opacity: 0,
+                  color: 'var(--color-foreground-secondary)',
+                }}
+              />
             </Collapse.Trigger>
           ) : null}
           {props.children}

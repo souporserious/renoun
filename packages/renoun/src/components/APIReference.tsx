@@ -413,9 +413,9 @@ function renderMethodSubRow(
   const signature = method.signatures[0]
 
   return (
-    <>
+    <components.Block gap="medium">
       {signature.parameters.length ? (
-        <TypeDetail components={components}>
+        <TypeDetail label="Parameters" components={components}>
           <TypeTable
             rows={signature.parameters}
             headers={['Parameter', 'Type', 'Default Value']}
@@ -428,11 +428,11 @@ function renderMethodSubRow(
       ) : null}
 
       {signature.returnType ? (
-        <TypeDetail components={components}>
+        <TypeDetail label="Returns" components={components}>
           <components.Code>{signature.returnType.text}</components.Code>
         </TypeDetail>
       ) : null}
-    </>
+    </components.Block>
   )
 }
 
@@ -991,7 +991,7 @@ function getParameterText(parameter?: Kind.Parameter): string {
   }
 
   if (parameter.type.kind === 'TypeReference') {
-    return parameter.type.name!
+    return parameter.type.text
   }
 
   return parameter.text
