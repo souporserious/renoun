@@ -315,94 +315,39 @@ describe('resolveType', () => {
               },
               "text": "promiseObject?: Promise<ExportedType>;",
               "type": {
-                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "name": "Promise",
                 "position": {
                   "end": {
-                    "column": 15356,
-                    "line": 4,
+                    "column": 44,
+                    "line": 22,
                   },
                   "start": {
-                    "column": 15015,
-                    "line": 4,
+                    "column": 23,
+                    "line": 22,
                   },
                 },
                 "text": "Promise<ExportedType>",
                 "typeArguments": [
                   {
-                    "kind": "TypeLiteral",
-                    "members": [
-                      {
-                        "filePath": "test.ts",
-                        "isOptional": false,
-                        "isReadonly": false,
-                        "kind": "PropertySignature",
-                        "name": "slug",
-                        "position": {
-                          "end": {
-                            "column": 20,
-                            "line": 3,
-                          },
-                          "start": {
-                            "column": 7,
-                            "line": 3,
-                          },
-                        },
-                        "text": "slug: string;",
-                        "type": {
-                          "filePath": "test.ts",
-                          "kind": "String",
-                          "position": {
-                            "end": {
-                              "column": 19,
-                              "line": 3,
-                            },
-                            "start": {
-                              "column": 13,
-                              "line": 3,
-                            },
-                          },
-                          "text": "string",
-                          "value": undefined,
-                        },
+                    "filePath": "test.ts",
+                    "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
+                    "name": "ExportedType",
+                    "position": {
+                      "end": {
+                        "column": 43,
+                        "line": 22,
                       },
-                      {
-                        "filePath": "test.ts",
-                        "isOptional": false,
-                        "isReadonly": false,
-                        "kind": "PropertySignature",
-                        "name": "filePath",
-                        "position": {
-                          "end": {
-                            "column": 24,
-                            "line": 4,
-                          },
-                          "start": {
-                            "column": 7,
-                            "line": 4,
-                          },
-                        },
-                        "text": "filePath: string;",
-                        "type": {
-                          "filePath": "test.ts",
-                          "kind": "String",
-                          "position": {
-                            "end": {
-                              "column": 23,
-                              "line": 4,
-                            },
-                            "start": {
-                              "column": 17,
-                              "line": 4,
-                            },
-                          },
-                          "text": "string",
-                          "value": undefined,
-                        },
+                      "start": {
+                        "column": 31,
+                        "line": 22,
                       },
-                    ],
+                    },
                     "text": "ExportedType",
+                    "typeArguments": [],
                   },
                 ],
               },
@@ -425,17 +370,18 @@ describe('resolveType', () => {
               },
               "text": "promiseFunction: Promise<(a: number, b: string) => void>;",
               "type": {
-                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "name": "Promise",
                 "position": {
                   "end": {
-                    "column": 15356,
-                    "line": 4,
+                    "column": 63,
+                    "line": 23,
                   },
                   "start": {
-                    "column": 15015,
-                    "line": 4,
+                    "column": 24,
+                    "line": 23,
                   },
                 },
                 "text": "Promise<(a: number, b: string) => void>",
@@ -1072,94 +1018,39 @@ describe('resolveType', () => {
                 "text": "Promise<ExportedType> & { a: string; } & { b(): void; }",
                 "types": [
                   {
-                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                    "filePath": "test.ts",
                     "kind": "TypeReference",
-                    "name": "Promise",
+                    "moduleSpecifier": undefined,
+                    "name": "ReturnType",
                     "position": {
                       "end": {
-                        "column": 15356,
-                        "line": 4,
+                        "column": 52,
+                        "line": 28,
                       },
                       "start": {
-                        "column": 15015,
-                        "line": 4,
+                        "column": 28,
+                        "line": 28,
                       },
                     },
                     "text": "Promise<ExportedType>",
                     "typeArguments": [
                       {
-                        "kind": "TypeLiteral",
-                        "members": [
-                          {
-                            "filePath": "test.ts",
-                            "isOptional": false,
-                            "isReadonly": false,
-                            "kind": "PropertySignature",
-                            "name": "slug",
-                            "position": {
-                              "end": {
-                                "column": 20,
-                                "line": 3,
-                              },
-                              "start": {
-                                "column": 7,
-                                "line": 3,
-                              },
-                            },
-                            "text": "slug: string;",
-                            "type": {
-                              "filePath": "test.ts",
-                              "kind": "String",
-                              "position": {
-                                "end": {
-                                  "column": 19,
-                                  "line": 3,
-                                },
-                                "start": {
-                                  "column": 13,
-                                  "line": 3,
-                                },
-                              },
-                              "text": "string",
-                              "value": undefined,
-                            },
+                        "filePath": "test.ts",
+                        "kind": "TypeReference",
+                        "moduleSpecifier": undefined,
+                        "name": "FunctionType",
+                        "position": {
+                          "end": {
+                            "column": 51,
+                            "line": 28,
                           },
-                          {
-                            "filePath": "test.ts",
-                            "isOptional": false,
-                            "isReadonly": false,
-                            "kind": "PropertySignature",
-                            "name": "filePath",
-                            "position": {
-                              "end": {
-                                "column": 24,
-                                "line": 4,
-                              },
-                              "start": {
-                                "column": 7,
-                                "line": 4,
-                              },
-                            },
-                            "text": "filePath: string;",
-                            "type": {
-                              "filePath": "test.ts",
-                              "kind": "String",
-                              "position": {
-                                "end": {
-                                  "column": 23,
-                                  "line": 4,
-                                },
-                                "start": {
-                                  "column": 17,
-                                  "line": 4,
-                                },
-                              },
-                              "text": "string",
-                              "value": undefined,
-                            },
+                          "start": {
+                            "column": 39,
+                            "line": 28,
                           },
-                        ],
-                        "text": "ExportedType",
+                        },
+                        "text": "FunctionType",
+                        "typeArguments": [],
                       },
                     ],
                   },
@@ -9261,88 +9152,22 @@ describe('resolveType', () => {
               },
               "text": "props: P",
               "type": {
-                "kind": "IntersectionType",
+                "filePath": "node_modules/@types/react/index.d.ts",
+                "kind": "TypeReference",
+                "moduleSpecifier": undefined,
+                "name": "P",
+                "position": {
+                  "end": {
+                    "column": 18,
+                    "line": 562,
+                  },
+                  "start": {
+                    "column": 17,
+                    "line": 562,
+                  },
+                },
                 "text": "Substitute<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, GridProps>",
-                "types": [
-                  {
-                    "filePath": "node_modules/styled-components/dist/types.d.ts",
-                    "kind": "TypeReference",
-                    "moduleSpecifier": undefined,
-                    "name": "FastOmit",
-                    "position": {
-                      "end": {
-                        "column": 82,
-                        "line": 203,
-                      },
-                      "start": {
-                        "column": 62,
-                        "line": 203,
-                      },
-                    },
-                    "text": "FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, keyof GridProps>",
-                    "typeArguments": [
-                      {
-                        "filePath": "node_modules/styled-components/dist/types.d.ts",
-                        "kind": "TypeReference",
-                        "moduleSpecifier": undefined,
-                        "name": "A",
-                        "position": {
-                          "end": {
-                            "column": 72,
-                            "line": 203,
-                          },
-                          "start": {
-                            "column": 71,
-                            "line": 203,
-                          },
-                        },
-                        "text": "A",
-                        "typeArguments": [],
-                      },
-                      {
-                        "kind": "TypeOperator",
-                        "operator": "keyof",
-                        "text": "keyof B",
-                        "type": {
-                          "filePath": "node_modules/styled-components/dist/types.d.ts",
-                          "kind": "TypeReference",
-                          "moduleSpecifier": undefined,
-                          "name": "B",
-                          "position": {
-                            "end": {
-                              "column": 81,
-                              "line": 203,
-                            },
-                            "start": {
-                              "column": 80,
-                              "line": 203,
-                            },
-                          },
-                          "text": "B",
-                          "typeArguments": [],
-                        },
-                      },
-                    ],
-                  },
-                  {
-                    "filePath": "node_modules/styled-components/dist/types.d.ts",
-                    "kind": "TypeReference",
-                    "moduleSpecifier": undefined,
-                    "name": "B",
-                    "position": {
-                      "end": {
-                        "column": 86,
-                        "line": 203,
-                      },
-                      "start": {
-                        "column": 85,
-                        "line": 203,
-                      },
-                    },
-                    "text": "GridProps",
-                    "typeArguments": [],
-                  },
-                ],
+                "typeArguments": [],
               },
             },
             "position": {
@@ -16130,7 +15955,7 @@ describe('resolveType', () => {
                       "line": 8,
                     },
                   },
-                  "text": "String",
+                  "text": "Name",
                   "typeArguments": [],
                 },
                 "kind": "IndexedAccessType",
@@ -16394,7 +16219,7 @@ describe('resolveType', () => {
                       "line": 7,
                     },
                   },
-                  "text": "String",
+                  "text": "Extension",
                   "typeArguments": [],
                 },
                 "kind": "IndexedAccessType",
@@ -18951,6 +18776,100 @@ describe('resolveType', () => {
           },
         },
         "text": "Foo",
+      }
+    `)
+  })
+
+  test('does not continue resolving mapped type with references', () => {
+    const sourceFile = project.createSourceFile(
+      'index.ts',
+      dedent`
+      export type ReferenceComponent<
+        Tag extends keyof React.JSX.IntrinsicElements,
+        Props = {},
+      > = React.ComponentType<React.JSX.IntrinsicElements[Tag] & Props>
+
+      export interface ReferenceComponents {
+        Section: ReferenceComponent<'section'>
+      }
+      `,
+      { overwrite: true }
+    )
+    const typeAlias = sourceFile.getInterfaceOrThrow('ReferenceComponents')
+    const type = resolveType(typeAlias.getType(), typeAlias)
+
+    expect(type).toMatchInlineSnapshot(`
+      {
+        "filePath": "index.ts",
+        "kind": "Interface",
+        "members": [
+          {
+            "filePath": "index.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "PropertySignature",
+            "name": "Section",
+            "position": {
+              "end": {
+                "column": 41,
+                "line": 7,
+              },
+              "start": {
+                "column": 3,
+                "line": 7,
+              },
+            },
+            "text": "Section: ReferenceComponent<'section'>",
+            "type": {
+              "filePath": "index.ts",
+              "kind": "TypeReference",
+              "moduleSpecifier": undefined,
+              "name": "ReferenceComponent",
+              "position": {
+                "end": {
+                  "column": 41,
+                  "line": 7,
+                },
+                "start": {
+                  "column": 12,
+                  "line": 7,
+                },
+              },
+              "text": "ReferenceComponent<"section", {}>",
+              "typeArguments": [
+                {
+                  "filePath": "index.ts",
+                  "kind": "String",
+                  "position": {
+                    "end": {
+                      "column": 40,
+                      "line": 7,
+                    },
+                    "start": {
+                      "column": 31,
+                      "line": 7,
+                    },
+                  },
+                  "text": ""section"",
+                  "value": "section",
+                },
+              ],
+            },
+          },
+        ],
+        "name": "ReferenceComponents",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 8,
+          },
+          "start": {
+            "column": 1,
+            "line": 6,
+          },
+        },
+        "text": "ReferenceComponents",
+        "typeParameters": [],
       }
     `)
   })

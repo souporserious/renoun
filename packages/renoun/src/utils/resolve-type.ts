@@ -3749,6 +3749,46 @@ function getTypeAtLocation<
   )
 }
 
+/** Gets the visibility of a symbol. */
+function getSymbolVisibility(
+  symbol: tsMorph.Symbol | undefined,
+  enclosingNode: Node | undefined
+) {
+  if (!symbol) {
+    return 'synthetic'
+  }
+
+  const declarations = symbol.getDeclarations()
+
+  if (!declarations.length) {
+    return 'synthetic'
+  }
+
+  const isInNodeModules = declarations.every((declaration) =>
+    declaration.getSourceFile().isInNodeModules()
+  )
+
+  if (isInNodeModules) {
+    return 'node-modules'
+  }
+
+  const isExported = declarations.some((declaration) =>
+    isDeclarationExported(declaration, enclosingNode)
+  )
+
+  return isExported ? 'local-exported' : 'local-internal'
+}
+
+/** Determines if a type is trivial. */
+function isTrivialType(type: Type): boolean {
+  return (
+    type.isObject() &&
+    !type.isTuple() &&
+    !type.isArray() &&
+    type.getProperties().length === 0
+  )
+}
+
 /**
  * Decide whether a `TypeReference` should be fully resolved or kept as a reference.
  *
@@ -3769,41 +3809,50 @@ function shouldResolveTypeReference(type: Type, enclosingNode?: Node): boolean {
     return false
   }
 
-  const typeArguments = [
-    ...type.getAliasTypeArguments(),
-    ...type.getTypeArguments(),
-  ]
-  const hasInternalTypeArgument = typeArguments.some((typeArgument) => {
-    const symbol = typeArgument.getSymbol() ?? typeArgument.getAliasSymbol()
-
-    if (!symbol) {
-      return false
-    }
-
-    return symbol
-      .getDeclarations()
-      .every((declaration) => isDeclarationInternal(declaration, enclosingNode))
-  })
-
-  // keep resolving only for internal type arguments
-  if (hasInternalTypeArgument) {
-    return true
-  }
-
-  // keep alias when:
-  // - all type arguments are public or external
-  // - the alias symbol itself is external / exported
   const symbol = type.getAliasSymbol() ?? type.getSymbol()
 
-  if (
-    symbol
-      ?.getDeclarations()
-      .some((declaration) => !isDeclarationInternal(declaration, enclosingNode))
-  ) {
+  if (!symbol) {
     return false
   }
 
-  return true
+  const symbolVisibility = getSymbolVisibility(symbol, enclosingNode)
+
+  // Keep exported aliases from the current project.
+  if (symbolVisibility === 'local-exported') {
+    return false
+  }
+
+  // Inline purely internal project aliases.
+  if (symbolVisibility === 'local-internal') {
+    return true
+  }
+
+  // Inline if node_modules alias and real internal argument
+  if (symbolVisibility === 'node-modules') {
+    const typeArguments = [
+      ...type.getAliasTypeArguments(),
+      ...type.getTypeArguments(),
+    ]
+    const hasLocalInternalTypeArgument = typeArguments.some((typeArgument) => {
+      return (
+        getSymbolVisibility(
+          typeArgument.getAliasSymbol() ?? typeArgument.getSymbol(),
+          enclosingNode
+        ) === 'local-internal'
+      )
+    })
+    if (hasLocalInternalTypeArgument) {
+      const hasNonTrivialTypeArgument = typeArguments.some(
+        (typeArgument) => !isTrivialType(typeArgument)
+      )
+      if (hasNonTrivialTypeArgument) {
+        return true
+      }
+    }
+  }
+
+  // Otherwise keep as a reference.
+  return false
 }
 
 /**
