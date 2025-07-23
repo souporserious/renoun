@@ -306,7 +306,6 @@ async function Preview({
             css={{
               fontSize: '1rem',
               lineHeight: '1.35',
-              width: '100%',
               maxWidth: '-webkit-fill-available',
               padding: '4rem',
               margin: 'auto',
