@@ -87,7 +87,7 @@ const defaultComponents: InternalAPIReferenceComponents = {
   TableData: ({ index, hasSubRow, ...props }) => <td {...props} />,
   TableRow: ({ hasSubRow, ...props }) => <tr {...props} />,
   TableSubRow: 'tr',
-  TableRowGroup: ({ hasSubRow, children }) => children,
+  TableRowGroup: ({ children }) => children,
 }
 
 export interface APIReferenceProps {
