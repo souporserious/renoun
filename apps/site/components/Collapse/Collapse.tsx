@@ -1,6 +1,7 @@
 /** @jsxImportSource restyle */
 'use client'
-import React, { createContext, use, useId, useMemo, useState } from 'react'
+import React, { createContext, use, useId, useState } from 'react'
+import type { CSSObject } from 'restyle'
 
 const CollapseContext = createContext<
   | {
@@ -45,38 +46,20 @@ export function Provider({
   )
 }
 
-export function Trigger<As extends React.ElementType = 'button'>({
-  as,
+export function Trigger({
   children,
+  css,
   ...props
-}: {
-  as?: As
-} & React.ComponentPropsWithoutRef<As>) {
-  const Component = as || 'button'
+}: { css?: CSSObject } & React.ComponentPropsWithoutRef<'button'>) {
   const { triggerId, contentId, isOpen, toggle } = useCollapse()
   let childrenToRender = children
 
   if (childrenToRender === undefined) {
-    childrenToRender = (
-      <svg
-        viewBox="0 0 12 12"
-        css={{
-          width: '100%',
-          height: '100%',
-          transition: 'transform 200ms ease',
-
-          '[aria-expanded="true"] &': {
-            transform: 'rotate(90deg)',
-          },
-        }}
-      >
-        <path d="M3 2l4 4-4 4" fill="none" stroke="currentColor" />
-      </svg>
-    )
+    childrenToRender = <TriggerIcon />
   }
 
   return (
-    <Component
+    <button
       id={triggerId}
       aria-expanded={isOpen}
       aria-controls={contentId}
@@ -87,20 +70,45 @@ export function Trigger<As extends React.ElementType = 'button'>({
         padding: 0,
         border: 0,
         background: 'none',
+        ...css,
       }}
       {...props}
     >
       {childrenToRender}
-    </Component>
+    </button>
+  )
+}
+
+export function TriggerIcon({ css }: { css?: CSSObject }) {
+  return (
+    <svg
+      viewBox="0 0 12 12"
+      css={{
+        width: '100%',
+        height: '100%',
+        transition: 'transform 200ms ease',
+
+        '[aria-expanded="true"] &': {
+          transform: 'rotate(90deg)',
+        },
+        ...css,
+      }}
+    >
+      <path d="M3 2l4 4-4 4" fill="none" stroke="currentColor" />
+    </svg>
   )
 }
 
 export function Content<As extends React.ElementType = 'div'>({
   as,
+  display = 'block',
   children,
+  css,
   ...props
 }: {
   as?: As
+  display?: 'block' | 'flex' | 'grid' | 'list-item'
+  css?: CSSObject
 } & React.HTMLAttributes<HTMLDivElement>) {
   const Component = as || 'div'
   const { isOpen, triggerId, contentId } = useCollapse()
@@ -110,21 +118,40 @@ export function Content<As extends React.ElementType = 'div'>({
       id={contentId}
       aria-labelledby={triggerId}
       hidden={!isOpen}
-      style={
-        {
-          width: '100%',
-          display: isOpen ? undefined : 'none', // TODO: use CSS and starting style here
-          height: isOpen ? 'auto' : 0,
-          opacity: isOpen ? 1 : 0,
-          overflow: 'hidden',
-          transition: `height 0.3s ease, opacity 0.5s ease, content-visibility 0.3s`,
-          transitionBehavior: 'allow-discrete',
-          interpolateSize: 'allow-keywords',
-        } as React.CSSProperties
-      }
+      className="CollapseContent"
+      css={{ display, ...css }}
       {...props}
     >
       {children}
+      <style href="CollapseContent" precedence="CollapseContent">{`
+      .CollapseContent {
+        width: 100%;
+        height: auto;
+        min-height: 0;
+        opacity: 1;
+        interpolate-size: allow-keywords;
+
+        &[hidden] {
+          height: 0;
+          opacity: 0;
+          overflow: hidden;
+        }
+      }
+
+      @media (prefers-reduced-motion: no-preference) {
+        .CollapseContent {
+          transition:
+            display 400ms allow-discrete,
+            height 400ms,
+            opacity 400ms;
+
+          @starting-style {
+            height: 0;
+            opacity: 0;
+          }
+        }
+      }
+      `}</style>
     </Component>
   )
 }

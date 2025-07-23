@@ -12,47 +12,46 @@ import {
 } from '../utils/resolve-type.js'
 import { WorkingDirectoryContext } from './Context.js'
 
-export type APIReferenceComponents = {
-  Section: React.ElementType
-  SectionHeading: React.ElementType
-  SectionBody: React.ComponentType<{
-    hasDescription: boolean
-    children: React.ReactNode
-  }>
-  Block: React.ComponentType<{
-    gap?: 'small' | 'medium' | 'large'
-    children: React.ReactNode
-  }>
-  Inline: React.ComponentType<{
-    gap?: 'small' | 'medium' | 'large'
-    children: React.ReactNode
-  }>
-  Code: React.ElementType
-  Description: React.ElementType
-  Detail: React.ElementType
-  Signatures: React.ElementType
-  DetailHeading: React.ElementType
-  Table: React.ElementType
-  TableHead: React.ElementType
-  TableBody: React.ElementType
-  TableRow: React.ElementType
-  TableRowGroup: React.ComponentType<{
-    hasSubRow: boolean
-    children: React.ReactNode
-  }>
-  TableSubRow: React.ElementType
-  TableHeader: React.ElementType
-  TableData: React.ElementType
+type GapSize = 'small' | 'medium' | 'large'
+
+export type ReferenceComponent<
+  Tag extends keyof React.JSX.IntrinsicElements,
+  Props = {},
+> = React.ComponentType<React.JSX.IntrinsicElements[Tag] & Props>
+
+export interface APIReferenceComponents {
+  Section: ReferenceComponent<'section'>
+  SectionHeading: ReferenceComponent<'h3'>
+  SectionBody: ReferenceComponent<'div', { hasDescription: boolean }>
+  Block: ReferenceComponent<'div', { gap?: GapSize }>
+  Inline: ReferenceComponent<'div', { gap?: GapSize }>
+  Code: ReferenceComponent<'code'>
+  Description: ReferenceComponent<'p', { children: string }>
+  Detail: ReferenceComponent<'div'>
+  Signatures: ReferenceComponent<'div'>
+  DetailHeading: ReferenceComponent<'h4'>
+  Table: ReferenceComponent<'table'>
+  TableHead: ReferenceComponent<'thead'>
+  TableBody: ReferenceComponent<'tbody'>
+  TableRowGroup: ReferenceComponent<'tr', { hasSubRow?: boolean }>
+  TableRow: ReferenceComponent<'tr', { hasSubRow?: boolean }>
+  TableSubRow: React.ComponentType<{ children: React.ReactNode }>
+  TableHeader: ReferenceComponent<'th'>
+  TableData: ReferenceComponent<'td', { index: number; hasSubRow?: boolean }>
 }
 
-const defaultGaps = {
-  small: '0.25rem',
-  medium: '0.5rem',
+type InternalAPIReferenceComponents = {
+  [Key in keyof APIReferenceComponents]: APIReferenceComponents[Key] | string
+}
+
+const defaultGaps: Record<GapSize, string> = {
+  small: '0.5rem',
+  medium: '1rem',
   large: '2rem',
 }
 
 /** Default implementations for every slot. */
-const defaultComponents: APIReferenceComponents = {
+const defaultComponents: InternalAPIReferenceComponents = {
   Section: 'section',
   SectionHeading: 'h3',
   SectionBody: ({ children }) => children,
@@ -85,10 +84,10 @@ const defaultComponents: APIReferenceComponents = {
   TableHead: 'thead',
   TableHeader: 'th',
   TableBody: 'tbody',
-  TableData: 'td',
-  TableRow: 'tr',
+  TableData: ({ index, hasSubRow, ...props }) => <td {...props} />,
+  TableRow: ({ hasSubRow, ...props }) => <tr {...props} />,
   TableSubRow: 'tr',
-  TableRowGroup: ({ children }) => children,
+  TableRowGroup: ({ hasSubRow, children }) => children,
 }
 
 export interface APIReferenceProps {
@@ -151,7 +150,7 @@ async function APIReferenceAsync({
     return null
   }
 
-  const mergedComponents: APIReferenceComponents = {
+  const mergedComponents: InternalAPIReferenceComponents = {
     ...defaultComponents,
     ...components,
   }
@@ -185,7 +184,7 @@ function TypeNodeRouter({
   slug,
 }: {
   node: Kind
-  components: APIReferenceComponents
+  components: InternalAPIReferenceComponents
   slug: string
 }) {
   switch (node.kind) {
@@ -251,7 +250,7 @@ function TypeSection({
   description?: string
   id?: string
   children: React.ReactNode
-  components: APIReferenceComponents
+  components: InternalAPIReferenceComponents
 }) {
   return (
     <components.Section id={id}>
@@ -260,7 +259,7 @@ function TypeSection({
       </components.SectionHeading>
       <components.SectionBody hasDescription={Boolean(description)}>
         {description ? (
-          <components.Block gap="small">
+          <components.Block gap="medium">
             <components.Description>{description}</components.Description>
             {children}
           </components.Block>
@@ -279,7 +278,7 @@ function TypeDetail({
 }: {
   label?: React.ReactNode
   children: React.ReactNode
-  components: APIReferenceComponents
+  components: InternalAPIReferenceComponents
 }) {
   return (
     <components.Detail>
@@ -300,9 +299,9 @@ function TypeTable<RowType>({
 }: {
   rows: readonly RowType[]
   headers?: readonly React.ReactNode[]
-  renderRow: (row: RowType, index: number) => React.ReactNode
+  renderRow: (row: RowType, hasSubRow: boolean) => React.ReactNode
   renderSubRow?: (row: RowType, index: number) => React.ReactNode
-  components: APIReferenceComponents
+  components: InternalAPIReferenceComponents
 }) {
   return (
     <components.Table>
@@ -321,16 +320,15 @@ function TypeTable<RowType>({
       <components.TableBody>
         {rows.map((row, index) => {
           const subRow = renderSubRow?.(row, index)
+          const hasSubRow = Boolean(subRow)
 
           return (
-            <components.TableRowGroup key={index} hasSubRow={!!subRow}>
-              <components.TableRow>{renderRow(row, index)}</components.TableRow>
+            <components.TableRowGroup key={index} hasSubRow={hasSubRow}>
+              <components.TableRow hasSubRow={hasSubRow}>
+                {renderRow(row, hasSubRow)}
+              </components.TableRow>
               {subRow ? (
-                <components.TableSubRow>
-                  <components.TableData colSpan={3}>
-                    {subRow}
-                  </components.TableData>
-                </components.TableSubRow>
+                <components.TableSubRow>{subRow}</components.TableSubRow>
               ) : null}
             </components.TableRowGroup>
           )
@@ -346,7 +344,7 @@ function VariableSection({
   slug,
 }: {
   node: TypeOfKind<'Variable'>
-  components: APIReferenceComponents
+  components: InternalAPIReferenceComponents
   slug: string
 }) {
   return (
@@ -366,18 +364,19 @@ function VariableSection({
 
 function renderClassPropertyRow(
   property: NonNullable<TypeOfKind<'Class'>['properties']>[number],
-  components: APIReferenceComponents
+  components: InternalAPIReferenceComponents,
+  hasSubRow: boolean
 ) {
   return (
     <>
-      <components.TableData>
+      <components.TableData index={0} hasSubRow={hasSubRow}>
         {property.name}
         {property.isOptional ? '?' : ''}
       </components.TableData>
-      <components.TableData>
+      <components.TableData index={1} hasSubRow={hasSubRow}>
         <components.Code>{property.text}</components.Code>
       </components.TableData>
-      <components.TableData>
+      <components.TableData index={2} hasSubRow={hasSubRow}>
         <InitializerValue
           initializer={property.initializer}
           components={components}
@@ -389,14 +388,17 @@ function renderClassPropertyRow(
 
 function renderMethodRow(
   method: NonNullable<TypeOfKind<'Class'>['methods']>[number],
-  components: APIReferenceComponents
+  components: InternalAPIReferenceComponents,
+  hasSubRow: boolean
 ) {
   const signature = method.signatures[0]
 
   return (
     <>
-      <components.TableData>{method.name}</components.TableData>
-      <components.TableData colSpan={2}>
+      <components.TableData index={0} hasSubRow={hasSubRow}>
+        {method.name}
+      </components.TableData>
+      <components.TableData index={1} hasSubRow={hasSubRow} colSpan={2}>
         <components.Code>{signature.text}</components.Code>
       </components.TableData>
     </>
@@ -405,7 +407,7 @@ function renderMethodRow(
 
 function renderMethodSubRow(
   method: NonNullable<TypeOfKind<'Class'>['methods']>[number],
-  components: APIReferenceComponents
+  components: InternalAPIReferenceComponents
 ) {
   // TODO: Handle multiple signatures
   const signature = method.signatures[0]
@@ -417,7 +419,9 @@ function renderMethodSubRow(
           <TypeTable
             rows={signature.parameters}
             headers={['Parameter', 'Type', 'Default Value']}
-            renderRow={(parameter) => renderParameterRow(parameter, components)}
+            renderRow={(parameter, hasSubRow) =>
+              renderParameterRow(parameter, components, hasSubRow)
+            }
             components={components}
           />
         </TypeDetail>
@@ -438,7 +442,7 @@ function ClassSection({
   slug,
 }: {
   node: TypeOfKind<'Class'>
-  components: APIReferenceComponents
+  components: InternalAPIReferenceComponents
   slug: string
 }) {
   return (
@@ -453,9 +457,9 @@ function ClassSection({
         <TypeDetail label="Properties" components={components}>
           <TypeTable
             rows={node.properties}
-            headers={['Property', 'Type', 'Default Value']}
-            renderRow={(property) =>
-              renderClassPropertyRow(property, components)
+            headers={['Property', 'Type', 'Default Value']}
+            renderRow={(property, hasSubRow) =>
+              renderClassPropertyRow(property, components, hasSubRow)
             }
             components={components}
           />
@@ -467,7 +471,9 @@ function ClassSection({
           <TypeTable
             rows={node.methods}
             headers={['Method', 'Type']}
-            renderRow={(method) => renderMethodRow(method, components)}
+            renderRow={(method, hasSubRow) =>
+              renderMethodRow(method, components, hasSubRow)
+            }
             renderSubRow={(method) => renderMethodSubRow(method, components)}
             components={components}
           />
@@ -477,14 +483,14 @@ function ClassSection({
       {node.extends || node.implements?.length ? (
         <TypeDetail components={components}>
           {node.extends ? (
-            <components.Block gap="medium">
+            <components.Block gap="small">
               <components.DetailHeading>Extends</components.DetailHeading>
               <components.Code>{node.extends.text}</components.Code>
             </components.Block>
           ) : null}
 
           {node.implements?.length ? (
-            <components.Block gap="medium">
+            <components.Block gap="small">
               <components.DetailHeading>Implements</components.DetailHeading>
               {node.implements.map((implementation, index) => (
                 <React.Fragment key={index}>
@@ -506,7 +512,7 @@ function ComponentSection({
   slug,
 }: {
   node: TypeOfKind<'Component'>
-  components: APIReferenceComponents
+  components: InternalAPIReferenceComponents
   slug: string
 }) {
   return (
@@ -526,19 +532,19 @@ function ComponentSection({
                   <TypeTable
                     rows={signature.parameter.type.members}
                     headers={['Property', 'Type', 'Default Value']}
-                    renderRow={(property) =>
+                    renderRow={(property, hasSubRow) =>
                       property.kind === 'PropertySignature' ? (
                         <>
-                          <components.TableData>
+                          <components.TableData index={0} hasSubRow={hasSubRow}>
                             {property.name}
                             {property.isOptional ? '?' : ''}
                           </components.TableData>
-                          <components.TableData>
+                          <components.TableData index={1} hasSubRow={hasSubRow}>
                             <components.Code>
                               {property.type.text}
                             </components.Code>
                           </components.TableData>
-                          <components.TableData>
+                          <components.TableData index={2} hasSubRow={hasSubRow}>
                             {/* TODO: immediate type literals should have an initializer e.g. function Button({ variant = 'outline' }: { variant: 'fill' | 'outline' }) {}, this could be a special ImmediateTypeLiteral/Object kind that provides it. */}
                             {/* <InitializerValue
                           value={property.initializer}
@@ -547,7 +553,11 @@ function ComponentSection({
                           </components.TableData>
                         </>
                       ) : (
-                        <components.TableData colSpan={3}>
+                        <components.TableData
+                          index={0}
+                          hasSubRow={hasSubRow}
+                          colSpan={3}
+                        >
                           <components.Code>{property.text}</components.Code>
                         </components.TableData>
                       )
@@ -570,18 +580,19 @@ function ComponentSection({
 
 function renderParameterRow(
   parameter: TypeOfKind<'Parameter'>,
-  components: APIReferenceComponents
+  components: InternalAPIReferenceComponents,
+  hasSubRow: boolean
 ) {
   return (
     <>
-      <components.TableData>
+      <components.TableData index={0} hasSubRow={hasSubRow}>
         {parameter.name}
         {parameter.isOptional ? '?' : ''}
       </components.TableData>
-      <components.TableData>
+      <components.TableData index={1} hasSubRow={hasSubRow}>
         <components.Code>{getParameterText(parameter)}</components.Code>
       </components.TableData>
-      <components.TableData>
+      <components.TableData index={2} hasSubRow={hasSubRow}>
         <InitializerValue
           initializer={parameter.initializer}
           components={components}
@@ -597,7 +608,7 @@ function FunctionSection({
   slug,
 }: {
   node: TypeOfKind<'Function'>
-  components: APIReferenceComponents
+  components: InternalAPIReferenceComponents
   slug: string
 }) {
   return (
@@ -616,7 +627,9 @@ function FunctionSection({
                 <TypeTable
                   rows={signature.parameters}
                   headers={['Parameter', 'Type', 'Default Value']}
-                  renderRow={(param) => renderParameterRow(param, components)}
+                  renderRow={(param, hasSubRow) =>
+                    renderParameterRow(param, components, hasSubRow)
+                  }
                   components={components}
                 />
               </TypeDetail>
@@ -640,7 +653,7 @@ function TypeAliasSection({
   slug,
 }: {
   node: TypeOfKind<'TypeAlias'>
-  components: APIReferenceComponents
+  components: InternalAPIReferenceComponents
   slug: string
 }) {
   return (
@@ -664,7 +677,7 @@ function MembersSection({
   slug,
 }: {
   node: Kind.Interface | Kind.TypeAlias<Kind.TypeLiteral>
-  components: APIReferenceComponents
+  components: InternalAPIReferenceComponents
   slug: string
 }) {
   const members = node.kind === 'Interface' ? node.members : node.type.members
@@ -699,13 +712,17 @@ function MembersSection({
           <TypeTable
             rows={propertySignatures}
             headers={['Property', 'Type']}
-            renderRow={(property) => (
+            renderRow={(property, hasSubRow) => (
               <>
-                <components.TableData>
+                <components.TableData index={0} hasSubRow={hasSubRow}>
                   {property.name}
                   {property.isOptional ? '?' : ''}
                 </components.TableData>
-                <components.TableData colSpan={2}>
+                <components.TableData
+                  index={1}
+                  hasSubRow={hasSubRow}
+                  colSpan={2}
+                >
                   <components.Code>{property.type.text}</components.Code>
                 </components.TableData>
               </>
@@ -720,10 +737,16 @@ function MembersSection({
           <TypeTable
             rows={methodSignatures}
             headers={['Method', 'Type']}
-            renderRow={(method) => (
+            renderRow={(method, hasSubRow) => (
               <>
-                <components.TableData>{method.name}</components.TableData>
-                <components.TableData colSpan={2}>
+                <components.TableData index={0} hasSubRow={hasSubRow}>
+                  {method.name}
+                </components.TableData>
+                <components.TableData
+                  index={1}
+                  hasSubRow={hasSubRow}
+                  colSpan={2}
+                >
                   <components.Code>{method.text}</components.Code>
                 </components.TableData>
               </>
@@ -738,14 +761,18 @@ function MembersSection({
           <TypeTable
             rows={indexSignatures}
             headers={['Key', 'Type']}
-            renderRow={(indexSignature) => (
+            renderRow={(indexSignature, hasSubRow) => (
               <>
-                <components.TableData>
+                <components.TableData index={0} hasSubRow={hasSubRow}>
                   <components.Code>
                     {indexSignature.parameter.text}
                   </components.Code>
                 </components.TableData>
-                <components.TableData colSpan={2}>
+                <components.TableData
+                  index={1}
+                  hasSubRow={hasSubRow}
+                  colSpan={2}
+                >
                   <components.Code>{indexSignature.type.text}</components.Code>
                 </components.TableData>
               </>
@@ -764,7 +791,7 @@ function MappedSection({
   slug,
 }: {
   node: TypeOfKind<'MappedType'>
-  components: APIReferenceComponents
+  components: InternalAPIReferenceComponents
   slug: string
 }) {
   const parameterText = `${node.typeParameter.name} in ${node.typeParameter.constraintType?.text ?? '?'}`
@@ -801,7 +828,7 @@ function IntersectionSection({
   slug,
 }: {
   node: TypeOfKind<'IntersectionType'>
-  components: APIReferenceComponents
+  components: InternalAPIReferenceComponents
   slug: string
 }) {
   // Flatten into one table if every member is either a TypeLiteral or a MappedType kind
@@ -863,13 +890,17 @@ function IntersectionSection({
           <TypeTable
             rows={rows}
             headers={['Property', 'Type']}
-            renderRow={(row) => (
+            renderRow={(row, hasSubRow) => (
               <>
-                <components.TableData>
+                <components.TableData index={0} hasSubRow={hasSubRow}>
                   {row.name}
                   {row.isOptional ? '?' : ''}
                 </components.TableData>
-                <components.TableData colSpan={2}>
+                <components.TableData
+                  index={1}
+                  hasSubRow={hasSubRow}
+                  colSpan={2}
+                >
                   <components.Code>{row.text}</components.Code>
                 </components.TableData>
               </>
@@ -909,7 +940,7 @@ function TypeExpressionSection({
   components,
 }: {
   node: Kind.TypeExpression
-  components: APIReferenceComponents
+  components: InternalAPIReferenceComponents
 }) {
   const label = kindToLabel(node.kind)
 
@@ -927,7 +958,7 @@ function InitializerValue({
   components,
 }: {
   initializer: unknown | undefined
-  components: APIReferenceComponents
+  components: InternalAPIReferenceComponents
 }) {
   if (initializer === undefined) {
     return '—'

@@ -6,9 +6,9 @@ import {
 } from 'renoun/components'
 import { GeistMono } from 'geist/font/mono'
 
-const gaps = {
-  small: '0.25rem',
-  medium: '0.5rem',
+const gapSizes = {
+  small: '0.5rem',
+  medium: '1rem',
   large: '2rem',
 }
 
@@ -19,7 +19,7 @@ const components = {
       css={{
         display: 'flex',
         flexDirection: 'column',
-        gap: gap ? gaps[gap] : undefined,
+        gap: gap ? gapSizes[gap] : undefined,
       }}
     />
   ),
@@ -29,7 +29,7 @@ const components = {
       css={{
         display: 'flex',
         flexDirection: 'row',
-        gap: gap ? gaps[gap] : undefined,
+        gap: gap ? gapSizes[gap] : undefined,
       }}
     />
   ),
@@ -89,11 +89,16 @@ const components = {
   Description: (props) => (
     <Markdown
       {...props}
-      css={{
-        fontSize: 'var(--font-size-body-2)',
-        lineHeight: 'var(--line-height-body-2)',
-      }}
       components={{
+        p: (props) => (
+          <p
+            {...props}
+            css={{
+              fontSize: 'var(--font-size-body-2)',
+              lineHeight: 'var(--line-height-body-2)',
+            }}
+          />
+        ),
         code: (props) => (
           <code
             {...props}
@@ -119,7 +124,7 @@ const components = {
       }}
     />
   ),
-  TableRow: (props) => (
+  TableRow: ({ hasSubRow, ...props }) => (
     <tr
       {...props}
       css={{
@@ -138,7 +143,7 @@ const components = {
       }}
     />
   ),
-  TableData: (props) => (
+  TableData: ({ index, hasSubRow, ...props }) => (
     <td
       {...props}
       css={{

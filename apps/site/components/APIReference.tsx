@@ -4,8 +4,8 @@ import {
   type APIReferenceProps,
   type APIReferenceComponents,
 } from 'renoun/components'
-import { styled } from 'restyle'
 import { GeistMono } from 'geist/font/mono'
+import type { CSSObject } from 'restyle'
 
 import { Collapse } from './Collapse'
 import { Markdown } from './Markdown'
@@ -67,26 +67,39 @@ export function APIReference(props: APIReferenceProps) {
           },
         }}
       >
-        <StyledTrigger>
-          <svg
-            viewBox="0 0 12 12"
+        <Collapse.Trigger
+          css={{
+            display: 'flex',
+            flexDirection: 'column',
+            padding: '1.5rem 0',
+            gap: '0.5rem',
+            border: 'none',
+            background: 'none',
+            fontSize: 'inherit',
+            lineHeight: 'inherit',
+            fontWeight: 'inherit',
+            textAlign: 'left',
+            cursor: 'pointer',
+
+            '&:hover': {
+              svg: {
+                opacity: 1,
+              },
+            },
+          }}
+        >
+          <Collapse.TriggerIcon
             css={{
-              position: 'absolute',
               width: 16,
               height: 16,
+              position: 'absolute',
               top: '3.2rem',
               left: '-2rem',
-              transition: 'transform 0.2s ease',
-
-              '[aria-expanded="true"] &': {
-                transform: 'rotate(90deg)',
-              },
+              opacity: 0,
             }}
-          >
-            <path d="M3 2l4 4-4 4" fill="none" stroke="currentColor" />
-          </svg>
+          />
           {props.children}
-        </StyledTrigger>
+        </Collapse.Trigger>
       </h3>
     ),
     SectionBody: ({ children }) => (
@@ -98,14 +111,7 @@ export function APIReference(props: APIReferenceProps) {
         css={{
           display: 'flex',
           flexDirection: 'column',
-          gap:
-            gap === 'small'
-              ? '0.25rem'
-              : gap === 'medium'
-                ? '0.5rem'
-                : gap === 'large'
-                  ? '2rem'
-                  : undefined,
+          gap: gap ? gapSizes[gap] : undefined,
         }}
       />
     ),
@@ -115,14 +121,7 @@ export function APIReference(props: APIReferenceProps) {
         css={{
           display: 'flex',
           flexDirection: 'row',
-          gap:
-            gap === 'small'
-              ? '0.25rem'
-              : gap === 'medium'
-                ? '0.5rem'
-                : gap === 'large'
-                  ? '2rem'
-                  : undefined,
+          gap: gap ? gapSizes[gap] : undefined,
         }}
       />
     ),
@@ -141,9 +140,15 @@ export function APIReference(props: APIReferenceProps) {
       <h4
         {...props}
         css={{
-          fontSize: 'var(--font-size-body-1)',
-          lineHeight: 'var(--line-height-body-1)',
-          fontWeight: 'var(--font-weight-body)',
+          position: 'absolute',
+          width: '1px',
+          height: '1px',
+          padding: 0,
+          margin: '-1px',
+          overflow: 'hidden',
+          clip: 'rect(0, 0, 0, 0)',
+          whiteSpace: 'nowrap',
+          border: 0,
         }}
       />
     ),
@@ -153,7 +158,6 @@ export function APIReference(props: APIReferenceProps) {
         css={{
           display: 'flex',
           flexDirection: 'column',
-          '& > *': { padding: '2rem 0' },
           '& > *:not(:last-child)': {
             borderBottom: '1px solid var(--color-separator-secondary)',
           },
@@ -168,7 +172,6 @@ export function APIReference(props: APIReferenceProps) {
           tableLayout: 'fixed',
           fontSize: 'var(--font-size-body-2)',
           lineHeight: 'var(--line-height-body-2)',
-          borderBottom: '1px solid var(--color-separator)',
           borderCollapse: 'collapse',
 
           'th, td': {
@@ -180,19 +183,35 @@ export function APIReference(props: APIReferenceProps) {
         }}
       />
     ),
-    TableRow: (props) => (
-      <tr
-        {...props}
-        css={{ borderBottom: '1px solid var(--color-separator)' }}
-      />
-    ),
-    TableRowGroup: ({ hasSubRow, children }) =>
-      hasSubRow ? (
+    TableRowGroup: ({ hasSubRow, children }) => {
+      return hasSubRow ? (
         <Collapse.Provider>{children}</Collapse.Provider>
       ) : (
         <>{children}</>
-      ),
-    TableSubRow: (props) => <StyledCollapse as="tr" {...props} />,
+      )
+    },
+    TableRow: ({ hasSubRow, ...props }) => (
+      <tr
+        {...props}
+        css={{
+          borderTop: '1px solid var(--color-separator)',
+        }}
+      />
+    ),
+    TableSubRow: ({ children }) => (
+      <tr>
+        <td colSpan={3} css={{ padding: 0 }}>
+          <Collapse.Content
+            css={{
+              backgroundColor: 'var(--color-surface-secondary)',
+              borderTop: '1px solid var(--color-separator)',
+            }}
+          >
+            {children}
+          </Collapse.Content>
+        </td>
+      </tr>
+    ),
     TableHeader: (props) => (
       <th
         {...props}
@@ -203,32 +222,79 @@ export function APIReference(props: APIReferenceProps) {
         }}
       />
     ),
-    TableData: (props) => (
-      <td
+    TableData: ({ index, hasSubRow, ...props }) => {
+      const isFirstWithSubRow = index === 0 && hasSubRow
+
+      return (
+        <td
+          {...props}
+          css={{
+            whiteSpace: 'nowrap',
+            width: '100%',
+            position: 'relative',
+            ...(isFirstWithSubRow ? {} : scrollStyles),
+
+            ':not(:only-child):nth-child(1)': {
+              maxWidth: '30.77%',
+            },
+            ':not(:only-child):nth-child(2)': {
+              maxWidth: '38.46%',
+            },
+            ':not(:only-child):nth-child(3)': {
+              maxWidth: '30.77%',
+            },
+          }}
+        >
+          {isFirstWithSubRow ? (
+            <Collapse.Trigger
+              css={{
+                display: 'flex',
+                alignItems: 'center',
+                position: 'absolute',
+                inset: '0 0 0 -2rem',
+                cursor: 'pointer',
+
+                svg: {
+                  opacity: 0,
+                },
+
+                '&:hover': {
+                  svg: {
+                    opacity: 1,
+                  },
+                },
+              }}
+            >
+              <Collapse.TriggerIcon css={{ width: 16, height: 16 }} />
+            </Collapse.Trigger>
+          ) : null}
+          {props.children}
+        </td>
+      )
+    },
+    Code: (props) => (
+      <code
         {...props}
         css={{
-          whiteSpace: 'nowrap',
-          overflowX: 'auto',
-          mask: 'linear-gradient(to right, #0000, #ffff var(--start-fade) calc(100% - var(--end-fade)), #0000)',
-          animationName: 'scroll-mask',
-          animationTimeline: '--scroll-mask',
-          scrollTimeline: '--scroll-mask x',
-          width: '100%',
-
-          ':nth-child(1)': {
-            maxWidth: '30.77%',
-          },
-          ':nth-child(2)': {
-            maxWidth: '38.46%',
-          },
-          ':nth-child(3)': {
-            maxWidth: '30.77%',
-          },
+          color: 'var(--color-foreground-interactive)',
+          wordWrap: 'break-word',
         }}
-      >
-        {props.children}
-        <style href="scroll-mask" precedence="scroll-mask">
-          {`
+        className={GeistMono.className}
+      />
+    ),
+    Description: ({ children }) => (
+      <div css={{ padding: '0.5rem 0' }}>
+        <Markdown children={children} />
+      </div>
+    ),
+    ...props.components,
+  } satisfies Partial<APIReferenceComponents>
+
+  return (
+    <>
+      <DefaultAPIReference {...props} components={components} />
+      <style href="scroll-mask" precedence="scroll-mask">
+        {`
                 @property --start-fade {
                   syntax: '<length>';
                   inherits: false;
@@ -256,58 +322,21 @@ export function APIReference(props: APIReferenceProps) {
                   }
                 }
               `}
-        </style>
-      </td>
-    ),
-    Code: (props) => (
-      <code
-        {...props}
-        css={{
-          color: 'var(--color-foreground-interactive)',
-          wordWrap: 'break-word',
-        }}
-        className={GeistMono.className}
-      />
-    ),
-    Description: ({ children }) => (
-      <div css={{ padding: '0.5rem 0' }}>
-        <Markdown children={children as string} />
-      </div>
-    ),
-    ...props.components,
-  } satisfies Partial<APIReferenceComponents>
-
-  return <DefaultAPIReference {...props} components={components} />
+      </style>
+    </>
+  )
 }
 
-const StyledTrigger = styled(Collapse.Trigger, {
-  display: 'flex',
-  flexDirection: 'column',
-  padding: '1.5rem 0',
-  gap: '0.5rem',
-  border: 'none',
-  background: 'none',
-  fontSize: 'inherit',
-  lineHeight: 'inherit',
-  fontWeight: 'inherit',
-  textAlign: 'left',
-  cursor: 'pointer',
+const gapSizes = {
+  small: '0.5rem',
+  medium: '1rem',
+  large: '2rem',
+}
 
-  svg: {
-    opacity: 0,
-  },
-
-  '&:hover': {
-    svg: {
-      opacity: 1,
-    },
-  },
-})
-
-const StyledCollapse = styled(Collapse.Content, {
-  display: 'grid',
-  gridTemplateColumns: 'subgrid',
-  gridColumn: '1 / -1',
-  backgroundColor: 'var(--color-surface-secondary)',
-  borderBottom: '1px solid var(--color-separator)',
-})
+const scrollStyles = {
+  overflowX: 'auto',
+  mask: 'linear-gradient(to right, #0000, #ffff var(--start-fade) calc(100% - var(--end-fade)), #0000)',
+  animationName: 'scroll-mask',
+  animationTimeline: '--scroll-mask',
+  scrollTimeline: '--scroll-mask x',
+} satisfies CSSObject
