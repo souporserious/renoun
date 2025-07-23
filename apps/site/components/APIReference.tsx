@@ -132,7 +132,6 @@ export function APIReference(props: APIReferenceProps) {
           display: 'flex',
           flexDirection: 'column',
           gap: '0.5rem',
-          marginBottom: '1rem',
         }}
       />
     ),
@@ -201,14 +200,7 @@ export function APIReference(props: APIReferenceProps) {
     TableSubRow: ({ children }) => (
       <tr>
         <td colSpan={3} css={{ padding: 0 }}>
-          <Collapse.Content
-            css={{
-              backgroundColor: 'var(--color-surface-secondary)',
-              borderTop: '1px solid var(--color-separator)',
-            }}
-          >
-            {children}
-          </Collapse.Content>
+          <Collapse.Content>{children}</Collapse.Content>
         </td>
       </tr>
     ),
