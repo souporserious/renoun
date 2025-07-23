@@ -109,7 +109,9 @@ export function APIReference(props: APIReferenceProps) {
       </h3>
     ),
     SectionBody: ({ children }) => (
-      <Collapse.Content>{children}</Collapse.Content>
+      <Collapse.Content>
+        <div css={{ paddingBottom: '1.5rem' }}>{children}</div>
+      </Collapse.Content>
     ),
     Block: ({ gap, ...props }) => (
       <div
