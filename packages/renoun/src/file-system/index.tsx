@@ -30,7 +30,7 @@ import {
   removeOrderPrefixes,
   relativePath,
 } from '../utils/path.js'
-import type { SymbolFilter } from '../utils/resolve-type.js'
+import type { TypeFilter } from '../utils/resolve-type.js'
 import type { FileSystem } from './FileSystem.js'
 import { NodeFileSystem } from './NodeFileSystem.js'
 import {
@@ -224,19 +224,6 @@ export type LoadersWithRuntimeKeys<Loaders> = Extract<
   keyof Loaders,
   'js' | 'jsx' | 'ts' | 'tsx' | 'mdx'
 >
-
-/** All export names made available by a set of runtime‑capable loaders. */
-export type LoaderExportNames<Loaders> = string &
-  {
-    [Extension in LoadersWithRuntimeKeys<Loaders>]: keyof Loaders[Extension]
-  }[LoadersWithRuntimeKeys<Loaders>]
-
-/** The value type for a given export name coming from any runtime‑capable loaders. */
-export type LoaderExportValue<Loaders, Name extends string> = {
-  [Extension in LoadersWithRuntimeKeys<Loaders>]: Name extends keyof Loaders[Extension]
-    ? Loaders[Extension][Name]
-    : never
-}[LoadersWithRuntimeKeys<Loaders>]
 
 /** Determines if the loader is a resolver. */
 function isLoader(
@@ -761,7 +748,7 @@ export class JavaScriptFileExport<Value> {
   }
 
   /** Get the resolved type of the export. */
-  async getType(filter?: SymbolFilter) {
+  async getType(filter?: TypeFilter) {
     const location = await this.#getLocation()
 
     if (location === undefined) {
@@ -2488,7 +2475,7 @@ export type FileWithExtension<
 type StringUnion<Type> = Extract<Type, string> | (string & {})
 
 /** Resolves valid extension patterns from an object of loaders. */
-type LoadersToExtensions<
+export type LoadersToExtensions<
   DirectoryLoaders extends ModuleLoaders,
   ExtensionUnion = StringUnion<keyof DirectoryLoaders>,
 > = ExtensionUnion | ExtensionUnion[]
@@ -2499,7 +2486,7 @@ type LoadersToExtensions<
  */
 export function isFile<
   Types extends Record<string, any>,
-  const Extension extends StringUnion<keyof Types> | StringUnion<keyof Types>[],
+  const Extension extends LoadersToExtensions<Types>,
 >(
   entry: FileSystemEntry<Types> | undefined,
   extension?: Extension

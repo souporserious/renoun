@@ -1,7 +1,6 @@
-import { APIReference } from 'renoun/components'
-
 import { FileSystemCollection } from '@/collections'
 import { TableOfContents } from '@/components/TableOfContents'
+import { References } from '@/components/Reference'
 
 export default async function Page() {
   const sourceFile = await FileSystemCollection.getFile('index', 'tsx')
@@ -48,13 +47,12 @@ export default async function Page() {
               lineHeight: 'var(--line-height-heading-2)',
               fontWeight: 'var(--font-weight-heading)',
               marginBlockStart: '1.6rem',
+              marginBlockEnd: '2rem',
             }}
           >
             API Reference
           </h2>
-          {fileExports.map((fileExport) => (
-            <APIReference key={fileExport.getName()} source={fileExport} />
-          ))}
+          <References fileExports={fileExports} />
         </div>
       </div>
 
@@ -74,12 +72,12 @@ export default async function Page() {
             {
               id: 'api-reference',
               text: 'API Reference',
-              depth: 2,
+              level: 2,
             },
             ...fileExports.map((fileExport) => ({
-              id: fileExport.getSlug(),
+              id: fileExport.getName(),
               text: fileExport.getName(),
-              depth: 3,
+              level: 3,
             })),
           ]}
         />

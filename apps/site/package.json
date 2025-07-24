@@ -3,8 +3,8 @@
   "name": "@apps/site",
   "type": "module",
   "scripts": {
-    "dev": "renoun next dev",
-    "build": "renoun next build",
+    "dev": "../../packages/renoun/dist/cli/index.js next dev",
+    "build": "../../packages/renoun/dist/cli/index.js next build",
     "start": "serve out",
     "check-broken-links": "tsx scripts/check-broken-links.ts"
   },
@@ -17,7 +17,7 @@
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vercel/analytics": "^1.5.0",
-    "geist": "^1.4.2",
+    "geist": "catalog:",
     "next": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",

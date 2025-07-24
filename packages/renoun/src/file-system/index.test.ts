@@ -27,6 +27,7 @@ import {
   FileExportNotFoundError,
 } from './index'
 import type { Expect, Is, IsNotAny } from './types'
+import type { Kind } from '../utils/resolve-type'
 
 describe('file system', () => {
   describe('File', () => {
@@ -450,7 +451,7 @@ describe('file system', () => {
           for (const fileExport of fileExports) {
             const tags = fileExport.getTags()
 
-            if (tags?.some((tag) => tag.tagName === 'internal')) {
+            if (tags?.some((tag) => tag.name === 'internal')) {
               return false
             }
           }
@@ -739,76 +740,68 @@ describe('file system', () => {
 
     beforeAll(() => {
       fileSystem = new MemoryFileSystem({
-        'components/APIReference.examples.tsx': '',
-        'components/APIReference.tsx': '',
+        'components/Reference.examples.tsx': '',
+        'components/Reference.tsx': '',
       })
       directory = new Directory({ fileSystem })
     })
 
     test('string path', async () => {
-      const entry = await directory.getEntry('components/APIReference/examples')
+      const entry = await directory.getEntry('components/Reference/examples')
 
-      expect(entry.getAbsolutePath()).toBe(
-        '/components/APIReference.examples.tsx'
-      )
+      expect(entry.getAbsolutePath()).toBe('/components/Reference.examples.tsx')
 
-      const file = await directory.getFile('components/APIReference/examples')
+      const file = await directory.getFile('components/Reference/examples')
 
-      expect(file.getAbsolutePath()).toBe(
-        '/components/APIReference.examples.tsx'
-      )
+      expect(file.getAbsolutePath()).toBe('/components/Reference.examples.tsx')
 
       const fileWithExtension = await directory.getFile(
-        'components/APIReference/examples',
+        'components/Reference/examples',
         'tsx'
       )
 
       expect(fileWithExtension.getAbsolutePath()).toBe(
-        '/components/APIReference.examples.tsx'
+        '/components/Reference.examples.tsx'
       )
     })
 
     test('array path', async () => {
       const entry = await directory.getEntry([
         'components',
-        'APIReference',
+        'Reference',
         'examples',
       ])
 
-      expect(entry.getAbsolutePath()).toBe(
-        '/components/APIReference.examples.tsx'
-      )
+      expect(entry.getAbsolutePath()).toBe('/components/Reference.examples.tsx')
 
       const file = await directory.getFile([
         'components',
-        'APIReference',
+        'Reference',
         'examples',
       ])
 
-      expect(file.getAbsolutePath()).toBe(
-        '/components/APIReference.examples.tsx'
-      )
+      expect(file.getAbsolutePath()).toBe('/components/Reference.examples.tsx')
 
       const fileWithExtension = await directory.getFile(
-        ['components', 'APIReference', 'examples'],
+        ['components', 'Reference', 'examples'],
         'tsx'
       )
 
       expect(fileWithExtension.getAbsolutePath()).toBe(
-        '/components/APIReference.examples.tsx'
+        '/components/Reference.examples.tsx'
       )
     })
   })
 
   test('prioritizes base file name over file name with modifier', async () => {
     const fileSystem = new MemoryFileSystem({
-      'APIReference.examples.tsx': '',
-      'APIReference.tsx': '',
+      'Reference.examples.tsx': '',
+      'Reference.tsx': '',
     })
     const directory = new Directory({ fileSystem })
-    const entry = await directory.getEntry('APIReference')
+    const entry = await directory.getEntry('Reference')
 
-    expect(entry.getAbsolutePath()).toBe('/APIReference.tsx')
+    expect(entry.getAbsolutePath()).toBe('/Reference.tsx')
   })
 
   test('chooses entry with same name as directory when bare file path', async () => {
@@ -1064,7 +1057,7 @@ describe('file system', () => {
     expect(fileExport.getName()).toBe('hello')
     expect(fileExport.getDescription()).toBe('Say hello.')
     expect(fileExport.getTags()).toMatchObject([
-      { tagName: 'category', text: 'greetings' },
+      { name: 'category', text: 'greetings' },
     ])
     expect(await fileExport.getText()).toBe(statementText)
     expect(fileExport.getPosition()).toMatchInlineSnapshot(`
@@ -1101,11 +1094,11 @@ describe('file system', () => {
     const directory = new Directory({ fileSystem })
     const file = await directory.getFile('index', 'ts')
     const fileExport = await file.getExport('Metadata')
-    const type = await fileExport.getType()
+    const type = (await fileExport.getType()) as Kind.TypeAlias
 
     expect(type).toBeDefined()
-    expect(type!.kind).toBe('Object')
-    expect(type!.name).toBe('Metadata')
+
+    expect(type!.kind).toBe('TypeAlias')
   })
 
   test('getRuntimeValue resolves export runtime value from extension module', async () => {

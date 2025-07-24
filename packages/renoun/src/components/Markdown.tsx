@@ -6,7 +6,6 @@ import remarkRehype from 'remark-rehype'
 import { urlAttributes } from 'html-url-attributes'
 import type { Root, Properties } from 'hast'
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime'
-import type { ComponentType, JSX } from 'react'
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 
 declare module 'unified' {
@@ -17,8 +16,8 @@ declare module 'unified' {
 
 export type MarkdownComponents = {
   [Key in keyof React.JSX.IntrinsicElements]?:
-    | ComponentType<JSX.IntrinsicElements[Key]>
-    | keyof JSX.IntrinsicElements
+    | React.ComponentType<React.JSX.IntrinsicElements[Key]>
+    | keyof React.JSX.IntrinsicElements
 }
 
 export interface MarkdownProps {

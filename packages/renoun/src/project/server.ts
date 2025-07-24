@@ -21,7 +21,6 @@ import {
   type GetSourceTextMetadataOptions,
 } from '../utils/get-source-text-metadata.js'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.js'
-import type { SymbolFilter } from '../utils/resolve-type.js'
 import { resolveTypeAtLocation as baseResolveTypeAtLocation } from '../utils/resolve-type-at-location.js'
 import { transpileSourceFile as baseTranspileSourceFile } from '../utils/transpile-source-file.js'
 import { WebSocketServer } from './rpc/server.js'
@@ -118,30 +117,13 @@ export async function createServer(options?: { port?: number }) {
       projectOptions?: ProjectOptions
     }) {
       const project = getProject(projectOptions)
-      const filterFn = filter
-        ? (new Function(
-            'symbolMetadata',
-            `try {
-           return (${filter})(symbolMetadata)
-         } catch (error) {
-           if (error instanceof ReferenceError) {
-             throw new Error(
-               '[renoun]: A ReferenceError occured in the collection filter, this may have been caused by a variable defined outside the function scope. Ensure that all variables are defined within the filter function since it is serialized.',
-               { cause: error }
-             )
-           } else {
-             throw error
-           }
-         }`
-          ) as SymbolFilter)
-        : undefined
 
       return baseResolveTypeAtLocation(
         project,
         options.filePath,
         options.position,
         options.kind,
-        filterFn,
+        filter ? JSON.parse(filter) : undefined,
         projectOptions?.useInMemoryFileSystem
       )
     }

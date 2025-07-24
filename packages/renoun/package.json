@@ -134,7 +134,7 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && chmod +x dist/cli/index.js",
     "dev": "tsc -w",
     "textmate": "tsx ./scripts/textmate.ts",
     "test": "vitest --typecheck"
@@ -150,8 +150,10 @@
     "@types/react-dom": "catalog:",
     "@types/ws": "^8.18.1",
     "dedent": "^1.6.0",
+    "geist": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
+    "styled-components": "^6.1.19",
     "tm-grammars": "^1.23.26",
     "tm-themes": "^1.10.6",
     "valibot": "catalog:",

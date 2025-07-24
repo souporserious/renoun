@@ -55,7 +55,7 @@ Built from the ground up for React, renoun gives you the full power of compositi
 
 #### Drop‑In Components
 
-Quickly get started with powerful components like [`APIReference`](https://www.renoun.dev/components/api-reference), [`CodeBlock`](https://www.renoun.dev/components/code-block), [`MDX`](https://www.renoun.dev/components/mdx), and more — no extra setup required.
+Quickly get started with powerful components like [`Reference`](https://www.renoun.dev/components/api-reference), [`CodeBlock`](https://www.renoun.dev/components/code-block), [`MDX`](https://www.renoun.dev/components/mdx), and more — no extra setup required.
 
 [Explore components →](https://www.renoun.dev/components)
 
@@ -75,7 +75,7 @@ Easily query file system entries, generate navigations, and validate JavaScript 
 
 Effortlessly generate accurate, up‑to‑date API references, including type signatures and prop tables directly from your source code.
 
-[Try the `APIReference` component →](https://www.renoun.dev/components/api-reference)
+[Try the `Reference` component →](https://www.renoun.dev/components/api-reference)
 
 #### Customizable Theming
 
@@ -179,13 +179,13 @@ export default function Page() {
 
 #### API References
 
-Quickly document your APIs with renoun’s [`APIReference`](https://www.renoun.dev/components/api-reference) component:
+Quickly document your APIs with renoun’s [`Reference`](https://www.renoun.dev/components/api-reference) component:
 
 ```tsx
-import { APIReference } from 'renoun/components'
+import { Reference } from 'renoun/components'
 
 export default function Page() {
-  return <APIReference source="src/components/Button.tsx" />
+  return <Reference source="src/components/Button.tsx" />
 }
 ```
 
@@ -193,7 +193,7 @@ API references can also be resolved from a `File` that will include references f
 
 ```tsx
 import { Directory } from 'renoun/file-system'
-import { APIReference } from 'renoun/components'
+import { Reference } from 'renoun/components'
 
 const components = new Directory({ path: 'components' })
 
@@ -205,7 +205,7 @@ export default async function Page({
   const { slug } = await params
   const component = await components.getFile(slug, 'tsx')
 
-  return <APIReference source={component} />
+  return <Reference source={component} />
 }
 ```
 
@@ -213,7 +213,7 @@ Or from a specific exports within a `File`:
 
 ```tsx
 import { Directory } from 'renoun/file-system'
-import { APIReference } from 'renoun/components'
+import { Reference } from 'renoun/components'
 
 const components = new Directory({ path: 'components' })
 
@@ -229,7 +229,7 @@ export default async function Page({
   return componentExports.map((source) => (
     <section>
       <h2>{source.getBaseName()}</h2>
-      <APIReference source={source} />
+      <Reference source={source} />
     </section>
   ))
 }

@@ -1,4 +1,8 @@
-export { APIReference } from './APIReference.js'
+export {
+  Reference,
+  type ReferenceProps,
+  type ReferenceComponents,
+} from './Reference.js'
 export {
   CodeBlock,
   CopyButton,
@@ -23,6 +27,10 @@ export {
   type MarkdownComponents,
 } from './Markdown.js'
 export { MDX as MDX } from './MDX.js'
-export { PackageInstall, PackageInstallScript } from './PackageInstall/index.js'
+export {
+  PackageInstall,
+  PackageInstallScript,
+  type PackageInstallProps,
+} from './PackageInstall/index.js'
 export { Refresh } from './Refresh/index.js'
 export { ThemeProvider, ThemeStyles } from './Theme/index.js'
