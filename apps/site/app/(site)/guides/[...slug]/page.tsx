@@ -1,8 +1,8 @@
-import { CollectionGroup, GuidesCollection } from '@/collections'
+import { RootCollection, GuidesDirectory } from '@/collections'
 import { DocumentEntry } from '@/components/DocumentEntry'
 
 export async function generateStaticParams() {
-  const entries = await GuidesCollection.getEntries()
+  const entries = await GuidesDirectory.getEntries()
 
   return entries.map((entry) => ({
     slug: entry.getPathnameSegments({ includeBasePathname: false }),
@@ -15,7 +15,7 @@ export default async function Guide({
   params: Promise<{ slug: string[] }>
 }) {
   const { slug } = await params
-  const file = await GuidesCollection.getFile(slug, 'mdx')
+  const file = await GuidesDirectory.getFile(slug, 'mdx')
 
-  return <DocumentEntry file={file} entryGroup={CollectionGroup} />
+  return <DocumentEntry file={file} collection={RootCollection} />
 }

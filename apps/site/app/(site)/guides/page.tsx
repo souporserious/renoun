@@ -1,8 +1,8 @@
-import { GuidesCollection } from '@/collections'
+import { GuidesDirectory } from '@/collections'
 import { DocumentEntry } from '@/components/DocumentEntry'
 
 export default async function Guides() {
-  const file = await GuidesCollection.getFile('index', 'mdx')
+  const file = await GuidesDirectory.getFile('index', 'mdx')
 
   return (
     <DocumentEntry

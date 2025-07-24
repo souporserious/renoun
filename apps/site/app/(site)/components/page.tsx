@@ -1,9 +1,9 @@
-import { ComponentsCollection } from '@/collections'
+import { ComponentsDirectory } from '@/collections'
 import { Card } from '@/components/Card'
 import { Row } from '@/components/Row'
 
 export default async function Components() {
-  const entries = await ComponentsCollection.getEntries()
+  const entries = await ComponentsDirectory.getEntries()
 
   return (
     <div

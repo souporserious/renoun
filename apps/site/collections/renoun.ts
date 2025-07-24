@@ -29,7 +29,7 @@ async function filterInternalExports(entry: FileSystemEntry<any>) {
   return isDirectory(entry) || isFile(entry, 'mdx')
 }
 
-export const FileSystemCollection = new Directory({
+export const FileSystemDirectory = new Directory({
   path: '../../packages/renoun/src/file-system',
   basePathname: 'utilities',
   loader: {
@@ -44,7 +44,7 @@ export const FileSystemCollection = new Directory({
 
 type ComponentSchema = Record<string, React.ComponentType>
 
-export const ComponentsCollection = new Directory({
+export const ComponentsDirectory = new Directory({
   path: '../../packages/renoun/src/components',
   loader: {
     ts: withSchema<ComponentSchema>(

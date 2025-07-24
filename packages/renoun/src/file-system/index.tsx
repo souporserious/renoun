@@ -527,7 +527,7 @@ export class File<
   async getSiblings<
     GroupTypes extends Record<string, any> = DirectoryTypes,
   >(options?: {
-    entryGroup?: EntryGroup<GroupTypes, FileSystemEntry<any>[]>
+    collection?: Collection<GroupTypes, FileSystemEntry<any>[]>
     includeDirectoryNamedSegment?: boolean
   }): Promise<
     [
@@ -542,8 +542,8 @@ export class File<
       return this.#directory.getSiblings() as any
     }
 
-    const entries = await (options?.entryGroup
-      ? options.entryGroup.getEntries({ recursive: true })
+    const entries = await (options?.collection
+      ? options.collection.getEntries({ recursive: true })
       : this.#directory.getEntries())
     const path = this.getPathname({
       includeDirectoryNamedSegment: options?.includeDirectoryNamedSegment,
@@ -2060,7 +2060,7 @@ export class Directory<
   async getSiblings<
     GroupTypes extends Record<string, any> = LoaderTypes,
   >(options?: {
-    entryGroup?: EntryGroup<GroupTypes, FileSystemEntry<any>[]>
+    collection?: Collection<GroupTypes, FileSystemEntry<any>[]>
   }): Promise<
     [
       FileSystemEntry<LoaderTypes> | undefined,
@@ -2069,8 +2069,8 @@ export class Directory<
   > {
     let entries: FileSystemEntry<LoaderTypes>[]
 
-    if (options?.entryGroup) {
-      entries = await options.entryGroup.getEntries({ recursive: true })
+    if (options?.collection) {
+      entries = await options.collection.getEntries({ recursive: true })
     } else if (this.#directory) {
       entries = await this.#directory.getEntries()
     } else {
@@ -2263,20 +2263,20 @@ type LoadersFromEntries<Entries extends FileSystemEntry<any>[]> =
     Entries[number] extends Directory<any, any, infer Loaders> ? Loaders : {}
   >
 
-/** Options for an `EntryGroup`. */
-export interface EntryGroupOptions<Entries extends FileSystemEntry<any>[]> {
+/** Options for a `Collection`. */
+export interface CollectionOptions<Entries extends FileSystemEntry<any>[]> {
   entries: Entries
 }
 
 /** A group of file system entries. */
-export class EntryGroup<
+export class Collection<
   Types extends InferModuleLoadersTypes<Loaders>,
   const Entries extends FileSystemEntry<any>[] = FileSystemEntry<any>[],
   const Loaders extends ModuleLoaders = LoadersFromEntries<Entries>,
 > {
   #entries: Entries
 
-  constructor(options: EntryGroupOptions<Entries>) {
+  constructor(options: CollectionOptions<Entries>) {
     this.#entries = options.entries
   }
 

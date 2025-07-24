@@ -2,9 +2,9 @@ import type { CSSObject } from 'restyle'
 import { GitProviderLink } from 'renoun/components'
 
 import {
-  DocsCollection,
-  ComponentsCollection,
-  GuidesCollection,
+  DocsDirectory,
+  ComponentsDirectory,
+  GuidesDirectory,
 } from '@/collections'
 import { NavigationBoundary } from './NavigationBoundary'
 import { SidebarLink } from './SidebarLink'
@@ -56,7 +56,7 @@ export function Sidebar() {
             }}
           >
             <h3 className="title">Docs</h3>
-            <TreeNavigation collection={DocsCollection} />
+            <TreeNavigation collection={DocsDirectory} />
           </li>
 
           <li
@@ -67,7 +67,7 @@ export function Sidebar() {
             }}
           >
             <h3 className="title">Components</h3>
-            <TreeNavigation collection={ComponentsCollection} variant="name" />
+            <TreeNavigation collection={ComponentsDirectory} variant="name" />
           </li>
 
           <li
@@ -104,7 +104,7 @@ export function Sidebar() {
             }}
           >
             <h3 className="title">Guides</h3>
-            <TreeNavigation collection={GuidesCollection} />
+            <TreeNavigation collection={GuidesDirectory} />
           </li>
 
           <li css={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>

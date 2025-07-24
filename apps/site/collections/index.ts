@@ -1,10 +1,10 @@
-import { EntryGroup } from 'renoun/file-system'
+import { Collection } from 'renoun/file-system'
 
-import { ComponentsCollection } from './renoun'
-import { DocsCollection, GuidesCollection } from './site'
+import { ComponentsDirectory } from './renoun'
+import { DocsDirectory, GuidesDirectory } from './site'
 
-export const CollectionGroup = new EntryGroup({
-  entries: [DocsCollection, ComponentsCollection, GuidesCollection],
+export const RootCollection = new Collection({
+  entries: [DocsDirectory, ComponentsDirectory, GuidesDirectory],
 })
 export * from './renoun'
 export * from './site'

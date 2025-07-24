@@ -1,15 +1,15 @@
-import { FileSystemCollection } from '@/collections'
+import { FileSystemDirectory } from '@/collections'
 import { TableOfContents } from '@/components/TableOfContents'
 import { References } from '@/components/Reference'
 
 export default async function Page() {
-  const sourceFile = await FileSystemCollection.getFile('index', 'tsx')
+  const sourceFile = await FileSystemDirectory.getFile('index', 'tsx')
 
   if (!sourceFile) {
     return null
   }
 
-  const docFile = await FileSystemCollection.getFile('README', 'mdx')
+  const docFile = await FileSystemDirectory.getFile('README', 'mdx')
 
   if (!docFile) {
     return null

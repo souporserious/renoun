@@ -16,7 +16,7 @@ import {
   JavaScriptFile,
   JavaScriptFileExport,
   MDXFile,
-  EntryGroup,
+  Collection,
   isDirectory,
   isFile,
   isJavaScriptFile,
@@ -1485,7 +1485,7 @@ describe('file system', () => {
         mdx: withSchema<FrontMatter>(),
       },
     })
-    const group = new EntryGroup({
+    const group = new Collection({
       entries: [posts, docs],
     })
     const entries = await group.getEntries()
@@ -1519,7 +1519,7 @@ describe('file system', () => {
 
     const file = await group.getFile(['posts', 'meta'], 'js')
     const [previousEntry, nextEntry] = await file.getSiblings({
-      entryGroup: group,
+      collection: group,
     })
 
     expect(previousEntry?.getBaseName()).toBe('building-a-button-component')
@@ -1535,11 +1535,11 @@ describe('file system', () => {
     })
     const docs = new Directory({ path: 'docs', fileSystem })
     const guides = new Directory({ path: 'guides', fileSystem })
-    const group = new EntryGroup({ entries: [docs, guides] })
+    const group = new Collection({ entries: [docs, guides] })
 
     const directory = await group.getDirectory('guides')
     const [previousDirectoryEntry, nextDirectoryEntry] =
-      await directory.getSiblings({ entryGroup: group })
+      await directory.getSiblings({ collection: group })
 
     expect(previousDirectoryEntry).toBeDefined()
     expect(previousDirectoryEntry!.getPathname()).toBe('/docs/next-steps')
@@ -1549,7 +1549,7 @@ describe('file system', () => {
 
     const file = await group.getFile('guides/intro')
     const [previousFileEntry, nextFileEntry] = await file.getSiblings({
-      entryGroup: group,
+      collection: group,
     })
 
     expect(previousFileEntry).toBeDefined()
@@ -1567,7 +1567,7 @@ describe('file system', () => {
     const directory = new Directory({
       fileSystem,
     })
-    const entryGroup = new EntryGroup({
+    const collection = new Collection({
       entries: [directory],
     })
     const directoryEntry = await directory.getFile(
@@ -1578,7 +1578,7 @@ describe('file system', () => {
     expect(directoryEntry).toBeDefined()
     expect(directoryEntry?.getExtension()).toBe('tsx')
 
-    const groupEntry = await entryGroup.getFile(
+    const groupEntry = await collection.getFile(
       ['components', 'Button'],
       ['ts', 'tsx']
     )
@@ -1594,15 +1594,15 @@ describe('file system', () => {
     const directoryTwo = new Directory({
       fileSystem: new MemoryFileSystem({ 'docs/Button.mdx': '' }),
     })
-    const entryGroup = new EntryGroup({
+    const collection = new Collection({
       entries: [directoryOne, directoryTwo],
     })
-    const componentEntry = await entryGroup.getEntry(['docs', 'Button'])
+    const componentEntry = await collection.getEntry(['docs', 'Button'])
 
     expect(componentEntry).toBeDefined()
     expect(componentEntry.getPathname()).toBe('/docs/button')
 
-    const componentFile = await entryGroup.getFile(['docs', 'Button'], 'mdx')
+    const componentFile = await collection.getFile(['docs', 'Button'], 'mdx')
 
     expect(componentFile).toBeDefined()
     expect(componentFile.getPathname()).toBe('/docs/button')
@@ -1624,7 +1624,7 @@ describe('file system', () => {
         tsx: withSchema<TSXTypes>(),
       },
     })
-    const group = new EntryGroup({
+    const group = new Collection({
       entries: [directoryA, directoryB],
     })
     const file = await group.getFile('Button', 'mdx')
@@ -1658,7 +1658,7 @@ describe('file system', () => {
           description: string
         }
       }>
-      entryGroup?: EntryGroup<any>
+      collection?: Collection<any>
     }) {
       return null
     }
@@ -1688,12 +1688,12 @@ describe('file system', () => {
       },
       include: (entry) => isFile(entry, 'mdx'),
     })
-    const entryGroup = new EntryGroup({
+    const collection = new Collection({
       entries: [directory],
     })
     const file = await directory.getFile('index', 'mdx')
 
-    Document({ file, entryGroup })
+    Document({ file, collection })
   })
 
   test('adds default MDXContent type to existing mdx loaders', async () => {

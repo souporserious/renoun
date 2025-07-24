@@ -11,13 +11,13 @@ import type { MDXHeadings } from 'renoun/mdx'
 import { GeistMono } from 'geist/font/mono'
 import { References } from '@/components/Reference'
 
-import { CollectionGroup, ComponentsCollection } from '@/collections'
+import { RootCollection, ComponentsDirectory } from '@/collections'
 import { MDX } from '@/components/MDX'
 import { SiblingLink } from '@/components/SiblingLink'
 import { TableOfContents } from '@/components/TableOfContents'
 
 export async function generateStaticParams() {
-  const entries = await ComponentsCollection.getEntries({ recursive: true })
+  const entries = await ComponentsDirectory.getEntries({ recursive: true })
 
   return entries.map((entry) => ({
     slug: entry.getPathnameSegments({ includeBasePathname: false }),
@@ -30,8 +30,8 @@ export default async function Component({
   params: Promise<{ slug: string[] }>
 }) {
   const slug = (await params).slug
-  const componentEntry = await ComponentsCollection.getFile(slug, ['ts', 'tsx'])
-  const mdxFile = await ComponentsCollection.getFile(slug, 'mdx').catch(
+  const componentEntry = await ComponentsDirectory.getFile(slug, ['ts', 'tsx'])
+  const mdxFile = await ComponentsDirectory.getFile(slug, 'mdx').catch(
     (error) => {
       if (error instanceof FileNotFoundError) {
         return undefined
@@ -57,7 +57,7 @@ export default async function Component({
       throw error
     })
   const description = mainExport ? mainExport.getDescription() : null
-  const examplesEntry = await ComponentsCollection.getEntry([
+  const examplesEntry = await ComponentsDirectory.getEntry([
     ...slug,
     'examples',
   ]).catch((error) => {
@@ -91,7 +91,7 @@ export default async function Component({
   const updatedAt = await componentEntry.getLastCommitDate()
   const url = componentEntry.getEditUrl()
   const [previousEntry, nextEntry] = await componentEntry.getSiblings({
-    entryGroup: CollectionGroup,
+    collection: RootCollection,
   })
 
   let headings: MDXHeadings = []
@@ -230,9 +230,7 @@ export default async function Component({
                 entry={previousEntry}
                 direction="previous"
                 variant={
-                  ComponentsCollection.hasEntry(previousEntry)
-                    ? 'name'
-                    : 'title'
+                  ComponentsDirectory.hasEntry(previousEntry) ? 'name' : 'title'
                 }
               />
             ) : null}
@@ -241,7 +239,7 @@ export default async function Component({
                 entry={nextEntry}
                 direction="next"
                 variant={
-                  ComponentsCollection.hasEntry(nextEntry) ? 'name' : 'title'
+                  ComponentsDirectory.hasEntry(nextEntry) ? 'name' : 'title'
                 }
               />
             ) : null}

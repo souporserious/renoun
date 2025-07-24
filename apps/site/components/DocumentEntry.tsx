@@ -1,12 +1,12 @@
-import type { EntryGroup, MDXFile } from 'renoun/file-system'
-import type { MDXContent, MDXHeadings } from 'renoun/mdx'
+import type { Collection, MDXFile } from 'renoun/file-system'
+import type { MDXHeadings } from 'renoun/mdx'
 
 import { SiblingLink } from './SiblingLink'
 import { TableOfContents } from './TableOfContents'
 
 export async function DocumentEntry({
   file,
-  entryGroup,
+  collection,
   shouldRenderTableOfContents = true,
   shouldRenderUpdatedAt = true,
 }: {
@@ -17,7 +17,7 @@ export async function DocumentEntry({
       description: string
     }
   }>
-  entryGroup?: EntryGroup<any>
+  collection?: Collection<any>
   shouldRenderTableOfContents?: boolean
   shouldRenderUpdatedAt?: boolean
 }) {
@@ -30,7 +30,7 @@ export async function DocumentEntry({
     ? await file.getLastCommitDate()
     : null
   const editPath = file.getEditUrl()
-  let [previousEntry, nextEntry] = await file.getSiblings({ entryGroup })
+  let [previousEntry, nextEntry] = await file.getSiblings({ collection })
 
   if (previousEntry?.getBaseName() === 'docs') {
     previousEntry = undefined
