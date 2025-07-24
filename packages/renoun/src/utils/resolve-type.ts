@@ -3796,12 +3796,11 @@ function isTrivialType(type: Type): boolean {
  * Decide whether a `TypeReference` should be fully resolved or kept as a reference.
  *
  * A type is resolved when all of the following criteria are met:
- * - The reference is not already being resolved (prevents infinite loops).
- * - The reference itself doesn't contain any free type parameters (i.e. it is already fully instantiated).
- * - At least one type-argument is internal and none of the arguments are:
- *    - imported into the current file
- *    - exported from their source file
- *    - declared in `node_modules`
+ * - The reference is not already being resolved (prevents infinite loops)
+ * - The reference itself doesn't contain any free type parameters (i.e. it is already fully instantiated)
+ * - The reference is either:
+ *   - declared in the local project
+ *   - an alias from node-modules and at least one of its type-arguments comes from the local project (exported or internal) and that argument is non-trivial
  */
 function shouldResolveTypeReference(type: Type, enclosingNode?: Node): boolean {
   if (
@@ -3812,77 +3811,74 @@ function shouldResolveTypeReference(type: Type, enclosingNode?: Node): boolean {
     return false
   }
 
-  const symbol = type.getAliasSymbol() ?? type.getSymbol()
+  const symbol = type.getAliasSymbol() || type.getSymbol()
 
   if (!symbol) {
     return false
   }
 
-  const symbolVisibility = getSymbolVisibility(symbol, enclosingNode)
+  const visibility = getSymbolVisibility(symbol, enclosingNode)
 
-  // Keep exported aliases from the current project.
-  if (symbolVisibility === 'local-exported') {
-    return false
-  }
-
-  if (symbolVisibility === 'local-internal') {
-    if (enclosingNode) {
-      // Walk up to the first TypeReference that *contains* this alias.
-      let parent: tsMorph.Node | undefined = enclosingNode.getParent()
-      while (parent && !tsMorph.Node.isTypeReference(parent)) {
-        parent = parent.getParent()
-      }
-
-      if (parent && tsMorph.Node.isTypeReference(parent)) {
-        const parentType = parent.getType()
-        const parentSymbol =
-          parentType.getAliasSymbol() ?? parentType.getSymbol()
-        const parentVisibility = getSymbolVisibility(parentSymbol, parent)
-
-        // When the surrounding generic comes from node_modules we want to
-        // preserve the alias (so consumers still see `GridProps`, *not* the
-        // expanded object literal).
-        if (parentVisibility === 'node-modules') {
-          return false // keep it as `TypeReference`
-        }
-      }
-    }
-
-    // default: flatten local-internal aliases
+  if (visibility === 'local-internal') {
     return true
   }
 
-  // Inline if node_modules alias and real internal argument
-  if (symbolVisibility === 'node-modules') {
+  if (visibility === 'local-exported') {
+    return false
+  }
+
+  if (visibility === 'node-modules') {
     const typeArguments = [
       ...type.getAliasTypeArguments(),
       ...type.getTypeArguments(),
     ]
-    const hasLocalInternalTypeArgument = typeArguments.some((typeArgument) => {
-      return (
-        getSymbolVisibility(
-          typeArgument.getAliasSymbol() ?? typeArgument.getSymbol(),
-          enclosingNode
-        ) === 'local-internal'
+
+    if (typeArguments.length === 0) {
+      return false
+    }
+
+    let hasLocalInternalArgument = false
+    let hasLocalExportedArgument = false
+    let hasTrivialArgument = true
+
+    for (const typeArgument of typeArguments) {
+      const typeArgumentVisibility = getSymbolVisibility(
+        typeArgument.getAliasSymbol() || typeArgument.getSymbol(),
+        enclosingNode
       )
-    })
-    if (hasLocalInternalTypeArgument) {
-      const hasNonTrivialTypeArgument = typeArguments.some(
-        (typeArgument) => !isTrivialType(typeArgument)
-      )
-      if (hasNonTrivialTypeArgument) {
-        return true
+
+      if (typeArgumentVisibility === 'local-internal') {
+        hasLocalInternalArgument = true
+      } else if (typeArgumentVisibility === 'local-exported') {
+        hasLocalExportedArgument = true
+      }
+
+      if (!isTrivialType(typeArgument)) {
+        hasTrivialArgument = false
       }
     }
+
+    if (hasTrivialArgument) {
+      return false
+    }
+
+    const declarations = symbol.getDeclarations()
+    const isTypeAlias =
+      declarations.length > 0
+        ? declarations.every(tsMorph.Node.isTypeAliasDeclaration)
+        : false
+
+    if (isTypeAlias) {
+      return hasLocalInternalArgument || hasLocalExportedArgument
+    }
+
+    return hasLocalInternalArgument
   }
 
-  // Otherwise keep as a reference.
   return false
 }
 
-/**
- * Determine whether a `MappedType` should be fully resolved or kept as a reference.
- */
+/** Determine whether a `MappedType` should be fully resolved or kept as a reference. */
 function shouldResolveMappedType(mappedNode: tsMorph.MappedTypeNode): boolean {
   const constraint = mappedNode.getTypeParameter().getConstraint()
 

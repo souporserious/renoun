@@ -9152,22 +9152,88 @@ describe('resolveType', () => {
               },
               "text": "props: P",
               "type": {
-                "filePath": "node_modules/@types/react/index.d.ts",
-                "kind": "TypeReference",
-                "moduleSpecifier": undefined,
-                "name": "P",
-                "position": {
-                  "end": {
-                    "column": 18,
-                    "line": 562,
-                  },
-                  "start": {
-                    "column": 17,
-                    "line": 562,
-                  },
-                },
+                "kind": "IntersectionType",
                 "text": "Substitute<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, GridProps>",
-                "typeArguments": [],
+                "types": [
+                  {
+                    "filePath": "node_modules/styled-components/dist/types.d.ts",
+                    "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
+                    "name": "FastOmit",
+                    "position": {
+                      "end": {
+                        "column": 82,
+                        "line": 203,
+                      },
+                      "start": {
+                        "column": 62,
+                        "line": 203,
+                      },
+                    },
+                    "text": "FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, keyof GridProps>",
+                    "typeArguments": [
+                      {
+                        "filePath": "node_modules/styled-components/dist/types.d.ts",
+                        "kind": "TypeReference",
+                        "moduleSpecifier": undefined,
+                        "name": "A",
+                        "position": {
+                          "end": {
+                            "column": 72,
+                            "line": 203,
+                          },
+                          "start": {
+                            "column": 71,
+                            "line": 203,
+                          },
+                        },
+                        "text": "A",
+                        "typeArguments": [],
+                      },
+                      {
+                        "kind": "TypeOperator",
+                        "operator": "keyof",
+                        "text": "keyof B",
+                        "type": {
+                          "filePath": "node_modules/styled-components/dist/types.d.ts",
+                          "kind": "TypeReference",
+                          "moduleSpecifier": undefined,
+                          "name": "B",
+                          "position": {
+                            "end": {
+                              "column": 81,
+                              "line": 203,
+                            },
+                            "start": {
+                              "column": 80,
+                              "line": 203,
+                            },
+                          },
+                          "text": "B",
+                          "typeArguments": [],
+                        },
+                      },
+                    ],
+                  },
+                  {
+                    "filePath": "node_modules/styled-components/dist/types.d.ts",
+                    "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
+                    "name": "B",
+                    "position": {
+                      "end": {
+                        "column": 86,
+                        "line": 203,
+                      },
+                      "start": {
+                        "column": 85,
+                        "line": 203,
+                      },
+                    },
+                    "text": "GridProps",
+                    "typeArguments": [],
+                  },
+                ],
               },
             },
             "position": {
