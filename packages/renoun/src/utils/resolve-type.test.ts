@@ -9216,18 +9216,18 @@ describe('resolveType', () => {
                     ],
                   },
                   {
-                    "filePath": "node_modules/styled-components/dist/types.d.ts",
+                    "filePath": "test.ts",
                     "kind": "TypeReference",
                     "moduleSpecifier": undefined,
-                    "name": "B",
+                    "name": "GridProps",
                     "position": {
                       "end": {
-                        "column": 86,
-                        "line": 203,
+                        "column": 2,
+                        "line": 6,
                       },
                       "start": {
-                        "column": 85,
-                        "line": 203,
+                        "column": 1,
+                        "line": 3,
                       },
                     },
                     "text": "GridProps",
@@ -11703,10 +11703,7 @@ describe('resolveType', () => {
       dedent`
         import * as React from 'react';
   
-        type ButtonVariant = 'primary' | 'secondary' | 'danger';
-  
         type ButtonProps = {
-          // variant?: ButtonVariant;
           isDisabled?: boolean;
         } & React.ButtonHTMLAttributes<HTMLButtonElement>
   
@@ -11732,11 +11729,11 @@ describe('resolveType', () => {
         "position": {
           "end": {
             "column": 2,
-            "line": 12,
+            "line": 9,
           },
           "start": {
             "column": 23,
-            "line": 10,
+            "line": 7,
           },
         },
         "signatures": [
@@ -11754,11 +11751,11 @@ describe('resolveType', () => {
               "position": {
                 "end": {
                   "column": 42,
-                  "line": 10,
+                  "line": 7,
                 },
                 "start": {
                   "column": 24,
-                  "line": 10,
+                  "line": 7,
                 },
               },
               "text": "props: ButtonProps",
@@ -11778,11 +11775,11 @@ describe('resolveType', () => {
                         "position": {
                           "end": {
                             "column": 24,
-                            "line": 7,
+                            "line": 4,
                           },
                           "start": {
                             "column": 3,
-                            "line": 7,
+                            "line": 4,
                           },
                         },
                         "text": "isDisabled?: boolean;",
@@ -11792,11 +11789,11 @@ describe('resolveType', () => {
                           "position": {
                             "end": {
                               "column": 23,
-                              "line": 7,
+                              "line": 4,
                             },
                             "start": {
                               "column": 16,
-                              "line": 7,
+                              "line": 4,
                             },
                           },
                           "text": "boolean",
@@ -11850,11 +11847,11 @@ describe('resolveType', () => {
                             "position": {
                               "end": {
                                 "column": 24,
-                                "line": 7,
+                                "line": 4,
                               },
                               "start": {
                                 "column": 3,
-                                "line": 7,
+                                "line": 4,
                               },
                             },
                             "text": "isDisabled?: boolean;",
@@ -11864,11 +11861,11 @@ describe('resolveType', () => {
                               "position": {
                                 "end": {
                                   "column": 23,
-                                  "line": 7,
+                                  "line": 4,
                                 },
                                 "start": {
                                   "column": 16,
-                                  "line": 7,
+                                  "line": 4,
                                 },
                               },
                               "text": "boolean",
@@ -11964,11 +11961,11 @@ describe('resolveType', () => {
             "position": {
               "end": {
                 "column": 2,
-                "line": 12,
+                "line": 9,
               },
               "start": {
                 "column": 23,
-                "line": 10,
+                "line": 7,
               },
             },
             "returnType": {
@@ -11978,11 +11975,11 @@ describe('resolveType', () => {
               "position": {
                 "end": {
                   "column": 2,
-                  "line": 12,
+                  "line": 9,
                 },
                 "start": {
                   "column": 23,
-                  "line": 10,
+                  "line": 7,
                 },
               },
               "text": "Element",

@@ -1070,15 +1070,64 @@ function resolveTypeExpression(
         }
       }
 
+      const typeName = enclosingNode.getTypeName()
+      let referenceName = typeName.getText()
+      let locationNode: Node = enclosingNode
+
+      // If the type name resolves to a type parameter, grab the concrete symbol
+      if (tsMorph.Node.isIdentifier(typeName)) {
+        const typeNameSymbol = typeName.getSymbol()
+
+        if (
+          typeNameSymbol &&
+          typeNameSymbol
+            .getDeclarations()
+            .every(tsMorph.Node.isTypeParameterDeclaration)
+        ) {
+          const typeNameVisibility = getSymbolVisibility(
+            typeNameSymbol,
+            enclosingNode
+          )
+
+          if (typeNameVisibility === 'node-modules') {
+            // Get the substituted type's symbol after generic instantiation
+            const apparent = type.getApparentType()
+            const concreteSymbol =
+              apparent.getAliasSymbol() || apparent.getSymbol()
+
+            if (
+              concreteSymbol &&
+              !concreteSymbol
+                .getDeclarations()
+                .every(tsMorph.Node.isTypeParameterDeclaration)
+            ) {
+              const concreteVisibility = getSymbolVisibility(
+                concreteSymbol,
+                enclosingNode
+              )
+
+              if (concreteVisibility !== 'node-modules') {
+                referenceName = concreteSymbol.getName()
+                const concreteDeclaration =
+                  getPrimaryDeclaration(concreteSymbol)
+                if (concreteDeclaration) {
+                  locationNode = concreteDeclaration
+                }
+              }
+            }
+          }
+        }
+      }
+
       moduleSpecifier = getModuleSpecifierFromTypeReference(enclosingNode)
 
       resolvedType = {
         kind: 'TypeReference',
-        name: enclosingNode.getTypeName().getText(),
+        name: referenceName,
         text: typeText,
         typeArguments: resolvedTypeArguments,
         moduleSpecifier,
-        ...getDeclarationLocation(enclosingNode),
+        ...getDeclarationLocation(locationNode),
       } satisfies Kind.TypeReference
     } else {
       const typeArguments = aliasSymbol
