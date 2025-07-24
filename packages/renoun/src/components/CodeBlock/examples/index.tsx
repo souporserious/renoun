@@ -79,7 +79,7 @@ export async function CustomStyles() {
   )
 
   return (
-    <CodeBlock path="./counter/Counter.tsx" workingDirectory={directoryPath}>
+    <CodeBlock path="./counter/Counter.tsx" baseDirectory={directoryPath}>
       <div
         style={{
           fontSize: '1rem',

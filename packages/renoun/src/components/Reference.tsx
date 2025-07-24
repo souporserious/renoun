@@ -10,7 +10,7 @@ import {
   type TypeFilter,
   type TypeOfKind,
 } from '../utils/resolve-type.js'
-import { WorkingDirectoryContext } from './Context.js'
+import { BaseDirectoryContext } from './Context.js'
 
 type GapSize = 'small' | 'medium' | 'large'
 
@@ -157,7 +157,7 @@ async function ReferenceAsync({
   const slug = source.getSlug()
 
   return (
-    <WorkingDirectoryContext value={filePath ? dirname(filePath) : undefined}>
+    <BaseDirectoryContext value={filePath ? dirname(filePath) : undefined}>
       {Array.isArray(resolvedType) ? (
         resolvedType.map((type, index) => (
           <TypeNodeRouter
@@ -174,7 +174,7 @@ async function ReferenceAsync({
           slug={slug}
         />
       )}
-    </WorkingDirectoryContext>
+    </BaseDirectoryContext>
   )
 }
 

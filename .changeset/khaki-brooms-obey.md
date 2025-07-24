@@ -2,7 +2,7 @@
 'renoun': minor
 ---
 
-Allow passing relative `workingDirectory` to `CodeBlock` component, this allows more easily creating virtual files in a specific directory relative to the current working directory:
+Allow passing relative `baseDirectory` to `CodeBlock` component, this allows more easily creating virtual files in a specific directory relative to the current working directory:
 
 ```tsx
 import { CodeBlock } from 'renoun/components'
@@ -10,7 +10,7 @@ import { CodeBlock } from 'renoun/components'
 export default function Example() {
   return (
     <CodeBlock
-      workingDirectory="src/components"
+      baseDirectory="src/components"
       children={`
         import { Button } from './Button';
 

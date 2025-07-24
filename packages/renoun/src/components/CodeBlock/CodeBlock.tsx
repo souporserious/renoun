@@ -1,7 +1,7 @@
 import React, { Suspense } from 'react'
 import { type CSSObject, styled } from 'restyle'
 
-import { WorkingDirectoryContext } from '../Context.js'
+import { BaseDirectoryContext } from '../Context.js'
 import { computeDirectionalStyles } from '../../utils/compute-directional-styles.js'
 import { getContext } from '../../utils/context.js'
 import {
@@ -29,8 +29,8 @@ export interface CodeBlockProps {
   /** Name or path of the code block. Ordered file names will be stripped from the name e.g. `01.index.tsx` becomes `index.tsx`. */
   path?: string
 
-  /** The working directory to use when analyzing the source code. This will read the local file system contents from the `workingDirectory` joined with the `path` prop instead of creating a virtual file. */
-  workingDirectory?: string
+  /** The base directory to use when analyzing the source code. This will read the local file system contents from the `baseDirectory` joined with the `path` prop instead of creating a virtual file. */
+  baseDirectory?: string
 
   /** Language of the source code provided to the `Tokens` component. When `path` is defined, the file extension will be used to determine the language by default. */
   language?: Languages
@@ -108,18 +108,18 @@ export function CodeBlock(props: CodeBlockProps) {
   const {
     shouldAnalyze = true,
     unfocusedLinesOpacity = 0.6,
-    workingDirectory: workingDirectoryProp,
+    baseDirectory: baseDirectoryProp,
     ...restProps
   } = props
-  const workingDirectoryContext = getContext(WorkingDirectoryContext)
-  const workingDirectory = workingDirectoryProp ?? workingDirectoryContext
+  const baseDirectoryContext = getContext(BaseDirectoryContext)
+  const baseDirectory = baseDirectoryProp ?? baseDirectoryContext
 
   if (typeof restProps.children !== 'string') {
     return (
       <CodeBlockAsync
         shouldAnalyze={shouldAnalyze}
         unfocusedLinesOpacity={unfocusedLinesOpacity}
-        workingDirectory={workingDirectory}
+        baseDirectory={baseDirectory}
         {...restProps}
       />
     )
@@ -230,7 +230,7 @@ export function CodeBlock(props: CodeBlockProps) {
       <CodeBlockAsync
         shouldAnalyze={shouldAnalyze}
         unfocusedLinesOpacity={unfocusedLinesOpacity}
-        workingDirectory={workingDirectory}
+        baseDirectory={baseDirectory}
         {...restProps}
       />
     </Suspense>
@@ -239,7 +239,7 @@ export function CodeBlock(props: CodeBlockProps) {
 
 async function CodeBlockAsync({
   path,
-  workingDirectory,
+  baseDirectory: baseDirectory,
   language,
   highlightedLines,
   focusedLines,
@@ -276,7 +276,7 @@ async function CodeBlockAsync({
     shouldFormat,
     highlightedLines,
     language,
-    workingDirectory,
+    baseDirectory,
     resolvers,
   } satisfies ContextValue
   let value: string

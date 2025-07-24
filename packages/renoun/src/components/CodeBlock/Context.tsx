@@ -15,7 +15,7 @@ export type ContextValue = {
   shouldFormat?: boolean
   highlightedLines?: string
   padding?: CSSProperties['padding']
-  workingDirectory?: string
+  baseDirectory?: string
   resolved?: {
     value: string
     language: Languages

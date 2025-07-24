@@ -12,7 +12,7 @@ export interface GetSourceTextMetadataOptions {
   language?: Languages
   filePath?: string
   shouldFormat?: boolean
-  workingDirectory?: string
+  baseDirectory?: string
 }
 
 export interface GetSourceTextMetadataResult {
@@ -39,7 +39,7 @@ export async function getSourceTextMetadata({
   language,
   shouldFormat = true,
   value,
-  workingDirectory,
+  baseDirectory,
 }: GetSourceTextMetadataOptions): Promise<GetSourceTextMetadataResult> {
   await waitForRefreshingProjects()
 
@@ -84,14 +84,14 @@ export async function getSourceTextMetadata({
     isGeneratedFileName = true
   }
 
-  if (workingDirectory) {
-    if (isAbsolute(workingDirectory)) {
-      filePath = join(workingDirectory, filePath)
+  if (baseDirectory) {
+    if (isAbsolute(baseDirectory)) {
+      filePath = join(baseDirectory, filePath)
     } else {
       // TODO: we need to account for nested tsconfig.json files
       const { configFilePath } = project.getCompilerOptions()
       const tsconfigDirectory = dirname(String(configFilePath))
-      filePath = join(tsconfigDirectory, workingDirectory, filePath)
+      filePath = join(tsconfigDirectory, baseDirectory, filePath)
     }
   }
 
@@ -118,7 +118,7 @@ export async function getSourceTextMetadata({
 
   // Scope code block source files since they can conflict with other files on disk
   // unless a working directory is provided in which case the file path is absolute.
-  if (workingDirectory === undefined) {
+  if (baseDirectory === undefined) {
     filePath = join(scopeId, filePath)
   }
 

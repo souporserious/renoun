@@ -1,9 +1,7 @@
 import { createContext } from '../utils/context.js'
 
 /**
- * Manages passing the current tree's `workingDirectory` to descendant server components.
+ * Manages passing the current tree's `baseDirectory` to descendant server components.
  * @internal
  */
-export const WorkingDirectoryContext = createContext<string | undefined>(
-  undefined
-)
+export const BaseDirectoryContext = createContext<string | undefined>(undefined)

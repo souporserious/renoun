@@ -3,8 +3,8 @@ import { dirname } from 'node:path'
 import { getClosestPackageJson } from './get-closest-package-json.js'
 
 /** Returns the package metadata based on the first shared directory between the provided paths. */
-export function getPackageMetadata(workingDirectory?: string) {
-  const result = getClosestPackageJson(workingDirectory)
+export function getPackageMetadata(baseDirectory?: string) {
+  const result = getClosestPackageJson(baseDirectory)
 
   if (!result) {
     return undefined

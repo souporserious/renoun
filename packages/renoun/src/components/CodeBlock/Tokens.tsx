@@ -84,7 +84,7 @@ export async function Tokens({
 
   if (value === undefined) {
     throw new Error(
-      '[renoun] No code value provided to Tokens component. Pass a string, a promise that resolves to a string, or wrap within a `CodeBlock` component that defines `path` and `workingDirectory` props.'
+      '[renoun] No code value provided to Tokens component. Pass a string, a promise that resolves to a string, or wrap within a `CodeBlock` component that defines `path` and `baseDirectory` props.'
     )
   }
 
@@ -94,7 +94,7 @@ export async function Tokens({
   if (shouldAnalyze) {
     const result = await getSourceTextMetadata({
       filePath: context?.filePath,
-      workingDirectory: context?.workingDirectory,
+      baseDirectory: context?.baseDirectory,
       value,
       language,
       shouldFormat,
