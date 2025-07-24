@@ -1,8 +1,8 @@
 import type { JavaScriptFileExport } from 'renoun/file-system'
 import {
-  APIReference as DefaultAPIReference,
-  type APIReferenceProps,
-  type APIReferenceComponents,
+  Reference as DefaultReference,
+  type ReferenceProps,
+  type ReferenceComponents,
 } from 'renoun/components'
 import { GeistMono } from 'geist/font/mono'
 import type { CSSObject } from 'restyle'
@@ -10,7 +10,7 @@ import type { CSSObject } from 'restyle'
 import { Collapse } from './Collapse'
 import { Markdown } from './Markdown'
 
-export function APIReferences({
+export function References({
   fileExports,
 }: {
   fileExports: JavaScriptFileExport<any>[]
@@ -27,13 +27,13 @@ export function APIReferences({
       }}
     >
       {fileExports.map((fileExport) => (
-        <APIReference key={fileExport.getName()} source={fileExport} />
+        <Reference key={fileExport.getName()} source={fileExport} />
       ))}
     </div>
   )
 }
 
-export function APIReference(props: APIReferenceProps) {
+export function Reference(props: ReferenceProps) {
   const components = {
     Section: (props) => (
       <Collapse.Provider>
@@ -293,11 +293,11 @@ export function APIReference(props: APIReferenceProps) {
       </div>
     ),
     ...props.components,
-  } satisfies Partial<APIReferenceComponents>
+  } satisfies Partial<ReferenceComponents>
 
   return (
     <>
-      <DefaultAPIReference {...props} components={components} />
+      <DefaultReference {...props} components={components} />
       <style href="scroll-mask" precedence="scroll-mask">
         {`
                 @property --start-fade {

@@ -1,8 +1,8 @@
 export {
-  APIReference,
-  type APIReferenceProps,
-  type APIReferenceComponents,
-} from './APIReference.js'
+  Reference,
+  type ReferenceProps,
+  type ReferenceComponents,
+} from './Reference.js'
 export {
   CodeBlock,
   CopyButton,

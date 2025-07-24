@@ -19,7 +19,7 @@ export type ReferenceComponent<
   Props = {},
 > = React.ComponentType<React.JSX.IntrinsicElements[Tag] & Props>
 
-export interface APIReferenceComponents {
+export interface ReferenceComponents {
   Section: ReferenceComponent<'section'>
   SectionHeading: ReferenceComponent<'h3'>
   SectionBody: ReferenceComponent<'div', { hasDescription: boolean }>
@@ -40,8 +40,8 @@ export interface APIReferenceComponents {
   TableData: ReferenceComponent<'td', { index: number; hasSubRow?: boolean }>
 }
 
-type InternalAPIReferenceComponents = {
-  [Key in keyof APIReferenceComponents]: APIReferenceComponents[Key] | string
+type InternalReferenceComponents = {
+  [Key in keyof ReferenceComponents]: ReferenceComponents[Key] | string
 }
 
 const defaultGaps: Record<GapSize, string> = {
@@ -51,7 +51,7 @@ const defaultGaps: Record<GapSize, string> = {
 }
 
 /** Default implementations for every slot. */
-const defaultComponents: InternalAPIReferenceComponents = {
+const defaultComponents: InternalReferenceComponents = {
   Section: 'section',
   SectionHeading: 'h3',
   SectionBody: ({ children }) => children,
@@ -90,7 +90,7 @@ const defaultComponents: InternalAPIReferenceComponents = {
   TableRowGroup: ({ children }) => children,
 }
 
-export interface APIReferenceProps {
+export interface ReferenceProps {
   /** The file path, `JavaScriptFile`, or `JavaScriptFileExport` type reference to resolve. */
   source: string | JavaScriptFile<any> | JavaScriptFileExport<any>
 
@@ -101,23 +101,23 @@ export interface APIReferenceProps {
   baseDirectory?: string
 
   /** Override default component renderers. */
-  components?: Partial<APIReferenceComponents>
+  components?: Partial<ReferenceComponents>
 }
 
-export function APIReference(props: APIReferenceProps) {
+export function Reference(props: ReferenceProps) {
   return (
     <Suspense>
-      <APIReferenceAsync {...props} />
+      <ReferenceAsync {...props} />
     </Suspense>
   )
 }
 
-async function APIReferenceAsync({
+async function ReferenceAsync({
   source,
   filter,
   baseDirectory,
   components = {},
-}: APIReferenceProps) {
+}: ReferenceProps) {
   let filePath: string | undefined = undefined
 
   if (typeof source === 'string') {
@@ -150,7 +150,7 @@ async function APIReferenceAsync({
     return null
   }
 
-  const mergedComponents: InternalAPIReferenceComponents = {
+  const mergedComponents: InternalReferenceComponents = {
     ...defaultComponents,
     ...components,
   }
@@ -184,7 +184,7 @@ function TypeNodeRouter({
   slug,
 }: {
   node: Kind
-  components: InternalAPIReferenceComponents
+  components: InternalReferenceComponents
   slug: string
 }) {
   switch (node.kind) {
@@ -250,7 +250,7 @@ function TypeSection({
   description?: string
   id?: string
   children: React.ReactNode
-  components: InternalAPIReferenceComponents
+  components: InternalReferenceComponents
 }) {
   return (
     <components.Section id={id}>
@@ -278,7 +278,7 @@ function TypeDetail({
 }: {
   label?: React.ReactNode
   children: React.ReactNode
-  components: InternalAPIReferenceComponents
+  components: InternalReferenceComponents
 }) {
   return (
     <components.Detail>
@@ -301,7 +301,7 @@ function TypeTable<RowType>({
   headers?: readonly React.ReactNode[]
   renderRow: (row: RowType, hasSubRow: boolean) => React.ReactNode
   renderSubRow?: (row: RowType, index: number) => React.ReactNode
-  components: InternalAPIReferenceComponents
+  components: InternalReferenceComponents
 }) {
   return (
     <components.Table>
@@ -344,7 +344,7 @@ function VariableSection({
   slug,
 }: {
   node: TypeOfKind<'Variable'>
-  components: InternalAPIReferenceComponents
+  components: InternalReferenceComponents
   slug: string
 }) {
   return (
@@ -364,7 +364,7 @@ function VariableSection({
 
 function renderClassPropertyRow(
   property: NonNullable<TypeOfKind<'Class'>['properties']>[number],
-  components: InternalAPIReferenceComponents,
+  components: InternalReferenceComponents,
   hasSubRow: boolean
 ) {
   return (
@@ -388,7 +388,7 @@ function renderClassPropertyRow(
 
 function renderMethodRow(
   method: NonNullable<TypeOfKind<'Class'>['methods']>[number],
-  components: InternalAPIReferenceComponents,
+  components: InternalReferenceComponents,
   hasSubRow: boolean
 ) {
   const signature = method.signatures[0]
@@ -407,7 +407,7 @@ function renderMethodRow(
 
 function renderMethodSubRow(
   method: NonNullable<TypeOfKind<'Class'>['methods']>[number],
-  components: InternalAPIReferenceComponents
+  components: InternalReferenceComponents
 ) {
   // TODO: Handle multiple signatures
   const signature = method.signatures[0]
@@ -442,7 +442,7 @@ function ClassSection({
   slug,
 }: {
   node: TypeOfKind<'Class'>
-  components: InternalAPIReferenceComponents
+  components: InternalReferenceComponents
   slug: string
 }) {
   return (
@@ -512,7 +512,7 @@ function ComponentSection({
   slug,
 }: {
   node: TypeOfKind<'Component'>
-  components: InternalAPIReferenceComponents
+  components: InternalReferenceComponents
   slug: string
 }) {
   return (
@@ -580,7 +580,7 @@ function ComponentSection({
 
 function renderParameterRow(
   parameter: TypeOfKind<'Parameter'>,
-  components: InternalAPIReferenceComponents,
+  components: InternalReferenceComponents,
   hasSubRow: boolean
 ) {
   return (
@@ -608,7 +608,7 @@ function FunctionSection({
   slug,
 }: {
   node: TypeOfKind<'Function'>
-  components: InternalAPIReferenceComponents
+  components: InternalReferenceComponents
   slug: string
 }) {
   return (
@@ -653,7 +653,7 @@ function TypeAliasSection({
   slug,
 }: {
   node: TypeOfKind<'TypeAlias'>
-  components: InternalAPIReferenceComponents
+  components: InternalReferenceComponents
   slug: string
 }) {
   return (
@@ -677,7 +677,7 @@ function MembersSection({
   slug,
 }: {
   node: Kind.Interface | Kind.TypeAlias<Kind.TypeLiteral>
-  components: InternalAPIReferenceComponents
+  components: InternalReferenceComponents
   slug: string
 }) {
   const members = node.kind === 'Interface' ? node.members : node.type.members
@@ -791,7 +791,7 @@ function MappedSection({
   slug,
 }: {
   node: TypeOfKind<'MappedType'>
-  components: InternalAPIReferenceComponents
+  components: InternalReferenceComponents
   slug: string
 }) {
   const parameterText = `${node.typeParameter.name} in ${node.typeParameter.constraintType?.text ?? '?'}`
@@ -828,7 +828,7 @@ function IntersectionSection({
   slug,
 }: {
   node: TypeOfKind<'IntersectionType'>
-  components: InternalAPIReferenceComponents
+  components: InternalReferenceComponents
   slug: string
 }) {
   // Flatten into one table if every member is either a TypeLiteral or a MappedType kind
@@ -940,7 +940,7 @@ function TypeExpressionSection({
   components,
 }: {
   node: Kind.TypeExpression
-  components: InternalAPIReferenceComponents
+  components: InternalReferenceComponents
 }) {
   const label = kindToLabel(node.kind)
 
@@ -958,7 +958,7 @@ function InitializerValue({
   components,
 }: {
   initializer: unknown | undefined
-  components: InternalAPIReferenceComponents
+  components: InternalReferenceComponents
 }) {
   if (initializer === undefined) {
     return '—'

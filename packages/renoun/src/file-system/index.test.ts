@@ -740,76 +740,68 @@ describe('file system', () => {
 
     beforeAll(() => {
       fileSystem = new MemoryFileSystem({
-        'components/APIReference.examples.tsx': '',
-        'components/APIReference.tsx': '',
+        'components/Reference.examples.tsx': '',
+        'components/Reference.tsx': '',
       })
       directory = new Directory({ fileSystem })
     })
 
     test('string path', async () => {
-      const entry = await directory.getEntry('components/APIReference/examples')
+      const entry = await directory.getEntry('components/Reference/examples')
 
-      expect(entry.getAbsolutePath()).toBe(
-        '/components/APIReference.examples.tsx'
-      )
+      expect(entry.getAbsolutePath()).toBe('/components/Reference.examples.tsx')
 
-      const file = await directory.getFile('components/APIReference/examples')
+      const file = await directory.getFile('components/Reference/examples')
 
-      expect(file.getAbsolutePath()).toBe(
-        '/components/APIReference.examples.tsx'
-      )
+      expect(file.getAbsolutePath()).toBe('/components/Reference.examples.tsx')
 
       const fileWithExtension = await directory.getFile(
-        'components/APIReference/examples',
+        'components/Reference/examples',
         'tsx'
       )
 
       expect(fileWithExtension.getAbsolutePath()).toBe(
-        '/components/APIReference.examples.tsx'
+        '/components/Reference.examples.tsx'
       )
     })
 
     test('array path', async () => {
       const entry = await directory.getEntry([
         'components',
-        'APIReference',
+        'Reference',
         'examples',
       ])
 
-      expect(entry.getAbsolutePath()).toBe(
-        '/components/APIReference.examples.tsx'
-      )
+      expect(entry.getAbsolutePath()).toBe('/components/Reference.examples.tsx')
 
       const file = await directory.getFile([
         'components',
-        'APIReference',
+        'Reference',
         'examples',
       ])
 
-      expect(file.getAbsolutePath()).toBe(
-        '/components/APIReference.examples.tsx'
-      )
+      expect(file.getAbsolutePath()).toBe('/components/Reference.examples.tsx')
 
       const fileWithExtension = await directory.getFile(
-        ['components', 'APIReference', 'examples'],
+        ['components', 'Reference', 'examples'],
         'tsx'
       )
 
       expect(fileWithExtension.getAbsolutePath()).toBe(
-        '/components/APIReference.examples.tsx'
+        '/components/Reference.examples.tsx'
       )
     })
   })
 
   test('prioritizes base file name over file name with modifier', async () => {
     const fileSystem = new MemoryFileSystem({
-      'APIReference.examples.tsx': '',
-      'APIReference.tsx': '',
+      'Reference.examples.tsx': '',
+      'Reference.tsx': '',
     })
     const directory = new Directory({ fileSystem })
-    const entry = await directory.getEntry('APIReference')
+    const entry = await directory.getEntry('Reference')
 
-    expect(entry.getAbsolutePath()).toBe('/APIReference.tsx')
+    expect(entry.getAbsolutePath()).toBe('/Reference.tsx')
   })
 
   test('chooses entry with same name as directory when bare file path', async () => {

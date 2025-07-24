@@ -1,4 +1,4 @@
-import { APIReference } from 'renoun/components'
+import { Reference } from 'renoun/components'
 
 export const metadata = {
   title: 'Getting Started',
@@ -278,16 +278,16 @@ If you are using front matter, you can use the [remark-frontmatter](https://www.
 
 ## Enhancing with Components
 
-The renoun toolkit provides several built-in components to enhance your documentation like [`APIReference`](/components/api-reference) and [`CodeBlock`](/components/code-block). For example, you can use the `APIReference` component to document all exports from a module:
+The renoun toolkit provides several built-in components to enhance your documentation like [`Reference`](/components/api-reference) and [`CodeBlock`](/components/code-block). For example, you can use the `Reference` component to document all exports from a module:
 
 ```mdx
-import { APIReference } from 'renoun/components'
+import { Reference } from 'renoun/components'
 
-<APIReference source="components/Card.tsx" />
+<Reference source="components/Card.tsx" />
 ```
 
 <Preview>
-  <APIReference source="components/Card.tsx" />
+  <Reference source="components/Card.tsx" />
 </Preview>
 
 Explore more [components](/components) to enhance your documentation.

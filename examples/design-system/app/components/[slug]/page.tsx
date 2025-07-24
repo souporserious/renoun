@@ -1,4 +1,4 @@
-import { APIReference } from 'renoun/components'
+import { Reference } from 'renoun/components'
 import {
   isFile,
   isDirectory,
@@ -98,7 +98,7 @@ export default async function Component({
       {mainEntry ? (
         <div>
           <h2>API Reference</h2>
-          <APIReference source={mainEntry} />
+          <Reference source={mainEntry} />
         </div>
       ) : null}
 

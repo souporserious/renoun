@@ -1,7 +1,7 @@
 /** @jsxImportSource restyle */
 import {
-  APIReference,
-  type APIReferenceComponents,
+  Reference,
+  type ReferenceComponents,
   Markdown,
 } from 'renoun/components'
 import { GeistMono } from 'geist/font/mono'
@@ -164,7 +164,7 @@ const components = {
       }}
     />
   ),
-} satisfies Partial<APIReferenceComponents>
+} satisfies Partial<ReferenceComponents>
 
 export function BasicUsage() {
   return (
@@ -175,7 +175,7 @@ export function BasicUsage() {
         gap: '3rem',
       }}
     >
-      <APIReference
+      <Reference
         source="./examples/Button.tsx"
         baseDirectory={import.meta.url}
         components={components}

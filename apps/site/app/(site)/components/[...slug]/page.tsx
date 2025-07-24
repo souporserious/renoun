@@ -9,7 +9,7 @@ import {
 import { CodeBlock, Tokens } from 'renoun/components'
 import type { MDXHeadings } from 'renoun/mdx'
 import { GeistMono } from 'geist/font/mono'
-import { APIReferences } from '@/components/APIReference'
+import { References } from '@/components/Reference'
 
 import { CollectionGroup, ComponentsCollection } from '@/collections'
 import { MDX } from '@/components/MDX'
@@ -191,7 +191,7 @@ export default async function Component({
             <h2 id="api-reference" css={{ margin: '0 0 2rem' }}>
               API Reference
             </h2>
-            <APIReferences fileExports={componentExports} />
+            <References fileExports={componentExports} />
           </div>
         ) : null}
 

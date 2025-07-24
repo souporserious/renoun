@@ -1,6 +1,6 @@
 import { FileSystemCollection } from '@/collections'
 import { TableOfContents } from '@/components/TableOfContents'
-import { APIReferences } from '@/components/APIReference'
+import { References } from '@/components/Reference'
 
 export default async function Page() {
   const sourceFile = await FileSystemCollection.getFile('index', 'tsx')
@@ -52,7 +52,7 @@ export default async function Page() {
           >
             API Reference
           </h2>
-          <APIReferences fileExports={fileExports} />
+          <References fileExports={fileExports} />
         </div>
       </div>
 
