@@ -13,7 +13,7 @@ const gapSizes = {
 }
 
 const components = {
-  Block: ({ gap, ...props }) => (
+  Column: ({ gap, ...props }) => (
     <div
       {...props}
       css={{
@@ -23,7 +23,7 @@ const components = {
       }}
     />
   ),
-  Inline: ({ gap, ...props }) => (
+  Row: ({ gap, ...props }) => (
     <div
       {...props}
       css={{

@@ -113,7 +113,7 @@ export function Reference(props: ReferenceProps) {
         <div css={{ paddingBottom: '1.5rem' }}>{children}</div>
       </Collapse.Content>
     ),
-    Block: ({ gap, ...props }) => (
+    Column: ({ gap, ...props }) => (
       <div
         {...props}
         css={{
@@ -123,7 +123,7 @@ export function Reference(props: ReferenceProps) {
         }}
       />
     ),
-    Inline: ({ gap, ...props }) => (
+    Row: ({ gap, ...props }) => (
       <div
         {...props}
         css={{

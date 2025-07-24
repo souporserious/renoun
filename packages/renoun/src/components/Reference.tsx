@@ -23,8 +23,8 @@ export interface ReferenceComponents {
   Section: ReferenceComponent<'section'>
   SectionHeading: ReferenceComponent<'h3'>
   SectionBody: ReferenceComponent<'div', { hasDescription: boolean }>
-  Block: ReferenceComponent<'div', { gap?: GapSize }>
-  Inline: ReferenceComponent<'div', { gap?: GapSize }>
+  Column: ReferenceComponent<'div', { gap?: GapSize }>
+  Row: ReferenceComponent<'div', { gap?: GapSize }>
   Code: ReferenceComponent<'code'>
   Description: ReferenceComponent<'p', { children: string }>
   Detail: ReferenceComponent<'div'>
@@ -55,7 +55,7 @@ const defaultComponents: InternalReferenceComponents = {
   Section: 'section',
   SectionHeading: 'h3',
   SectionBody: ({ children }) => children,
-  Block: ({ gap, children }) => (
+  Column: ({ gap, children }) => (
     <div
       style={{
         display: 'flex',
@@ -65,7 +65,7 @@ const defaultComponents: InternalReferenceComponents = {
       children={children}
     />
   ),
-  Inline: ({ gap, children }) => (
+  Row: ({ gap, children }) => (
     <div
       style={{
         display: 'flex',
@@ -259,10 +259,10 @@ function TypeSection({
       </components.SectionHeading>
       <components.SectionBody hasDescription={Boolean(description)}>
         {description ? (
-          <components.Block gap="medium">
+          <components.Column gap="medium">
             <components.Description>{description}</components.Description>
             {children}
-          </components.Block>
+          </components.Column>
         ) : (
           children
         )}
@@ -413,7 +413,7 @@ function renderMethodSubRow(
   const signature = method.signatures[0]
 
   return (
-    <components.Block gap="medium">
+    <components.Column gap="medium">
       {signature.parameters.length ? (
         <TypeDetail label="Parameters" components={components}>
           <TypeTable
@@ -432,7 +432,7 @@ function renderMethodSubRow(
           <components.Code>{signature.returnType.text}</components.Code>
         </TypeDetail>
       ) : null}
-    </components.Block>
+    </components.Column>
   )
 }
 
@@ -483,14 +483,14 @@ function ClassSection({
       {node.extends || node.implements?.length ? (
         <TypeDetail components={components}>
           {node.extends ? (
-            <components.Block gap="small">
+            <components.Column gap="small">
               <components.DetailHeading>Extends</components.DetailHeading>
               <components.Code>{node.extends.text}</components.Code>
-            </components.Block>
+            </components.Column>
           ) : null}
 
           {node.implements?.length ? (
-            <components.Block gap="small">
+            <components.Column gap="small">
               <components.DetailHeading>Implements</components.DetailHeading>
               {node.implements.map((implementation, index) => (
                 <React.Fragment key={index}>
@@ -498,7 +498,7 @@ function ClassSection({
                   <components.Code>{implementation.text}</components.Code>
                 </React.Fragment>
               ))}
-            </components.Block>
+            </components.Column>
           ) : null}
         </TypeDetail>
       ) : null}
@@ -526,7 +526,7 @@ function ComponentSection({
       <components.Signatures>
         {node.signatures.map((signature, index) => {
           return (
-            <components.Block gap="large" key={index}>
+            <components.Column gap="large" key={index}>
               <TypeDetail label="Properties" components={components}>
                 {signature.parameter?.type.kind === 'TypeLiteral' ? (
                   <TypeTable
@@ -570,7 +570,7 @@ function ComponentSection({
                   </components.Code>
                 )}
               </TypeDetail>
-            </components.Block>
+            </components.Column>
           )
         })}
       </components.Signatures>
@@ -621,7 +621,7 @@ function FunctionSection({
     >
       <components.Signatures>
         {node.signatures.map((signature, index) => (
-          <components.Block key={index} gap="large">
+          <components.Column key={index} gap="large">
             {signature.parameters.length > 0 ? (
               <TypeDetail label="Parameters" components={components}>
                 <TypeTable
@@ -640,7 +640,7 @@ function FunctionSection({
                 <components.Code>{signature.returnType.text}</components.Code>
               </TypeDetail>
             ) : null}
-          </components.Block>
+          </components.Column>
         ))}
       </components.Signatures>
     </TypeSection>
@@ -920,17 +920,17 @@ function IntersectionSection({
       id={slug}
       components={components}
     >
-      <components.Block gap="medium">
+      <components.Column gap="medium">
         {node.types.map((type, index) => (
-          <components.Inline key={index} gap="small">
+          <components.Row key={index} gap="small">
             <TypeNodeRouter
               node={type}
               components={components}
               slug={`${slug}-${index}`}
             />
-          </components.Inline>
+          </components.Row>
         ))}
-      </components.Block>
+      </components.Column>
     </TypeSection>
   )
 }

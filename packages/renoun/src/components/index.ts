@@ -1,9 +1,4 @@
 export {
-  Reference,
-  type ReferenceProps,
-  type ReferenceComponents,
-} from './Reference.js'
-export {
   CodeBlock,
   CopyButton,
   LineNumbers,
@@ -32,5 +27,10 @@ export {
   PackageInstallScript,
   type PackageInstallProps,
 } from './PackageInstall/index.js'
+export {
+  Reference,
+  type ReferenceProps,
+  type ReferenceComponents,
+} from './Reference.js'
 export { Refresh } from './Refresh/index.js'
 export { ThemeProvider, ThemeStyles } from './Theme/index.js'
