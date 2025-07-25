@@ -55,6 +55,9 @@ catalogs:
       specifier: 4.0.9
       version: 4.0.9
 
+overrides:
+  on-headers: ^1.1.0
+
 importers:
 
   .:
@@ -3306,8 +3309,8 @@ packages:
   nth-check@2.1.1:
     resolution: {integrity: sha512-lqjrjmaOoAnWfMmBPL+XNnynZh2+swxiX3WUE0s4yEHI6m+AwrK2UZOimIRl3X/4QctVqS8AiZjFqyOGrMXb/w==}
 
-  on-headers@1.0.2:
-    resolution: {integrity: sha512-pZAE+FJLoyITytdqK0U5s+FIpjN0JP3OzFi/u8Rx+EV5/W+JTWGXG8xFzevE7AjBfDqHv/8vL8qQsIhHnqRkrA==}
+  on-headers@1.1.0:
+    resolution: {integrity: sha512-737ZY3yNnXy37FHkQxPzt4UZ2UWPWiCZWLvFZ4fu5cueciegX0zGPnrlY6bwRg4FdQOe9YU8MkmJwGhoMybl8A==}
     engines: {node: '>= 0.8'}
 
   onetime@5.1.2:
@@ -6669,7 +6672,7 @@ snapshots:
       bytes: 3.0.0
       compressible: 2.0.18
       debug: 2.6.9
-      on-headers: 1.0.2
+      on-headers: 1.1.0
       safe-buffer: 5.1.2
       vary: 1.1.2
     transitivePeerDependencies:
@@ -7856,7 +7859,7 @@ snapshots:
     dependencies:
       boolbase: 1.0.0
 
-  on-headers@1.0.2: {}
+  on-headers@1.1.0: {}
 
   onetime@5.1.2:
     dependencies:
