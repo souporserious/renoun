@@ -1,5 +1,37 @@
 # @renoun/mdx
 
+## 3.0.0
+
+### Major Changes
+
+- 7e38b82: Updates `create-renoun` and `@renoun/mdx` licensing to use `MIT` license.
+
+### Minor Changes
+
+- d3c6019: Updates how to use the `CodeBlock` component in MDX. When using `renoun/mdx`, a new `addCodeBlock` rehype plugin rewrites the `pre` element to a `CodeBlock` element. This is more explicit and requires defining a `CodeBlock` component now.
+
+  ### Breaking Changes
+
+  If you are using the `renoun/mdx` plugins, wherever you pass additional MDX components needs to be updated to provide a `CodeBlock` component now:
+
+  ```diff
+  import {
+      CodeBlock,
+  --    parsePreProps
+  } from 'renoun/components'
+
+  function useMDXComponents() {
+    return {
+  --    pre: (props) => <CodeBlock {...parsePreProps(props)} />,
+  ++    CodeBlock,
+    }
+  }
+  ```
+
+  If you are not using `renoun/mdx` plugins `parsePreProps` is still required.
+
+- d537e64: Adds a `Markdown` component. This should be used when rendering markdown content and is now used to render JS Doc quick info content in the `CodeBlock` component to ensure that the intended markdown is rendered correctly. This is also safer since we do not need to evaluate anything and return JSX elements directly.
+
 ## 2.1.0
 
 ### Minor Changes
@@ -136,7 +168,6 @@
 - 97bc268: Renames `@renoun/mdx` `Headings` type to `MDXHeadings`. This adds better clarity and consistency with the other `MDX` prefixed types.
 
   ### Breaking Changes
-
   - Rename any `Headings` references from `@renoun/mdx` to `MDXHeadings`.
 
 ### Patch Changes
