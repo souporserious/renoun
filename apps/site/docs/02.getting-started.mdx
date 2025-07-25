@@ -266,8 +266,8 @@ export default async function Page({
 
   return (
     <>
-      <h1>{metadata.title}</h1>
-      <p>{metadata.description}</p>
+      <h1>{metadata.title.toString()}</h1>
+      <p>{metadata.summary.toString()}</p>
       <Content />
     </>
   )
