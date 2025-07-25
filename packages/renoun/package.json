@@ -165,7 +165,6 @@
     "@renoun/mdx": "workspace:*",
     "@shikijs/langs": "^3.8.1",
     "@shikijs/themes": "^3.8.1",
-    "hast": "^1.0.0",
     "hast-util-to-jsx-runtime": "^2.3.6",
     "html-url-attributes": "^3.0.1",
     "ignore": "^7.0.5",
