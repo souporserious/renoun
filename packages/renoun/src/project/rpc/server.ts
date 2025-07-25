@@ -45,7 +45,7 @@ export class WebSocketServer {
       .then((ws) => {
         this.#server = new ws.WebSocketServer({
           port: options?.port ?? 0,
-          host: '127.0.0.1',
+          host: 'localhost',
           verifyClient: (info, callback) => {
             if (info.req.headers['sec-websocket-protocol'] !== SECRET) {
               return callback(false, 401, 'Unauthorized')
@@ -58,7 +58,7 @@ export class WebSocketServer {
               } catch {
                 return callback(false, 403, 'Bad Origin')
               }
-              if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+              if (hostname !== 'localhost') {
                 return callback(false, 403, 'Forbidden')
               }
             }
