@@ -43,9 +43,14 @@ export function CommandMenu({
 }) {
   let [isOpen, setOpen] = useState(false)
   let { contains } = useFilter({ sensitivity: 'base' })
-  let isMac = useMemo(() => /Mac/.test(navigator.platform), [])
+  const isMac = useMemo(
+    () =>
+      typeof navigator === 'undefined'
+        ? false
+        : /mac(os|intosh)/i.test(navigator.userAgent),
+    []
+  )
   const router = useRouter()
-
   const [searchQuery, setSearchQuery] = useState('')
   const filteredEntries = routes
     .filter((entry) =>
