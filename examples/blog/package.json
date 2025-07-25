@@ -2,8 +2,8 @@
   "private": true,
   "name": "@examples/blog",
   "scripts": {
-    "dev": "renoun next",
-    "build": "renoun next build",
+    "dev": "../../packages/renoun/dist/cli/index.js next",
+    "build": "../../packages/renoun/dist/cli/index.js next build",
     "start": "next start"
   },
   "dependencies": {
