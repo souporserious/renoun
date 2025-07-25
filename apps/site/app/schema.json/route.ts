@@ -15,9 +15,9 @@ const themeValueSchema = z.union([
 ])
 
 const themeOverrideSchema = z
-  .object({
+  .looseObject({
     colors: z
-      .record(z.string())
+      .record(z.string(), z.string())
       .optional()
       .describe('Overrides for theme colors.'),
     tokenColors: z
@@ -53,11 +53,10 @@ const themeOverrideSchema = z
       .optional()
       .describe('Overrides for token colors.'),
     semanticTokenColors: z
-      .record(z.union([z.string(), z.object({}).passthrough()]))
+      .record(z.string(), z.union([z.string(), z.looseObject({})]))
       .optional()
       .describe('Overrides for semantic token colors.'),
   })
-  .passthrough()
   .describe('Theme override configuration.')
 
 const themeOptionSchema = z.union([
@@ -81,7 +80,6 @@ const languagesSchema = z.enum(
 
 const gitSchema = z.object({
   source: z
-    .string()
     .url()
     .describe(
       'The git source URL to use for linking to the repository and source files.'
@@ -101,11 +99,7 @@ const gitSchema = z.object({
     .optional(),
   owner: z.string().describe('The owner of the repository.').optional(),
   repository: z.string().describe('The repository name.').optional(),
-  baseUrl: z
-    .string()
-    .url()
-    .describe('The base URL of the Git provider.')
-    .optional(),
+  baseUrl: z.url().describe('The base URL of the Git provider.').optional(),
 })
 
 const renounConfigSchema = z.object({
@@ -117,7 +111,6 @@ const renounConfigSchema = z.object({
     .optional(),
   git: gitSchema.describe('Git configuration object').optional(),
   siteUrl: z
-    .string()
     .url()
     .describe('The production site URL e.g. https://renoun.dev')
     .optional(),

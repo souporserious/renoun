@@ -17,13 +17,13 @@
     "clean": "node -e \"(function rm(directory) { ['.next', '.turbo', 'node_modules', 'dist'].includes(path.basename(directory)) ? fs.rmSync(directory, { recursive: true, force: true }) : fs.existsSync(directory) && fs.statSync(directory).isDirectory() && fs.readdirSync(directory).forEach(filePath => rm(path.join(directory, filePath))); })('.');\""
   },
   "devDependencies": {
-    "@changesets/cli": "^2.29.4",
-    "@types/node": "^24.0.1",
-    "prettier": "3.5.3",
+    "@changesets/cli": "^2.29.5",
+    "@types/node": "^24.1.0",
+    "prettier": "3.6.2",
     "tsx": "4.20.3",
-    "turbo": "^2.5.4",
+    "turbo": "^2.5.5",
     "typescript": "^5.8.3",
-    "vitest": "^3.2.3"
+    "vitest": "^3.2.4"
   },
   "engines": {
     "node": "20 || >=22"
