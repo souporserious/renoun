@@ -97,7 +97,7 @@ export interface ReferenceProps {
   /** Optional filter for including additional properties from referenced types. */
   filter?: TypeFilter
 
-  /** Base directory for relative `source` values. */
+  /** Base directory for relative `source` values. Passing `import.meta.url` will resolve the directory of the current file. */
   baseDirectory?: string
 
   /** Override default component renderers. */
