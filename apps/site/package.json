@@ -26,7 +26,6 @@
     "serve": "^14.2.4",
     "ts-morph": "catalog:",
     "valibot": "catalog:",
-    "zod": "catalog:",
-    "zod-to-json-schema": "3.24.6"
+    "zod": "catalog:"
   }
 }

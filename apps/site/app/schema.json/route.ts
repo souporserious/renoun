@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
-import { z } from 'zod'
-import { zodToJsonSchema } from 'zod-to-json-schema'
 import { themes, grammars } from 'renoun/textmate'
+import { z } from 'zod'
 
 const themeValueSchema = z.union([
   z
@@ -119,5 +118,5 @@ const renounConfigSchema = z.object({
 export const dynamic = 'force-static'
 
 export async function GET() {
-  return NextResponse.json(zodToJsonSchema(renounConfigSchema))
+  return NextResponse.json(z.toJSONSchema(renounConfigSchema))
 }
