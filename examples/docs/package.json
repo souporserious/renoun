@@ -2,8 +2,8 @@
   "private": true,
   "name": "@examples/docs",
   "scripts": {
-    "dev": "../../packages/renoun/dist/cli/index.js next --turbopack",
-    "build": "../../packages/renoun/dist/cli/index.js next build --turbopack",
+    "dev": "renoun next --turbopack",
+    "build": "renoun next build --turbopack",
     "start": "next start"
   },
   "dependencies": {

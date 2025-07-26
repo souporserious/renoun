@@ -3,6 +3,7 @@
   "private": true,
   "license": "AGPL-3.0-or-later",
   "scripts": {
+    "pnpm:devPreinstall": "node -e \"fs.mkdirSync('packages/renoun/dist/cli',{recursive:true});fs.writeFileSync('packages/renoun/dist/cli/index.js','#!/usr/bin/env node');\"",
     "build": "turbo run build",
     "build:site": "pnpm build --filter=@apps/site",
     "build:examples": "pnpm build --filter=@examples/*",
