@@ -1,5 +1,11 @@
 # renoun
 
+## 9.0.1
+
+### Patch Changes
+
+- 9e2735b: Uses `localhost` instead of hardcoded `127.0.0.1` IP for dev server to improve portability and avoid linter warnings.
+
 ## 9.0.0
 
 ### Major Changes
