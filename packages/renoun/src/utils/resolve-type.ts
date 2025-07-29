@@ -1219,7 +1219,17 @@ function resolveTypeExpression(
       }
     }
   } else {
-    if (tsMorph.Node.isTypeOperatorTypeNode(enclosingNode)) {
+    if (tsMorph.Node.isParenthesizedTypeNode(enclosingNode)) {
+      const typeNode = enclosingNode.getTypeNode()
+
+      return resolveTypeExpression(
+        typeNode.getType(),
+        typeNode,
+        filter,
+        defaultValues,
+        dependencies
+      )
+    } else if (tsMorph.Node.isTypeOperatorTypeNode(enclosingNode)) {
       const operandNode = enclosingNode.getTypeNode()
       const operandType = resolveTypeExpression(
         operandNode.getType(),

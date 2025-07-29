@@ -868,12 +868,34 @@ describe('resolveType', () => {
                               "text": "string | number",
                               "types": [
                                 {
+                                  "filePath": "test.ts",
                                   "kind": "String",
+                                  "position": {
+                                    "end": {
+                                      "column": 95,
+                                      "line": 26,
+                                    },
+                                    "start": {
+                                      "column": 89,
+                                      "line": 26,
+                                    },
+                                  },
                                   "text": "string",
                                   "value": undefined,
                                 },
                                 {
+                                  "filePath": "test.ts",
                                   "kind": "Number",
+                                  "position": {
+                                    "end": {
+                                      "column": 104,
+                                      "line": 26,
+                                    },
+                                    "start": {
+                                      "column": 98,
+                                      "line": 26,
+                                    },
+                                  },
                                   "text": "number",
                                   "value": undefined,
                                 },
@@ -15517,7 +15539,18 @@ describe('resolveType', () => {
                       },
                     },
                     {
+                      "filePath": "test.ts",
                       "kind": "String",
+                      "position": {
+                        "end": {
+                          "column": 52,
+                          "line": 6,
+                        },
+                        "start": {
+                          "column": 46,
+                          "line": 6,
+                        },
+                      },
                       "text": "string",
                       "value": undefined,
                     },
@@ -16869,15 +16902,16 @@ describe('resolveType', () => {
             "checkType": {
               "filePath": "test.ts",
               "kind": "TypeReference",
+              "moduleSpecifier": undefined,
               "name": "Union",
               "position": {
                 "end": {
-                  "column": 2,
-                  "line": 3,
+                  "column": 8,
+                  "line": 2,
                 },
                 "start": {
-                  "column": 35,
-                  "line": 1,
+                  "column": 3,
+                  "line": 2,
                 },
               },
               "text": "Union",
@@ -16888,12 +16922,12 @@ describe('resolveType', () => {
               "kind": "Any",
               "position": {
                 "end": {
-                  "column": 2,
-                  "line": 3,
+                  "column": 20,
+                  "line": 2,
                 },
                 "start": {
-                  "column": 35,
-                  "line": 1,
+                  "column": 17,
+                  "line": 2,
                 },
               },
               "text": "any",
@@ -16903,12 +16937,12 @@ describe('resolveType', () => {
               "kind": "Never",
               "position": {
                 "end": {
-                  "column": 2,
-                  "line": 3,
+                  "column": 64,
+                  "line": 2,
                 },
                 "start": {
-                  "column": 35,
-                  "line": 1,
+                  "column": 59,
+                  "line": 2,
                 },
               },
               "text": "never",
