@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { themes, grammars } from 'renoun/textmate'
+import { themes, grammars } from 'renoun/grammars'
 import { z } from 'zod'
 
 const themeValueSchema = z.union([

@@ -2,6 +2,7 @@ import { join, posix } from 'node:path'
 import type { Diagnostic, Project, SourceFile, ts } from 'ts-morph'
 import tsMorph from 'ts-morph'
 
+import type { Languages as TextMateLanguages } from '../grammars/index.js'
 import type { Highlighter } from './create-highlighter.js'
 import { getDiagnosticMessageText } from './get-diagnostic-message.js'
 import { getLanguage, type Languages } from './get-language.js'
@@ -132,7 +133,11 @@ export async function getTokens({
           }
           return theme[0]
         })
-  const tokens = await highlighter(value, finalLanguage, themeNames)
+  const tokens = await highlighter(
+    value,
+    finalLanguage as TextMateLanguages,
+    themeNames
+  )
   const sourceFile = filePath ? project.getSourceFile(filePath) : undefined
   const sourceFileDiagnostics = getDiagnostics(
     sourceFile,

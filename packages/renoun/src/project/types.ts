@@ -1,6 +1,6 @@
 import type { ProjectOptions as TsMorphProjectOptions } from 'ts-morph'
 
-import type { Themes } from '../textmate/index.js'
+import type { Themes } from '../grammars/index.js'
 
 export type ProjectOptions = {
   /** Path to the VS Code compatible theme used for syntax highlighting the `CodeBlock`, `CodeInline`, and `Tokens` components. */

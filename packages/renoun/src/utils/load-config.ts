@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { cwd } from 'node:process'
 
-import type { Languages, Themes } from '../textmate/index.js'
+import type { Languages, Themes } from '../grammars/index.js'
 
 type ThemeValue = Themes | (string & {})
 
@@ -49,7 +49,7 @@ const defaultConfig = {
     'tsx',
     'md',
     'mdx',
-    'sh',
+    'shell',
     'json',
     'html',
   ],

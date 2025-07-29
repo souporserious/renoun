@@ -1,4 +1,4 @@
-import { CodeInline } from 'renoun/components'
+import { CodeBlock, CodeInline } from 'renoun/components'
 
 import { ButtonLink } from '@/components/ButtonLink'
 import { Text } from '@/components/Text'

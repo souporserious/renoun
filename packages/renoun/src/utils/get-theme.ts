@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import type { Themes } from '../textmate/index.js'
 import type { TextMateThemeRaw } from './create-tokenizer.js'
 import { loadConfig } from './load-config.js'
 
@@ -54,7 +53,7 @@ export async function getTheme(themeName?: string): Promise<TextMateThemeRaw> {
     return cachedThemes.get(themePath)! as TextMateThemeRaw
   }
 
-  const { themes } = await import('../textmate/index.js')
+  const { themes } = await import('../grammars/index.js')
   const themeOverrides = Array.isArray(themeConfigName)
     ? themeConfigName[1]
     : undefined
@@ -63,9 +62,17 @@ export async function getTheme(themeName?: string): Promise<TextMateThemeRaw> {
   if (themePath.endsWith('.json')) {
     theme = JSON.parse(readFileSync(themePath, 'utf-8'))
   } else if (themePath in themes) {
-    const themeKey = themePath as Themes
-    const resolvedTheme = await themes[themeKey].call(null)
-    theme = resolvedTheme.default
+    try {
+      const tmTheme = readFileSync(
+        `./node_modules/tm-themes/themes/${themePath}.json`,
+        'utf-8'
+      )
+      theme = JSON.parse(tmTheme)
+    } catch (error) {
+      throw new Error(
+        `[renoun] The theme was not loaded, ensure the "tm-themes" package is installed in your project.`
+      )
+    }
   } else {
     throw new Error(
       `[renoun] The theme "${themePath}" is not a valid JSON file or a bundled theme.`

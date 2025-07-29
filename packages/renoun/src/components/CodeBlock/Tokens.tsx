@@ -3,7 +3,7 @@ import type { CSSObject } from 'restyle'
 import { css } from 'restyle/css'
 
 import { getSourceTextMetadata, getTokens } from '../../project/client.js'
-import type { Languages } from '../../textmate/index.js'
+import type { Languages } from '../../grammars/index.js'
 import { getContext } from '../../utils/context.js'
 import { getThemeColors } from '../../utils/get-theme.js'
 import { QuickInfo } from './QuickInfo.js'
