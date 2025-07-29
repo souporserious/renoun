@@ -7,14 +7,16 @@ import type {
 import TextMate from 'vscode-textmate'
 import { toRegExp } from 'oniguruma-to-es'
 
-import { grammars } from '../textmate/index.js'
+import type { Grammars, Languages, ScopeName } from '../grammars/index.js'
+import { grammars } from '../grammars/index.js'
 
-export interface RegistryOptions<Grammar extends string, Theme extends string> {
-  getGrammar: (grammar: Grammar) => Promise<TextMateGrammarRaw>
+export interface RegistryOptions<Theme extends string> {
+  getGrammar: (scopeName: ScopeName) => Promise<TextMateGrammarRaw>
   getTheme: (theme: Theme) => Promise<TextMateThemeRaw>
 }
 
 export type TextMateGrammar = IGrammar
+
 export type TextMateGrammarRaw = IRawGrammar
 
 export type TextMateRegistry<Grammar extends string> = {
@@ -186,12 +188,12 @@ interface GrammarMetadata extends IRawGrammar {
   aliases?: string[]
 }
 
-export class Registry<Grammar extends string, Theme extends string> {
-  #options: RegistryOptions<Grammar, Theme>
-  #registry: TextMateRegistry<Grammar>
+export class Registry<Theme extends string> {
+  #options: RegistryOptions<Theme>
+  #registry: TextMateRegistry<ScopeName>
   #theme: TextMateThemeRaw | undefined
 
-  constructor(options: RegistryOptions<Grammar, Theme>) {
+  constructor(options: RegistryOptions<Theme>) {
     this.#options = options
     this.#registry = new TextMate.Registry({
       onigLib,
@@ -200,7 +202,7 @@ export class Registry<Grammar extends string, Theme extends string> {
   }
 
   fetchGrammar = async (
-    scopeName: Grammar
+    scopeName: ScopeName
   ): Promise<GrammarMetadata | null> => {
     const source = await this.#options.getGrammar(scopeName)
     if (!source) {
@@ -209,20 +211,31 @@ export class Registry<Grammar extends string, Theme extends string> {
     return source
   }
 
-  async loadGrammar(name: Grammar): Promise<TextMateGrammar | null> {
-    const scopeName = Object.keys(grammars).find((scopeName) =>
-      grammars[scopeName].slice(1).includes(name)
-    ) as Grammar
-    return this.#registry.loadGrammar(scopeName || name)
+  async loadGrammar(language: Languages): Promise<TextMateGrammar | null> {
+    let scopeName = Object.keys(grammars).find((scopeName) =>
+      (grammars[scopeName as ScopeName] as readonly Languages[]).includes(
+        language
+      )
+    ) as ScopeName | undefined
+
+    if (!scopeName) {
+      throw new Error(
+        `[renoun] The grammar for language "${language}" could not be found. Ensure this language is configured in renoun.json correctly.`
+      )
+    }
+
+    return this.#registry.loadGrammar(scopeName)
   }
 
   async fetchTheme(name: Theme): Promise<TextMateThemeRaw> {
     const source = await this.#options.getTheme(name)
+
     if (!source) {
       throw new Error(
-        `[renoun] Missing "${name}" theme in Registry. Ensure this theme is configured in renoun.json.`
+        `[renoun] Missing "${name}" theme in Registry. Ensure this theme is configured in renoun.json correctly and the \`tm-themes\` package is installed.`
       )
     }
+
     return source
   }
 
@@ -244,19 +257,19 @@ const FontStyle = {
   Strikethrough: 8,
 }
 
-export class Tokenizer<Grammar extends string, Theme extends string> {
+export class Tokenizer<Theme extends string> {
   #baseColors: Map<string, string> = new Map()
-  #registries: Map<string, Registry<Grammar, Theme>> = new Map()
-  #registryOptions: RegistryOptions<Grammar, Theme>
+  #registries: Map<string, Registry<Theme>> = new Map()
+  #registryOptions: RegistryOptions<Theme>
 
-  constructor(registryOptions: RegistryOptions<Grammar, Theme>) {
+  constructor(registryOptions: RegistryOptions<Theme>) {
     this.#registryOptions = registryOptions
   }
 
   /** Tokenize the given source for multiple themes. */
   tokenize = async (
     source: string,
-    grammar: Grammar,
+    language: Languages,
     themes: Theme[],
     timeLimit?: number
   ): Promise<TextMateToken[][]> => {
@@ -279,14 +292,23 @@ export class Tokenizer<Grammar extends string, Theme extends string> {
         this.#registries.set(themeName, registry)
       }
 
-      const loadedGrammar = await registry.loadGrammar(grammar)
+      const loadedGrammar = await registry
+        .loadGrammar(language)
+        .catch((error) => {
+          throw new Error(
+            `[renoun] Grammar could not be loaded for language "${language}". Ensure this language is configured in renoun.json correctly.`,
+            { cause: error }
+          )
+        })
 
       if (loadedGrammar) {
         themeGrammars[themeIndex] = loadedGrammar
       }
 
       if (!themeGrammars[themeIndex]) {
-        throw new Error(`Could not load grammar: ${grammar}`)
+        throw new Error(
+          `[renoun] Could not load grammar for language: ${language}`
+        )
       }
 
       themeColorMaps[themeIndex] = registry.getThemeColors()
@@ -425,9 +447,9 @@ export class Tokenizer<Grammar extends string, Theme extends string> {
   }
 }
 
-export function createTokenizer<Grammar extends string, Theme extends string>(
-  options: RegistryOptions<Grammar, Theme>
-): Tokenizer<Grammar, Theme>['tokenize'] {
+export function createTokenizer<Theme extends string>(
+  options: RegistryOptions<Theme>
+): Tokenizer<Theme>['tokenize'] {
   const tokenizer = new Tokenizer(options)
   return tokenizer.tokenize
 }

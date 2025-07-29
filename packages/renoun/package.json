@@ -58,6 +58,11 @@
       "import": "./dist/file-system/index.js",
       "default": "./dist/file-system/index.js"
     },
+    "./grammars": {
+      "types": "./dist/grammars/index.d.ts",
+      "import": "./dist/grammars/index.js",
+      "default": "./dist/grammars/index.js"
+    },
     "./hooks": {
       "types": "./dist/hooks/index.d.ts",
       "import": "./dist/hooks/index.js",
@@ -88,11 +93,6 @@
       "import": "./dist/project/server.js",
       "default": "./dist/project/server.js"
     },
-    "./textmate": {
-      "types": "./dist/textmate/index.d.ts",
-      "import": "./dist/textmate/index.js",
-      "default": "./dist/textmate/index.js"
-    },
     "./utils": {
       "types": "./dist/utils/index.d.ts",
       "import": "./dist/utils/index.js",
@@ -113,6 +113,15 @@
       "file-system": [
         "./dist/file-system/index.d.ts"
       ],
+      "grammars": [
+        "./dist/grammars/index.d.ts"
+      ],
+      "hooks": [
+        "./dist/hooks/index.d.ts"
+      ],
+      "hooks/*": [
+        "./dist/hooks/*.d.ts"
+      ],
       "mdx": [
         "./dist/mdx/index.d.ts"
       ],
@@ -125,9 +134,6 @@
       "server": [
         "./dist/project/server.d.ts"
       ],
-      "textmate": [
-        "./dist/textmate/index.d.ts"
-      ],
       "utils": [
         "./dist/utils/index.d.ts"
       ]
@@ -136,7 +142,7 @@
   "scripts": {
     "build": "tsc && chmod +x dist/cli/index.js",
     "dev": "tsc -w",
-    "textmate": "tsx ./scripts/textmate.ts",
+    "grammars": "node --experimental-strip-types ./scripts/grammars.ts",
     "test": "vitest --typecheck"
   },
   "peerDependencies": {
@@ -154,8 +160,8 @@
     "react": "catalog:",
     "react-dom": "catalog:",
     "styled-components": "^6.1.19",
-    "tm-grammars": "^1.24.0",
-    "tm-themes": "^1.10.7",
+    "tm-grammars": "catalog:",
+    "tm-themes": "catalog:",
     "valibot": "catalog:",
     "vfile-message": "^4.0.2",
     "zod": "catalog:"
@@ -163,8 +169,6 @@
   "dependencies": {
     "@mdx-js/mdx": "^3.1.0",
     "@renoun/mdx": "workspace:*",
-    "@shikijs/langs": "^3.8.1",
-    "@shikijs/themes": "^3.8.1",
     "hast-util-to-jsx-runtime": "^2.3.6",
     "html-url-attributes": "^3.0.1",
     "ignore": "^7.0.5",

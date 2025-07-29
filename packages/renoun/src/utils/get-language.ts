@@ -1,4 +1,4 @@
-import type { Languages as TextMateLanguages } from '../textmate/index.js'
+import type { Languages as TextMateLanguages } from '../grammars/index.js'
 
 export const languageMap = {
   mjs: 'js',

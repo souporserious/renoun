@@ -1,15 +1,5 @@
-import { createRequire } from 'node:module'
-
-import { findPackageDependency } from './find-package-dependency.js'
 import { extensionName } from './path.js'
-
-const require = createRequire(import.meta.url)
-
-/** Attempts to load a package if it is installed. */
-async function loadPackage<Value>(name: string, getImport: () => any) {
-  const hasPackage = await findPackageDependency(name)
-  return hasPackage ? (getImport() as Value) : null
-}
+import { loadPrettier } from './load-package.js'
 
 const extensionToParser = {
   js: 'babel',
@@ -42,14 +32,6 @@ function getPrettierParser(filePath: string, language?: string) {
 
   const extension = extensionName(filePath).slice(1)
   return extensionToParser[extension as keyof typeof extensionToParser]
-}
-
-/** Attempts to load the prettier package if it is installed. */
-function loadPrettier() {
-  return loadPackage<{
-    format: (sourceText: string, options?: Record<string, unknown>) => string
-    resolveConfig: (fileName: string) => Promise<Record<string, unknown> | null>
-  }>('prettier', () => require('prettier'))
 }
 
 type Formatter = (

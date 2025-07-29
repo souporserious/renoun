@@ -1,9 +1,8 @@
-import React, { Fragment, Suspense } from 'react'
+import React, { Suspense } from 'react'
 import { css, styled, type CSSObject } from 'restyle'
 
-import type { MDXComponents } from '../mdx/index.js'
-import type { Languages } from '../textmate/index.js'
-import { grammars } from '../textmate/index.js'
+import type { Languages } from '../grammars/index.js'
+import { grammars } from '../grammars/index.js'
 import { getThemeColors, getThemeTokenVariables } from '../utils/get-theme.js'
 import { CopyButton } from './CodeBlock/CopyButton.js'
 import { Tokens } from './CodeBlock/Tokens.js'
@@ -198,8 +197,8 @@ export function parseCodeProps(props: React.ComponentProps<'code'>): {
 
   if (firstSpaceIndex > -1) {
     const possibleLanguage = children.substring(0, firstSpaceIndex) as Languages
-    const isValidLanguage = Object.entries(grammars).some(
-      ([, [, ...grammar]]) => grammar.includes(possibleLanguage)
+    const isValidLanguage = Object.values(grammars).some((aliases) =>
+      (aliases as readonly Languages[]).includes(possibleLanguage)
     )
 
     if (isValidLanguage) {

@@ -17,6 +17,7 @@
     "react-dom": "catalog:",
     "renoun": "workspace:*",
     "restyle": "catalog:",
+    "tm-themes": "catalog:",
     "ts-morph": "catalog:"
   }
 }

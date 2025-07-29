@@ -6,7 +6,7 @@
     "dev": "renoun next dev",
     "build": "renoun next build",
     "start": "serve out",
-    "check-broken-links": "tsx scripts/check-broken-links.ts"
+    "check-broken-links": "node --experimental-strip-types scripts/check-broken-links.ts"
   },
   "dependencies": {
     "@mdx-js/loader": "catalog:",
