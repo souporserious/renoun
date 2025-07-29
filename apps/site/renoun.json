@@ -4,22 +4,5 @@
   "git": {
     "source": "https://github.com/souporserious/renoun"
   },
-  "siteUrl": "https://renoun.dev",
-  "languages": [
-    "python",
-    "typescript",
-    "javascript",
-    "jsx",
-    "tsx",
-    "json",
-    "bash",
-    "shell",
-    "css",
-    "html",
-    "mdx",
-    "md",
-    "markdown",
-    "text",
-    "plain"
-  ]
+  "siteUrl": "https://renoun.dev"
 }
