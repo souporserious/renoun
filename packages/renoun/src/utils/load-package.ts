@@ -36,9 +36,20 @@ export function loadTmGrammars() {
 
 /** Attempts to load a grammar from the tm-grammars package if it is installed. */
 export function loadTmGrammar(name: string) {
-  return loadPackage<string>('tm-grammars', async () => {
+  return loadPackage<Record<string, any>>('tm-grammars', async () => {
     const module = await import(
       /* webpackIgnore: true */ /* turbopackIgnore: true */ /* @vite-ignore */ `tm-grammars/grammars/${name}.json`,
+      { with: { type: 'json' } }
+    )
+    return module.default
+  })
+}
+
+/** Attempts to load a theme from the tm-themes package if it is installed. */
+export function loadTmTheme(name: string) {
+  return loadPackage<Record<string, any>>('tm-themes', async () => {
+    const module = await import(
+      /* webpackIgnore: true */ /* turbopackIgnore: true */ /* @vite-ignore */ `tm-themes/themes/${name}.json`,
       { with: { type: 'json' } }
     )
     return module.default

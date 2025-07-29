@@ -21,6 +21,7 @@
     "renoun": "workspace:*",
     "tailwindcss": "^4.1.11",
     "tailwindcss-react-aria-components": "^2.0.0",
+    "tm-themes": "catalog:",
     "ts-morph": "catalog:",
     "zod": "catalog:"
   }

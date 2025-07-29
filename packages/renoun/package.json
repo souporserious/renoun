@@ -160,8 +160,8 @@
     "react": "catalog:",
     "react-dom": "catalog:",
     "styled-components": "^6.1.19",
-    "tm-grammars": "^1.24.0",
-    "tm-themes": "^1.10.7",
+    "tm-grammars": "catalog:",
+    "tm-themes": "catalog:",
     "valibot": "catalog:",
     "vfile-message": "^4.0.2",
     "zod": "catalog:"

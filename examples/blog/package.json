@@ -20,6 +20,7 @@
     "remark-mdx-frontmatter": "^5.2.0",
     "renoun": "workspace:*",
     "restyle": "catalog:",
+    "tm-themes": "catalog:",
     "ts-morph": "catalog:",
     "zod": "catalog:"
   }

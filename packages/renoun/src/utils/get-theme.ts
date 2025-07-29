@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 
 import type { TextMateThemeRaw } from './create-tokenizer.js'
 import { loadConfig } from './load-config.js'
+import { loadTmTheme } from './load-package.js'
 
 /** Resolves the theme config name from the `renoun.json` config. */
 function getThemeConfigName(themeName?: string) {
@@ -61,16 +62,13 @@ export async function getTheme(themeName?: string): Promise<TextMateThemeRaw> {
 
   if (themePath.endsWith('.json')) {
     theme = JSON.parse(readFileSync(themePath, 'utf-8'))
-  } else if (themePath in themes) {
-    try {
-      const tmTheme = readFileSync(
-        `./node_modules/tm-themes/themes/${themePath}.json`,
-        'utf-8'
-      )
-      theme = JSON.parse(tmTheme)
-    } catch (error) {
+  } else if (themes.includes(themePath)) {
+    const tmTheme = await loadTmTheme(themePath)
+    if (tmTheme) {
+      theme = tmTheme
+    } else {
       throw new Error(
-        `[renoun] The theme was not loaded, ensure the "tm-themes" package is installed in your project.`
+        `[renoun] The theme "${themePath}" could not be loaded, ensure the "tm-themes" package is installed in your project.`
       )
     }
   } else {
