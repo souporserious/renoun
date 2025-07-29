@@ -8,4 +8,4 @@ For languages with similar grammars, like `js` or `ts` files, these will be mapp
 
 ### Breaking Changes
 
-If you have configured a language besides `ts(x)`, `md(x)`, `css`, `html`, `shell`, or `json`, you will need to install the `tm-grammars` package. Additionally, if you were using a non-local theme, you will need to install the `tm-themes` package.
+If you have configured a language besides `ts(x)`, `md(x)`, `css`, `html`, `shell`, or `json`, you will need to install the `tm-grammars` package. Additionally, if you are using a non-local theme, you will need to install the `tm-themes` package.
