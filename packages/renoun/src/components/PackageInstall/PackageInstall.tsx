@@ -15,10 +15,19 @@ const packageManagers = {
   bun: 'bun add',
   yarn: 'yarn add',
 } as const
+const devFlags = {
+  npm: '--save-dev',
+  pnpm: '--save-dev',
+  bun: '--dev',
+  yarn: '--dev',
+} as const
 
 export interface PackageInstallProps {
   /** The package names to install. */
   packages: string[]
+
+  /** Whether to install the packages in `devDependencies`. */
+  dev?: boolean
 
   /** Override styles for each part of the component. */
   css?: {
@@ -98,6 +107,7 @@ async function PackageInstallAsync({
   packages,
   css,
   className,
+  dev = false,
 }: PackageInstallProps) {
   const theme = await getThemeColors()
 
@@ -142,7 +152,10 @@ async function PackageInstallAsync({
 
   const tabPanels = Object.entries(packageManagers).map(
     ([packageManager, install]) => {
-      const installCommand = `${install} ${packages.join(' ')}`
+      const flag = dev
+        ? ` ${devFlags[packageManager as keyof typeof devFlags]}`
+        : ''
+      const installCommand = `${install}${flag} ${packages.join(' ')}`
 
       return (
         <TabPanel
@@ -200,9 +213,15 @@ export function PackageInstall({
   packages,
   css,
   className,
+  dev = false,
 }: PackageInstallProps) {
   return (
-    <PackageInstallAsync packages={packages} css={css} className={className} />
+    <PackageInstallAsync
+      packages={packages}
+      css={css}
+      className={className}
+      dev={dev}
+    />
   )
 }
 
