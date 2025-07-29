@@ -34,11 +34,17 @@ This file should be placed in the root of your workspace. Here is an example con
 
 ## Themes
 
-Themes are powered by <a href="https://shiki.style" target="_blank" rel="noopener">Shiki</a> and specify how source code is highlighted in the `CodeBlock` and `CodeInline` components. You can use a bundled theme or create your own theme. The default theme is set to `nord`.
+Themes are powered by <a href="https://github.com/shikijs/textmate-grammars-themes" target="_blank" rel="noopener">Shiki</a> and specify how source code is highlighted in the `CodeBlock` and `CodeInline` components. To keep the install size small, renoun does not bundle any themes by default. You can either provide your own local theme JSON file or install the optional `tm-themes` package to load a bundled theme by name.
 
-### Bundled Themes
+### TextMate Themes
 
-To use a bundled theme, you can reference a <a href="https://shiki.matsu.io/themes" target="_blank" rel="noopener">valid theme by name</a>:
+To use a bundled theme, first install the `tm-themes` package and then reference a <a href="https://shiki.matsu.io/themes" target="_blank" rel="noopener">valid theme by name</a>:
+
+```bash
+npm install --save-dev tm-themes
+```
+
+Now you can reference a theme by name in your `renoun.json` file:
 
 ```json
 {
@@ -169,6 +175,8 @@ This accepts a subset of a VS Code theme to override, specifically the `colors`,
 
 The `languages` property is used to define the languages that are supported by the `CodeBlock` and `CodeInline` components. This is used to determine which language to load when highlighting code.
 
+### Default Languages
+
 The following languages are loaded by default:
 
 ```json
@@ -189,10 +197,27 @@ The following languages are loaded by default:
 ```
 
 <Note>
+Only this core subset of grammars is bundled with renoun. To add support for additional languages, install the optional `tm-grammars` package and list the languages you want in the `languages` array.
 
-Configuring the `languages` property will replace the default languages. If you want to add additional languages, you should include the default languages in your configuration explicitly.
+File types such as `js` and `ts` are automatically mapped to the `tsx` grammar, and `md` maps to `mdx`, so they do not need to be included explicitly unless you need features that are only available in the respective grammar.
 
 </Note>
+
+### Additional Languages
+
+To add support for additional languages, install the optional `tm-grammars` package and list the languages you want in the `languages` array.
+
+```bash
+npm install --save-dev tm-grammars
+```
+
+Now you can reference a language by name in your `renoun.json` file:
+
+```json
+{
+  "languages": ["python", "rust", "go"]
+}
+```
 
 ## Git Information
 
