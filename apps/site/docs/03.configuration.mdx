@@ -40,9 +40,7 @@ Themes are powered by <a href="https://github.com/shikijs/textmate-grammars-them
 
 To use a bundled theme, first install the `tm-themes` package and then reference a <a href="https://shiki.matsu.io/themes" target="_blank" rel="noopener">valid theme by name</a>:
 
-```bash
-npm install --save-dev tm-themes
-```
+<PackageInstall packages={['tm-themes']} dev />
 
 Now you can reference a theme by name in your `renoun.json` file:
 
@@ -197,6 +195,7 @@ The following languages are loaded by default:
 ```
 
 <Note>
+
 Only this core subset of grammars is bundled with renoun. To add support for additional languages, install the optional `tm-grammars` package and list the languages you want in the `languages` array.
 
 File types such as `js` and `ts` are automatically mapped to the `tsx` grammar, and `md` maps to `mdx`, so they do not need to be included explicitly unless you need features that are only available in the respective grammar.
@@ -207,9 +206,7 @@ File types such as `js` and `ts` are automatically mapped to the `tsx` grammar, 
 
 To add support for additional languages, install the optional `tm-grammars` package and list the languages you want in the `languages` array.
 
-```bash
-npm install --save-dev tm-grammars
-```
+<PackageInstall packages={['tm-grammars']} dev />
 
 Now you can reference a language by name in your `renoun.json` file:
 
