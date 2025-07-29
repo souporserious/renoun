@@ -1,7 +1,7 @@
 import { Analytics } from '@vercel/analytics/react'
 import type { Metadata } from 'next'
 import { GeistSans } from 'geist/font/sans'
-import { PackageInstallScript, Refresh } from 'renoun/components'
+import { Refresh } from 'renoun/components'
 
 export const metadata = {
   title: 'renoun - Elevate Your Design System Docs',
@@ -27,7 +27,6 @@ export default function RootLayout({
       />
       <link rel="stylesheet" href="/layout.css" precedence="medium" />
       <body className={GeistSans.className}>
-        <PackageInstallScript />
         <script
           dangerouslySetInnerHTML={{ __html: tableOfContentsActiveState }}
         />

@@ -24,7 +24,6 @@ export {
 export { MDX as MDX } from './MDX.js'
 export {
   PackageInstall,
-  PackageInstallScript,
   type PackageInstallProps,
 } from './PackageInstall/index.js'
 export {

@@ -6,34 +6,6 @@ Render a package install command with a variant for `npm`, `pnpm`, `bun` and `ya
   <PackageInstall packages={['renoun']} />
 </Preview>
 
-## Configuration
+## Local Storage
 
-The `PackageInstall` component uses local storage for the package manager preference, so it is important to ensure that the component is renders on the client without any flashing from state changes.
-
-This can be avoided by rendering the `PackageInstallScript` in your root component or layout file before rendering `PackageInstall`:
-
-```tsx path="layout.tsx"
-import { PackageInstallScript } from 'renoun/components'
-
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  return (
-    <html lang="en">
-      <body>
-        <PackageInstallScript />
-        {children}
-      </body>
-    </html>
-  )
-}
-```
-
-<Note>
-
-A banner with an error will be added to the page during development if the
-`PackageInstallScript` is not loaded on the client side.
-
-</Note>
+The `PackageInstall` component uses local storage for the package manager preference and will use a small script hoisted to the root of the page to set the package manager on load. This is done to avoid any flashing from state changes when a local storage value is found.

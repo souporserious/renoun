@@ -48,6 +48,9 @@ export interface PackageInstallProps {
     copyButton?: string
     code?: string
   }
+
+  /** The nonce to use for the script that sets the package manager on load. */
+  nonce?: string
 }
 
 const Container = styled('div', {
@@ -179,16 +182,6 @@ async function PackageInstallAsync({
     }
   )
 
-  const children = []
-
-  if (process.env.NODE_ENV === 'development') {
-    children.push(
-      import('./InstallWarning.js').then(({ InstallWarning }) => (
-        <InstallWarning />
-      ))
-    )
-  }
-
   return (
     <Container
       data-package-install=""
@@ -202,7 +195,6 @@ async function PackageInstallAsync({
     >
       {tabs}
       {tabPanels}
-      {children}
       <PackageInstallClient />
     </Container>
   )
@@ -214,14 +206,22 @@ export function PackageInstall({
   css,
   className,
   dev = false,
+  nonce,
 }: PackageInstallProps) {
   return (
-    <PackageInstallAsync
-      packages={packages}
-      css={css}
-      className={className}
-      dev={dev}
-    />
+    <>
+      <script
+        async
+        nonce={nonce}
+        src={`data:text/javascript;base64,${btoa(packageScript)}`}
+      />
+      <PackageInstallAsync
+        packages={packages}
+        css={css}
+        className={className}
+        dev={dev}
+      />
+    </>
   )
 }
 
@@ -314,13 +314,3 @@ document.addEventListener('click', event => {
   }
 });
 `.trim()
-
-/** Client script to set the package manager based on local storage if available. */
-export function PackageInstallScript() {
-  return (
-    <script
-      id="package-install-script"
-      dangerouslySetInnerHTML={{ __html: packageScript }}
-    />
-  )
-}

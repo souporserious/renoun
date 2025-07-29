@@ -1,5 +1,1 @@
-export {
-  PackageInstall,
-  PackageInstallScript,
-  type PackageInstallProps,
-} from './PackageInstall.js'
+export { PackageInstall, type PackageInstallProps } from './PackageInstall.js'
