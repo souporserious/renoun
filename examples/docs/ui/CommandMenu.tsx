@@ -81,6 +81,9 @@ export function CommandMenu({
         <span className="hidden sm:flex items-center text-xs text-gray-500 dark:text-white/60 group-hover:text-gray-700 dark:group-hover:text-white transition-colors">
           <kbd className="h-5 px-2 font-semibold rounded text-xs bg-gray-200 text-gray-700 dark:bg-gray-800 dark:text-white/60 group-hover:text-gray-700 dark:group-hover:text-white outline-none focus-visible:ring-2 focus-visible:ring-violet-500 dark:focus-visible:ring-blue-400 flex items-center justify-center transition-colors">
             {isMac ? '⌘ K' : 'Ctrl K'}
+            <script>
+              {`document.currentScript.previousSibling.textContent = /mac(os|intosh)/i.test(navigator.userAgent) ? '⌘ K' : 'Ctrl K'`}
+            </script>
           </kbd>
         </span>
       </Button>
