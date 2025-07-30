@@ -536,9 +536,9 @@ export namespace Kind {
   }
 
   /** An interface or type alias method signature. */
-  export interface MethodSignature extends SharedDocumentable, SharedCallable {
+  export interface MethodSignature extends SharedDocumentable {
     kind: 'MethodSignature'
-    parameters: Parameter[]
+    signatures: CallSignature[]
   }
 
   export type TypeExpression =
@@ -593,9 +593,9 @@ export type Kind =
   | Kind.CallSignature
   | Kind.ConstructSignature
   | Kind.ComponentSignature
-  | Kind.IndexSignature
   | Kind.MethodSignature
   | Kind.PropertySignature
+  | Kind.IndexSignature
   | Kind.Parameter
   | Kind.Namespace
 
@@ -1610,12 +1610,15 @@ function resolveTypeExpression(
           return
         }
 
-        // Consolidate "string & {}" to just "string"
-        if (resolvedIntersectionTypes.length === 1) {
-          const intersectionType = resolvedIntersectionTypes[0]
-
-          if (intersectionType.kind === 'String') {
-            return intersectionType
+        // Collapse `string & {}` or `string & Record<never, never>`
+        if (isOnlyStringAndEmpty(resolvedIntersectionTypes)) {
+          return resolvedIntersectionTypes.find(
+            (type) => type.kind === 'String'
+          )
+        } else if (resolvedIntersectionTypes.length === 1) {
+          const resolvedIntersectionType = resolvedIntersectionTypes[0]
+          if (resolvedIntersectionType.kind === 'String') {
+            return resolvedIntersectionType
           }
         }
 
@@ -1790,12 +1793,15 @@ function resolveTypeExpression(
           return
         }
 
-        // Consolidate "string & {}" to just "string"
-        if (resolvedIntersectionTypes.length === 1) {
-          const intersectionType = resolvedIntersectionTypes[0]
-
-          if (intersectionType.kind === 'String') {
-            return intersectionType
+        // Collapse `string & {}` or `string & Record<never, never>`
+        if (isOnlyStringAndEmpty(resolvedIntersectionTypes)) {
+          return resolvedIntersectionTypes.find(
+            (type) => type.kind === 'String'
+          )
+        } else if (resolvedIntersectionTypes.length === 1) {
+          const resolvedIntersectionType = resolvedIntersectionTypes[0]
+          if (resolvedIntersectionType.kind === 'String') {
+            return resolvedIntersectionType
           }
         }
 
@@ -1805,26 +1811,42 @@ function resolveTypeExpression(
           types: resolvedIntersectionTypes,
         } satisfies Kind.IntersectionType
       }
+    } else if (tsMorph.Node.isFunctionTypeNode(enclosingNode)) {
+      const signature = enclosingNode.getSignature()
+      const resolvedSignature = resolveCallSignature(
+        signature,
+        filter,
+        dependencies
+      )
+
+      if (!resolvedSignature) {
+        throw new UnresolvedTypeExpressionError(type, enclosingNode)
+      }
+
+      resolvedType = {
+        kind: 'FunctionType',
+        text: typeText,
+        parameters: resolvedSignature.parameters,
+        returnType: resolvedSignature.returnType,
+        isAsync: resolvedSignature.returnType
+          ? isPromiseLike(resolvedSignature.returnType)
+          : false,
+        ...getDeclarationLocation(enclosingNode),
+        ...getJsDocMetadata(enclosingNode),
+      } satisfies Kind.FunctionType
     } else {
       const callSignatures = type.getCallSignatures()
 
-      if (callSignatures.length) {
-        // If there are multiple call signatures, we need bail out since we can't
-        // determine which one to use. This most likely only happens in our initial
-        // `resolveType` call where we want it to continue resolving the type.
-        if (callSignatures.length > 1) {
-          return
-        }
-
-        const [signature] = callSignatures
+      if (callSignatures.length === 1) {
+        const [callSignature] = callSignatures
         const resolvedParameters = resolveParameters(
-          signature,
+          callSignature,
           filter,
           dependencies
         )
         const resolvedTypeParameters: Kind.TypeParameter[] = []
 
-        for (const typeParameter of signature.getTypeParameters()) {
+        for (const typeParameter of callSignature.getTypeParameters()) {
           const resolved = resolveTypeParameter(
             typeParameter,
             filter,
@@ -1835,7 +1857,7 @@ function resolveTypeExpression(
           }
         }
 
-        const signatureDeclaration = signature.getDeclaration()
+        const signatureDeclaration = callSignature.getDeclaration()
         const returnTypeNode = signatureDeclaration.getReturnTypeNode()
         let returnType: Kind.TypeExpression | undefined
 
@@ -1849,7 +1871,7 @@ function resolveTypeExpression(
           )
         } else {
           returnType = resolveTypeExpression(
-            signature.getReturnType(),
+            callSignature.getReturnType(),
             signatureDeclaration,
             filter,
             undefined,
@@ -1930,28 +1952,39 @@ function resolveTypeExpression(
           }
         }
 
-        // TODO: use resolveMemberSignatures here instead
-        const propertySignatures = resolvePropertySignatures(
-          type,
-          symbolDeclaration ?? enclosingNode,
-          filter,
-          defaultValues,
-          dependencies
-        )
-        const indexSignatures = resolveIndexSignatures(
-          symbolDeclaration,
-          filter
-        )
+        let resolvedMembers: Kind.MemberUnion[] = []
 
-        // If the literal is truly empty we treat it like `{}` and bail
-        if (propertySignatures.length === 0 && indexSignatures.length === 0) {
-          return
+        if (tsMorph.Node.isTypeLiteral(enclosingNode)) {
+          resolvedMembers = resolveMemberSignatures(
+            enclosingNode.getMembers(),
+            filter,
+            defaultValues,
+            dependencies
+          )
+        } else {
+          const propertySignatures = resolvePropertySignatures(
+            type,
+            symbolDeclaration ?? enclosingNode,
+            filter,
+            defaultValues,
+            dependencies
+          )
+          const indexSignatures = resolveIndexSignatures(
+            symbolDeclaration,
+            filter
+          )
+          resolvedMembers = [...propertySignatures, ...indexSignatures]
+
+          // If the literal is truly empty we treat it like `{}` and bail
+          if (propertySignatures.length === 0 && indexSignatures.length === 0) {
+            return
+          }
         }
 
         resolvedType = {
           kind: 'TypeLiteral',
           text: typeText,
-          members: [...propertySignatures, ...indexSignatures],
+          members: resolvedMembers,
         } satisfies Kind.TypeLiteral
       } else if (tsMorph.Node.isObjectKeyword(enclosingNode)) {
         resolvedType = {
@@ -2029,9 +2062,26 @@ function resolveMemberSignatures(
       defaultValues,
       dependencies
     )
-    if (resolved) {
-      resolvedMembers.push(resolved)
+
+    if (!resolved) {
+      continue
     }
+
+    if (resolved.kind === 'MethodSignature' && resolvedMembers.length > 0) {
+      const previousResolvedMember = resolvedMembers[resolvedMembers.length - 1]
+
+      if (
+        previousResolvedMember.kind === 'MethodSignature' &&
+        previousResolvedMember.name === resolved.name
+      ) {
+        // Same method as the previous entry: append its overload(s)
+        previousResolvedMember.signatures.push(...resolved.signatures)
+        previousResolvedMember.text += `\n${resolved.text}`
+        continue
+      }
+    }
+
+    resolvedMembers.push(resolved)
   }
 
   return resolvedMembers
@@ -2044,32 +2094,6 @@ function resolveMemberSignature(
   defaultValues?: Record<string, unknown> | unknown,
   dependencies?: Set<string>
 ): Kind.MemberUnion | undefined {
-  let resolvedMemberType: Kind.TypeExpression | undefined
-
-  if (tsMorph.Node.isPropertySignature(member)) {
-    const typeNode = member.getTypeNodeOrThrow()
-
-    resolvedMemberType = resolveTypeExpression(
-      typeNode.getType(),
-      typeNode,
-      filter,
-      defaultValues,
-      dependencies
-    )
-  } else {
-    resolvedMemberType = resolveTypeExpression(
-      member.getType(),
-      member,
-      filter,
-      defaultValues,
-      dependencies
-    )
-  }
-
-  if (!resolvedMemberType) {
-    return
-  }
-
   if (tsMorph.Node.isPropertySignature(member)) {
     const symbol = member.getSymbol()
 
@@ -2089,31 +2113,50 @@ function resolveMemberSignature(
   }
 
   if (tsMorph.Node.isMethodSignature(member)) {
-    const memberType = member.getType()
-    const callSignature = memberType.getCallSignatures()[0]
-    const resolvedParameters = resolveParameters(
-      callSignature,
+    const signature = member.getSignature()
+    const resolvedSignature = resolveCallSignature(
+      signature,
       filter,
       dependencies
     )
+
+    if (!resolvedSignature) {
+      throw new UnresolvedTypeExpressionError(member.getType(), member)
+    }
+
     return {
       kind: 'MethodSignature',
       name: member.getName(),
-      text: memberType.getText(
-        undefined,
-        tsMorph.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope
-      ),
-      ...resolvedParameters,
-      returnType: resolveTypeExpression(
-        callSignature.getReturnType(),
-        member,
-        filter,
-        undefined,
-        dependencies
-      ),
+      signatures: [resolvedSignature],
+      text: member.getText(),
       ...getJsDocMetadata(member),
       ...getDeclarationLocation(member),
-    }
+    } satisfies Kind.MethodSignature
+  }
+
+  if (tsMorph.Node.isCallSignatureDeclaration(member)) {
+    const signature = member.getSignature()
+    const resolvedParameters = resolveParameters(
+      signature,
+      filter,
+      dependencies
+    )
+    const returnType = resolveTypeExpression(
+      signature.getReturnType(),
+      signature.getDeclaration(),
+      filter,
+      undefined,
+      dependencies
+    )
+
+    return {
+      kind: 'CallSignature',
+      text: member.getText(),
+      ...resolvedParameters,
+      returnType,
+      ...getJsDocMetadata(member),
+      ...getDeclarationLocation(member),
+    } satisfies Kind.CallSignature
   }
 
   if (tsMorph.Node.isIndexSignatureDeclaration(member)) {
@@ -2125,7 +2168,7 @@ function resolveMemberSignature(
   }
 
   throw new Error(
-    `[renoun:resolveMemberSignature]: Unhandled member signature of kind "${member.getKindName()}". Please file an issue if you encounter this error.`
+    `[renoun:resolveMemberSignature]: Unhandled member signature "${member.getText()}" of kind "${member.getKindName()}". Please file an issue if you encounter this error.`
   )
 }
 
@@ -2312,6 +2355,10 @@ function resolveCallSignature(
   ) {
     resolvedType.isAsync = signatureDeclaration.isAsync()
     resolvedType.isGenerator = signatureDeclaration.isGenerator()
+  }
+
+  if (isPromiseLike(returnType)) {
+    resolvedType.isAsync = true
   }
 
   if (resolvedTypeParameters.length) {
@@ -3651,6 +3698,56 @@ function isPromiseLike(type: Kind.TypeExpression): boolean {
       return type.types.some(isPromiseLike)
   }
   return false
+}
+
+/**
+ * Returns true only when `types` contains exactly:
+ *   - One primitive string
+ *   - One empty‑object‑like shape (e.g. `{}`, `Object`, or `Record<never, never>`)
+ */
+function isOnlyStringAndEmpty(types: Kind.TypeExpression[]): boolean {
+  if (types.length !== 2) {
+    return false
+  }
+
+  let sawString = false
+  let sawEmpty = false
+
+  for (const type of types) {
+    switch (type.kind) {
+      case 'String':
+        if (sawString) {
+          return false
+        }
+        sawString = true
+        break
+
+      case 'TypeLiteral':
+        if (type.members.length !== 0 || sawEmpty) {
+          return false
+        }
+        sawEmpty = true
+        break
+
+      case 'TypeReference':
+        if (
+          type.name === 'Record' &&
+          type.typeArguments?.length === 2 &&
+          type.typeArguments[0].kind === 'Never' &&
+          type.typeArguments[1].kind === 'Never' &&
+          !sawEmpty
+        ) {
+          sawEmpty = true
+          break
+        }
+        return false
+
+      default:
+        return false
+    }
+  }
+
+  return sawString && sawEmpty
 }
 
 /** Checks if a type reference's primary declaration is exported. */
