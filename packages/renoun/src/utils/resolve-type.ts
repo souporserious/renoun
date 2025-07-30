@@ -1154,8 +1154,10 @@ function resolveTypeExpression(
 
       // Prefer the alias name if defined in the project
       if (aliasSymbol) {
-        const symbolVisibility = getSymbolVisibility(aliasSymbol, enclosingNode)
-        if (symbolVisibility !== 'node-modules') {
+        if (
+          name?.startsWith('__') ||
+          getSymbolVisibility(aliasSymbol, enclosingNode) !== 'node-modules'
+        ) {
           name = aliasSymbol.getName()
           locationNode = getPrimaryDeclaration(aliasSymbol)
         }
@@ -1905,7 +1907,7 @@ function resolveTypeExpression(
           }
 
           if (mappedNode) {
-            if (shouldResolveMappedType(mappedNode)) {
+            if (shouldResolveMappedType(mappedNode, type)) {
               const members = resolvePropertySignatures(
                 type,
                 mappedNode,
@@ -3608,11 +3610,29 @@ function isTypeReference(type: Type, enclosingNode?: Node): boolean {
     return true
   }
 
-  if (tsMorph.Node.isTypeReference(enclosingNode)) {
+  // If the enclosing node is a type reference or the type is a reference type, then treat it as a type reference.
+  if (tsMorph.Node.isTypeReference(enclosingNode) || isReferenceType(type)) {
     return true
   }
 
-  return isReferenceType(type)
+  // Mapped utility types (Partial, Required, Pick, etc.)
+  if (isMappedType(type)) {
+    return false
+  }
+
+  // Finally, check if the symbol is in node_modules.
+  const symbol = type.getSymbol()
+  if (
+    symbol
+      ?.getDeclarations()
+      .some((declaration) =>
+        declaration.getSourceFile().getFilePath().includes('node_modules')
+      )
+  ) {
+    return true
+  }
+
+  return false
 }
 
 /** Determines if a resolved type is a primitive type. */
@@ -4035,7 +4055,23 @@ function shouldResolveTypeReference(type: Type, enclosingNode?: Node): boolean {
 }
 
 /** Determine whether a `MappedType` should be fully resolved or kept as a reference. */
-function shouldResolveMappedType(mappedNode: tsMorph.MappedTypeNode): boolean {
+function shouldResolveMappedType(
+  mappedNode: tsMorph.MappedTypeNode,
+  type: tsMorph.Type
+): boolean {
+  for (const typeArgument of [
+    ...type.getAliasTypeArguments(),
+    ...type.getTypeArguments(),
+  ]) {
+    const visibility = getSymbolVisibility(
+      typeArgument.getAliasSymbol() ?? typeArgument.getSymbol(),
+      mappedNode
+    )
+    if (visibility === 'local-internal' || visibility === 'local-exported') {
+      return true
+    }
+  }
+
   const constraint = mappedNode.getTypeParameter().getConstraint()
 
   if (!constraint) {
