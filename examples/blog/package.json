@@ -22,6 +22,7 @@
     "restyle": "catalog:",
     "tm-themes": "catalog:",
     "ts-morph": "catalog:",
+    "typescript": "catalog:",
     "zod": "catalog:"
   }
 }

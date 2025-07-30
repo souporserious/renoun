@@ -51,6 +51,9 @@ catalogs:
     ts-morph:
       specifier: 26.0.0
       version: 26.0.0
+    typescript:
+      specifier: 5.8.3
+      version: 5.8.3
     unified:
       specifier: 11.0.5
       version: 11.0.5
@@ -81,7 +84,7 @@ importers:
         specifier: ^2.5.5
         version: 2.5.5
       typescript:
-        specifier: ^5.8.3
+        specifier: 'catalog:'
         version: 5.8.3
       vitest:
         specifier: ^3.2.4
@@ -191,6 +194,9 @@ importers:
       ts-morph:
         specifier: 'catalog:'
         version: 26.0.0
+      typescript:
+        specifier: 'catalog:'
+        version: 5.8.3
       zod:
         specifier: 'catalog:'
         version: 4.0.9
@@ -233,6 +239,9 @@ importers:
       ts-morph:
         specifier: 'catalog:'
         version: 26.0.0
+      typescript:
+        specifier: 'catalog:'
+        version: 5.8.3
 
   examples/docs:
     dependencies:
@@ -284,6 +293,9 @@ importers:
       ts-morph:
         specifier: 'catalog:'
         version: 26.0.0
+      typescript:
+        specifier: 'catalog:'
+        version: 5.8.3
       zod:
         specifier: 'catalog:'
         version: 4.0.9

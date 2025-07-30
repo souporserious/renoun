@@ -23,6 +23,7 @@
     "tailwindcss-react-aria-components": "^2.0.0",
     "tm-themes": "catalog:",
     "ts-morph": "catalog:",
+    "typescript": "catalog:",
     "zod": "catalog:"
   }
 }

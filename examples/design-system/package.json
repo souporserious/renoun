@@ -18,6 +18,7 @@
     "renoun": "workspace:*",
     "restyle": "catalog:",
     "tm-themes": "catalog:",
-    "ts-morph": "catalog:"
+    "ts-morph": "catalog:",
+    "typescript": "catalog:"
   }
 }

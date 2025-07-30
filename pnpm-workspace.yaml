@@ -19,6 +19,7 @@ catalog:
   tm-grammars: 1.24.0
   tm-themes: 1.10.7
   ts-morph: 26.0.0
+  typescript: 5.8.3
   unified: 11.0.5
   valibot: 1.1.0
   zod: 4.0.9
