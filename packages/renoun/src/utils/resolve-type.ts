@@ -1582,7 +1582,7 @@ function resolveTypeExpression(
         falseType: resolvedFalseType,
         isDistributive: checkType.isTypeParameter(),
       } satisfies Kind.ConditionalType
-    } else if (type.isUnion()) {
+    } else if (type.isUnion() || tsMorph.Node.isUnionTypeNode(enclosingNode)) {
       // Mixed intersection inside union (`A & B | C`)
       if (tsMorph.Node.isIntersectionTypeNode(enclosingNode)) {
         const intersectionTypeNodes = enclosingNode.getTypeNodes()

@@ -11951,65 +11951,41 @@ describe('resolveType', () => {
               },
               "text": "onClick?: MouseEventHandler<T> | undefined;",
               "type": {
-                "isAsync": false,
-                "kind": "FunctionType",
-                "parameters": [
-                  {
-                    "description": undefined,
-                    "filePath": "node_modules/@types/react/index.d.ts",
-                    "initializer": undefined,
-                    "isOptional": false,
-                    "isRest": false,
-                    "kind": "Parameter",
-                    "name": "event",
-                    "position": {
-                      "end": {
-                        "column": 81,
-                        "line": 2136,
-                      },
-                      "start": {
-                        "column": 73,
-                        "line": 2136,
-                      },
-                    },
-                    "text": "event: E",
-                    "type": {
-                      "filePath": "node_modules/@types/react/index.d.ts",
-                      "kind": "TypeReference",
-                      "moduleSpecifier": undefined,
-                      "name": "E",
-                      "position": {
-                        "end": {
-                          "column": 81,
-                          "line": 2136,
-                        },
-                        "start": {
-                          "column": 80,
-                          "line": 2136,
-                        },
-                      },
-                      "text": "E",
-                      "typeArguments": [],
-                    },
+                "filePath": "node_modules/@types/react/index.d.ts",
+                "kind": "TypeReference",
+                "moduleSpecifier": undefined,
+                "name": "MouseEventHandler",
+                "position": {
+                  "end": {
+                    "column": 39,
+                    "line": 2281,
                   },
-                ],
-                "returnType": {
-                  "filePath": "node_modules/@types/react/index.d.ts",
-                  "kind": "Void",
-                  "position": {
-                    "end": {
-                      "column": 88,
-                      "line": 2136,
-                    },
-                    "start": {
-                      "column": 84,
-                      "line": 2136,
-                    },
+                  "start": {
+                    "column": 19,
+                    "line": 2281,
                   },
-                  "text": "void",
                 },
                 "text": "MouseEventHandler<T>",
-                "thisType": undefined,
+                "typeArguments": [
+                  {
+                    "filePath": "node_modules/@types/react/index.d.ts",
+                    "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
+                    "name": "T",
+                    "position": {
+                      "end": {
+                        "column": 38,
+                        "line": 2281,
+                      },
+                      "start": {
+                        "column": 37,
+                        "line": 2281,
+                      },
+                    },
+                    "text": "T",
+                    "typeArguments": [],
+                  },
+                ],
               },
             },
           ],
@@ -12212,65 +12188,41 @@ describe('resolveType', () => {
                             },
                             "text": "onClick?: MouseEventHandler<T> | undefined;",
                             "type": {
-                              "isAsync": false,
-                              "kind": "FunctionType",
-                              "parameters": [
-                                {
-                                  "description": undefined,
-                                  "filePath": "node_modules/@types/react/index.d.ts",
-                                  "initializer": undefined,
-                                  "isOptional": false,
-                                  "isRest": false,
-                                  "kind": "Parameter",
-                                  "name": "event",
-                                  "position": {
-                                    "end": {
-                                      "column": 81,
-                                      "line": 2136,
-                                    },
-                                    "start": {
-                                      "column": 73,
-                                      "line": 2136,
-                                    },
-                                  },
-                                  "text": "event: E",
-                                  "type": {
-                                    "filePath": "node_modules/@types/react/index.d.ts",
-                                    "kind": "TypeReference",
-                                    "moduleSpecifier": undefined,
-                                    "name": "E",
-                                    "position": {
-                                      "end": {
-                                        "column": 81,
-                                        "line": 2136,
-                                      },
-                                      "start": {
-                                        "column": 80,
-                                        "line": 2136,
-                                      },
-                                    },
-                                    "text": "E",
-                                    "typeArguments": [],
-                                  },
+                              "filePath": "node_modules/@types/react/index.d.ts",
+                              "kind": "TypeReference",
+                              "moduleSpecifier": undefined,
+                              "name": "MouseEventHandler",
+                              "position": {
+                                "end": {
+                                  "column": 39,
+                                  "line": 2281,
                                 },
-                              ],
-                              "returnType": {
-                                "filePath": "node_modules/@types/react/index.d.ts",
-                                "kind": "Void",
-                                "position": {
-                                  "end": {
-                                    "column": 88,
-                                    "line": 2136,
-                                  },
-                                  "start": {
-                                    "column": 84,
-                                    "line": 2136,
-                                  },
+                                "start": {
+                                  "column": 19,
+                                  "line": 2281,
                                 },
-                                "text": "void",
                               },
                               "text": "MouseEventHandler<T>",
-                              "thisType": undefined,
+                              "typeArguments": [
+                                {
+                                  "filePath": "node_modules/@types/react/index.d.ts",
+                                  "kind": "TypeReference",
+                                  "moduleSpecifier": undefined,
+                                  "name": "T",
+                                  "position": {
+                                    "end": {
+                                      "column": 38,
+                                      "line": 2281,
+                                    },
+                                    "start": {
+                                      "column": 37,
+                                      "line": 2281,
+                                    },
+                                  },
+                                  "text": "T",
+                                  "typeArguments": [],
+                                },
+                              ],
                             },
                           },
                         ],
@@ -19547,6 +19499,111 @@ describe('resolveType', () => {
           "text": "WithSchema",
         },
         "typeParameters": [],
+      }
+    `)
+  })
+
+  test('does not continue resolving node_module types in union', () => {
+    const sourceFile = project.createSourceFile(
+      'index.ts',
+      dedent`
+      class Foo {
+        getToday(): Date | undefined {
+          return undefined
+        }
+      }
+      `,
+      { overwrite: true }
+    )
+    const classDeclaration = sourceFile.getClassOrThrow('Foo')
+    const type = resolveType(classDeclaration.getType(), classDeclaration)
+
+    expect(type).toMatchInlineSnapshot(`
+      {
+        "constructor": undefined,
+        "filePath": "index.ts",
+        "kind": "Class",
+        "methods": [
+          {
+            "kind": "ClassMethod",
+            "name": "getToday",
+            "scope": undefined,
+            "signatures": [
+              {
+                "filePath": "index.ts",
+                "isAsync": false,
+                "isGenerator": false,
+                "kind": "CallSignature",
+                "parameters": [],
+                "position": {
+                  "end": {
+                    "column": 4,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 2,
+                  },
+                },
+                "returnType": {
+                  "kind": "UnionType",
+                  "text": "Date | undefined",
+                  "types": [
+                    {
+                      "filePath": "index.ts",
+                      "kind": "TypeReference",
+                      "moduleSpecifier": undefined,
+                      "name": "Date",
+                      "position": {
+                        "end": {
+                          "column": 19,
+                          "line": 2,
+                        },
+                        "start": {
+                          "column": 15,
+                          "line": 2,
+                        },
+                      },
+                      "text": "Date",
+                      "typeArguments": [],
+                    },
+                    {
+                      "filePath": "index.ts",
+                      "kind": "Undefined",
+                      "position": {
+                        "end": {
+                          "column": 31,
+                          "line": 2,
+                        },
+                        "start": {
+                          "column": 22,
+                          "line": 2,
+                        },
+                      },
+                      "text": "undefined",
+                    },
+                  ],
+                },
+                "text": "() => Date | undefined",
+                "thisType": undefined,
+              },
+            ],
+            "text": "() => Date | undefined",
+            "visibility": undefined,
+          },
+        ],
+        "name": "Foo",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 5,
+          },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "text": "Foo",
       }
     `)
   })
