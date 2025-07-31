@@ -2544,8 +2544,8 @@ function resolveParameter(
     if (enclosingNode) {
       contextualType = getTypeAtLocation(
         parameterDeclarationOrSymbol as tsMorph.Symbol,
-        enclosingNode,
-        parameterDeclaration
+        parameterDeclaration,
+        enclosingNode
       )
     } else {
       throw new Error(
@@ -2777,8 +2777,8 @@ function resolvePropertySignature(
   } else {
     const propertyType = getTypeAtLocation(
       property,
-      enclosingNode ?? declaration,
-      propertyDeclaration
+      propertyDeclaration,
+      enclosingNode ?? declaration
     )
 
     resolvedPropertyType = resolveTypeExpression(
@@ -3858,6 +3858,54 @@ function isOnlyStringAndEmpty(types: Kind.TypeExpression[]): boolean {
   return sawString && sawEmpty
 }
 
+/** Returns true if the symbol is a bivariance symbol. */
+function isBivarianceSymbol(symbol: Symbol | undefined): boolean {
+  if (!symbol) {
+    return false
+  }
+
+  const propDeclaration = getPrimaryDeclaration(symbol)
+
+  if (
+    !tsMorph.Node.isPropertySignature(propDeclaration) &&
+    !tsMorph.Node.isMethodSignature(propDeclaration)
+  ) {
+    return false
+  }
+
+  // the parent must be a one-member anonymous TypeLiteral
+  const typeLiteral = propDeclaration.getParentIfKind(
+    tsMorph.SyntaxKind.TypeLiteral
+  )
+  if (!typeLiteral || typeLiteral.getMembers().length !== 1) {
+    return false
+  }
+
+  // the grand-parent must be an IndexedAccessType whose index is the property name
+  const indexedAccess = typeLiteral.getParentIfKind(
+    tsMorph.SyntaxKind.IndexedAccessType
+  )
+  if (!indexedAccess) {
+    return false
+  }
+
+  const indexNode = indexedAccess.getIndexTypeNode()
+  if (!tsMorph.Node.isLiteralTypeNode(indexNode)) {
+    return false
+  }
+
+  const literalNode = indexNode.getLiteral()
+  if (
+    !tsMorph.Node.isStringLiteral(literalNode) ||
+    literalNode.getLiteralText() !== propDeclaration.getName()
+  ) {
+    return false
+  }
+
+  // the property's own type must have (at least one) call-signature
+  return propDeclaration.getType().getCallSignatures().length > 0
+}
+
 /** Checks if a type reference's primary declaration is exported. */
 function isTypeReferenceExported(
   typeReference: tsMorph.TypeReferenceNode
@@ -4010,7 +4058,7 @@ function getDeclaredAnnotationType(declaration?: Node): Type | undefined {
 /** Preserves aliases when the declaration has an explicit annotation. */
 function getTypeAtLocation<
   Symbol extends { getTypeAtLocation(node: Node): Type },
->(symbol: Symbol, location: Node, declaration?: Node): Type {
+>(symbol: Symbol, declaration: Node | undefined, location: Node): Type {
   return (
     getDeclaredAnnotationType(declaration) ?? symbol.getTypeAtLocation(location)
   )
@@ -4266,10 +4314,7 @@ function getModuleSpecifierFromTypeReference(
     }
 
     if (tsMorph.Node.isIdentifier(leftSide)) {
-      const leftMostIdentifierSymbol = leftSide.getSymbol()
-      const moduleFromLeftIdentifier = getModuleFromSymbol(
-        leftMostIdentifierSymbol
-      )
+      const moduleFromLeftIdentifier = getModuleFromSymbol(leftSide.getSymbol())
       if (moduleFromLeftIdentifier) {
         return moduleFromLeftIdentifier
       }
