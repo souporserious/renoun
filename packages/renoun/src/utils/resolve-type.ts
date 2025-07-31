@@ -1908,7 +1908,7 @@ function resolveTypeExpression(
 
           if (mappedNode) {
             if (shouldResolveMappedType(mappedNode, type)) {
-              const members = resolvePropertySignatures(
+              const resolvedMappedType = resolveMappedType(
                 type,
                 mappedNode,
                 filter,
@@ -1916,22 +1916,19 @@ function resolveTypeExpression(
                 dependencies
               )
 
-              if (members.length) {
-                return {
-                  kind: 'TypeLiteral',
-                  text: typeText,
-                  members,
-                } satisfies Kind.TypeLiteral
+              if (resolvedMappedType) {
+                return resolvedMappedType
               }
             }
 
-            const resolvedTypeParameter = resolveTypeParameterDeclaration(
-              mappedNode.getTypeParameter(),
+            const keyNode = mappedNode.getTypeParameter()
+            const resolvedKeyType = resolveTypeParameterDeclaration(
+              keyNode,
               filter,
               dependencies
             )
             const valueNode = mappedNode.getTypeNode()
-            const valueType = valueNode
+            const resolvedValueType = valueNode
               ? resolveTypeExpression(
                   valueNode.getType(),
                   valueNode,
@@ -1941,12 +1938,12 @@ function resolveTypeExpression(
                 )
               : undefined
 
-            if (resolvedTypeParameter && valueType) {
+            if (resolvedKeyType && resolvedValueType) {
               return {
                 kind: 'MappedType',
                 text: typeText,
-                typeParameter: resolvedTypeParameter,
-                type: valueType,
+                typeParameter: resolvedKeyType,
+                type: resolvedValueType,
                 isReadonly: Boolean(mappedNode.getReadonlyToken()),
                 isOptional: Boolean(mappedNode.getQuestionToken()),
               } satisfies Kind.MappedType
@@ -2046,6 +2043,97 @@ export class UnresolvedTypeExpressionError extends Error {
 
     Error.captureStackTrace?.(this, UnresolvedTypeExpressionError)
   }
+}
+
+/** Resolves a mapped type. */
+function resolveMappedType(
+  type: Type,
+  enclosingNode: Node | undefined,
+  filter?: TypeFilter,
+  defaultValues?: Record<string, unknown> | unknown,
+  dependencies?: Set<string>
+): Kind.TypeLiteral | undefined {
+  const members: Kind.MemberUnion[] = []
+  const stringIndex = type.getStringIndexType()
+
+  if (stringIndex) {
+    const value = resolveTypeExpression(
+      stringIndex,
+      enclosingNode,
+      filter,
+      defaultValues,
+      dependencies
+    )
+    if (value) {
+      const parameter: Kind.IndexSignatureParameter = {
+        kind: 'IndexSignatureParameter',
+        name: 'key',
+        type: { kind: 'String', text: 'string' } satisfies Kind.String,
+        text: 'key: string',
+      }
+      members.push({
+        kind: 'IndexSignature',
+        parameter,
+        type: value,
+        text: `[key: string]: ${value.text}`,
+        isReadonly: isReadonlyType(type, enclosingNode),
+        ...getDeclarationLocation(
+          enclosingNode ?? type.getSymbol()?.getDeclarations()?.[0]!
+        ),
+      } satisfies Kind.IndexSignature)
+    }
+  }
+
+  const numberIndex = type.getNumberIndexType()
+
+  if (numberIndex) {
+    const value = resolveTypeExpression(
+      numberIndex,
+      enclosingNode,
+      filter,
+      defaultValues,
+      dependencies
+    )
+    if (value) {
+      const parameter: Kind.IndexSignatureParameter = {
+        kind: 'IndexSignatureParameter',
+        name: 'index',
+        type: { kind: 'Number', text: 'number' } satisfies Kind.Number,
+        text: 'index: number',
+      }
+      members.push({
+        kind: 'IndexSignature',
+        parameter,
+        type: value,
+        text: `[key: number]: ${value.text}`,
+        isReadonly: isReadonlyType(type, enclosingNode),
+        ...getDeclarationLocation(
+          enclosingNode ?? type.getSymbol()?.getDeclarations()?.[0]!
+        ),
+      } satisfies Kind.IndexSignature)
+    }
+  }
+
+  // concrete properties when the key is a finite union
+  members.push(
+    ...resolvePropertySignatures(
+      type,
+      enclosingNode,
+      filter,
+      defaultValues,
+      dependencies
+    )
+  )
+
+  if (!members.length) {
+    return
+  }
+
+  return {
+    kind: 'TypeLiteral',
+    text: type.getText(undefined, TYPE_FORMAT_FLAGS),
+    members,
+  } satisfies Kind.TypeLiteral
 }
 
 /** Resolve all member signatures of a type. */
@@ -4004,6 +4092,17 @@ function shouldResolveTypeReference(type: Type, enclosingNode?: Node): boolean {
   }
 
   if (visibility === 'node-modules') {
+    // const aliasDeclaration = getPrimaryDeclaration(symbol)
+
+    // if (tsMorph.Node.isTypeAliasDeclaration(aliasDeclaration)) {
+    //   const typeNode = aliasDeclaration.getTypeNodeOrThrow()
+    //   if (tsMorph.Node.isMappedTypeNode(typeNode)) {
+    //     if (!shouldResolveMappedType(typeNode, type)) {
+    //       return false
+    //     }
+    //   }
+    // }
+
     const typeArguments = [
       ...type.getAliasTypeArguments(),
       ...type.getTypeArguments(),

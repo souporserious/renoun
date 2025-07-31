@@ -1933,52 +1933,75 @@ describe('resolveType', () => {
               },
               "text": "obj: Record<string, { value: number }>;",
               "type": {
-                "isOptional": false,
-                "isReadonly": false,
-                "kind": "MappedType",
-                "text": "Record<string, { value: number; }>",
-                "type": {
-                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                  "kind": "TypeReference",
-                  "moduleSpecifier": undefined,
-                  "name": "T",
-                  "position": {
-                    "end": {
-                      "column": 312,
-                      "line": 6,
-                    },
-                    "start": {
-                      "column": 311,
-                      "line": 6,
-                    },
-                  },
-                  "text": "T",
-                  "typeArguments": [],
-                },
-                "typeParameter": {
-                  "constraintType": {
+                "kind": "TypeLiteral",
+                "members": [
+                  {
                     "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
-                    "kind": "TypeReference",
-                    "moduleSpecifier": undefined,
-                    "name": "K",
+                    "isReadonly": false,
+                    "kind": "IndexSignature",
+                    "parameter": {
+                      "kind": "IndexSignatureParameter",
+                      "name": "key",
+                      "text": "key: string",
+                      "type": {
+                        "kind": "String",
+                        "text": "string",
+                      },
+                    },
                     "position": {
                       "end": {
-                        "column": 309,
+                        "column": 314,
                         "line": 6,
                       },
                       "start": {
-                        "column": 308,
+                        "column": 301,
                         "line": 6,
                       },
                     },
-                    "text": "K",
-                    "typeArguments": [],
+                    "text": "[key: string]: { value: number; }",
+                    "type": {
+                      "kind": "TypeLiteral",
+                      "members": [
+                        {
+                          "filePath": "test.ts",
+                          "isOptional": false,
+                          "isReadonly": false,
+                          "kind": "PropertySignature",
+                          "name": "value",
+                          "position": {
+                            "end": {
+                              "column": 46,
+                              "line": 17,
+                            },
+                            "start": {
+                              "column": 33,
+                              "line": 17,
+                            },
+                          },
+                          "text": "value: number",
+                          "type": {
+                            "filePath": "test.ts",
+                            "kind": "Number",
+                            "position": {
+                              "end": {
+                                "column": 46,
+                                "line": 17,
+                              },
+                              "start": {
+                                "column": 40,
+                                "line": 17,
+                              },
+                            },
+                            "text": "number",
+                            "value": undefined,
+                          },
+                        },
+                      ],
+                      "text": "{ value: number; }",
+                    },
                   },
-                  "defaultType": undefined,
-                  "kind": "TypeParameter",
-                  "name": "P",
-                  "text": "P in K",
-                },
+                ],
+                "text": "Record<string, { value: number; }>",
               },
             },
             {
