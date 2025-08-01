@@ -2896,17 +2896,6 @@ function isDeclarationExported(
   return isExported
 }
 
-/** Check if a declaration is considered internal. */
-function isDeclarationInternal(
-  declaration: Node,
-  enclosingNode: Node | undefined
-) {
-  if (declaration.getSourceFile().isInNodeModules()) {
-    return false
-  }
-  return !isDeclarationExported(declaration, enclosingNode)
-}
-
 /** Gather metadata about a symbol. */
 function getSymbolMetadata(
   symbol?: Symbol,
@@ -3692,6 +3681,17 @@ function isSymbolType(type: Type) {
   return type.getSymbol()?.getName() === 'Symbol'
 }
 
+/** True when the alias unwraps to exactly one function-shaped property. */
+function isCallableAlias(type: Type): boolean {
+  const apparentType = type.getApparentType()
+  return (
+    apparentType.getCallSignatures().length === 1 &&
+    apparentType.getProperties().length === 0 &&
+    !apparentType.isUnion() &&
+    !apparentType.isIntersection()
+  )
+}
+
 /** Determines if a type or enclosing node is a type reference. */
 function isTypeReference(type: Type, enclosingNode?: Node): boolean {
   // Primitive and array types can carry a reference flag, so we need to continue checking.
@@ -3709,6 +3709,11 @@ function isTypeReference(type: Type, enclosingNode?: Node): boolean {
     return true
   }
 
+  // If the type is a callable alias, then we want to expand it to get the function type.
+  if (isCallableAlias(type)) {
+    return false
+  }
+
   // Mapped utility types (Partial, Required, Pick, etc.)
   if (isMappedType(type)) {
     return false
@@ -3719,9 +3724,7 @@ function isTypeReference(type: Type, enclosingNode?: Node): boolean {
   if (
     symbol
       ?.getDeclarations()
-      .some((declaration) =>
-        declaration.getSourceFile().getFilePath().includes('node_modules')
-      )
+      .some((declaration) => declaration.getSourceFile().isInNodeModules())
   ) {
     return true
   }
@@ -4146,17 +4149,6 @@ function shouldResolveTypeReference(type: Type, enclosingNode?: Node): boolean {
   }
 
   if (visibility === 'node-modules') {
-    // const aliasDeclaration = getPrimaryDeclaration(symbol)
-
-    // if (tsMorph.Node.isTypeAliasDeclaration(aliasDeclaration)) {
-    //   const typeNode = aliasDeclaration.getTypeNodeOrThrow()
-    //   if (tsMorph.Node.isMappedTypeNode(typeNode)) {
-    //     if (!shouldResolveMappedType(typeNode, type)) {
-    //       return false
-    //     }
-    //   }
-    // }
-
     const typeArguments = [
       ...type.getAliasTypeArguments(),
       ...type.getTypeArguments(),

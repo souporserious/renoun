@@ -2847,7 +2847,7 @@ describe('resolveType', () => {
               "text": "readFile: typeof readFile",
               "type": {
                 "filePath": "test.ts",
-                "kind": "TypeReference",
+                "kind": "TypeQuery",
                 "name": "readFile",
                 "position": {
                   "end": {
@@ -11817,39 +11817,65 @@ describe('resolveType', () => {
               },
               "text": "MouseEventHandler<HTMLButtonElement>",
               "type": {
-                "filePath": "node_modules/@types/react/index.d.ts",
-                "kind": "TypeReference",
-                "name": "bivarianceHack",
-                "position": {
-                  "end": {
-                    "column": 52,
-                    "line": 2281,
-                  },
-                  "start": {
-                    "column": 9,
-                    "line": 2281,
-                  },
-                },
-                "text": "MouseEventHandler<HTMLButtonElement>",
-                "typeArguments": [
+                "isAsync": false,
+                "kind": "FunctionType",
+                "parameters": [
                   {
+                    "description": undefined,
                     "filePath": "node_modules/@types/react/index.d.ts",
-                    "kind": "TypeReference",
-                    "name": "HTMLButtonElement",
+                    "initializer": undefined,
+                    "isOptional": false,
+                    "isRest": false,
+                    "kind": "Parameter",
+                    "name": "event",
                     "position": {
                       "end": {
-                        "column": 52,
-                        "line": 2281,
+                        "column": 81,
+                        "line": 2136,
                       },
                       "start": {
-                        "column": 9,
-                        "line": 2281,
+                        "column": 73,
+                        "line": 2136,
                       },
                     },
-                    "text": "HTMLButtonElement",
-                    "typeArguments": [],
+                    "text": "event: E",
+                    "type": {
+                      "filePath": "node_modules/@types/react/index.d.ts",
+                      "kind": "TypeReference",
+                      "moduleSpecifier": undefined,
+                      "name": "E",
+                      "position": {
+                        "end": {
+                          "column": 81,
+                          "line": 2136,
+                        },
+                        "start": {
+                          "column": 80,
+                          "line": 2136,
+                        },
+                      },
+                      "text": "MouseEvent<HTMLButtonElement, MouseEvent>",
+                      "typeArguments": [],
+                    },
                   },
                 ],
+                "returnType": {
+                  "filePath": "node_modules/@types/react/index.d.ts",
+                  "kind": "Void",
+                  "position": {
+                    "end": {
+                      "column": 88,
+                      "line": 2136,
+                    },
+                    "start": {
+                      "column": 84,
+                      "line": 2136,
+                    },
+                  },
+                  "text": "void",
+                },
+                "text": "MouseEventHandler<HTMLButtonElement>",
+                "thisType": undefined,
               },
             },
           ],
@@ -12052,39 +12078,65 @@ describe('resolveType', () => {
                             },
                             "text": "MouseEventHandler<HTMLButtonElement>",
                             "type": {
-                              "filePath": "node_modules/@types/react/index.d.ts",
-                              "kind": "TypeReference",
-                              "name": "bivarianceHack",
-                              "position": {
-                                "end": {
-                                  "column": 52,
-                                  "line": 2281,
-                                },
-                                "start": {
-                                  "column": 9,
-                                  "line": 2281,
-                                },
-                              },
-                              "text": "MouseEventHandler<HTMLButtonElement>",
-                              "typeArguments": [
+                              "isAsync": false,
+                              "kind": "FunctionType",
+                              "parameters": [
                                 {
+                                  "description": undefined,
                                   "filePath": "node_modules/@types/react/index.d.ts",
-                                  "kind": "TypeReference",
-                                  "name": "HTMLButtonElement",
+                                  "initializer": undefined,
+                                  "isOptional": false,
+                                  "isRest": false,
+                                  "kind": "Parameter",
+                                  "name": "event",
                                   "position": {
                                     "end": {
-                                      "column": 52,
-                                      "line": 2281,
+                                      "column": 81,
+                                      "line": 2136,
                                     },
                                     "start": {
-                                      "column": 9,
-                                      "line": 2281,
+                                      "column": 73,
+                                      "line": 2136,
                                     },
                                   },
-                                  "text": "HTMLButtonElement",
-                                  "typeArguments": [],
+                                  "text": "event: E",
+                                  "type": {
+                                    "filePath": "node_modules/@types/react/index.d.ts",
+                                    "kind": "TypeReference",
+                                    "moduleSpecifier": undefined,
+                                    "name": "E",
+                                    "position": {
+                                      "end": {
+                                        "column": 81,
+                                        "line": 2136,
+                                      },
+                                      "start": {
+                                        "column": 80,
+                                        "line": 2136,
+                                      },
+                                    },
+                                    "text": "MouseEvent<HTMLButtonElement, MouseEvent>",
+                                    "typeArguments": [],
+                                  },
                                 },
                               ],
+                              "returnType": {
+                                "filePath": "node_modules/@types/react/index.d.ts",
+                                "kind": "Void",
+                                "position": {
+                                  "end": {
+                                    "column": 88,
+                                    "line": 2136,
+                                  },
+                                  "start": {
+                                    "column": 84,
+                                    "line": 2136,
+                                  },
+                                },
+                                "text": "void",
+                              },
+                              "text": "MouseEventHandler<HTMLButtonElement>",
+                              "thisType": undefined,
                             },
                           },
                         ],
