@@ -2542,11 +2542,9 @@ function resolveParameter(
 
   if (isContextualSymbol) {
     if (enclosingNode) {
-      contextualType = getTypeAtLocation(
-        parameterDeclarationOrSymbol as tsMorph.Symbol,
-        parameterDeclaration,
-        enclosingNode
-      )
+      contextualType = (
+        parameterDeclarationOrSymbol as tsMorph.Symbol
+      ).getTypeAtLocation(enclosingNode)
     } else {
       throw new Error(
         `[renoun:resolveParameter]: No enclosing node found when resolving a contextual parameter symbol. If you are seeing this error, please file an issue.`
@@ -2781,11 +2779,7 @@ function resolvePropertySignature(
     )
     typeText = propertyDeclaration.getText()
   } else {
-    const propertyType = getTypeAtLocation(
-      property,
-      propertyDeclaration,
-      enclosingNode ?? declaration
-    )
+    const propertyType = property.getTypeAtLocation(declaration)
 
     resolvedPropertyType = resolveTypeExpression(
       propertyType,
@@ -4062,15 +4056,6 @@ function getDeclaredAnnotationType(declaration?: Node): Type | undefined {
   const type = typeNode ? typeNode.getType() : undefined
 
   return containsFreeTypeParameter(type) ? undefined : type
-}
-
-/** Preserves aliases when the declaration has an explicit annotation. */
-function getTypeAtLocation<
-  Symbol extends { getTypeAtLocation(node: Node): Type },
->(symbol: Symbol, declaration: Node | undefined, location: Node): Type {
-  return (
-    getDeclaredAnnotationType(declaration) ?? symbol.getTypeAtLocation(location)
-  )
 }
 
 /** Gets the visibility of a symbol. */
