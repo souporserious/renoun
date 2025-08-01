@@ -2759,10 +2759,16 @@ function resolvePropertySignature(
           getInitializerValueKey(propertyDeclaration)
         ]
       : undefined
+  const isExternal = propertyDeclaration
+    ? propertyDeclaration.getSourceFile().isInNodeModules()
+    : false
   let resolvedPropertyType: Kind.TypeExpression | undefined
   let typeText: string | undefined
 
-  if (tsMorph.Node.isPropertySignature(propertyDeclaration)) {
+  if (
+    tsMorph.Node.isPropertySignature(propertyDeclaration) &&
+    (propertyDeclaration === enclosingNode || !isExternal)
+  ) {
     const typeNode = propertyDeclaration.getTypeNodeOrThrow()
     const typeNodeType = typeNode.getType()
 
