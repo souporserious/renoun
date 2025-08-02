@@ -749,6 +749,7 @@ export function resolveType(
     ) {
       const resolvedCallSignatures = resolveCallSignatures(
         callSignatures,
+        enclosingNode,
         filter,
         dependencies
       )
@@ -1817,6 +1818,7 @@ function resolveTypeExpression(
       const signature = enclosingNode.getSignature()
       const resolvedSignature = resolveCallSignature(
         signature,
+        enclosingNode,
         filter,
         dependencies
       )
@@ -1843,6 +1845,7 @@ function resolveTypeExpression(
         const [callSignature] = callSignatures
         const resolvedParameters = resolveParameters(
           callSignature,
+          enclosingNode,
           filter,
           dependencies
         )
@@ -1963,7 +1966,7 @@ function resolveTypeExpression(
         } else {
           const propertySignatures = resolvePropertySignatures(
             type,
-            symbolDeclaration ?? enclosingNode,
+            enclosingNode,
             filter,
             defaultValues,
             dependencies
@@ -2206,6 +2209,7 @@ function resolveMemberSignature(
     const signature = member.getSignature()
     const resolvedSignature = resolveCallSignature(
       signature,
+      member,
       filter,
       dependencies
     )
@@ -2228,6 +2232,7 @@ function resolveMemberSignature(
     const signature = member.getSignature()
     const resolvedParameters = resolveParameters(
       signature,
+      member,
       filter,
       dependencies
     )
@@ -2349,6 +2354,7 @@ function shouldResolveCallSignature(signature: tsMorph.Signature): boolean {
 /** Process all function signatures of a given type including their parameters and return types. */
 function resolveCallSignatures(
   signatures: Signature[],
+  enclosingNode: Node | undefined,
   filter?: TypeFilter,
   dependencies?: Set<string>
 ): Kind.CallSignature[] {
@@ -2356,6 +2362,7 @@ function resolveCallSignatures(
   for (let index = 0, length = signatures.length; index < length; ++index) {
     const resolvedSignature = resolveCallSignature(
       signatures[index],
+      enclosingNode,
       filter,
       dependencies
     )
@@ -2369,6 +2376,7 @@ function resolveCallSignatures(
 /** Process a single function signature including its parameters and return type. */
 function resolveCallSignature(
   signature: Signature,
+  enclosingNode: Node | undefined,
   filter?: TypeFilter,
   dependencies?: Set<string>
 ): Kind.CallSignature | undefined {
@@ -2391,7 +2399,12 @@ function resolveCallSignature(
         })
         .join(', ')}>`
     : ''
-  const resolvedParameters = resolveParameters(signature, filter, dependencies)
+  const resolvedParameters = resolveParameters(
+    signature,
+    enclosingNode,
+    filter,
+    dependencies
+  )
   const parametersText = resolvedParameters.parameters
     .map((parameter) => parameter.text)
     .join(', ')
@@ -2460,6 +2473,7 @@ function resolveCallSignature(
 
 function resolveParameters(
   signature: Signature,
+  enclosingNode: Node | undefined,
   filter?: TypeFilter,
   dependencies?: Set<string>
 ): { parameters: Kind.Parameter[]; thisType?: Kind.TypeExpression } {
@@ -2473,7 +2487,7 @@ function resolveParameters(
     if (thisParameter?.getName() === 'this') {
       const resolvedThisParameter = resolveParameter(
         thisParameter,
-        signatureDeclaration,
+        enclosingNode || signatureDeclaration,
         filter,
         dependencies
       )
@@ -2488,7 +2502,7 @@ function resolveParameters(
     for (const parameter of contextualParameters) {
       const resolved = resolveParameter(
         parameter,
-        signatureDeclaration,
+        enclosingNode || signatureDeclaration,
         filter,
         dependencies
       )
@@ -2515,10 +2529,11 @@ function resolveParameter(
   dependencies?: Set<string>
 ): Kind.Parameter | undefined {
   let parameterDeclaration: ParameterDeclaration | undefined
-  let isContextualSymbol = false
+  let parameterType: Type | undefined
 
   if (tsMorph.Node.isNode(parameterDeclarationOrSymbol)) {
     parameterDeclaration = parameterDeclarationOrSymbol
+    parameterType = parameterDeclaration.getType()
   } else {
     const symbolDeclaration = getPrimaryDeclaration(
       parameterDeclarationOrSymbol
@@ -2528,21 +2543,8 @@ function resolveParameter(
       parameterDeclaration = symbolDeclaration
     }
 
-    isContextualSymbol = true
-  }
-
-  if (!parameterDeclaration) {
-    throw new Error(
-      `[renoun:resolveParameter]: No parameter declaration found. If you are seeing this error, please file an issue.`
-    )
-  }
-
-  // when dealing with a symbol, we need to get the fully-substituted type of the parameter at the call site
-  let contextualType: Type | undefined
-
-  if (isContextualSymbol) {
     if (enclosingNode) {
-      contextualType = (
+      parameterType = (
         parameterDeclarationOrSymbol as tsMorph.Symbol
       ).getTypeAtLocation(enclosingNode)
     } else {
@@ -2550,6 +2552,12 @@ function resolveParameter(
         `[renoun:resolveParameter]: No enclosing node found when resolving a contextual parameter symbol. If you are seeing this error, please file an issue.`
       )
     }
+  }
+
+  if (!parameterDeclaration) {
+    throw new Error(
+      `[renoun:resolveParameter]: No parameter declaration found. If you are seeing this error, please file an issue.`
+    )
   }
 
   /**
@@ -2564,27 +2572,24 @@ function resolveParameter(
    * - Otherwise we're at an instantiated call site, so use the contextual type.
    */
   const parameterTypeNode = parameterDeclaration.getTypeNode()
-  const parameterType = parameterDeclaration.getType()
   const initializer = getInitializerValue(parameterDeclaration)
+  const isLocal = parameterDeclaration === enclosingNode
+  const isExternal = parameterDeclaration
+    ? parameterDeclaration.getSourceFile().isInNodeModules()
+    : false
   let resolvedParameterType: Kind.TypeExpression | undefined
 
-  if (parameterTypeNode || contextualType) {
-    const hasConcreteContext =
-      contextualType && !containsFreeTypeParameter(contextualType)
-    const typeToResolve = hasConcreteContext
-      ? contextualType! // already instantiated with generics
-      : parameterTypeNode
-        ? parameterTypeNode.getType() // keep annotation if still generic
-        : parameterType
-
+  if (parameterTypeNode && (isLocal || !isExternal)) {
     resolvedParameterType = resolveTypeExpression(
-      typeToResolve,
-      parameterTypeNode ?? enclosingNode,
+      containsFreeTypeParameter(parameterType)
+        ? parameterTypeNode.getType() // keep annotation if still generic
+        : parameterType,
+      parameterTypeNode,
       filter,
       initializer,
       dependencies
     )
-  } else if (parameterType) {
+  } else {
     resolvedParameterType = resolveTypeExpression(
       parameterType,
       enclosingNode,
@@ -2757,6 +2762,7 @@ function resolvePropertySignature(
           getInitializerValueKey(propertyDeclaration)
         ]
       : undefined
+  const isLocal = propertyDeclaration === enclosingNode
   const isExternal = propertyDeclaration
     ? propertyDeclaration.getSourceFile().isInNodeModules()
     : false
@@ -2765,7 +2771,7 @@ function resolvePropertySignature(
 
   if (
     tsMorph.Node.isPropertySignature(propertyDeclaration) &&
-    (propertyDeclaration === enclosingNode || !isExternal)
+    (isLocal || !isExternal)
   ) {
     const typeNode = propertyDeclaration.getTypeNodeOrThrow()
     const typeNodeType = typeNode.getType()
@@ -2779,6 +2785,7 @@ function resolvePropertySignature(
     )
     typeText = propertyDeclaration.getText()
   } else {
+    const locationNode = enclosingNode ?? declaration
     const propertyType = property.getTypeAtLocation(declaration)
 
     resolvedPropertyType = resolveTypeExpression(
@@ -3166,6 +3173,7 @@ function resolveClass(
     )
     const resolvedCallSignatures = resolveCallSignatures(
       constructorSignaturesToResolve,
+      classDeclaration,
       filter,
       dependencies
     )
@@ -3314,6 +3322,7 @@ function resolveClassAccessor(
   if (tsMorph.Node.isSetAccessorDeclaration(accessor)) {
     const resolvedSignature = resolveCallSignature(
       accessor.getSignature(),
+      accessor,
       filter,
       dependencies
     )
@@ -3376,6 +3385,7 @@ function resolveClassMethod(
 
   const resolvedCallSignatures = resolveCallSignatures(
     callSignatures,
+    method,
     filter,
     dependencies
   )
@@ -3693,19 +3703,17 @@ function isTypeReference(type: Type, enclosingNode?: Node): boolean {
     return false
   }
 
-  // If the type is a type parameter and the enclosing node is not an infer type node, then treat it as a type reference.
-  if (type.isTypeParameter() && !tsMorph.Node.isInferTypeNode(enclosingNode)) {
-    return true
-  }
-
   // If the enclosing node is a type reference or the type is a reference type, then treat it as a type reference.
   if (tsMorph.Node.isTypeReference(enclosingNode) || isReferenceType(type)) {
     return true
   }
-
   // If the type is a callable alias, then we want to expand it to get the function type.
   if (isCallableAlias(type)) {
     return false
+  }
+  // If the type is a type parameter and the enclosing node is not an infer type node, then treat it as a type reference.
+  if (type.isTypeParameter() && !tsMorph.Node.isInferTypeNode(enclosingNode)) {
+    return true
   }
 
   // Mapped utility types (Partial, Required, Pick, etc.)

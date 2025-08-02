@@ -11842,20 +11842,54 @@ describe('resolveType', () => {
                     "type": {
                       "filePath": "node_modules/@types/react/index.d.ts",
                       "kind": "TypeReference",
-                      "moduleSpecifier": undefined,
-                      "name": "E",
+                      "name": "MouseEvent",
                       "position": {
                         "end": {
-                          "column": 81,
-                          "line": 2136,
+                          "column": 52,
+                          "line": 2281,
                         },
                         "start": {
-                          "column": 80,
-                          "line": 2136,
+                          "column": 9,
+                          "line": 2281,
                         },
                       },
                       "text": "MouseEvent<HTMLButtonElement, MouseEvent>",
-                      "typeArguments": [],
+                      "typeArguments": [
+                        {
+                          "filePath": "node_modules/@types/react/index.d.ts",
+                          "kind": "TypeReference",
+                          "name": "HTMLButtonElement",
+                          "position": {
+                            "end": {
+                              "column": 52,
+                              "line": 2281,
+                            },
+                            "start": {
+                              "column": 9,
+                              "line": 2281,
+                            },
+                          },
+                          "text": "HTMLButtonElement",
+                          "typeArguments": [],
+                        },
+                        {
+                          "filePath": "node_modules/@types/react/index.d.ts",
+                          "kind": "TypeReference",
+                          "name": "MouseEvent",
+                          "position": {
+                            "end": {
+                              "column": 52,
+                              "line": 2281,
+                            },
+                            "start": {
+                              "column": 9,
+                              "line": 2281,
+                            },
+                          },
+                          "text": "MouseEvent",
+                          "typeArguments": [],
+                        },
+                      ],
                     },
                   },
                 ],
@@ -12103,20 +12137,54 @@ describe('resolveType', () => {
                                   "type": {
                                     "filePath": "node_modules/@types/react/index.d.ts",
                                     "kind": "TypeReference",
-                                    "moduleSpecifier": undefined,
-                                    "name": "E",
+                                    "name": "MouseEvent",
                                     "position": {
                                       "end": {
-                                        "column": 81,
-                                        "line": 2136,
+                                        "column": 52,
+                                        "line": 2281,
                                       },
                                       "start": {
-                                        "column": 80,
-                                        "line": 2136,
+                                        "column": 9,
+                                        "line": 2281,
                                       },
                                     },
                                     "text": "MouseEvent<HTMLButtonElement, MouseEvent>",
-                                    "typeArguments": [],
+                                    "typeArguments": [
+                                      {
+                                        "filePath": "node_modules/@types/react/index.d.ts",
+                                        "kind": "TypeReference",
+                                        "name": "HTMLButtonElement",
+                                        "position": {
+                                          "end": {
+                                            "column": 52,
+                                            "line": 2281,
+                                          },
+                                          "start": {
+                                            "column": 9,
+                                            "line": 2281,
+                                          },
+                                        },
+                                        "text": "HTMLButtonElement",
+                                        "typeArguments": [],
+                                      },
+                                      {
+                                        "filePath": "node_modules/@types/react/index.d.ts",
+                                        "kind": "TypeReference",
+                                        "name": "MouseEvent",
+                                        "position": {
+                                          "end": {
+                                            "column": 52,
+                                            "line": 2281,
+                                          },
+                                          "start": {
+                                            "column": 9,
+                                            "line": 2281,
+                                          },
+                                        },
+                                        "text": "MouseEvent",
+                                        "typeArguments": [],
+                                      },
+                                    ],
                                   },
                                 },
                               ],
