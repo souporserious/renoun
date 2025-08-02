@@ -84,6 +84,7 @@ export type IsRecursiveFilePattern<Pattern extends string> =
         ? true
         : false
 
+// @ts-expect-error
 type Tests = [
   Expect<Is<ExtractFileExtension<'index.ts'>, 'ts'>>,
   Expect<Is<ExtractFileExtension<'**/*.ts'>, 'ts'>>,

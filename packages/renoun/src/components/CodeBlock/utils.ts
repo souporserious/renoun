@@ -61,11 +61,6 @@ function getRectWithScroll(
   }
 }
 
-interface KeepElementInViewOptions {
-  maxWidth?: number
-  maxHeight?: number
-}
-
 /**
  * Adjust the element's position including potential flipping.
  * @internal

@@ -7,7 +7,7 @@ import type {
 import TextMate from 'vscode-textmate'
 import { toRegExp } from 'oniguruma-to-es'
 
-import type { Grammars, Languages, ScopeName } from '../grammars/index.js'
+import type { Languages, ScopeName } from '../grammars/index.js'
 import { grammars } from '../grammars/index.js'
 
 export interface RegistryOptions<Theme extends string> {

@@ -1,4 +1,4 @@
-import { posix, join } from 'node:path'
+import { posix } from 'node:path'
 
 import { createSlug } from './create-slug.js'
 

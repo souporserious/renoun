@@ -18,7 +18,6 @@ import type {
   Symbol,
   Type,
   TypeElement,
-  TypeNode,
   TypeParameterDeclaration,
   TypeReferenceNode,
   ModuleDeclaration,
@@ -2883,7 +2882,6 @@ function resolvePropertySignature(
     )
     typeText = propertyDeclaration.getText()
   } else {
-    const locationNode = enclosingNode ?? declaration
     const propertyType = property.getTypeAtLocation(declaration)
 
     resolvedPropertyType = resolveTypeExpression(
@@ -3967,54 +3965,6 @@ function isOnlyStringAndEmpty(types: Kind.TypeExpression[]): boolean {
   return sawString && sawEmpty
 }
 
-/** Returns true if the symbol is a bivariance symbol. */
-function isBivarianceSymbol(symbol: Symbol | undefined): boolean {
-  if (!symbol) {
-    return false
-  }
-
-  const propDeclaration = getPrimaryDeclaration(symbol)
-
-  if (
-    !tsMorph.Node.isPropertySignature(propDeclaration) &&
-    !tsMorph.Node.isMethodSignature(propDeclaration)
-  ) {
-    return false
-  }
-
-  // the parent must be a one-member anonymous TypeLiteral
-  const typeLiteral = propDeclaration.getParentIfKind(
-    tsMorph.SyntaxKind.TypeLiteral
-  )
-  if (!typeLiteral || typeLiteral.getMembers().length !== 1) {
-    return false
-  }
-
-  // the grand-parent must be an IndexedAccessType whose index is the property name
-  const indexedAccess = typeLiteral.getParentIfKind(
-    tsMorph.SyntaxKind.IndexedAccessType
-  )
-  if (!indexedAccess) {
-    return false
-  }
-
-  const indexNode = indexedAccess.getIndexTypeNode()
-  if (!tsMorph.Node.isLiteralTypeNode(indexNode)) {
-    return false
-  }
-
-  const literalNode = indexNode.getLiteral()
-  if (
-    !tsMorph.Node.isStringLiteral(literalNode) ||
-    literalNode.getLiteralText() !== propDeclaration.getName()
-  ) {
-    return false
-  }
-
-  // the property's own type must have (at least one) call-signature
-  return propDeclaration.getType().getCallSignatures().length > 0
-}
-
 /** Checks if a type reference's primary declaration is exported. */
 function isTypeReferenceExported(
   typeReference: tsMorph.TypeReferenceNode
@@ -4137,31 +4087,6 @@ function containsFreeTypeParameter(
   }
 
   return false
-}
-
-/** Gets the declared annotation type of a node. */
-function getDeclaredAnnotationType(declaration?: Node): Type | undefined {
-  if (!declaration) return undefined
-
-  let typeNode: TypeNode | undefined
-
-  if (
-    tsMorph.Node.isPropertySignature(declaration) ||
-    tsMorph.Node.isPropertyDeclaration(declaration) ||
-    tsMorph.Node.isVariableDeclaration(declaration) ||
-    tsMorph.Node.isParameterDeclaration(declaration)
-  ) {
-    typeNode = declaration.getTypeNode()
-  } else if (
-    tsMorph.Node.isGetAccessorDeclaration(declaration) ||
-    tsMorph.Node.isSetAccessorDeclaration(declaration)
-  ) {
-    typeNode = declaration.getReturnTypeNode()
-  }
-
-  const type = typeNode ? typeNode.getType() : undefined
-
-  return containsFreeTypeParameter(type) ? undefined : type
 }
 
 /** Gets the visibility of a symbol. */
