@@ -1894,76 +1894,90 @@ function resolveTypeExpression(
           ...(returnType ? { returnType } : {}),
           isAsync: returnType ? isPromiseLike(returnType) : false,
         } satisfies Kind.FunctionType
-      } else if (type.isObject()) {
-        if (isMappedType(type)) {
-          let mappedNode: tsMorph.MappedTypeNode | undefined
+      } else if (isMappedType(type)) {
+        let mappedNode: tsMorph.MappedTypeNode | undefined
 
-          if (tsMorph.Node.isMappedTypeNode(enclosingNode)) {
-            mappedNode = enclosingNode
-          } else if (tsMorph.Node.isMappedTypeNode(symbolDeclaration)) {
-            mappedNode = symbolDeclaration
-          } else if (tsMorph.Node.isTypeAliasDeclaration(symbolDeclaration)) {
-            const typeNode = symbolDeclaration.getTypeNode()
-            if (tsMorph.Node.isMappedTypeNode(typeNode)) {
-              mappedNode = typeNode
+        if (tsMorph.Node.isMappedTypeNode(enclosingNode)) {
+          mappedNode = enclosingNode
+        } else if (tsMorph.Node.isMappedTypeNode(symbolDeclaration)) {
+          mappedNode = symbolDeclaration
+        } else if (tsMorph.Node.isTypeAliasDeclaration(symbolDeclaration)) {
+          const typeNode = symbolDeclaration.getTypeNode()
+          if (tsMorph.Node.isMappedTypeNode(typeNode)) {
+            mappedNode = typeNode
+          }
+        }
+
+        if (mappedNode) {
+          if (shouldResolveMappedType(mappedNode, type)) {
+            const resolvedMappedType = resolveMappedType(
+              type,
+              mappedNode,
+              filter,
+              defaultValues,
+              dependencies
+            )
+
+            if (resolvedMappedType) {
+              return resolvedMappedType
             }
           }
 
-          if (mappedNode) {
-            if (shouldResolveMappedType(mappedNode, type)) {
-              const resolvedMappedType = resolveMappedType(
-                type,
-                mappedNode,
+          const keyNode = mappedNode.getTypeParameter()
+          const resolvedKeyType = resolveTypeParameterDeclaration(
+            keyNode,
+            filter,
+            dependencies
+          )
+          const valueNode = mappedNode.getTypeNode()
+          const resolvedValueType = valueNode
+            ? resolveTypeExpression(
+                valueNode.getType(),
+                valueNode,
                 filter,
                 defaultValues,
                 dependencies
               )
+            : undefined
 
-              if (resolvedMappedType) {
-                return resolvedMappedType
-              }
-            }
-
-            const keyNode = mappedNode.getTypeParameter()
-            const resolvedKeyType = resolveTypeParameterDeclaration(
-              keyNode,
-              filter,
-              dependencies
-            )
-            const valueNode = mappedNode.getTypeNode()
-            const resolvedValueType = valueNode
-              ? resolveTypeExpression(
-                  valueNode.getType(),
-                  valueNode,
-                  filter,
-                  defaultValues,
-                  dependencies
-                )
-              : undefined
-
-            if (resolvedKeyType && resolvedValueType) {
-              return {
-                kind: 'MappedType',
-                text: typeText,
-                typeParameter: resolvedKeyType,
-                type: resolvedValueType,
-                isReadonly: Boolean(mappedNode.getReadonlyToken()),
-                isOptional: Boolean(mappedNode.getQuestionToken()),
-              } satisfies Kind.MappedType
-            }
+          if (resolvedKeyType && resolvedValueType) {
+            return {
+              kind: 'MappedType',
+              text: typeText,
+              typeParameter: resolvedKeyType,
+              type: resolvedValueType,
+              isReadonly: Boolean(mappedNode.getReadonlyToken()),
+              isOptional: Boolean(mappedNode.getQuestionToken()),
+            } satisfies Kind.MappedType
           }
         }
-
+      } else if (type.isObject()) {
         let resolvedMembers: Kind.MemberUnion[] = []
+        let objectNode: tsMorph.TypeLiteralNode | undefined
 
-        if (tsMorph.Node.isTypeLiteral(enclosingNode)) {
+        if (tsMorph.Node.isTypeAliasDeclaration(symbolDeclaration)) {
+          const typeNode = symbolDeclaration.getTypeNode()
+          if (tsMorph.Node.isTypeLiteral(typeNode)) {
+            objectNode = typeNode
+          }
+        } else if (tsMorph.Node.isTypeLiteral(symbolDeclaration)) {
+          objectNode = symbolDeclaration
+        } else if (tsMorph.Node.isTypeLiteral(enclosingNode)) {
+          objectNode = enclosingNode
+        }
+
+        if (objectNode) {
           resolvedMembers = resolveMemberSignatures(
-            enclosingNode.getMembers(),
+            objectNode.getMembers(),
             filter,
             defaultValues,
             dependencies
           )
-        } else {
+        } else if (
+          type.isAnonymous() ||
+          tsMorph.Node.isInterfaceDeclaration(symbolDeclaration) ||
+          tsMorph.Node.isObjectLiteralExpression(symbolDeclaration)
+        ) {
           const propertySignatures = resolvePropertySignatures(
             type,
             enclosingNode,
@@ -1981,6 +1995,8 @@ function resolveTypeExpression(
           if (propertySignatures.length === 0 && indexSignatures.length === 0) {
             return
           }
+        } else {
+          throw new UnresolvedTypeExpressionError(type, enclosingNode)
         }
 
         resolvedType = {
@@ -2630,9 +2646,91 @@ function resolveParameter(
 
 /** Process index signatures of an interface or type alias. */
 function resolveIndexSignatures(node?: Node, filter?: TypeFilter) {
-  return getIndexSignatures(node).map((indexSignature) => {
-    return resolveIndexSignature(indexSignature, filter)
-  }) as Kind.IndexSignature[]
+  const resolvedSignatures: Kind.IndexSignature[] = []
+
+  // Explicit index signatures declared on the node (e.g. `{ [key: string]: Type }`)
+  for (const indexSignature of getIndexSignatures(node)) {
+    resolvedSignatures.push(resolveIndexSignature(indexSignature, filter))
+  }
+
+  // Implicit string / number index signatures that are represented on the type
+  // but have no explicit declaration (e.g. mapped types, utility types, etc.)
+  if (node) {
+    const type = node.getType()
+    const stringIndex = type.getStringIndexType()
+
+    if (stringIndex) {
+      const value = resolveTypeExpression(stringIndex, node, filter)
+
+      if (value) {
+        const parameter: Kind.IndexSignatureParameter = {
+          kind: 'IndexSignatureParameter',
+          name: 'key',
+          type: { kind: 'String', text: 'string' } as Kind.String,
+          text: 'key: string',
+        }
+        let hasStringIndex = false
+
+        for (const signature of resolvedSignatures) {
+          if (signature.parameter.type.kind === 'String') {
+            hasStringIndex = true
+            break
+          }
+        }
+
+        if (!hasStringIndex) {
+          resolvedSignatures.push({
+            kind: 'IndexSignature',
+            parameter,
+            type: value,
+            text: `[key: string]: ${value.text}`,
+            isReadonly: isReadonlyType(type, node),
+            ...getDeclarationLocation(
+              node ?? type.getSymbol()?.getDeclarations()?.[0]!
+            ),
+          })
+        }
+      }
+    }
+
+    const numberIndex = type.getNumberIndexType()
+
+    if (numberIndex) {
+      const value = resolveTypeExpression(numberIndex, node, filter)
+
+      if (value) {
+        const parameter: Kind.IndexSignatureParameter = {
+          kind: 'IndexSignatureParameter',
+          name: 'index',
+          type: { kind: 'Number', text: 'number' } as Kind.Number,
+          text: 'index: number',
+        }
+        let hasNumberIndex = false
+
+        for (const signature of resolvedSignatures) {
+          if (signature.parameter.type.kind === 'Number') {
+            hasNumberIndex = true
+            break
+          }
+        }
+
+        if (!hasNumberIndex) {
+          resolvedSignatures.push({
+            kind: 'IndexSignature',
+            parameter,
+            type: value,
+            text: `[key: number]: ${value.text}`,
+            isReadonly: isReadonlyType(type, node),
+            ...getDeclarationLocation(
+              node ?? type.getSymbol()?.getDeclarations()?.[0]!
+            ),
+          })
+        }
+      }
+    }
+  }
+
+  return resolvedSignatures
 }
 
 /** Process an index signature. */
