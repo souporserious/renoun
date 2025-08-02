@@ -4,10 +4,16 @@ import React from 'react'
 export async function Refresh() {
   if (process.env.NODE_ENV === 'development') {
     const { RefreshClient } = await import('./RefreshClient.js')
-    const port = process.env.RENOUN_SERVER_PORT!
-    const secret = process.env.RENOUN_SERVER_SECRET!
+    const port = process.env.RENOUN_SERVER_PORT
+    const id = process.env.RENOUN_SERVER_ID
 
-    return <RefreshClient port={port} secret={secret} />
+    if (!port || !id) {
+      throw new Error(
+        '[renoun] The Refresh component requires the renoun development server to be running.'
+      )
+    }
+
+    return <RefreshClient port={port} id={id} />
   }
 
   return null

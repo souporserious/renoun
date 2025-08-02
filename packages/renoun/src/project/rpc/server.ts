@@ -19,8 +19,8 @@ export interface WebSocketNotification {
   data?: any
 }
 
-const SECRET = randomBytes(16).toString('hex')
-process.env.RENOUN_SERVER_SECRET = SECRET
+const SERVER_ID = randomBytes(16).toString('hex')
+process.env.RENOUN_SERVER_ID = SERVER_ID
 
 export class WebSocketServer {
   #server!: Server
@@ -47,7 +47,7 @@ export class WebSocketServer {
           port: options?.port ?? 0,
           host: 'localhost',
           verifyClient: (info, callback) => {
-            if (info.req.headers['sec-websocket-protocol'] !== SECRET) {
+            if (info.req.headers['sec-websocket-protocol'] !== SERVER_ID) {
               return callback(false, 401, 'Unauthorized')
             }
 

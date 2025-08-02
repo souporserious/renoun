@@ -7,13 +7,7 @@ import type { WebSocketNotification } from '../../project/rpc/server.js'
  * Subscribes to the development server and refreshes the page when a source file changes.
  * @internal
  */
-export function RefreshClient({
-  port,
-  secret,
-}: {
-  port: string
-  secret: string
-}) {
+export function RefreshClient({ port, id }: { port: string; id: string }) {
   useEffect(() => {
     if (port === undefined) {
       return
@@ -34,7 +28,7 @@ export function RefreshClient({
       }
     }
 
-    const ws = new WebSocket(`ws://localhost:${port}`, secret)
+    const ws = new WebSocket(`ws://localhost:${port}`, id)
     ws.addEventListener('message', handleMessage)
 
     return () => {
