@@ -15,6 +15,7 @@ import {
   removeAllExtensions,
   removeOrderPrefixes,
 } from '../utils/path.js'
+import { parseJsonWithComments } from '../utils/parse-json-with-comments.js'
 import type { TypeFilter } from '../utils/resolve-type.js'
 import type { DirectoryEntry } from './types.js'
 
@@ -90,7 +91,7 @@ export abstract class FileSystem {
     const tsConfigContents = this.readFileSync(this.#tsConfigPath)
 
     try {
-      return JSON.parse(tsConfigContents) as TsConfig
+      return parseJsonWithComments<TsConfig>(tsConfigContents)
     } catch (error) {
       throw new Error('[renoun] Failed to parse tsconfig.json', {
         cause: error,
