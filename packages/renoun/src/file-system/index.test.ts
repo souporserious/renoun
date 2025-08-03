@@ -2175,4 +2175,33 @@ describe('file system', () => {
       resolvedFile?.getExportValue('nonexistent')
     }
   })
+
+  test('query path with modifier and separate extensions', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'Button.examples.tsx': ``,
+      'useHover.examples.ts': ``,
+    })
+    const directory = new Directory({
+      fileSystem,
+    })
+    const buttonExamples = await directory.getFile('Button.examples', [
+      'ts',
+      'tsx',
+    ])
+    const useHoverExamples = await directory.getFile('useHover.examples', [
+      'ts',
+      'tsx',
+    ])
+
+    expect(buttonExamples).toBeDefined()
+    expect(useHoverExamples).toBeDefined()
+
+    expect(buttonExamples.getBaseName()).toBe('Button')
+    expect(buttonExamples.getModifierName()).toBe('examples')
+    expect(buttonExamples.getExtension()).toBe('tsx')
+
+    expect(useHoverExamples.getBaseName()).toBe('useHover')
+    expect(useHoverExamples.getModifierName()).toBe('examples')
+    expect(useHoverExamples.getExtension()).toBe('ts')
+  })
 })

@@ -1699,9 +1699,9 @@ export class Directory<
       }
     }
 
-    if (parsedExtension && extension) {
+    if (extension && parsedExtension && extension.includes(parsedExtension)) {
       throw new Error(
-        `[renoun] The path "${rawPath}" already includes a file extension (.${parsedExtension}). The \`extension\` argument can only be used when the path omits an extension.`
+        `[renoun] The path "${rawPath}" already includes the file extension "${parsedExtension}". The \`extension\` argument can only use a path with a different extension.`
       )
     }
 
@@ -1712,7 +1712,9 @@ export class Directory<
         : parsedExtension
           ? [parsedExtension]
           : undefined
-    const segments = rawSegments.map((s) => createSlug(s, this.#slugCasing))
+    const segments = rawSegments.map((segment) =>
+      createSlug(segment, this.#slugCasing)
+    )
 
     if (segments.length === 0) {
       throw new FileNotFoundError(rawPath, allExtensions)
