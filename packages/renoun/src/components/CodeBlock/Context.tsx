@@ -1,29 +1,22 @@
 import type { CSSProperties } from 'react'
 
 import { createContext, getContext } from '../../utils/context.js'
-import type { Languages } from '../../utils/get-language.js'
+import type { SourceTextMetadata } from '../../utils/get-source-text-metadata.js'
 
 /** @internal */
-export type ContextValue = {
-  value?: string
-  language?: Languages
-  filePath?: string
-  label?: string
-  allowErrors?: boolean | string
-  showErrors?: boolean
-  shouldAnalyze?: boolean
-  shouldFormat?: boolean
-  highlightedLines?: string
-  padding?: CSSProperties['padding']
-  baseDirectory?: string
-  resolved?: {
-    value: string
-    language: Languages
-    filePath: string
-    label: string
-  }
-  resolvers: PromiseWithResolvers<void>
-} | null
+export type ContextValue =
+  | (Partial<SourceTextMetadata> & {
+      allowErrors?: boolean | string
+      showErrors?: boolean
+      shouldAnalyze?: boolean
+      shouldFormat?: boolean
+      highlightedLines?: string
+      padding?: CSSProperties['padding']
+      baseDirectory?: string
+      resolved?: Required<SourceTextMetadata>
+      resolvers: PromiseWithResolvers<void>
+    })
+  | null
 
 /**
  * Context for managing code block state.

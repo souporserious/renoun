@@ -11,7 +11,7 @@ import type {
 import type { GetTokensOptions, TokenizedLines } from '../utils/get-tokens.js'
 import type {
   GetSourceTextMetadataOptions,
-  GetSourceTextMetadataResult,
+  SourceTextMetadata,
 } from '../utils/get-source-text-metadata.js'
 import type { Kind, TypeFilter } from '../utils/resolve-type.js'
 import type { resolveTypeAtLocation as baseResolveTypeAtLocation } from '../utils/resolve-type-at-location.js'
@@ -35,13 +35,13 @@ export async function getSourceTextMetadata(
   options: DistributiveOmit<GetSourceTextMetadataOptions, 'project'> & {
     projectOptions?: ProjectOptions
   }
-): Promise<GetSourceTextMetadataResult> {
+): Promise<SourceTextMetadata> {
   if (client) {
     return client.callMethod<
       DistributiveOmit<GetSourceTextMetadataOptions, 'project'> & {
         projectOptions?: ProjectOptions
       },
-      GetSourceTextMetadataResult
+      SourceTextMetadata
     >('getSourceTextMetadata', options)
   }
 

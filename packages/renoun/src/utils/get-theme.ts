@@ -5,6 +5,19 @@ import type { TextMateThemeRaw } from './create-tokenizer.js'
 import { loadConfig } from './load-config.js'
 import { loadTmTheme } from './load-package.js'
 
+interface Theme {
+  colors: {
+    foreground?: string
+    background?: string
+    [key: string]: any
+  }
+  tokenColors?: any
+  semanticTokenColors?: Record<string, any>
+  settings: any[]
+  type?: 'light' | 'dark'
+  [key: string]: any
+}
+
 /** Resolves the theme config name from the `renoun.json` config. */
 function getThemeConfigName(themeName?: string) {
   const config = loadConfig()
@@ -58,14 +71,14 @@ export async function getTheme(themeName?: string): Promise<TextMateThemeRaw> {
   const themeOverrides = Array.isArray(themeConfigName)
     ? themeConfigName[1]
     : undefined
-  let theme: Record<string, any>
+  let theme: Theme
 
   if (themePath.endsWith('.json')) {
-    theme = JSON.parse(readFileSync(themePath, 'utf-8'))
+    theme = JSON.parse(readFileSync(themePath, 'utf-8')) as Theme
   } else if (themes.includes(themePath)) {
     const tmTheme = await loadTmTheme(themePath)
     if (tmTheme) {
-      theme = tmTheme
+      theme = tmTheme as Theme
     } else {
       throw new Error(
         `[renoun] The theme "${themePath}" could not be loaded, ensure the "tm-themes" package is installed in your project.`
@@ -340,8 +353,8 @@ export function getThemeTokenVariables() {
 
 /** Normalize a VS Code theme to a TextMate theme. */
 export function normalizeTheme(
-  theme: Record<string, any>,
-  overrides?: Record<string, any>
+  theme: Theme,
+  overrides?: Theme
 ): TextMateThemeRaw {
   // Apply theme overrides.
   if (overrides) {
@@ -369,10 +382,7 @@ export function normalizeTheme(
 }
 
 /** Merge two VS Code theme JSON objects (baseTheme and overrides). */
-function mergeThemeColors(
-  baseTheme: Record<string, any>,
-  overrides: Record<string, any>
-) {
+function mergeThemeColors(baseTheme: Theme, overrides: Theme) {
   if (!overrides) {
     return {
       colors: baseTheme.colors,
@@ -420,7 +430,7 @@ function mergeThemeColors(
 }
 
 /** Applies default foreground and background colors to the theme. */
-function applyForegroundBackground(theme: Record<string, any>) {
+function applyForegroundBackground(theme: Theme) {
   const globalSetting = theme.settings
     ? theme.settings.find((setting: any) => !setting.name && !setting.scope)
     : undefined

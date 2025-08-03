@@ -59,8 +59,8 @@ export async function formatSourceText(
     if (prettier) {
       const config = (await prettier.resolveConfig(filePath)) || {}
 
-      if (config.printWidth === undefined) {
-        config.printWidth = 80
+      if (config['printWidth'] === undefined) {
+        config['printWidth'] = 80
       }
 
       formatter = (sourceText: string, options: Record<string, unknown>) => {

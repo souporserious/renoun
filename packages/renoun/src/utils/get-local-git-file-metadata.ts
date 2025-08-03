@@ -49,11 +49,11 @@ export async function getLocalGitFileMetadata(
 
       if (isShallow === 'true') {
         const message = `[renoun] This repository is shallow cloned so the createdAt and updatedAt dates cannot be calculated correctly.`
-        if (process.env.VERCEL) {
+        if ('VERCEL' in process.env) {
           throw new Error(
             `${message} Set the VERCEL_DEEP_CLONE=true environment variable to enable deep cloning.`
           )
-        } else if (process.env.GITHUB_ACTION) {
+        } else if ('GITHUB_ACTION' in process.env) {
           throw new Error(
             `${message} See https://github.com/actions/checkout#fetch-all-history-for-all-tags-and-branches to fetch the entire git history.`
           )

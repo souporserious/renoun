@@ -51,13 +51,14 @@ export interface TextMateTokenStyle {
   fontStyle: string
   fontWeight: string
   textDecoration: string
+  [key: string]: string | undefined
 }
 
 export interface TextMateToken {
   value: string
   start: number
   end: number
-  style: Record<string, string>
+  style: TextMateTokenStyle
   hasTextStyles: boolean
   isBaseColor: boolean
   isWhiteSpace: boolean
@@ -288,7 +289,7 @@ export class Tokenizer<Theme extends string> {
         registry = new Registry(this.#registryOptions)
         const theme = await registry.fetchTheme(themeName)
         registry.setTheme(theme)
-        this.#baseColors.set(themeName, theme.colors!.foreground)
+        this.#baseColors.set(themeName, theme.colors!['foreground'])
         this.#registries.set(themeName, registry)
       }
 
@@ -379,7 +380,7 @@ export class Tokenizer<Theme extends string> {
         const value = lineText.slice(rangeStart, rangeEnd)
 
         // Merge style bits from all tokens that overlap this boundary range
-        const style: Record<string, string> = {}
+        const style: Partial<TextMateTokenStyle> = {}
         let isBaseColor = true
         let hasTextStyles = false
 
@@ -433,7 +434,7 @@ export class Tokenizer<Theme extends string> {
           value,
           start: rangeStart,
           end: rangeEnd,
-          style,
+          style: style as TextMateTokenStyle,
           hasTextStyles,
           isBaseColor,
           isWhiteSpace: /^\s*$/.test(value),

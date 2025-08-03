@@ -6,20 +6,18 @@ import { formatSourceText } from './format-source-text.js'
 import { getLanguage, type Languages } from './get-language.js'
 import { isJsxOnly } from './is-jsx-only.js'
 
-export interface GetSourceTextMetadataOptions {
-  project: Project
+export interface SourceTextMetadata {
   value: string
   language?: Languages
   filePath?: string
-  shouldFormat?: boolean
-  baseDirectory?: string
+  label?: string
 }
 
-export interface GetSourceTextMetadataResult {
-  value: string
-  language: Languages
-  filePath: string
-  label?: string
+export interface GetSourceTextMetadataOptions
+  extends Omit<SourceTextMetadata, 'label'> {
+  project: Project
+  shouldFormat?: boolean
+  baseDirectory?: string
 }
 
 export const generatedFilenames = new Set<string>()
@@ -40,7 +38,7 @@ export async function getSourceTextMetadata({
   shouldFormat = true,
   value,
   baseDirectory,
-}: GetSourceTextMetadataOptions): Promise<GetSourceTextMetadataResult> {
+}: GetSourceTextMetadataOptions): Promise<SourceTextMetadata> {
   await waitForRefreshingProjects()
 
   let finalValue = value

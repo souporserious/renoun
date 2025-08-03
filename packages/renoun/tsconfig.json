@@ -6,6 +6,8 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noPropertyAccessFromIndexSignature": true,
     "forceConsistentCasingInFileNames": true,
     "esModuleInterop": true,
     "module": "Preserve",

@@ -32,7 +32,7 @@ export function useThemePicker(): [
       try {
         const storedColorMode = localStorage.getItem('colorMode')
         if (storedColorMode && themeModes.includes(storedColorMode)) {
-          document.documentElement.dataset.theme = storedColorMode
+          document.documentElement.dataset['theme'] = storedColorMode
           setColorMode(storedColorMode)
         }
       } catch {
@@ -49,7 +49,7 @@ export function useThemePicker(): [
               ? 'dark'
               : // find next eligible color mode after 'dark'
                 themeModes[(themeModes.indexOf('dark') + 1) % themeModes.length]
-            document.documentElement.dataset.theme = nextColorMode
+            document.documentElement.dataset['theme'] = nextColorMode
             setColorMode(nextColorMode)
           }
         } catch {

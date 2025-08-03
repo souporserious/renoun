@@ -12,7 +12,7 @@ if (firstArgument === 'help') {
 }
 
 /* Disable the buffer util for WebSocket. */
-process.env.WS_NO_BUFFER_UTIL = 'true'
+process.env['WS_NO_BUFFER_UTIL'] = 'true'
 
 if (firstArgument === 'next' || firstArgument === 'waku') {
   let subProcess: ReturnType<typeof spawn> | undefined
@@ -26,8 +26,8 @@ if (firstArgument === 'next' || firstArgument === 'waku') {
 
   const isProduction = secondArgument === 'build'
 
-  if (process.env.NODE_ENV === undefined) {
-    process.env.NODE_ENV = isProduction ? 'production' : 'development'
+  if (process.env['NODE_ENV'] === undefined) {
+    process.env['NODE_ENV'] = isProduction ? 'production' : 'development'
   }
 
   async function runSubProcess() {
@@ -63,8 +63,8 @@ if (firstArgument === 'next' || firstArgument === 'waku') {
     cleanupAndExit(1)
   })
 } else if (firstArgument === 'watch') {
-  if (process.env.NODE_ENV === undefined) {
-    process.env.NODE_ENV = 'development'
+  if (process.env['NODE_ENV'] === undefined) {
+    process.env['NODE_ENV'] = 'development'
   }
 
   createServer()

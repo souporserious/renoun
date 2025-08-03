@@ -3,8 +3,9 @@ import type { CSSObject } from 'restyle'
 import { css } from 'restyle/css'
 
 import { getSourceTextMetadata, getTokens } from '../../project/client.js'
-import type { Languages } from '../../grammars/index.js'
 import { getContext } from '../../utils/context.js'
+import type { Languages } from '../../utils/get-language.js'
+import type { SourceTextMetadata } from '../../utils/get-source-text-metadata.js'
 import { getThemeColors } from '../../utils/get-theme.js'
 import { QuickInfo } from './QuickInfo.js'
 import { QuickInfoProvider } from './QuickInfoProvider.js'
@@ -89,7 +90,7 @@ export async function Tokens({
   }
 
   const shouldAnalyze = shouldAnalyzeProp ?? context?.shouldAnalyze ?? true
-  const metadata: Record<string, any> = {}
+  const metadata: SourceTextMetadata = {} as SourceTextMetadata
 
   if (shouldAnalyze) {
     const result = await getSourceTextMetadata({
@@ -113,9 +114,9 @@ export async function Tokens({
   if (context) {
     context.resolved = {
       value: metadata.value,
-      language: metadata.language,
-      filePath: metadata.filePath,
-      label: metadata.label,
+      language: metadata.language!,
+      filePath: metadata.filePath!,
+      label: metadata.label!,
     }
     context.resolvers.resolve()
   }

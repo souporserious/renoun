@@ -1,5 +1,5 @@
 import { Minimatch } from 'minimatch'
-import type { SyntaxKind } from 'ts-morph'
+import type { SyntaxKind, ts } from 'ts-morph'
 
 import {
   getFileExports,
@@ -23,9 +23,19 @@ export interface FileSystemOptions {
   tsConfigPath?: string
 }
 
+export interface TsConfig {
+  compilerOptions?: ts.CompilerOptions
+  include?: string[]
+  exclude?: string[]
+  extends?: string
+  references?: { path: string }[]
+  files?: string[]
+  [key: string]: unknown
+}
+
 export abstract class FileSystem {
   #tsConfigPath: string
-  #tsConfig?: Record<string, unknown>
+  #tsConfig?: TsConfig
   #exclude?: Minimatch[]
 
   constructor(options: FileSystemOptions = {}) {
@@ -69,14 +79,11 @@ export abstract class FileSystem {
 
   abstract readFile(path: string): Promise<string>
 
-  #getTsConfig() {
+  #getTsConfig(): TsConfig | undefined {
     try {
       const tsConfigContents = this.readFileSync(this.#tsConfigPath)
       try {
-        const parsedTsConfig = JSON.parse(tsConfigContents) as Record<
-          string,
-          unknown
-        >
+        const parsedTsConfig = JSON.parse(tsConfigContents) as TsConfig
         return parsedTsConfig
       } catch (error) {
         throw new Error('Failed to parse tsconfig.json', { cause: error })
@@ -107,7 +114,7 @@ export abstract class FileSystem {
 
       if (Array.isArray(tsConfig?.exclude)) {
         this.#exclude = tsConfig.exclude.map(
-          (pattern: string) => new Minimatch(pattern, { dot: true })
+          (pattern) => new Minimatch(pattern, { dot: true })
         )
       }
     }

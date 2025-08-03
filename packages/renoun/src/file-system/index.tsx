@@ -51,7 +51,10 @@ const mdxComponents = {
   code: (props) => <CodeInline {...parseCodeProps(props)} />,
 } satisfies MDXComponents
 
-const defaultLoaders: Record<string, ModuleLoader<any>> = {
+const defaultLoaders: {
+  mdx: ModuleLoader<any>
+  [extension: string]: ModuleLoader<any>
+} = {
   mdx: async (_, file) => {
     const value = await file.getText()
     const { default: Content, ...mdxExports } = await getMDXRuntimeValue({
