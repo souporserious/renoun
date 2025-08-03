@@ -79,17 +79,22 @@ export abstract class FileSystem {
 
   abstract readFile(path: string): Promise<string>
 
+  /** Check synchronously if a file exists at the given path. */
+  abstract fileExistsSync(path: string): boolean
+
   #getTsConfig(): TsConfig | undefined {
-    try {
-      const tsConfigContents = this.readFileSync(this.#tsConfigPath)
-      try {
-        const parsedTsConfig = JSON.parse(tsConfigContents) as TsConfig
-        return parsedTsConfig
-      } catch (error) {
-        throw new Error('Failed to parse tsconfig.json', { cause: error })
-      }
-    } catch (error) {
+    if (!this.fileExistsSync(this.#tsConfigPath)) {
       return
+    }
+
+    const tsConfigContents = this.readFileSync(this.#tsConfigPath)
+
+    try {
+      return JSON.parse(tsConfigContents) as TsConfig
+    } catch (error) {
+      throw new Error('[renoun] Failed to parse tsconfig.json', {
+        cause: error,
+      })
     }
   }
 

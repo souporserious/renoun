@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, type Dirent } from 'node:fs'
+import { readdirSync, readFileSync, existsSync, type Dirent } from 'node:fs'
 import { readdir, readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { ensureRelativePath, relativePath } from '../utils/path.js'
@@ -66,6 +66,10 @@ export class NodeFileSystem extends FileSystem {
 
   async readFile(path: string): Promise<string> {
     return readFile(path, 'utf-8')
+  }
+
+  fileExistsSync(path: string): boolean {
+    return existsSync(path)
   }
 
   isFilePathGitIgnored(filePath: string): boolean {

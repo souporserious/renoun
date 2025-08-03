@@ -153,6 +153,13 @@ export class MemoryFileSystem extends FileSystem {
     return this.readFileSync(path)
   }
 
+  fileExistsSync(path: string): boolean {
+    if (!path.startsWith('.')) {
+      path = `./${path}`
+    }
+    return this.#files.has(path)
+  }
+
   isFilePathGitIgnored(filePath: string) {
     if (!this.#ignore) {
       try {
